@@ -6,7 +6,7 @@
 
 # Interface: MergeWithLLMOptions
 
-Defined in: [src/core-flow/Parallel.ts:99](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L99)
+Defined in: [src/core-flow/Parallel.ts:99](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L99)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core-flow/Parallel.ts:99](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core-flow/Parallel.ts:105](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L105)
+Defined in: [src/core-flow/Parallel.ts:105](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L105)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core-flow/Parallel.ts:105](https://github.com/footprintjs/agent
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:101](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L101)
+Defined in: [src/core-flow/Parallel.ts:101](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L101)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core-flow/Parallel.ts:101](https://github.com/footprintjs/agent
 
 > `readonly` **prompt**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:103](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L103)
+Defined in: [src/core-flow/Parallel.ts:103](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L103)
 
 Prompt prepended to the branch results when feeding the merge LLM.
 
@@ -40,7 +40,7 @@ Prompt prepended to the branch results when feeding the merge LLM.
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core-flow/Parallel.ts:100](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L100)
+Defined in: [src/core-flow/Parallel.ts:100](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L100)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [src/core-flow/Parallel.ts:100](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core-flow/Parallel.ts:104](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L104)
+Defined in: [src/core-flow/Parallel.ts:104](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core-flow/Parallel.ts#L104)

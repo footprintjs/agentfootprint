@@ -6,7 +6,7 @@
 
 # Interface: SwarmOptions
 
-Defined in: [src/patterns/Swarm.ts:35](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L35)
+Defined in: [src/patterns/Swarm.ts:35](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L35)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/patterns/Swarm.ts:35](https://github.com/footprintjs/agentfootp
 
 > `readonly` **agents**: readonly [`SwarmAgent`](/agentfootprint/api/generated/interfaces/SwarmAgent.md)[]
 
-Defined in: [src/patterns/Swarm.ts:40](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L40)
+Defined in: [src/patterns/Swarm.ts:40](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L40)
 
 The fixed agent roster. Must contain >= 2 agents. The order doesn't
 matter — the `route` function selects by id.
@@ -25,7 +25,7 @@ matter — the `route` function selects by id.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/Swarm.ts:51](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L51)
+Defined in: [src/patterns/Swarm.ts:51](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L51)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [src/patterns/Swarm.ts:51](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **maxHandoffs?**: `number`
 
-Defined in: [src/patterns/Swarm.ts:49](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L49)
+Defined in: [src/patterns/Swarm.ts:49](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L49)
 
 Max hand-offs before the loop halts. Default 10.
 
@@ -43,7 +43,7 @@ Max hand-offs before the loop halts. Default 10.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/Swarm.ts:50](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L50)
+Defined in: [src/patterns/Swarm.ts:50](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L50)
 
 ***
 
@@ -51,7 +51,7 @@ Defined in: [src/patterns/Swarm.ts:50](https://github.com/footprintjs/agentfootp
 
 > `readonly` **route**: (`input`) => `string` \| `undefined`
 
-Defined in: [src/patterns/Swarm.ts:47](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/Swarm.ts#L47)
+Defined in: [src/patterns/Swarm.ts:47](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/Swarm.ts#L47)
 
 Routing function — receives the current message and returns the
 selected agent's id. Pure sync; evaluated before each iteration's

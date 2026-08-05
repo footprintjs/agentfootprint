@@ -8,7 +8,7 @@
 
 > **actKeyFor**(`moment`): `"input"` \| `"output"` \| `"window"` \| `"beforeTool"` \| `"afterTool"`
 
-Defined in: [src/core/agent/moments.ts:61](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core/agent/moments.ts#L61)
+Defined in: [src/core/agent/moments.ts:61](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core/agent/moments.ts#L61)
 
 The runtime twin of [ActKey](/agentfootprint/api/generated/type-aliases/ActKey.md). `.act()`'s accepted key set is built
 from this over `LOOP_MOMENTS`, so an unknown key is refused by a rule that

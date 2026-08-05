@@ -6,7 +6,7 @@
 
 # Interface: LlmRouterOptions
 
-Defined in: [src/patterns/LlmRouter.ts:141](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L141)
+Defined in: [src/patterns/LlmRouter.ts:141](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L141)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/patterns/LlmRouter.ts:141](https://github.com/footprintjs/agent
 
 > `readonly` **agents**: readonly [`RouterAgent`](/agentfootprint/api/generated/interfaces/RouterAgent.md)[]
 
-Defined in: [src/patterns/LlmRouter.ts:147](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L147)
+Defined in: [src/patterns/LlmRouter.ts:147](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L147)
 
 The roster. Two or more agents; ids must be unique.
 
@@ -24,7 +24,7 @@ The roster. Two or more agents; ids must be unique.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:161](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L161)
+Defined in: [src/patterns/LlmRouter.ts:161](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L161)
 
 Stable id used in events + stage ids. Default `'router'`.
 
@@ -34,7 +34,7 @@ Stable id used in events + stage ids. Default `'router'`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:153](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L153)
+Defined in: [src/patterns/LlmRouter.ts:153](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L153)
 
 Extra authored framing, placed before the roster ("Prefer billing for
 anything money-shaped"). Your words, trusted — unlike descriptions,
@@ -46,7 +46,7 @@ which ride as data.
 
 > `readonly` **model**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:145](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L145)
+Defined in: [src/patterns/LlmRouter.ts:145](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L145)
 
 Model to ask.
 
@@ -56,7 +56,7 @@ Model to ask.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:163](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L163)
+Defined in: [src/patterns/LlmRouter.ts:163](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L163)
 
 Display name. Default `'Router'`.
 
@@ -66,7 +66,7 @@ Display name. Default `'Router'`.
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/patterns/LlmRouter.ts:143](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L143)
+Defined in: [src/patterns/LlmRouter.ts:143](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L143)
 
 The LLM that makes the decision.
 
@@ -76,7 +76,7 @@ The LLM that makes the decision.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/patterns/LlmRouter.ts:159](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/patterns/LlmRouter.ts#L159)
+Defined in: [src/patterns/LlmRouter.ts:159](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/patterns/LlmRouter.ts#L159)
 
 Sampling temperature for the routing call. Defaults to `0` — routing
 is a classification, and the same message should reach the same

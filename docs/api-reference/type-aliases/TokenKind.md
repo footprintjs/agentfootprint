@@ -8,4 +8,4 @@
 
 > **TokenKind** = `"input"` \| `"output"` \| `"cacheRead"` \| `"cacheWrite"`
 
-Defined in: [src/adapters/types.ts:628](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L628)
+Defined in: [src/adapters/types.ts:628](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/adapters/types.ts#L628)

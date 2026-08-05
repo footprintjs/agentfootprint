@@ -8,7 +8,7 @@
 
 > **GroupKind** = `"Parallel"` \| `"Sequence"` \| `"Loop"` \| `"Conditional"` \| `"Agent"` \| `"LLMCall"`
 
-Defined in: [src/core/translator.ts:39](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core/translator.ts#L39)
+Defined in: [src/core/translator.ts:39](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core/translator.ts#L39)
 
 The composition KIND a translator sees in `GroupMetadata.kind`.
 Closed union — every agentfootprint composition declares exactly

@@ -6,7 +6,7 @@
 
 # Interface: ProviderFromEnv
 
-Defined in: [src/adapters/llm/createProvider.ts:90](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/llm/createProvider.ts#L90)
+Defined in: [src/adapters/llm/createProvider.ts:90](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/adapters/llm/createProvider.ts#L90)
 
 What `providerFromEnv()` resolved: the provider + the `model` to pass to
  `Agent.create({ provider, model })`, and which `kind` was detected.
@@ -17,7 +17,7 @@ What `providerFromEnv()` resolved: the provider + the `model` to pass to
 
 > `readonly` **kind**: `"mock"` \| `"anthropic"` \| `"openai"` \| `"azure-openai"`
 
-Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/llm/createProvider.ts#L93)
+Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/adapters/llm/createProvider.ts#L93)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprint
 
 > `readonly` **model**: `string`
 
-Defined in: [src/adapters/llm/createProvider.ts:92](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/llm/createProvider.ts#L92)
+Defined in: [src/adapters/llm/createProvider.ts:92](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/adapters/llm/createProvider.ts#L92)
 
 ***
 
@@ -33,4 +33,4 @@ Defined in: [src/adapters/llm/createProvider.ts:92](https://github.com/footprint
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/adapters/llm/createProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/llm/createProvider.ts#L91)
+Defined in: [src/adapters/llm/createProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/adapters/llm/createProvider.ts#L91)
