@@ -6,7 +6,7 @@
 
 # Interface: RiskContext
 
-Defined in: [src/adapters/types.ts:445](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L445)
+Defined in: [src/adapters/types.ts:491](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L491)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:445](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:449](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L449)
+Defined in: [src/adapters/types.ts:495](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L495)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:449](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **slot?**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:446](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L446)
+Defined in: [src/adapters/types.ts:492](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L492)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:446](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **source?**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:447](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L447)
+Defined in: [src/adapters/types.ts:493](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L493)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/adapters/types.ts:447](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:448](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L448)
+Defined in: [src/adapters/types.ts:494](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L494)

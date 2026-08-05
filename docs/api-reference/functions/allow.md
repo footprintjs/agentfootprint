@@ -10,7 +10,7 @@
 
 > **allow**(): [`AllowOutcome`](/agentfootprint/api/generated/interfaces/AllowOutcome.md)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:21](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/outcomes.ts#L21)
+Defined in: [src/core/agent/middleware/outcomes.ts:21](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core/agent/middleware/outcomes.ts#L21)
 
 Pass the value through untouched.
 
@@ -22,7 +22,7 @@ Pass the value through untouched.
 
 > **allow**(`value`, `why`): [`AllowOutcome`](/agentfootprint/api/generated/interfaces/AllowOutcome.md)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:30](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/outcomes.ts#L30)
+Defined in: [src/core/agent/middleware/outcomes.ts:30](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core/agent/middleware/outcomes.ts#L30)
 
 Pass the value through untouched, and say why you were comfortable.
 
@@ -49,7 +49,7 @@ silently permitted, not only in the record of the call that asked.
 
 > **allow**\<`T`\>(`value`, `why`): [`AllowOutcome`](/agentfootprint/api/generated/interfaces/AllowOutcome.md)\<`T`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:38](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/outcomes.ts#L38)
+Defined in: [src/core/agent/middleware/outcomes.ts:38](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core/agent/middleware/outcomes.ts#L38)
 
 Replace the value and say why.
 

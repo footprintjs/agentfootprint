@@ -121,6 +121,7 @@
 - [MiddlewareDecision](/agentfootprint/api/generated/interfaces/MiddlewareDecision.md)
 - [Milestone](/agentfootprint/api/generated/interfaces/Milestone.md)
 - [ObserverStats](/agentfootprint/api/generated/interfaces/ObserverStats.md)
+- [OutputAttempt](/agentfootprint/api/generated/interfaces/OutputAttempt.md)
 - [OutputFallbackOptions](/agentfootprint/api/generated/interfaces/OutputFallbackOptions.md)
 - [OutputSchemaOptions](/agentfootprint/api/generated/interfaces/OutputSchemaOptions.md)
 - [OutputSchemaParser](/agentfootprint/api/generated/interfaces/OutputSchemaParser.md)
@@ -221,6 +222,7 @@
 - [ObserverDeliveryOptions](/agentfootprint/api/generated/type-aliases/ObserverDeliveryOptions.md)
 - [ObserverDrainResult](/agentfootprint/api/generated/type-aliases/ObserverDrainResult.md)
 - [OutputFallbackFn](/agentfootprint/api/generated/type-aliases/OutputFallbackFn.md)
+- [OutputSchemaStrategy](/agentfootprint/api/generated/type-aliases/OutputSchemaStrategy.md)
 - [ParallelOutput](/agentfootprint/api/generated/type-aliases/ParallelOutput.md)
 - [Predicate](/agentfootprint/api/generated/type-aliases/Predicate.md)
 - [ProviderKind](/agentfootprint/api/generated/type-aliases/ProviderKind.md)
@@ -255,6 +257,8 @@
 - [lexicalDriverScorer](/agentfootprint/api/generated/variables/lexicalDriverScorer.md)
 - [LOOP\_MOMENTS](/agentfootprint/api/generated/variables/LOOP_MOMENTS.md)
 - [minimalEvidenceAssembler](/agentfootprint/api/generated/variables/minimalEvidenceAssembler.md)
+- [SCHEMA\_CHECK\_FRAME\_PREFIX](/agentfootprint/api/generated/variables/SCHEMA_CHECK_FRAME_PREFIX.md)
+- [SCHEMA\_TOOL\_NAME](/agentfootprint/api/generated/variables/SCHEMA_TOOL_NAME.md)
 - [standardEvidenceAssembler](/agentfootprint/api/generated/variables/standardEvidenceAssembler.md)
 
 ## Functions
@@ -289,6 +293,7 @@
 - [isInjectionKey](/agentfootprint/api/generated/functions/isInjectionKey.md)
 - [isPaused](/agentfootprint/api/generated/functions/isPaused.md)
 - [isPauseRequest](/agentfootprint/api/generated/functions/isPauseRequest.md)
+- [isSchemaCheckMessage](/agentfootprint/api/generated/functions/isSchemaCheckMessage.md)
 - [llmRouter](/agentfootprint/api/generated/functions/llmRouter.md)
 - [llmSwarm](/agentfootprint/api/generated/functions/llmSwarm.md)
 - [makeRunId](/agentfootprint/api/generated/functions/makeRunId.md)

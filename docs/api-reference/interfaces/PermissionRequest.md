@@ -6,7 +6,7 @@
 
 # Interface: PermissionRequest
 
-Defined in: [src/adapters/types.ts:497](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L497)
+Defined in: [src/adapters/types.ts:543](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L543)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:497](https://github.com/footprintjs/agentfoot
 
 > `readonly` **actor**: `string`
 
-Defined in: [src/adapters/types.ts:499](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L499)
+Defined in: [src/adapters/types.ts:545](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L545)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:499](https://github.com/footprintjs/agentfoot
 
 > `readonly` **capability**: `"tool_call"` \| `"memory_read"` \| `"memory_write"` \| `"external_net"` \| `"user_data"`
 
-Defined in: [src/adapters/types.ts:498](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L498)
+Defined in: [src/adapters/types.ts:544](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L544)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:498](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/adapters/types.ts:501](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L501)
+Defined in: [src/adapters/types.ts:547](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L547)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:501](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **history?**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/adapters/types.ts:514](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L514)
+Defined in: [src/adapters/types.ts:560](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L560)
 
 v2.12 — Full conversation history at check time. Lets policies
 inspect prior assistant content / tool results without maintaining
@@ -50,7 +50,7 @@ parallel state via event subscription.
 
 > `readonly` `optional` **identity?**: `object`
 
-Defined in: [src/adapters/types.ts:524](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L524)
+Defined in: [src/adapters/types.ts:570](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L570)
 
 v2.12 — Caller identity from `agent.run({ identity })`. Permission
 predicates can role-check on `identity.principal` / `identity.tenant`.
@@ -73,7 +73,7 @@ predicates can role-check on `identity.principal` / `identity.tenant`.
 
 > `readonly` `optional` **iteration?**: `number`
 
-Defined in: [src/adapters/types.ts:519](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L519)
+Defined in: [src/adapters/types.ts:565](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L565)
 
 v2.12 — Current ReAct iteration (1-based). Lets policies fire
 different rules per iteration without external counters.
@@ -84,7 +84,7 @@ different rules per iteration without external counters.
 
 > `readonly` `optional` **sequence?**: readonly [`ToolCallEntry`](/agentfootprint/api/generated/interfaces/ToolCallEntry.md)[]
 
-Defined in: [src/adapters/types.ts:508](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L508)
+Defined in: [src/adapters/types.ts:554](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L554)
 
 v2.12 — Sequence of tool calls already dispatched this run, in
 call order. EMPTY for non-`tool_call` capabilities. Sequence-aware
@@ -97,7 +97,7 @@ decisions that single-call governance cannot.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:534](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L534)
+Defined in: [src/adapters/types.ts:580](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L580)
 
 v2.12 — Optional abort signal propagated from `agent.run({ env: { signal } })`.
 Async checkers (Redis lookups, hub-backed allowlists) MUST honor this
@@ -109,4 +109,4 @@ Async checkers (Redis lookups, hub-backed allowlists) MUST honor this
 
 > `readonly` `optional` **target?**: `string`
 
-Defined in: [src/adapters/types.ts:500](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L500)
+Defined in: [src/adapters/types.ts:546](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L546)

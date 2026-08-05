@@ -6,7 +6,7 @@
 
 # Interface: LLMRequest
 
-Defined in: [src/adapters/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L141)
+Defined in: [src/adapters/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L141)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:141](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **cacheMarkers?**: readonly `CacheMarker`[]
 
-Defined in: [src/adapters/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L160)
+Defined in: [src/adapters/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L160)
 
 Cache markers (v2.6+) — provider-agnostic prefix-cache hints
 populated by `CacheStrategy.prepareRequest` after the agent's
@@ -31,7 +31,7 @@ cache support (OpenAI auto-cache, Mock, NoOp) ignore it.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/adapters/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L147)
+Defined in: [src/adapters/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L147)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/adapters/types.ts:147](https://github.com/footprintjs/agentfoot
 
 > `readonly` **messages**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/adapters/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L143)
+Defined in: [src/adapters/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L143)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/adapters/types.ts:143](https://github.com/footprintjs/agentfoot
 
 > `readonly` **model**: `string`
 
-Defined in: [src/adapters/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L145)
+Defined in: [src/adapters/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L145)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/adapters/types.ts:145](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L149)
+Defined in: [src/adapters/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L149)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/adapters/types.ts:149](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: [src/adapters/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L148)
+Defined in: [src/adapters/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L148)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: [src/adapters/types.ts:148](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **systemPrompt?**: `string`
 
-Defined in: [src/adapters/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L142)
+Defined in: [src/adapters/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L142)
 
 ***
 
@@ -79,7 +79,7 @@ Defined in: [src/adapters/types.ts:142](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/adapters/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L146)
+Defined in: [src/adapters/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L146)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: [src/adapters/types.ts:146](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **thinking?**: `object`
 
-Defined in: [src/adapters/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L184)
+Defined in: [src/adapters/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L184)
 
 v2.14 — request the LLM emit reasoning/thinking content on this call.
 
@@ -117,8 +117,41 @@ LLM call the agent makes. Leave undefined to call without thinking
 
 ***
 
+### toolChoice?
+
+> `readonly` `optional` **toolChoice?**: `object`
+
+Defined in: [src/adapters/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L205)
+
+v7.26 — force the model to answer through one named tool.
+
+One arm, because one arm is what the library needs and can keep a
+promise about: `.outputSchema(parser, { strategy: 'tool-forced' })`
+presents the schema as a synthetic tool and forces the choice, so the
+shape is constrained at generation instead of requested in prose.
+Anthropic spells it `{type:'tool',name}`, OpenAI
+`{type:'function',function:{name}}`, Bedrock Converse
+`toolConfig.toolChoice.tool.name` — the field is the one word all three
+agree on, and each adapter writes its own dialect.
+
+A provider that does not declare [LLMProvider.carriesForcedToolChoice](/agentfootprint/api/generated/interfaces/LLMProvider.md#carriesforcedtoolchoice)
+never receives this field: the agent refuses at run start instead,
+naming the provider. Silently sending it to a wire that ignores it would
+turn a guarantee into a suggestion with nothing in the recording to say
+so.
+
+#### name
+
+> `readonly` **name**: `string`
+
+#### type
+
+> `readonly` **type**: `"tool"`
+
+***
+
 ### tools?
 
 > `readonly` `optional` **tools?**: readonly [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)[]
 
-Defined in: [src/adapters/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L144)
+Defined in: [src/adapters/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/adapters/types.ts#L144)

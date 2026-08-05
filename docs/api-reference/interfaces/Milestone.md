@@ -6,7 +6,7 @@
 
 # Interface: Milestone
 
-Defined in: [src/conventions.ts:277](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/conventions.ts#L277)
+Defined in: [src/conventions.ts:285](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/conventions.ts#L285)
 
 A time-travel milestone: a domain-declared scrub stop. Conceptually each
 milestone marks the boundary of a COLLECTION of commits (the commits that
@@ -21,7 +21,7 @@ classifies; it never hardcodes agent vocabulary.
 
 > `readonly` **kind**: [`MilestoneKind`](/agentfootprint/api/generated/type-aliases/MilestoneKind.md)
 
-Defined in: [src/conventions.ts:278](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/conventions.ts#L278)
+Defined in: [src/conventions.ts:286](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/conventions.ts#L286)
 
 ***
 
@@ -29,6 +29,6 @@ Defined in: [src/conventions.ts:278](https://github.com/footprintjs/agentfootpri
 
 > `readonly` **label**: `string`
 
-Defined in: [src/conventions.ts:280](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/conventions.ts#L280)
+Defined in: [src/conventions.ts:288](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/conventions.ts#L288)
 
 Human-readable base label ("LLM turn"); the renderer may add an ordinal.

@@ -8,7 +8,7 @@
 
 > **MergeFn** = (`branchResults`) => `string`
 
-Defined in: [src/core-flow/Parallel.ts:82](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core-flow/Parallel.ts#L82)
+Defined in: [src/core-flow/Parallel.ts:82](https://github.com/footprintjs/agentfootprint/blob/b0d6df03c3c530d8a98631823e1b6745e8adc197/src/core-flow/Parallel.ts#L82)
 
 ## Parameters
 
