@@ -6,7 +6,7 @@
 
 # Interface: CommentaryContext
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:149](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/recorders/observability/commentary/commentaryTemplates.ts#L149)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:149](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/recorders/observability/commentary/commentaryTemplates.ts#L149)
 
 Context the var-extractor reads from. Anything that's NOT in the
  event payload (consumer-supplied appName, tool registry lookup) goes
@@ -18,7 +18,7 @@ Context the var-extractor reads from. Anything that's NOT in the
 
 > `readonly` **appName**: `string`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:152](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/recorders/observability/commentary/commentaryTemplates.ts#L152)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:152](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/recorders/observability/commentary/commentaryTemplates.ts#L152)
 
 The system that orchestrates the LLM. Substituted as the active
  actor in every line ("Acme called the LLM"). Default: `'Chatbot'`.
@@ -29,7 +29,7 @@ The system that orchestrates the LLM. Substituted as the active
 
 > `readonly` `optional` **getToolDescription?**: (`toolName`) => `string` \| `undefined`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:157](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/recorders/observability/commentary/commentaryTemplates.ts#L157)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:157](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/recorders/observability/commentary/commentaryTemplates.ts#L157)
 
 Resolves a tool name to its registered description ("Get current
  weather for a city"). Used to compose the optional `descClause`

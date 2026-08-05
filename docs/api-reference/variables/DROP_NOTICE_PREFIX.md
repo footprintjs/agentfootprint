@@ -8,6 +8,6 @@
 
 > `const` **DROP\_NOTICE\_PREFIX**: `"[dropped history"` = `'[dropped history'`
 
-Defined in: [src/core/agent/window/notice.ts:35](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/window/notice.ts#L35)
+Defined in: [src/core/agent/window/notice.ts:35](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/window/notice.ts#L35)
 
 Opening of the authored notice. Stable — tests and readers match on it.
