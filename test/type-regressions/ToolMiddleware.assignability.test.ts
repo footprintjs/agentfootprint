@@ -28,16 +28,20 @@ import type {
   MessageMiddlewareContext,
   MessageOutcome,
   MiddlewareDecision,
+  ToolCallMiddleware,
   ToolMiddleware,
   ToolMiddlewareContext,
   ToolOutcome,
+  ToolResultContext,
+  ToolResultMiddleware,
+  ToolResultOutcome,
 } from '../../src/index';
 import { allow, ask, deny, MessageDeniedError } from '../../src/index';
 
 // ─── 1 + 2. The shape of the closed union ─────────────────────────
 
 /** A tool middleware written against nothing but the exported types. */
-const governed: ToolMiddleware = {
+const governed: ToolCallMiddleware = {
   name: 'governed',
   onToolCall: (call: ToolMiddlewareContext): ToolOutcome => {
     if (call.toolName === 'wire_money') return deny('wire transfers are out of scope');
@@ -92,9 +96,62 @@ function _neverCalled(): void {
 }
 void _neverCalled;
 
+// ─── 7.24 — the after-tool moment ─────────────────────────────────
+
+/** A rule about the RESULT only. It takes no part in dispatch. */
+const resultOnly: ToolResultMiddleware = {
+  name: 'result-only',
+  onToolResult: (call: ToolResultContext): ToolResultOutcome => {
+    if (call.error === true) return allow();
+    if (typeof call.result === 'string' && call.result.includes('sk-live-'))
+      return deny('the tool answered with a live key; the model does not read it');
+    return allow({ wrapped: call.result }, 'wrapped the result');
+  },
+};
+void resultOnly;
+
+/** Both hooks on one object — the ordinary "wrap a call" shape. */
+const wraps: ToolMiddleware = {
+  name: 'wraps',
+  onToolCall: () => allow(),
+  onToolResult: () => allow(),
+};
+void wraps;
+
+// LAW — there is no `ask` at the after-tool moment: the tool has already run, so
+// there is nothing left for a person to prevent.
+// @ts-expect-error `ToolResultOutcome` has no `ask` arm.
+const _askedAfter: ToolResultOutcome = ask({ question: 'was that ok?' });
+void _askedAfter;
+
+// LAW — a middleware with a name and no hook is a rule that can never run.
+// @ts-expect-error neither `onToolCall` nor `onToolResult`.
+const _hookless: ToolMiddleware = { name: 'hookless' };
+void _hookless;
+
+// The two arms are each assignable to the union.
+const _before: ToolMiddleware = {} as ToolCallMiddleware;
+const _after: ToolMiddleware = {} as ToolResultMiddleware;
+void _before;
+void _after;
+
+// The after context is the before context plus what came back.
+function _readsBoth(call: ToolResultContext): void {
+  const _name: string = call.toolName;
+  const _args: Readonly<Record<string, unknown>> = call.args;
+  const _result: unknown = call.result;
+  const _source: string | undefined = call.toolSource;
+  void _name;
+  void _args;
+  void _result;
+  void _source;
+}
+void _readsBoth;
+
 // A ledger row is plain data — it must survive structuredClone into a record.
 const _row: MiddlewareDecision = {
   middleware: 'scrubbed',
+  moment: 'input',
   at: 'message',
   phase: 'input',
   iteration: 0,
@@ -127,6 +184,32 @@ describe('middleware seam — type regression', () => {
       history: [],
     });
     expect(asked.kind).toBe('ask');
+  });
+
+  it('a result-only middleware written against the exported types alone runs', async () => {
+    const withheld = await resultOnly.onToolResult({
+      toolName: 'read_vault',
+      toolCallId: 'c1',
+      iteration: 1,
+      args: {},
+      result: 'token sk-live-42',
+      history: [],
+    });
+    expect(withheld.kind).toBe('deny');
+
+    const wrapped = await resultOnly.onToolResult({
+      toolName: 'read_vault',
+      toolCallId: 'c2',
+      iteration: 1,
+      args: {},
+      result: 'fine',
+      history: [],
+    });
+    expect(wrapped).toEqual({
+      kind: 'allow',
+      value: { wrapped: 'fine' },
+      why: 'wrapped the result',
+    });
   });
 
   it('a message middleware narrows on phase and never returns an ask', async () => {

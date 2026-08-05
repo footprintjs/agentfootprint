@@ -35,10 +35,41 @@
  * `checkIn` and `askHuman` already go through. `MessageOutcome` does not,
  * because the message boundary is a plain stage, and inventing a second
  * pause to give it one would be a worse answer than not offering it.
+ * `ToolResultOutcome` does not either — see below.
+ *
+ * ## The two moments of a tool call
+ *
+ * A tool middleware may speak twice about one call:
+ *
+ *   `onToolCall`    BEFORE dispatch — about the call. Three verbs.
+ *   `onToolResult`  AFTER the tool ran, before its result enters the history
+ *                   or reaches the model — about the result. Two verbs.
+ *
+ * Each hook is named for what it RECEIVES; the moments they sit at are named
+ * `'before-tool'` and `'after-tool'` (and `.act()`'s keys after those).
+ *
+ * Either hook alone is a whole middleware; a link with only `onToolResult`
+ * does not take part in dispatch at all. The chain walks the two moments in **onion
+ * order**: the first-declared link sees the CALL first and the RESULT last —
+ * first word going in, last word coming out — which is the order that lets an
+ * outer rule inspect what every inner rule already did.
+ *
+ * **There is no `ask` at the after-tool moment.** Not because the machinery is missing —
+ * the dispatch loop pauses perfectly well — but because the tool has ALREADY
+ * RUN. A person woken to answer a question about a side effect that already
+ * happened cannot prevent it; the honest verbs there are "let the result
+ * through" and "do not let the model see it", and both are available now. The
+ * business cases this was measured against — authorize before, hide from the
+ * model, annotate the result, attach a fact through a context trigger — none
+ * of them needed a person at that moment. This is a refusal, not an oversight,
+ * and it is written here so evidence can promote it later: bring a case that
+ * genuinely needs a human at the after-tool moment and the arm can be added, on the
+ * pause machinery that already exists.
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
+import type { LoopMoment } from '../moments.js';
 
 // ─── The outcomes ────────────────────────────────────────────────────
 
@@ -98,6 +129,25 @@ export type ToolOutcome =
 /** Everything a message middleware may answer. No `ask` — see the header. */
 export type MessageOutcome = AllowOutcome<string> | DenyOutcome;
 
+/**
+ * Everything a tool middleware may answer at the after-tool moment. Two arms,
+ * and no `ask` — the tool has already run, so there is nothing left for a
+ * person to prevent (see the header).
+ *
+ * `allow()` lets the real result through. `allow(value, why)` replaces what
+ * the MODEL reads while the run commits both versions. `deny(reason)` sends
+ * the reason to the model instead of the result — and the run still records
+ * the result, because the side effect happened and a record that hid it would
+ * be a record that lies.
+ *
+ * A tool result can be any value, so the transform arm is `unknown`. One
+ * sharp edge follows from `allow`'s own rule: `allow(undefined, why)` is a
+ * pass-through carrying a reason, not a replacement — there is no spelling of
+ * "replace the result with `undefined`". To keep a result away from the model
+ * use `deny(reason)`, which says so in the record.
+ */
+export type ToolResultOutcome = AllowOutcome<unknown> | DenyOutcome;
+
 // ─── What a middleware is handed ─────────────────────────────────────
 
 /** The call a tool middleware is deciding about. */
@@ -133,6 +183,29 @@ export interface ToolMiddlewareContext {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * The finished call `onToolResult` is deciding about: everything `onToolCall`
+ * saw, plus what came back.
+ *
+ * `args` here are the args the tool ACTUALLY RAN WITH — every before-transform
+ * applied — so a rule reading both fields is reading one coherent event rather
+ * than the model's proposal beside somebody else's answer.
+ */
+export interface ToolResultContext extends ToolMiddlewareContext {
+  /**
+   * What the tool returned. Whatever the tool's own return type is, un-
+   * stringified — the conversion to the text the model reads happens after
+   * this chain, so a rule can inspect the real object.
+   */
+  readonly result: unknown;
+  /**
+   * Present and `true` when the tool THREW and `result` is the error's
+   * message. The call still executed, which is why this moment happens at
+   * all: a tool that failed halfway may have done half its work.
+   */
+  readonly error?: true;
+}
+
 /** The message a message middleware is deciding about. */
 export interface MessageMiddlewareContext {
   /**
@@ -153,8 +226,32 @@ export interface MessageMiddlewareContext {
 
 // ─── The middlewares ─────────────────────────────────────────────────
 
+/** What both arms of {@link ToolMiddleware} carry. */
+interface ToolMiddlewareIdentity {
+  /** Identifies this middleware in every ledger row and event it produces. */
+  readonly name: string;
+}
+
+/** A link that decides about the CALL, and may also decide about the result. */
+export interface ToolCallMiddleware extends ToolMiddlewareIdentity {
+  onToolCall(call: ToolMiddlewareContext): ToolOutcome | Promise<ToolOutcome>;
+  onToolResult?(call: ToolResultContext): ToolResultOutcome | Promise<ToolResultOutcome>;
+}
+
+/** A link that decides only about the RESULT. It takes no part in dispatch. */
+export interface ToolResultMiddleware extends ToolMiddlewareIdentity {
+  onToolCall?: never;
+  onToolResult(call: ToolResultContext): ToolResultOutcome | Promise<ToolResultOutcome>;
+}
+
 /**
- * One link in the tool-dispatch chain.
+ * One link in the tool chain — a rule about the call, about the result, or
+ * about both.
+ *
+ * The union is the point: an object with a `name` and no hook would be a
+ * governance rule that silently never runs, so it does not type-check. Which
+ * hooks a link has is what decides where it speaks — never which list it was
+ * written in.
  *
  * @example
  * ```ts
@@ -163,13 +260,17 @@ export interface MessageMiddlewareContext {
  *   onToolCall: (call) =>
  *     call.args.env === 'prod' ? deny('writes to prod need a change ticket') : allow(),
  * };
+ *
+ * const hideRawPII: ToolMiddleware = {
+ *   name: 'hide-raw-pii',
+ *   onToolResult: (call) =>
+ *     hasSSN(call.result)
+ *       ? deny('the record exists but its raw contents are not for the model')
+ *       : allow(),
+ * };
  * ```
  */
-export interface ToolMiddleware {
-  /** Identifies this middleware in every ledger row and event it produces. */
-  readonly name: string;
-  onToolCall(call: ToolMiddlewareContext): ToolOutcome | Promise<ToolOutcome>;
-}
+export type ToolMiddleware = ToolCallMiddleware | ToolResultMiddleware;
 
 /**
  * One link in the message chain. Runs at both phases unless it decides
@@ -204,9 +305,19 @@ export interface MessageMiddleware {
 export interface MiddlewareDecision {
   /** The middleware's `name`. */
   readonly middleware: string;
-  /** Which chain this row came from. */
+  /**
+   * WHERE IN THE LOOP this decision happened — the same five words `.act()`
+   * is keyed on, so a row and the door that filed it are read in one
+   * vocabulary.
+   *
+   * `at` and `phase` below say the same thing in the spelling 7.18 shipped
+   * with. They are committed state and they are not going anywhere; this is
+   * the newer word for the same fact, and the one to narrow on.
+   */
+  readonly moment: LoopMoment;
+  /** Which chain this row came from. The older spelling — see `moment`. */
   readonly at: 'tool' | 'message';
-  /** Message chain only. */
+  /** Message chain only. The older spelling — see `moment`. */
   readonly phase?: 'input' | 'output';
   /** Tool chain only. */
   readonly toolName?: string;
@@ -215,11 +326,26 @@ export interface MiddlewareDecision {
   /** ReAct iteration. `0` for the `'input'` phase, which runs before iter 1. */
   readonly iteration: number;
   readonly outcome: 'allow' | 'deny' | 'ask';
-  /** True when this row changed the value the chain carries forward. */
+  /**
+   * True when this row changed the value the chain carries forward.
+   *
+   * A refusal at `'before-tool'` leaves nothing to change — the call does not
+   * happen. A refusal at `'after-tool'` DOES change something: the tool ran,
+   * and the model is handed the reason instead of what came back. Those rows
+   * carry `changed: true` with the real result in `before`.
+   */
   readonly changed: boolean;
   /** The transform's `why`, the denial's `reason`, or the ask's `question`. */
   readonly why?: string;
-  /** The value before this middleware. Present only when `changed`. */
+  /**
+   * The value before this middleware. Present only when `changed`.
+   *
+   * At `'after-tool'` this is the tool's REAL result — including on a
+   * refusal, where it is the only copy in the run, because the side effect
+   * happened and a record that dropped it would be a record that lies. If it
+   * must not survive in the commit log, that is footprintjs redaction over
+   * this key: the row survives, the value does not.
+   */
   readonly before?: unknown;
   /** The value after this middleware. Present only when `changed`. */
   readonly after?: unknown;

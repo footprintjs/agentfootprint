@@ -164,10 +164,22 @@ export {
   type MessageMiddlewareContext,
   type MessageOutcome,
   type MiddlewareDecision,
+  type ToolCallMiddleware,
   type ToolMiddleware,
   type ToolMiddlewareContext,
   type ToolOutcome,
+  type ToolResultContext,
+  type ToolResultMiddleware,
+  type ToolResultOutcome,
 } from './core/agent/middleware/index.js';
+
+// `.act({ input, beforeTool, afterTool, window, output })` — the five moments
+// of the loop in one block, and the canonical way to say what an agent does
+// about its own turn. Pure sugar over the five doors above and below; the keys
+// are locked at compile time against `LoopMoment`, so the bundle cannot fall
+// behind the loop.
+export { LOOP_MOMENTS, actKeyFor, type ActKey, type LoopMoment } from './core/agent/moments.js';
+export { ACT_KEYS, type ActOptions } from './core/agent/act.js';
 
 // Check in with the receipts — evidence-carrying human consent. A tool
 // declares `checkIn` (see `defineTool`); when it trips the run pauses with a

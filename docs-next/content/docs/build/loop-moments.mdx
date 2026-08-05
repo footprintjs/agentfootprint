@@ -1,0 +1,194 @@
+---
+title: The moments of the loop
+description: Every place in an agent turn where a rule may speak, what watch reports there, and what act may change. One block — .act({ input, beforeTool, afterTool, window, output }) — with keys locked to the moments at compile time.
+---
+
+> **Tools do the work. Act decides about the work. Watch remembers both — and nothing can act without being watched.**
+
+Act and watch attend the same moments. The difference is what they may DO there: watch reports, act changes what happens next. A moment with an act seam always has a watch event; a moment with only a watch event is one you can see and cannot steer.
+
+<Diagram name="loop-moments" alt="One agent turn drawn as a circle. The message enters through the input gate, the loop runs clockwise past the window gate, the model call, the before-tool gate, the tool running, the after-tool gate and the end of the iteration; the answer leaves through the output gate. Five amber gates are what act() can change; purple watch-dots sit at every moment, including those with no gate." />
+
+## The whole steering wheel
+
+```ts
+import { Agent, slidingWindow } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .act({
+    input:      [scrubSSNs],                          // the message, before the run commits it
+    beforeTool: [refundCeiling],                      // every call, before it is dispatched
+    afterTool:  [stripPII],                           // every result, before the model reads it
+    window:     slidingWindow({ keepRecentTurns: 12 }), // what the live window keeps
+    output:     [noCodenames],                        // the answer, before the caller gets it
+  })
+  .build();
+```
+
+Five optional keys, one per moment, in the order the loop reaches them. Autocomplete on an empty `{}` is the loop.
+
+**It is sugar, and provably so.** Each key is forwarded to the door that already owned it, so the agent above is byte-for-byte the agent five separate calls build — same requests on the wire, same rows in the ledger. That equivalence is pinned per key by tests.
+
+**Call it once.** A second `.act()` throws: two posture blocks put the answer to "what does this agent do at each moment?" in two places, with the later one silently winning. Adding one rule to an agent somebody else built is what the [individual doors](#composing-incrementally) are for.
+
+## The table
+
+Every moment of one turn, what watch reports there, and what act may change:
+
+| moment | what happens | watch event | act seam |
+| --- | --- | --- | --- |
+| **input** | the user's message arrives, before anything commits it | `agent.turn_start`, `middleware.decision` | `.act({ input })` |
+| context slots | the three slots are composed for this iteration | `context.slot_composed`, `context.injected`, `tools.offered` | observation only |
+| **window** | the live window is measured and trimmed | `context.evicted` | `.act({ window })` |
+| the model call | the request goes out and the answer streams back | `stream.llm_start`, `stream.token`, `stream.llm_end` | observation only |
+| the route | this turn either calls tools or answers | `agent.route_decided` | observation only |
+| **before-tool** | a call is about to be dispatched | `stream.tool_start`, `permission.check`, `middleware.decision` | `.act({ beforeTool })` |
+| the tool runs | the work itself — credentials resolve, the tool executes | `credential.requested`, `credential.acquired` | observation only |
+| **after-tool** | the result exists, before it enters history | `stream.tool_end`, `middleware.decision` | `.act({ afterTool })` |
+| the iteration ends | history is committed and the loop turns | `agent.iteration_end` | observation only |
+| **output** | the final answer, before the caller receives it | `agent.turn_end`, `middleware.decision` | `.act({ output })` |
+
+Two moments are worth naming as deliberately observation-only. **The model call** has no seam because a rule that could rewrite the response would be a rule that could answer for the model, which is the fabrication this library removes everywhere else. **The tool run** has none for the same reason, one layer down: `beforeTool` decides whether it happens and `afterTool` decides what is read of it, and neither can stand in for it.
+
+## What each moment can answer
+
+| verb | input / output | beforeTool | afterTool |
+| --- | --- | --- | --- |
+| `allow()` | ✅ | ✅ | ✅ |
+| `allow(value, why)` | ✅ the text | ✅ the args | ✅ the result the model reads |
+| `allow(undefined, why)` | ✅ pass through, with a reason on the row | ✅ | ✅ |
+| `deny(reason)` | ✅ raises `MessageDeniedError` | ✅ the model reads the reason | ✅ the model reads the reason instead of the result |
+| `ask({ question })` | ❌ no pause at this boundary | ✅ suspends for a person | ❌ the tool has already run |
+
+The `window` moment speaks a different language — a [`WindowStrategy`](doc:window-strategies) plans a removal and files a record — because it decides about the whole conversation rather than about one value.
+
+## The onion
+
+The two tool moments are ONE chain, walked forwards for the call and backwards for the result. The first-declared rule gets the **first word going in and the last word coming out**:
+
+```
+                    ┌──────────────── audit ────────────────┐
+                    │   ┌──────────── redact ───────────┐   │
+                    │   │   ┌──────── ceiling ──────┐   │   │
+   the model asks ──┼───┼───┼──────▶  THE TOOL      │   │   │
+                    │   │   └───────────────────────┘   │   │
+                    │   └───────────────────────────────┘   │
+   the model reads ◀┴───────────────────────────────────────┘
+
+   .act({ beforeTool: [audit, redact, ceiling] })
+
+   before:  audit → redact → ceiling → the tool runs
+   after:            the tool → ceiling → redact → audit
+```
+
+`audit` sees the call the model asked for, before anyone changed it, and the result after everyone finished with it. `ceiling` sits closest to the tool on both sides. That is the only order in which "wrap" means anything — and an order-sensitive test pins it.
+
+## The after-tool moment
+
+`onToolResult` runs once the tool has executed and **before its result enters the history or reaches the model**:
+
+```ts
+const stripPII: ToolMiddleware = {
+  name: 'strip-pii',
+  onToolResult: (call) => {
+    const record = call.result as Record<string, unknown>;
+    if (!('ssn' in record)) return allow();
+    const { ssn, ...safe } = record;
+    return allow(safe, 'removed the SSN before the model read it');
+  },
+};
+```
+
+It takes the same context the call moment gets — including [`toolSource`](doc:middleware#which-server-did-this-tool-come-from) — plus `result`, and `args` as the tool **actually ran with** them, every before-transform applied.
+
+**The moment is `after-tool`; the hook is `onToolResult`.** A moment is named for WHEN it happens — which is what `.act()`'s `afterTool` key is named after — and a hook is named for WHAT IT RECEIVES, which is how it pairs with `onToolCall`.
+
+**A refusal here hides an answer; it does not undo a side effect.** `deny(reason)` sends the reason to the model instead of the result, and the run still commits the real result, because it happened. A record that dropped it would describe an agent that called a tool and got nothing back, which is not what occurred. (If that value must not survive in the commit log, that is a [redaction](doc:middleware#read-this-before-you-scrub-secrets) question, and the row survives the scrub.)
+
+**`onToolResult` never runs for a call that never executed.** Denied before dispatch, waiting on a person, rejected by arg validation, blocked on a credential, or naming a tool that does not exist — none of those have a result to decide about, and asking a rule about a result that does not exist is the fabrication the outcome union removes.
+
+**There is no `ask` at the after-tool moment, and that is a refusal rather than an omission.** The machinery is right there — the dispatch loop pauses perfectly well — but the tool has already run, so a person woken to answer cannot prevent anything. The honest verbs at that moment are "let it through" and "the model does not read this", and both ship. The business cases this was measured against (authorize before · hide from the model · annotate the result · attach a fact through a trigger) needed none of them. Bring one that genuinely needs a person there and the arm can be added on the pause machinery that already exists.
+
+**A rule with only `onToolResult` takes no part in dispatch** — no walk, no ledger row at the call moment. It did not decide anything there, and a row saying it allowed would be inventing a decision.
+
+## Every row says which moment it came from
+
+```ts
+const rows = agent.getLastSnapshot()?.sharedState.middlewareDecisions;
+// [{ middleware: 'scrub-ssns',  moment: 'input',       outcome: 'allow', changed: true, ... },
+//  { middleware: 'refund-ceiling', moment: 'before-tool', outcome: 'allow', changed: true, ... },
+//  { middleware: 'strip-pii',   moment: 'after-tool',  outcome: 'allow', changed: true, ... }]
+```
+
+`moment` is the same word the key is named for, so the door you wrote and the row it produced read in one vocabulary. The 7.18 fields — `at: 'tool' | 'message'` and `phase: 'input' | 'output'` — are committed state and are still written; `moment` is the newer spelling and the one to narrow on.
+
+The typed event carries it too:
+
+```ts
+agent.on('agentfootprint.middleware.decision', (e) => {
+  console.log(e.payload.moment, e.payload.middleware, e.payload.outcome);
+});
+```
+
+As before, the event carries the FACT and never the values — an event stream fans out to sinks the library does not control.
+
+## Session trust: ask once, remember the answer
+
+The rule people actually want around a consequential tool is neither "ask every time" nor "never ask". It is **ask once, then remember** — and the remembering has to be legible, or "why did this run without asking?" has no answer in the record.
+
+<CodeFile path="examples/features/39-approve-once.ts" region="approve-once" title="examples/features/39-approve-once.ts (region: approve-once)" />
+
+The `why` is what makes it honest: a call that sails through on a remembered decision files a row saying **whose** decision it sailed through on. `allow(undefined, why)` is a pass-through that carries a reason — the row still reads `changed: false`, because nothing moved.
+
+**The key is the safe default: tool + source + args.** An approval is an approval of a THING — this refund, this amount, this order. The loosening is one line:
+
+```ts
+const keyOf = (call) => `${call.toolSource ?? 'own'}::${call.toolName}`;  // args dropped
+```
+
+…and it costs exactly what it looks like it costs: one approval of `issue_refund` then covers **every** refund for the rest of the session, including amounts nobody has seen. A reasonable trade for a read-only lookup; a bad one for anything destructive.
+
+## The whole wheel, running
+
+<CodeFile path="examples/features/38-act.ts" region="wheel" title="examples/features/38-act.ts (region: wheel)" />
+
+Run it with `npm run example examples/features/38-act.ts` and it prints what each moment decided.
+
+## Composing incrementally
+
+<Callout type="info">**Advanced.** Use these when you are adding one piece to an agent you did not build — a plugin, a policy pack, a test harness. For an agent you own, `.act()` is the spelling.</Callout>
+
+The five doors `.act()` forwards to are unchanged and stay open:
+
+| door | moment(s) |
+| --- | --- |
+| [`.messageMiddleware(...)`](doc:middleware) | `input` and `output` — one rule at both halves, reading `msg.phase` |
+| [`.toolMiddleware(...)`](doc:middleware) | `before-tool` and `after-tool` — whichever of `onToolCall` / `onToolResult` the rule has |
+| [`.window(strategy)`](doc:window-strategies) | `window` |
+| [`.compaction({...})`](doc:compaction) | `window`, with `summarizeOldest` already in it |
+
+They append, so a plugin can add a rule to an agent that already has a posture. Two details are worth knowing:
+
+- **`.act({ input })` restricts a rule to one phase; `.messageMiddleware()` does not.** A rule named for one message moment is still a link in the chain at the other, where it passes through and files that pass-through row — byte for byte what the hand-written `msg.phase === 'input' ? … : allow()` spelling records. Name a rule under **both** `input` and `output` and it is attached once, unguarded: exactly `.messageMiddleware(rule)`.
+- **The tool buckets are for reading; the hooks decide.** A rule with both `onToolCall` and `onToolResult` runs at both moments whichever key you wrote it under, and a rule named under both keys is the same object attached once. A governance rule that silently did not run because it was filed in the wrong bucket is the failure this door exists to prevent — so the bucket is checked for the hook it names, and refuses at build time if it is missing.
+
+## The completeness lock
+
+`.act()` claims to be the whole wheel. A claim like that lasts exactly as long as somebody remembers it, so it is pinned by the compiler instead:
+
+```ts
+export type LoopMoment = 'input' | 'before-tool' | 'after-tool' | 'window' | 'output';
+```
+
+The bundle's keys are checked **both ways** against that list, camel-cased (`'before-tool'` → `beforeTool`) by type-level string manipulation rather than a hand-written pair table. Ship a sixth moment without a key and our build fails naming it; add a key that is not a moment and it fails the other way. The runtime validator is derived from the same list, so a typo'd key is refused by a rule that cannot fall behind the type it validates.
+
+`LOOP_MOMENTS` and `actKeyFor` are exported, so a UI that renders "what does this agent do at each moment?" can enumerate the moments rather than hard-code five strings.
+
+## Related
+
+- [Middleware](doc:middleware) — the verbs, the ledger, and the laws they rest on
+- [Window strategies](doc:window-strategies) — what the `window` moment can be
+- [Check in](doc:checkin) — consent a TOOL declares, rather than a rule
+- [Security](doc:security) — `PermissionChecker`, which decides before any of this
+- [Observability](doc:observability) — the watch side of the same moments
+- [Serving over MCP](doc:mcp-serve) — both tool moments at the served boundary

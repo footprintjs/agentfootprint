@@ -20,6 +20,15 @@ import type { AllowOutcome, AskOutcome, AskPayload, DenyOutcome } from './types.
 /** Pass the value through untouched. */
 export function allow(): AllowOutcome<never>;
 /**
+ * Pass the value through untouched, and say why you were comfortable.
+ *
+ * The row still reads `changed: false` — nothing moved — but it carries the
+ * reason, which is what a rule that remembers an earlier decision needs:
+ * "approved by dana@ops at 14:02" belongs in the record of the call it
+ * silently permitted, not only in the record of the call that asked.
+ */
+export function allow(value: undefined, why: string): AllowOutcome<never>;
+/**
  * Replace the value and say why.
  *
  * The `why` is mandatory and lands in the ledger next to the before/after
@@ -28,7 +37,9 @@ export function allow(): AllowOutcome<never>;
  */
 export function allow<T>(value: T, why: string): AllowOutcome<T>;
 export function allow<T>(value?: T, why?: string): AllowOutcome<T> {
-  if (value === undefined) return { kind: 'allow' };
+  if (value === undefined) {
+    return typeof why === 'string' && why.length > 0 ? { kind: 'allow', why } : { kind: 'allow' };
+  }
   if (typeof why !== 'string' || why.length === 0) {
     throw new Error(
       'allow(value, why): a transform must say why. Pass a short reason — it is what the ' +
@@ -45,6 +56,12 @@ export function allow<T>(value?: T, why?: string): AllowOutcome<T> {
  * For a tool the reason reaches the model verbatim, as the tool's result,
  * and the loop continues — the agent gets to adapt. For a message it
  * surfaces as a `MessageDeniedError`.
+ *
+ * At the after-tool moment it means "the model does not get to read this" — the
+ * tool has already run, so the refusal replaces what the model reads while
+ * the run keeps the real result in the ledger. Refusing there hides an answer
+ * from the model; it cannot un-happen a side effect, and it does not pretend
+ * to.
  */
 export function deny(reason: string): DenyOutcome {
   if (typeof reason !== 'string' || reason.length === 0) {

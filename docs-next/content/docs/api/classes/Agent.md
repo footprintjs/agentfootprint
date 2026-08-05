@@ -121,7 +121,7 @@ readonly `MemoryDefinition`\<`unknown`\>[] = `[]`
 
 ##### toolMiddleware?
 
-readonly [`ToolMiddleware`](/docs/api/interfaces/ToolMiddleware)[]
+readonly [`ToolMiddleware`](/docs/api/type-aliases/ToolMiddleware)[]
 
 ##### messageMiddleware?
 

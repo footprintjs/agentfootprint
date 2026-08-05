@@ -23,7 +23,7 @@
  * Gate order for one call, and why it is this order:
  *
  *   permission → MIDDLEWARE CHAIN → arg validation → check-in →
- *   credentials → execute
+ *   credentials → execute → THE CHAIN AGAIN, BACKWARDS (`onToolResult`)
  *
  * The chain sits after the permission gate so an existing checker still
  * decides first (a denial there means no middleware runs), and before arg
@@ -32,6 +32,11 @@
  * rejects must be caught, not forwarded. A middleware answering `ask`
  * pauses on the SAME wire `checkIn` uses; the human's answer is a
  * decision, not a result, so the chain resumes and the REAL tool runs.
+ *
+ * The last step is the same chain walked BACKWARDS over the result, before it
+ * becomes history — so the first-declared rule has the first word about the
+ * call and the last word about the answer. It runs only for a call that
+ * executed: everything the gates above refuse has no result to decide about.
  *
  * `read_skill` is the auto-attached activation tool — when the LLM
  * calls it with a valid Skill id, the next InjectionEngine pass
@@ -59,7 +64,7 @@ import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool } from '../../tools.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { ToolMiddleware } from '../middleware/types.js';
-import { runToolChain, type ToolArgs } from '../middleware/runChain.js';
+import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import {
   formatToolArgIssues,
@@ -173,6 +178,59 @@ export function buildToolCallsHandler(
     return cached.find((t) => t.schema.name === toolName);
   };
 
+  /**
+   * The after-tool moment: the chain's last word, on a call that RAN.
+   *
+   * Called from all three dispatch sites (the loop, an approved ask, an
+   * approved check-in) and from nowhere else — every one of them has just
+   * executed a tool, which is the entire precondition. A call the chain
+   * denied, a call whose args were rejected, a call whose credential never
+   * issued and a call still waiting on a person have no result, and asking a
+   * rule about a result that does not exist would be the same fabrication the
+   * outcome union removes.
+   *
+   * Returns what the MODEL reads. The real result stays with the caller for
+   * `stream.tool_end`, so an event stream keeps reporting what the tool
+   * returned while the history carries what the rules allowed through — and
+   * the ledger row beside them says which is which.
+   */
+  const afterMoment = async (
+    scope: TypedScope<AgentState>,
+    call: {
+      readonly tool?: Tool;
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly iteration: number;
+      readonly args: ToolArgs;
+      readonly result: unknown;
+      readonly error?: boolean;
+      readonly history: readonly LLMMessage[];
+      readonly identity?: { tenant?: string; principal?: string; conversationId: string };
+      readonly signal?: AbortSignal;
+    },
+  ): Promise<unknown> => {
+    const chain = deps.toolMiddleware ?? [];
+    // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
+    // beyond the ones this dispatch already made. An agent whose middleware
+    // only governs calls is byte-identical to one built before this moment
+    // existed.
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return call.result;
+    const verdict = await runToolAfterChain(chain, {
+      toolName: call.toolName,
+      ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      args: call.args,
+      result: call.result,
+      ...(call.error === true && { error: true as const }),
+      history: call.history,
+      ...(call.identity && { identity: call.identity }),
+      ...(call.signal && { signal: call.signal }),
+    });
+    recordDecisions(scope, verdict.decisions);
+    return verdict.kind === 'deny' ? verdict.reason : verdict.result;
+  };
+
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -188,7 +246,7 @@ export function buildToolCallsHandler(
     toolCallId: string,
     iteration: number,
     env: { readonly signal?: AbortSignal },
-  ): Promise<{ result: unknown; error?: boolean }> => {
+  ): Promise<{ result: unknown; error?: boolean; executed?: boolean }> => {
     if (!tool) return { result: `Unknown tool: ${toolName}`, error: true };
     const runIdentity = scope.runIdentity as
       | { tenant?: string; principal?: string; conversationId: string }
@@ -244,15 +302,23 @@ export function buildToolCallsHandler(
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
       });
-      return { result };
+      return { result, executed: true };
     } catch (err) {
       if (isPauseRequest(err)) {
         return {
           result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
           error: true,
+          // It ran — a tool that asked to pause had already started work.
+          executed: true,
         };
       }
-      return { result: err instanceof Error ? err.message : String(err), error: true };
+      // A tool that threw still RAN, and may have done half its work; the
+      // after-tool moment exists precisely for the rules that care about that.
+      return {
+        result: err instanceof Error ? err.message : String(err),
+        error: true,
+        executed: true,
+      };
     }
   };
 
@@ -349,6 +415,8 @@ export function buildToolCallsHandler(
         // answer to "what did this call really run with".
         let callArgs: ToolArgs = tc.args;
         let denied = false;
+        /** True once `tool.execute` has been entered — see `afterMoment`. */
+        let executed = false;
         let haltContext:
           | {
               reason: string;
@@ -620,6 +688,10 @@ export function buildToolCallsHandler(
           if (!credentialBlocked) {
             try {
               if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
+              // Set BEFORE the await: a tool that throws has still run, and a
+              // tool that does not exist has not. This flag is the entire
+              // precondition of the after-tool moment below.
+              executed = true;
               result = await tool.execute(callArgs, {
                 toolCallId: tc.id,
                 iteration,
@@ -679,6 +751,25 @@ export function buildToolCallsHandler(
           }
         }
 
+        // ── The after-tool moment ────────────────────────────────────────
+        // Last thing before the result becomes history, and only for a call
+        // that ran. `modelResult` is what the model reads; `result` stays the
+        // truth about the tool and is what `stream.tool_end` reports.
+        const modelResult = executed
+          ? await afterMoment(scope, {
+              ...(tool && { tool }),
+              toolName: tc.name,
+              toolCallId: tc.id,
+              iteration,
+              args: callArgs,
+              result,
+              ...(error === true && { error: true }),
+              history: newHistory,
+              ...(runIdentity && { identity: runIdentity }),
+              ...(env.signal && { signal: env.signal }),
+            })
+          : result;
+
         const durationMs = Date.now() - startMs;
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId: tc.id,
@@ -686,7 +777,8 @@ export function buildToolCallsHandler(
           durationMs,
           ...(error === true && { error: true }),
         });
-        const resultStr = typeof result === 'string' ? result : safeStringify(result);
+        const resultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         newHistory.push({
           role: 'tool',
           content: resultStr,
@@ -799,12 +891,16 @@ export function buildToolCallsHandler(
           : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
 
         let result: unknown;
+        /** What the model reads. Differs from `result` only when a rule at the
+         *  after-tool moment transformed or withheld it. */
+        let modelResult: unknown;
         let error: boolean | undefined;
         if (!decision.approved) {
           result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
           recordDecisions(scope, [
             {
               middleware: askedBy,
+              moment: 'before-tool',
               at: 'tool',
               toolName,
               toolCallId,
@@ -818,6 +914,7 @@ export function buildToolCallsHandler(
           recordDecisions(scope, [
             {
               middleware: askedBy,
+              moment: 'before-tool',
               at: 'tool',
               toolName,
               toolCallId,
@@ -878,10 +975,31 @@ export function buildToolCallsHandler(
             );
             result = dispatched.result;
             error = dispatched.error;
+            // The tool ran on this side of the pause, so the chain gets its
+            // last word here too — a rule about results cannot be skipped by
+            // routing a call through a human.
+            if (dispatched.executed === true) {
+              modelResult = await afterMoment(scope, {
+                ...(tool && { tool }),
+                toolName,
+                toolCallId,
+                iteration,
+                args: rest.args,
+                result,
+                ...(error === true && { error: true }),
+                history: [...(scope.history as readonly LLMMessage[])],
+                ...(scope.runIdentity && { identity: scope.runIdentity }),
+                ...(env.signal && { signal: env.signal }),
+              });
+            }
           }
         }
 
-        const askResultStr = typeof result === 'string' ? result : safeStringify(result);
+        // `modelResult` is only set where the after-tool moment ran; everywhere
+        // else the two are the same value.
+        if (modelResult === undefined) modelResult = result;
+        const askResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         const askHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: askResultStr, toolCallId, toolName },
@@ -938,12 +1056,15 @@ export function buildToolCallsHandler(
         });
 
         let result: unknown;
+        /** What the model reads — see the ask path above. */
+        let modelResult: unknown;
         let error: boolean | undefined;
         if (decision.approved) {
           const env = scope.$getEnv();
+          const tool = lookupTool(toolName);
           const dispatched = await resolveCredentialAndExecute(
             scope,
-            lookupTool(toolName),
+            tool,
             toolName,
             args,
             toolCallId,
@@ -952,11 +1073,29 @@ export function buildToolCallsHandler(
           );
           result = dispatched.result;
           error = dispatched.error;
+          // Consent moved the execution to this side of the pause; the rules
+          // about results move with it.
+          if (dispatched.executed === true) {
+            modelResult = await afterMoment(scope, {
+              ...(tool && { tool }),
+              toolName,
+              toolCallId,
+              iteration,
+              args,
+              result,
+              ...(error === true && { error: true }),
+              history: [...(scope.history as readonly LLMMessage[])],
+              ...(scope.runIdentity && { identity: scope.runIdentity }),
+              ...(env.signal && { signal: env.signal }),
+            });
+          }
         } else {
           result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
         }
 
-        const decisionResultStr = typeof result === 'string' ? result : safeStringify(result);
+        if (modelResult === undefined) modelResult = result;
+        const decisionResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         const decisionHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: decisionResultStr, toolCallId, toolName },

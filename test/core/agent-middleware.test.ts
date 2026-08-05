@@ -992,3 +992,543 @@ describe('middleware — toolSource', () => {
     expect(await agent.run({ message: 'go' })).toBe('done');
   });
 });
+
+// ─── The after-tool moment (7.24) ─────────────────────────────────
+//
+// A tool link may speak twice: `onToolCall` about the call, `onToolResult`
+// about the result. Six laws carry the second half, and each has a test below:
+//
+//   A1. the transform works on the REAL result and commits BOTH versions;
+//   A2. a deny sends the reason to the model INSTEAD of the result, while the
+//       record keeps both — the side effect happened;
+//   A3. `onToolResult` NEVER runs for a call that never executed;
+//   A4. a link with only `onToolResult` takes no part in dispatch;
+//   A5. onion order — first-declared sees the call first and the result last;
+//   A6. `toolSource` is present at the after-tool moment, and a tool that threw still gets
+//       the moment (it ran, and may have done half its work).
+
+describe('middleware — the after-tool moment', () => {
+  /** A tool whose result is a plain object, so transforms are visible. */
+  const objectTool = (result: unknown = { ok: true, secret: 'sk-live-42' }) =>
+    defineTool<Record<string, unknown>, unknown>({
+      name: 'act',
+      description: 'does a thing',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => result,
+    });
+
+  const toolMessage = (spy: ReturnType<typeof spyProvider>) =>
+    spy.requests[1]?.messages.find((m) => m.role === 'tool')?.content;
+
+  it('A1: a transform at after-tool is what the MODEL reads, and both versions are committed', async () => {
+    const spy = spyProvider(callThen('act'));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({
+        name: 'redact-keys',
+        onToolResult: (call) => {
+          const r = call.result as Record<string, unknown>;
+          return 'secret' in r ? allow({ ...r, secret: '[redacted]' }, 'hid a live key') : allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(toolMessage(spy)).toContain('[redacted]');
+    expect(toolMessage(spy)).not.toContain('sk-live-42');
+
+    const row = ledger(agent).find((r) => r.moment === 'after-tool');
+    expect(row).toMatchObject({
+      middleware: 'redact-keys',
+      moment: 'after-tool',
+      at: 'tool',
+      toolName: 'act',
+      outcome: 'allow',
+      changed: true,
+      why: 'hid a live key',
+    });
+    // The REAL result is what it started from — the record keeps what the
+    // model was not shown.
+    expect(row?.before).toEqual({ ok: true, secret: 'sk-live-42' });
+    expect(row?.after).toEqual({ ok: true, secret: '[redacted]' });
+  });
+
+  it('A1: the transform sees the real result, not a stringified copy', async () => {
+    let seen: unknown;
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool({ n: 1, nested: { deep: true } })])
+      .toolMiddleware({
+        name: 'peek',
+        onToolResult: (call) => {
+          seen = call.result;
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seen).toEqual({ n: 1, nested: { deep: true } });
+  });
+
+  it('A2: a deny at after-tool sends the reason instead of the result — and the record keeps both', async () => {
+    const spy = spyProvider(callThen('act'));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([objectTool({ ssn: '123-45-6789' })])
+      .toolMiddleware({
+        name: 'no-raw-pii',
+        onToolResult: () => deny('the record exists; its raw contents are not for the model'),
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(toolMessage(spy)).toBe('the record exists; its raw contents are not for the model');
+    expect(toolMessage(spy)).not.toContain('123-45-6789');
+
+    const row = ledger(agent).find((r) => r.moment === 'after-tool');
+    // `changed: true` — unlike a refusal before dispatch, this one replaced
+    // something that existed.
+    expect(row).toMatchObject({ outcome: 'deny', changed: true });
+    expect(row?.before).toEqual({ ssn: '123-45-6789' });
+  });
+
+  it('A2: the tool still RAN — a refusal hides an answer, it does not undo a side effect', async () => {
+    const sideEffects: string[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([
+        defineTool<Record<string, unknown>, string>({
+          name: 'act',
+          description: 'does a thing',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => {
+            sideEffects.push('charged the card');
+            return 'charged';
+          },
+        }),
+      ])
+      .toolMiddleware({ name: 'hide', onToolResult: () => deny('not for the model') })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(sideEffects).toEqual(['charged the card']);
+  });
+
+  it('A3: onToolResult NEVER runs for a call denied at before-tool', async () => {
+    const ran: string[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({
+        name: 'both',
+        onToolCall: () => deny('not this one'),
+        onToolResult: () => {
+          ran.push('after');
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(ran).toEqual([]);
+    expect(ledger(agent).some((r) => r.moment === 'after-tool')).toBe(false);
+  });
+
+  it('A3: onToolResult NEVER runs for a call still waiting on a person', async () => {
+    const ran: string[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({
+        name: 'gate',
+        onToolCall: () => ask({ question: 'approve?' }),
+        onToolResult: () => {
+          ran.push('after');
+          return allow();
+        },
+      })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    expect(isAskPause(paused)).toBe(true);
+    expect(ran).toEqual([]);
+  });
+
+  it('A3: onToolResult runs on the far side of an approval — the tool ran there', async () => {
+    const spy = spyProvider(callThen('act'));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([objectTool({ v: 1 })])
+      .toolMiddleware({
+        name: 'gate',
+        onToolCall: () => ask({ question: 'approve?' }),
+        onToolResult: () => allow({ v: 2 }, 'stamped after approval'),
+      })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(paused.checkpoint, checkInApproved({ by: 'dana@ops' }));
+
+    const row = ledger(agent).find((r) => r.moment === 'after-tool');
+    expect(row).toMatchObject({ middleware: 'gate', outcome: 'allow', changed: true });
+    expect(row?.after).toEqual({ v: 2 });
+  });
+
+  it('A3: onToolResult NEVER runs for args the validator rejected — nothing executed', async () => {
+    const ran: string[] = [];
+    const strict = defineTool<{ n: number }, string>({
+      name: 'act',
+      description: 'needs a number',
+      inputSchema: { type: 'object', properties: { n: { type: 'number' } }, required: ['n'] },
+      execute: () => 'ran',
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ toolCalls: [{ id: 'c1', name: 'act', args: {} }] }, { content: 'done' }],
+      }),
+      model: 'm',
+    })
+      .tools([strict])
+      .toolMiddleware({
+        name: 'watch',
+        onToolResult: () => {
+          ran.push('after');
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(ran).toEqual([]);
+  });
+
+  it('A3: onToolResult NEVER runs for a tool that does not exist', async () => {
+    const ran: string[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('nope') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({
+        name: 'watch',
+        onToolResult: () => {
+          ran.push('after');
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(ran).toEqual([]);
+  });
+
+  it('A4: a link with ONLY onToolResult does not take part in dispatch — no row, no transform', async () => {
+    const { seen, tool } = recordingTool();
+    const agent = Agent.create({
+      provider: mock({ replies: callThen('act', { a: 1 }) }),
+      model: 'm',
+    })
+      .tools([tool])
+      .toolMiddleware({ name: 'result-only', onToolResult: () => allow() })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seen).toEqual([{ a: 1 }]);
+    const rows = ledger(agent);
+    expect(rows.map((r) => r.moment)).toEqual(['after-tool']);
+  });
+
+  it('A5: ONION ORDER — first-declared sees the call first and the result last', async () => {
+    const order: string[] = [];
+    const link = (name: string): ToolMiddleware => ({
+      name,
+      onToolCall: () => {
+        order.push(`before:${name}`);
+        return allow();
+      },
+      onToolResult: () => {
+        order.push(`after:${name}`);
+        return allow();
+      },
+    });
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware(link('outer'), link('middle'), link('inner'))
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(order).toEqual([
+      'before:outer',
+      'before:middle',
+      'before:inner',
+      'after:inner',
+      'after:middle',
+      'after:outer',
+    ]);
+    // And the ledger tells the same story, in the same order.
+    expect(ledger(agent).map((r) => `${r.moment}:${r.middleware}`)).toEqual([
+      'before-tool:outer',
+      'before-tool:middle',
+      'before-tool:inner',
+      'after-tool:inner',
+      'after-tool:middle',
+      'after-tool:outer',
+    ]);
+  });
+
+  it('A5: the outer link sees what the inner one already did to the result', async () => {
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool({ n: 1 })])
+      .toolMiddleware(
+        {
+          name: 'outer',
+          onToolResult: (call) => allow({ ...(call.result as object), outer: true }, 'outer stamp'),
+        },
+        {
+          name: 'inner',
+          onToolResult: (call) => allow({ ...(call.result as object), inner: true }, 'inner stamp'),
+        },
+      )
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    const rows = ledger(agent).filter((r) => r.moment === 'after-tool');
+    expect(rows[0]?.middleware).toBe('inner');
+    expect(rows[1]?.middleware).toBe('outer');
+    expect(rows[1]?.before).toEqual({ n: 1, inner: true });
+    expect(rows[1]?.after).toEqual({ n: 1, inner: true, outer: true });
+  });
+
+  it('A5: the first non-allow answer wins going out, too', async () => {
+    const ran: string[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware(
+        {
+          name: 'outer',
+          onToolResult: () => {
+            ran.push('outer');
+            return allow();
+          },
+        },
+        { name: 'inner', onToolResult: () => deny('stop here') },
+      )
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(ran).toEqual([]);
+    expect(ledger(agent).filter((r) => r.moment === 'after-tool')).toHaveLength(1);
+  });
+
+  it('A5: a throwing onToolResult link is a denial, never a silent pass', async () => {
+    const spy = spyProvider(callThen('act'));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([objectTool({ secret: 'sk-live-42' })])
+      .toolMiddleware({
+        name: 'brittle',
+        onToolResult: () => {
+          throw new Error('classifier unavailable');
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(toolMessage(spy)).toContain('classifier unavailable');
+    expect(toolMessage(spy)).not.toContain('sk-live-42');
+  });
+
+  it('A6: toolSource is present at after-tool, and absent for the agent’s own tools', async () => {
+    const seen: Array<{ declared: boolean; source?: string }> = [];
+    const watcher: ToolMiddleware = {
+      name: 'watch',
+      onToolResult: (call) => {
+        seen.push({
+          declared: 'toolSource' in call,
+          ...(call.toolSource !== undefined && { source: call.toolSource }),
+        });
+        return allow();
+      },
+    };
+
+    const client = mockMcpClient({
+      name: 'aws-prod',
+      tools: [
+        {
+          name: 'call_aws',
+          description: 'calls AWS',
+          inputSchema: { type: 'object', properties: {} },
+          handler: async () => 'aws answered',
+        },
+      ],
+    });
+    const served = (await client.tools())[0]!;
+
+    const remote = Agent.create({ provider: mock({ replies: callThen('call_aws') }), model: 'm' })
+      .tools([served])
+      .toolMiddleware(watcher)
+      .build();
+    const own = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware(watcher)
+      .build();
+
+    await remote.run({ message: 'go' });
+    await own.run({ message: 'go' });
+
+    expect(seen).toEqual([{ declared: true, source: 'aws-prod' }, { declared: false }]);
+  });
+
+  it('A6: a tool that THREW still reaches onToolResult, flagged — it ran, and may have done half its work', async () => {
+    const seen: Array<{ result: unknown; error?: true }> = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([
+        defineTool<Record<string, unknown>, string>({
+          name: 'act',
+          description: 'fails halfway',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => {
+            throw new Error('timed out after writing 3 of 5 rows');
+          },
+        }),
+      ])
+      .toolMiddleware({
+        name: 'watch',
+        onToolResult: (call) => {
+          seen.push({ result: call.result, ...(call.error === true && { error: true }) });
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seen).toEqual([{ result: 'timed out after writing 3 of 5 rows', error: true }]);
+  });
+
+  it('A6: the args at after-tool are what the tool RAN with, not what the model proposed', async () => {
+    let seenArgs: unknown;
+    const agent = Agent.create({
+      provider: mock({ replies: callThen('act', { amount: 500 }) }),
+      model: 'm',
+    })
+      .tools([objectTool()])
+      .toolMiddleware({
+        name: 'cap',
+        onToolCall: (call) => allow({ ...call.args, amount: 100 }, 'capped at 100'),
+        onToolResult: (call) => {
+          seenArgs = call.args;
+          return allow();
+        },
+      })
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seenArgs).toEqual({ amount: 100 });
+  });
+
+  it('stream.tool_end keeps reporting what the TOOL returned, not what the model was given', async () => {
+    // The two facts are different and both are recorded: the event stream is
+    // about the tool, the history is about the model, and the ledger row in
+    // between says which is which.
+    const ends: unknown[] = [];
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool({ secret: 'sk-live-42' })])
+      .toolMiddleware({ name: 'hide', onToolResult: () => deny('not for the model') })
+      .build();
+    agent.on('agentfootprint.stream.tool_end', (e) => ends.push(e.payload.result));
+
+    await agent.run({ message: 'go' });
+
+    expect(ends).toEqual([{ secret: 'sk-live-42' }]);
+  });
+
+  it('an agent whose chain has no onToolResult hook is byte-identical to one built before it existed', async () => {
+    const bare = spyProvider(callThen('act'));
+    const bareAgent = Agent.create({ provider: bare.provider, model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({ name: 'call-only', onToolCall: () => allow() })
+      .build();
+    await bareAgent.run({ message: 'go' });
+
+    const withAfter = spyProvider(callThen('act'));
+    const withAfterAgent = Agent.create({ provider: withAfter.provider, model: 'm' })
+      .tools([objectTool()])
+      .toolMiddleware({ name: 'call-only', onToolCall: () => allow(), onToolResult: () => allow() })
+      .build();
+    await withAfterAgent.run({ message: 'go' });
+
+    expect(JSON.stringify(withAfter.requests)).toBe(JSON.stringify(bare.requests));
+    // One extra row, and it is the after row — nothing else moved.
+    expect(ledger(withAfterAgent).map((r) => r.moment)).toEqual(['before-tool', 'after-tool']);
+    expect(ledger(bareAgent).map((r) => r.moment)).toEqual(['before-tool']);
+  });
+
+  it('the builder refuses a tool middleware with no hooks at all', () => {
+    const builder = Agent.create({ provider: mock({ reply: 'x' }), model: 'm' });
+    expect(() => builder.toolMiddleware({ name: 'empty' } as never)).toThrow(/at least one of/);
+  });
+
+  it('redaction over the ledger scrubs a withheld result while the refusal survives', async () => {
+    // The E9 law, from the other end of the loop. A result the model never saw
+    // lives in exactly one place — the ledger row — so this is where honesty
+    // and protection meet for the after moment too.
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool({ ssn: '123-45-6789' })])
+      .toolMiddleware({ name: 'no-raw-pii', onToolResult: () => deny('raw record withheld') })
+      .build();
+
+    const withPolicy = agent as unknown as {
+      createExecutor(): {
+        setRedactionPolicy(p: { keys: string[] }): void;
+        run(input: unknown): Promise<unknown>;
+        getSnapshot(): { sharedState: Record<string, unknown>; commitLog: readonly unknown[] };
+      };
+    };
+    const executor = withPolicy.createExecutor();
+    executor.setRedactionPolicy({ keys: ['middlewareDecisions'] });
+    // The full run shape: a tool-calling turn needs the iteration headroom
+    // `Agent.run` normally supplies.
+    await executor.run({ input: { message: 'go' }, maxIterations: 30 });
+    const raw = JSON.stringify(executor.getSnapshot().commitLog);
+
+    expect(raw).not.toContain('123-45-6789');
+    expect(raw).toContain('middlewareDecisions');
+  });
+
+  it('redaction over the ledger scrubs a result TRANSFORM’s before/after while the row survives', async () => {
+    // The other half of the same law: a transform at after-tool commits both
+    // versions, so both are what redaction has to reach — and the row saying
+    // a transform happened, and who did it, has to survive the scrub.
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([objectTool({ ok: true, secret: 'sk-live-42' })])
+      .toolMiddleware({
+        name: 'redact-keys',
+        onToolResult: (call) =>
+          allow({ ...(call.result as object), secret: '[redacted]' }, 'hid a live key'),
+      })
+      .build();
+
+    const withPolicy = agent as unknown as {
+      createExecutor(): {
+        setRedactionPolicy(p: { keys: string[] }): void;
+        run(input: unknown): Promise<unknown>;
+        getSnapshot(): { sharedState: Record<string, unknown>; commitLog: readonly unknown[] };
+      };
+    };
+    const executor = withPolicy.createExecutor();
+    executor.setRedactionPolicy({ keys: ['middlewareDecisions'] });
+    await executor.run({ input: { message: 'go' }, maxIterations: 30 });
+    const raw = JSON.stringify(executor.getSnapshot().commitLog);
+
+    // Protection: neither version of the value is in the ledger key.
+    expect(raw).not.toContain('sk-live-42');
+    // Honesty: the run still says a transform happened, by name and with a why.
+    expect(raw).toContain('middlewareDecisions');
+  });
+});

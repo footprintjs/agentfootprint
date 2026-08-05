@@ -6,7 +6,7 @@
 
 # Interface: ToolContractCheckup
 
-Defined in: [src/core/toolContract.ts:32](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/toolContract.ts#L32)
+Defined in: [src/core/toolContract.ts:32](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/toolContract.ts#L32)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/toolContract.ts:32](https://github.com/footprintjs/agentfo
 
 > `readonly` **ok**: `boolean`
 
-Defined in: [src/core/toolContract.ts:33](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/toolContract.ts#L33)
+Defined in: [src/core/toolContract.ts:33](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/toolContract.ts#L33)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/core/toolContract.ts:33](https://github.com/footprintjs/agentfo
 
 > `readonly` **problems**: readonly [`ToolContractProblem`](/agentfootprint/api/generated/interfaces/ToolContractProblem.md)[]
 
-Defined in: [src/core/toolContract.ts:34](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/toolContract.ts#L34)
+Defined in: [src/core/toolContract.ts:34](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/toolContract.ts#L34)

@@ -18,9 +18,36 @@ Pass the value through untouched.
 
 ## Call Signature
 
+> **allow**(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
+
+Defined in: [src/core/agent/middleware/outcomes.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L30)
+
+Pass the value through untouched, and say why you were comfortable.
+
+The row still reads `changed: false` — nothing moved — but it carries the
+reason, which is what a rule that remembers an earlier decision needs:
+"approved by dana@ops at 14:02" belongs in the record of the call it
+silently permitted, not only in the record of the call that asked.
+
+### Parameters
+
+#### value
+
+`undefined`
+
+#### why
+
+`string`
+
+### Returns
+
+[`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
+
+## Call Signature
+
 > **allow**\<`T`\>(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L29)
+Defined in: [src/core/agent/middleware/outcomes.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L38)
 
 Replace the value and say why.
 

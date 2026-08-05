@@ -8,7 +8,7 @@
 
 > **ask**(`payload`): [`AskOutcome`](/agentfootprint/api/generated/interfaces/AskOutcome.md)
 
-Defined in: src/core/agent/middleware/outcomes.ts:68
+Defined in: [src/core/agent/middleware/outcomes.ts:85](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/outcomes.ts#L85)
 
 Suspend the run and put the question to a person. Tool dispatch only —
 `MessageOutcome` has no `ask` arm, so this cannot be returned from a

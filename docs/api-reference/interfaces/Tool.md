@@ -6,7 +6,7 @@
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L24)
+Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L24)
 
 One executable tool the Agent can call.
 
@@ -31,7 +31,7 @@ One executable tool the Agent can call.
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)
 
-Defined in: [src/core/tools.ts:44](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L44)
+Defined in: [src/core/tools.ts:44](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L44)
 
 Declarative demand for a human check-in BEFORE this tool runs — consent
 for a consequential action, with an evidence pack riding the ask.
@@ -52,7 +52,7 @@ exposes a predicate typed to the tool's args at the CALL site.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:29](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L29)
+Defined in: [src/core/tools.ts:29](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L29)
 
 Declare-and-push: a credential this tool needs. The framework resolves it
  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
@@ -64,7 +64,31 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 > `readonly` **schema**: [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)
 
-Defined in: [src/core/tools.ts:25](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L25)
+Defined in: [src/core/tools.ts:25](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L25)
+
+***
+
+### source?
+
+> `readonly` `optional` **source?**: `string`
+
+Defined in: [src/core/tools.ts:62](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L62)
+
+Where this tool came from — the name of the MCP server that served it.
+
+**Absent means "this agent's own".** A tool you wrote with `defineTool`
+carries nothing here, and that absence is the fact: nobody else supplied
+it. A tool that arrived over MCP carries the client's `name`
+(`mcpClient({ name: 'aws-mcp' })`), because the same tool NAME can come
+from two servers and a policy that cannot tell them apart governs both.
+
+It travels to the decision point as `ToolMiddlewareContext.toolSource` —
+the tool-dispatch chain and `mcpServe`'s serving-side chain read the same
+field.
+
+Set by `mcpClient` / `mockMcpClient`. `defineTool` never sets it, so it
+cannot be spoofed by accident; a hand-built `Tool` may set it deliberately
+when it is genuinely relaying another source's tool.
 
 ## Methods
 
@@ -72,7 +96,7 @@ Defined in: [src/core/tools.ts:25](https://github.com/footprintjs/agentfootprint
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:45](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L45)
+Defined in: [src/core/tools.ts:63](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/tools.ts#L63)
 
 #### Parameters
 

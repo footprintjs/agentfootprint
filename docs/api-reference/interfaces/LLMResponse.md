@@ -6,7 +6,7 @@
 
 # Interface: LLMResponse
 
-Defined in: [src/adapters/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L141)
+Defined in: [src/adapters/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L189)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:141](https://github.com/footprintjs/agentfoot
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L142)
+Defined in: [src/adapters/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L190)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:142](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **providerRef?**: `string`
 
-Defined in: [src/adapters/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L174)
+Defined in: [src/adapters/types.ts:222](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L222)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:174](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rawThinking?**: `unknown`
 
-Defined in: [src/adapters/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L189)
+Defined in: [src/adapters/types.ts:237](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L237)
 
 v2.14 — Provider-specific raw thinking data, opaque to the
 framework. Providers that support extended thinking populate this
@@ -51,7 +51,7 @@ etc.). The thinking subflow's stage early-returns in this case.
 
 > `readonly` **stopReason**: `string`
 
-Defined in: [src/adapters/types.ts:173](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L173)
+Defined in: [src/adapters/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L221)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [src/adapters/types.ts:173](https://github.com/footprintjs/agentfoot
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L143)
+Defined in: [src/adapters/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L191)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [src/adapters/types.ts:143](https://github.com/footprintjs/agentfoot
 
 > `readonly` **usage**: `object`
 
-Defined in: [src/adapters/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L148)
+Defined in: [src/adapters/types.ts:196](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L196)
 
 #### cacheRead?
 

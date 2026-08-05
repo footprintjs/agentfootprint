@@ -25,6 +25,16 @@
  * permission gate has always applied to a checker that throws: a
  * governance layer whose failure mode is "allow" is not a governance
  * layer.
+ *
+ * **The result comes back through the onion.** `runToolAfterChain` walks the
+ * SAME list in reverse, so the first-declared link gets the first word about
+ * the call and the last word about the result. An outer rule is the one that
+ * sees what every inner rule already did — which is the only order in which
+ * "wrap" means anything.
+ *
+ * **A link that has no hook for a moment files no row.** It did not decide;
+ * saying it allowed would be inventing a decision, and the ledger's whole
+ * value is that a row means somebody looked.
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
@@ -36,6 +46,7 @@ import type {
   MiddlewareDecision,
   ToolMiddleware,
   ToolOutcome,
+  ToolResultOutcome,
 } from './types.js';
 
 /** Tool args, as they travel the chain. */
@@ -102,8 +113,12 @@ export async function runToolChain(
 
   for (let i = input.startIndex ?? 0; i < chain.length; i++) {
     const mw = chain[i]!;
+    // A result-only link takes no part in dispatch — and files no row here,
+    // because it did not decide anything about this call.
+    if (typeof mw.onToolCall !== 'function') continue;
     const row = (extra: Partial<MiddlewareDecision>): MiddlewareDecision => ({
       middleware: mw.name,
+      moment: 'before-tool',
       at: 'tool',
       toolName: input.toolName,
       toolCallId: input.toolCallId,
@@ -167,11 +182,130 @@ export async function runToolChain(
         row({ changed: true, ...(outcome.why && { why: outcome.why }), before, after: args }),
       );
     } else {
-      decisions.push(row({}));
+      // `allow(undefined, why)` — nothing moved, and the link said why it was
+      // comfortable. The reason belongs on the row of the call it permitted.
+      decisions.push(row(outcome.why ? { why: outcome.why } : {}));
     }
   }
 
   return { kind: 'allow', args, decisions };
+}
+
+// ─── The after-tool moment ───────────────────────────────────────────
+
+export type ToolAfterChainResult =
+  | { readonly kind: 'allow'; readonly result: unknown; readonly decisions: MiddlewareDecision[] }
+  | {
+      readonly kind: 'deny';
+      readonly reason: string;
+      readonly middleware: string;
+      /** The tool's REAL result. The side effect happened; the record says so. */
+      readonly result: unknown;
+      readonly decisions: MiddlewareDecision[];
+    };
+
+export interface ToolAfterChainInput {
+  readonly toolName: string;
+  readonly toolSource?: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** The args the tool ACTUALLY ran with — every before-transform applied. */
+  readonly args: ToolArgs;
+  readonly result: unknown;
+  /** `true` when the tool threw and `result` is the error's message. */
+  readonly error?: true;
+  readonly history: readonly LLMMessage[];
+  readonly identity?: MemoryIdentity;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Walk the chain BACKWARDS over a finished call. Never throws — a throwing
+ * link becomes a denial, which at this moment means the model reads the
+ * reason instead of the result.
+ *
+ * Only called for a call that actually executed. A call the chain denied, or
+ * one still waiting on a person, has no result to decide about, and asking a
+ * rule about a result that does not exist would be the same fabrication the
+ * outcome union exists to prevent.
+ */
+export async function runToolAfterChain(
+  chain: readonly ToolMiddleware[],
+  input: ToolAfterChainInput,
+): Promise<ToolAfterChainResult> {
+  const decisions: MiddlewareDecision[] = [];
+  const real = input.result;
+  let result = real;
+
+  // Reverse: first-declared saw the call first, so it sees the result last.
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const mw = chain[i]!;
+    const hook = mw.onToolResult;
+    if (typeof hook !== 'function') continue;
+    const row = (extra: Partial<MiddlewareDecision>): MiddlewareDecision => ({
+      middleware: mw.name,
+      moment: 'after-tool',
+      at: 'tool',
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      iteration: input.iteration,
+      outcome: 'allow',
+      changed: false,
+      ...extra,
+    });
+
+    let outcome: ToolResultOutcome;
+    try {
+      outcome = await hook.call(mw, {
+        toolName: input.toolName,
+        ...(input.toolSource !== undefined && { toolSource: input.toolSource }),
+        toolCallId: input.toolCallId,
+        iteration: input.iteration,
+        args: input.args,
+        result,
+        ...(input.error === true && { error: true as const }),
+        history: input.history,
+        ...(input.identity && { identity: input.identity }),
+        ...(input.signal && { signal: input.signal }),
+      });
+    } catch (err) {
+      const reason = `middleware '${mw.name}' threw: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      decisions.push(
+        row({ outcome: 'deny', changed: true, why: reason, before: result, after: reason }),
+      );
+      return { kind: 'deny', reason, middleware: mw.name, result: real, decisions };
+    }
+
+    if (outcome.kind === 'deny') {
+      // `changed: true` on purpose: unlike a refusal before dispatch, this one
+      // DOES replace something. The real result rides `before` — often the
+      // only copy of it in the run.
+      decisions.push(
+        row({
+          outcome: 'deny',
+          changed: true,
+          why: outcome.reason,
+          before: result,
+          after: outcome.reason,
+        }),
+      );
+      return { kind: 'deny', reason: outcome.reason, middleware: mw.name, result: real, decisions };
+    }
+
+    if (outcome.value !== undefined) {
+      const before = result;
+      result = outcome.value;
+      decisions.push(
+        row({ changed: true, ...(outcome.why && { why: outcome.why }), before, after: result }),
+      );
+    } else {
+      decisions.push(row(outcome.why ? { why: outcome.why } : {}));
+    }
+  }
+
+  return { kind: 'allow', result, decisions };
 }
 
 // ─── Message chain ───────────────────────────────────────────────────
@@ -208,6 +342,7 @@ export async function runMessageChain(
   for (const mw of chain) {
     const row = (extra: Partial<MiddlewareDecision>): MiddlewareDecision => ({
       middleware: mw.name,
+      moment: input.phase,
       at: 'message',
       phase: input.phase,
       iteration: input.iteration,
@@ -245,7 +380,7 @@ export async function runMessageChain(
         row({ changed: true, ...(outcome.why && { why: outcome.why }), before, after: content }),
       );
     } else {
-      decisions.push(row({}));
+      decisions.push(row(outcome.why ? { why: outcome.why } : {}));
     }
   }
 

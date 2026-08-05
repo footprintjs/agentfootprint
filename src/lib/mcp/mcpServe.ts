@@ -68,7 +68,7 @@ import type {
   McpServeTransport,
 } from './types.js';
 import { lazyRequire } from '../lazyRequire.js';
-import { runToolChain } from '../../core/agent/middleware/runChain.js';
+import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
 const DEFAULT_SERVER_VERSION = '0.0.0';
@@ -176,6 +176,30 @@ export async function mcpServe(
       if ('blocked' in ctx) return toolError(ctx.blocked);
 
       const result = await tool.execute(args as never, ctx.context);
+
+      // The after-tool moment, on the same shared walker and therefore under the
+      // same laws: backwards through the chain, a transform declares itself, a
+      // throwing link is a refusal. It runs only here — after a tool that
+      // really executed — for the same reason it does inside an agent.
+      //
+      // There is no ledger at this boundary (no scope, no run), so the rows
+      // the walker produces have nowhere to be committed; what the CLIENT sees
+      // is the whole record here, which is why a refusal answers as a named
+      // tool error rather than quietly swapping the payload.
+      if (opts.toolMiddleware && opts.toolMiddleware.length > 0) {
+        const verdict = await runToolAfterChain(opts.toolMiddleware, {
+          toolName: tool.schema.name,
+          ...(tool.source !== undefined && { toolSource: tool.source }),
+          toolCallId,
+          iteration: 0,
+          args: (args ?? {}) as Readonly<Record<string, unknown>>,
+          result,
+          history: [],
+          ...(extra?.signal && { signal: extra.signal }),
+        });
+        if (verdict.kind === 'deny') return toolError(verdict.reason);
+        return { content: [{ type: 'text', text: stringifyResult(verdict.result) }] };
+      }
       return { content: [{ type: 'text', text: stringifyResult(result) }] };
     } catch (error) {
       return toolError(error instanceof Error ? error.message : String(error));

@@ -1,9 +1,11 @@
 /**
- * 37 — The middleware family: `.toolMiddleware()` and `.messageMiddleware()`.
+ * 37 — The middleware family: the verbs, and what they may answer.
  *
  * A typed chain around every tool dispatch, and around the message
  * boundary — the input before the model sees it, the output before the
- * caller receives it. Each link answers with one of three verbs:
+ * caller receives it. Both are written into `.act()` (see 38); the
+ * individual doors `.toolMiddleware()` / `.messageMiddleware()` are what
+ * it forwards to. Each link answers with one of three verbs:
  *
  *   allow()               let it through
  *   allow(value, why)     let it through, changed, and say what changed
@@ -110,9 +112,11 @@ const fourEyes: ToolMiddleware = {
 
 function show(rows: readonly MiddlewareDecision[]): void {
   for (const r of rows) {
-    const where = r.at === 'message' ? `message:${r.phase ?? ''}` : `tool:${r.toolName ?? ''}`;
+    // `moment` is where in the loop this happened — the same word `.act()` is
+    // keyed on. (`at` / `phase` say the same thing in the 7.18 spelling.)
+    const where = r.toolName ? `${r.moment}:${r.toolName}` : r.moment;
     const what = r.changed ? `${JSON.stringify(r.before)} → ${JSON.stringify(r.after)}` : '';
-    console.log(`  ${r.middleware.padEnd(16)} ${r.outcome.padEnd(6)} ${where}  ${r.why ?? ''}`);
+    console.log(`  ${r.middleware.padEnd(16)} ${r.outcome.padEnd(6)} ${where.padEnd(26)} ${r.why ?? ''}`);
     if (what) console.log(`  ${' '.repeat(16)}        ${what}`);
   }
 }
@@ -138,9 +142,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const agent = Agent.create({ provider: llm, model: 'small-model' })
     .system('You handle refunds.')
     .tool(refund)
-    // Order is call order, and each link sees the previous one's output.
-    .toolMiddleware(refundCeiling, fourEyes)
-    .messageMiddleware(scrubSSNs)
+    .act({
+      input: [scrubSSNs], //  the message, before the run commits it
+      // Order is call order, and each link sees the previous one's output.
+      beforeTool: [refundCeiling, fourEyes], //  every call, before dispatch
+    })
     .build();
   // #endregion wire
 

@@ -6,7 +6,7 @@
 
 # Interface: LLMMessage
 
-Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L21)
+Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L21)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootp
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L23)
+Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L23)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/adapters/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L84)
+Defined in: [src/adapters/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L84)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -48,11 +48,61 @@ audit-invisible prompts.
 
 ***
 
+### injectedBy?
+
+> `readonly` `optional` **injectedBy?**: `object`
+
+Defined in: [src/adapters/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L104)
+
+v7.21 — WHO let this message into the window.
+
+Stamped by the agent's `Deliver` stage on a message that came from a
+`slot: 'messages'` Injection rather than from the conversation. It is the
+stable marker the messages slot reads to attribute the message to its
+injection (source / sourceId / reason) instead of inferring a baseline
+source from the role — so one wire message produces exactly one
+`context.injected` record, naming whoever put it there.
+
+**Never reaches a provider.** `callLLM` strips this field from every
+message before the request is handed to `provider.complete()` / `stream()`,
+so no adapter — first-party or consumer-authored — can leak framework
+metadata onto a wire, even one that serializes a message wholesale.
+Stripping removes a field, never a message, so wire indices are unchanged
+(which is what lets a `CacheMarker{field:'messages'}` name a real position).
+
+Absent on every message that came from the conversation itself.
+
+#### flavor
+
+> `readonly` **flavor**: `ContextSource`
+
+The injection's flavor — the `source` the slot records.
+
+#### injectionId
+
+> `readonly` **injectionId**: `string`
+
+The `Injection.id` that produced this message.
+
+#### iteration
+
+> `readonly` **iteration**: `number`
+
+The ReAct iteration whose boundary delivered it.
+
+#### reason?
+
+> `readonly` `optional` **reason?**: `string`
+
+The injection's description, when it had one.
+
+***
+
 ### role
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L22)
+Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L22)
 
 ***
 
@@ -60,7 +110,7 @@ Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/adapters/types.ts:60](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L60)
+Defined in: [src/adapters/types.ts:60](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L60)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -86,7 +136,7 @@ Empty array OR undefined when no thinking is present (most calls).
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/adapters/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L25)
+Defined in: [src/adapters/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L25)
 
 For `role: 'tool'` — the tool_use id this result corresponds to.
 
@@ -96,7 +146,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L36)
+Defined in: [src/adapters/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L36)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -111,6 +161,6 @@ Empty array on text-only turns; undefined for non-assistant roles.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/adapters/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L27)
+Defined in: [src/adapters/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L27)
 
 For `role: 'tool'` — the tool name this result corresponds to.

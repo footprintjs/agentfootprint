@@ -8,7 +8,7 @@
 
 > **buildAgentMessageApiChart**(`deps`): `FlowChart`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/buildAgentMessageApiChart.ts#L73)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/buildAgentMessageApiChart.ts#L73)
 
 Build the Agent merge-tree chart as one flat ReAct flowchart.
 

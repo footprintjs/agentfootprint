@@ -8,13 +8,19 @@
 
 > **deny**(`reason`): [`DenyOutcome`](/agentfootprint/api/generated/interfaces/DenyOutcome.md)
 
-Defined in: src/core/agent/middleware/outcomes.ts:49
+Defined in: [src/core/agent/middleware/outcomes.ts:66](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/outcomes.ts#L66)
 
 Refuse the call.
 
 For a tool the reason reaches the model verbatim, as the tool's result,
 and the loop continues — the agent gets to adapt. For a message it
 surfaces as a `MessageDeniedError`.
+
+At the after-tool moment it means "the model does not get to read this" — the
+tool has already run, so the refusal replaces what the model reads while
+the run keeps the real result in the ledger. Refusing there hides an answer
+from the model; it cannot un-happen a side effect, and it does not pretend
+to.
 
 ## Parameters
 

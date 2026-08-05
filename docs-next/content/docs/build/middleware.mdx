@@ -7,27 +7,42 @@ description: A typed chain around every tool dispatch and around the message bou
 >
 > Here the wrapper cannot answer. **The outcome union has no arm for a result**, so whatever a chain decides, what the model finally reads is the real tool's output or a refusal.
 
-## Two chains, one vocabulary
+## Where they go
+
+Middleware is written into [`.act()`](doc:loop-moments), the one block that says what an agent does at each moment of its loop:
 
 ```ts
 import { Agent, allow, deny, ask } from 'agentfootprint';
 
 Agent.create({ provider, model })
-  .toolMiddleware(refundCeiling, fourEyes)   // wraps every tool dispatch
-  .messageMiddleware(scrubSSNs)              // wraps the message boundary
+  .act({
+    input:      [scrubSSNs],                // the message, before the run commits it
+    beforeTool: [refundCeiling, fourEyes],  // every call, before it is dispatched
+    afterTool:  [stripPII],                 // every result, before the model reads it
+    output:     [noCodenames],              // the answer, before the caller gets it
+  })
   .build();
 ```
+
+The individual doors (`.toolMiddleware()`, `.messageMiddleware()`) are still there and still supported — they are what `.act()` forwards to — and they are the right spelling when you are adding one rule to an agent somebody else built. See [Composing incrementally](doc:loop-moments#composing-incrementally).
+
+## Three verbs, one vocabulary
 
 | verb | what it means | where the answer goes |
 | --- | --- | --- |
 | `allow()` | pass it through | the tool runs |
 | `allow(value, why)` | pass it through, changed | the tool runs on `value`; the ledger records **both** versions and your `why` |
+| `allow(undefined, why)` | pass it through, and say why you were comfortable | nothing moves; the row carries the reason |
 | `deny(reason)` | refuse | the reason reaches the model verbatim as the tool result, and the loop continues |
 | `ask({ question })` | suspend for a person | the run pauses; the answer is a **decision**, and then the real tool runs |
 
 Order is call order. Each link sees the previous one's output. The first non-`allow` answer wins and the rest of the chain does not run — a refusal a later rule could overturn is not a refusal.
 
-Configure neither and nothing changes: no chain walk, no extra committed key, the same request bytes as an agent that never heard of any of this.
+A tool rule may speak twice: `onToolCall` about the CALL, and `onToolResult` about the RESULT once the tool has run. Those two halves are one chain walked in [onion order](doc:loop-moments#the-onion), and the second has its own page section — [the after-tool moment](doc:loop-moments#the-after-tool-moment) — because its laws are different: two verbs, no `ask`, and it never runs for a call that never executed.
+
+**Both spellings appear above, and they name different things.** `afterTool` is a MOMENT — when it happens — which is why `.act()`'s key and the ledger's `'after-tool'` share the word. `onToolResult` is a HOOK, named for what it receives, which is how it pairs with `onToolCall`.
+
+Configure none of it and nothing changes: no chain walk, no extra committed key, the same request bytes as an agent that never heard of any of this.
 
 ## The law: a middleware cannot answer for the tool
 
@@ -74,9 +89,10 @@ A transform makes the trace and the wire disagree. Committing the pair — with 
 
 ```ts
 const rows = agent.getLastSnapshot()?.sharedState.middlewareDecisions;
-// [{ middleware: 'scrub-ssns', at: 'message', phase: 'input', outcome: 'allow',
+// [{ middleware: 'scrub-ssns', moment: 'input', outcome: 'allow',
 //    changed: true, why: 'masked a US SSN',
-//    before: 'my ssn is 123-45-6789', after: 'my ssn is [ssn]' }]
+//    before: 'my ssn is 123-45-6789', after: 'my ssn is [ssn]',
+//    at: 'message', phase: 'input' }]        // `at` / `phase`: the 7.18 spelling
 ```
 
 `allow(value, why)` **requires** the `why`. A transform that does not say why is exactly the thing this key exists to prevent.
@@ -90,6 +106,8 @@ Every decision files a row, including the pass-throughs — "the rule looked and
 If your threat model says the original must not survive in the commit log, that is a **redaction** question, not a middleware one — and footprintjs already answers it. Configure redaction over the `middlewareDecisions` key and `before` / `after` are scrubbed at write time while the decision row itself survives: the run still says a scrub happened, who did it, and why, without holding what was scrubbed. Honesty and protection are both laws here, and that is where they meet.
 
 For tool args and the output phase the point is moot — the pre-transform value is already in the committed history and in `llmLatestContent`, so the ledger adds no exposure. It just makes the change findable.
+
+The `'after-tool'` moment is the input phase's mirror image: a result the model was **not** allowed to read lives in exactly one place, that row's `before`. Same trade, same answer — redact the key and the refusal survives without the value.
 
 ## Tool rules
 
@@ -164,7 +182,7 @@ await mcpServe([refundTool], {
 });
 ```
 
-It runs before `execute` and before credentials resolve, exactly as it does inside an agent. `ask` cannot survive that boundary — MCP is request/response and there is no pause to carry the question — so a link that asks answers the client with a tool error **naming it**, rather than executing ungoverned. Same refusal wording `checkIn` gets, for the same reason.
+Both moments run there: the call half before `execute` and before credentials resolve, and the `onToolResult` half over the result before it is serialized for the client — exactly as they do inside an agent, on the same walker, under the same laws. `ask` cannot survive that boundary — MCP is request/response and there is no pause to carry the question — so a link that asks answers the client with a tool error **naming it**, rather than executing ungoverned. Same refusal wording `checkIn` gets, for the same reason.
 
 ## What the package exports
 
@@ -174,18 +192,23 @@ Everything below comes from the package root, `agentfootprint`:
 | --- | --- |
 | `allow()` / `allow(value, why)` | Pass through, optionally transformed. The `why` is required when the value changes. |
 | `deny(reason)` | Refuse. For a tool, `reason` is what the model reads. |
-| `ask(payload)` | Suspend for a person. `{ question, detail? }`. Tool chains only. |
-| `ToolMiddleware` | `{ name, onToolCall(call) }`. |
+| `ask(payload)` | Suspend for a person. `{ question, detail? }`. The call moment only. |
+| `ToolMiddleware` | `{ name, onToolCall?(call), onToolResult?(call) }` — at least one hook, or it does not compile. |
 | `MessageMiddleware` | `{ name, onMessage(msg) }`. |
 | `ToolMiddlewareContext` | What a tool link is handed: `toolName`, `toolSource?`, `toolCallId`, `iteration`, `args`, `history`, `identity?`, `signal?`. |
+| `ToolResultContext` | The same, plus `result` and `error?` — what `onToolResult` is handed. `args` are what the tool actually ran with. |
 | `MessageMiddlewareContext` | What a message link is handed: `phase`, `content`, `history`, `identity?`, `signal?`. |
 | `ToolOutcome` | `allow \| deny \| ask`. No result arm. |
+| `ToolResultOutcome` | `allow \| deny`. No `ask` — the tool has already run. |
 | `MessageOutcome` | `allow \| deny`. No `ask` — the message boundary has no pause to carry one. |
-| `MiddlewareDecision` | One ledger row. |
+| `MiddlewareDecision` | One ledger row, stamped with the `moment` it came from. |
+| `LoopMoment` | `'input' \| 'before-tool' \| 'after-tool' \| 'window' \| 'output'` — see [the moments](doc:loop-moments). |
 | `MessageDeniedError` | Raised when a message chain refuses. Carries `reason`, `phase`, `middleware`. |
 | `isAskPause(result)` | Narrows a paused run to one carrying `ask`. |
 
 The three arms are exported individually too, for code that needs to name one: `AllowOutcome` is the pass-through-or-transform arm, `DenyOutcome` the refusal, and `AskOutcome` the suspension — whose `payload` is an `AskPayload` (`{ question, detail? }`). On a paused run that question surfaces as a `MiddlewareAsk`, which is the `AskPayload` plus the `middleware` name that asked. `MessageDeniedContext` is what `MessageDeniedError` is constructed from.
+
+`ToolCallMiddleware` and `ToolResultMiddleware` are the two arms of the `ToolMiddleware` union, for code that needs to name one. `LOOP_MOMENTS` and `actKeyFor` (with `ActKey`) are the moment list and its key mapping; `ActOptions` and `ACT_KEYS` are `.act()`'s bundle and the keys it accepts.
 
 One typed event, `agentfootprint.middleware.decision`, fires per row. It carries the fact — who, where, which outcome, whether the value changed — and deliberately **not** the values themselves: an event stream fans out to sinks the library does not control, and a scrubbed value should not leave the run through it.
 
@@ -196,4 +219,5 @@ One typed event, `agentfootprint.middleware.decision`, fires per row. It carries
 - [Pause / resume](doc:pausable) — the machinery `ask` rides
 - [Serving over MCP](doc:mcp-serve) — the governance law at the served boundary
 - [Connecting to an MCP server](doc:mcp-client) — where `toolSource` comes from
+- [The moments of the loop](doc:loop-moments) — `.act()`, the after-tool moment, and the whole table
 - [Window strategies](doc:window-strategies) — the other family that records what it changed

@@ -30,6 +30,7 @@
 
 ## Interfaces
 
+- [ActOptions](/agentfootprint/api/generated/interfaces/ActOptions.md)
 - [AgentInput](/agentfootprint/api/generated/interfaces/AgentInput.md)
 - [AgentMessageApiChartDeps](/agentfootprint/api/generated/interfaces/AgentMessageApiChartDeps.md)
 - [AgentOptions](/agentfootprint/api/generated/interfaces/AgentOptions.md)
@@ -164,12 +165,14 @@
 - [TokenBudgetRecord](/agentfootprint/api/generated/interfaces/TokenBudgetRecord.md)
 - [Tool](/agentfootprint/api/generated/interfaces/Tool.md)
 - [ToolCallEntry](/agentfootprint/api/generated/interfaces/ToolCallEntry.md)
+- [ToolCallMiddleware](/agentfootprint/api/generated/interfaces/ToolCallMiddleware.md)
 - [ToolContractCheckup](/agentfootprint/api/generated/interfaces/ToolContractCheckup.md)
 - [ToolContractProblem](/agentfootprint/api/generated/interfaces/ToolContractProblem.md)
 - [ToolExecutionContext](/agentfootprint/api/generated/interfaces/ToolExecutionContext.md)
-- [ToolMiddleware](/agentfootprint/api/generated/interfaces/ToolMiddleware.md)
 - [ToolMiddlewareContext](/agentfootprint/api/generated/interfaces/ToolMiddlewareContext.md)
 - [ToolRegistryEntry](/agentfootprint/api/generated/interfaces/ToolRegistryEntry.md)
+- [ToolResultContext](/agentfootprint/api/generated/interfaces/ToolResultContext.md)
+- [ToolResultMiddleware](/agentfootprint/api/generated/interfaces/ToolResultMiddleware.md)
 - [ToTOptions](/agentfootprint/api/generated/interfaces/ToTOptions.md)
 - [TraversalContext](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 - [Turn](/agentfootprint/api/generated/interfaces/Turn.md)
@@ -184,6 +187,7 @@
 
 ## Type Aliases
 
+- [ActKey](/agentfootprint/api/generated/type-aliases/ActKey.md)
 - [AgentOutput](/agentfootprint/api/generated/type-aliases/AgentOutput.md)
 - [BranchOutcome](/agentfootprint/api/generated/type-aliases/BranchOutcome.md)
 - [CheckInAssembler](/agentfootprint/api/generated/type-aliases/CheckInAssembler.md)
@@ -207,6 +211,7 @@
 - [GroupKind](/agentfootprint/api/generated/type-aliases/GroupKind.md)
 - [InjectionKey](/agentfootprint/api/generated/type-aliases/InjectionKey.md)
 - [LLMCallOutput](/agentfootprint/api/generated/type-aliases/LLMCallOutput.md)
+- [LoopMoment](/agentfootprint/api/generated/type-aliases/LoopMoment.md)
 - [LoopOutput](/agentfootprint/api/generated/type-aliases/LoopOutput.md)
 - [MergeFn](/agentfootprint/api/generated/type-aliases/MergeFn.md)
 - [MergeOutcomesFn](/agentfootprint/api/generated/type-aliases/MergeOutcomesFn.md)
@@ -226,28 +231,35 @@
 - [TokenKind](/agentfootprint/api/generated/type-aliases/TokenKind.md)
 - [ToolArgValidationMode](/agentfootprint/api/generated/type-aliases/ToolArgValidationMode.md)
 - [ToolContractCode](/agentfootprint/api/generated/type-aliases/ToolContractCode.md)
+- [ToolMiddleware](/agentfootprint/api/generated/type-aliases/ToolMiddleware.md)
 - [ToolOutcome](/agentfootprint/api/generated/type-aliases/ToolOutcome.md)
 - [ToolResultContent](/agentfootprint/api/generated/type-aliases/ToolResultContent.md)
+- [ToolResultOutcome](/agentfootprint/api/generated/type-aliases/ToolResultOutcome.md)
 - [UntilGuard](/agentfootprint/api/generated/type-aliases/UntilGuard.md)
 - [WindowRefusalReason](/agentfootprint/api/generated/type-aliases/WindowRefusalReason.md)
+- [WireRole](/agentfootprint/api/generated/type-aliases/WireRole.md)
 - [WriteProvenanceMode](/agentfootprint/api/generated/type-aliases/WriteProvenanceMode.md)
 
 ## Variables
 
+- [ACT\_KEYS](/agentfootprint/api/generated/variables/ACT_KEYS.md)
 - [askHuman](/agentfootprint/api/generated/variables/askHuman.md)
 - [BASELINE\_SOURCES](/agentfootprint/api/generated/variables/BASELINE_SOURCES.md)
 - [COMPACTED\_FRAME\_PREFIX](/agentfootprint/api/generated/variables/COMPACTED_FRAME_PREFIX.md)
 - [COMPOSITION\_KEYS](/agentfootprint/api/generated/variables/COMPOSITION_KEYS.md)
+- [DEFAULT\_CARRIES\_IN\_MESSAGES](/agentfootprint/api/generated/variables/DEFAULT_CARRIES_IN_MESSAGES.md)
 - [defaultCommentaryTemplates](/agentfootprint/api/generated/variables/defaultCommentaryTemplates.md)
 - [DROP\_NOTICE\_PREFIX](/agentfootprint/api/generated/variables/DROP_NOTICE_PREFIX.md)
 - [ENGINEERED\_SOURCES](/agentfootprint/api/generated/variables/ENGINEERED_SOURCES.md)
 - [INJECTION\_KEYS](/agentfootprint/api/generated/variables/INJECTION_KEYS.md)
 - [lexicalDriverScorer](/agentfootprint/api/generated/variables/lexicalDriverScorer.md)
+- [LOOP\_MOMENTS](/agentfootprint/api/generated/variables/LOOP_MOMENTS.md)
 - [minimalEvidenceAssembler](/agentfootprint/api/generated/variables/minimalEvidenceAssembler.md)
 - [standardEvidenceAssembler](/agentfootprint/api/generated/variables/standardEvidenceAssembler.md)
 
 ## Functions
 
+- [actKeyFor](/agentfootprint/api/generated/functions/actKeyFor.md)
 - [allow](/agentfootprint/api/generated/functions/allow.md)
 - [applyOutputSchema](/agentfootprint/api/generated/functions/applyOutputSchema.md)
 - [ask](/agentfootprint/api/generated/functions/ask.md)

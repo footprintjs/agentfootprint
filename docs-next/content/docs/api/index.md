@@ -30,6 +30,7 @@ title: agentfootprint
 
 ## Interfaces
 
+- [ActOptions](/docs/api/interfaces/ActOptions)
 - [AgentInput](/docs/api/interfaces/AgentInput)
 - [AgentMessageApiChartDeps](/docs/api/interfaces/AgentMessageApiChartDeps)
 - [AgentOptions](/docs/api/interfaces/AgentOptions)
@@ -164,12 +165,14 @@ title: agentfootprint
 - [TokenBudgetRecord](/docs/api/interfaces/TokenBudgetRecord)
 - [Tool](/docs/api/interfaces/Tool)
 - [ToolCallEntry](/docs/api/interfaces/ToolCallEntry)
+- [ToolCallMiddleware](/docs/api/interfaces/ToolCallMiddleware)
 - [ToolContractCheckup](/docs/api/interfaces/ToolContractCheckup)
 - [ToolContractProblem](/docs/api/interfaces/ToolContractProblem)
 - [ToolExecutionContext](/docs/api/interfaces/ToolExecutionContext)
-- [ToolMiddleware](/docs/api/interfaces/ToolMiddleware)
 - [ToolMiddlewareContext](/docs/api/interfaces/ToolMiddlewareContext)
 - [ToolRegistryEntry](/docs/api/interfaces/ToolRegistryEntry)
+- [ToolResultContext](/docs/api/interfaces/ToolResultContext)
+- [ToolResultMiddleware](/docs/api/interfaces/ToolResultMiddleware)
 - [ToTOptions](/docs/api/interfaces/ToTOptions)
 - [TraversalContext](/docs/api/interfaces/TraversalContext)
 - [Turn](/docs/api/interfaces/Turn)
@@ -184,6 +187,7 @@ title: agentfootprint
 
 ## Type Aliases
 
+- [ActKey](/docs/api/type-aliases/ActKey)
 - [AgentOutput](/docs/api/type-aliases/AgentOutput)
 - [BranchOutcome](/docs/api/type-aliases/BranchOutcome)
 - [CheckInAssembler](/docs/api/type-aliases/CheckInAssembler)
@@ -207,6 +211,7 @@ title: agentfootprint
 - [GroupKind](/docs/api/type-aliases/GroupKind)
 - [InjectionKey](/docs/api/type-aliases/InjectionKey)
 - [LLMCallOutput](/docs/api/type-aliases/LLMCallOutput)
+- [LoopMoment](/docs/api/type-aliases/LoopMoment)
 - [LoopOutput](/docs/api/type-aliases/LoopOutput)
 - [MergeFn](/docs/api/type-aliases/MergeFn)
 - [MergeOutcomesFn](/docs/api/type-aliases/MergeOutcomesFn)
@@ -226,8 +231,10 @@ title: agentfootprint
 - [TokenKind](/docs/api/type-aliases/TokenKind)
 - [ToolArgValidationMode](/docs/api/type-aliases/ToolArgValidationMode)
 - [ToolContractCode](/docs/api/type-aliases/ToolContractCode)
+- [ToolMiddleware](/docs/api/type-aliases/ToolMiddleware)
 - [ToolOutcome](/docs/api/type-aliases/ToolOutcome)
 - [ToolResultContent](/docs/api/type-aliases/ToolResultContent)
+- [ToolResultOutcome](/docs/api/type-aliases/ToolResultOutcome)
 - [UntilGuard](/docs/api/type-aliases/UntilGuard)
 - [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason)
 - [WireRole](/docs/api/type-aliases/WireRole)
@@ -235,6 +242,7 @@ title: agentfootprint
 
 ## Variables
 
+- [ACT\_KEYS](/docs/api/variables/ACT_KEYS)
 - [askHuman](/docs/api/variables/askHuman)
 - [BASELINE\_SOURCES](/docs/api/variables/BASELINE_SOURCES)
 - [COMPACTED\_FRAME\_PREFIX](/docs/api/variables/COMPACTED_FRAME_PREFIX)
@@ -245,11 +253,13 @@ title: agentfootprint
 - [ENGINEERED\_SOURCES](/docs/api/variables/ENGINEERED_SOURCES)
 - [INJECTION\_KEYS](/docs/api/variables/INJECTION_KEYS)
 - [lexicalDriverScorer](/docs/api/variables/lexicalDriverScorer)
+- [LOOP\_MOMENTS](/docs/api/variables/LOOP_MOMENTS)
 - [minimalEvidenceAssembler](/docs/api/variables/minimalEvidenceAssembler)
 - [standardEvidenceAssembler](/docs/api/variables/standardEvidenceAssembler)
 
 ## Functions
 
+- [actKeyFor](/docs/api/functions/actKeyFor)
 - [allow](/docs/api/functions/allow)
 - [applyOutputSchema](/docs/api/functions/applyOutputSchema)
 - [ask](/docs/api/functions/ask)

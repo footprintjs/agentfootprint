@@ -8,7 +8,7 @@
 
 > **ObserverDeliveryOptions** = `Omit`\<`AttachRecorderOptions`, `"delivery"`\>
 
-Defined in: [src/core/agent/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/types.ts#L48)
+Defined in: [src/core/agent/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/types.ts#L49)
 
 Dials for the deferred observer queue (RFC-001) — only meaningful with
 `observerDelivery: 'deferred'` (passing them without it throws at

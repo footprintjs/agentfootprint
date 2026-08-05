@@ -18,14 +18,16 @@ description: Three ways to keep the live context window inside its budget — su
 ```ts
 import { Agent, slidingWindow, tokenBudget, summarizeOldest } from 'agentfootprint';
 
-Agent.create({ provider, model }).window(slidingWindow({ keepRecentTurns: 12 }));
-Agent.create({ provider, model }).window(tokenBudget({ thresholdTokens: 120_000 }));
-Agent.create({ provider, model }).window(summarizeOldest({ thresholdTokens: 120_000, summarizer }));
+Agent.create({ provider, model }).act({ window: slidingWindow({ keepRecentTurns: 12 }) });
+Agent.create({ provider, model }).act({ window: tokenBudget({ thresholdTokens: 120_000 }) });
+Agent.create({ provider, model }).act({ window: summarizeOldest({ thresholdTokens: 120_000, summarizer }) });
 ```
 
-`.window(strategy)` is the general door. [`.compaction({...})`](doc:compaction) is `.window(summarizeOldest({...}))` spelled shorter — the same agent, byte for byte, and it keeps its own name because compaction is what the market calls that move and it is the one most people want first.
+The window is one of the [five moments of the loop](doc:loop-moments), and `.act({ window })` is where it is written — beside whatever this agent does at the other four. It forwards to `.window(strategy)`, the individual door, which is still there and is the right spelling when you are adding a strategy to an agent somebody else built ([composing incrementally](doc:loop-moments#composing-incrementally)).
 
-**Exactly one strategy per agent.** A second through either door throws at build time: a window policy that quietly changed is a policy you cannot audit.
+[`.compaction({...})`](doc:compaction) is `summarizeOldest({...})` spelled shorter — the same agent, byte for byte, and it keeps its own name because compaction is what the market calls that move and it is the one most people want first.
+
+**Exactly one strategy per agent.** A second through any door throws at build time: a window policy that quietly changed is a policy you cannot audit.
 
 Configure none and nothing changes — no stage, no extra committed key, the same request bytes as an agent that never heard of any of this.
 
@@ -110,7 +112,7 @@ No new event types were added for any of this:
 ## slidingWindow
 
 ```ts
-.window(slidingWindow({ keepRecentTurns: 12 }))
+.act({ window: slidingWindow({ keepRecentTurns: 12 }) })
 ```
 
 Keeps the most recent `keepRecentTurns` turns and drops what is older. No summarizer, no LLM call, no usage requirement — so it runs on **any** provider, including the OpenAI-compatible endpoints (Ollama, vLLM) that send no usage while streaming. Nothing here is unmeasurable, so nothing here throws.
@@ -122,7 +124,7 @@ Keeps the most recent `keepRecentTurns` turns and drops what is older. No summar
 ## tokenBudget
 
 ```ts
-.window(tokenBudget({ thresholdTokens: 120_000, keepRecentTurns: 6 }))
+.act({ window: tokenBudget({ thresholdTokens: 120_000, keepRecentTurns: 6 }) })
 ```
 
 Compaction's trigger, without the summarizer. The number is **counted, never guessed**: it reads the input tokens the provider itself reported for the last call, off the `stream.llm_end` event the adapter already emits.
@@ -167,7 +169,7 @@ const rendered = history.map((m) => (isDropNotice(m) ? '⟨dropped⟩' : m.conte
 
 ## Writing your own
 
-`.window(...)` takes any object satisfying `WindowStrategy`:
+The `window` key — and `.window(...)` behind it — takes any object satisfying `WindowStrategy`:
 
 ```ts
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from 'agentfootprint';
@@ -207,7 +209,7 @@ Everything below comes from the package root, `agentfootprint`:
 | --- | --- |
 | `slidingWindow(options)` | The factory for the keep-the-last-N-turns strategy. |
 | `tokenBudget(options)` | The factory for the counted-token drop strategy. |
-| `summarizeOldest(options)` | The factory `.compaction(...)` uses, exposed so you can pass it to `.window(...)` yourself. |
+| `summarizeOldest(options)` | The factory `.compaction(...)` uses, exposed so you can pass it to the `window` key yourself. |
 | `SlidingWindowOptions` | What `slidingWindow` accepts: `keepRecentTurns` (required — it is the policy). |
 | `TokenBudgetOptions` | What `tokenBudget` accepts: `thresholdTokens` (required) and `keepRecentTurns` (default 6). |
 | `CompactionOptions` | What `summarizeOldest` and `.compaction()` accept. |

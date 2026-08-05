@@ -6,7 +6,7 @@
 
 # Interface: ContextSourceAdapter
 
-Defined in: [src/adapters/types.ts:354](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L354)
+Defined in: [src/adapters/types.ts:428](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L428)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:354](https://github.com/footprintjs/agentfoot
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:355](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L355)
+Defined in: [src/adapters/types.ts:429](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L429)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:355](https://github.com/footprintjs/agentfoot
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L357)
+Defined in: [src/adapters/types.ts:431](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L431)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:357](https://github.com/footprintjs/agentfoot
 
 > `readonly` **targetSlot**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:356](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L356)
+Defined in: [src/adapters/types.ts:430](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L430)
 
 ## Methods
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:356](https://github.com/footprintjs/agentfoot
 
 > **resolve**(`ctx`): `Promise`\<readonly [`ContextContribution`](/agentfootprint/api/generated/interfaces/ContextContribution.md)[]\>
 
-Defined in: [src/adapters/types.ts:358](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/adapters/types.ts#L358)
+Defined in: [src/adapters/types.ts:432](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/adapters/types.ts#L432)
 
 #### Parameters
 

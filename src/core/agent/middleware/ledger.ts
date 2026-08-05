@@ -16,6 +16,12 @@
  * disagreement from a lie into a record. Every slice taken afterwards can
  * then find the moment the value changed and who changed it.
  *
+ * The same reasoning covers the `'after-tool'` moment from the other side. A
+ * result the model was not allowed to read still HAPPENED — the tool ran, the
+ * side effect landed — so the refusal row carries the real result. A run that
+ * dropped it would record an agent that called a tool and got nothing back,
+ * which is not what occurred.
+ *
  * This is not a redaction layer, and it is not trying to be one. For the
  * `'input'` phase in particular, the ledger row is the ONLY copy of the
  * pre-scrub text anywhere in the run — the seed stage commits the
@@ -51,6 +57,7 @@ export function recordDecisions(scope: LedgerScope, rows: readonly MiddlewareDec
   for (const row of rows) {
     typedEmit(scope, 'agentfootprint.middleware.decision', {
       middleware: row.middleware,
+      moment: row.moment,
       at: row.at,
       ...(row.phase !== undefined && { phase: row.phase }),
       ...(row.toolName !== undefined && { toolName: row.toolName }),

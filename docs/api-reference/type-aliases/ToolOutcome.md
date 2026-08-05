@@ -8,7 +8,7 @@
 
 > **ToolOutcome** = [`AllowOutcome`](/agentfootprint/api/generated/interfaces/AllowOutcome.md)\<`Readonly`\<`Record`\<`string`, `unknown`\>\>\> \| [`DenyOutcome`](/agentfootprint/api/generated/interfaces/DenyOutcome.md) \| [`AskOutcome`](/agentfootprint/api/generated/interfaces/AskOutcome.md)
 
-Defined in: src/core/agent/middleware/types.ts:93
+Defined in: [src/core/agent/middleware/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/types.ts#L124)
 
 Everything a tool middleware may answer. Closed, and every arm has a
 home in this codebase: allow rides the normal dispatch, deny rides the

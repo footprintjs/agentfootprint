@@ -42,6 +42,7 @@ import type { AgentOptions, RunConfigFn } from './types.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
+import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 
@@ -167,6 +168,8 @@ export class AgentBuilder {
   private toolMiddlewareList: readonly ToolMiddleware[] = [];
   /** The message chain, in call order. Empty = no chain, no ledger. */
   private messageMiddlewareList: readonly MessageMiddleware[] = [];
+  /** `.act()` is the posture block: one per agent. See the method. */
+  private actCalled = false;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -325,6 +328,82 @@ export class AgentBuilder {
   }
 
   /**
+   * Everything this agent DOES about its own loop, in one block.
+   *
+   * Tools do the work. `.act()` decides about the work. `watch` remembers
+   * both — and nothing can act without being watched.
+   *
+   * Five keys, one per moment of a turn, each optional and each the exact
+   * argument the individual door takes:
+   *
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .act({
+   *     input:      [scrubSSNs],        // the message, before the run commits it
+   *     beforeTool: [refundCeiling],    // every call, before it is dispatched
+   *     afterTool:  [hideRawPII],       // every result, before the model reads it
+   *     window:     slidingWindow({ keepRecentTurns: 12 }),
+   *     output:     [noInternalCodenames],
+   *   })
+   *   .build();
+   * ```
+   *
+   * **It is sugar, and provably so.** Each key is forwarded to the door that
+   * already owned it — `.messageMiddleware()`, `.toolMiddleware()`,
+   * `.window()` — so the agent it builds sends the same request bytes and
+   * files the same records as the same rules spelled out one call at a time.
+   * That equivalence is pinned per key by tests, the way `.compaction()`'s is.
+   *
+   * **The keys cannot fall behind the loop.** They are locked at compile time
+   * against `LoopMoment`, so a sixth moment cannot ship without a key here.
+   *
+   * **A rule speaks where its hooks say, not where you filed it.** `beforeTool`
+   * and `afterTool` are one chain; an entry with both `onToolCall` and
+   * `onToolResult` runs at both moments whichever key you wrote it under —
+   * the KEYS are named for the moments, the HOOKS for what they receive — and
+   * an entry named
+   * under both keys is the same object attached once. A governance rule that
+   * silently did not run because it was written in the wrong bucket is exactly
+   * the failure this library exists to make impossible — so the bucket is
+   * checked for the hook it names, and the hooks decide the rest.
+   *
+   * **Call it once.** A second `.act()` throws: two posture blocks means the
+   * answer to "what does this agent do at each moment?" is in two places, and
+   * the second one silently wins. Adding one piece to an agent somebody else
+   * built — a plugin, a policy pack — is what the individual doors are for,
+   * and they stay open for exactly that.
+   *
+   * @param options - One key per moment. `input` / `output` take message
+   *   middleware, `beforeTool` / `afterTool` take tool middleware, `window`
+   *   takes a `WindowStrategy`. Unknown keys throw.
+   */
+  act(options: ActOptions): this {
+    if (this.actCalled) {
+      throw new Error(
+        'AgentBuilder.act: already called. One posture block per agent — a second would put ' +
+          'the answer to "what does this agent do at each moment of its loop?" in two places, ' +
+          'with the later one silently winning. To ADD one rule to an agent that already has ' +
+          'a posture, use the individual door for that moment (.toolMiddleware(), ' +
+          '.messageMiddleware(), .window()); they compose incrementally by design.',
+      );
+    }
+    // Resolved BEFORE anything is attached: a bundle with a bad key must
+    // leave the builder exactly as it found it, not half-configured. Every
+    // entry is validated inside `resolveAct`, and the window — the one key
+    // whose validation lives on its own door — goes first for the same
+    // reason.
+    const resolved = resolveAct(options);
+    if (resolved.window !== undefined) {
+      this.assertNoWindowStrategy('act');
+      this.window(resolved.window);
+    }
+    this.actCalled = true;
+    if (resolved.message.length > 0) this.messageMiddleware(...resolved.message);
+    if (resolved.tool.length > 0) this.toolMiddleware(...resolved.tool);
+    return this;
+  }
+
+  /**
    * Choose how the live context window is kept inside its budget.
    *
    * This is the general door; the strategy decides everything about WHEN it
@@ -444,9 +523,17 @@ export class AgentBuilder {
    * silently override the first, and a window policy that quietly changed is
    * a policy you cannot audit.
    */
-  private assertNoWindowStrategy(door: 'window' | 'compaction'): void {
+  private assertNoWindowStrategy(door: 'window' | 'compaction' | 'act'): void {
     const existing = this.windowStrategyValue;
     if (existing === undefined) return;
+    if (door === 'act') {
+      throw new Error(
+        `AgentBuilder.act: this agent already has a window strategy ('${existing.name}'), set ` +
+          'by .window() or .compaction(). One window strategy per agent, whichever door set ' +
+          'it — a second would silently override the first, and a window policy that quietly ' +
+          'changed is a policy you cannot audit. Move it into the `window` key, or drop the key.',
+      );
+    }
     if (door === 'compaction') {
       throw new Error(
         'AgentBuilder.compaction: already set. One compaction policy per agent — a second ' +
@@ -1065,6 +1152,16 @@ export class AgentBuilder {
    * middleware that throws is a denial carrying the error as its reason —
    * never a silent pass.
    *
+   * A link may also carry an **`onToolResult`** hook, which decides about the
+   * RESULT once the tool has run and before the model reads it — `allow()`,
+   * `allow(value, why)` or `deny(reason)`, and no `ask`, because the tool has
+   * already run and there is nothing left for a person to prevent. That half
+   * of the chain is walked BACKWARDS, so the first-declared rule has the first
+   * word about the call and the last word about the answer. A link with only
+   * `onToolResult` takes no part in dispatch at all.
+   *
+   * `.act({ beforeTool, afterTool })` is the same chain, named by moment.
+   *
    * An existing `PermissionChecker` still decides FIRST: it is not part of
    * this chain, it runs ahead of it, so a call it denies never reaches a
    * middleware. `gatedTools` is a different layer again — it decides which
@@ -1087,9 +1184,36 @@ export class AgentBuilder {
    * ```
    */
   toolMiddleware(...middleware: readonly ToolMiddleware[]): this {
-    for (const mw of middleware) this.assertMiddleware(mw, 'toolMiddleware', 'onToolCall');
+    for (const mw of middleware) this.assertToolMiddleware(mw);
     this.toolMiddlewareList = [...this.toolMiddlewareList, ...middleware];
     return this;
+  }
+
+  /**
+   * A tool link needs a name and at least one hook. Both are optional
+   * INDIVIDUALLY — a rule about calls, a rule about results, or both — but a
+   * link with neither is a governance rule that can never run, and finding
+   * that out from a quiet run rather than from `build()` is the whole disease.
+   */
+  private assertToolMiddleware(mw: unknown): void {
+    const shaped =
+      mw !== null &&
+      typeof mw === 'object' &&
+      typeof (mw as { name?: unknown }).name === 'string' &&
+      (mw as { name: string }).name.length > 0;
+    const record = mw as Record<string, unknown> | null;
+    const hooks =
+      shaped &&
+      (typeof record?.onToolCall === 'function' || typeof record?.onToolResult === 'function');
+    if (!hooks) {
+      throw new Error(
+        `AgentBuilder.toolMiddleware: expected an object with a non-empty \`name\` and at ` +
+          `least one of \`onToolCall(call)\` (decides about the call) or ` +
+          `\`onToolResult(call)\` ` +
+          `(decides about the result), got ${typeof mw}. The name is what every ledger row ` +
+          `and event says decided the call, so it cannot be blank.`,
+      );
+    }
   }
 
   /**

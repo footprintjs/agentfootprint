@@ -590,6 +590,40 @@ npm run example examples/features/34-checkin-coworker.ts -- --decline
 
 See the [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
 
+### Act — everything your agent does about its own loop, in one block
+
+**Tools do the work. Act decides about the work. Watch remembers both — and nothing can act without being watched.**
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/loop-moments-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/loop-moments-light.svg">
+    <img alt="One agent turn drawn as a circle. The message enters through the INPUT gate; the loop runs clockwise past the WINDOW gate (what the live context keeps), the context slots and the model call, the BEFORE-TOOL gate (every call, before dispatch), the tool actually running, the AFTER-TOOL gate (every result, before the model reads it) and the end of the iteration; the answer leaves through the OUTPUT gate. Five amber gates are the moments .act() can change; purple watch-dots sit at every moment, including the ones with no gate, because watch attends all of them and cannot be switched off." src="docs/assets/loop-moments-light.svg" width="100%"/>
+  </picture>
+</p>
+
+```ts
+const agent = Agent.create({ provider, model })
+  .act({
+    input:      [scrubSSNs],                            // the message, before the run commits it
+    beforeTool: [refundCeiling, fourEyes],              // every call, before it is dispatched
+    afterTool:  [stripPII],                             // every result, before the model reads it
+    window:     slidingWindow({ keepRecentTurns: 12 }), // what the live window keeps
+    output:     [noCodenames],                          // the answer, before the caller gets it
+  })
+  .build();
+```
+
+Five keys, one per moment, in the order the loop reaches them — so autocomplete on an empty `{}` teaches the loop. Every rule answers `allow()`, `allow(value, why)` or `deny(reason)` (and `ask({ question })` where a person can still change the outcome), **and none of them can answer for the tool**: the outcome union has no result arm, so what the model finally reads is the real tool's output or a refusal. Every decision files a ledger row stamped with its `moment`.
+
+It is pure sugar over the five individual doors, pinned byte-equivalent per key — and the bundle's keys are locked against `LoopMoment` at compile time, so a sixth moment cannot ship without a key for it.
+
+```bash
+npm run example examples/features/38-act.ts
+```
+
+See [The moments of the loop](https://footprintjs.github.io/agentfootprint/docs/build/loop-moments/).
+
 ---
 
 ## 🐛 Debug — see what your agent did

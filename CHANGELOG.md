@@ -7,6 +7,167 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.24.0] - 2026-08-04
+
+This library keeps measuring the same disease and shipping cures for it one
+organ at a time: **a capability nobody can find is a capability nobody has.**
+The skill router exists because a tool the model cannot see is a tool that does
+not exist. The context ledger exists because a piece of context nobody can
+account for might as well not have been sent. And an agent's own governance had
+the same problem, in the place where it costs the most: the answer to "what
+does this agent do at each moment of its turn?" was four unrelated builder
+calls, scattered through a chain, with no place to be answered.
+
+So this release does two things, and the second is the reason for the first.
+
+**`.act()` — one block, five keys, one per moment of the loop.**
+
+```ts
+Agent.create({ provider, model })
+  .act({
+    input:      [scrubSSNs],                            // the message, before the run commits it
+    beforeTool: [refundCeiling, fourEyes],              // every call, before it is dispatched
+    afterTool:  [stripPII],                             // every result, before the model reads it
+    window:     slidingWindow({ keepRecentTurns: 12 }), // what the live window keeps
+    output:     [noCodenames],                          // the answer, before the caller gets it
+  })
+  .build();
+```
+
+Governance at a glance: one thing to read in review, one thing to diff, and
+autocomplete on an empty `{}` that teaches the loop rather than requiring you
+to already know it. It builds nothing new — every key is forwarded to the door
+that already owned it, and the equivalence is pinned **per key** against the
+hand-written spelling, the way `.compaction()`'s was: same requests on the
+wire, same rows in the ledger.
+
+The canonical path is preserved by **demoting the doors, not deleting them**.
+`.toolMiddleware()`, `.messageMiddleware()`, `.window()` and `.compaction()`
+are unchanged and stay open, and they are now documented under *Composing
+incrementally* — because adding one rule to an agent somebody else built is a
+real job, and a bundle that must be written all at once cannot do it. That
+division is the one-sentence answer to "which spelling": **`.act()` for an
+agent you own, a door for a piece you are adding to somebody else's.** A second
+`.act()` throws, since two posture blocks put the answer in two places with the
+later one silently winning.
+
+**And the keys cannot fall behind the loop.** `LoopMoment` is exported, and the
+bundle's keys are type-locked against it in both directions, camel-cased by
+type-level string manipulation rather than a hand-written pair table. Ship a
+sixth moment without a key and OUR build fails naming it. The runtime validator
+that decides which keys `.act()` accepts is derived from the same list, so it
+cannot drift from the type it is validating. A surface that claims to be
+complete has to be made unable to fall behind, or the claim is just a sentence
+in a doc.
+
+**The after-tool moment, which 7.18 deferred.** A tool middleware may now carry
+an `onToolResult` hook that runs once the tool has executed and **before its
+result enters the history or reaches the model**. Two verbs there — `allow()`,
+`allow(value, why)`, `deny(reason)` — and the two halves are ONE chain walked
+in onion order: the first-declared rule gets the first word going in and the
+last word coming out.
+
+There is deliberately **no `ask` at the after-tool moment**, and that is a refusal rather
+than an omission. The machinery is right there; the tool has already run, so a
+person woken to answer cannot prevent anything. Every reviewed business case —
+authorize before, hide from the model, annotate the result, attach a fact
+through a trigger — needed the two verbs and none of them needed a person. The
+absence is recorded at the type and in the docs so evidence can promote it: a
+case that genuinely needs a human at that moment gets the arm, on the pause
+machinery that already exists.
+
+### Added
+
+- **`.act({ input?, beforeTool?, afterTool?, window?, output? })`** — the
+  canonical door. Pure sugar over the five existing ones, callable once, with
+  unknown keys refused by name rather than ignored (a key nobody reads is a
+  governance rule that silently never runs). A bundle that fails validation
+  leaves the builder exactly as it found it.
+
+- **`ToolMiddleware.onToolResult`** — the result moment. The moment is named
+  `'after-tool'` (and `.act()`'s key after it) because that is WHEN it happens;
+  the hook is named for WHAT IT RECEIVES, which is how it pairs with
+  `onToolCall`. Its context is the call
+  context plus `result`, plus `error: true` when the tool threw, with `args`
+  as the tool ACTUALLY RAN WITH them. `toolSource` is present here too, so a
+  rule about a server's answers is as writable as a rule about its calls.
+  `ToolMiddleware` is now a union: at least one of `onToolCall` /
+  `onToolResult`, so a rule with a name and no hook does not compile. A link
+  with only `onToolResult` takes no part in dispatch — no walk, no ledger row at the call moment, since it
+  decided nothing there.
+
+- **`LoopMoment`, `LOOP_MOMENTS`, `actKeyFor`, `ActKey`, `ActOptions`,
+  `ACT_KEYS`** — the moment vocabulary and the bundle, exported so a UI that
+  renders "what does this agent do at each moment?" can enumerate the moments
+  instead of hard-coding five strings.
+
+- **`MiddlewareDecision.moment`** and the same field on the
+  `agentfootprint.middleware.decision` payload — every row now says WHERE IN
+  THE LOOP it came from, in the same words the key is named for. The 7.18
+  `at` / `phase` fields are committed state, are still written, and still mean
+  what they meant; `moment` is the newer spelling and the one to narrow on.
+
+- **`allow(undefined, why)`** — a pass-through that carries a reason. The row
+  still reads `changed: false`, because nothing moved. It is what an
+  approve-once rule needs: a call that sails through on a remembered decision
+  files a row saying **whose** decision it sailed through on, so "why did this
+  run without asking?" has an answer in the record rather than in somebody's
+  memory.
+
+- **[The moments of the loop](https://footprintjs.github.io/agentfootprint/docs/build/loop-moments)**
+  — a new docs page with the hero diagram, and THE TABLE: every lifecycle
+  moment × the watch event that reports it × the act seam that can change it
+  (or "observation only", which two moments are, on purpose — a rule that could
+  rewrite the model's answer would be a rule that could answer for the model).
+  Plus the session-trust recipe and the whole-steering-wheel example.
+
+- **Examples** `features/38-act.ts` (all five moments on one agent) and
+  `features/39-approve-once.ts` (ask once, remember the answer, keyed by
+  tool + source + args — with the loosening shown and its cost named).
+
+### The judgements these rest on
+
+**Deny at the after-tool moment hides an answer; it does not undo a side effect.** The model
+reads the reason instead of the result, and the run still commits the real
+result — because it happened. A record that dropped it would describe an agent
+that called a tool and got nothing back, which is not what occurred. That makes
+the row the only copy of a withheld result, exactly as the `'input'` phase row
+is the only copy of pre-scrub text, and it gets the same answer: redaction over
+`middlewareDecisions` scrubs the value while the refusal survives. The 7.18
+security test grew a second half that pins it.
+
+**`onToolResult` NEVER runs for a call that never executed.** Denied before dispatch,
+waiting on a person, rejected by arg validation, blocked on a credential, or
+naming a tool that does not exist — none of those have a result to decide
+about, and asking a rule about a result that does not exist is the same
+fabrication the outcome union removes. It DOES run on the far side of an
+approval, because that is where the tool ran.
+
+**`stream.tool_end` still reports what the TOOL returned.** The event stream is
+about the tool; the history is about the model; the ledger row between them
+says which is which. Making the event report the model's copy would have made
+one of the two facts unrecoverable.
+
+**The buckets are for reading; the hooks decide.** A rule with both hooks runs
+at both moments whichever key it was written under, and a rule named under both
+tool keys is the same object attached once. The other rule — buckets that
+restrict — would mean a governance rule silently not running because it was
+filed in the wrong place, which is the failure this whole surface exists to
+prevent. What IS checked, at build time, is that a bucket's entries have the
+hook the bucket names.
+
+**`.act({ input })` restricts a rule to one phase; `.messageMiddleware()` does
+not.** The bundle wraps each entry in exactly the `msg.phase === 'input' ? … :
+allow()` guard a person writes today — including its pass-through row at the
+other phase, which is what keeps the per-key equivalence honest. Name a rule
+under BOTH `input` and `output` and it is attached once, unguarded: exactly
+`.messageMiddleware(rule)`.
+
+**`WindowRecord` did not gain a `moment`.** It was considered and declined:
+required, it breaks every third-party `WindowStrategy` in a minor; optional, it
+is a discriminant that always holds the same value, added to committed state.
+A window record is already the window moment by virtue of the key it lives in.
+
 ## [7.23.0] - 2026-08-04
 
 Three seams that each stopped one layer short of the person who needed them.

@@ -17,6 +17,7 @@ import type {
   ToolProtocol,
 } from './types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+import type { LoopMoment } from '../core/agent/moments.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -376,6 +377,9 @@ export interface CheckInDecisionPayload {
  */
 export interface MiddlewareDecisionPayload {
   readonly middleware: string;
+  /** Where in the loop this happened — the vocabulary `.act()` is keyed on. */
+  readonly moment: LoopMoment;
+  /** The 7.18 spelling of the same fact. Narrow on `moment`. */
   readonly at: 'tool' | 'message';
   readonly phase?: 'input' | 'output';
   readonly toolName?: string;

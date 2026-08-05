@@ -537,6 +537,115 @@ describe('mcpServe — the governance chain (7.18)', () => {
     ]);
   });
 
+  it('the after-tool moment reaches the served boundary too — the transform is what the client reads', async () => {
+    const sink = defineTool<Record<string, unknown>, unknown>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => ({ ok: true, secret: 'sk-live-42' }),
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [
+        {
+          name: 'redact',
+          onToolResult: (call) =>
+            allow({ ...(call.result as object), secret: '[redacted]' }, 'hid a live key'),
+        },
+      ],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0]?.text).toContain('[redacted]');
+    expect(result.content[0]?.text).not.toContain('sk-live-42');
+  });
+
+  it('a deny at `onToolResult` answers the client with the reason, and never the result', async () => {
+    const sink = defineTool<Record<string, unknown>, unknown>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => ({ ssn: '123-45-6789' }),
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [
+        { name: 'no-raw-pii', onToolResult: () => deny('raw records are not served') },
+      ],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('raw records are not served');
+    expect(result.content[0]?.text).not.toContain('123-45-6789');
+  });
+
+  it('the after-tool moment sees the SERVED provenance, and the same onion order', async () => {
+    const order: string[] = [];
+    const seen: Array<{ declared: boolean; source?: string }> = [];
+    const relayed: Tool = {
+      schema: { name: 'call_aws', description: 'relayed', inputSchema: { type: 'object' } },
+      source: 'aws-prod',
+      execute: () => 'relayed ok',
+    };
+    const link = (name: string) => ({
+      name,
+      onToolCall: () => {
+        order.push(`before:${name}`);
+        return allow();
+      },
+      onToolResult: (call: { toolSource?: string }) => {
+        order.push(`after:${name}`);
+        seen.push({
+          declared: 'toolSource' in call,
+          ...(call.toolSource !== undefined && { source: call.toolSource }),
+        });
+        return allow();
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([relayed], { _server: server, toolMiddleware: [link('outer'), link('inner')] });
+
+    await server.call('call_aws', {});
+
+    expect(order).toEqual(['before:outer', 'before:inner', 'after:inner', 'after:outer']);
+    expect(seen).toEqual([
+      { declared: true, source: 'aws-prod' },
+      { declared: true, source: 'aws-prod' },
+    ]);
+  });
+
+  it('an onToolResult rule never runs for a call the chain refused before dispatch', async () => {
+    const ran: string[] = [];
+    const sink = defineTool<Record<string, unknown>, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => 'ok',
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [
+        {
+          name: 'closed',
+          onToolCall: () => deny('this server is read-only'),
+          onToolResult: () => {
+            ran.push('after');
+            return allow();
+          },
+        },
+      ],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBe(true);
+    expect(ran).toEqual([]);
+  });
+
   it('without a chain the served call is byte-identical to before', async () => {
     const seen: unknown[] = [];
     const sink = defineTool<Record<string, unknown>, string>({

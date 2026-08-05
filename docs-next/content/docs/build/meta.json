@@ -21,6 +21,7 @@
     "mcp-client",
     "mcp-serve",
     "sequence-governance",
+    "loop-moments",
     "middleware",
     "flowchart-as-tool",
     "output-schema",

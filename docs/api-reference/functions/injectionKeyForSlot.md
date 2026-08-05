@@ -8,7 +8,7 @@
 
 > **injectionKeyForSlot**(`slot`): [`InjectionKey`](/agentfootprint/api/generated/type-aliases/InjectionKey.md)
 
-Defined in: [src/conventions.ts:340](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/conventions.ts#L340)
+Defined in: [src/conventions.ts:348](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/conventions.ts#L348)
 
 Map a slot to its injection scope key.
 

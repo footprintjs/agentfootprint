@@ -8,7 +8,7 @@
 
 > **swarm**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/Swarm.ts:62](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/patterns/Swarm.ts#L62)
+Defined in: [src/patterns/Swarm.ts:62](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/patterns/Swarm.ts#L62)
 
 Build a Swarm Runner. Each iteration:
   1. Router evaluates `route(input)` to pick an agent id.

@@ -6,7 +6,7 @@
 
 # Interface: AskOutcome
 
-Defined in: src/core/agent/middleware/types.ts:74
+Defined in: [src/core/agent/middleware/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/types.ts#L105)
 
 Suspend the run and put the question to a person. Tool dispatch only.
 
@@ -16,7 +16,7 @@ Suspend the run and put the question to a person. Tool dispatch only.
 
 > `readonly` **kind**: `"ask"`
 
-Defined in: src/core/agent/middleware/types.ts:75
+Defined in: [src/core/agent/middleware/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/types.ts#L106)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: src/core/agent/middleware/types.ts:75
 
 > `readonly` **payload**: [`AskPayload`](/agentfootprint/api/generated/interfaces/AskPayload.md)
 
-Defined in: src/core/agent/middleware/types.ts:76
+Defined in: [src/core/agent/middleware/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/a7bc648325994ed8e4f49f22420056b84917c151/src/core/agent/middleware/types.ts#L107)

@@ -10,6 +10,11 @@
  *
  * Three verbs: `allow`, `deny`, `ask`. There is no fourth, and in
  * particular there is no way to return a result — see `types.ts`.
+ *
+ * A tool link may speak twice: `onToolCall` about the call, `onToolResult`
+ * about the result. The chain is walked forwards for the first and backwards for the
+ * second, so the first-declared link has the first word going in and the last
+ * word coming out.
  */
 
 export { allow, ask, deny } from './outcomes.js';
@@ -23,7 +28,11 @@ export type {
   MessageMiddlewareContext,
   MessageOutcome,
   MiddlewareDecision,
+  ToolCallMiddleware,
   ToolMiddleware,
   ToolMiddlewareContext,
   ToolOutcome,
+  ToolResultContext,
+  ToolResultMiddleware,
+  ToolResultOutcome,
 } from './types.js';
