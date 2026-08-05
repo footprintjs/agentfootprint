@@ -6,7 +6,7 @@
 
 # Interface: OutputSchemaOptions
 
-Defined in: [src/core/outputSchema.ts:77](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/outputSchema.ts#L77)
+Defined in: [src/core/outputSchema.ts:77](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/outputSchema.ts#L77)
 
 Optional configuration for `outputSchema`.
 
@@ -16,7 +16,7 @@ Optional configuration for `outputSchema`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/core/outputSchema.ts:92](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/outputSchema.ts#L92)
+Defined in: [src/core/outputSchema.ts:92](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/outputSchema.ts#L92)
 
 Custom system-prompt instruction text. Defaults to a generic
 "Respond with valid JSON matching the output schema. Do not
@@ -30,7 +30,7 @@ domain-specific framing.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/outputSchema.ts:84](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/outputSchema.ts#L84)
+Defined in: [src/core/outputSchema.ts:84](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/outputSchema.ts#L84)
 
 Injection id for the auto-generated "respond with this shape"
 instruction. Defaults to `'output-schema'`. Override when you

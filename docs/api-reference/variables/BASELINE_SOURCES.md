@@ -8,7 +8,7 @@
 
 > `const` **BASELINE\_SOURCES**: `ReadonlySet`\<`ContextSource`\>
 
-Defined in: [src/recorders/core/contextEngineering.ts:83](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/recorders/core/contextEngineering.ts#L83)
+Defined in: [src/recorders/core/contextEngineering.ts:83](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/recorders/core/contextEngineering.ts#L83)
 
 Public set of "baseline" sources — the message-history flow that
 exists regardless of context engineering: user input, tool results,

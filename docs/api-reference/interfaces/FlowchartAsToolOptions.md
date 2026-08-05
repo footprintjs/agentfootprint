@@ -6,7 +6,7 @@
 
 # Interface: FlowchartAsToolOptions
 
-Defined in: [src/core/flowchartAsTool.ts:134](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L134)
+Defined in: [src/core/flowchartAsTool.ts:134](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L134)
 
 Options for `flowchartAsTool`.
 
@@ -16,7 +16,7 @@ Options for `flowchartAsTool`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:138](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L138)
+Defined in: [src/core/flowchartAsTool.ts:138](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L138)
 
 Tool description shown to the LLM.
 
@@ -26,7 +26,7 @@ Tool description shown to the LLM.
 
 > `readonly` **flowchart**: `FlowChart`
 
-Defined in: [src/core/flowchartAsTool.ts:148](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L148)
+Defined in: [src/core/flowchartAsTool.ts:148](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L148)
 
 The footprintjs flowchart to mount as the tool's body.
 The chart's stages receive args via `scope.$getArgs()`.
@@ -37,7 +37,7 @@ The chart's stages receive args via `scope.$getArgs()`.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:143](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L143)
+Defined in: [src/core/flowchartAsTool.ts:143](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L143)
 
 JSON Schema describing the input args the LLM must produce.
 Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties: {} }`.
@@ -48,7 +48,7 @@ Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:136](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L136)
+Defined in: [src/core/flowchartAsTool.ts:136](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L136)
 
 Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
@@ -58,7 +58,7 @@ Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
 > `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)[]
 
-Defined in: [src/core/flowchartAsTool.ts:179](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L179)
+Defined in: [src/core/flowchartAsTool.ts:179](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L179)
 
 Observers to attach to the tool's INTERNAL `FlowChartExecutor`
 before each run. This is the hook that lets decide()/select()
@@ -90,7 +90,7 @@ detect the boundary via `event.traversalContext.runId !== lastRunId`
 
 > `readonly` `optional` **resultMapper?**: [`FlowchartResultMapper`](/agentfootprint/api/generated/type-aliases/FlowchartResultMapper.md)
 
-Defined in: [src/core/flowchartAsTool.ts:153](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L153)
+Defined in: [src/core/flowchartAsTool.ts:153](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L153)
 
 Optional shaping function. Default: `JSON.stringify(snapshot.values)`.
 Errors throw into the tool's `[mapper-error: ...]` envelope.

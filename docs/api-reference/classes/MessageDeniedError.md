@@ -6,7 +6,7 @@
 
 # Class: MessageDeniedError
 
-Defined in: [src/core/agent/middleware/errors.ts:47](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L47)
+Defined in: [src/core/agent/middleware/errors.ts:47](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L47)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [src/core/agent/middleware/errors.ts:47](https://github.com/footprin
 
 > **new MessageDeniedError**(`ctx`): `MessageDeniedError`
 
-Defined in: [src/core/agent/middleware/errors.ts:53](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L53)
+Defined in: [src/core/agent/middleware/errors.ts:53](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L53)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_MESSAGE_DENIED"`
 
-Defined in: [src/core/agent/middleware/errors.ts:48](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L48)
+Defined in: [src/core/agent/middleware/errors.ts:48](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L48)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` **middleware**: `string`
 
-Defined in: [src/core/agent/middleware/errors.ts:51](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L51)
+Defined in: [src/core/agent/middleware/errors.ts:51](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L51)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: [src/core/agent/middleware/errors.ts:50](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L50)
+Defined in: [src/core/agent/middleware/errors.ts:50](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L50)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: [src/core/agent/middleware/errors.ts:50](https://github.com/footprin
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/middleware/errors.ts:49](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/agent/middleware/errors.ts#L49)
+Defined in: [src/core/agent/middleware/errors.ts:49](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/agent/middleware/errors.ts#L49)
 
 ***
 

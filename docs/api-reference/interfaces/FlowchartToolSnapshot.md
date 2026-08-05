@@ -6,7 +6,7 @@
 
 # Interface: FlowchartToolSnapshot
 
-Defined in: [src/core/flowchartAsTool.ts:105](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L105)
+Defined in: [src/core/flowchartAsTool.ts:105](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L105)
 
 Pruned snapshot view passed to `resultMapper`. We keep this minimal
 (the values bag + the chart's narrative entries) to avoid leaking
@@ -19,7 +19,7 @@ pass a `passthrough` resultMapper that ignores the prune.
 
 > `readonly` **narrative**: readonly `object`[]
 
-Defined in: [src/core/flowchartAsTool.ts:116](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L116)
+Defined in: [src/core/flowchartAsTool.ts:116](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L116)
 
 The flowchart's combined narrative entries (flow + data).
 Useful for resultMappers that want to extract specific commit
@@ -31,7 +31,7 @@ artifacts or audit a decision path.
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:110](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L110)
+Defined in: [src/core/flowchartAsTool.ts:110](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L110)
 
 Final scope state — the merged result of every stage's writes.
 This is what `executor.getSnapshot().values` returns.

@@ -6,7 +6,7 @@
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:369](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L369)
+Defined in: [src/adapters/types.ts:369](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L369)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:369](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/agentfootprint/api/generated/type-aliases/WireRole.md)[]
 
-Defined in: [src/adapters/types.ts:396](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L396)
+Defined in: [src/adapters/types.ts:396](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L396)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -46,7 +46,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:370](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L370)
+Defined in: [src/adapters/types.ts:370](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L370)
 
 ## Methods
 
@@ -54,7 +54,7 @@ Defined in: [src/adapters/types.ts:370](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/types.ts:404](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L404)
+Defined in: [src/adapters/types.ts:404](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L404)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -82,7 +82,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [src/adapters/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L405)
+Defined in: [src/adapters/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L405)
 
 #### Parameters
 

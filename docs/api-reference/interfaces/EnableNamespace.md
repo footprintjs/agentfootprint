@@ -6,7 +6,7 @@
 
 # Interface: EnableNamespace
 
-Defined in: [src/core/runner.ts:52](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L52)
+Defined in: [src/core/runner.ts:52](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L52)
 
 High-level feature-enable methods. Each attaches a pre-built observability
 recorder and returns an Unsubscribe function. Additional methods land in
@@ -18,7 +18,7 @@ Phase 5 (lens, tracing, cost, guardrails, ...).
 
 > **cost**(`opts?`): `Unsubscribe`
 
-Defined in: [src/core/runner.ts:92](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L92)
+Defined in: [src/core/runner.ts:92](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L92)
 
 v2.8+ — grouped strategy enabler for cost. Subscribes the strategy
 to `cost.tick` events; defaults to `inMemorySinkCost()` for
@@ -40,7 +40,7 @@ read-back / test inspection.
 
 > **flowchart**(`opts?`): [`FlowchartHandle`](/agentfootprint/api/generated/interfaces/FlowchartHandle.md)
 
-Defined in: [src/core/runner.ts:63](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L63)
+Defined in: [src/core/runner.ts:63](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L63)
 
 Live composition graph — subflow / fork-branch / decision-branch
 nodes accumulate as execution unfolds. Hook into any graph renderer
@@ -67,7 +67,7 @@ leaves behind can be replayed with its step strip intact.
 
 > **liveStatus**(`opts`): `Unsubscribe`
 
-Defined in: [src/core/runner.ts:99](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L99)
+Defined in: [src/core/runner.ts:99](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L99)
 
 v2.8+ — grouped strategy enabler for chat-bubble live status.
 Maintains the thinking-state machine; calls strategy.renderStatus
@@ -90,7 +90,7 @@ Strategy is required (consumer must wire UI).
 
 > **localObservability**(`opts?`): `LocalObservabilityHandle`
 
-Defined in: [src/core/runner.ts:79](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L79)
+Defined in: [src/core/runner.ts:79](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L79)
 
 Tier-3 / Debug — RETAIN a live run model: watch it via `onLive` (a
 fresh `StepGraph` per event, for your own renderer) AND freeze it for
@@ -122,7 +122,7 @@ model so you can look at it — locally, with full content. The serialized
 
 > **observability**(`opts?`): `Unsubscribe`
 
-Defined in: [src/core/runner.ts:86](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/runner.ts#L86)
+Defined in: [src/core/runner.ts:86](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/runner.ts#L86)
 
 v2.8+ — grouped strategy enabler for observability. Pipes every
 typed event into a vendor strategy (Datadog, OTel, AgentCore,

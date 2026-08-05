@@ -8,7 +8,7 @@
 
 > **flowchartAsTool**(`opts`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)
 
-Defined in: [src/core/flowchartAsTool.ts:203](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/core/flowchartAsTool.ts#L203)
+Defined in: [src/core/flowchartAsTool.ts:203](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/core/flowchartAsTool.ts#L203)
 
 Wrap a footprintjs `FlowChart` as a `Tool` the Agent's LLM can call.
 

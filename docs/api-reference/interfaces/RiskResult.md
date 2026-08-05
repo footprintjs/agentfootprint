@@ -6,7 +6,7 @@
 
 # Interface: RiskResult
 
-Defined in: [src/adapters/types.ts:452](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L452)
+Defined in: [src/adapters/types.ts:452](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L452)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:452](https://github.com/footprintjs/agentfoot
 
 > `readonly` **category**: `"pii"` \| `"prompt_injection"` \| `"runaway_loop"` \| `"cost_overrun"` \| `"hallucination_flag"`
 
-Defined in: [src/adapters/types.ts:455](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L455)
+Defined in: [src/adapters/types.ts:455](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L455)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:455](https://github.com/footprintjs/agentfoot
 
 > `readonly` **evidence**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L461)
+Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L461)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfoot
 
 > `readonly` **flagged**: `boolean`
 
-Defined in: [src/adapters/types.ts:453](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L453)
+Defined in: [src/adapters/types.ts:453](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L453)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:453](https://github.com/footprintjs/agentfoot
 
 > `readonly` **severity**: `"low"` \| `"medium"` \| `"high"` \| `"critical"`
 
-Defined in: [src/adapters/types.ts:454](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L454)
+Defined in: [src/adapters/types.ts:454](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L454)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/adapters/types.ts:454](https://github.com/footprintjs/agentfoot
 
 > `readonly` **suggestedAction**: `"warn"` \| `"redact"` \| `"abort"`
 
-Defined in: [src/adapters/types.ts:462](https://github.com/footprintjs/agentfootprint/blob/d630ddc0e0e611e1322ad7092c9a03baa7a88950/src/adapters/types.ts#L462)
+Defined in: [src/adapters/types.ts:462](https://github.com/footprintjs/agentfootprint/blob/e2a169f27b476cdd0e6f7bc3bc9b3ad9c33173cb/src/adapters/types.ts#L462)
