@@ -90,6 +90,10 @@ export const STAGE_IDS = {
    *  clear commit boundary marking "we have the answer." */
   EXTRACT_FINAL: 'extract-final',
   FINAL: 'final',
+  /** The Route decider's third branch (7.26), mounted ONLY on an agent built
+   *  with `.outputSchema(parser, { retries })`. It writes the corrective turn
+   *  and loops back — a re-ask is an ordinary iteration, not a mode. */
+  OUTPUT_RETRY: 'output-retry',
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
@@ -238,6 +242,10 @@ const PLUMBING_LOCAL_IDS: ReadonlySet<string> = new Set([
 const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
   STAGE_IDS.SEED, // 'Initialize' — chart root / Agent boundary
   STAGE_IDS.FINAL, // 'final' (=== SUBFLOW_IDS.FINAL)
+  // The schema re-ask is a boundary, not plumbing: it is the run deciding the
+  // answer was not good enough, which is exactly the kind of thing a reader
+  // came to see. Muting it would hide the reason a run took three turns.
+  STAGE_IDS.OUTPUT_RETRY,
 ]);
 
 /**
@@ -322,6 +330,10 @@ export function milestoneFor(id: string): Milestone | null {
       return { kind: 'tool-call', label: 'Tool call' };
     case SUBFLOW_IDS.ROUTE:
       return { kind: 'decision', label: 'Route' };
+    // The answer failed its schema and the loop asked again — a stop worth
+    // scrubbing to, because everything after it is a second attempt.
+    case STAGE_IDS.OUTPUT_RETRY:
+      return { kind: 'decision', label: 'Schema retry' };
     default:
       return null;
   }

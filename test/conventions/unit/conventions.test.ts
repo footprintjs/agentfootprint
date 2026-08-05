@@ -49,7 +49,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 17 known stage IDs', () => {
+  it('has the 18 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -72,6 +72,9 @@ describe('STAGE_IDS — single source of truth', () => {
         // Messages-slot delivery (7.21) — mounted only when something could
         // target the slot:
         'deliver',
+        // The output-schema re-ask (7.26) — the Route decider's third branch,
+        // mounted only with `.outputSchema(parser, { retries })`:
+        'output-retry',
         // Cache layer (v2.6+):
         'update-skill-history',
         'cache-gate',

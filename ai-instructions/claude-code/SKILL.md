@@ -379,7 +379,7 @@ if (isPaused(result)) {
 }
 ```
 
-## Observability — 68 typed events × 20 domains
+## Observability — 69 typed events × 20 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

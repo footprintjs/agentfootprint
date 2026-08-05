@@ -113,6 +113,15 @@ const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user'
 export class MockProvider implements LLMProvider {
   readonly name: string;
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  /**
+   * The mock carries a forced tool choice, so `strategy: 'tool-forced'` is
+   * testable end-to-end with no key and no network: script a reply whose
+   * `toolCalls` names the synthetic tool and the whole loop — forced request,
+   * tool-shaped answer, validation, retry — runs deterministically. A mock
+   * that refused the strategy would make the one path that most needs a
+   * cheap rehearsal the one path you could only rehearse in production.
+   */
+  readonly carriesForcedToolChoice = true;
   private readonly reply?: string;
   private readonly replies?: readonly MockReply[];
   private repliesCursor = 0;

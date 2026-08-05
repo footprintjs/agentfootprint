@@ -57,6 +57,9 @@ interface OpenAICreateParams {
   stream?: boolean;
   /** Ask OpenAI/Azure to emit a final usage chunk while streaming. */
   stream_options?: { include_usage: boolean };
+  /** v7.26 — forced choice of one named tool, OpenAI's dialect of
+   *  `LLMRequest.toolChoice`. */
+  tool_choice?: { type: 'function'; function: { name: string } };
 }
 
 interface OpenAIMessage {
@@ -190,6 +193,13 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
   const provider: LLMProvider = {
     name: 'openai',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    // Declared for real OpenAI and Azure, and NOT behind a custom baseURL.
+    // What an OpenAI-COMPATIBLE server (Ollama, vLLM, Together, …) does with
+    // `tool_choice` is that server's business; promising it here on their
+    // behalf would be this library guaranteeing someone else's endpoint. Same
+    // signal the file already trusts to pick `max_tokens` vs
+    // `max_completion_tokens`.
+    carriesForcedToolChoice: !legacyEndpoint,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, { ...cfg, stream: false });
       try {
@@ -282,10 +292,15 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
 export class OpenAIProvider implements LLMProvider {
   readonly name = 'openai';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  /** Read off `inner` rather than fixed here: the answer depends on whether a
+   *  custom `baseURL` was given, and this class is only the thing its options
+   *  made it. */
+  readonly carriesForcedToolChoice: boolean;
   private readonly inner: LLMProvider;
 
   constructor(options: OpenAIProviderOptions = {}) {
     this.inner = openai(options);
+    this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -382,6 +397,9 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
     // rather than inheriting by accident: this factory builds a fresh object,
     // and a dropped capability silently becomes the user/assistant floor.
     carriesInMessages: CARRIES_IN_MESSAGES,
+    ...(inner.carriesForcedToolChoice !== undefined && {
+      carriesForcedToolChoice: inner.carriesForcedToolChoice,
+    }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
@@ -531,6 +549,12 @@ function buildParams(req: LLMRequest, cfg: BuildConfig): OpenAICreateParams {
   // Reasoning models reject an explicit `temperature` (only the default is allowed).
   if (req.temperature !== undefined && !reasoning) params.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) params.stop = [...req.stop];
+  // v7.26 — forced choice of one named tool. Guarded on tools being present
+  // for the same reason the Anthropic adapter guards: a tool choice naming a
+  // tool the request does not carry is a request that cannot be served.
+  if (req.toolChoice && params.tools !== undefined && params.tools.length > 0) {
+    params.tool_choice = { type: 'function', function: { name: req.toolChoice.name } };
+  }
   return params;
 }
 

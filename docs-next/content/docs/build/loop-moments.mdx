@@ -47,6 +47,9 @@ Every moment of one turn, what watch reports there, and what act may change:
 | **after-tool** | the result exists, before it enters history | `stream.tool_end`, `middleware.decision` | `.act({ afterTool })` |
 | the iteration ends | history is committed and the loop turns | `agent.iteration_end` | observation only |
 | **output** | the final answer, before the caller receives it | `agent.turn_end`, `middleware.decision` | `.act({ output })` |
+| output — schema enforcement | the answer is judged against `.outputSchema()`; a failure with retries left sends a correction and turns the loop again | `agent.route_decided` (`chosen: 'output-retry'`), `agent.output_schema_retry` | declared, not a rule — [`{ retries }`](doc:output-schema) |
+
+Schema enforcement sits INSIDE the output moment rather than beside it, and has no `.act()` key. It is not a sixth place to intervene — it is what a declaration you already made does when the answer arrives, and its decision is fixed: the shape either matched or it did not. A rule there would be a rule about whether to honour your own contract.
 
 Two moments are worth naming as deliberately observation-only. **The model call** has no seam because a rule that could rewrite the response would be a rule that could answer for the model, which is the fabrication this library removes everywhere else. **The tool run** has none for the same reason, one layer down: `beforeTool` decides whether it happens and `afterTool` decides what is read of it, and neither can stand in for it.
 

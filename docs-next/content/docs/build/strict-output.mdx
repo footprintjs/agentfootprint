@@ -3,6 +3,8 @@ title: Strict output (Instructor-style schema retry)
 description: Wire outputSchema validation INTO the reliability gate so failed validations re-prompt the model within the current turn — without burning a full ReAct loop iteration. New helpers, ephemeral-message handling, and stuck-loop detection.
 ---
 
+> **Looking for the simple version?** [`.outputSchema(parser, { retries })`](doc:output-schema) needs no rules and no `.reliability()` config: a failed answer becomes one more ordinary turn of the ReAct loop, with its own LLM bracket and its own cost tick. The page you are on is the OTHER mechanism — retries INSIDE one `call-llm` stage, driven by reliability rules, which is cheaper in iterations and, because it shares one bracket and one cost tick, less visible in the recording. Rules that also need provider failover, circuit breaking or fail-fast belong here; a plain "the shape was wrong, ask again" belongs there.
+
 > **The Instructor pattern, on agentfootprint primitives.** When the LLM emits valid JSON that fails your `outputSchema` (e.g. `amount` came back as `"USD 50"` instead of `50`), v2.13 re-prompts the same model with the validation error — within the SAME turn — for up to N retries. Each retry's feedback is an ephemeral message: visible to the model, never persisted to memory or audit logs. Composes on top of the existing v2.11.5 reliability gate; no new factory.
 
 ## What v2.13 added (small primitive change)

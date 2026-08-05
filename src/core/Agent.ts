@@ -95,6 +95,8 @@ import {
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
+import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
+import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { ToolRegistryEntry } from './tools.js';
 import type { ToolProvider } from '../tool-providers/types.js';
@@ -319,6 +321,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * raw string; consumers opt into typed mode explicitly.
    */
   private readonly outputSchemaParser?: OutputSchemaParser<unknown>;
+  /**
+   * What the LOOP enforces about the output (7.26) — resolved by the builder
+   * when `.outputSchema()` was given `retries` or a `'tool-forced'` strategy.
+   * Undefined otherwise, and undefined is the whole of the byte-identical
+   * path: no branch is mounted, the decider is the function it always was,
+   * and the request is the one 7.25 sent.
+   */
+  private readonly outputEnforcement?: ResolvedOutputEnforcement;
 
   /**
    * Optional 3-tier degradation for output-schema validation
@@ -414,6 +424,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     windowStrategy?: WindowStrategy,
     toolMiddleware?: readonly ToolMiddleware[],
     messageMiddleware?: readonly MessageMiddleware[],
+    outputEnforcement?: ResolvedOutputEnforcement,
   ) {
     super();
     this.provider = opts.provider;
@@ -439,6 +450,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphScoreEntries = skillGraphScoreEntries;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
+    this.outputEnforcement = outputEnforcement;
     this.outputFallbackCfg = outputFallbackCfg;
     this.externalToolProvider = toolProvider;
     // Eager validation: tool names must be unique across .tool() +
@@ -987,8 +999,38 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
   }
 
+  /**
+   * Refuse, at run start, a `'tool-forced'` output strategy on a provider
+   * that does not put a forced tool choice on its wire (7.26).
+   *
+   * Run start rather than build time for the reason `assertDeliverableRoles`
+   * gives one method up: a decorated provider (`withFallback`, `withRetry`,
+   * a breaker) is only the thing it is once composed, and `withFallback`
+   * publishes the AND of its pair.
+   *
+   * Refusal rather than a quiet fall back to `'instruct'`, because the two
+   * are not interchangeable: one constrains the shape at generation, the
+   * other asks for it in prose. An agent that silently got the second while
+   * its config said the first would be a promise the recording could not
+   * even show was broken.
+   */
+  private assertForcedToolChoiceSupported(): void {
+    if (this.outputEnforcement?.schemaTool === undefined) return;
+    if (this.provider.carriesForcedToolChoice === true) return;
+    throw new Error(
+      `Agent: .outputSchema(parser, { strategy: 'tool-forced' }) needs a provider that puts ` +
+        `a forced tool choice on its wire, and '${this.provider.name}' does not declare one. ` +
+        `Anthropic, Bedrock, real OpenAI/Azure and the mock do; an OpenAI-COMPATIBLE endpoint ` +
+        `behind a custom baseURL (Ollama, vLLM, …) deliberately does not, because what that ` +
+        `server does with tool_choice is not this library's to promise. Use ` +
+        `{ strategy: 'instruct', retries: N } on this provider — it works on every wire — or ` +
+        `run the forced strategy on a provider that declares the capability.`,
+    );
+  }
+
   private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
     this.assertDeliverableRoles();
+    this.assertForcedToolChoiceSupported();
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     this.currentRunContext = {
@@ -1402,6 +1444,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.outputSchemaParser !== undefined && {
         outputSchemaParser: this.outputSchemaParser,
       }),
+      // 7.26 — the synthetic tool, under `strategy: 'tool-forced'` only.
+      ...(this.outputEnforcement?.schemaTool !== undefined && {
+        schemaTool: this.outputEnforcement.schemaTool,
+      }),
       ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
       // Only a configured agent reads `scope.resolvedModel` — see the dep's
       // JSDoc for why this is a build-time flag and not a runtime fallback.
@@ -1433,7 +1479,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // one is configured — see buildRouteDeciderStage for why that seam and not
     // PrepareFinal. Without a chain this is the same function reference the
     // chart has always been handed.
-    const routeDecider = buildRouteDeciderStage(this.messageMiddleware);
+    // 7.26 — the decider also judges the final answer against the schema when
+    // the agent opted into enforcement, because it is the last stage that
+    // still has a loop to send the answer back around. Without enforcement
+    // this is the same function reference the chart has always been handed.
+    const routeDecider = buildRouteDeciderStage(this.messageMiddleware, this.outputEnforcement);
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -1481,6 +1531,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       callLLM,
       routeDecider,
       toolCallsHandler,
+      // The re-ask branch — mounted only when there are retries to spend. A
+      // `'tool-forced'` agent with `retries: 0` gets the constrained shape and
+      // no branch: there is nothing for a branch to do.
+      ...(this.outputEnforcement !== undefined &&
+        this.outputEnforcement.retries > 0 && {
+          outputRetryStage: buildOutputRetryStage(this.outputEnforcement) as (scope: never) => void,
+        }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
       // Messages-slot delivery (7.21) — mounted ONLY when something could

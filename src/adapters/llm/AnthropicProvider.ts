@@ -55,7 +55,13 @@ interface AnthropicCreateParams {
   // `disable_parallel_tool_use` on any `tool_choice` variant; `auto`
   // is the variant that leaves the CHOICE of tool (and of whether to
   // call one at all) with the model — we only cap the COUNT.
-  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true };
+  /**
+   * v7.26 — a forced choice of ONE named tool, the shape
+   * `.outputSchema(s, { strategy: 'tool-forced' })` needs. Anthropic accepts
+   * `{type:'tool',name}`; it is mutually exclusive with the `auto` variant
+   * above (only one tool_choice can be sent), and the forced choice wins
+   * because it is the guarantee the consumer selected the strategy for. */
+  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true } | { type: 'tool'; name: string };
 }
 
 interface AnthropicMessageParam {
@@ -189,6 +195,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const provider: LLMProvider = {
     name: 'anthropic',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    carriesForcedToolChoice: true,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
@@ -237,6 +244,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
 export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  readonly carriesForcedToolChoice = true;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {
@@ -321,6 +329,14 @@ function buildParams(
   // that carries no tools, and an agent's final answer call often has none.
   if (parallelToolCalls === false && params.tools !== undefined && params.tools.length > 0) {
     params.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
+  }
+  // Forced choice of one named tool. Written LAST so it wins over the
+  // parallel cap: capping how many tools a reply may use is a preference,
+  // constraining WHICH tool answers is the contract the run is built on.
+  // Same `params.tools` guard — Anthropic rejects any tool_choice on a
+  // request carrying no tools.
+  if (req.toolChoice && params.tools !== undefined && params.tools.length > 0) {
+    params.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }
   return params;
 }

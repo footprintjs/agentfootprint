@@ -11,7 +11,14 @@ import {
   buildDefaultInstruction,
   type OutputSchemaOptions,
   type OutputSchemaParser,
+  type OutputSchemaStrategy,
 } from '../outputSchema.js';
+import {
+  buildSchemaTool,
+  resolveJsonSchema,
+  SCHEMA_TOOL_NAME,
+  type ResolvedOutputEnforcement,
+} from './outputEnforcement.js';
 import {
   validateCannedAgainstSchema,
   type OutputFallbackFn,
@@ -96,6 +103,12 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
+  /** Corrective re-asks the loop may spend. `0` (the default) means the
+   *  schema is judged once, at the caller's boundary, exactly as it always
+   *  was — and no enforcement is mounted in the chart at all. */
+  private outputSchemaRetries = 0;
+  private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
+  private outputSchemaJson?: Readonly<Record<string, unknown>>;
 
   /** 3-tier output fallback chain — set via `.outputFallback({...})`.
    *  Optional; absent = current throw-on-validation-failure behavior. */
@@ -846,6 +859,9 @@ export class AgentBuilder {
       );
     }
     this.outputSchemaParser = parser as OutputSchemaParser<unknown>;
+    this.outputSchemaRetries = resolveRetries(opts?.retries);
+    this.outputSchemaStrategy = opts?.strategy ?? 'instruct';
+    if (opts?.jsonSchema !== undefined) this.outputSchemaJson = opts.jsonSchema;
     const instructionText = opts?.instruction ?? buildDefaultInstruction(parser);
     const id = opts?.name ?? 'output-schema';
     // Always-on system-slot instruction. Activates every iteration so
@@ -1307,6 +1323,71 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Resolve what the loop will enforce about the output — or `undefined` when
+   * nothing is mounted, which is the default and the byte-identical path.
+   *
+   * Both refusals live here rather than in `.outputSchema()` because both
+   * depend on the WHOLE agent: the tools are registered by other calls that
+   * may come after, and `.selfExplain()` attaches its own.
+   */
+  private resolveOutputEnforcement(): ResolvedOutputEnforcement | undefined {
+    const parser = this.outputSchemaParser;
+    if (!parser) return undefined;
+
+    let schemaTool;
+    if (this.outputSchemaStrategy === 'tool-forced') {
+      // Refusal 1 — the strategy and the agent's tools cannot both be true.
+      // Forcing the choice BY NAME is what makes the shape a guarantee, and
+      // it also means no other tool can be called on any turn: a tool-using
+      // agent would quietly become single-shot. That is config that lies in
+      // the other direction, so it is refused rather than allowed to happen.
+      const toolNames = this.registry.map((entry) => entry.name);
+      const skillCount = this.injectionList.filter((i) => i.flavor === 'skill').length;
+      const reasons: string[] = [];
+      if (toolNames.length > 0)
+        reasons.push(`registers ${toolNames.length} tool(s) (${toolNames.join(', ')})`);
+      if (this.toolProviderRef !== undefined) reasons.push('has a .toolProvider()');
+      if (skillCount > 0)
+        reasons.push(`has ${skillCount} skill(s), which reach the model as tools`);
+      if (this.selfExplainConfig !== undefined)
+        reasons.push('has .selfExplain(), which attaches trace tools');
+      if (reasons.length > 0) {
+        throw new Error(
+          `AgentBuilder.outputSchema: strategy 'tool-forced' forces every answer through ` +
+            `the '${SCHEMA_TOOL_NAME}' tool by name, so NO other tool can be called on any ` +
+            `turn — and this agent ${reasons.join('; ')}. Rather than let those tools go ` +
+            `silently unusable, two honest paths: drop the tools and keep the forced shape, ` +
+            `or keep the tools and use { strategy: 'instruct', retries: N } — the corrective ` +
+            `loop works on every provider and leaves the agent an agent.`,
+        );
+      }
+
+      // Refusal 2 — a tool needs its shape, and the library will not invent one.
+      const jsonSchema = resolveJsonSchema(parser, this.outputSchemaJson);
+      if (jsonSchema === undefined) {
+        throw new Error(
+          `AgentBuilder.outputSchema: strategy 'tool-forced' puts the schema on the wire as ` +
+            `a tool, and a tool carries its shape as JSON Schema. This parser does not offer ` +
+            `one (no \`toJsonSchema()\` method), and a \`parse()\` function is not something ` +
+            `the library gets to guess a shape from. Pass it: .outputSchema(parser, ` +
+            `{ strategy: 'tool-forced', jsonSchema: { type: 'object', properties: { … } } }).`,
+        );
+      }
+      schemaTool = buildSchemaTool(jsonSchema, parser.description);
+    }
+
+    // No retries and no forced shape → nothing for the loop to do, and no
+    // enforcement is mounted. The chart, the events and the commit log are
+    // the ones this agent had before the option existed.
+    if (this.outputSchemaRetries === 0 && schemaTool === undefined) return undefined;
+    return {
+      parser,
+      retries: this.outputSchemaRetries,
+      ...(schemaTool !== undefined && { schemaTool }),
+    };
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -1378,6 +1459,7 @@ export class AgentBuilder {
       this.windowStrategyValue,
       this.toolMiddlewareList,
       this.messageMiddlewareList,
+      this.resolveOutputEnforcement(),
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build
@@ -1394,3 +1476,36 @@ export class AgentBuilder {
     return agent;
   }
 }
+
+/**
+ * Validate `.outputSchema(…, { retries })`.
+ *
+ * The ceiling is stated rather than left open: a model that has missed the
+ * shape ten times in a row is not going to find it on the eleventh, and the
+ * run would be spending real money and real iterations discovering that. When
+ * ten is not enough the answer is a different schema or a different model,
+ * not a longer loop.
+ */
+function resolveRetries(retries: number | undefined): number {
+  if (retries === undefined) return 0;
+  if (!Number.isInteger(retries) || retries < 0) {
+    throw new Error(
+      `AgentBuilder.outputSchema: { retries } must be a non-negative integer, got ${String(
+        retries,
+      )}. It counts corrective re-asks — 0 (the default) means the first answer is the only one.`,
+    );
+  }
+  if (retries > MAX_OUTPUT_RETRIES) {
+    throw new Error(
+      `AgentBuilder.outputSchema: { retries: ${retries} } exceeds the ceiling of ` +
+        `${MAX_OUTPUT_RETRIES}. Each retry is a real turn — a real request, real tokens, real ` +
+        `money — and a model that has missed the shape ${MAX_OUTPUT_RETRIES} times running is ` +
+        `not about to find it. If that is genuinely not enough, the fix is a simpler schema, a ` +
+        `clearer instruction, or a different model.`,
+    );
+  }
+  return retries;
+}
+
+/** The stated ceiling on corrective re-asks. See {@link resolveRetries}. */
+const MAX_OUTPUT_RETRIES = 10;

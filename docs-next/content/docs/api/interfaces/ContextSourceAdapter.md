@@ -4,7 +4,7 @@ title: ContextSourceAdapter
 
 # Interface: ContextSourceAdapter
 
-Defined in: [src/adapters/types.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L428)
+Defined in: [src/adapters/types.ts:474](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L474)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:428](https://github.com/footprintjs/agentfoot
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L429)
+Defined in: [src/adapters/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L475)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:429](https://github.com/footprintjs/agentfoot
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:431](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L431)
+Defined in: [src/adapters/types.ts:477](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L477)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/adapters/types.ts:431](https://github.com/footprintjs/agentfoot
 
 > `readonly` **targetSlot**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L430)
+Defined in: [src/adapters/types.ts:476](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L476)
 
 ## Methods
 
@@ -36,7 +36,7 @@ Defined in: [src/adapters/types.ts:430](https://github.com/footprintjs/agentfoot
 
 > **resolve**(`ctx`): `Promise`\<readonly [`ContextContribution`](/docs/api/interfaces/ContextContribution)[]\>
 
-Defined in: [src/adapters/types.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L432)
+Defined in: [src/adapters/types.ts:478](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L478)
 
 #### Parameters
 

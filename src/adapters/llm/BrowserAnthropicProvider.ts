@@ -50,7 +50,8 @@ interface AnthropicRequestBody {
   thinking?: { type: 'enabled'; budget_tokens: number };
   // Emitted only when `parallelToolCalls: false`. Mirror of the Node
   // AnthropicProvider's same field.
-  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true };
+  /** v7.26 — forced choice of one named tool. Mirror of the Node provider. */
+  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true } | { type: 'tool'; name: string };
 }
 
 interface AnthropicMessageParam {
@@ -145,6 +146,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
   const provider: LLMProvider = {
     name: 'browser-anthropic',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    carriesForcedToolChoice: true,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
         ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
@@ -375,6 +377,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
 export class BrowserAnthropicProvider implements LLMProvider {
   readonly name = 'browser-anthropic';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  readonly carriesForcedToolChoice = true;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAnthropicProviderOptions) {
@@ -428,6 +431,10 @@ function buildBody(
   // `tool_choice` on a request that carries no tools.
   if (parallelToolCalls === false && body.tools !== undefined && body.tools.length > 0) {
     body.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
+  }
+  // Forced choice wins over the parallel cap — see the Node provider.
+  if (req.toolChoice && body.tools !== undefined && body.tools.length > 0) {
+    body.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }
   // v2.6+ cache markers — applied AFTER body construction so we have
   // the materialized fields (system / tools / messages) to mark.

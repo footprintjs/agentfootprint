@@ -115,6 +115,39 @@ LLM call the agent makes. Leave undefined to call without thinking
 
 ***
 
+### toolChoice?
+
+> `readonly` `optional` **toolChoice?**: `object`
+
+Defined in: [src/adapters/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L205)
+
+v7.26 — force the model to answer through one named tool.
+
+One arm, because one arm is what the library needs and can keep a
+promise about: `.outputSchema(parser, { strategy: 'tool-forced' })`
+presents the schema as a synthetic tool and forces the choice, so the
+shape is constrained at generation instead of requested in prose.
+Anthropic spells it `{type:'tool',name}`, OpenAI
+`{type:'function',function:{name}}`, Bedrock Converse
+`toolConfig.toolChoice.tool.name` — the field is the one word all three
+agree on, and each adapter writes its own dialect.
+
+A provider that does not declare [LLMProvider.carriesForcedToolChoice](/docs/api/interfaces/LLMProvider#carriesforcedtoolchoice)
+never receives this field: the agent refuses at run start instead,
+naming the provider. Silently sending it to a wire that ignores it would
+turn a guarantee into a suggestion with nothing in the recording to say
+so.
+
+#### name
+
+> `readonly` **name**: `string`
+
+#### type
+
+> `readonly` **type**: `"tool"`
+
+***
+
 ### tools?
 
 > `readonly` `optional` **tools?**: readonly [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)[]

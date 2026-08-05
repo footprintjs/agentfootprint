@@ -49,7 +49,13 @@ interface BedrockConverseCommand {
   modelId: string;
   messages: BedrockMessage[];
   system?: Array<{ text: string }>;
-  toolConfig?: { tools: BedrockTool[] };
+  toolConfig?: {
+    tools: BedrockTool[];
+    /** v7.26 — Converse's forced choice of one named tool. `{ tool: { name } }`
+     *  is the arm that names it; the API also has `auto` / `any`, which this
+     *  library has no use for and therefore does not model. */
+    toolChoice?: { tool: { name: string } };
+  };
   inferenceConfig?: {
     maxTokens?: number;
     temperature?: number;
@@ -171,6 +177,11 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
   const provider: LLMProvider = {
     name: 'bedrock',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    // Converse carries `toolConfig.toolChoice`. Whether the MODEL behind it
+    // honours a forced choice is the model's business — the same caveat that
+    // applies to every Converse feature — but the adapter does put it on the
+    // wire, which is what this capability claims.
+    carriesForcedToolChoice: true,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const input = buildInput(req, defaultModel, defaultMaxTokens);
       try {
@@ -293,6 +304,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
 export class BedrockProvider implements LLMProvider {
   readonly name = 'bedrock';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  readonly carriesForcedToolChoice = true;
   private readonly inner: LLMProvider;
 
   constructor(options: BedrockProviderOptions = {}) {
@@ -353,7 +365,13 @@ function buildInput(
   };
   if (req.systemPrompt) input.system = [{ text: req.systemPrompt }];
   if (req.tools && req.tools.length > 0) {
-    input.toolConfig = { tools: req.tools.map(toBedrockTool) };
+    input.toolConfig = {
+      tools: req.tools.map(toBedrockTool),
+      // v7.26 — forced choice of one named tool. Nested inside the same guard
+      // because `toolChoice` lives ON `toolConfig`: there is no place to put
+      // it on a request that carries no tools.
+      ...(req.toolChoice && { toolChoice: { tool: { name: req.toolChoice.name } } }),
+    };
   }
   const inference: BedrockConverseCommand['inferenceConfig'] = {
     maxTokens: req.maxTokens ?? defaultMaxTokens,

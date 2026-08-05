@@ -20,18 +20,26 @@ import type { LLMMessage } from '../../../adapters/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
+import {
+  judgeAnswer,
+  recordOutputAttempt,
+  type ResolvedOutputEnforcement,
+} from '../outputEnforcement.js';
 
-export type RouteBranch = 'tool-calls' | 'final';
+export type RouteBranch = 'tool-calls' | 'final' | 'output-retry';
 
-export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch => {
+/** The base decision, with the sentence that explains it. Split out so the
+ *  enforcement-enabled path can decide, then judge, then announce ONCE — an
+ *  agent whose answer is about to be re-asked should not have a route event
+ *  saying it finished. */
+function decideBranch(scope: TypedScope<AgentState>): {
+  chosen: 'tool-calls' | 'final';
+  rationale: string;
+} {
   const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
   const iteration = scope.iteration as number;
-  const chosen: RouteBranch =
-    toolCalls.length > 0 && iteration < scope.maxIterations ? 'tool-calls' : 'final';
-
-  typedEmit(scope, 'agentfootprint.agent.route_decided', {
-    turnIndex: 0,
-    iterIndex: iteration,
+  const chosen = toolCalls.length > 0 && iteration < scope.maxIterations ? 'tool-calls' : 'final';
+  return {
     chosen,
     rationale:
       chosen === 'tool-calls'
@@ -39,8 +47,25 @@ export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch =>
         : iteration >= scope.maxIterations
         ? 'maxIterations reached — forcing final'
         : 'LLM produced no tool calls — final answer',
-  });
+  };
+}
 
+function emitRouteDecided(
+  scope: TypedScope<AgentState>,
+  chosen: RouteBranch,
+  rationale: string,
+): void {
+  typedEmit(scope, 'agentfootprint.agent.route_decided', {
+    turnIndex: 0,
+    iterIndex: scope.iteration as number,
+    chosen,
+    rationale,
+  });
+}
+
+export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch => {
+  const { chosen, rationale } = decideBranch(scope);
+  emitRouteDecided(scope, chosen, rationale);
   return chosen;
 };
 
@@ -70,12 +95,29 @@ export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch =>
  * would be running it over something that is not the output.
  *
  * Empty chain → the exact synchronous decider this file has always exported.
+ *
+ * ## Why the schema is judged HERE too
+ *
+ * The same property that made this the output seam makes it the enforcement
+ * seam. `outputSchema` used to be judged only at the caller's boundary, after
+ * the run — a fine place to reject an answer and a useless place to fix one,
+ * because the loop has already stopped. Judged here, one stage before the
+ * Final branch, the run still HAS a loop: a failed answer can route to
+ * `'output-retry'`, which loops back for one more real turn.
+ *
+ * The judging runs AFTER the message chain, over the content the chain
+ * produced, because that is the string the caller will receive — validating
+ * the pre-chain value would judge an answer nobody gets. A DENIED answer is
+ * never judged or retried: it was withheld on purpose, and re-asking for it
+ * would be the library working around a rule the app wrote.
  */
 export function buildRouteDeciderStage(
   messageMiddleware?: readonly MessageMiddleware[],
+  enforcement?: ResolvedOutputEnforcement,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
-  if (chain.length === 0) return routeDeciderStage;
+  if (chain.length === 0 && enforcement === undefined) return routeDeciderStage;
+  if (enforcement !== undefined) return buildEnforcingDecider(chain, enforcement);
   return async (scope) => {
     const chosen = routeDeciderStage(scope);
     if (chosen !== 'final') return chosen;
@@ -101,5 +143,96 @@ export function buildRouteDeciderStage(
     // ledger row beside it says who withheld it and why.
     scope.llmLatestContent = verdict.content;
     return chosen;
+  };
+}
+
+/**
+ * The decider an agent with `.outputSchema(parser, { retries })` runs:
+ * decide, run the output chain if there is one, judge the answer, THEN
+ * announce the branch — so `route_decided` names the branch the run actually
+ * took rather than the one it was heading for.
+ */
+function buildEnforcingDecider(
+  chain: readonly MessageMiddleware[],
+  enforcement: ResolvedOutputEnforcement,
+): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
+  return async (scope) => {
+    const base = decideBranch(scope);
+    if (base.chosen !== 'final') {
+      emitRouteDecided(scope, base.chosen, base.rationale);
+      return base.chosen;
+    }
+
+    let denied = false;
+    if (chain.length > 0) {
+      const verdict = await runMessageChain(chain, {
+        phase: 'output',
+        content: scope.llmLatestContent,
+        history: [...(scope.history as readonly LLMMessage[])],
+        iteration: scope.iteration,
+        ...(scope.runIdentity && { identity: scope.runIdentity }),
+      });
+      recordDecisions(scope, verdict.decisions);
+      if (verdict.kind === 'deny') {
+        denied = true;
+        scope.messageDeniedReason = verdict.reason;
+        scope.messageDeniedPhase = 'output';
+        scope.messageDeniedBy = verdict.middleware;
+      }
+      scope.llmLatestContent = verdict.content;
+    }
+
+    // A withheld answer is not judged and never re-asked. The app decided
+    // nobody gets this string; asking the model for a better-shaped version
+    // of it would be the library routing around that decision.
+    if (denied) {
+      emitRouteDecided(scope, 'final', base.rationale);
+      return 'final';
+    }
+
+    const attempt = ((scope.outputAttempts?.length as number | undefined) ?? 0) + 1;
+    const failure = judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
+
+    if (failure === undefined) {
+      recordOutputAttempt(scope, {
+        attempt,
+        iteration: scope.iteration as number,
+        outcome: 'passed',
+      });
+      emitRouteDecided(scope, 'final', base.rationale);
+      return 'final';
+    }
+
+    if (attempt <= enforcement.retries) {
+      // The retry stage writes the correction and files the row, because it
+      // is the one that knows what it wrote. This is the hand-off.
+      scope.outputSchemaFailure = { attempt, ...failure };
+      emitRouteDecided(
+        scope,
+        'output-retry',
+        `final answer failed the output schema (${failure.stage}) — ` +
+          `asking again, attempt ${attempt + 1} of ${enforcement.retries + 1}`,
+      );
+      return 'output-retry';
+    }
+
+    // Out of retries. The answer stands as the run's answer; `runTyped()`
+    // throws on it at the boundary exactly as it did before any of this
+    // existed, and `.outputFallback()` still gets its turn there.
+    recordOutputAttempt(scope, {
+      attempt,
+      iteration: scope.iteration as number,
+      outcome: 'exhausted',
+      stage: failure.stage,
+      error: failure.error,
+      ...(failure.path !== undefined && { path: failure.path }),
+    });
+    emitRouteDecided(
+      scope,
+      'final',
+      `final answer failed the output schema (${failure.stage}) and ` +
+        `${enforcement.retries} retry/retries were spent`,
+    );
+    return 'final';
   };
 }

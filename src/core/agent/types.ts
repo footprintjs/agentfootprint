@@ -34,6 +34,7 @@ import type { ReliabilityScope } from '../../reliability/types.js';
 import type { WindowRecord } from './window/types.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
+import type { OutputAttempt } from './outputEnforcement.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -415,6 +416,25 @@ export interface AgentState {
    *  taken later can find the moment the text changed and who changed it.
    *  Written only by an agent that configured a chain; absent otherwise. */
   middlewareDecisions?: readonly MiddlewareDecision[];
+
+  // ── The output-schema ledger (`.outputSchema(s, { retries })`) ──────────
+  /** One row per final-answer attempt, in order: what was answered, whether
+   *  it satisfied the schema, and — when it did not — the validator's own
+   *  words and the correction that went back. Read it from
+   *  `snapshot.sharedState` to see why a run took three turns to answer.
+   *  Written only by an agent that opted into `retries`; absent otherwise. */
+  outputAttempts?: readonly OutputAttempt[];
+  /** In-flight hand-off from the Route decider (which judges the answer and
+   *  picks the branch) to the retry stage (which writes the correction). Not
+   *  a record — the record is `outputAttempts`. Always freshly written by the
+   *  decider immediately before the retry branch runs, so it is never read
+   *  stale. */
+  outputSchemaFailure?: {
+    readonly attempt: number;
+    readonly stage: 'json-parse' | 'schema-validate';
+    readonly error: string;
+    readonly path?: string;
+  };
   /** Set by the seed / prepare-final stage when a `messageMiddleware` returned
    *  `deny`. Read at the API boundary, where it becomes a `MessageDeniedError`.
    *  Never carries the refused content — see MessageDeniedError. */

@@ -261,6 +261,11 @@ export function withCircuitBreaker(
     ...(inner.carriesInMessages !== undefined && {
       carriesInMessages: inner.carriesInMessages,
     }),
+    // Likewise for the forced tool choice — a breaker decides WHETHER to
+    // call, never what the wire can express.
+    ...(inner.carriesForcedToolChoice !== undefined && {
+      carriesForcedToolChoice: inner.carriesForcedToolChoice,
+    }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       rejectFastIfOpen();
       try {

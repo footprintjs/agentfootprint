@@ -440,7 +440,7 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**68 typed events / 20 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(8)
+**69 typed events / 20 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(9)
 `stream.*`(7) `context.*`(5 — the thesis) `memory.*`(4) `tools.*`(6) `validation.*`(1) `skill.*`(3) `permission.*`(4)
 `credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(3) `reliability.*`(3) `pause.*`(2)
 `checkin.*`(2) `middleware.*`(1) `embedding.*`(1) `risk.*`(1) `fallback.*`(1).

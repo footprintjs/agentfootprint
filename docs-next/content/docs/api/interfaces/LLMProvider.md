@@ -4,15 +4,45 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:369](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L369)
+Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L391)
 
 ## Properties
+
+### carriesForcedToolChoice?
+
+> `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
+
+Defined in: [src/adapters/types.ts:442](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L442)
+
+v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
+wire as a forced choice of one named tool.
+
+**Absence means NO, not "probably".** That is the opposite of
+`carriesInMessages`, whose absence means the floor every wire supports,
+and the difference is what the two capabilities are for. A role that
+quietly vanishes costs a message; a tool choice that quietly vanishes
+costs the guarantee the consumer selected the strategy FOR — the model
+would answer in whatever shape it liked while the config said the shape
+was constrained. So an agent using `strategy: 'tool-forced'` on a
+provider that has not declared this refuses at run start, by name.
+
+Declare it only where it is true of the endpoint, not of the SDK: the
+OpenAI adapter declares it for real OpenAI and Azure and NOT behind a
+custom `baseURL` (Ollama, vLLM, Together, …), because what an
+OpenAI-compatible server does with `tool_choice` is that server's
+business and this library does not get to promise it.
+
+A WRAPPER must forward it; `withFallback` publishes the AND of the two
+providers it holds, since a call that might be served by either is only
+constrained if both constrain it.
+
+***
 
 ### carriesInMessages?
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:396](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L396)
+Defined in: [src/adapters/types.ts:418](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L418)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -44,7 +74,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:370](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L370)
+Defined in: [src/adapters/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L392)
 
 ## Methods
 
@@ -52,7 +82,7 @@ Defined in: [src/adapters/types.ts:370](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L404)
+Defined in: [src/adapters/types.ts:450](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L450)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -80,7 +110,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L405)
+Defined in: [src/adapters/types.ts:451](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L451)
 
 #### Parameters
 

@@ -87,6 +87,12 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     ...(provider.carriesInMessages !== undefined && {
       carriesInMessages: provider.carriesInMessages,
     }),
+    // Same wire, same forced-choice answer. Dropping this one degrades to
+    // "not declared", which is a REFUSAL — a wrapped Anthropic provider would
+    // start refusing `strategy: 'tool-forced'` it can perfectly well do.
+    ...(provider.carriesForcedToolChoice !== undefined && {
+      carriesForcedToolChoice: provider.carriesForcedToolChoice,
+    }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       let lastError: unknown;
       // t0 for the `recovered` report's totalDurationMs. New

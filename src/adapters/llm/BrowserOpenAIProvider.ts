@@ -45,6 +45,8 @@ interface OpenAIRequestBody {
   stream?: boolean;
   /** Ask OpenAI/Azure to emit a final usage chunk while streaming. */
   stream_options?: { include_usage: boolean };
+  /** v7.26 — forced choice of one named tool. Mirror of the Node provider. */
+  tool_choice?: { type: 'function'; function: { name: string } };
 }
 
 interface OpenAIMessage {
@@ -160,6 +162,9 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
   const provider: LLMProvider = {
     name: 'browser-openai',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    // Not behind a custom baseURL — see the Node provider for why the library
+    // does not promise an OpenAI-compatible server's behaviour.
+    carriesForcedToolChoice: !legacyEndpoint,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: false });
       let response: Response;
@@ -255,10 +260,13 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
 export class BrowserOpenAIProvider implements LLMProvider {
   readonly name = 'browser-openai';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  /** Read off `inner` — it depends on the options, not on the class. */
+  readonly carriesForcedToolChoice: boolean;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserOpenAIProviderOptions) {
     this.inner = browserOpenai(options);
+    this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -354,6 +362,9 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
   return {
     name: 'browser-azure-openai',
     carriesInMessages: CARRIES_IN_MESSAGES,
+    ...(inner.carriesForcedToolChoice !== undefined && {
+      carriesForcedToolChoice: inner.carriesForcedToolChoice,
+    }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
@@ -365,10 +376,13 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
 export class BrowserAzureOpenAIProvider implements LLMProvider {
   readonly name = 'browser-azure-openai';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
+  /** Read off `inner` — it depends on the options, not on the class. */
+  readonly carriesForcedToolChoice: boolean;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAzureOpenAIProviderOptions) {
     this.inner = browserAzureOpenai(options);
+    this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -421,6 +435,12 @@ function buildBody(req: LLMRequest, cfg: BuildConfig): OpenAIRequestBody {
   // Reasoning models reject an explicit temperature.
   if (req.temperature !== undefined && !reasoning) body.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) body.stop = [...req.stop];
+  // v7.26 — forced choice of one named tool. Guarded on tools being present
+  // for the same reason the Anthropic adapter guards: a tool choice naming a
+  // tool the request does not carry is a request that cannot be served.
+  if (req.toolChoice && body.tools !== undefined && body.tools.length > 0) {
+    body.tool_choice = { type: 'function', function: { name: req.toolChoice.name } };
+  }
   return body;
 }
 

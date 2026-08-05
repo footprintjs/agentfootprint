@@ -35,6 +35,7 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
+import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import {
   executeWithReliability,
   ValidationFailure,
@@ -97,6 +98,21 @@ export interface CallLLMStageDeps {
    *  NOT set, validation only happens at `agent.parseOutput()` boundary
    *  (existing v2.4 behavior). */
   readonly outputSchemaParser?: OutputSchemaParser<unknown>;
+  /**
+   * The synthetic tool the `'tool-forced'` output strategy puts on the wire
+   * (7.26). Present ONLY under that strategy; under `'instruct'` — the
+   * default — this is undefined and not one line below it runs.
+   *
+   * When present, the tool is appended to the request's tool list and the
+   * request carries `toolChoice`, so the provider constrains generation to
+   * this shape instead of the model being asked in prose to comply. It is
+   * added HERE, at request assembly, and nowhere else: that is what keeps it
+   * off `.tools()`, out of the tools slot and its `tools.offered` event, off
+   * any MCP server's served list, and away from the dispatcher that runs
+   * tools and files middleware rows. It is the strategy's mechanism, not the
+   * agent's surface.
+   */
+  readonly schemaTool?: LLMToolSchema;
   /** v2.14+ — request-side thinking budget. When set, every LLMRequest
    *  carries `thinking: { budget }` so the provider activates extended
    *  thinking. Undefined = no activation (default). */
@@ -172,8 +188,15 @@ export function buildCallLLMStage(
     // schemas at startup before the tools slot has run. Computed BEFORE the
     // llm_start emit so the event reports what the model ACTUALLY saw this call
     // (count + the name/description catalog), not the static startup set.
-    const activeToolSchemas =
+    const registeredToolSchemas =
       (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
+    // Under `'tool-forced'` the schema rides along as one more tool ON THE
+    // WIRE. It is reported in `llm_start` too, and deliberately: that event's
+    // whole claim is "what the model actually saw this call", and a tool the
+    // model was forced to use is the last thing to leave out of it.
+    const activeToolSchemas = deps.schemaTool
+      ? [...registeredToolSchemas, deps.schemaTool]
+      : registeredToolSchemas;
 
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
@@ -201,6 +224,9 @@ export function buildCallLLMStage(
       ...(deps.maxTokens !== undefined && { maxTokens: deps.maxTokens }),
       ...(deps.thinkingBudget !== undefined && {
         thinking: { budget: deps.thinkingBudget },
+      }),
+      ...(deps.schemaTool !== undefined && {
+        toolChoice: { type: 'tool' as const, name: deps.schemaTool.name },
       }),
     };
     // v2.6+ — call cache strategy to attach provider-specific cache
@@ -274,6 +300,25 @@ export function buildCallLLMStage(
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
         resp = await deps.provider.complete(req, providerHooks);
+      }
+      // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
+      // so it is moved into `content` and the call is taken off the list here,
+      // at the single seam every later reader goes through. Everything
+      // downstream — the reliability validator, the scope writes, the Route
+      // decider, the retry loop — then sees the response it would have seen
+      // under `'instruct'`: a final answer that is a JSON string, and no tool
+      // calls. One normalization, no second code path, and nothing further
+      // down has to know which strategy is in force.
+      const forcedName = deps.schemaTool?.name;
+      if (forcedName !== undefined) {
+        const answer = readSchemaToolAnswer(resp);
+        if (answer !== undefined) {
+          resp = {
+            ...resp,
+            content: answer,
+            toolCalls: resp.toolCalls.filter((tc) => tc.name !== forcedName),
+          };
+        }
       }
       return resp;
     };

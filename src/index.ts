@@ -350,7 +350,18 @@ export {
   applyOutputSchema,
   type OutputSchemaParser,
   type OutputSchemaOptions,
+  type OutputSchemaStrategy,
 } from './core/outputSchema.js';
+// 7.26 — the loop's side of the output contract. `OutputAttempt` is the row
+// shape `snapshot.sharedState.outputAttempts` carries; the frame prefix and
+// the tool name are exported so a reader (or a test) can recognise the two
+// things this feature puts into a conversation without matching on prose.
+export {
+  SCHEMA_CHECK_FRAME_PREFIX,
+  SCHEMA_TOOL_NAME,
+  isSchemaCheckMessage,
+  type OutputAttempt,
+} from './core/agent/outputEnforcement.js';
 export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
 export { RunCheckpointError, type AgentRunCheckpoint } from './core/runCheckpoint.js';
 export {

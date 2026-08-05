@@ -435,7 +435,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   }
   const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.LLM_CALL;
 
-  builder = builder
+  let decider = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {
       inputMapper: (parent) => {
         const p = parent as Record<string, unknown>;
@@ -541,7 +541,24 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
       { loopTo: loopTarget },
-    )
+    );
+
+  // ── The schema re-ask — conditional mount (7.26) ────────────────
+  // Byte-twin of the flat chart's mount, loop target and all: the second
+  // looping branch, going back to the same place the tool branch does, so a
+  // re-ask is one more ordinary turn through sf-llm-call. Absent unless the
+  // agent asked for retries.
+  if (deps.outputRetryStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.OUTPUT_RETRY,
+      'SchemaRetry',
+      deps.outputRetryStage as never,
+      'Answer failed the output schema — put the correction back and ask again',
+      { loopTo: loopTarget },
+    );
+  }
+
+  const chart = decider
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       inputMapper: (parent) => {
         const { finalContent: _f, newMessages: _nm, ...rest } = parent;
@@ -562,5 +579,5 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // `{ loopTo }` above), not the decider — so `Final` is a plain terminal leaf
   // and the chart draws `ToolCalls → LLM` for the loop edge.
 
-  return builder.build();
+  return chart.build();
 }

@@ -4,7 +4,7 @@ title: OutputSchemaError
 
 # Class: OutputSchemaError
 
-Defined in: [src/core/outputSchema.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L103)
+Defined in: [src/core/outputSchema.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L155)
 
 Thrown by `agent.parseOutput(...)` / `agent.runTyped(...)` when the
 agent's final answer fails JSON parsing OR schema validation.
@@ -23,7 +23,7 @@ can log / persist the failed response for triage.
 
 > **new OutputSchemaError**(`message`, `opts`): `OutputSchemaError`
 
-Defined in: [src/core/outputSchema.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L108)
+Defined in: [src/core/outputSchema.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L160)
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Defined in: [src/core/outputSchema.ts:108](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **cause?**: `unknown`
 
-Defined in: [src/core/outputSchema.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L106)
+Defined in: [src/core/outputSchema.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L158)
 
 #### Overrides
 
@@ -95,7 +95,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **rawOutput**: `string`
 
-Defined in: [src/core/outputSchema.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L104)
+Defined in: [src/core/outputSchema.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L156)
 
 ***
 
@@ -137,7 +137,7 @@ not capture any frames.
 
 > `readonly` **stage**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: [src/core/outputSchema.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L105)
+Defined in: [src/core/outputSchema.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L157)
 
 ## Methods
 

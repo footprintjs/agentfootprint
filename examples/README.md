@@ -246,6 +246,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 37 | [`37-middleware.ts`](features/37-middleware.ts) | Middleware — allow, deny, ask | A typed chain around every tool dispatch and around the message boundary.  |
 | 38 | [`38-act.ts`](features/38-act.ts) | act() — the five moments of the loop | One block that says what an agent does at every moment of its turn: input,  |
 | 39 | [`39-approve-once.ts`](features/39-approve-once.ts) | Approve once — session trust that says whose trust it is | A ~10-line tool middleware: the first matching call asks a person, the decision  |
+| 40 | [`40-output-schema-retry.ts`](features/40-output-schema-retry.ts) | The schema teaches back — retries on outputSchema | 7.26 —  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

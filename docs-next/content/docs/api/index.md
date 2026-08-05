@@ -121,6 +121,7 @@ title: agentfootprint
 - [MiddlewareDecision](/docs/api/interfaces/MiddlewareDecision)
 - [Milestone](/docs/api/interfaces/Milestone)
 - [ObserverStats](/docs/api/interfaces/ObserverStats)
+- [OutputAttempt](/docs/api/interfaces/OutputAttempt)
 - [OutputFallbackOptions](/docs/api/interfaces/OutputFallbackOptions)
 - [OutputSchemaOptions](/docs/api/interfaces/OutputSchemaOptions)
 - [OutputSchemaParser](/docs/api/interfaces/OutputSchemaParser)
@@ -221,6 +222,7 @@ title: agentfootprint
 - [ObserverDeliveryOptions](/docs/api/type-aliases/ObserverDeliveryOptions)
 - [ObserverDrainResult](/docs/api/type-aliases/ObserverDrainResult)
 - [OutputFallbackFn](/docs/api/type-aliases/OutputFallbackFn)
+- [OutputSchemaStrategy](/docs/api/type-aliases/OutputSchemaStrategy)
 - [ParallelOutput](/docs/api/type-aliases/ParallelOutput)
 - [Predicate](/docs/api/type-aliases/Predicate)
 - [ProviderKind](/docs/api/type-aliases/ProviderKind)
@@ -255,6 +257,8 @@ title: agentfootprint
 - [lexicalDriverScorer](/docs/api/variables/lexicalDriverScorer)
 - [LOOP\_MOMENTS](/docs/api/variables/LOOP_MOMENTS)
 - [minimalEvidenceAssembler](/docs/api/variables/minimalEvidenceAssembler)
+- [SCHEMA\_CHECK\_FRAME\_PREFIX](/docs/api/variables/SCHEMA_CHECK_FRAME_PREFIX)
+- [SCHEMA\_TOOL\_NAME](/docs/api/variables/SCHEMA_TOOL_NAME)
 - [standardEvidenceAssembler](/docs/api/variables/standardEvidenceAssembler)
 
 ## Functions
@@ -289,6 +293,7 @@ title: agentfootprint
 - [isInjectionKey](/docs/api/functions/isInjectionKey)
 - [isPaused](/docs/api/functions/isPaused)
 - [isPauseRequest](/docs/api/functions/isPauseRequest)
+- [isSchemaCheckMessage](/docs/api/functions/isSchemaCheckMessage)
 - [llmRouter](/docs/api/functions/llmRouter)
 - [llmSwarm](/docs/api/functions/llmSwarm)
 - [makeRunId](/docs/api/functions/makeRunId)

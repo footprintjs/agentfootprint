@@ -61,6 +61,7 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { breakFinalStage } from './stages/breakFinal.js';
 import { prepareFinalStage } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
+import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
 
 /**
@@ -89,8 +90,19 @@ export interface AgentChartDeps {
   // ─ Stage handlers ───────────────────────────────────────────────
   readonly seed: (scope: never) => void | Promise<void>;
   readonly callLLM: (scope: never) => Promise<void>;
-  readonly routeDecider: (scope: never) => 'tool-calls' | 'final' | Promise<'tool-calls' | 'final'>;
+  readonly routeDecider: (scope: never) => RouteBranch | Promise<RouteBranch>;
   readonly toolCallsHandler: import('footprintjs').PausableHandler<never>;
+  /**
+   * The schema re-ask branch (7.26). Present ONLY when the agent was built
+   * with `.outputSchema(parser, { retries })` — and when present it is a
+   * THIRD branch of the Route decider carrying the same `{ loopTo }` the
+   * tool branch does, because a re-ask is one more ordinary turn.
+   *
+   * Conditional mount, for the reason every conditional mount here exists:
+   * an agent that did not opt in gets no branch, no stage, no scope key and
+   * no event — its chart and its commit log are the ones it always had.
+   */
+  readonly outputRetryStage?: (scope: never) => void;
 
   // ─ Slot subflows ───────────────────────────────────────────────
   readonly injectionEngineSubflow: FlowChart;
@@ -540,7 +552,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       },
     );
   }
-  builder = builder
+  let decider = builder
     .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
     .addPausableFunctionBranch(
       'tool-calls',
@@ -555,7 +567,25 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // engine resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
       { loopTo: loopTarget },
-    )
+    );
+
+  // ── The schema re-ask — conditional mount (7.26) ────────────────
+  // The second looping branch, and it loops to the SAME target the tool branch
+  // does. That is the whole design: a re-ask re-enters the ordinary loop, so
+  // the corrective turn is engineered, cached, sent and recorded exactly like
+  // any other — its own iteration bracket, its own cost tick. Omitted entirely
+  // for an agent that did not ask for retries.
+  if (deps.outputRetryStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.OUTPUT_RETRY,
+      'SchemaRetry',
+      deps.outputRetryStage as never,
+      'Answer failed the output schema — put the correction back and ask again',
+      { loopTo: loopTarget },
+    );
+  }
+
+  builder = decider
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       // Pass through the read-only state the sub-chart needs;
       // OMIT keys the sub-chart writes (finalContent, newMessages)

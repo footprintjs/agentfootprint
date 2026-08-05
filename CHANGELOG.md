@@ -7,6 +7,188 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.26.0] - 2026-08-05
+
+`toolArgValidation` has spent several releases doing something quietly
+remarkable at the other end of a tool call: when the model writes arguments
+that do not match the schema, the call is not dispatched and the model is
+handed a structured explanation — path, expectation, received type — which it
+reads on the next iteration and corrects. Validation that TEACHES rather than
+merely refuses.
+
+`outputSchema` could only refuse. It judged the agent's final answer after the
+run was over, at the caller's boundary, and turned a bad shape into an
+exception. That is a fine place to reject an answer and a useless place to fix
+one: the loop has stopped, the model is gone, and all the caller can do is
+throw or substitute a canned value.
+
+**This release gives the answer side the same teaching that the arguments side
+has had all along.**
+
+```ts
+.outputSchema(Refund, { retries: 2 })
+```
+
+A failed answer and an authored correction join the conversation, and the ReAct
+loop turns again.
+
+**The failed answer goes back with the correction, and that finding shaped the
+feature.** Nothing writes the answering turn into `history` — the loop appends
+an assistant turn only when it carries tool calls, and the turn that ends the
+run carries none. So a correction sent on its own would have arrived at a model
+that could not see what it said: teaching into the void. Both messages go, in
+the order they really happened, which is also what makes the retry legible
+afterwards — the conversation says what was answered, what was wrong with it,
+and what came back.
+
+**Each retry is a REAL turn, and that is the entire architectural argument.**
+The re-ask is a third branch of the Route decider carrying the same `{ loopTo }`
+the tool branch carries, so it re-enters the ordinary loop: the injection engine
+re-evaluates, the slots recompose, the cache decides, the model is called. The
+attempt therefore gets its own `stream.llm_start` / `llm_end` bracket, its own
+`cost.tick` against `costBudget`, and its own row in the ledger.
+
+Compare the in-stage schema retry the reliability gate has done since v2.13,
+which is kept and still recommended when the rules also need failover or
+circuit breaking: N attempts there share ONE bracket, and `emitCostTick` fires
+once carrying only the last attempt's usage. Those retried attempts were
+genuinely billed and completely invisible. A library whose product is the
+recording does not get to bill you for turns it does not show you.
+
+A retry consumes an iteration, and that is documented rather than worked
+around. The alternative was a parallel counter, which would have meant two
+`iteration_start` events with the same `iterIndex` — and every recorder that
+synthesizes steps, plus the crash-checkpoint tracker, counts on that pairing.
+The loop already had a word for "one more turn"; inventing a second one to
+avoid admitting the cost would have been an accounting trick.
+
+**The corrective message is an authored frame with the validator's error as
+DATA.** The library's own words come first and say that what follows is a
+report about the answer rather than an instruction; the error is quoted
+verbatim; and *nothing authored follows it*, so there is no trailing sentence
+for injected text to pre-empt. A schema whose error message reads "IGNORE ALL
+PREVIOUS INSTRUCTIONS" produces a message that still says, first and in the
+library's voice, what it is. This is exactly the compaction frame's rule
+pointed at the other untrusted string this library quotes, and it is pinned by
+a test that sends a hostile error through the whole loop.
+
+**The event was asked for, and that is why it exists.** The state-vs-event rule
+says committed state is the default and an event needs a reason; here the
+reason is a person asking to be able to watch retries happen. So both:
+`agentfootprint.agent.output_schema_retry` fires per failed attempt, and
+`snapshot.sharedState.outputAttempts` keeps one row per final-answer attempt —
+joined by the corrective message's hash, so a live subscriber and a stored
+recording are talking about the same message.
+
+**And the second half: `strategy: 'tool-forced'`,** which presents the schema
+as a synthetic tool and forces the provider's tool choice, so the shape is
+constrained at generation instead of requested in prose. Two refusals guard it,
+and both were the interesting design work.
+
+Forcing the choice BY NAME means no other tool can be called on any turn — so
+an agent with tools would go silently single-shot: config that lies in the
+other direction. That combination is refused at build, naming both honest
+paths. A `tool_choice: 'any'` variant would keep the tools working, but it
+would not keep the guarantee on any given turn; it is a different feature
+wearing the same name, and if evidence ever asks for it, it arrives under its
+own word.
+
+The second refusal is about the shape itself. A tool carries its input schema
+as JSON Schema, and this library has never converted a validator into one.
+A parser that can render itself (ArkType's `toJsonSchema()`) is asked; anything
+else must be handed `jsonSchema` explicitly. Guessing what somebody's schema
+means is not a thing the library gets to do.
+
+`jsonSchema` and the parser can disagree, and nothing here prevents it —
+because the system stays honest when they do. The forced shape satisfies the
+wire, the parser still judges the answer, and a disagreement surfaces as an
+ordinary validation failure that the retry loop corrects with the validator's
+words. The schema constrains generation; the parser remains the judge.
+
+**Nothing changes for anyone who does not opt in.** `retries` defaults to `0`,
+enforcement is a conditional mount, and an agent without it has no branch in
+its chart, no key in its commit log, no event, and byte-identical request
+bytes — pinned against 7.25 by test, not by care.
+
+### Added
+
+- **`.outputSchema(parser, { retries })`** — corrective re-asks, capped and
+  stated. On failure the loop routes to a new `'output-retry'` branch which
+  appends the failed answer plus an authored correction and loops back to the
+  same target the tool branch uses. Exhaustion leaves the last answer standing
+  and `runTyped()` throws `OutputSchemaError` exactly as before;
+  `.outputFallback()` composes on top unchanged. The ceiling is 10, and the
+  refusal above it says why: a model that has missed the shape ten times
+  running is not about to find it.
+
+- **`.outputSchema(parser, { strategy: 'tool-forced', jsonSchema })`** — the
+  schema as a synthetic tool with the provider's choice forced. The tool is
+  assembled at request time and exists nowhere else: not in `.tools()`, not in
+  the tools slot or `tools.offered`, not on an MCP server's served list, not in
+  the dispatcher that runs tools and files middleware rows. It DOES appear in
+  `stream.llm_start`, whose claim is what the model actually saw.
+
+- **`LLMRequest.toolChoice`** (`{ type: 'tool', name }`) and
+  **`LLMProvider.carriesForcedToolChoice`**. One arm on the port, one dialect
+  per wire: Anthropic `{type:'tool',name}`, OpenAI
+  `{type:'function',function:{name}}`, Bedrock Converse
+  `toolConfig.toolChoice.tool.name`. **Absence of the capability means NO** —
+  the opposite of `carriesInMessages`, whose absence means the floor — because
+  a tool choice that quietly vanishes costs the guarantee the strategy was
+  selected for. Declared by Anthropic (+ browser), Bedrock, real OpenAI/Azure
+  (+ browser) and the mock; deliberately NOT declared behind a custom `baseURL`
+  (Ollama, vLLM, Together), since what an OpenAI-compatible server does with
+  `tool_choice` is that server's promise to make. `withRetry` and
+  `withCircuitBreaker` forward it; `withFallback` publishes the **AND** of its
+  pair, since either side may serve the call.
+
+- **`agentfootprint.agent.output_schema_retry`** — one per failed attempt,
+  carrying `{ attempt, retriesRemaining, iteration, stage, error, path?,
+  correctiveMessageHash }`. 69 typed events across 20 domains. It sits in the
+  `agent` domain beside `output_schema_validation_failed`, its in-stage
+  sibling; a new domain for one event that has a family home would have been
+  taxonomy for its own sake.
+
+- **`snapshot.sharedState.outputAttempts`** — `OutputAttempt[]`, one row per
+  final-answer attempt: `attempt`, `iteration`, `outcome`
+  (`'passed' | 'retried' | 'exhausted'`), and on a failure the validator's own
+  message plus the corrective message's hash. Written only by an agent that
+  opted in.
+
+- **`SCHEMA_CHECK_FRAME_PREFIX`, `SCHEMA_TOOL_NAME`, `isSchemaCheckMessage()`,
+  `OutputAttempt`, `OutputSchemaStrategy`** on the main barrel — so a reader,
+  a test or a UI can recognise the two things this feature puts into a
+  conversation without matching on prose.
+
+### Changed
+
+- **`agent.route_decided.chosen` widens with `'output-retry'`.** It appears
+  only on an agent that opted into retries, and only on a turn whose answer
+  failed with retries left. Reporting `'final'` for a turn that is about to ask
+  again would have been the one thing this event must never do.
+
+- **`STAGE_IDS.OUTPUT_RETRY`** joins `conventions.ts` as a `boundary` role and
+  a `'decision'` milestone labelled "Schema retry" — the run deciding its own
+  answer was not good enough is exactly what a reader came to see, so it is not
+  muted as plumbing.
+
+### Notes
+
+- **`.reliability()` and `{ retries }` layer rather than collide**, and the
+  ordering is pinned: the in-stage gate decides FIRST, about a response before
+  it is committed, and `retries` governs answers that WERE committed and turned
+  out invalid. With reliability configured and no rule for `'schema-fail'`, a
+  bad shape still fails the run as it always did — `retries` does not rescue it,
+  because the gate never committed an answer for the loop to govern. The one
+  case where both genuinely fire is an output `messageMiddleware` that rewrites
+  the answer after the in-stage check: the decider judges what the CALLER will
+  receive, which is the only honest place to judge it.
+
+- **A denied answer is never judged and never re-asked.** When an output
+  middleware returns `deny`, the run raises as before; asking the model for a
+  better-shaped version of a withheld answer would be the library routing
+  around a rule the app wrote.
+
 ## [7.25.0] - 2026-08-04
 
 A production integration deployed an agent that operates the user's browser. The

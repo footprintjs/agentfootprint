@@ -4,7 +4,7 @@ title: AgentInput
 
 # Interface: AgentInput
 
-Defined in: [src/core/agent/types.ts:317](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L317)
+Defined in: [src/core/agent/types.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L318)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:317](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L328)
+Defined in: [src/core/agent/types.ts:329](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L329)
 
 Multi-tenant memory scope. Populated to `scope.identity` so memory
 subflows registered via `.memory()` can isolate reads/writes per
@@ -27,4 +27,4 @@ without memory work unchanged.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L318)
+Defined in: [src/core/agent/types.ts:319](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L319)

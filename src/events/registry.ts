@@ -41,6 +41,7 @@ import type {
   EvalScorePayload,
   EvalThresholdCrossedPayload,
   AgentOutputSchemaValidationFailedPayload,
+  AgentOutputSchemaRetryPayload,
   AgentThinkingParseFailedPayload,
   StreamThinkingDeltaPayload,
   StreamThinkingEndPayload,
@@ -110,6 +111,7 @@ export const EVENT_NAMES = {
     routeDecided: 'agentfootprint.agent.route_decided',
     handoff: 'agentfootprint.agent.handoff',
     outputSchemaValidationFailed: 'agentfootprint.agent.output_schema_validation_failed',
+    outputSchemaRetry: 'agentfootprint.agent.output_schema_retry',
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
   },
   stream: {
@@ -267,6 +269,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.output_schema_validation_failed': AgentfootprintEventEnvelope<
     'agentfootprint.agent.output_schema_validation_failed',
     AgentOutputSchemaValidationFailedPayload
+  >;
+  'agentfootprint.agent.output_schema_retry': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.output_schema_retry',
+    AgentOutputSchemaRetryPayload
   >;
   'agentfootprint.agent.thinking_parse_failed': AgentfootprintEventEnvelope<
     'agentfootprint.agent.thinking_parse_failed',
@@ -525,6 +531,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.route_decided',
   'agentfootprint.agent.handoff',
   'agentfootprint.agent.output_schema_validation_failed',
+  'agentfootprint.agent.output_schema_retry',
   'agentfootprint.agent.thinking_parse_failed',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',

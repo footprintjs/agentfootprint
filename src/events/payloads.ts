@@ -130,7 +130,13 @@ export interface AgentIterationEndPayload {
 export interface AgentRouteDecidedPayload {
   readonly turnIndex: number;
   readonly iterIndex: number;
-  readonly chosen: 'tool-calls' | 'final';
+  /**
+   * The branch the turn took. `'output-retry'` (7.26) appears only on an
+   * agent built with `.outputSchema(parser, { retries })`, and only on a
+   * turn whose answer failed the schema with retries left — the loop is
+   * about to ask again rather than finish.
+   */
+  readonly chosen: 'tool-calls' | 'final' | 'output-retry';
   readonly rationale?: string;
 }
 
@@ -702,6 +708,47 @@ export interface EvalThresholdCrossedPayload {
  * Fires BEFORE PostDecide rules evaluate, so observability sees the
  * failure even if a buggy rule routes to fail-fast or swallows it.
  */
+/**
+ * Emitted (7.26) once per failed final answer that the run is about to
+ * ASK AGAIN about, on an agent built with
+ * `.outputSchema(parser, { retries })`.
+ *
+ * Its sibling `agent.output_schema_validation_failed` reports a failure the
+ * reliability gate is handling INSIDE one `call-llm` stage. This one reports
+ * a failure the LOOP is handling: the corrective message named here joins the
+ * conversation, the ReAct loop re-enters, and the next attempt arrives with
+ * its own `stream.llm_start` / `stream.llm_end` bracket and its own
+ * `cost.tick`. Subscribe to it to see how often a model needs a second ask —
+ * a leading indicator of drift, and of a schema that is harder to hit than
+ * its author thinks.
+ *
+ * Fires from the retry branch, after the corrective turn is committed, so a
+ * consumer that reads `snapshot.sharedState.outputAttempts` finds the
+ * matching row (joined by `correctiveMessageHash`) already there.
+ */
+export interface AgentOutputSchemaRetryPayload {
+  /** 1-based attempt that just failed. `1` is the first answer. */
+  readonly attempt: number;
+  /** Corrective asks left AFTER this one. `0` means this is the last. */
+  readonly retriesRemaining: number;
+  /** The ReAct iteration the failed answer came from. A retry consumes an
+   *  iteration, so the next attempt reports `iteration + 1`. */
+  readonly iteration: number;
+  /** Which half of validation failed — `'json-parse'` (the model emitted
+   *  prose) vs `'schema-validate'` (JSON, wrong shape). They trend
+   *  differently under model drift. */
+  readonly stage: 'json-parse' | 'schema-validate';
+  /** The validator's own message, verbatim. DATA, not narrative: it is
+   *  quoted into the corrective message after an authored frame, and it is
+   *  quoted here the same way. */
+  readonly error: string;
+  /** Failing field path when the parser exposes one (Zod-style issues). */
+  readonly path?: string;
+  /** `fnv1a` of the corrective message that went back to the model — the
+   *  join to the message in `history` and to the `outputAttempts` row. */
+  readonly correctiveMessageHash: string;
+}
+
 export interface AgentOutputSchemaValidationFailedPayload {
   /** Validation error message (from Zod / parser). */
   readonly message: string;

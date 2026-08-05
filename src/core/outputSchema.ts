@@ -72,6 +72,22 @@ export interface OutputSchemaParser<T> {
 }
 
 /**
+ * How the schema reaches the model.
+ *
+ *   • `'instruct'` (default) — the shape is described in the system prompt
+ *     and the model is asked for JSON. Works on every provider, because it
+ *     is only words.
+ *   • `'tool-forced'` — the shape is presented as a synthetic tool and the
+ *     provider's tool choice is FORCED to it, so generation is constrained
+ *     at the source instead of requested in prose. Requires a provider that
+ *     declares `carriesForcedToolChoice`; a provider that does not is
+ *     refused BY NAME at run start rather than quietly downgraded, because
+ *     a strategy that silently falls back to the other one is config that
+ *     lies.
+ */
+export type OutputSchemaStrategy = 'instruct' | 'tool-forced';
+
+/**
  * Optional configuration for `outputSchema`.
  */
 export interface OutputSchemaOptions {
@@ -90,6 +106,42 @@ export interface OutputSchemaOptions {
    * domain-specific framing.
    */
   readonly instruction?: string;
+  /**
+   * How many corrective re-asks the run may spend when the final answer
+   * fails the schema. Default `0` — the historical behaviour, where the
+   * first answer is the only answer and `runTyped()` throws on a bad one.
+   *
+   * Each retry is a REAL turn: the failed answer and an authored corrective
+   * message join the conversation, the ReAct loop re-enters, and the next
+   * attempt gets its own `llm_start`/`llm_end` bracket and its own
+   * `cost.tick` against `costBudget`. A retry therefore consumes one
+   * iteration of the agent's budget, the same way a tool call does.
+   *
+   * When the cap is spent the last answer stands and `runTyped()` throws
+   * `OutputSchemaError` exactly as it always has — `.outputFallback()`
+   * composes on top, unchanged.
+   */
+  readonly retries?: number;
+  /**
+   * How the schema reaches the model. Default `'instruct'`.
+   * See {@link OutputSchemaStrategy}.
+   */
+  readonly strategy?: OutputSchemaStrategy;
+  /**
+   * The JSON Schema for the synthetic tool, required by
+   * `strategy: 'tool-forced'` unless the parser can produce one itself
+   * (a `toJsonSchema()` method, which ArkType has). The library will not
+   * infer a shape from a `parse()` function — guessing what your schema
+   * means is not a thing it gets to do.
+   *
+   * This value and the parser CAN disagree. Nothing here prevents that,
+   * and nothing needs to: the forced shape satisfies the wire, the parser
+   * still judges the answer, and a disagreement surfaces as an ordinary
+   * validation failure that the retry loop corrects using the validator's
+   * own words. The schema constrains generation; the parser remains the
+   * judge.
+   */
+  readonly jsonSchema?: Readonly<Record<string, unknown>>;
 }
 
 /**

@@ -103,6 +103,12 @@ export function withFallback(
     // exists to prevent. Undeclared means the user/assistant floor on that
     // side, so an undeclared partner clamps the pair to the floor.
     carriesInMessages: carriedByBoth(primary, fallback),
+    // AND, for the same reason the roles are an intersection: either side may
+    // serve the call, so the pair constrains generation only if BOTH do. One
+    // declared partner and one silent one is a pair whose answer is shaped
+    // some of the time, which is the shape of guarantee nobody can use.
+    carriesForcedToolChoice:
+      (primary.carriesForcedToolChoice ?? false) && (fallback.carriesForcedToolChoice ?? false),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
         return await primary.complete(req, hooks);
