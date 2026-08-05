@@ -143,6 +143,50 @@ describe('nodeHost — a socket the caller owns', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it('refuses onUnhandled beside it, by name — unmatched paths are already yours there', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    try {
+      expect(() => nodeHost({ server, onUnhandled: () => undefined })).toThrow(/'onUnhandled'/);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('nodeHost — the socket is the host’s and the spare routes are yours', () => {
+  // The machinery and its laws live in httpHost.test.ts; what is asserted here
+  // is that THIS adapter passes the hook through and keeps its own three paths
+  // — the mistake that would let a route shadow a door.
+  it('answers /debug/trace from the caller’s hook, and never hands over its own paths', async () => {
+    const seen: string[] = [];
+    const handle = await serving(echo, {
+      onUnhandled: (req: { url?: string }, res: import('node:http').ServerResponse) => {
+        seen.push(req.url ?? '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ from: 'the app', path: req.url }));
+      },
+    });
+    try {
+      expect(await (await fetch(`${handle.url}/debug/trace`)).json()).toEqual({
+        from: 'the app',
+        path: '/debug/trace',
+      });
+
+      // The three doors this adapter owns answer exactly as they always did…
+      expect((await post(handle.url, '/invoke', { input: 'mine' })).status).toBe(200);
+      expect((await fetch(`${handle.url}/health`)).status).toBe(200);
+      // …and a wrong method on one of them is still this host's 404, never the
+      // caller's route. `/conversation` included: the door owns its address
+      // whether or not what arrived on it was an upgrade.
+      expect((await fetch(`${handle.url}/invoke`)).status).toBe(404);
+      expect((await fetch(`${handle.url}/conversation`)).status).toBe(404);
+      expect(seen).toEqual(['/debug/trace']);
+    } finally {
+      await handle.close();
+    }
+  });
 });
 
 describe('nodeHost — what arrives at the handler', () => {

@@ -73,6 +73,12 @@ export const CLOSE_CODE = {
   invalidPayload: 1007,
   /** Past a declared ceiling. */
   tooBig: 1009,
+  /**
+   * Something went wrong on THIS side — the RFC's own word for a condition
+   * that stopped this endpoint fulfilling the request. Used where the fault is
+   * demonstrably not the peer's, so that a close code never blames them for it.
+   */
+  internalError: 1011,
 } as const;
 
 /** One frame, as it came off the wire, already unmasked. */

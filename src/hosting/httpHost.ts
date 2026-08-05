@@ -34,6 +34,21 @@
  * detaches and drains without closing a socket it never opened. That is the
  * whole difference; every other law on this page is the same either way.
  *
+ * ── …and the same seam, inverted: `onUnhandled` ──────────────────────────────
+ * `server` lends the host a socket somebody else owns. `onUnhandled` lends the
+ * CALLER every path this host does not own on a socket the host owns. One port
+ * either way; which side binds it is the only difference. The host still never
+ * answers for the application — with this hook it no longer has to 404 for it
+ * either. Refused alongside `server`, where unmatched paths are already the
+ * caller's and a second answer would just race the first.
+ *
+ * ── The law under all of it ──────────────────────────────────────────────────
+ * **Nothing in a request's lifecycle may ever be the process's failure.** Every
+ * listener body on this page that computes is wrapped, because node calls them
+ * from its own stack and a throw there is uncaught — the death of a container,
+ * bought with one malformed request. Stated in full at `readJson`, which is
+ * where the field found it.
+ *
  * ── The third door: a conversation ───────────────────────────────────────────
  * `serveConversations(handler)` sits beside `serve(handler)` and takes upgrades
  * on `conversationPath`, because `HostRequest → HostReply` is one exchange and
@@ -201,6 +216,12 @@ export interface HttpHostOptions {
    *    serving, and touches nothing else — not your connections, not your
    *    socket.
    *  - It never writes to a response an earlier listener already answered.
+   *  - **A framework in front of it may mean this host never sees a request at
+   *    all.** Frameworks that install a catch-all handler answer everything
+   *    that reaches them, and a request they answered is finished before this
+   *    host's listener runs. Register the framework's own route for these two
+   *    paths and delegate to the host from inside it — or let the host own the
+   *    socket and put your routes on {@link HttpHostOptions.onUnhandled}.
    *
    * @example  One port, an agent and a WebSocket upgrade
    *   const server = createServer();
@@ -236,6 +257,59 @@ export interface HttpHostOptions {
    * inventing one would be reporting a fact nobody established.
    */
   readonly conversationLimits?: ConversationLimits;
+  /**
+   * Answer a request whose path this host does not own — **your** code, on this
+   * host's socket, INSTEAD of this host's 404.
+   *
+   * ── The law it states ────────────────────────────────────────────────────
+   * The host never answers for the application. With this hook it no longer has
+   * to 404 for it either: an unowned path arrives exactly as it came off the
+   * wire, and what happens next is yours — a route of your own, a file, your
+   * own 404, or nothing at all.
+   *
+   * This is the inverse of {@link HttpHostOptions.server}. There, you own the
+   * socket and lend the host two paths; here, the host owns the socket and
+   * lends you everything else. Same single port, opposite direction, and the
+   * one to reach for when the host is the only thing that needs to bind.
+   *
+   * ── What it never receives ───────────────────────────────────────────────
+   * The paths this host OWNS: `invokePath`, `healthPath` and `conversationPath`
+   * — including a wrong METHOD on one of them, which is still this host's
+   * question to answer. A hook that could claim `POST /invoke` would be a
+   * second door wearing the first one's name.
+   *
+   * Absent, nothing changes: an unmatched path gets the same 404 it always did,
+   * byte for byte.
+   *
+   * ── Private-server mode only ─────────────────────────────────────────────
+   * Passed together with a caller-owned {@link HttpHostOptions.server} it is
+   * REFUSED at construction, by name. There, unmatched paths are already yours
+   * — they fall through to your own `'request'` listeners untouched — so this
+   * would be a second answer to one question, and which answer won would depend
+   * on the order two listeners were registered in.
+   *
+   * ── Two costs, stated rather than discovered ─────────────────────────────
+   *  - A throw here is THAT REQUEST's 500 and never the process's failure, the
+   *    same as everything else in a request's lifecycle.
+   *  - A hook that answers NOTHING leaves the request hanging until it times
+   *    out — the same price, for the same reason, as the 404 a caller-owned
+   *    server does not get.
+   *
+   * @example  A diagnostic route beside the agent, on one port
+   *   httpHost({
+   *     ...wireOptions,
+   *     onUnhandled: (req, res) => {
+   *       if (req.url === '/debug/trace') {
+   *         res.writeHead(200, { 'content-type': 'application/json' });
+   *         res.end(JSON.stringify(lastTrace));
+   *         return;
+   *       }
+   *       res.writeHead(404, { 'content-type': 'application/json' });
+   *       res.end('{"error":"no such route"}');
+   *     },
+   *   });
+   */
+  readonly onUnhandled?: (req: IncomingMessage, res: ServerResponse) => void;
 }
 
 /** A {@link HostHandle} that also says where it landed. */
@@ -330,8 +404,30 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         `or drop the server and let this host bind its own socket.`,
     );
   }
+  // Refused at construction for the same reason and in the same breath: on a
+  // server the caller owns, unmatched paths ALREADY reach their own listeners,
+  // so a hook for them here is a second answer to one question and the winner
+  // would be whichever listener was registered first.
+  const onUnhandled = options.onUnhandled;
+  if (ownServer && onUnhandled !== undefined) {
+    throw new Error(
+      `[hosting] httpHost('${name}') was given both a caller-owned 'server' and an ` +
+        `'onUnhandled'. On a server you own, a path this host does not own is already yours — ` +
+        `it falls through to your own 'request' listeners untouched — so this hook would be a ` +
+        `second answer to the same question. Route unmatched paths on your server, or drop ` +
+        `'server' and let this host own the socket and hand you what it does not answer.`,
+    );
+  }
   const port = options.port ?? 8080;
   const hostname = options.hostname ?? '0.0.0.0';
+  /**
+   * The paths this host answers on. Everything else is unowned and may be
+   * handed to `onUnhandled` — the conversation path included in the ownership,
+   * because a door that takes upgrades still OWNS its path when something
+   * arrives on it that is not one.
+   */
+  const ownsPath = (path: string): boolean =>
+    path === invokePath || path === healthPath || path === conversationPath;
   // A door that exists is a capability that can be honoured; one built without
   // a path is not, and says so rather than being discovered at runtime.
   const capabilities =
@@ -459,10 +555,27 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       });
 
       const onUpgrade = (request: IncomingMessage, socketOfConversation: Duplex): void => {
-        if (door.handleUpgrade(request, socketOfConversation)) return;
+        // THE LAW again, on the other door: an `'upgrade'` listener runs on
+        // node's own stack too, so a throw here is uncaught and would end every
+        // OTHER conversation — and every request — for one bad handshake.
+        let claimed: boolean;
+        try {
+          claimed = door.handleUpgrade(request, socketOfConversation);
+        } catch {
+          // The door answers its own refusals; anything that got past them
+          // costs THIS socket and nothing else.
+          socketOfConversation.destroy();
+          return;
+        }
+        if (claimed) return;
         // Not our path. On the caller's server that is theirs to answer or to
         // ignore, exactly as an unmatched request path is; on ours nobody else
         // can, so leaving the socket hanging would be the one dishonest option.
+        //
+        // `onUnhandled` deliberately does NOT extend here: it is a hook for
+        // ROUTES, and an upgrade is a protocol handover with a socket to answer
+        // by hand rather than a response to write. An unclaimed upgrade on a
+        // private socket keeps exactly the answer it has always had.
         if (ownServer) return;
         socketOfConversation.end(
           'HTTP/1.1 400 Bad Request\r\nconnection: close\r\n\r\n' +
@@ -515,7 +628,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       let accepting = true;
       let closing: Promise<void> | undefined;
 
-      const onRequest = (req: IncomingMessage, res: ServerResponse): void => {
+      const route = (req: IncomingMessage, res: ServerResponse): void => {
         // On a shared server an earlier listener may already have answered.
         // Writing again would corrupt its reply; there is nothing to add.
         if (res.headersSent) return;
@@ -530,6 +643,15 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           // so is the honest answer. On a server the CALLER owns it is theirs,
           // and a 404 from us would answer for their application.
           if (ownServer) return;
+          // …and on a socket THIS host owns, the caller can still claim the
+          // paths it does not: their code, here, INSTEAD of our 404. What the
+          // host owns never reaches them — a wrong method on an owned path is
+          // still this host's question to answer, and a route that could shadow
+          // a door would be a second door with the same name.
+          if (onUnhandled !== undefined && !ownsPath(path)) {
+            onUnhandled(req, res);
+            return;
+          }
           sendJson(res, 404, wire.failure(`no route for ${req.method ?? '?'} ${path}`));
           return;
         }
@@ -545,7 +667,22 @@ export function httpHost(options: HttpHostOptions): HttpHost {
 
         const served = serveOne(req, res, handler, wire);
         inFlight.add(served);
+        // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
+      };
+
+      // THE LAW (see `readJson`): nothing in a request's lifecycle may ever be
+      // the process's failure. Routing computes — a wire's `health()`, a body
+      // that has to stringify, a caller's `onUnhandled` — and every one of
+      // those is somebody else's code running on node's own stack, where a
+      // throw is uncaught. So the whole body is wrapped, and whatever went
+      // wrong is answered to the request that caused it.
+      const onRequest = (req: IncomingMessage, res: ServerResponse): void => {
+        try {
+          route(req, res);
+        } catch (err) {
+          failSafely(res, wire, err);
+        }
       };
 
       const server = await acquireSocket();
@@ -592,8 +729,31 @@ export function httpHost(options: HttpHostOptions): HttpHost {
   };
 }
 
-/** Run one request through the handler and write whatever it decides. */
+/**
+ * Run one request through the handler and write whatever it decides.
+ *
+ * Total by construction: this promise NEVER rejects. It is held in a Set and
+ * voided at the call site, so a rejection would be an unhandled rejection —
+ * which on node's defaults is the same crash the law above forbids, reached by
+ * a different road.
+ */
 async function serveOne(
+  req: IncomingMessage,
+  res: ServerResponse,
+  handler: HostHandler,
+  wire: HttpWire,
+): Promise<void> {
+  try {
+    await dispatchOne(req, res, handler, wire);
+  } catch (err) {
+    // Everything inside answers its own failures; anything that got past them
+    // — a dialect that threw, a body that would not stringify — is still this
+    // REQUEST's failure and not the process's.
+    failSafely(res, wire, err);
+  }
+}
+
+async function dispatchOne(
   req: IncomingMessage,
   res: ServerResponse,
   handler: HostHandler,
@@ -626,7 +786,13 @@ async function serveOne(
   // The caller hung up before we answered — tell the handler so it can stop
   // paying for work nobody is waiting for.
   res.once('close', () => {
-    if (!settled) controller.abort();
+    try {
+      if (!settled) controller.abort();
+    } catch {
+      // An abort listener the HANDLER installed threw while being told the
+      // caller left. That is a fault in somebody's teardown, and a fault in
+      // teardown is not a reason for this process to stop serving everyone.
+    }
   });
 
   const reply: HostReply = {
@@ -707,19 +873,56 @@ async function serveOne(
   }
 }
 
+/**
+ * The body, as JSON — and never as the process's failure.
+ *
+ * ── A chunk is not always a Buffer ───────────────────────────────────────────
+ * `'data'` delivers whatever encoding the stream is in, and the encoding is not
+ * this host's to assume. Anything else holding the same request may have called
+ * `req.setEncoding(...)` — a co-listener on a shared server, a framework that
+ * installs its own catch-all `'request'` handler — and from that moment every
+ * chunk arrives as a STRING. `Buffer.concat` on strings throws, and it threw
+ * INSIDE the `'end'` listener. Field-reported, and process-fatal: see the law
+ * below.
+ *
+ * A string chunk is coerced back rather than refused, and no bytes are lost
+ * doing it: `setEncoding` decodes through a `StringDecoder`, which holds a
+ * partial multi-byte sequence across a chunk boundary rather than splitting it,
+ * so what arrives is whole text and `Buffer.from(chunk, 'utf8')` reproduces
+ * exactly the bytes that were sent.
+ *
+ * ── THE LAW, stated where it was broken ─────────────────────────────────────
+ * **Nothing in a request's lifecycle may ever be the process's failure.**
+ * `node:http` calls these listeners from its own stack: a throw inside one is
+ * not a rejected promise anybody awaits and not an exception anybody catches —
+ * it is an UNCAUGHT exception, and an uncaught exception ends the process. One
+ * malformed request would take every other request with it, every open
+ * conversation, and — on the shared socket this file exists for — everything
+ * else the container was serving.
+ *
+ * So every listener body here that COMPUTES is wrapped, not just the line that
+ * was found to break: a surprise this file has not imagined yet becomes THIS
+ * REQUEST's 400 or 500, the failure of the thing that caused it.
+ */
 function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('data', (c: Buffer | string) => {
+      try {
+        chunks.push(typeof c === 'string' ? Buffer.from(c, 'utf8') : c);
+      } catch (err) {
+        reject(asError(err));
+      }
+    });
     req.on('error', reject);
     req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve({});
       try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        if (!raw) return resolve({});
         const parsed: unknown = JSON.parse(raw);
         resolve(parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {});
       } catch (err) {
-        reject(err);
+        reject(asError(err));
       }
     });
   });
@@ -728,6 +931,41 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * The last answer a request can be given: its own 500.
+ *
+ * This is the floor under the law — reached where the ORDINARY reply path is
+ * what went wrong (a dialect that threw, a body that would not stringify, a
+ * caller's route handler that raised), so it assumes as little as possible and
+ * cannot itself throw.
+ *
+ * A response already committed to the wire is ENDED rather than overwritten:
+ * two half-answers on one socket is worse than one answer that stopped early,
+ * and a status line cannot be taken back.
+ */
+function failSafely(res: ServerResponse, wire: HttpWire, err: unknown): void {
+  const message = asError(err).message;
+  try {
+    if (res.writableEnded) return;
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    let body: string;
+    try {
+      body = JSON.stringify(wire.failure(message));
+    } catch {
+      // The DIALECT is what broke. Answer in the one shape nothing can refuse.
+      body = JSON.stringify({ error: message });
+    }
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end(body);
+  } catch {
+    // The socket went away while we were answering it. There is nothing left
+    // to say, and nothing here that is the process's business either.
+  }
 }
 
 function asError(err: unknown): Error {

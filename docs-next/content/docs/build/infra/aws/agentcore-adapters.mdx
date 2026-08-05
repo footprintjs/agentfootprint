@@ -103,6 +103,14 @@ knowing: an unmatched path *hangs* rather than 404s if nobody routes it) are the
 same for every adapter built on `httpHost` — see
 [One port, two protocols](doc:hosting).
 
+If all you want is a route of your own beside the runtime's — a `/debug/trace`,
+say — the inverse option is cheaper: `agentCoreRuntimeHost({ onUnhandled })`
+keeps the host binding the container's port and hands you every path it does not
+own, instead of answering 404 for your application. `/invocations`, `/ping` and
+`/ws` never reach it, and it is refused beside `{ server }`, where unmatched
+paths already reach your own listeners. See
+[Your routes on the host's socket](doc:hosting).
+
 ### The runtime's second door — `/ws`
 
 The runtime exposes exactly two doors into a container: request/response, and a

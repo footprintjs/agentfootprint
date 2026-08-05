@@ -180,6 +180,31 @@ export interface AgentCoreRuntimeHostOptions {
    * construction, which is what the single-port container required.
    */
   readonly conversationPath?: string;
+  /**
+   * Answer a request whose path this adapter does not own — your code, on this
+   * host's socket, instead of its 404.
+   *
+   * The inverse of `server`, and the cheaper half of it when all you need is a
+   * route of your own: the host binds the container's one port as usual and
+   * hands you everything it does not answer. The runtime's own three paths
+   * never reach it, a throw inside it is that request's 500, and passing it
+   * beside `server` is refused by name — there, unmatched paths already reach
+   * your own listeners.
+   *
+   * @example  A diagnostic route inside the container, on the one port it has
+   *   agentCoreRuntimeHost({
+   *     onUnhandled: (req, res) => {
+   *       res.writeHead(req.url === '/debug/trace' ? 200 : 404, {
+   *         'content-type': 'application/json',
+   *       });
+   *       res.end(JSON.stringify(req.url === '/debug/trace' ? lastTrace : { error: 'no route' }));
+   *     },
+   *   });
+   */
+  readonly onUnhandled?: (
+    req: import('node:http').IncomingMessage,
+    res: import('node:http').ServerResponse,
+  ) => void;
 }
 
 /**
@@ -335,6 +360,10 @@ export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}):
           ...(options.hostname !== undefined && { hostname: options.hostname }),
         }
       : { port: options.port ?? RUNTIME_PORT, hostname: options.hostname ?? '0.0.0.0' }),
+    // Travels as given, including next to a `server` — where `httpHost` refuses
+    // the pair by name rather than quietly dropping one half of what was asked
+    // for.
+    ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
   });
 }
 

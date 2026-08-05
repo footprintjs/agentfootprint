@@ -17,7 +17,7 @@
  * because every one of them is about behaviour node itself decides.
  */
 
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { connect, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -223,6 +223,62 @@ async function unanswered(url: string, init: RequestInit = {}): Promise<boolean>
   } catch {
     return true;
   }
+}
+
+/**
+ * POST a body in TWO writes, with the split placed wherever the caller says.
+ *
+ * `fetch` decides its own framing, so it cannot be asked to cut a body in the
+ * middle of a character. This can — which is the only way to prove that a
+ * multi-byte character split across chunks comes back whole. Returns the
+ * response body as text.
+ */
+async function rawPostSplit(
+  port: number,
+  path: string,
+  body: Buffer,
+  splitAt: number,
+): Promise<string> {
+  const socket = connect(port, '127.0.0.1');
+  openSockets.push(socket);
+  const received: Buffer[] = [];
+  socket.on('error', () => undefined);
+  socket.on('data', (chunk: Buffer) => received.push(chunk));
+  await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
+  socket.write(
+    `POST ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\n` +
+      `content-length: ${body.length}\r\nconnection: close\r\n\r\n`,
+  );
+  socket.write(body.subarray(0, splitAt));
+  // Long enough that the two writes cannot be coalesced into one TCP segment,
+  // which is the entire point of the fixture.
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  socket.write(body.subarray(splitAt));
+  await new Promise<void>((resolve) => socket.once('close', () => resolve()));
+  const whole = Buffer.concat(received);
+  const split = whole.indexOf('\r\n\r\n');
+  const head = whole.subarray(0, split).toString('utf8');
+  const payload = whole.subarray(split + 4);
+  // `connection: close` invites node to answer in chunks, and a raw client that
+  // ignored the framing would be reading the chunk sizes as content.
+  return /transfer-encoding:\s*chunked/i.test(head)
+    ? dechunk(payload).toString('utf8')
+    : payload.toString('utf8');
+}
+
+/** The chunked body, unframed. Just enough of RFC 9112 §7.1 for one small reply. */
+function dechunk(body: Buffer): Buffer {
+  const pieces: Buffer[] = [];
+  let at = 0;
+  for (;;) {
+    const eol = body.indexOf('\r\n', at);
+    if (eol < 0) break;
+    const size = parseInt(body.subarray(at, eol).toString('utf8'), 16);
+    if (!Number.isFinite(size) || size === 0) break;
+    pieces.push(body.subarray(eol + 2, eol + 2 + size));
+    at = eol + 2 + size + 2;
+  }
+  return Buffer.concat(pieces);
 }
 
 /** A raw client that speaks the upgrade handshake — no `ws` dependency needed. */
@@ -433,6 +489,346 @@ describe('httpHost — a server the caller owns', () => {
     expect((await fetch(`${url}/alive`)).status).toBe(200);
     await open.splice(0)[0]!.close();
     expect(await unanswered(`${url}/alive`)).toBe(true);
+  });
+});
+
+// ── the defect this release exists for: a co-listener's encoding ────
+//
+// Field-reported against a shared socket. A co-listener called `req.setEncoding`
+// in its own `'request'` handler — an ordinary thing to do before deciding the
+// path is not yours — and from that moment the host received the body as
+// STRINGS. `Buffer.concat` on strings throws, and it threw inside the `'end'`
+// listener, which node calls from its OWN stack: not a rejected promise, not a
+// failed request, an UNCAUGHT exception. The container died, taking every other
+// request and every open conversation with it.
+//
+// Reachable only through `{ server }` — the mode built for co-listeners — which
+// is why the fixture below is a real second listener on a real shared socket
+// rather than a stubbed request.
+
+describe('httpHost — a co-listener that set an encoding', () => {
+  /** The field shape: somebody else reads the request first, and sets an encoding. */
+  async function sharedWithEncodingCoListener(): Promise<{
+    base: string;
+    port: number;
+    chunkTypes: string[];
+  }> {
+    const { server, base, port } = await callerServer();
+    const chunkTypes: string[] = [];
+    // Registered BEFORE the host, exactly as a listener that was there first
+    // is. It answers nothing: the path is not its own.
+    server.on('request', (req) => {
+      req.setEncoding('utf8');
+      req.on('data', (chunk: unknown) => chunkTypes.push(typeof chunk));
+    });
+    await attachOdd(server);
+    return { base, port, chunkTypes };
+  }
+
+  it('is what the OLD reader could not survive — pinned as the contrast', async () => {
+    const { base, chunkTypes } = await sharedWithEncodingCoListener();
+    await (await say(base, 'hello')).json();
+
+    // The fixture is real, not assumed: the chunks really did arrive as text.
+    expect(chunkTypes).toEqual(['string']);
+
+    // The pre-7.27.0 reader, quoted so the regression has a shape a reader can
+    // recognise rather than a description of one:
+    //
+    //     req.on('data', (c: Buffer) => chunks.push(c));
+    //     req.on('end', () => {
+    //       const raw = Buffer.concat(chunks).toString('utf8');
+    //       …
+    //     });
+    //
+    // Handed what this fixture delivers, the concat dies:
+    const asTheOldReaderKeptThem = [JSON.stringify({ say: 'hello' })] as unknown as Buffer[];
+    expect(() => Buffer.concat(asTheOldReaderKeptThem)).toThrow(TypeError);
+    // …and it died INSIDE the 'end' listener, which is the entire severity.
+    // A throw there is nobody's rejection and everybody's crash.
+  });
+
+  it('LAW: the request answers normally now, and the host keeps serving', async () => {
+    const { base } = await sharedWithEncodingCoListener();
+
+    expect(await (await say(base, 'hello')).json()).toEqual({ said: 'hello/none' });
+    // The proof that nothing died: the socket is still answering afterwards.
+    expect(await (await say(base, 'again')).json()).toEqual({ said: 'again/none' });
+    expect(((await (await fetch(`${base}/alive`)).json()) as { alive: boolean }).alive).toBe(true);
+  });
+
+  it('LAW: multi-byte text survives a chunk boundary drawn through a character', async () => {
+    // `setEncoding` decodes through a StringDecoder, which HOLDS a partial
+    // multi-byte sequence rather than splitting it — so coercing the text back
+    // to bytes is lossless. Proven the only way worth proving: by writing the
+    // body in two TCP writes with the split placed INSIDE a 4-byte character.
+    const { base, port, chunkTypes } = await sharedWithEncodingCoListener();
+    const text = 'ünïcödé — 😀 — 漢字 — ẞ';
+    const body = Buffer.from(JSON.stringify({ say: text }), 'utf8');
+    const midCharacter = body.indexOf(Buffer.from('😀', 'utf8')) + 2;
+    expect(midCharacter).toBeGreaterThan(2);
+
+    const answer = await rawPostSplit(port, '/say', body, midCharacter);
+
+    expect(JSON.parse(answer)).toEqual({ said: `${text}/none` });
+    // …and it really did arrive in more than one piece, as text.
+    expect(chunkTypes.length).toBeGreaterThan(1);
+    expect(new Set(chunkTypes)).toEqual(new Set(['string']));
+    // The base URL is unused by the raw client; asserted so the fixture cannot
+    // silently stop being the shared-socket one.
+    expect(base).toContain(`:${port}`);
+  });
+});
+
+// ── the deeper law: a request's failure is never the process's ──────
+
+describe('httpHost — nothing in a request’s lifecycle is the process’s failure', () => {
+  /** A dialect that breaks in whichever place the test names. */
+  function brittleWire(breaks: 'health' | 'readRequest' | 'failure'): HttpWire {
+    return {
+      ...oddWire,
+      health: (uptimeMs) => {
+        if (breaks === 'health') throw new Error('the health body threw');
+        return oddWire.health(uptimeMs);
+      },
+      readRequest: (facts) => {
+        if (breaks === 'readRequest') throw new Error('the request dialect threw');
+        return oddWire.readRequest(facts);
+      },
+      failure: (message, code) => {
+        if (breaks === 'failure') throw new Error('even the failure body threw');
+        return oddWire.failure(message, code);
+      },
+    };
+  }
+
+  async function serveBrittle(breaks: 'health' | 'readRequest' | 'failure'): Promise<string> {
+    const handle = (await httpHost({
+      name: 'brittleHost',
+      wire: brittleWire(breaks),
+      invokePath: '/say',
+      healthPath: '/alive',
+      port: 0,
+      hostname: '127.0.0.1',
+    }).serve(defaultHandler)) as HttpHostHandle;
+    open.push(handle);
+    return handle.url;
+  }
+
+  it('a wire that throws on the HEALTH path is a 500, not an uncaught exception', async () => {
+    // The health path is answered INSIDE the 'request' listener, with nothing
+    // between the wire and node's own stack. It was the shortest road to a dead
+    // container in the whole file.
+    const base = await serveBrittle('health');
+    expect((await fetch(`${base}/alive`)).status).toBe(500);
+    // Still up, still serving, which is the whole claim.
+    expect(await (await say(base, 'after')).json()).toEqual({ said: 'after/none' });
+  });
+
+  it('a wire that throws while READING a request is that request’s 500', async () => {
+    // This one never reached a listener: it rejected the promise the request
+    // was being served on, which nobody awaited — an unhandled rejection, and
+    // node's default answer to one of those is the same dead process.
+    const base = await serveBrittle('readRequest');
+    const response = await say(base, 'x');
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ broke: 'the request dialect threw' });
+    expect((await fetch(`${base}/alive`)).status).toBe(200);
+  });
+
+  it('a wire whose FAILURE body also throws still answers, in the plainest shape there is', async () => {
+    // The floor under the law: when the dialect itself is what broke, the
+    // refusal cannot be written in that dialect. It is written in the one shape
+    // nothing can refuse.
+    const base = await serveBrittle('failure');
+    const response = await fetch(`${base}/nowhere`);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'even the failure body threw' });
+    expect(await (await say(base, 'after')).json()).toEqual({ said: 'after/none' });
+  });
+});
+
+// ── scenario: the inverse seam — the caller's routes, our socket ────
+//
+// `{ server }` lends the host a socket somebody else owns. `onUnhandled` lends
+// the CALLER every path the host does not own, on a socket the host owns. The
+// field case is the second one: a container with a single port that wants a
+// diagnostic route beside the agent and has no reason to bind the socket
+// itself.
+
+describe('httpHost — onUnhandled, the inverse seam', () => {
+  /** The odd-dialect host, private socket, with a hook for what it does not own. */
+  async function serveWithHook(
+    onUnhandled: (req: IncomingMessage, res: ServerResponse) => void,
+    extra: Record<string, unknown> = {},
+  ): Promise<string> {
+    const handle = (await httpHost({
+      name: 'oddHost',
+      wire: oddWire,
+      invokePath: '/say',
+      healthPath: '/alive',
+      conversationPath: '/talk',
+      port: 0,
+      hostname: '127.0.0.1',
+      onUnhandled,
+      ...extra,
+    }).serve(defaultHandler)) as HttpHostHandle;
+    open.push(handle);
+    return handle.url;
+  }
+
+  /** A hook that answers everything it is given, and records what that was. */
+  function recordingHook(seen: string[]): (req: IncomingMessage, res: ServerResponse) => void {
+    return (req, res) => {
+      seen.push(`${req.method ?? '?'} ${req.url ?? ''}`);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ from: 'the caller', path: req.url }));
+    };
+  }
+
+  it('LAW: the caller answers the paths this host does not own', async () => {
+    const seen: string[] = [];
+    const base = await serveWithHook(recordingHook(seen));
+
+    expect(await (await fetch(`${base}/debug/trace`)).json()).toEqual({
+      from: 'the caller',
+      path: '/debug/trace',
+    });
+    expect(seen).toEqual(['GET /debug/trace']);
+    // Any method, any shape — it is their path, not this host's.
+    await fetch(`${base}/debug/trace?run=7`, { method: 'DELETE' });
+    expect(seen).toEqual(['GET /debug/trace', 'DELETE /debug/trace?run=7']);
+  });
+
+  it('LAW: the paths this host OWNS never leak to it — including the conversation door', async () => {
+    const seen: string[] = [];
+    const base = await serveWithHook(recordingHook(seen));
+
+    // The two doors answer as they always did…
+    expect(await (await say(base, 'mine')).json()).toEqual({ said: 'mine/none' });
+    expect(((await (await fetch(`${base}/alive`)).json()) as { alive: boolean }).alive).toBe(true);
+    // …and a WRONG METHOD on an owned path is still this host's question. A
+    // hook that could claim `GET /say` could shadow the invoke door tomorrow.
+    expect((await fetch(`${base}/say`)).status).toBe(404);
+    expect((await fetch(`${base}/alive`, { method: 'POST' })).status).toBe(404);
+    // The conversation path is owned too: an upgrade is not the only thing that
+    // can arrive on it, and the door still owns the address either way.
+    expect((await fetch(`${base}/talk`)).status).toBe(404);
+    expect((await fetch(`${base}/talk`, { method: 'POST', body: '{}' })).status).toBe(404);
+
+    expect(seen).toEqual([]);
+  });
+
+  it('LAW: absent, the 404 is byte-identical to the one that shipped before', async () => {
+    const withHook = await serveWithHook(() => undefined, {});
+    const withoutHook = (await httpHost({
+      name: 'oddHost',
+      wire: oddWire,
+      invokePath: '/say',
+      healthPath: '/alive',
+      conversationPath: '/talk',
+      port: 0,
+      hostname: '127.0.0.1',
+    }).serve(defaultHandler)) as HttpHostHandle;
+    open.push(withoutHook);
+
+    // Same host, same dialect, one with the hook and one without: the paths the
+    // hook never sees must be answered identically by both.
+    for (const path of ['/say', '/talk']) {
+      const hooked = await fetch(`${withHook}${path}`);
+      const plain = await fetch(`${withoutHook.url}${path}`);
+      expect(hooked.status).toBe(plain.status);
+      expect(await hooked.text()).toBe(await plain.text());
+    }
+    // …and with no hook at all, an unowned path is the same 404 it always was.
+    const unowned = await fetch(`${withoutHook.url}/debug/trace`);
+    expect(unowned.status).toBe(404);
+    expect(await unowned.json()).toEqual({ broke: 'no route for GET /debug/trace' });
+  });
+
+  it('LAW: refused BY NAME beside a caller-owned server', async () => {
+    const { server } = await callerServer();
+    const base = { name: 'oddHost', wire: oddWire, invokePath: '/say', healthPath: '/alive' };
+    expect(() => httpHost({ ...base, server, onUnhandled: () => undefined })).toThrow(
+      /'onUnhandled'/,
+    );
+    // The refusal says why, not just that: there, unmatched paths are already
+    // the caller's, and a second answer would race the first.
+    expect(() => httpHost({ ...base, server, onUnhandled: () => undefined })).toThrow(
+      /already yours/,
+    );
+    // Without the server, the same hook is perfectly ordinary.
+    expect(() => httpHost({ ...base, port: 0, onUnhandled: () => undefined })).not.toThrow();
+  });
+
+  it('LAW: a hook that throws is THAT request’s 500, never the process’s failure', async () => {
+    const base = await serveWithHook(() => {
+      throw new Error('the diagnostic route threw');
+    });
+
+    const response = await fetch(`${base}/debug/trace`);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ broke: 'the diagnostic route threw' });
+    // The agent door is untouched by somebody else's broken route.
+    expect(await (await say(base, 'still here')).json()).toEqual({ said: 'still here/none' });
+  });
+
+  it('a hook that already answered is not overwritten when it then throws', async () => {
+    const base = await serveWithHook((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ from: 'the caller' }));
+      throw new Error('after answering');
+    });
+
+    const response = await fetch(`${base}/debug/trace`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ from: 'the caller' });
+    expect(await (await say(base, 'after')).json()).toEqual({ said: 'after/none' });
+  });
+
+  it('a hook that threw HALF an answer has the request ended, not left hanging', async () => {
+    // The floor's other branch: headers are on the wire, so the status line
+    // cannot be taken back and a 500 would be a second answer. The request is
+    // ended instead — one answer that stopped early beats two half-answers on
+    // one socket, and beats a caller waiting for a timeout.
+    const base = await serveWithHook((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.write('{"partial":');
+      throw new Error('threw mid-answer');
+    });
+
+    const response = await fetch(`${base}/debug/trace`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('{"partial":');
+    expect(await (await say(base, 'after')).json()).toEqual({ said: 'after/none' });
+  });
+
+  it('the conversation door still opens on a host that has the hook', async () => {
+    // The hook answers REQUESTS. An upgrade is a protocol handover on its own
+    // event, and this pins that the two never got tangled.
+    const seen: string[] = [];
+    const handle = (await httpHost({
+      name: 'oddHost',
+      wire: oddWire,
+      invokePath: '/say',
+      healthPath: '/alive',
+      conversationPath: '/talk',
+      port: 0,
+      hostname: '127.0.0.1',
+      onUnhandled: recordingHook(seen),
+    }).serveConversations((conversation) => {
+      conversation.onFrame((frame) => conversation.send(`echo:${frame}`));
+    })) as HttpHostHandle;
+    open.push(handle);
+
+    const client = upgradeClient(handle.port);
+    client.socket.write(
+      `GET /talk HTTP/1.1\r\nHost: 127.0.0.1:${handle.port}\r\nConnection: Upgrade\r\n` +
+        `Upgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n` +
+        `Sec-WebSocket-Version: 13\r\n\r\n`,
+    );
+    await client.waitFor('101 Switching Protocols');
+    expect(seen).toEqual([]);
   });
 });
 

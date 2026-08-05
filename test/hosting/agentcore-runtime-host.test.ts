@@ -371,6 +371,46 @@ describe('agentCoreRuntimeHost — attached to a server the caller owns', () => 
     expect(() => agentCoreRuntimeHost({ server, port: 8080 })).toThrow(/both a caller-owned/);
     expect(() => agentCoreRuntimeHost({ server })).not.toThrow();
   });
+
+  it('refuses onUnhandled beside a caller-owned server, BY NAME', async () => {
+    const { server } = await containerServer();
+    // Passed through rather than dropped, so the refusal reaches the caller who
+    // asked for a pair this adapter cannot honour — there, unmatched paths
+    // already reach their own listeners.
+    expect(() => agentCoreRuntimeHost({ server, onUnhandled: () => undefined })).toThrow(
+      /'onUnhandled'/,
+    );
+  });
+});
+
+// ── the inverse seam, on the container's own port ───────────────────
+
+describe('agentCoreRuntimeHost — onUnhandled', () => {
+  it('hands the container’s spare paths to the caller, and none of its own', async () => {
+    // The single-port container again, from the other side: the adapter binds
+    // the port as usual and a diagnostic route rides along on it.
+    const seen: string[] = [];
+    const base = await serving(echo, {
+      onUnhandled: (req: { url?: string }, res: import('node:http').ServerResponse) => {
+        seen.push(req.url ?? '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ from: 'the container' }));
+      },
+    });
+
+    expect(await (await fetch(`${base}/debug/trace`)).json()).toEqual({ from: 'the container' });
+
+    // …and the runtime's own three paths are never handed over: the contract
+    // answers them, whatever the method.
+    const invoked = await post(base, { prompt: 'hi' });
+    expect(((await invoked.json()) as { status: string }).status).toBe('success');
+    expect(((await (await fetch(`${base}/ping`)).json()) as { status: string }).status).toBe(
+      'Healthy',
+    );
+    expect((await fetch(`${base}/invocations`)).status).toBe(404);
+    expect((await fetch(`${base}/ws`)).status).toBe(404);
+    expect(seen).toEqual(['/debug/trace']);
+  });
 });
 
 // ── ROI: the adapter is a configuration, not a second implementation ─

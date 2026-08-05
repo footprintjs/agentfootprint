@@ -273,6 +273,92 @@ describe('the conversation door on a socket the CALLER owns', () => {
   });
 });
 
+// ── the deeper law, on the other door ───────────────────────────────
+//
+// `node:http` calls an `'upgrade'` listener from its own stack, and an upgraded
+// socket's `'data'` listener the same way. A throw inside either is UNCAUGHT —
+// so one bad handshake, or one co-listener's setting, would end every other
+// conversation on this door and every request beside them. Both are contained
+// here, and both cost exactly one conversation.
+
+describe('a conversation is never the PROCESS’s failure', () => {
+  it('LAW: a handshake dialect that throws refuses THAT upgrade and keeps the door open', async () => {
+    let firstOnly = true;
+    const handle = (await httpHost({
+      name: 'brittleHost',
+      wire: {
+        ...jsonWire,
+        readConversation: () => {
+          // Throws for the first handshake only, so the same door can be shown
+          // still working immediately afterwards.
+          if (firstOnly) {
+            firstOnly = false;
+            throw new Error('the handshake dialect threw');
+          }
+          return {};
+        },
+      },
+      invokePath: '/invoke',
+      healthPath: '/health',
+      conversationPath: '/conversation',
+      port: 0,
+      hostname: '127.0.0.1',
+    }).serveConversations(echo)) as HttpHostHandle;
+    open.push(handle);
+
+    const refused = connectConversation(handle.port);
+    expect((await refused.opened).status).toBe(500);
+    refused.destroy();
+
+    // The door is still a door: the next conversation is carried normally.
+    const after = connectConversation(handle.port);
+    expect((await after.opened).status).toBe(101);
+    after.send('after');
+    expect(await after.waitForFrames(1)).toEqual(['echo:after']);
+    after.destroy();
+  });
+
+  it('WHY THE FRAME READER IS SAFE: node refuses an encoding on an upgraded socket', async () => {
+    // The request door's field defect asked the same question of this one: a
+    // co-listener shares the upgraded socket, and one that called
+    // `setEncoding` would turn every frame into text with its mask key decoded
+    // away. It cannot. Node replaces `setEncoding` on a socket it has handed to
+    // `'upgrade'` with a refusal — ERR_HTTP_SOCKET_ENCODING, "not allowed per
+    // RFC7230 Section 3" — so the chunks this door reads are bytes by the
+    // transport's own rule and not by this door's hope.
+    //
+    // Pinned rather than asserted in prose, because the reason lives in NODE
+    // and could change there; if it ever does, this test says so first.
+    const server = createServer();
+    servers.push(server);
+    server.on('connection', (socket: Socket) => sockets.push(socket));
+    const refusals: string[] = [];
+    server.on('upgrade', (request, socket: Duplex) => {
+      if ((request.url ?? '').split('?')[0] !== '/conversation') return;
+      try {
+        socket.setEncoding('utf8');
+        refusals.push('ALLOWED');
+      } catch (err) {
+        refusals.push((err as { code?: string }).code ?? String(err));
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+
+    const handle = await nodeHost({ server }).serveConversations(echo);
+    open.push(handle);
+
+    const client = connectConversation(port);
+    expect((await client.opened).status).toBe(101);
+    client.send('hello');
+    expect(await client.waitForFrames(1)).toEqual(['echo:hello']);
+    client.destroy();
+
+    expect(refusals).toEqual(['ERR_HTTP_SOCKET_ENCODING']);
+  });
+});
+
 describe('the declared ceilings, enforced where they were declared', () => {
   async function serving(
     limits?: { maxFrameBytes?: number; maxPendingBytes?: number },

@@ -7,6 +7,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.27.0] - 2026-08-05
+
+A production integration ran an agent on a shared socket, with a co-listener of
+their own reading requests beside it. The co-listener called
+`req.setEncoding('utf8')` — an ordinary thing for a framework to do before it
+decides a path is not its own — and the container died.
+
+Not the request. The container.
+
+`readJson` collected chunks and called `Buffer.concat`. With an encoding set,
+node delivers those chunks as STRINGS, and `Buffer.concat` on strings throws —
+inside the `'end'` listener, which node calls from its own stack. A throw there
+is not a rejected promise anybody awaits and not a failed request anybody
+answers: it is an uncaught exception. One perfectly ordinary request took down
+every other request in flight, every open conversation, and everything else that
+container was serving.
+
+The two-line fix is to coerce the chunk. **The release is the law it exposed.**
+
+> **Nothing in a request's lifecycle may ever be the process's failure.**
+
+That sentence is now stated at the site where the field found it and enforced
+across every listener body in the hosting layer that computes. Not just the line
+that broke — the whole class. A dialect that throws while reading a request, a
+health body that throws, a body that will not stringify, a handshake dialect
+that throws, an abort listener that throws while being told the caller left:
+each of those is now the failure of the thing that caused it. A 400, a 500, one
+refused upgrade, one ended conversation. Never the process.
+
+One of them was not even a throw. `serveOne`'s promise is held in a Set and
+voided at the call site, so anything that escaped it was an *unhandled
+rejection* — which on node's defaults is the same dead container reached by a
+different road. It is total by construction now, and says so.
+
+**The audit's other finding is that the conversation door was already safe, and
+for a reason worth writing down.** The same co-listener cannot do this to an
+upgraded socket: node itself refuses `setEncoding` there
+(`ERR_HTTP_SOCKET_ENCODING`, "not allowed per RFC7230 Section 3"). So the frame
+reader reads bytes by the transport's own rule rather than by this door's hope —
+and because that reason lives in node and could change there, it is pinned by a
+test instead of asserted in a comment.
+
+**And the inverse seam, from the same report.** `{ server }` — lend the host a
+socket you bound — is the right answer when you have a protocol of your own to
+serve. It is a great deal of ceremony when all you wanted was a `/debug/trace`
+beside the agent on the one port the container was given.
+
+```ts
+nodeHost({ port: 8080, onUnhandled: (req, res) => myRouter(req, res) })
+```
+
+Same single port, opposite direction: the host binds the socket as it always
+did, and every path it does not own is handed to your code **instead of** its
+404. The host still never answers for your application — with this hook it no
+longer has to 404 for it either.
+
+What it never receives is the interesting half. The paths the host owns —
+`invokePath`, `healthPath`, `conversationPath` — never reach it, *including a
+wrong method on one of them*, because a hook that could claim `POST /invoke`
+would be a second door wearing the first one's name. And it is refused at
+construction beside `{ server }`, by name: there, unmatched paths already fall
+through to your own `'request'` listeners, so a second way to answer them would
+make the winner depend on the order two listeners were registered in. Two
+answers to one question is the confusion the refusal prevents.
+
+**Upgrades deliberately do not travel through it**, and the reasoning is on the
+page rather than in somebody's head. `onUnhandled` is handed a `ServerResponse`
+to write; an upgrade has none — it has a raw socket and a handover to perform by
+hand. The field case is diagnostic HTTP routes, so an unclaimed upgrade on a
+private socket keeps exactly the answer it always had (400, socket closed), and
+a differently-shaped second hook for a case nobody has asked for is how a port
+grows a surface it cannot explain. `{ server }` remains what it always was.
+
+**Nothing changes for anyone who does not opt in.** No `onUnhandled` means the
+same 404 as before, byte for byte, and that is pinned by comparing two live
+hosts rather than by care.
+
+### Added
+
+- **`onUnhandled` on `HttpHostOptions`**, threaded through `nodeHost` and
+  `agentCoreRuntimeHost` — `(req, res) => void`, called in private-server mode
+  for any path the host does not own, instead of the host's 404. Your code, on
+  the host's socket, with the request and response exactly as they came off the
+  wire. Refused at construction beside a caller-owned `server`. A throw inside
+  it is that request's 500; a hook that answers nothing leaves the request
+  hanging until it times out — the same price, for the same reason, as the
+  missing 404 on a caller-owned server.
+
+- **`examples/deploy/own-routes.ts`** — the field scenario, runnable: the agent
+  on `/invoke`, the conversation door on `/conversation`, and a `/debug/trace`
+  of the caller's own, all on ONE port with no server to create. It breaks a
+  route on purpose to show what that costs (one 500) and what it does not (the
+  agent, still answering).
+
+- **`CLOSE_CODE.internalError`** (1011), internal to the conversation door — the
+  RFC's own word for "this end could not fulfil the request", used where the
+  fault is demonstrably not the peer's, so a close code never blames them for
+  something that happened on this side.
+
+### Fixed
+
+- **A request body read on a shared socket no longer kills the process.** String
+  chunks are coerced back to bytes, and no bytes are lost doing it: `setEncoding`
+  decodes through a `StringDecoder`, which holds a partial multi-byte sequence
+  across a chunk boundary rather than splitting it. Pinned by writing a body in
+  two TCP writes with the split placed *inside* a four-byte character and
+  asserting it round-trips. Reachable only through `{ server }` — the mode built
+  for co-listeners — and reproduced there, with a real second listener on a real
+  shared socket rather than a stubbed request.
+
+- **Every listener body in the hosting layer that computes is contained.**
+  `'request'`, `'upgrade'`, `'data'`, `'end'`, `'close'` and the response's own
+  `'close'`: a throw in any of them is answered to the request, the upgrade or
+  the conversation that caused it. `serveOne` no longer rejects at all — an
+  unhandled rejection was the same crash by another name. Where the ordinary
+  reply path is itself what broke, the refusal is written in the one shape
+  nothing can refuse: `{ error }` with a 500.
+
+- **A conversation-handshake dialect that throws refuses that upgrade** with a
+  `500` naming the host, and the door keeps carrying everybody else's
+  conversations. Previously it was an uncaught exception on node's stack.
+
+### Notes
+
+- **With a framework that installs a catch-all handler (Fastify, Express), the
+  framework answers first and the attached host never sees the request** —
+  register the framework's routes as a delegation to the host, or let the host
+  own the socket and use `onUnhandled` for your own routes. This is now beside
+  the hang-cost callout in the hosting guide, where the same class of surprise
+  already lived.
+
+- **The conversation door needed no fix, and that is a finding rather than an
+  omission.** Node refuses an encoding change on an upgraded socket, so the
+  frame reader cannot be handed text. The test that says so exists because the
+  guarantee is node's, not this library's.
+
 ## [7.26.0] - 2026-08-05
 
 `toolArgValidation` has spent several releases doing something quietly

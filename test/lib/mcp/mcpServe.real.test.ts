@@ -48,6 +48,46 @@ const textOf = (result: { content: unknown }): string =>
 const newClient = (): Client =>
   new Client({ name: 'agentfootprint-real-test', version: '1.0.0' }, { capabilities: {} });
 
+/** A dead keep-alive socket handed over by the pool, and nothing else. */
+const isDeadPooledSocket = (err: unknown): boolean => {
+  const cause = (err as { cause?: { code?: string; message?: string } } | undefined)?.cause;
+  return (
+    String(err).includes('fetch failed') ||
+    cause?.code === 'UND_ERR_SOCKET' ||
+    String(cause?.message ?? '').includes('other side closed')
+  );
+};
+
+/**
+ * A `fetch` that survives the pool handing it a socket the previous server owned.
+ *
+ * Node's `fetch` keeps connections alive in a GLOBAL undici pool keyed by
+ * ORIGIN, not by server instance. So when a test closes one listener and starts
+ * another on the same port, the next client can be handed a socket the closed
+ * server was holding — and it fails with `UND_ERR_SOCKET` ("other side closed")
+ * on whichever request happens to draw it: the initialize exchange just as
+ * easily as a later call. Retrying the REQUEST evicts that socket and dials a
+ * fresh one, which is why the tolerance lives here rather than around any single
+ * call: every request the SDK transport makes goes through this function.
+ *
+ * Bounded at three attempts, and narrow — anything that is not a dead pooled
+ * socket is rethrown untouched. The law under test is that the PORT is reusable
+ * (a listener still holding it would `EADDRINUSE` when the second server binds);
+ * connection-pool hygiene is undici's surface and never was this library's.
+ */
+const pooledSocketTolerantFetch: typeof fetch = async (url, init) => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      // Three attempts, because the pool can hold more than one stale socket
+      // for an origin — and a body this transport sends is always a string, so
+      // replaying the request costs nothing that cannot be replayed.
+      if (attempt >= 3 || !isDeadPooledSocket(err)) throw err;
+    }
+  }
+};
+
 // ─── (a) stdio — a real child process, a real pipe ────────────────
 
 describe('mcpServe over a real stdio transport', () => {
@@ -207,10 +247,16 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
     return handle;
   };
 
-  const connectHttp = async (port: number, path = '/mcp'): Promise<Client> => {
+  const connectHttp = async (
+    port: number,
+    path = '/mcp',
+    options: { fetch?: typeof fetch } = {},
+  ): Promise<Client> => {
     const client = newClient();
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}${path}`)),
+      new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}${path}`), {
+        ...(options.fetch && { fetch: options.fetch }),
+      }),
     );
     return client;
   };
@@ -378,24 +424,16 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
       // If the listener were still holding the socket this would EADDRINUSE.
       const second = await serveOnHttp(port);
       expect(second.toolNames).toEqual(['echo', 'delete_account']);
-      const reconnected = await connectHttp(port);
+      // The reconnect gets its OWN fetch, tolerant of one dead pooled socket —
+      // see `pooledSocketTolerantFetch`. Every request the transport makes goes
+      // through it, so the tolerance covers the connect/initialize exchange as
+      // well as the call below; a retry wrapped around only the call left the
+      // handshake exposed, which is where this last flaked.
+      const reconnected = await connectHttp(port, '/mcp', { fetch: pooledSocketTolerantFetch });
       try {
-        // The first client's keep-alive socket lives in undici's GLOBAL pool,
-        // keyed by origin — the second client can be handed that dead socket
-        // and fail once with UND_ERR_SOCKET ("other side closed"). The law
-        // this test pins is that the PORT is reusable (the serveOnHttp above
-        // would EADDRINUSE otherwise); connection-pool hygiene is undici's
-        // surface, not ours, so one bounded retry on exactly that error keeps
-        // the pin honest without a flake.
-        const callOnceRetryingDeadSocket = async () => {
-          try {
-            return await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } });
-          } catch (e) {
-            if (!String(e).includes('fetch failed')) throw e;
-            return await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } });
-          }
-        };
-        expect(textOf(await callOnceRetryingDeadSocket())).toBe('echo: b');
+        expect(textOf(await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } }))).toBe(
+          'echo: b',
+        );
       } finally {
         await reconnected.close();
       }

@@ -75,7 +75,31 @@ and after `handle.close()` the socket is still listening with your routes and
 your upgrade intact. Two rules to carry into a real deployment: a path the host
 does not own is **yours** — it will never write a 404 on your server, so an
 unrouted path hangs rather than 404s — and `port` / `hostname` are refused
-beside `server`, because a server you own already has an address.
+beside `server`, because a server you own already has an address. One more, if
+a framework sits in front: a catch-all handler (Fastify, Express) answers before
+the attached host ever sees the request, so register the framework's routes as a
+delegation to the host.
+
+### …and when all you wanted was a route of your own
+
+Binding the socket yourself is a lot of ceremony for one diagnostic endpoint.
+Since 7.27.0 the inverse option exists: the host binds the port as usual and
+hands you every path it does **not** own.
+
+```ts
+nodeHost({ port: 8080, onUnhandled: (req, res) => myRoutes(req, res) })
+```
+
+```bash
+npx tsx examples/deploy/own-routes.ts
+```
+
+[`own-routes.ts`](./own-routes.ts) serves the agent, the conversation door and a
+`/debug/trace` of its own on one port with no server to create — and breaks a
+route on purpose to show the cost: that request gets a 500, the agent beside it
+does not notice. The host's own paths never reach your hook (a wrong method on
+one of them included), and it is refused beside `{ server }`, where unmatched
+paths already reach your own listeners.
 
 ## When the caller cannot be called — the conversation door
 

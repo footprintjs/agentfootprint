@@ -21,6 +21,11 @@
  * instead of binding one, so a WebSocket upgrade or your own routes can share
  * the port. `close()` then detaches and drains, and your socket stays up.
  *
+ * **Or the socket can be the host's and the routes yours.** Pass `onUnhandled`
+ * and every path this adapter does not own is handed to your code instead of
+ * collecting its 404 — the same one port, bound by the host rather than by you.
+ * The two are opposite ends of one seam and are refused together.
+ *
  * **There is a third door.** `serveConversations(handler)` takes WebSocket
  * upgrades on `/conversation` and hands each one to your handler as a
  * `HostConversation` — a channel that stays open, for the callers that cannot
@@ -89,6 +94,35 @@ export interface NodeHostOptions {
    * full set of laws is on `httpHost`'s own `server` option, which this is.
    */
   readonly server?: import('node:http').Server;
+  /**
+   * Answer a request whose path this adapter does not own — your code, on this
+   * host's socket, instead of its 404.
+   *
+   * The inverse of `server`: there you own the socket and lend the host two
+   * paths; here the host owns the socket and lends you every path it does not
+   * answer. `/invoke`, `/health` and `/conversation` never reach it, a throw
+   * inside it is that request's 500, and passing it beside `server` is refused
+   * by name. The full set of laws is on `httpHost`'s own `onUnhandled`, which
+   * this is.
+   *
+   * @example  A diagnostic route beside the agent, on one port
+   *   nodeHost({
+   *     port: 8080,
+   *     onUnhandled: (req, res) => {
+   *       if (req.url === '/debug/trace') {
+   *         res.writeHead(200, { 'content-type': 'application/json' });
+   *         res.end(JSON.stringify(lastTrace));
+   *         return;
+   *       }
+   *       res.writeHead(404, { 'content-type': 'application/json' });
+   *       res.end('{"error":"no such route"}');
+   *     },
+   *   });
+   */
+  readonly onUnhandled?: (
+    req: import('node:http').IncomingMessage,
+    res: import('node:http').ServerResponse,
+  ) => void;
 }
 
 /**
@@ -176,5 +210,9 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     ...(options.port !== undefined && { port: options.port }),
     ...(options.hostname !== undefined && { hostname: options.hostname }),
     ...(options.server !== undefined && { server: options.server }),
+    // Passed through as given for the same reason: with a caller-owned server
+    // this hook is refused BY NAME rather than dropped, so a caller who asked
+    // for both learns which one this host cannot honour.
+    ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
   });
 }

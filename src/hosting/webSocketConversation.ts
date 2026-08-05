@@ -28,6 +28,11 @@
  *  - **The port's frame is the whole message.** A message the transport
  *    delivered in fragments counts against `maxFrameBytes` in total, so
  *    fragmentation cannot be used to walk around the ceiling.
+ *  - **Nothing in a conversation's lifecycle is ever the PROCESS's failure.**
+ *    Node calls a socket's listeners from its own stack, so a throw inside one
+ *    is uncaught and ends the container. Every listener body here that computes
+ *    is wrapped: a surprise costs THIS conversation, with a reason, and the
+ *    door keeps carrying everybody else's.
  *
  * Pattern: Adapter. Role: outer ring, one transport.
  */
@@ -175,7 +180,22 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
         headers,
         query: new URLSearchParams(url.split('?')[1] ?? ''),
       };
-      const read = options.readConversation?.(facts) ?? {};
+      // A dialect is somebody else's code, and it runs on node's own stack: a
+      // throw here is UNCAUGHT and would end the process — every other
+      // conversation on this door and every request beside them — for one
+      // handshake it could not read. Nothing in a request's lifecycle may ever
+      // be the process's failure, and a handshake is the start of one.
+      let read: ConversationHandshake;
+      try {
+        read = options.readConversation?.(facts) ?? {};
+      } catch (err) {
+        refuse(
+          socket,
+          500,
+          `the '${options.hostName}' host could not read this handshake: ${asMessage(err)}`,
+        );
+        return true;
+      }
       socket.write(handshakeResponse(key, read.protocol));
 
       const conversation = openConversation(socket, {
@@ -210,10 +230,17 @@ export function conversationDoor(options: ConversationDoorOptions): Conversation
   };
 }
 
+/** The three statuses this door answers a pre-101 socket with. */
+const REFUSAL_REASON: Readonly<Record<number, string>> = {
+  400: 'Bad Request',
+  500: 'Internal Server Error',
+  503: 'Service Unavailable',
+};
+
 /** Answer an upgrade we will not carry, in the one language a pre-101 socket speaks. */
 function refuse(socket: Duplex, status: number, message: string): void {
   const text = `[hosting] ${message}.`;
-  const reason = status === 503 ? 'Service Unavailable' : 'Bad Request';
+  const reason = REFUSAL_REASON[status] ?? 'Bad Request';
   socket.end(
     `HTTP/1.1 ${status} ${reason}\r\n` +
       `content-type: text/plain\r\n` +
@@ -263,15 +290,26 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
   function finish(close: ConversationClose, wireCode?: number, wireReason?: string): void {
     if (ending !== undefined) return;
     ending = close;
-    if (wireCode !== undefined && socket.writable) {
-      socket.write(encodeClose(wireCode, wireReason ?? close.reason));
+    // Saying goodbye is the part that touches the transport, so it is the part
+    // that can fail — and a failure to say goodbye must not stop the handler
+    // being TOLD, or leave `ended` unresolved and every shutdown sharing this
+    // socket waiting on it.
+    try {
+      if (wireCode !== undefined && socket.writable) {
+        socket.write(encodeClose(wireCode, wireReason ?? close.reason));
+      }
+      // end() flushes what is queued and then sends FIN — the polite half of
+      // the close. The timer is the impolite half, for a peer that never
+      // answers.
+      socket.end();
+      const grace = setTimeout(() => socket.destroy(), CLOSE_GRACE_MS);
+      if (typeof grace.unref === 'function') grace.unref();
+      socket.once('close', () => clearTimeout(grace));
+    } catch {
+      // The socket could not be told. It is going away either way, and the
+      // conversation is over regardless of how politely.
+      socket.destroy();
     }
-    // end() flushes what is queued and then sends FIN — the polite half of the
-    // close. The timer is the impolite half, for a peer that never answers.
-    socket.end();
-    const grace = setTimeout(() => socket.destroy(), CLOSE_GRACE_MS);
-    if (typeof grace.unref === 'function') grace.unref();
-    socket.once('close', () => clearTimeout(grace));
 
     const subscribers = [...closeSubscribers];
     closeSubscribers.clear();
@@ -407,35 +445,75 @@ function openConversation(socket: Duplex, options: OpenOptions): LiveConversatio
     finish({ by: 'far-side', reason: asMessage(err) }, code, asMessage(err));
   }
 
-  socket.on('data', (chunk: Buffer) => {
-    if (ending !== undefined) return;
-    let frames;
-    try {
-      frames = reader.push(chunk);
-    } catch (err) {
-      protocolFailure(err);
-      return;
-    }
-    for (const frame of frames) handleFrame(frame);
-  });
-  socket.on('error', (err: Error) => {
-    finish({ by: 'transport', reason: err.message });
-    socket.destroy();
-  });
+  /**
+   * One socket's version of the law the request door states: **nothing in a
+   * conversation's lifecycle may ever be the process's failure.** An upgraded
+   * socket is a plain stream and node calls its listeners from its own stack,
+   * so a throw inside one is uncaught — and would end every OTHER conversation
+   * on this door, plus the requests beside them, for one peer's bad frame.
+   * Wrapped, it ends THIS conversation and says why.
+   */
+  function contained<A extends unknown[]>(body: (...args: A) => void): (...args: A) => void {
+    return (...args: A): void => {
+      try {
+        body(...args);
+      } catch (err) {
+        finish(
+          { by: 'host', reason: `this conversation could not be read: ${asMessage(err)}` },
+          CLOSE_CODE.internalError,
+        );
+        socket.destroy();
+      }
+    };
+  }
+
+  // Chunks here are always BYTES, and that is node's guarantee rather than this
+  // door's assumption: an upgraded socket refuses `setEncoding` outright
+  // (`ERR_HTTP_SOCKET_ENCODING`, "not allowed per RFC7230 Section 3"), so the
+  // co-listener that can turn a REQUEST body into strings cannot do it to a
+  // conversation. Pinned by a test, because the reason this is safe lives in
+  // node and could change there.
+  socket.on(
+    'data',
+    contained((chunk: Buffer) => {
+      if (ending !== undefined) return;
+      let frames;
+      try {
+        frames = reader.push(chunk);
+      } catch (err) {
+        protocolFailure(err);
+        return;
+      }
+      for (const frame of frames) handleFrame(frame);
+    }),
+  );
+  socket.on(
+    'error',
+    contained((err: Error) => {
+      finish({ by: 'transport', reason: err.message });
+      socket.destroy();
+    }),
+  );
   // BOTH halves, and `'end'` is the one that matters. An upgraded socket is
   // half-open: when the far side vanishes, node delivers `'end'` and then waits
   // for THIS side to end too — no `'error'`, and no `'close'` until we act. A
   // door listening only for `'close'` would never fire onClose for a caller
   // that walked away, and would hold a socket open that keeps every shutdown
   // sharing this port waiting. Measured, not assumed.
-  socket.on('end', () => {
-    finish({ by: 'transport', reason: 'the connection ended without a close frame' });
-  });
-  socket.on('close', () => {
-    // No close frame from either side: the connection went away rather than
-    // ended, and those are different facts to whoever is watching.
-    finish({ by: 'transport', reason: 'the connection closed without a close frame' });
-  });
+  socket.on(
+    'end',
+    contained(() => {
+      finish({ by: 'transport', reason: 'the connection ended without a close frame' });
+    }),
+  );
+  socket.on(
+    'close',
+    contained(() => {
+      // No close frame from either side: the connection went away rather than
+      // ended, and those are different facts to whoever is watching.
+      finish({ by: 'transport', reason: 'the connection closed without a close frame' });
+    }),
+  );
 
   const port: HostConversation = {
     ...(sessionId !== undefined && { sessionId }),

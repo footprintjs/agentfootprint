@@ -125,8 +125,9 @@ nodeHost({ port: 0, hostname: '127.0.0.1' })   // pick a free port
 nodeHost({ invokePath: '/v1/messages', healthPath: '/healthz' })
 ```
 
-`NodeHostOptions` takes `port`, `hostname`, `invokePath`, `healthPath` — and
-`server`, for when the socket has to be yours (below). Both paths are options
+`NodeHostOptions` takes `port`, `hostname`, `invokePath`, `healthPath` — plus
+`server`, for when the socket has to be yours, and `onUnhandled`, for when the
+socket stays the host's and the spare routes are yours (both below). Both paths are options
 because a path is a deployment detail — usually dictated by whatever sits in
 front of your process — and a default that silently matched one vendor's
 container contract would be that vendor leaking in through the back door.
@@ -234,6 +235,22 @@ the price of not answering for your application, and it is stated here rather
 than discovered at 3am.
 </Callout>
 
+<Callout type="warn" title="A framework in front of the host may mean the host never sees the request">
+With a framework that installs a catch-all handler (Fastify, Express), the
+framework answers first and the attached host never sees the request — register
+the framework's routes as a delegation to the host, or let the host own the
+socket and use [`onUnhandled`](#your-routes-on-the-hosts-socket--onunhandled)
+for your own routes.
+
+A co-listener that reads the request before the host does is safe in one more
+way since 7.27.0: one that calls `req.setEncoding(...)` used to make the host's
+body reader throw *inside* a `'data'`/`'end'` listener, where a throw is an
+uncaught exception rather than a failed request. Chunks are coerced now, and no
+listener body in the host can be the process's failure. Multi-byte text
+survives it — the decoder holds a partial character across a chunk boundary, and
+that is pinned by a test.
+</Callout>
+
 Two things are refused rather than guessed:
 
 - **`port` or `hostname` beside `server`** throws at construction. A server you
@@ -263,6 +280,70 @@ port is a paved road, not a wall.
 The full runnable version — an agent, a WebSocket echo and a `/metrics` route on
 one port, with the socket outliving the host's `close()` — is
 [`examples/deploy/one-port.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/one-port.ts).
+
+## Your routes on the host's socket — `onUnhandled`
+
+> **The same seam, inverted.** `{ server }` is the right answer when you have a
+> protocol of your own to serve. It is a lot of ceremony when all you wanted was
+> a diagnostic route beside the agent on the one port the container was given.
+
+So let the host bind the socket, and take everything it does not own:
+
+```ts
+const host = nodeHost({
+  port: 8080,
+  onUnhandled: (req, res) => {
+    if (req.url === '/debug/trace') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(lastTrace));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end('{"error":"no such route"}');
+  },
+});
+```
+
+The law, stated once: **the host never answers for your application — and with
+this hook it no longer has to 404 for it either.** An unowned path arrives
+exactly as it came off the wire, as a `node:http` request and response, and what
+happens next is yours.
+
+Five laws, each pinned by a test:
+
+| | |
+|---|---|
+| **It receives exactly the paths the host does not own** | Everything except `invokePath`, `healthPath` and `conversationPath`. |
+| **Owned paths never leak to it** | Including a *wrong method* on one — `GET /invoke` is still the host's 404. A hook that could claim `POST /invoke` would be a second door wearing the first one's name. |
+| **Absent, nothing changes** | No hook means the same 404 as before, byte for byte. |
+| **Refused beside `{ server }`, by name** | There, unmatched paths already reach your own `'request'` listeners; a second way to answer them would make the winner depend on registration order. |
+| **A throw inside it is that request's 500** | Never the process's failure. The agent door beside it does not notice. |
+
+Two things it does *not* do, and both are deliberate:
+
+- **A hook that answers nothing leaves the request hanging** until it times out.
+  That is the same price, for the same reason, as the missing 404 on a
+  caller-owned server: nothing writes on your behalf.
+- **It does not receive upgrades.** An unclaimed upgrade on a private socket
+  keeps the answer it has always had — `400` and the socket closed. `onUnhandled`
+  is a hook for *routes*: it is handed a `ServerResponse` to write, and an
+  upgrade has none — it has a raw socket and a protocol handover to perform by
+  hand. The field case that bought this feature is diagnostic HTTP routes, and
+  minting a second, differently-shaped hook for a case nobody has asked for is
+  how a port grows a surface it cannot explain. If evidence arrives, it arrives
+  under its own name. Until then, an upgrade you want to answer yourself is
+  exactly what `{ server }` is for.
+
+`httpHost({ onUnhandled })` is where this lives, so every adapter inherits it:
+`nodeHost({ onUnhandled })` and `agentCoreRuntimeHost({ onUnhandled })` are the
+same option.
+
+<CodeFile path="examples/deploy/own-routes.ts" region="own-routes" title="examples/deploy/own-routes.ts (region: own-routes)" />
+
+The full runnable version — the agent, the conversation door and a
+`/debug/trace` of your own on one port, plus a route that throws on purpose to
+show what it costs — is
+[`examples/deploy/own-routes.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/own-routes.ts).
 
 ## A door that stays open — `serveConversations()`
 

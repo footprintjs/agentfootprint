@@ -93,6 +93,23 @@ const handle = await standingAgent({
 *hangs* unless you route it), and `close()` detaches and drains without closing
 your socket. Runnable: [`examples/deploy/one-port.ts`](../../examples/deploy/one-port.ts).
 
+Two things to know before you reach for it. A framework that installs a
+catch-all handler (Fastify, Express) answers first, so the attached host never
+sees the request — register the framework's routes as a delegation to the host,
+or let the host own the socket. And if all you want is a route of your own
+beside the runtime's, the inverse option is cheaper:
+
+```ts
+agentCoreRuntimeHost({ onUnhandled: (req, res) => myDiagnosticRoutes(req, res) })
+```
+
+The host binds the container's port as usual and hands you every path it does
+*not* own, instead of answering 404 for your application. `/invocations`,
+`/ping` and `/ws` never reach it (a wrong method on one of them included), a
+throw inside it is that request's 500, and it is refused beside `{ server }`,
+where unmatched paths already reach your own listeners. Runnable:
+[`examples/deploy/own-routes.ts`](../../examples/deploy/own-routes.ts).
+
 **Field facts worth knowing before you deploy** (both reported from a real deployment):
 
 - **`runtimeSessionId` must be ≥ 33 characters.** The service validates the length and
