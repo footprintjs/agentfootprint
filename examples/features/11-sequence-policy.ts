@@ -31,8 +31,8 @@
  */
 
 import { Agent, defineTool, type LLMToolSchema, type PermissionChecker, type Tool, type ToolCallEntry } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js'
-import { PolicyHaltError } from '../../src/security/index.js';
+import { mock } from '../../src/doors/providers.js'
+import { PolicyHaltError } from '../../src/doors/security.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

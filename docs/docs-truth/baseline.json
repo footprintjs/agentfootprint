@@ -4,20 +4,20 @@
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
   "recordedAt": "2026-08-06",
   "surface": {
-    "subpaths": 25,
-    "declaredSymbols": 1215,
+    "subpaths": 27,
+    "declaredSymbols": 1216,
     "declaredEvents": 69,
     "eventSource": "src/events/registry.ts:518"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 329,
+      "documented-never-exercised": 332,
       "exercised-undocumented": 37,
-      "undocumented-unexercised": 600,
-      "site-code-sample-only": 18,
-      "written-but-not-published": 138,
-      "ok": 93
+      "undocumented-unexercised": 599,
+      "site-code-sample-only": 19,
+      "written-but-not-published": 135,
+      "ok": 94
     },
     "events": {
       "docs-promise-nothing": 0,
@@ -30,7 +30,7 @@
     },
     "phantoms": 0,
     "unregisteredEvents": 2,
-    "advisories": 9
+    "advisories": 6
   },
   "exercisedEvidence": {
     "recordedAt": "2026-07-28",
@@ -246,7 +246,6 @@
     "DomainToolStartEvent",
     "DomainWildcard",
     "DroppedUnit",
-    "EVENT_NAMES",
     "EdgePathStep",
     "EmbedArgs",
     "EmbedBatchArgs",
@@ -704,7 +703,6 @@
     "defaultPipeline",
     "defaultStructuralRules",
     "defaultSuspectClassifier",
-    "defineInjection",
     "defineRelevanceHint",
     "descriptionRule",
     "differentiationHint",
@@ -780,7 +778,6 @@
     "permissionRecorder",
     "probeFlipped",
     "projectActiveInjection",
-    "providerFromEnv",
     "rankEntries",
     "rankSuspects",
     "rankingConfidence",

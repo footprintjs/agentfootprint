@@ -1,5 +1,5 @@
 /**
- * 12 — `agentfootprint/status` subpath: low-level chat-bubble status.
+ * 12 — `agentfootprint/observe` subpath: low-level chat-bubble status.
  *
  * Two ways to drive a "what's the agent doing right now" line:
  *
@@ -22,8 +22,8 @@
 
 import { Agent } from '../../src/index.js'
 import { type AgentfootprintEvent } from '../../src/events.js';
-import { selectStatus, renderStatusLine, type StatusTemplates } from '../../src/status.js'
-import { defaultStatusTemplates } from '../../src/locales/index.js';
+import { selectStatus, renderStatusLine, type StatusTemplates } from '../../src/doors/observe.js'
+import { defaultStatusTemplates } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

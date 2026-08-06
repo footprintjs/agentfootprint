@@ -38,8 +38,8 @@
  */
 
 import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js'
-import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { type ToolDispatchContext, type ToolProvider } from '../../src/doors/providers.js'
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

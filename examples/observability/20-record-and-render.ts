@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { metrics, narrative } from 'footprintjs/recorders';
 
 import { LLMCall, Sequence } from '../../src/index.js';
-import { recordRun } from '../../src/observe.js';
+import { recordRun } from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

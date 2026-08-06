@@ -40,8 +40,8 @@
  */
 
 import { Agent } from '../../src/index.js';
-import { recordRun } from '../../src/observe.js';
-import { withCircuitBreaker, withFallback, withRetry } from '../../src/resilience/index.js';
+import { recordRun } from '../../src/doors/observe.js';
+import { withCircuitBreaker, withFallback, withRetry } from '../../src/doors/resilience.js';
 import type {
   LLMCallHooks,
   LLMProvider,

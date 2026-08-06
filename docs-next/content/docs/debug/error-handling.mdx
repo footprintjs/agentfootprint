@@ -56,7 +56,7 @@ The agent's narrative captures the error event (`agentfootprint.stream.tool_end`
 
 ```ts
 import { withRetry } from 'agentfootprint/resilience';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 const provider = withRetry(anthropic({ apiKey }), {
   maxAttempts: 5,         // total attempts incl. the first (default 3)
@@ -81,7 +81,7 @@ The default `shouldRetry` skips `AbortError` and HTTP 4xx (client mistakes don't
 
 ```ts
 import { withFallback } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withFallback(
   anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
@@ -98,7 +98,7 @@ For chaining three or more providers, use `fallbackProvider(p1, p2, p3, ...)` â€
 
 ```ts
 import { fallbackProvider } from 'agentfootprint/resilience';
-import { anthropic, openai, mock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, mock } from 'agentfootprint/providers';
 
 const provider = fallbackProvider(
   anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
@@ -113,7 +113,7 @@ Decorators stack â€” each preserves the `LLMProvider` interface, so they're drop
 
 ```ts
 import { withRetry, withFallback } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withRetry(
   withFallback(
@@ -132,7 +132,7 @@ import {
   withFallback,
   withCircuitBreaker,
 } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withRetry(
   withFallback(
@@ -154,7 +154,7 @@ Pass the composed provider to the agent: `Agent.create({ provider, ... })`.
 
 ```ts
 import { withCircuitBreaker, CircuitOpenError } from 'agentfootprint/resilience';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 const provider = withCircuitBreaker(anthropic({ apiKey }), {
   failureThreshold: 5,            // open after 5 consecutive failures (default 5)
@@ -188,11 +188,11 @@ try {
 
 ## Rules-based reliability
 
-For declarative retry/fail-fast policies inside the agent loop, configure `Agent.create({...}).reliability({...})` with rules evaluated each iteration. A matching rule decides `'retry'` vs `'fail-fast'`; on fail-fast the run throws `ReliabilityFailFastError` (from `agentfootprint/reliability`):
+For declarative retry/fail-fast policies inside the agent loop, configure `Agent.create({...}).reliability({...})` with rules evaluated each iteration. A matching rule decides `'retry'` vs `'fail-fast'`; on fail-fast the run throws `ReliabilityFailFastError` (from `agentfootprint/resilience`):
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+import { ReliabilityFailFastError } from 'agentfootprint/resilience';
 
 const agent = Agent.create({ provider, model })
   .reliability({

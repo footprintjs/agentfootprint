@@ -14,7 +14,7 @@ contract, as an adapter on the `AgentHost` port:
 
 ```ts
 import { standingAgent } from 'agentfootprint/hosting';
-import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting';
 
 const handle = await standingAgent({
   agent,
@@ -144,10 +144,10 @@ Once your agent runs in the container, the other AgentCore primitives attach
 through agentfootprint adapters — see the
 [AgentCore integration guide](../../docs/guides/agentcore.md):
 
-- **Memory** → `AgentCoreStore` (`agentfootprint/memory-providers`)
-- **Observability** → `agentcoreObservability` (`agentfootprint/observability-providers`)
-- **Gateway tools** → `gatewayTransport()` + `mcpClient()` (`agentfootprint/tool-providers`)
-- **Identity** (downstream OAuth) → `agentCoreIdentity()` (`agentfootprint/identity`)
+- **Memory** → `AgentCoreStore` (`agentfootprint/memory`)
+- **Observability** → `agentcoreObservability` (`agentfootprint/observe`)
+- **Gateway tools** → `gatewayTransport()` + `mcpClient()` (`agentfootprint/providers`)
+- **Identity** (downstream OAuth) → `agentCoreIdentity()` (`agentfootprint/security`)
 - **Policy** (authorize each tool call) → `agentCorePolicy()` (`agentfootprint/security`)
 
 ## A note on verification

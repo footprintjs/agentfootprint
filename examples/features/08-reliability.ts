@@ -33,7 +33,7 @@ import {
   withCircuitBreaker,
   withFallback,
   CircuitOpenError,
-} from '../../src/resilience/index.js';
+} from '../../src/doors/resilience.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';

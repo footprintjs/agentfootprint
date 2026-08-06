@@ -12,7 +12,7 @@ side. Use this as a quick reference for the API shape.
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint'
-import { defineSteering, defineInstruction, defineSkill, defineFact } from 'agentfootprint/injection-engine';
+import { defineSteering, defineInstruction, defineSkill, defineFact } from 'agentfootprint/context';
 
 const agent = Agent.create({ provider, model: 'mock' })
   .system('You are a support assistant.')

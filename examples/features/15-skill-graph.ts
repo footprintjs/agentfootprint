@@ -18,8 +18,8 @@
  */
 
 import { Agent, defineTool, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
-import { defineSkill, decideSkill, skillGraph } from '../../src/injection-engine.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineSkill, decideSkill, skillGraph } from '../../src/doors/context.js'
+import { mock } from '../../src/doors/providers.js';
 import { evaluateInjections } from '../../src/lib/injection-engine/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -126,7 +126,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 5 })
     .system('You are a read-only SAN triage assistant.')
     .skillGraph(graph)
-    .recorder(captureRouting)
+    .watch(captureRouting)
     .build();
   const answer = await agent.run({ message: input });
 

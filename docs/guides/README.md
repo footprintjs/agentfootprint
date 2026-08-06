@@ -45,7 +45,7 @@ Write tests with `mock()`, deploy with `anthropic()`. Same code. Zero changes. F
 
 ```typescript
 import { mock } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 // test — deterministic, free
 const provider = mock({ reply: 'Paris.' });

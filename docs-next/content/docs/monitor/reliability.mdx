@@ -43,7 +43,7 @@ Sample output:
 `withCircuitBreaker` wraps any `LLMProvider` and tracks consecutive failures. After `failureThreshold` failures, the breaker OPENS and rejects calls immediately with `CircuitOpenError` — no network round-trip. After `cooldownMs`, it enters HALF-OPEN and admits probe calls; `halfOpenSuccessThreshold` successes close it; one failure re-opens it.
 
 ```ts
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
 
 const provider = withFallback(
@@ -172,7 +172,7 @@ The three primitives stack naturally — different layer of the failure stack:
 
 ```ts
 import { Agent, RunCheckpointError } from 'agentfootprint';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
 import { z } from 'zod';
 

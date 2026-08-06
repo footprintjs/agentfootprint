@@ -10,7 +10,7 @@ description: mcpClient({ transport }) turns any MCP server's tools into agentfoo
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { mcpClient } from 'agentfootprint/tool-providers';
+import { mcpClient } from 'agentfootprint/providers';
 
 const aws = await mcpClient({
   name: 'aws-prod',
@@ -150,7 +150,7 @@ re-served tool keeps its provenance across the boundary.
 
 ## What the package exports
 
-From `agentfootprint/tool-providers`:
+From `agentfootprint/providers`:
 
 | export | what it is |
 | --- | --- |

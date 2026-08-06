@@ -26,7 +26,7 @@ import {
   auditExport,
   verifyAuditBundle,
   type AuditBundle,
-} from '../../src/observability-providers.js';
+} from '../../src/doors/observe.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';

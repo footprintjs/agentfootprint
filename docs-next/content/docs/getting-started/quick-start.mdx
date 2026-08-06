@@ -38,7 +38,7 @@ User question → LLM thinks → calls a tool → reads result → thinks again 
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint'
-import { mock } from 'agentfootprint/llm-providers';
+import { mock } from 'agentfootprint/providers';
 
 const weather = defineTool({
   name: 'weather',
@@ -71,7 +71,7 @@ only change is the `provider:` line. The real-LLM factories ship from a
 separate subpath so the main bundle stays free of vendor-SDK peer deps:
 
 ```ts
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 // ...
 provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
 ```
@@ -85,7 +85,7 @@ in), and a STORE.
 ```ts
 import { Agent } from 'agentfootprint'
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory'
-import { mock } from 'agentfootprint/llm-providers';
+import { mock } from 'agentfootprint/providers';
 
 const memory = defineMemory({
   id: 'short-term',

@@ -20,8 +20,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Agent, type LLMProvider } from '../../src/index.js';
-import { skillsFromDir } from '../../src/injection-engine.js';
-import { mock } from '../../src/llm-providers.js';
+import { skillsFromDir } from '../../src/doors/context.js';
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

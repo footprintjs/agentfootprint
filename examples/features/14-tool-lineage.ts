@@ -12,8 +12,8 @@
  */
 
 import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js';
-import { toolLineageRecorder } from '../../src/observe.js';
+import { mock } from '../../src/doors/providers.js';
+import { toolLineageRecorder } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -74,7 +74,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     .system('You are a SAN triage assistant.')
     .tool(flogi)
     .tool(ioProfile)
-    .recorder(lineage)
+    .watch(lineage)
     .build();
 
   const answer = await agent.run({ message: input });

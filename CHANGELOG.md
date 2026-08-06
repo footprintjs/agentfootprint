@@ -7,6 +7,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0] - 2026-08-05
+
+**26 doors become 10.** Nothing about how agentfootprint behaves changed. What
+changed is how many places you have to know about to import from it.
+
+Through 7.x the `exports` field grew one subpath per internal concern, and the
+names came from how the library is built rather than what you are doing with
+it: `llm-providers` and `memory-providers` and `tool-providers` and
+`hosting-providers` and `observability-providers`; `resilience` next to
+`reliability`; `injection-engine` describing our machine instead of your task;
+five separate doors for observability alone. A person deciding where to import
+from had to learn our filing system first.
+
+The doors are now named for the job:
+
+`agentfootprint` · `/providers` · `/memory` · `/observe` · `/context` ·
+`/resilience` · `/security` · `/hosting` · `/events` · `/cache`
+
+**Every old import path still works, unchanged, for all of 8.x.** They are
+marked `@deprecated` so your editor points at the new door; nothing is logged,
+nothing breaks, and each one re-exports the *same symbols* the door carries —
+not copies. `test/api-conformance/door-aliases.test.ts` drives the TypeScript
+checker over the shipped `.d.ts` files to prove it, name by name, so the
+aliases cannot drift. They are removed in 9.0.0.
+
+### Migration
+
+| you were importing from | import from |
+|---|---|
+| `agentfootprint/llm-providers` | `agentfootprint/providers` |
+| `agentfootprint/embedders` | `agentfootprint/providers` |
+| `agentfootprint/tool-providers` | `agentfootprint/providers` |
+| `agentfootprint/thinking` | `agentfootprint/providers` |
+| `agentfootprint/memory-providers` | `agentfootprint/memory` |
+| `agentfootprint/observability-providers` | `agentfootprint/observe` |
+| `agentfootprint/strategies` | `agentfootprint/observe` |
+| `agentfootprint/stream` | `agentfootprint/observe` |
+| `agentfootprint/status` | `agentfootprint/observe` |
+| `agentfootprint/locales` | `agentfootprint/observe` |
+| `agentfootprint/debug` | `agentfootprint/observe` |
+| `agentfootprint/debug/finders` | `agentfootprint/observe` |
+| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe` |
+| `agentfootprint/reliability` | `agentfootprint/resilience` |
+| `agentfootprint/hosting-providers` | `agentfootprint/hosting` |
+| `agentfootprint/injection-engine` | `agentfootprint/context` |
+| `agentfootprint/identity` | `agentfootprint/security` |
+
+`agentfootprint`, `agentfootprint/memory`, `agentfootprint/observe`,
+`agentfootprint/security`, `agentfootprint/hosting` and
+`agentfootprint/resilience` keep their names and carry more than they did.
+
+### Two doors that stayed put, on purpose
+
+- **`agentfootprint/cache`** is not folded into `/memory`. Importing it RUNS
+  the vendor cache-strategy registrations — it is the one side-effectful
+  barrel in the package. Folding it in would mean `import { defineMemory }`
+  executing those registrations and carrying them in every bundle. Side-effectful
+  code stays behind its own plainly-named door.
+- **`agentfootprint/events`** is not folded into `/observe`. It is the typed
+  wire vocabulary observers *read*, not a tool for watching — and concretely,
+  its `ContextSource` (the injection-flavour union: `'rag' | 'skill' | …`) is a
+  completely different type from the `ContextSource` `/observe` already carries
+  (the context-bisect record). Two incompatible shapes cannot share a door.
+
+### One name that exists twice, said out loud
+
+`CircuitOpenError` is TWO classes: the provider decorator throws one, the
+reliability gate throws another, and they differ in constructor and in
+`instanceof`. The merged `agentfootprint/resilience` door carries the
+**decorator's** — the one that escapes a provider call. The gate's stays at
+`agentfootprint/reliability` for all of 8.x.
+
+If you `instanceof`-check the error the reliability gate throws, keep importing
+it from `agentfootprint/reliability`. Every other name on that path moved to
+the door. Merging the two classes would have changed the error message on one
+path, and this release changes packaging only.
+
+(`CircuitState` also exists twice, but the two are byte-identical —
+`'closed' | 'open' | 'half-open'` — so the door carries one and no consumer can
+tell. Both facts are pinned as test literals that cannot silently grow.)
+
+### Added — `.watch()`
+
+`.act()` says what an agent may do. `.watch()` says who is looking while it
+does it. The loop's own source has described this pair in prose since the
+moments were written down — "an observer reports, a rule changes what happens
+next" — while naming an API that did not exist. It does now.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .watch(toolChoiceRecorder({ embedder: staticEmbedder() }), routeRecorder())
+  .act({ beforeTool: [budgetGuard] })
+  .build();
+```
+
+Variadic, because observers come in sets. Build-time attach, so the observer
+sees the very first run. `agent.attach(observer)` is unchanged — that is the
+runtime door, and it still returns the `Unsubscribe` you own.
+
+`Watcher` is exported from the main barrel: the plain name for footprintjs's
+`CombinedRecorder`, which is what `.watch()`'s signature reads as.
+`CombinedRecorder` keeps its export too.
+
+There is deliberately **no** `WATCH_MOMENTS`. `.act()`'s keys are a closed,
+compiler-pinned list because a rule has to be *told* where it may speak; an
+observer attends the whole stream, and a list we published would be a
+vocabulary we then had to keep true against every event ever added.
+
+### Deprecated
+
+- `AgentBuilder.recorder(rec)` — use `.watch(...)`. Same list, same order, same
+  attachment; `.watch()` takes more than one. Still works for all of 8.x.
+- The seventeen import paths in the migration table above.
+
+### Fixed
+
+- `AGENTS.md` and six shipped `ai-instructions/` files still advertised
+  `agentfootprint/memory-redis` and `agentfootprint/memory-agentcore` —
+  subpaths **removed in 4.0.0** — including as live `import` statements. They
+  taught coding assistants to write imports that cannot resolve. Now pointed at
+  `agentfootprint/memory`.
+- The published architecture page's subpath table listed the same two dead
+  aliases plus a `./providers` row describing the 4.0.0 alias, which no longer
+  means what it says.
+
+### Packaging
+
+- `exports` goes 26 → 28 entries: 10 doors + 17 deprecated aliases +
+  `./package.json`. Every entry keeps the four-condition shape (per-condition
+  types for `import` and `require`); `typesVersions` mirrors it entry for entry,
+  now asserted rather than assumed.
+- `"type": "commonjs"` declared, and `repository.url` is a full `git+https://`
+  URL — publint's two outstanding suggestions, cleared.
+- Door barrels live in `src/doors/`. The implementation barrels did not move,
+  which is what makes the aliases identity-preserving rather than parallel
+  copies.
+
 ## [7.28.0] - 2026-08-05
 
 A paused agent is a promise you made to a person. Until this release the library

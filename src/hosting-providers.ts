@@ -50,6 +50,10 @@
  *     sessions: agentCoreSessions({ store: 'session-storage' }),
  *   });
  *   process.on('SIGTERM', () => void handle.close());
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/hosting` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 export {

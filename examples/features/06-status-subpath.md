@@ -5,14 +5,14 @@ guide: ../../README.md#features
 defaultInput: check the weather in Paris
 ---
 
-# Status subpath — `agentfootprint/status`
+# Status subpath — `agentfootprint/observe`
 
 Two ways to drive a "what's the agent doing right now?" line:
 
 | Surface | When to use |
 |---|---|
 | `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` | One strategy, opinionated formatter, zero subscriptions to wire. Use for **chat widgets** that just want strings to render. See [`04-observability.md`](./04-observability.md). |
-| `agentfootprint/status` (this example) | Lower-level state machine + templates + renderer. Use when you need **full control** — custom formatting, per-tool overrides, locale switching, custom UI shapes. |
+| `agentfootprint/observe` (this example) | Lower-level state machine + templates + renderer. Use when you need **full control** — custom formatting, per-tool overrides, locale switching, custom UI shapes. |
 
 This example shows the lower-level surface. It's what `agentfootprint-lens` and consumers like `neo-mds-triage` use to drive their custom chat-bubble status feeds.
 
@@ -47,8 +47,8 @@ Priority resolution: pause > tool > LLM. Whichever is active when you call `sele
 `renderStatusLine(state, ctx, templates?)` resolves the template + substitutes vars:
 
 ```ts
-import { selectStatus, renderStatusLine, type StatusTemplates } from 'agentfootprint/status'
-import { defaultStatusTemplates } from 'agentfootprint/locales';
+import { selectStatus, renderStatusLine, type StatusTemplates } from 'agentfootprint/observe'
+import { defaultStatusTemplates } from 'agentfootprint/observe';
 
 const myTemplates: StatusTemplates = {
   ...defaultStatusTemplates,

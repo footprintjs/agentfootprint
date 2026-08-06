@@ -55,7 +55,7 @@ The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good d
 
 <CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="examples/memory/01-window-strategy.ts (region: define)" />
 
-`InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory-redis`), `AgentCoreStore` (`agentfootprint/memory-agentcore`), or another adapter — same `MemoryStore` interface, drop-in.
+`InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory`), `AgentCoreStore` (`agentfootprint/memory`), or another adapter — same `MemoryStore` interface, drop-in.
 
 ## Causal memory — replay decisions, not just messages
 
@@ -101,8 +101,8 @@ For a deeper dive on how identity flows through the store + RAG indexing footgun
 | Store | Subpath | Production-ready |
 |---|---|---|
 | `InMemoryStore` | (top-level) | Dev / tests / single-process scenarios |
-| `RedisStore` | `agentfootprint/memory-redis` | ✅ — peer-dep `ioredis`, atomic Lua CAS, pipelined writes, GDPR forget |
-| `AgentCoreStore` | `agentfootprint/memory-agentcore` | ✅ — peer-dep `@aws-sdk/client-bedrock-agentcore`, session/event mapping |
+| `RedisStore` | `agentfootprint/memory` | ✅ — peer-dep `ioredis`, atomic Lua CAS, pipelined writes, GDPR forget |
+| `AgentCoreStore` | `agentfootprint/memory` | ✅ — peer-dep `@aws-sdk/client-bedrock-agentcore`, session/event mapping |
 | DynamoDB / Postgres / Pinecone | (planned) | v2.6+ |
 
 Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](doc:memory-stores) for the full integration matrix.

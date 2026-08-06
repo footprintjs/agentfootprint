@@ -41,8 +41,8 @@ import { connect } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { Agent, type LLMProvider } from '../../src/index.js';
-import { mock } from '../../src/llm-providers.js';
-import { memorySessions, nodeHost, standingAgent } from '../../src/hosting/index.js';
+import { mock } from '../../src/doors/providers.js';
+import { memorySessions, nodeHost, standingAgent } from '../../src/doors/hosting.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -45,7 +45,7 @@ The skill stays active until the agent run ends. The next `agent.run()` starts f
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts
-import { defineSkill, resolveSurfaceMode } from 'agentfootprint/injection-engine';
+import { defineSkill, resolveSurfaceMode } from 'agentfootprint/context';
 
 const billingSkill = defineSkill({
   id: 'billing',
@@ -97,7 +97,7 @@ For shared skill catalogs across multiple agents:
 
 ```ts
 import { Agent } from 'agentfootprint'
-import { SkillRegistry } from 'agentfootprint/injection-engine';
+import { SkillRegistry } from 'agentfootprint/context';
 
 const registry = new SkillRegistry();
 registry.register(billingSkill).register(refundSkill).register(complianceSkill);
@@ -118,7 +118,7 @@ registry.register(newSkill);
 When every skill in a registry should share the same `surfaceMode`, set it once on the constructor instead of repeating it on every `defineSkill`:
 
 ```ts
-import { SkillRegistry } from 'agentfootprint/injection-engine';
+import { SkillRegistry } from 'agentfootprint/context';
 
 // All skills here default to 'tool-only' (overrides defineSkill's 'auto')
 const registry = new SkillRegistry({ surfaceMode: 'tool-only' });
@@ -150,8 +150,8 @@ Per-mode routing is live at runtime — `'tool-only'` suppresses the body from t
 When you want to wire skill discovery into a custom tool chain (e.g., a `gatedTools` layer that filters by role) instead of the Agent's auto-attached `read_skill`, use `toTools()`:
 
 ```ts
-import { SkillRegistry } from 'agentfootprint/injection-engine';
-import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { SkillRegistry } from 'agentfootprint/context';
+import { gatedTools, staticTools } from 'agentfootprint/providers';
 import { PermissionPolicy } from 'agentfootprint/security';
 
 const registry = new SkillRegistry();
@@ -181,7 +181,7 @@ By default, a Skill's `tools` array is ADDED to the agent's tool registry on act
 
 ```ts
 import { Agent } from 'agentfootprint'
-import { defineSkill } from 'agentfootprint/injection-engine';
+import { defineSkill } from 'agentfootprint/context';
 
 const billingSkill = defineSkill({
   id: 'billing',
@@ -203,7 +203,7 @@ const agent = Agent.create({ provider })
 For a tool chain you compose yourself (outside the Agent's auto-attach — e.g., a `gatedTools` permission layer), materialize the same gate with `skillScopedTools(id, tools)`, reading `ctx.activeSkillId` per iteration:
 
 ```ts
-import { skillScopedTools, staticTools, type ToolProvider } from 'agentfootprint/tool-providers';
+import { skillScopedTools, staticTools, type ToolProvider } from 'agentfootprint/providers';
 
 const baseline = staticTools([lookupOrderTool, listSkills, readSkill]);
 const billingScope = skillScopedTools('billing', [refundTool, chargeTool]);
@@ -280,7 +280,7 @@ by skill name, so a chart built from it is stable regardless of the order the
 filesystem happened to return.
 
 `skillsFromDir` is Node-only — it reads the filesystem — but importing
-`agentfootprint/injection-engine` in a browser bundle stays safe: `node:fs` is
+`agentfootprint/context` in a browser bundle stays safe: `node:fs` is
 imported lazily inside the call, never at module load.
 
 ### Why it refuses a URL

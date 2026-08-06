@@ -21,13 +21,13 @@
  * ablation (RFC-003 Part B) is where causal claims live.
  */
 
-import { mockEmbedder } from '../../src/memory/index.js';
+import { mockEmbedder } from '../../src/doors/memory.js';
 import {
   embeddingCache,
   pairwiseSimilarity,
   scoreInfluence,
   scoreMargin,
-} from '../../src/observe.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

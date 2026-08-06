@@ -32,6 +32,10 @@
  * Same mechanism as the `client` option on the store adapters (RedisStore,
  * AgentCoreStore): the library states the surface it needs, the host owns the
  * construction. Nothing changes for Node callers who pass nothing.
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/providers` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 export type { Embedder } from '../memory/embedding/types.js';
 import type { Embedder } from '../memory/embedding/types.js';

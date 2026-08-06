@@ -31,7 +31,7 @@
  */
 
 import { Agent, OutputSchemaError, SCHEMA_TOOL_NAME } from '../../src/index.js';
-import { mock } from '../../src/llm-providers.js';
+import { mock } from '../../src/doors/providers.js';
 import type { LLMProvider } from '../../src/adapters/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 

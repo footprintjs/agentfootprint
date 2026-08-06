@@ -22,7 +22,7 @@
  * Run:  npx tsx examples/observability/06-backtrack-trace.ts
  */
 
-import { toBacktrackTrace, type BacktrackTrace } from '../../src/observe.js';
+import { toBacktrackTrace, type BacktrackTrace } from '../../src/doors/observe.js';
 import { run as runContextBisect } from './05-context-bisect.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 

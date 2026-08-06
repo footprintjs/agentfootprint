@@ -24,7 +24,7 @@ Caching is **on by default**. Turn it off explicitly:
 
 ```typescript
 import { Agent } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 const agent = Agent.create({
   provider: anthropic({ apiKey, defaultModel: 'claude-sonnet-4-5-20250929' }),

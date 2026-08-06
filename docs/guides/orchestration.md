@@ -5,7 +5,7 @@ Orchestration wrappers add reliability to any `LLMProvider`. Each wrapper is a *
 All wrappers live in the `agentfootprint/resilience` subpath (not the main barrel), and all return `LLMProvider`, so the wrapped provider is a drop-in replacement for the original.
 
 ```typescript
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 import { withRetry, withFallback } from 'agentfootprint/resilience';
 import { Agent } from 'agentfootprint';
 
@@ -112,7 +112,7 @@ For more than two providers, `fallbackProvider(p1, p2, p3, ...)` chains them in 
 
 ```typescript
 import { fallbackProvider } from 'agentfootprint/resilience';
-import { anthropic, openai, mock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, mock } from 'agentfootprint/providers';
 
 const provider = fallbackProvider(
   anthropic({ apiKey: A }),
@@ -202,7 +202,7 @@ const guarded = withCircuitBreaker(provider, {
 All wrappers return `LLMProvider`, so they compose naturally. The canonical production stack puts a circuit breaker on *each* provider, then chains them with fallback:
 
 ```typescript
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 import { withFallback, withCircuitBreaker } from 'agentfootprint/resilience';
 
 // Each provider gets its own breaker; fallback routes around an open one.

@@ -28,7 +28,7 @@ agent.enable.observability({ strategy: otel });
 | X-Ray | `xrayObservability()` | AWS X-Ray traces |
 | Audit bundle | `auditExport()` + `verifyAuditBundle()` | tamper-evident hash-chained file |
 
-All ship from `agentfootprint/observability-providers`. This is the Monitoring-side how-to;
+All ship from `agentfootprint/observe`. This is the Monitoring-side how-to;
 for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** and the
 [adapter pattern](doc:adapters); for the event taxonomy + recorders see
 **[Observability](doc:observability)**.
@@ -53,7 +53,7 @@ npm install @aws-sdk/client-cloudwatch-logs   # optional peer for the CloudWatch
 ### 2. Mount the strategy
 
 ```ts
-import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
 const agentcore = agentcoreObservability({
@@ -103,7 +103,7 @@ const tracer = trace.getTracer('workflow-assistant');
 ### 3. Mount the strategy
 
 ```ts
-import { otelObservability } from 'agentfootprint/observability-providers';
+import { otelObservability } from 'agentfootprint/observe';
 
 const otel = otelObservability({
   serviceName: 'workflow-assistant',

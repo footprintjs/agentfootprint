@@ -20,9 +20,9 @@
  */
 
 import { Agent, defineTool, type Tool } from 'agentfootprint';
-import { MockProvider } from 'agentfootprint/llm-providers';
-import { defineInstruction } from 'agentfootprint/injection-engine';
-import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { MockProvider } from 'agentfootprint/providers';
+import { defineInstruction } from 'agentfootprint/context';
+import { gatedTools, staticTools } from 'agentfootprint/providers';
 import { contextLedger, ledgerGated, ledgerToolGate } from 'agentfootprint/observe';
 
 // ── An over-stuffed toolbox: one earner, four passengers ──────────────────

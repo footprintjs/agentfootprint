@@ -26,10 +26,10 @@
  */
 
 import { Agent } from '../../src/index.js'
-import { type Injection } from '../../src/injection-engine.js'
-import { defineFact } from '../../src/injection-engine.js'
-import { mock } from '../../src/llm-providers.js'
-import { mockEmbedder } from '../../src/memory/index.js';
+import { type Injection } from '../../src/doors/context.js'
+import { defineFact } from '../../src/doors/context.js'
+import { mock } from '../../src/doors/providers.js'
+import { mockEmbedder } from '../../src/doors/memory.js';
 import {
   applyAblations,
   embeddingCache,
@@ -39,7 +39,7 @@ import {
   type AblationSpec,
   type CapturedEventLike,
   type ContextBugReport,
-} from '../../src/observe.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

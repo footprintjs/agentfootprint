@@ -41,8 +41,8 @@
  */
 
 import { type LLMProvider, type LLMRequest, type LLMResponse } from '../../src/index.js'
-import { type MockProviderOptions } from '../../src/llm-providers.js'
-import { MockProvider } from '../../src/llm-providers.js';
+import { type MockProviderOptions } from '../../src/doors/providers.js'
+import { MockProvider } from '../../src/doors/providers.js';
 
 /** Example category — drives the default mock setup. */
 export type ExampleKind = 'core' | 'core-flow' | 'feature' | 'pattern';

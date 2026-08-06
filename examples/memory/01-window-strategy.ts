@@ -7,8 +7,8 @@
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js'
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from '../../src/memory/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from '../../src/doors/memory.js'
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

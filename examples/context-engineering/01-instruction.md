@@ -78,7 +78,7 @@ it's caught and reported via `agentfootprint.context.evaluated.skipped[]`
 
 ```ts
 import { Agent } from 'agentfootprint'
-import { defineInstruction } from 'agentfootprint/injection-engine';
+import { defineInstruction } from 'agentfootprint/context';
 
 defineInstruction({
   id: string;

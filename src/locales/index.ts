@@ -58,6 +58,10 @@
  *   const myCatalog = composeMessages(defaultCommentaryMessages, customOverrides);
  *   validateMessages(myCatalog, Object.keys(defaultCommentaryMessages));
  *   // throws on first missing OR empty key — fail-fast at boot
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';

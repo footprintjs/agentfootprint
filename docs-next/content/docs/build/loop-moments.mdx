@@ -187,6 +187,35 @@ The bundle's keys are checked **both ways** against that list, camel-cased (`'be
 
 `LOOP_MOMENTS` and `actKeyFor` are exported, so a UI that renders "what does this agent do at each moment?" can enumerate the moments rather than hard-code five strings.
 
+## The watch side — `.watch()`
+
+The `watch event` column above is what an observer sees. `.watch()` is where you put the observer:
+
+```ts
+import { Agent, type Watcher } from 'agentfootprint';
+import { routeRecorder, toolChoiceRecorder } from 'agentfootprint/observe';
+import { staticEmbedder } from 'agentfootprint/providers';
+
+const choices = toolChoiceRecorder({ embedder: staticEmbedder() });
+
+const agent = Agent.create({ provider, model })
+  .watch(routeRecorder(), choices)          // who is looking
+  .act({ beforeTool: [refundCeiling] })     // what may change
+  .build();
+```
+
+It is **variadic**, because observers come in sets, and it attaches at **build time** — before `build()` returns — so the observer sees the very first run. There is no window in which the agent has acted and nobody was watching.
+
+`Watcher` is the type it takes: the plain name for footprintjs's `CombinedRecorder`, which is what every recorder factory on [`agentfootprint/observe`](doc:observability) returns. Write your own by handing `.watch()` any object with the recorder hook methods on it.
+
+`.watch()` returns the builder. The runtime door is `agent.attach(observer)`, which returns an `Unsubscribe` you own and call when the observer's life ends — a request scope, a UI unmount, a test teardown. Same mechanism underneath, so mixing them is fine and order is preserved.
+
+<Callout>
+There is deliberately **no** `WATCH_MOMENTS` to match `LOOP_MOMENTS`. `.act()`'s keys are a closed, compiler-pinned list because a rule has to be *told* where it may speak — a rule filed at a moment nobody reads is a governance hole. An observer is the opposite: it attends the entire event stream, and there is no closed set to enumerate. A list we published would be a vocabulary we then had to keep true against every event ever added, so the honest surface for watching is the door and the type.
+</Callout>
+
+`.recorder()` is the same door under its older, internals-flavoured name. It still works, takes one observer instead of many, and is deprecated as of 8.0.0.
+
 ## Related
 
 - [Middleware](doc:middleware) — the verbs, the ledger, and the laws they rest on

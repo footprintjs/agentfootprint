@@ -25,8 +25,8 @@
  */
 
 import { Agent, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
-import { defineSkill, skillGraph } from '../../src/injection-engine.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineSkill, skillGraph } from '../../src/doors/context.js'
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -94,7 +94,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 4 })
     .system('You are a support router. If no skill is active, pick the best one with read_skill.')
     .skillGraph(graph)
-    .recorder(recorder)
+    .watch(recorder)
     .build();
 
   const answer = await agent.run({ message: input });

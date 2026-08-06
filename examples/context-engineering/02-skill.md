@@ -57,7 +57,7 @@ starts fresh — `activatedInjectionIds` resets to `[]`.
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint'
-import { defineSkill } from 'agentfootprint/injection-engine';
+import { defineSkill } from 'agentfootprint/context';
 
 const refundTool = defineTool({
   name: 'process_refund',

@@ -40,7 +40,7 @@ you ship — only the adapters change later.
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint'
-import { mock } from 'agentfootprint/llm-providers'
+import { mock } from 'agentfootprint/providers'
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const weather = defineTool({
@@ -79,7 +79,7 @@ console.log(await agent.run({ message: 'Weather in SF?', identity: { conversatio
 Swap `mock()` → `bedrock()`. **One line.**
 
 ```ts
-import { bedrock } from 'agentfootprint/llm-providers';
+import { bedrock } from 'agentfootprint/providers';
 
 const provider = bedrock({ region: 'us-west-2', model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0' });
 const agent = buildAgent(provider);
@@ -98,7 +98,7 @@ Swap `InMemoryStore` → `AgentCoreStore` pointed at your Memory resource. **One
 `defineMemory(...)` strategy and the agent are unchanged.
 
 ```ts
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 
 const memory = defineMemory({
   id: 'conversation',
@@ -128,7 +128,7 @@ Deep dive: [Memory store adapters](doc:agentcore) · [AgentCore adapters](doc:ag
 Swap dev credentials → managed AgentCore identity. **One line**, no tool-code change.
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
+import { agentCoreIdentity } from 'agentfootprint/security';
 
 const credentials = agentCoreIdentity({
   region: 'us-west-2',
@@ -145,8 +145,8 @@ If your tools live behind an AgentCore **Gateway** (Lambda / OpenAPI / MCP targe
 its MCP endpoint through the Tools port:
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
-import { gatewayTransport, mcpClient, gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient, gatedTools, staticTools } from 'agentfootprint/providers';
 
 const gateway = await mcpClient({
   name: 'gateway',
@@ -179,7 +179,7 @@ Agent.create({
 ## Step 7 — Observability
 
 ```ts
-import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
 agent.enable.observability({
@@ -200,7 +200,7 @@ AgentCore Runtime calls a container over a fixed HTTP contract: `GET /ping` (hea
 
 ```ts
 import { standingAgent } from 'agentfootprint/hosting';
-import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting';
 
 const handle = await standingAgent({
   agent: buildAgent(provider),

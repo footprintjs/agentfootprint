@@ -13,9 +13,9 @@
  */
 
 import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
-import { defineSkill, skillGraph } from '../../src/injection-engine.js'
-import { mock } from '../../src/llm-providers.js';
-import { routeRecorder } from '../../src/observe.js';
+import { defineSkill, skillGraph } from '../../src/doors/context.js'
+import { mock } from '../../src/doors/providers.js';
+import { routeRecorder } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -66,7 +66,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 5 })
     .system('You are a read-only SAN assistant.')
     .skillGraph(graph)
-    .recorder(routes)
+    .watch(routes)
     .build();
   await agent.run({ message: input });
 

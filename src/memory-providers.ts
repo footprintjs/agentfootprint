@@ -31,6 +31,10 @@
  *
  * @example
  *   import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/memory` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 // Lazy-required peer-dep stores. Both adapters defer their vendor SDK

@@ -17,13 +17,13 @@ Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS cred
 
 ```ts
 // Canonical subpath:
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 
 // Legacy alias (still exported, kept for back-compat):
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 ```
 
-Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory-providers` (the canonical location, shared with `RedisStore`); `agentfootprint/memory-agentcore` remains as a back-compat alias.
+Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory` (the canonical location, shared with `RedisStore`); `agentfootprint/memory` remains as a back-compat alias.
 
 ## Use
 

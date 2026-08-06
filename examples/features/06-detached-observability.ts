@@ -17,7 +17,7 @@
 
 import { Agent } from '../../src/index.js';
 import { microtaskBatchDriver, flushAllDetached } from 'footprintjs/detach';
-import type { ObservabilityStrategy } from '../../src/strategies/index.js';
+import type { ObservabilityStrategy } from '../../src/doors/observe.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';

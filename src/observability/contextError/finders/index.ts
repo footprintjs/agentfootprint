@@ -12,6 +12,10 @@
  * Tree-shakeable: one finder = one file = one named export. Importing one finder does
  * not pull the others (or the heavy ablation path behind removeAndRetry). This barrel
  * is re-export-only — no runtime code, no registry.
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 export type {
   ContextPiece,

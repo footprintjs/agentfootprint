@@ -18,7 +18,7 @@ description: How to debug an agentfootprint agent — typed events, narrative en
 For interactive debugging in terminal:
 
 ```ts
-import { chatBubbleLiveStatus } from 'agentfootprint/strategies';
+import { chatBubbleLiveStatus } from 'agentfootprint/observe';
 
 agent.enable.liveStatus({
   strategy: chatBubbleLiveStatus({ onLine: (s) => console.log(`⎈ ${s}`) }),
@@ -32,7 +32,7 @@ Prints one line per state transition — *"calling LLM... tool weather(SF)... LL
 For CI / staging environments:
 
 ```ts
-import { consoleObservability } from 'agentfootprint/strategies';
+import { consoleObservability } from 'agentfootprint/observe';
 
 agent.enable.observability({
   strategy: consoleObservability(),  // or a vendor strategy: pino, OTel, CloudWatch, …

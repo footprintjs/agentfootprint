@@ -22,12 +22,12 @@ Multi-turn chat on agentfootprint is a host convention: `AgentInput` has no `his
 You supply **one** agent factory. It applies the ablation `specs` at agent **construction** (the documented seam — see [Localize a context bug](doc:localize-context-bug)) and returns a fresh agent. Live turns, re-run probes, baseline probes and fork turns all go through it.
 
 ```ts twoslash
-import { recordedChat, applyAblations, removableSources, embeddingCache } from 'agentfootprint/debug';
+import { recordedChat, applyAblations, removableSources, embeddingCache } from 'agentfootprint/observe';
 import { mockEmbedder } from 'agentfootprint/memory';
 import { Agent } from 'agentfootprint';
-import { mock } from 'agentfootprint/llm-providers';
-import { defineFact } from 'agentfootprint/injection-engine';
-import type { MakeChatAgent } from 'agentfootprint/debug';
+import { mock } from 'agentfootprint/providers';
+import { defineFact } from 'agentfootprint/context';
+import type { MakeChatAgent } from 'agentfootprint/observe';
 
 const FACTS = [
   defineFact({ id: 'quarterly-results', description: 'Q2', data: 'Revenue up 4%, in line.' }),

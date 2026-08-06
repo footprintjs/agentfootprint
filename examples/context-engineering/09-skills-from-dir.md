@@ -34,7 +34,7 @@ The skills this example loads live next to it, in [`skills/`](./skills/). Open t
 
 ```typescript
 import { Agent } from 'agentfootprint';
-import { skillsFromDir } from 'agentfootprint/injection-engine';
+import { skillsFromDir } from 'agentfootprint/context';
 
 const skills = await skillsFromDir('./skills');
 
@@ -60,7 +60,7 @@ A directory with no `SKILL.md` is an error, not an empty array: pointing at the 
 
 ## Node-only, safely
 
-`skillsFromDir` reads the filesystem, but importing `agentfootprint/injection-engine` in a browser bundle stays safe — `node:fs` is imported lazily inside the call, never at module load.
+`skillsFromDir` reads the filesystem, but importing `agentfootprint/context` in a browser bundle stays safe — `node:fs` is imported lazily inside the call, never at module load.
 
 ## Related
 

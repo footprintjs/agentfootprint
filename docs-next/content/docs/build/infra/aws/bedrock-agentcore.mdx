@@ -26,15 +26,15 @@ agentfootprint's adapters wrap.
 
 | Capability | AgentCore API (plane → op) | agentfootprint | Status |
 |---|---|---|---|
-| **Memory — events** | data → `CreateEvent` / `GetEvent` / `ListEvents` / `DeleteEvent` | `AgentCoreStore` (`agentfootprint/memory-providers`) + `defineMemory({ store })` | ✅ shipped |
+| **Memory — events** | data → `CreateEvent` / `GetEvent` / `ListEvents` / `DeleteEvent` | `AgentCoreStore` (`agentfootprint/memory`) + `defineMemory({ store })` | ✅ shipped |
 | **Memory — semantic retrieve** | data → `RetrieveMemoryRecords` | `AgentCoreStore.search(identity, vector, { text })` — see [AgentCore adapters](doc:agentcore-adapters) | ✅ shipped |
-| **Identity — workload token** | data → `GetWorkloadAccessToken[ForUserId]` | `agentCoreIdentity({ workloadName, userIdFor })` (`agentfootprint/identity`) | ✅ shipped |
+| **Identity — workload token** | data → `GetWorkloadAccessToken[ForUserId]` | `agentCoreIdentity({ workloadName, userIdFor })` (`agentfootprint/security`) | ✅ shipped |
 | **Identity — OAuth2 / API key** | data → `GetResourceOauth2Token` / `GetResourceApiKey` | `agentCoreIdentity()` | ✅ shipped |
-| **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient({ transport: gatewayTransport({ url, credentials }) })` (`agentfootprint/tool-providers`) | ✅ shipped |
+| **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient({ transport: gatewayTransport({ url, credentials }) })` (`agentfootprint/providers`) | ✅ shipped |
 | **Policy — authorize a tool call** | data → policy evaluation | `agentCorePolicy({ policyStoreId })` (`agentfootprint/security`) | ✅ shipped |
-| **Observability** | CloudWatch GenAI Observability + X-Ray (OTEL spans) | `agentcoreObservability()` (`agentfootprint/observability-providers`) | ✅ shipped |
-| **LLM** | Bedrock **Converse** | `bedrock()` (`agentfootprint/llm-providers`) | ✅ shipped |
-| **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`, session header) | `agentCoreRuntimeHost()` + `agentCoreSessions()` (`agentfootprint/hosting-providers`) | ✅ shipped |
+| **Observability** | CloudWatch GenAI Observability + X-Ray (OTEL spans) | `agentcoreObservability()` (`agentfootprint/observe`) | ✅ shipped |
+| **LLM** | Bedrock **Converse** | `bedrock()` (`agentfootprint/providers`) | ✅ shipped |
+| **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`, session header) | `agentCoreRuntimeHost()` + `agentCoreSessions()` (`agentfootprint/hosting`) | ✅ shipped |
 | **Control plane** (all `Create*`) | control → `Create*` | *use AWS SDK / CDK* | 🔴 bridge |
 | **Code Interpreter / Browser** | data → `Start*Session` | *wrap as a `defineTool` or MCP tool* | 🔴 bridge |
 
@@ -54,7 +54,7 @@ methods map 1:1 to data-plane events; the agent code is identical to the in-memo
 
 ```ts
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint/memory';
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 
 const store = new AgentCoreStore({
   memoryId: process.env.AGENTCORE_MEMORY_ID!,
@@ -82,7 +82,7 @@ Agent.create({ provider }).memory(memory).build();
 ## Identity — `agentCoreIdentity`
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
+import { agentCoreIdentity } from 'agentfootprint/security';
 
 const credentials = agentCoreIdentity({
   region: 'us-west-2',
@@ -105,8 +105,8 @@ endpoint with Identity-brokered egress auth. agentfootprint *consumes* it throug
 Tools/Gateway port:
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
-import { gatewayTransport, mcpClient, staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient, staticTools, gatedTools } from 'agentfootprint/providers';
 
 const gateway = await mcpClient({
   name: 'gateway',
@@ -144,7 +144,7 @@ instead of the run dying. See **[AgentCore adapters](doc:agentcore-adapters)**.
 ## Observability — `agentcoreObservability`
 
 ```ts
-import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
 agent.enable.observability({

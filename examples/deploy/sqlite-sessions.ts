@@ -36,7 +36,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Agent, defineTool, isPaused, type LLMProvider } from '../../src/index.js';
-import { mock } from '../../src/llm-providers.js';
+import { mock } from '../../src/doors/providers.js';
 import { askHuman } from '../../src/core/pause.js';
 import { checkInApproved } from '../../src/core/checkin.js';
 import {
@@ -49,7 +49,7 @@ import {
   SqliteUnavailableError,
   UnreadableSessionFileError,
   type SqliteSessions,
-} from '../../src/hosting/index.js';
+} from '../../src/doors/hosting.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

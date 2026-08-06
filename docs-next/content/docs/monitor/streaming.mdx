@@ -31,10 +31,10 @@ The event taxonomy:
 
 ## SSE for browser clients
 
-The fastest path is the built-in `toSSE()` helper from `agentfootprint/stream`. Hand it the runner and it yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) until the run finishes — drop it into any HTTP framework that accepts an async-iterable body:
+The fastest path is the built-in `toSSE()` helper from `agentfootprint/observe`. Hand it the runner and it yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) until the run finishes — drop it into any HTTP framework that accepts an async-iterable body:
 
 ```ts
-import { toSSE } from 'agentfootprint/stream';
+import { toSSE } from 'agentfootprint/observe';
 
 // Express
 app.post('/agent', async (req, res) => {

@@ -5,7 +5,7 @@ description: Ship the agent's voice as a locale pack. defaultCommentaryMessages 
 
 > agentfootprint emits two streams of user-facing prose: **commentary** (third-person — "the agent dispatched the refund tool") and **thinking** (first-person — "Looking up your order…"). Both live as flat `Record<string, string>` catalogs with `{{var}}` substitution. **The Message Catalog Pattern** lets you ship a Spanish, branded, or domain-specific catalog the way you'd ship an i18n bundle — `composeMessages(defaults, overrides)` + `validateMessages(catalog, requiredKeys)`.
 
-## What ships in `agentfootprint/locales`
+## What ships in `agentfootprint/observe`
 
 | Export | Purpose |
 |---|---|
@@ -34,7 +34,7 @@ import {
   defaultThinkingMessages,
   composeMessages,
   validateMessages,
-} from 'agentfootprint/locales';
+} from 'agentfootprint/observe';
 
 // Spanish locale pack — override only the keys you customize.
 // Thinking keys are the four chat-bubble states: idle, streaming, tool, paused

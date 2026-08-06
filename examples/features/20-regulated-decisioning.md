@@ -85,7 +85,7 @@ name the exact record that broke.
 - The anchor file in this demo sits next to the bundle; in production it
   must live somewhere the writer of the bundle cannot rewrite.
 - A real deployment persists the causal store via
-  `agentfootprint/memory-providers` (Redis/Postgres/Dynamo) instead of
+  `agentfootprint/memory` (Redis/Postgres/Dynamo) instead of
   exporting `InMemoryStore` entries to JSON.
 
 ## Library follow-ups found while building this (reported, not hacked)

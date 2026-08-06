@@ -31,14 +31,14 @@
  */
 
 import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js'
-import { mockEmbedder } from '../../src/memory/index.js';
+import { mock } from '../../src/doors/providers.js'
+import { mockEmbedder } from '../../src/doors/memory.js';
 import type { Embedder } from '../../src/lib/influence-core/index.js';
 import {
   toolChoiceRecorder,
   type ToolChoiceCall,
   type ToolChoiceSummary,
-} from '../../src/observe.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -132,7 +132,7 @@ export async function run(_input?: string | null): Promise<ToolChoiceMarginsResu
     .tool(fcnsLive)
     .tool(fcnsHistory)
     .tool(sendEmail)
-    .recorder(choices)
+    .watch(choices)
     .build();
 
   await agent.run({ message: 'did wwpn 21:00:00:24:ff:4a:12:03 drop off the fabric recently?' });

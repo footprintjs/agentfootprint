@@ -102,7 +102,7 @@ const result = await agent.run({ message: 'Weather in Paris?' });
 console.log(result);  // → "I checked: it is 72°F and sunny."
 ```
 
-For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
+For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
 ### Run against a local model (Ollama, llama.cpp, vLLM — any OpenAI-compatible endpoint)
 
@@ -110,7 +110,7 @@ No cloud account, no API key, $0 per token. `openai({ baseURL })` targets any se
 
 ```typescript
 import { Agent } from 'agentfootprint';
-import { ollama } from 'agentfootprint/llm-providers';
+import { ollama } from 'agentfootprint/providers';
 
 const agent = Agent.create({ provider: ollama({ defaultModel: 'llama3.1' }), model: 'llama3.1' }).build();
 // → talks to http://localhost:11434/v1 (run `ollama pull llama3.1` first)
@@ -309,7 +309,7 @@ source, and returns the same honest result `rerunWithoutSources` gives you. `for
 Branch, never rewrite.
 
 ```ts
-import { recordedChat } from 'agentfootprint/debug';
+import { recordedChat } from 'agentfootprint/observe';
 
 const chat = recordedChat({ makeAgent });          // your factory, specs applied at construction
 await chat.send('Should we BUY or HOLD?');         // recorded turn (frozen evidence)
@@ -624,6 +624,30 @@ npm run example examples/features/38-act.ts
 
 See [The moments of the loop](https://footprintjs.github.io/agentfootprint/docs/build/loop-moments/).
 
+### Watch — who is looking while it does
+
+`.act()` says what the agent may do. `.watch()` says who is looking while it does it. Observers handed to the builder are attached before `build()` returns, so there is no window where the agent has run and nobody was watching:
+
+```ts
+const routes  = routeRecorder();
+const choices = toolChoiceRecorder({ embedder: staticEmbedder() });
+
+const agent = Agent.create({ provider, model })
+  .watch(routes, choices)     // build-time — sees the very first run
+  .act({ beforeTool: [refundCeiling] })
+  .build();
+
+await agent.run({ message: 'refund order 4471' });
+
+console.log(await choices.getFlagged());   // calls where the tool choice was a near-tie
+```
+
+Variadic, because observers come in sets. It returns the builder — the runtime door is still `agent.attach(observer)`, which returns an `Unsubscribe` you own and call when the observer's life ends. Same mechanism underneath, so mixing them is fine and order is preserved.
+
+There is deliberately no list of "watch moments" to go with `.act()`'s five. A rule has to be *told* where it may speak, so that list is closed and compiler-pinned; an observer attends the whole stream, and any list we published would be a vocabulary we then had to keep true.
+
+*(`.recorder()` is the same door under its old, internals-flavoured name. It still works and is deprecated — see [8.0.0](./CHANGELOG.md).)*
+
 ---
 
 ## 🐛 Debug — see what your agent did
@@ -743,7 +767,7 @@ map; you decide.
 Answering *"why was the loan rejected?"* from captured evidence is the [debug door above](#-debug--see-what-your-agent-did). The audit door adds the integrity layer: prove the **record itself** hasn't been edited since capture. `auditExport()` hash-chains every typed event — decisions, tool calls, validation rejections, permission verdicts, costs — into an append-only bundle (EU AI Act Art. 12 record-keeping shape); `verifyAuditBundle()` re-checks it **offline** — no agent, no LLM — and names the exact record any tamper broke.
 
 ```ts
-import { auditExport, verifyAuditBundle } from 'agentfootprint/observability-providers';
+import { auditExport, verifyAuditBundle } from 'agentfootprint/observe';
 
 const audit = auditExport({ agent: 'ledger-auditor' });
 const stop = agent.enable.observability({ strategy: audit });
@@ -855,7 +879,8 @@ Import one thing, ship one thing. agentfootprint is built so your bundle grows o
 
 - **Dual build, true ESM.** Ships CommonJS (`require`) **and** real ECMAScript Modules (`import`) with TypeScript types. The ESM build is `type:module` with explicit `.js` import extensions, so it loads as true ESM under Node, Vite, Next, Deno, and Bun — no shims.
 - **Per-file modules + honest `sideEffects`.** The dist is emitted file-by-file (never pre-bundled), so bundlers drop every export you don't touch. A small `import { defineTool }` doesn't pull in the Agent runtime, injection engine, memory stores, or LLM providers.
-- **Subpath exports + lazy peer-deps.** Heavyweight integrations live behind their own subpaths and load their SDK **only when you instantiate them** — importing agentfootprint never bundles `@anthropic-ai/sdk`, `ioredis`, the AWS SDKs, or the MCP SDK unless you actually use that adapter.
+- **Ten doors, named for what you're doing.** `agentfootprint` · `/providers` (plug in a backend) · `/memory` (state that outlives a turn) · `/observe` (everything that watches) · `/context` (how context gets assembled) · `/resilience` (when the call fails) · `/security` (who may do what) · `/hosting` (behind a wire) · `/events` (the typed wire vocabulary) · `/cache` (prompt caching). 8.0.0 consolidated 26 internals-named subpaths into these; every old path still resolves for all of 8.x.
+- **Lazy peer-deps.** Heavyweight integrations load their SDK **only when you instantiate them** — importing agentfootprint never bundles `@anthropic-ai/sdk`, `ioredis`, the AWS SDKs, or the MCP SDK unless you actually use that adapter.
 
 **Proven, not promised.** A CI smoke test bundles a minimal `import { defineTool }` and asserts the Agent runtime, injection engine, memory stores, and providers are pruned; a second test loads the main barrel and every subpath as true ESM and verifies the lazy-adapter loader works under ESM (`createRequire`, not a bare `require`). See [`test/esm-packaging.test.ts`](test/esm-packaging.test.ts).
 

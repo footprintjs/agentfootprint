@@ -13,7 +13,7 @@ Adapters bridge external systems to agentfootprint's interfaces. There are two c
 
 ## LLM Adapters
 
-The vendor-SDK providers live in the `agentfootprint/llm-providers` subpath — they
+The vendor-SDK providers live in the `agentfootprint/providers` subpath — they
 lazy-load their respective SDKs as peer dependencies. The browser-safe and mock
 providers are also re-exported from the top-level `agentfootprint` barrel.
 
@@ -21,12 +21,12 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 
 | Provider | Factory | Subpath | Peer SDK | Auth |
 |---|---|---|---|---|
-| Anthropic (Claude) | `anthropic()` | `agentfootprint/llm-providers` | `@anthropic-ai/sdk` | `ANTHROPIC_API_KEY` |
-| OpenAI (GPT) | `openai()` | `agentfootprint/llm-providers` | `openai` | `OPENAI_API_KEY` |
-| **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/llm-providers` | `openai` | `api-key` (Azure) |
-| OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LM Studio, LiteLLM gateway, …) | `openai({ baseURL })` | `agentfootprint/llm-providers` | `openai` | `Bearer` |
-| Ollama (local) | `ollama()` | `agentfootprint/llm-providers` | `openai` | none |
-| AWS Bedrock | `bedrock()` | `agentfootprint/llm-providers` | `@aws-sdk/client-bedrock-runtime` | AWS IAM |
+| Anthropic (Claude) | `anthropic()` | `agentfootprint/providers` | `@anthropic-ai/sdk` | `ANTHROPIC_API_KEY` |
+| OpenAI (GPT) | `openai()` | `agentfootprint/providers` | `openai` | `OPENAI_API_KEY` |
+| **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/providers` | `openai` | `api-key` (Azure) |
+| OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LM Studio, LiteLLM gateway, …) | `openai({ baseURL })` | `agentfootprint/providers` | `openai` | `Bearer` |
+| Ollama (local) | `ollama()` | `agentfootprint/providers` | `openai` | none |
+| AWS Bedrock | `bedrock()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | AWS IAM |
 | Anthropic via `fetch` (browser/edge) | `browserAnthropic()` | `agentfootprint` (main) | none | key |
 | OpenAI via `fetch` (browser/edge) | `browserOpenai()` | `agentfootprint` (main) | none | key |
 | **Azure OpenAI** via `fetch` (browser/edge) | **`browserAzureOpenai()`** | `agentfootprint` (main) | none | `api-key` (Azure) |
@@ -50,7 +50,7 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 Each provider has a lowercase factory that takes an options object:
 
 ```typescript
-import { anthropic, openai, azureOpenai, ollama, bedrock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, azureOpenai, ollama, bedrock } from 'agentfootprint/providers';
 
 // Anthropic Claude
 const claude = anthropic({ model: 'claude-sonnet-4-20250514', apiKey: process.env.ANTHROPIC_API_KEY });
@@ -151,7 +151,7 @@ read `import.meta.env` yourself and call `browserAzureOpenai()` /
 For advanced use cases, construct the provider classes directly:
 
 ```typescript
-import { AnthropicProvider, OpenAIProvider, BedrockProvider } from 'agentfootprint/llm-providers';
+import { AnthropicProvider, OpenAIProvider, BedrockProvider } from 'agentfootprint/providers';
 
 const provider = new AnthropicProvider({
   model: 'claude-sonnet-4-20250514',
@@ -310,7 +310,7 @@ const slack = mockMcpClient({
 
 Mix MCP tools with local tools by combining the resolved `Tool[]` and wrapping
 with a `ToolProvider` (`staticTools` / `gatedTools` from
-`agentfootprint/tool-providers`):
+`agentfootprint/providers`):
 
 ```typescript
 import { staticTools, gatedTools } from 'agentfootprint';
@@ -368,7 +368,7 @@ stack freely:
 
 ```typescript
 import { withRetry, withFallback, fallbackProvider, withCircuitBreaker } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 // Retry the primary on transient failures (defaults: 3 attempts, exponential backoff)
 const reliable = withRetry(anthropic({ apiKey: A }), {
@@ -392,5 +392,5 @@ wrapped provider to `Agent.create({ provider: reliable })`. `withCircuitBreaker`
 throws a typed `CircuitOpenError` once the breaker trips.
 
 For richer reliability policies (circuit breaker plus fallback plus stuck-loop
-detection driven by the agent runner), see the `agentfootprint/reliability`
+detection driven by the agent runner), see the `agentfootprint/resilience`
 subpath and [orchestration.md](orchestration.md).

@@ -14,11 +14,11 @@ first cloud adapter was written against them.
 
 | Adapter | Port it fills | Subpath |
 |---|---|---|
-| `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting-providers` |
-| `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting-providers` |
+| `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting` |
+| `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting` |
 | `agentCorePolicy({ policyStoreId })` | `PermissionChecker` — a remote policy store decides tool calls | `agentfootprint/security` |
-| `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/tool-providers` |
-| `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory-providers` |
+| `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/providers` |
+| `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory` |
 
 <Callout type="warn" title="How much of this is verified — the honest version">
 `agentCoreRuntimeHost` is **plain HTTP and plain WebSocket with no AWS SDK on
@@ -331,8 +331,8 @@ into a session that tested perfectly.
 request:
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
-import { gatewayTransport, mcpClient, gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient, gatedTools, staticTools } from 'agentfootprint/providers';
 
 const gateway = await mcpClient({
   name: 'gateway',
@@ -439,7 +439,7 @@ Every adapter's options, its injectable client surface and its SDK-module shim
 are exported, so you can type a wrapper, a fake or a mapping of your own without
 reaching into `dist`.
 
-**Hosting** (`agentfootprint/hosting-providers`) —
+**Hosting** (`agentfootprint/hosting`) —
 `AgentCoreRuntimeHostOptions` is what `agentCoreRuntimeHost()` takes;
 `agentCoreRuntimeWire()` returns the contract's `HttpWire` on its own, for
 testing the body shapes without binding a socket.
@@ -459,11 +459,11 @@ behind `onUnavailable`. `AgentCorePolicyClientLike` is the one-method evaluate
 surface (inject it as `_client`), returning an `AgentCorePolicyEvaluation`;
 `BedrockAgentCorePolicySdkModule` is the SDK slice behind it.
 
-**Gateway** (`agentfootprint/tool-providers`) — `GatewayTransportOptions` is
+**Gateway** (`agentfootprint/providers`) — `GatewayTransportOptions` is
 what `gatewayTransport()` takes, and `McpGatewayTransport` is the descriptor it
 returns: the third member of the `McpTransport` union.
 
-**Memory** (`agentfootprint/memory-providers`) — `AgentCoreMemoryRecord` is one
+**Memory** (`agentfootprint/memory`) — `AgentCoreMemoryRecord` is one
 retrieved record as `search()` sees it, and `AgentCoreEvent` is one stored event
 as `AgentCoreLikeClient` reports it.
 

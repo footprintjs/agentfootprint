@@ -6,7 +6,7 @@
  *
  * Production usage:
  *
- *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
+ *   import { AgentCoreStore } from 'agentfootprint/memory';
  *   const store = new AgentCoreStore({
  *     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',
  *     region: 'us-west-2',
@@ -23,8 +23,8 @@
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js'
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/memory/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/doors/memory.js'
+import { mock } from '../../src/doors/providers.js';
 import {
   AgentCoreStore,
   type AgentCoreLikeClient,

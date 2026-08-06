@@ -110,7 +110,7 @@ Same shape for `CostStrategy`, `LiveStatusStrategy`, `LensStrategy`. Symmetry is
 Multi-vendor fan-out comes free:
 
 ```typescript
-import { compose } from 'agentfootprint/strategies';
+import { compose } from 'agentfootprint/observe';
 
 agent.enable.observability({
   strategy: compose([

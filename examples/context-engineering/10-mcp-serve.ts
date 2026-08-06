@@ -24,8 +24,8 @@
  */
 
 import { defineTool, type LLMProvider, type Tool } from '../../src/index.js';
-import { mcpServe } from '../../src/tool-providers/index.js';
-import { PermissionPolicy } from '../../src/security/index.js';
+import { mcpServe } from '../../src/doors/providers.js';
+import { PermissionPolicy } from '../../src/doors/security.js';
 import type { McpCallToolRequest, McpSdkServer } from '../../src/lib/mcp/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

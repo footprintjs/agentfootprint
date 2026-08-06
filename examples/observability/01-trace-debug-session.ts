@@ -39,7 +39,7 @@
 import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
-import { callTraceTool, traceToolpack } from '../../src/observe.js';
+import { callTraceTool, traceToolpack } from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

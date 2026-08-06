@@ -18,7 +18,7 @@
  *    schema never says so (`influx_get_interface_counters.switch_name`).
  */
 
-import type { CatalogTool } from '../../src/observe.js';
+import type { CatalogTool } from '../../src/doors/observe.js';
 
 export const neoToolCatalog: readonly CatalogTool[] = [
   // ── Interface-triage spine (NX-API, live switch state) ──────────────

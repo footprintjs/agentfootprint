@@ -42,8 +42,8 @@ import { join } from 'node:path';
 import { FlowChartExecutor, decide, flowChart, type FlowDecisionEvent } from 'footprintjs';
 
 import { Agent, defineTool, type PermissionChecker } from '../../src/index.js'
-import { defineMemory, InMemoryStore, MEMORY_STRATEGIES, MEMORY_TYPES, mockEmbedder, SNAPSHOT_PROJECTIONS } from '../../src/memory/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineMemory, InMemoryStore, MEMORY_STRATEGIES, MEMORY_TYPES, mockEmbedder, SNAPSHOT_PROJECTIONS } from '../../src/doors/memory.js'
+import { mock } from '../../src/doors/providers.js';
 import {
   auditExport,
   otelObservability,
@@ -52,7 +52,7 @@ import {
   type OtelSpanLike,
   type OtelSpanOptions,
   type OtelTracerLike,
-} from '../../src/observability-providers.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -490,7 +490,7 @@ export async function run(
   };
 
   // 5. Causal memory — the snapshot store. In production this is Redis /
-  //    Postgres / DynamoDB via `agentfootprint/memory-providers`; here the
+  //    Postgres / DynamoDB via `agentfootprint/memory`; here the
   //    in-memory store's entries are exported to JSON below.
   const store = new InMemoryStore();
   const causal = defineMemory({

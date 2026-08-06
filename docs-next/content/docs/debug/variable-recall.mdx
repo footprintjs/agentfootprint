@@ -18,8 +18,8 @@ That translation used to happen in each consumer's head, differently every time.
 ## One call
 
 ```ts twoslash
-import { traceVariable } from 'agentfootprint/debug';
-import type { ContextBugArtifacts } from 'agentfootprint/debug';
+import { traceVariable } from 'agentfootprint/observe';
+import type { ContextBugArtifacts } from 'agentfootprint/observe';
 
 declare const artifacts: ContextBugArtifacts; // { snapshot } from a finished run
 // ---cut---
@@ -80,9 +80,9 @@ The option takes a `WriteProvenanceMode` — `'off'` (the default) or `'reads-pr
 `walkToRoot` narrows each loop with per-loop influence — a **proxy** that points at a neighbourhood. Hand it the variables and one thing changes: where a narrowed suspect rode in on a key whose coverage is `'exact'`, the descent target comes from that key's recorded life instead.
 
 ```ts twoslash
-import { walkToRoot, traceVariable, embeddingCache } from 'agentfootprint/debug';
+import { walkToRoot, traceVariable, embeddingCache } from 'agentfootprint/observe';
 import { mockEmbedder } from 'agentfootprint/memory';
-import type { ContextBugArtifacts } from 'agentfootprint/debug';
+import type { ContextBugArtifacts } from 'agentfootprint/observe';
 declare const artifacts: ContextBugArtifacts;
 // ---cut---
 const path = await walkToRoot(artifacts, {

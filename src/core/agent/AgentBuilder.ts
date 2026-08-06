@@ -36,6 +36,7 @@ import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
+import type { Watcher } from './watch.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
 import {
@@ -127,10 +128,11 @@ export class AgentBuilder {
    */
   private maxIterationsOverride?: number;
   /**
-   * Recorders collected via `.recorder()`. Attached to the built Agent
-   * before `build()` returns (each via `agent.attach(rec)`).
+   * Observers collected via `.watch()` (or its deprecated spelling
+   * `.recorder()`). Attached to the built Agent before `build()` returns
+   * (each via `agent.attach(rec)`), in call order.
    */
-  private readonly recorderList: import('footprintjs').CombinedRecorder[] = [];
+  private readonly recorderList: Watcher[] = [];
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -580,16 +582,48 @@ export class AgentBuilder {
   }
 
   /**
+   * Watch this agent. `.act()` says what the agent may do; `.watch()` says
+   * who is looking while it does it.
+   *
+   * Every observer handed here is attached before `build()` returns, so it
+   * sees every event from the very first run — there is no window where the
+   * agent has run and nobody was watching.
+   *
+   * Variadic, because observers come in sets:
+   *
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .watch(toolChoiceRecorder(), routeRecorder())
+   *   .act({ beforeTool: [budgetGuard] })
+   *   .build();
+   * ```
+   *
+   * Build time, not run time. This returns the builder; `agent.attach(o)`
+   * attaches to a live agent and returns an `Unsubscribe` you own. Same
+   * mechanism underneath — `.watch()` replays through `agent.attach()` at
+   * the end of `build()` — so mixing the two is fine and order is preserved.
+   *
+   * Called more than once, the sets concatenate in call order. Nothing is
+   * de-duplicated here; footprintjs's executor dedupes by recorder id at run
+   * time, so the same observer handed in twice still fires once.
+   */
+  watch(...observers: readonly Watcher[]): this {
+    for (const observer of observers) this.recorderList.push(observer);
+    return this;
+  }
+
+  /**
    * Attach a footprintjs `CombinedRecorder` to the built Agent. Wired
    * via `agent.attach(rec)` immediately after construction, so the
    * recorder sees every event from the very first run.
    *
-   * Equivalent to calling `agent.attach(rec)` post-build; the builder
-   * method is a convenience for codebases that prefer fully-fluent
-   * agent assembly. Multiple recorders are supported (each gets its
-   * own `attach()` call).
+   * @deprecated Since 8.0.0 — use {@link AgentBuilder.watch} instead. Same
+   * list, same order, same attachment: `.watch(rec)` is this method under the
+   * name the loop already used for it (see `moments.ts` — "an observer
+   * reports, a rule changes what happens next"), and it takes more than one.
+   * This method keeps working for all of 8.x and is removed in 9.0.0.
    */
-  recorder(rec: import('footprintjs').CombinedRecorder): this {
+  recorder(rec: Watcher): this {
     this.recorderList.push(rec);
     return this;
   }
@@ -1461,11 +1495,12 @@ export class AgentBuilder {
       this.messageMiddlewareList,
       this.resolveOutputEnforcement(),
     );
-    // Attach builder-collected recorders so they receive events from
-    // the very first run. Mirrors what consumers would do post-build
-    // via `agent.attach(rec)`; the builder method is purely sugar.
-    for (const rec of this.recorderList) {
-      agent.attach(rec);
+    // Attach the observers collected by `.watch()` so they receive events
+    // from the very first run. Mirrors what consumers would do post-build
+    // via `agent.attach(rec)`; the builder method is purely sugar over it,
+    // which is what makes `.watch()` provably the same attachment.
+    for (const observer of this.recorderList) {
+      agent.attach(observer);
     }
     if (selfExplainBinding) {
       // Late binding: capture fires at each run's terminal flush, when

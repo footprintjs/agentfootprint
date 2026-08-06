@@ -181,6 +181,18 @@ export {
 export { LOOP_MOMENTS, actKeyFor, type ActKey, type LoopMoment } from './core/agent/moments.js';
 export { ACT_KEYS, type ActOptions } from './core/agent/act.js';
 
+// `.watch(observer, …)` — the other half of the sentence `moments.ts` has
+// always told: "an observer reports, a rule changes what happens next."
+// `.act()` is where a rule may speak; `.watch()` is who is looking while it
+// does. Build-time attach, so nothing can act without being watched; the
+// runtime door (`agent.attach(o)`, which returns an Unsubscribe) is unchanged.
+//
+// There is deliberately no `WATCH_MOMENTS`: `.act()`'s keys are a closed list
+// because a rule has to be TOLD where it may speak, while an observer attends
+// the whole stream and any list we published would be a vocabulary we then had
+// to keep true. See `core/agent/watch.ts`.
+export type { Watcher } from './core/agent/watch.js';
+
 // Check in with the receipts — evidence-carrying human consent. A tool
 // declares `checkIn` (see `defineTool`); when it trips the run pauses with a
 // `CheckInRequest` (the ask + evidence pack); a human answers with

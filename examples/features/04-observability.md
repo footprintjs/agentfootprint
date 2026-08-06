@@ -19,7 +19,7 @@ uniform **strategies**. They're one-liners over the typed dispatcher:
   vendor strategy (pino, OTel, CloudWatch, AgentCore) at the same call site.
 
 Both return an `Unsubscribe` — call to detach. Import the built-in
-strategies from `agentfootprint/strategies`.
+strategies from `agentfootprint/observe`.
 
 ## When to use
 
@@ -32,7 +32,7 @@ strategies from `agentfootprint/strategies`.
 ## Key API
 
 ```ts
-import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/strategies';
+import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/observe';
 
 // Status line
 const stopThinking = agent.enable.liveStatus({

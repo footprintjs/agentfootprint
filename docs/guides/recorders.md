@@ -164,7 +164,7 @@ These are the building blocks the agentfootprint Lens UI composes — see [strea
 The `enable` namespace wires a pre-built observability layer in a single call. Each returns an `Unsubscribe` (or, for `flowchart`, a handle you can query).
 
 ```typescript
-import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/strategies';
+import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/observe';
 
 // Live status line — "what's the agent doing right now".
 const stopThinking = agent.enable.liveStatus({

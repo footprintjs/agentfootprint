@@ -29,6 +29,10 @@
  * so consumers who never call a particular factory don't have to
  * install that SDK. Peer-deps are declared in package.json with
  * `peerDependenciesMeta.{name}.optional = true`.
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 export * from './types.js';

@@ -29,12 +29,12 @@
 
 import { FlowChartExecutor, decide, flowChart } from 'footprintjs';
 import { Agent } from '../../src/index.js';
-import { otelObservability } from '../../src/observability-providers.js';
+import { otelObservability } from '../../src/doors/observe.js';
 import type {
   OtelSpanLike,
   OtelSpanOptions,
   OtelTracerLike,
-} from '../../src/observability-providers.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

@@ -7,7 +7,7 @@
  */
 
 import { LLMCall, type LLMProvider } from '../../src/index.js'
-import { MockProvider } from '../../src/llm-providers.js';
+import { MockProvider } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

@@ -238,6 +238,7 @@
 - [ToolResultContent](/agentfootprint/api/generated/type-aliases/ToolResultContent.md)
 - [ToolResultOutcome](/agentfootprint/api/generated/type-aliases/ToolResultOutcome.md)
 - [UntilGuard](/agentfootprint/api/generated/type-aliases/UntilGuard.md)
+- [Watcher](/agentfootprint/api/generated/type-aliases/Watcher.md)
 - [WindowRefusalReason](/agentfootprint/api/generated/type-aliases/WindowRefusalReason.md)
 - [WireRole](/agentfootprint/api/generated/type-aliases/WireRole.md)
 - [WriteProvenanceMode](/agentfootprint/api/generated/type-aliases/WriteProvenanceMode.md)

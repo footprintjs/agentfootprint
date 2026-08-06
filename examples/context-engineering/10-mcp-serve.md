@@ -12,7 +12,7 @@ defaultInput: lookup order 5512
 ## Anatomy
 
 ```typescript
-import { mcpServe } from 'agentfootprint/tool-providers';
+import { mcpServe } from 'agentfootprint/providers';
 
 const handle = await mcpServe([lookupOrder, refundOrder], {
   name: 'support-desk',

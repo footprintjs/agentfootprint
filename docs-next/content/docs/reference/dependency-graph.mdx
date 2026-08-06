@@ -72,29 +72,36 @@ footprintjs at Layer 1 is the same engine running underneath Agent, Sequence, Pa
 
 Layer 3 — providers, stores, MCP — is the only layer that talks to the outside world. The whole rest of the library has zero dependency on `@anthropic-ai/sdk`, `openai`, `ioredis`, `@modelcontextprotocol/sdk`, or any other vendor SDK. Adapters are lazy-required at first call; consumers who use only `mock()` + `InMemoryStore` install zero peer-deps. This is the Hexagonal / Ports-and-Adapters discipline (Cockburn 2005) applied honestly.
 
-## Subpath exports = subset boundaries
+## Subpath exports = the ten doors
 
-The package.json `exports` field publishes subpath imports per layer:
+Through 7.x the `exports` field grew one subpath per internal concern — 26 of
+them, named after how the library is built. **8.0.0 consolidated them into ten
+doors named for what you are doing.** Every 7.x path still resolves, marked
+deprecated, for all of 8.x.
 
-| Subpath | Layer | What it exposes |
+| Door | Layer | What it exposes |
 |---|---|---|
-| `agentfootprint` (default) | 8 | The full curated barrel — 90% of consumers use only this |
-| `agentfootprint/memory` | 4 | `defineMemory`, `MEMORY_TYPES`, `MEMORY_STRATEGIES`, `InMemoryStore` |
-| `agentfootprint/llm-providers` | 3 | LLM provider adapters (canonical v2.5+) |
-| `agentfootprint/memory-providers` | 3 | Memory store adapters — `RedisStore`, `AgentCoreStore`, future stores (canonical v2.5+) |
-| `agentfootprint/tool-providers` | 3 | Tool dispatch + sources — `staticTools`, `gatedTools`, `skillScopedTools`, `mcpClient` |
-| `agentfootprint/security` | 3 | Cross-cutting authorization — `PermissionPolicy` |
-| `agentfootprint/providers` | 3 | Legacy alias for `llm-providers` (deprecated; still exported in v3.x — prefer `llm-providers`) |
-| `agentfootprint/memory-redis` | 3 | Legacy per-adapter alias for `memory-providers` (deprecated; still exported in v3.x) |
-| `agentfootprint/memory-agentcore` | 3 | Legacy per-adapter alias for `memory-providers` (deprecated; still exported in v3.x) |
-| `agentfootprint/observe` | 2 | Observability recorders — `ContextRecorder`, `streamRecorder`, `compositionRecorder`, `agentRecorder`, `boundaryRecorder`, `costRecorder`, … (the event taxonomy + `EventDispatcher` are on the default barrel) |
-| `agentfootprint/resilience` | 3 | `withRetry`, `withFallback`, `fallbackProvider`, `withCircuitBreaker` |
-| `agentfootprint/stream` | (cross-cutting) | SSE bridge for streaming agent events to HTTP |
-| `agentfootprint/injection-engine` | 5 | `Injection`, `InjectionTrigger`, `evaluateInjections` |
+| `agentfootprint` (default) | 8 | The story words — `Agent`, `defineTool`, `.act()`, `.watch()`, `providerFromEnv`, the core types. 90% of consumers use only this |
+| `agentfootprint/providers` | 3 | Everything you plug a backend into — LLM providers, embedders, tool providers + MCP, thinking handlers |
+| `agentfootprint/memory` | 4 | State that outlives a turn — `defineMemory`, `MEMORY_TYPES`, `MEMORY_STRATEGIES`, `InMemoryStore`, plus the `RedisStore` / `AgentCoreStore` adapters |
+| `agentfootprint/observe` | 2 | Everything that watches — `ContextRecorder`, `streamRecorder`, `compositionRecorder`, `agentRecorder`, `boundaryRecorder`, `costRecorder`, `recordRun`, diagnosis (influence, bisect, finders), vendor sinks, SSE delivery, status + its message catalogs |
+| `agentfootprint/context` | 5 | How the model's context gets assembled — `defineInjection`, `InjectionTrigger`, `evaluateInjections`, the skill graph |
+| `agentfootprint/resilience` | 3 | What happens when the call fails — the provider decorators AND the rules-based gate |
+| `agentfootprint/security` | 3 | Who may do what, with whose credentials — `PermissionPolicy` and the credential providers |
+| `agentfootprint/hosting` | 3 | Putting an agent behind a wire — `httpHost`, `nodeHost`, sessions, and the AgentCore runtime |
+| `agentfootprint/events` | 2 | The typed wire vocabulary — `EVENT_NAMES`, `EventDispatcher`, the payload shapes. Stands alone because it is what observers *read*, not a tool for watching |
+| `agentfootprint/cache` | 3 | Prompt caching. Stands alone because importing it REGISTERS vendor cache strategies — side-effectful code stays opt-in |
 
-Each subpath maps to a single layer (or in some cases a single layer's slice). Tree-shaking picks up only what's used.
+Each door maps to a layer (or a layer's slice). Tree-shaking picks up only
+what's used.
 
-The table above covers the most-reached subpaths. The full `exports` field also publishes `agentfootprint/reliability` (Layer 3 — `ReliabilityFailFastError`, circuit-breaker config, validators), `agentfootprint/observability-providers` (Layer 3 — `otelObservability`, `cloudwatchObservability`, `xrayObservability`, `agentcoreObservability`), `agentfootprint/thinking`, `agentfootprint/status`, and `agentfootprint/locales` (cross-cutting helpers). Check `package.json`'s `exports` map for the authoritative list.
+The seventeen 7.x paths that folded into a door — `llm-providers`,
+`embedders`, `tool-providers`, `thinking`, `memory-providers`,
+`observability-providers`, `strategies`, `stream`, `status`, `locales`,
+`debug`, `debug/finders`, `observability/contextError/finders`,
+`reliability`, `hosting-providers`, `injection-engine`, `identity` — all
+still resolve and export the same symbols, not copies. Check `package.json`'s
+`exports` map for the authoritative list.
 
 ## The Dynamic ReAct loop — runtime view of the same architecture
 

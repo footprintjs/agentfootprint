@@ -1,12 +1,13 @@
 {
   "name": "agentfootprint",
-  "version": "7.28.0",
+  "version": "8.0.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
+  "type": "commonjs",
   "author": "Sanjay Krishna Anbalagan",
   "repository": {
     "type": "git",
-    "url": "https://github.com/footprintjs/agentfootprint.git"
+    "url": "git+https://github.com/footprintjs/agentfootprint.git"
   },
   "homepage": "https://footprintjs.github.io/agentfootprint/",
   "bugs": {
@@ -106,6 +107,26 @@
         "default": "./dist/index.js"
       }
     },
+    "./providers": {
+      "import": {
+        "types": "./dist/esm/doors/providers.d.ts",
+        "default": "./dist/esm/doors/providers.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/providers.d.ts",
+        "default": "./dist/doors/providers.js"
+      }
+    },
+    "./memory": {
+      "import": {
+        "types": "./dist/esm/doors/memory.d.ts",
+        "default": "./dist/esm/doors/memory.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/memory.d.ts",
+        "default": "./dist/doors/memory.js"
+      }
+    },
     "./cache": {
       "import": {
         "types": "./dist/esm/cache/index.d.ts",
@@ -114,6 +135,16 @@
       "require": {
         "types": "./dist/types/cache/index.d.ts",
         "default": "./dist/cache/index.js"
+      }
+    },
+    "./observe": {
+      "import": {
+        "types": "./dist/esm/doors/observe.d.ts",
+        "default": "./dist/esm/doors/observe.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/observe.d.ts",
+        "default": "./dist/doors/observe.js"
       }
     },
     "./events": {
@@ -126,14 +157,44 @@
         "default": "./dist/events.js"
       }
     },
-    "./memory": {
+    "./context": {
       "import": {
-        "types": "./dist/esm/memory/index.d.ts",
-        "default": "./dist/esm/memory/index.js"
+        "types": "./dist/esm/doors/context.d.ts",
+        "default": "./dist/esm/doors/context.js"
       },
       "require": {
-        "types": "./dist/types/memory/index.d.ts",
-        "default": "./dist/memory/index.js"
+        "types": "./dist/types/doors/context.d.ts",
+        "default": "./dist/doors/context.js"
+      }
+    },
+    "./resilience": {
+      "import": {
+        "types": "./dist/esm/doors/resilience.d.ts",
+        "default": "./dist/esm/doors/resilience.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/resilience.d.ts",
+        "default": "./dist/doors/resilience.js"
+      }
+    },
+    "./hosting": {
+      "import": {
+        "types": "./dist/esm/doors/hosting.d.ts",
+        "default": "./dist/esm/doors/hosting.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/hosting.d.ts",
+        "default": "./dist/doors/hosting.js"
+      }
+    },
+    "./security": {
+      "import": {
+        "types": "./dist/esm/doors/security.d.ts",
+        "default": "./dist/esm/doors/security.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/security.d.ts",
+        "default": "./dist/doors/security.js"
       }
     },
     "./llm-providers": {
@@ -146,6 +207,36 @@
         "default": "./dist/llm-providers.js"
       }
     },
+    "./embedders": {
+      "import": {
+        "types": "./dist/esm/embedders/index.d.ts",
+        "default": "./dist/esm/embedders/index.js"
+      },
+      "require": {
+        "types": "./dist/types/embedders/index.d.ts",
+        "default": "./dist/embedders/index.js"
+      }
+    },
+    "./tool-providers": {
+      "import": {
+        "types": "./dist/esm/tool-providers/index.d.ts",
+        "default": "./dist/esm/tool-providers/index.js"
+      },
+      "require": {
+        "types": "./dist/types/tool-providers/index.d.ts",
+        "default": "./dist/tool-providers/index.js"
+      }
+    },
+    "./thinking": {
+      "import": {
+        "types": "./dist/esm/thinking/index.d.ts",
+        "default": "./dist/esm/thinking/index.js"
+      },
+      "require": {
+        "types": "./dist/types/thinking/index.d.ts",
+        "default": "./dist/thinking/index.js"
+      }
+    },
     "./memory-providers": {
       "import": {
         "types": "./dist/esm/memory-providers.d.ts",
@@ -154,16 +245,6 @@
       "require": {
         "types": "./dist/types/memory-providers.d.ts",
         "default": "./dist/memory-providers.js"
-      }
-    },
-    "./strategies": {
-      "import": {
-        "types": "./dist/esm/strategies/index.d.ts",
-        "default": "./dist/esm/strategies/index.js"
-      },
-      "require": {
-        "types": "./dist/types/strategies/index.d.ts",
-        "default": "./dist/strategies/index.js"
       }
     },
     "./observability-providers": {
@@ -176,14 +257,44 @@
         "default": "./dist/observability-providers.js"
       }
     },
-    "./observe": {
+    "./strategies": {
       "import": {
-        "types": "./dist/esm/observe.d.ts",
-        "default": "./dist/esm/observe.js"
+        "types": "./dist/esm/strategies/index.d.ts",
+        "default": "./dist/esm/strategies/index.js"
       },
       "require": {
-        "types": "./dist/types/observe.d.ts",
-        "default": "./dist/observe.js"
+        "types": "./dist/types/strategies/index.d.ts",
+        "default": "./dist/strategies/index.js"
+      }
+    },
+    "./stream": {
+      "import": {
+        "types": "./dist/esm/stream.d.ts",
+        "default": "./dist/esm/stream.js"
+      },
+      "require": {
+        "types": "./dist/types/stream.d.ts",
+        "default": "./dist/stream.js"
+      }
+    },
+    "./status": {
+      "import": {
+        "types": "./dist/esm/status.d.ts",
+        "default": "./dist/esm/status.js"
+      },
+      "require": {
+        "types": "./dist/types/status.d.ts",
+        "default": "./dist/status.js"
+      }
+    },
+    "./locales": {
+      "import": {
+        "types": "./dist/esm/locales/index.d.ts",
+        "default": "./dist/esm/locales/index.js"
+      },
+      "require": {
+        "types": "./dist/types/locales/index.d.ts",
+        "default": "./dist/locales/index.js"
       }
     },
     "./debug": {
@@ -216,74 +327,14 @@
         "default": "./dist/observability/contextError/finders/index.js"
       }
     },
-    "./resilience": {
+    "./reliability": {
       "import": {
-        "types": "./dist/esm/resilience/index.d.ts",
-        "default": "./dist/esm/resilience/index.js"
+        "types": "./dist/esm/reliability/index.d.ts",
+        "default": "./dist/esm/reliability/index.js"
       },
       "require": {
-        "types": "./dist/types/resilience/index.d.ts",
-        "default": "./dist/resilience/index.js"
-      }
-    },
-    "./stream": {
-      "import": {
-        "types": "./dist/esm/stream.d.ts",
-        "default": "./dist/esm/stream.js"
-      },
-      "require": {
-        "types": "./dist/types/stream.d.ts",
-        "default": "./dist/stream.js"
-      }
-    },
-    "./injection-engine": {
-      "import": {
-        "types": "./dist/esm/injection-engine.d.ts",
-        "default": "./dist/esm/injection-engine.js"
-      },
-      "require": {
-        "types": "./dist/types/injection-engine.d.ts",
-        "default": "./dist/injection-engine.js"
-      }
-    },
-    "./tool-providers": {
-      "import": {
-        "types": "./dist/esm/tool-providers/index.d.ts",
-        "default": "./dist/esm/tool-providers/index.js"
-      },
-      "require": {
-        "types": "./dist/types/tool-providers/index.d.ts",
-        "default": "./dist/tool-providers/index.js"
-      }
-    },
-    "./security": {
-      "import": {
-        "types": "./dist/esm/security/index.d.ts",
-        "default": "./dist/esm/security/index.js"
-      },
-      "require": {
-        "types": "./dist/types/security/index.d.ts",
-        "default": "./dist/security/index.js"
-      }
-    },
-    "./identity": {
-      "import": {
-        "types": "./dist/esm/identity.d.ts",
-        "default": "./dist/esm/identity.js"
-      },
-      "require": {
-        "types": "./dist/types/identity.d.ts",
-        "default": "./dist/identity.js"
-      }
-    },
-    "./hosting": {
-      "import": {
-        "types": "./dist/esm/hosting/index.d.ts",
-        "default": "./dist/esm/hosting/index.js"
-      },
-      "require": {
-        "types": "./dist/types/hosting/index.d.ts",
-        "default": "./dist/hosting/index.js"
+        "types": "./dist/types/reliability/index.d.ts",
+        "default": "./dist/reliability/index.js"
       }
     },
     "./hosting-providers": {
@@ -296,77 +347,86 @@
         "default": "./dist/hosting-providers.js"
       }
     },
-    "./reliability": {
+    "./injection-engine": {
       "import": {
-        "types": "./dist/esm/reliability/index.d.ts",
-        "default": "./dist/esm/reliability/index.js"
+        "types": "./dist/esm/injection-engine.d.ts",
+        "default": "./dist/esm/injection-engine.js"
       },
       "require": {
-        "types": "./dist/types/reliability/index.d.ts",
-        "default": "./dist/reliability/index.js"
+        "types": "./dist/types/injection-engine.d.ts",
+        "default": "./dist/injection-engine.js"
       }
     },
-    "./thinking": {
+    "./identity": {
       "import": {
-        "types": "./dist/esm/thinking/index.d.ts",
-        "default": "./dist/esm/thinking/index.js"
+        "types": "./dist/esm/identity.d.ts",
+        "default": "./dist/esm/identity.js"
       },
       "require": {
-        "types": "./dist/types/thinking/index.d.ts",
-        "default": "./dist/thinking/index.js"
+        "types": "./dist/types/identity.d.ts",
+        "default": "./dist/identity.js"
       }
     },
-    "./locales": {
-      "import": {
-        "types": "./dist/esm/locales/index.d.ts",
-        "default": "./dist/esm/locales/index.js"
-      },
-      "require": {
-        "types": "./dist/types/locales/index.d.ts",
-        "default": "./dist/locales/index.js"
-      }
-    },
-    "./status": {
-      "import": {
-        "types": "./dist/esm/status.d.ts",
-        "default": "./dist/esm/status.js"
-      },
-      "require": {
-        "types": "./dist/types/status.d.ts",
-        "default": "./dist/status.js"
-      }
-    },
-    "./package.json": "./package.json",
-    "./embedders": {
-      "import": {
-        "types": "./dist/esm/embedders/index.d.ts",
-        "default": "./dist/esm/embedders/index.js"
-      },
-      "require": {
-        "types": "./dist/types/embedders/index.d.ts",
-        "default": "./dist/embedders/index.js"
-      }
-    }
+    "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
+      "providers": [
+        "./dist/types/doors/providers.d.ts"
+      ],
       "memory": [
-        "./dist/types/memory/index.d.ts"
+        "./dist/types/doors/memory.d.ts"
+      ],
+      "cache": [
+        "./dist/types/cache/index.d.ts"
+      ],
+      "observe": [
+        "./dist/types/doors/observe.d.ts"
+      ],
+      "events": [
+        "./dist/types/events.d.ts"
+      ],
+      "context": [
+        "./dist/types/doors/context.d.ts"
+      ],
+      "resilience": [
+        "./dist/types/doors/resilience.d.ts"
+      ],
+      "hosting": [
+        "./dist/types/doors/hosting.d.ts"
+      ],
+      "security": [
+        "./dist/types/doors/security.d.ts"
       ],
       "llm-providers": [
         "./dist/types/llm-providers.d.ts"
       ],
+      "embedders": [
+        "./dist/types/embedders/index.d.ts"
+      ],
+      "tool-providers": [
+        "./dist/types/tool-providers/index.d.ts"
+      ],
+      "thinking": [
+        "./dist/types/thinking/index.d.ts"
+      ],
       "memory-providers": [
         "./dist/types/memory-providers.d.ts"
-      ],
-      "strategies": [
-        "./dist/types/strategies/index.d.ts"
       ],
       "observability-providers": [
         "./dist/types/observability-providers.d.ts"
       ],
-      "observe": [
-        "./dist/types/observe.d.ts"
+      "strategies": [
+        "./dist/types/strategies/index.d.ts"
+      ],
+      "stream": [
+        "./dist/types/stream.d.ts"
+      ],
+      "status": [
+        "./dist/types/status.d.ts"
+      ],
+      "locales": [
+        "./dist/types/locales/index.d.ts"
       ],
       "debug": [
         "./dist/types/debug.d.ts"
@@ -374,53 +434,20 @@
       "debug/finders": [
         "./dist/types/debug/finders.d.ts"
       ],
-      "cache": [
-        "./dist/types/cache/index.d.ts"
-      ],
-      "events": [
-        "./dist/types/events.d.ts"
-      ],
       "observability/contextError/finders": [
         "./dist/types/observability/contextError/finders/index.d.ts"
-      ],
-      "resilience": [
-        "./dist/types/resilience/index.d.ts"
-      ],
-      "stream": [
-        "./dist/types/stream.d.ts"
-      ],
-      "injection-engine": [
-        "./dist/types/injection-engine.d.ts"
-      ],
-      "tool-providers": [
-        "./dist/types/tool-providers/index.d.ts"
-      ],
-      "security": [
-        "./dist/types/security/index.d.ts"
-      ],
-      "identity": [
-        "./dist/types/identity.d.ts"
-      ],
-      "hosting": [
-        "./dist/types/hosting/index.d.ts"
-      ],
-      "hosting-providers": [
-        "./dist/types/hosting-providers.d.ts"
       ],
       "reliability": [
         "./dist/types/reliability/index.d.ts"
       ],
-      "thinking": [
-        "./dist/types/thinking/index.d.ts"
+      "hosting-providers": [
+        "./dist/types/hosting-providers.d.ts"
       ],
-      "locales": [
-        "./dist/types/locales/index.d.ts"
+      "injection-engine": [
+        "./dist/types/injection-engine.d.ts"
       ],
-      "status": [
-        "./dist/types/status.d.ts"
-      ],
-      "embedders": [
-        "./dist/types/embedders/index.d.ts"
+      "identity": [
+        "./dist/types/identity.d.ts"
       ]
     }
   },

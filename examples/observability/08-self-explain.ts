@@ -26,7 +26,7 @@
  */
 
 import { Agent, defineTool } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

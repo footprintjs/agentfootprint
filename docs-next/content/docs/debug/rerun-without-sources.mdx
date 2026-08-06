@@ -22,9 +22,9 @@ This is the product loop behind an "Influence Map" UI: the user sees an influenc
 You supply the **runner** — the same `AblationRunner` the localizer's causal mode uses. Its body applies the specs at agent **construction** (the documented seam — see [Localize a context bug](doc:localize-context-bug)), builds a fresh agent, and returns the answer:
 
 ```ts twoslash
-import { rerunWithoutSources, applyAblations, embeddingCache } from 'agentfootprint/debug';
+import { rerunWithoutSources, applyAblations, embeddingCache } from 'agentfootprint/observe';
 import { mockEmbedder } from 'agentfootprint/memory';
-import type { ContextBugReport, AblationSpec } from 'agentfootprint/debug';
+import type { ContextBugReport, AblationSpec } from 'agentfootprint/observe';
 
 // From a completed run + its localizer report:
 declare const report: ContextBugReport;

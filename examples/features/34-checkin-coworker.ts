@@ -539,7 +539,7 @@ async function resolveProvider(flags: Flags): Promise<LLMProvider | undefined> {
     return undefined;
   }
   // Lazy import so the default mock path never loads the vendor SDK.
-  const { anthropic } = await import('../../src/llm-providers.js');
+  const { anthropic } = await import('../../src/doors/providers.js');
   console.log('--live: using the real Claude provider.\n');
   return anthropic({ defaultModel: 'claude-sonnet-4-5-20250929' });
 }

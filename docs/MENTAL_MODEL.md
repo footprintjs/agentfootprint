@@ -357,7 +357,7 @@ plus an identity-scoped store.
   throws) · `hybrid`. No-LLM ones are free; topK/summarize/extract need embedder/LLM.
 - **STORE:** `MemoryStore` interface (get/put/list/delete/seen/feedback/forget, optional `search`).
   Built-in `InMemoryStore`; adapters `RedisStore` (no `search`), `AgentCoreStore` via
-  `agentfootprint/memory-providers` (lazy-required SDKs).
+  `agentfootprint/memory` (lazy-required SDKs).
 
 **`defineMemory({id,type,strategy,store,timing?,asRole?,projection?})`** → compiled `MemoryDefinition`
 (branded read/write FlowCharts). Wired via `mountMemoryRead` (TURN_START, between Seed and the loop)
@@ -398,7 +398,7 @@ interface LLMProvider { readonly name: string;
 **Adapters:** Anthropic, OpenAI(+`ollama()`), Bedrock (Converse, model-agnostic), BrowserAnthropic
 & BrowserOpenAI (fetch+SSE, for playgrounds), Mock. All lazy-`require` peer-dep SDKs (bundler-safe),
 expose a `_client` test seam, and **preserve raw `error.status`** (reliability classifies on it).
-Factory: `createProvider({kind,...})`. Public subpath `agentfootprint/llm-providers` (legacy `/providers`).
+Factory: `createProvider({kind,...})`. Public subpath `agentfootprint/providers` (legacy `/providers`).
 
 **$0 testing:** swap `provider` for `MockProvider` — `mock({reply})`, `mock({replies:[...]})`
 (scripted multi-turn, cursor-based, exhaustion throws), `mock({respond})`, `MockProvider.realistic()`
@@ -469,7 +469,7 @@ humanizes → emits `error.fatal` *unconditionally* (terminal signal; fixed the 
   `{kind:'Agent', extra:{slots:[sys,msgs,tools], toolNames, maxIterations}}`; LLMCall → 2 slots.
 
 **`enable.observability(tier)`** — minimal/standard(default, drops `stream.token`)/firehose; vendor
-strategies (CloudWatch/X-Ray/OTel/AgentCore) via `agentfootprint/observability-providers`; optional
+strategies (CloudWatch/X-Ray/OTel/AgentCore) via `agentfootprint/observe`; optional
 detach so slow exporters don't block. **`toSSE(runner)`** streams events as HTTP SSE.
 
 ---
@@ -771,10 +771,25 @@ src/
   llm-providers.ts memory-providers.ts observability-providers.ts   subpath barrels
 ```
 
-**Subpath exports** (from `package.json`): `agentfootprint` (main), `/memory`, `/providers` (legacy
-alias of `/llm-providers`), `/llm-providers`, `/memory-providers`, `/observability-providers`,
-`/observe`, `/resilience`, `/stream`, `/injection-engine`, `/memory-redis`, `/memory-agentcore`,
-`/tool-providers`, `/security`, `/reliability`, `/thinking`, `/locales`, `/status`.
+**The ten doors** (from `package.json` `exports`, 8.0.0): `agentfootprint` (main),
+`/providers`, `/memory`, `/observe`, `/context`, `/resilience`, `/security`,
+`/hosting`, `/events`, `/cache`.
+
+`/events` and `/cache` stand alone for reasons, not by oversight: `/events` is
+the wire vocabulary observers READ (and its `ContextSource` is a different type
+from the one `/observe` carries — they cannot share a door), and importing
+`/cache` RUNS the vendor cache-strategy registrations, so side-effectful code
+stays opt-in.
+
+Seventeen 7.x paths folded into those doors and still resolve as deprecated
+aliases through all of 8.x: `/llm-providers`, `/embedders`, `/tool-providers`,
+`/thinking`, `/memory-providers`, `/observability-providers`, `/strategies`,
+`/stream`, `/status`, `/locales`, `/debug`, `/debug/finders`,
+`/observability/contextError/finders`, `/reliability`, `/hosting-providers`,
+`/injection-engine`, `/identity`. Each re-exports the SAME symbols its door
+carries — pinned by `test/api-conformance/door-aliases.test.ts`.
+
+The door barrels live in `src/doors/`; the implementation barrels never moved.
 
 ---
 

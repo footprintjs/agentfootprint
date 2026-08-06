@@ -45,10 +45,10 @@ import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
 import { Agent, defineTool, type Tool } from '../../src/index.js'
-import { type Injection } from '../../src/injection-engine.js'
-import { defineFact } from '../../src/injection-engine.js'
-import { mock } from '../../src/llm-providers.js'
-import { mockEmbedder } from '../../src/memory/index.js';
+import { type Injection } from '../../src/doors/context.js'
+import { defineFact } from '../../src/doors/context.js'
+import { mock } from '../../src/doors/providers.js'
+import { mockEmbedder } from '../../src/doors/memory.js';
 import {
   applyAblations,
   embeddingCache,
@@ -59,7 +59,7 @@ import {
   type CapturedEventLike,
   type ContextBugArtifacts,
   type ContextBugReport,
-} from '../../src/observe.js';
+} from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -145,7 +145,7 @@ async function runRefundsAgent(specs: readonly AblationSpec[] = []): Promise<Age
   let builder = Agent.create({ provider, model: 'mock-1', maxIterations: 4 })
     .system('You are a refunds assistant. Policy: refunds only within 30 days of purchase.')
     .tools([...tools])
-    .recorder(ctrl);
+    .watch(ctrl);
   for (const injection of injections) builder = builder.fact(injection);
   const agent = builder.build();
   agent.on('*', (event) => events.push(event as CapturedEventLike));

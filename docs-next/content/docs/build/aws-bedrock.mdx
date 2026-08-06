@@ -17,7 +17,7 @@ Peer dep, lazy-required, optional. AWS credentials resolved via the SDK's normal
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { bedrock } from 'agentfootprint/llm-providers';
+import { bedrock } from 'agentfootprint/providers';
 
 const provider = bedrock({
   region: 'us-east-1',
@@ -66,7 +66,7 @@ Argument fragments are not yielded as chunks (`LLMChunk` has no field for them);
 - Tune the default model and token budget on the factory:
 
 ```ts
-import { bedrock } from 'agentfootprint/llm-providers';
+import { bedrock } from 'agentfootprint/providers';
 
 const provider = bedrock({
   region: 'us-east-1',

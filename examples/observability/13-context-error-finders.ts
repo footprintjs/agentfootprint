@@ -6,7 +6,7 @@
  * engines; the academic method + citation live in `meta`, never in the import name.
  *
  *   import { rankSuspects, removeAndRetry, compareFinders }
- *     from 'agentfootprint/observability/contextError/finders';
+ *     from 'agentfootprint/observe';
  *
  * THE STORY: a loan agent DECLINED an application it should have APPROVED — a planted
  * "reference policy" filler buried the binding committee-override note. We localize the
@@ -25,7 +25,7 @@
  * Run:  npx tsx examples/observability/13-context-error-finders.ts
  */
 
-import { mockEmbedder } from '../../src/memory/index.js';
+import { mockEmbedder } from '../../src/doors/memory.js';
 import {
   compareFinders,
   rankSuspects,
@@ -33,7 +33,7 @@ import {
   shrinkToCause,
   testManyCombos,
   type FindInput,
-} from '../../src/observability/contextError/finders/index.js';
+} from '../../src/doors/observe.js';
 
 // The wrong answer the agent produced, and the context pieces it saw.
 const wrongOutput =

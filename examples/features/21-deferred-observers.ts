@@ -35,8 +35,8 @@
  */
 
 import { Agent } from '../../src/index.js'
-import { defineInstruction } from '../../src/injection-engine.js'
-import { MockProvider } from '../../src/llm-providers.js';
+import { defineInstruction } from '../../src/doors/context.js'
+import { MockProvider } from '../../src/doors/providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -8,6 +8,6 @@
 
 > `const` **SCHEMA\_CHECK\_FRAME\_PREFIX**: `"[schema check"` = `'[schema check'`
 
-Defined in: [src/core/agent/outputEnforcement.ts:134](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core/agent/outputEnforcement.ts#L134)
+Defined in: [src/core/agent/outputEnforcement.ts:134](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L134)
 
 Opening of the authored frame. Stable — tests and readers match on it.

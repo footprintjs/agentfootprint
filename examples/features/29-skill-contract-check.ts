@@ -19,7 +19,7 @@
  */
 
 import { defineTool, type LLMProvider } from '../../src/index.js'
-import { defineSkill, skillGraph, checkSkillContract } from '../../src/injection-engine.js';
+import { defineSkill, skillGraph, checkSkillContract } from '../../src/doors/context.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -14,7 +14,7 @@
  */
 
 import { Agent } from '../../src/index.js';
-import { chatBubbleLiveStatus, consoleObservability } from '../../src/strategies/index.js';
+import { chatBubbleLiveStatus, consoleObservability } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

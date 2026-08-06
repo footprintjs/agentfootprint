@@ -113,7 +113,7 @@ Today: the pause surfaces as a thrown error so the consumer can persist the inne
 `flowchartAsTool` produces a regular `Tool` — it composes with everything tool-side:
 
 ```ts
-import { staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { staticTools, gatedTools } from 'agentfootprint/providers';
 import { PermissionPolicy } from 'agentfootprint/security';
 
 const refundTool   = flowchartAsTool({...});

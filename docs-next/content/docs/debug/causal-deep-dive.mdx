@@ -112,7 +112,7 @@ Most apps use `DECISIONS` — it's the default, the smallest projection that ans
 ```ts
 import { Agent } from 'agentfootprint'
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint/memory';
-import { anthropic } from 'agentfootprint/llm-providers'; // vendor-SDK providers live on this subpath
+import { anthropic } from 'agentfootprint/providers'; // vendor-SDK providers live on this subpath
 
 // Monday — production decision
 const monday = Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5-20250929' })

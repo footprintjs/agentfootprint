@@ -7,7 +7,7 @@ description: withRetry + withFallback + fallbackProvider + withCircuitBreaker �
 
 ## Four composable decorators
 
-All resilience decorators are exported from the `agentfootprint/resilience` subpath. Provider factories (`anthropic`, `openai`, `bedrock`, …) live at `agentfootprint/llm-providers`.
+All resilience decorators are exported from the `agentfootprint/resilience` subpath. Provider factories (`anthropic`, `openai`, `bedrock`, …) live at `agentfootprint/providers`.
 
 | Decorator | What it does |
 |---|---|
@@ -20,7 +20,7 @@ All four preserve the `LLMProvider` interface — drop-in replacements for the u
 
 ```ts
 import { withRetry, withFallback } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withRetry(
   withFallback(
@@ -39,7 +39,7 @@ For the common N-providers-in-a-chain shape, use the variadic factory. It is sug
 
 ```ts
 import { fallbackProvider, withRetry } from 'agentfootprint/resilience';
-import { anthropic, openai, bedrock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, bedrock } from 'agentfootprint/providers';
 
 const provider = withRetry(
   fallbackProvider(
@@ -194,7 +194,7 @@ When a vendor has a multi-minute outage, `withRetry` alone keeps hammering it �
 
 ```ts
 import { withCircuitBreaker, withFallback, CircuitOpenError } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withFallback(
   withCircuitBreaker(anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }), {
@@ -208,14 +208,29 @@ const provider = withFallback(
 
 The breaker is **per-instance, not distributed** — each `withCircuitBreaker(...)` call holds its own state in process memory. For cluster-wide coordination, layer your own Redis-backed counter on top via the `onStateChange` hook + `shouldCount` predicate.
 
-## What's NOT here yet (Reliability subsystem)
+## The rules engine, same door
 
-Two more primitives are deferred to the dedicated `agentfootprint/reliability` subsystem and compose ON TOP of these decorators:
+`agentfootprint/resilience` carries both halves of staying up. The four
+decorators above are the fixed part — retry N times, fall back, trip a
+breaker — and they decide the same way on every call. The
+[reliability gate](doc:reliability-gate) is the dynamic part: rules that
+read the failure and choose per call. They compose, and under `.reliability()`
+you will see both families of events interleave in one stage.
+
+Two primitives compose ON TOP of the decorators:
 
 - **3-tier output fallback** — if both providers fail, return a canned response (or escalate).
 - **`agent.resumeOnError(checkpoint, input)`** — auto-checkpoint at iteration boundaries; resume from the failure point with corrected input.
 
-The four provider decorators above cover the production-critical 80%. The Reliability subsystem covers the long tail.
+<Callout type="warn">
+One name means two things, and this is the one place it bites.
+`CircuitOpenError` exists twice: the decorator above throws one, the
+reliability gate throws another, and they are different classes with
+different `instanceof` answers. This door carries the **decorator's** — the
+one that escapes a provider call. If you catch the **gate's**, keep importing
+it from `agentfootprint/reliability`, which stays available for all of 8.x.
+Every other name from that path moved here.
+</Callout>
 
 ## Anti-patterns
 

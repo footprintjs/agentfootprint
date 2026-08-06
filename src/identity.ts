@@ -22,6 +22,10 @@
  *   callGitHub({ headers: r.credential.toHeaders() }); // universal applicator
  * }
  * ```
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/security` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 export type {

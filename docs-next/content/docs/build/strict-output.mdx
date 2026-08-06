@@ -43,7 +43,7 @@ interface LLMMessage {
   message, stage, path?, rawOutput?, attempt, cumulativeRetries
 }
 
-// New helpers (agentfootprint/reliability subpath)
+// New helpers (agentfootprint/resilience subpath)
 ValidationFailure          // sentinel error class
 defaultStuckLoopRule       // drop-in PostDecide rule
 lastNValidationErrorsMatch // helper for custom stuck-loop predicates
@@ -148,7 +148,7 @@ Three primitives, one composition story. No new architectural concept.
 A model that fails the same way twice in a row WILL fail the same way a third time. Burning more retries is wasteful AND a security signal (intentional probing). Drop in the built-in rule BEFORE your retry rules:
 
 ```ts
-import { defaultStuckLoopRule, lastNValidationErrorsMatch } from 'agentfootprint/reliability';
+import { defaultStuckLoopRule, lastNValidationErrorsMatch } from 'agentfootprint/resilience';
 
 postDecide: [
   defaultStuckLoopRule,                          // ← FIRST: short-circuit stuck loops
@@ -211,7 +211,7 @@ Same answer as v2.11.6 (`discoveryProvider`) and v2.12 (`sequencePolicy`): the *
 
 1. **Lock-in risk** — committing to ONE `strictOutput({...})` factory shape before real consumer patterns emerge would lock us into the wrong API
 2. **Cost-benefit** — extending `ReliabilityScope` + `ReliabilityRule` + `LLMMessage` is ~3 days of library work; shipping a full factory is ~1.5 weeks for the same outcome
-3. **Future option** — if 5+ consumers ship the same `strictOutput({...})` shape over the next 6 months, we promote it to `agentfootprint/reliability/strictOutput` in a future minor with a known-good API
+3. **Future option** — if 5+ consumers ship the same `strictOutput({...})` shape over the next 6 months, we promote it to the `agentfootprint/resilience` door in a future minor with a known-good API
 
 ## Next steps
 

@@ -22,8 +22,8 @@
  */
 
 import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js';
-import { staticTokens, withCredentialRetry, type CredentialProvider } from '../../src/identity.js';
+import { mock } from '../../src/doors/providers.js';
+import { staticTokens, withCredentialRetry, type CredentialProvider } from '../../src/doors/security.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

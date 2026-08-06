@@ -8,7 +8,7 @@
 
 > **isCheckInDecision**(`x`): `x is CheckInDecision`
 
-Defined in: [src/core/checkin.ts:158](https://github.com/footprintjs/agentfootprint/blob/d88e6fac2f21cbe1cf33c05b6ad2e016ecf61a67/src/core/checkin.ts#L158)
+Defined in: [src/core/checkin.ts:158](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/checkin.ts#L158)
 
 Type guard — is this resume input a [CheckInDecision](/agentfootprint/api/generated/interfaces/CheckInDecision.md)? Distinguishes
 a check-in answer from a plain `askHuman` tool-result value.

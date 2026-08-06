@@ -96,7 +96,7 @@ The killer feature: write tests with `mock()`, deploy with real providers. Zero 
 
 ```typescript
 import { Agent, mock, defineTool } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 // Define tools once
 const searchTool = defineTool<{ q: string }, string>({
@@ -129,7 +129,7 @@ function buildAgent(provider) {
 
 > `mock` / `createProvider` / `browserAnthropic` / `browserOpenai` are on the
 > main barrel; the vendor-SDK factories (`anthropic`, `openai`, `ollama`,
-> `bedrock`) live on the `agentfootprint/llm-providers` subpath.
+> `bedrock`) live on the `agentfootprint/providers` subpath.
 
 ---
 
@@ -203,11 +203,11 @@ The examples above use `mock()` for clarity. Before deploying anything for real:
 
 | Concern | What to add |
 |---|---|
-| **Real provider** | `anthropic({ defaultModel: '...' })` (from `agentfootprint/llm-providers`) with `model: 'anthropic'` — or `createProvider({ kind: 'anthropic', defaultModel: '...' })` — instead of `mock()` |
+| **Real provider** | `anthropic({ defaultModel: '...' })` (from `agentfootprint/providers`) with `model: 'anthropic'` — or `createProvider({ kind: 'anthropic', defaultModel: '...' })` — instead of `mock()` |
 | **Cost / token caps** | Pass `maxTokens` to `Agent.create({ ... })`; pass a `pricingTable` + `costBudget` to emit `agentfootprint.cost.*` events |
 | **Cancellation** | Pass `env: { signal: abortController.signal }` to `.run()` so users can cancel |
 | **Retry on rate limits** | Wrap the **provider** with `withRetry(provider, { shouldRetry })` (from `agentfootprint/resilience`) — see [orchestration.md](orchestration.md) |
-| **Tool authorization** | Gate the tool source with `gatedTools(...)` (from `agentfootprint/tool-providers`) and wire it via `.toolProvider(...)` — see [security.md](security.md) |
+| **Tool authorization** | Gate the tool source with `gatedTools(...)` (from `agentfootprint/providers`) and wire it via `.toolProvider(...)` — see [security.md](security.md) |
 | **Audit trail** | Subscribe to typed events, or use the `agent.enable.observability({ strategy })` grouped strategy |
 
 Treat the move from `mock()` to a real provider as a deployment milestone, not a one-line swap.

@@ -16,6 +16,10 @@
  *
  * For backward compatibility these are ALSO re-exported (deprecated) from
  * `agentfootprint/observe` for one transition version.
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 // influence-core — the ONE embedding-based scoring engine (RFC-002/003

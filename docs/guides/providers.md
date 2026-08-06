@@ -41,7 +41,7 @@ Agent.create({ provider: mock(), model: 'mock-model' })
 ### Dynamic system prompt via injections
 
 To shape the system prompt per turn (instead of a fixed string), use the injection
-factories from the `agentfootprint/injection-engine` subpath (also re-exported from
+factories from the `agentfootprint/context` subpath (also re-exported from
 the main barrel). A **steering** rule is always-on; an **instruction** activates
 conditionally via an `activeWhen` predicate.
 
@@ -120,7 +120,7 @@ const agent = Agent.create({ provider: mock(), model: 'mock-model' })
 
 For dynamic / gated tool sources, build a `ToolProvider` and wire it with
 `.toolProvider(...)`. The provider primitives live in the
-`agentfootprint/tool-providers` subpath:
+`agentfootprint/providers` subpath:
 
 | Provider | Behavior |
 |----------|----------|
@@ -130,7 +130,7 @@ For dynamic / gated tool sources, build a `ToolProvider` and wire it with
 
 ```typescript
 import { Agent, mock } from 'agentfootprint';
-import { staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { staticTools, gatedTools } from 'agentfootprint/providers';
 import { PermissionPolicy } from 'agentfootprint/security';
 
 const policy = PermissionPolicy.fromRoles({
@@ -158,7 +158,7 @@ at most once per agent.
 ### Custom `ToolProvider`
 
 ```typescript
-import type { ToolProvider, ToolDispatchContext } from 'agentfootprint/tool-providers';
+import type { ToolProvider, ToolDispatchContext } from 'agentfootprint/providers';
 
 const contextual: ToolProvider = {
   id: 'first-iteration-only',
@@ -185,7 +185,7 @@ To pull tools from an MCP server, fetch the catalog and register it:
 
 ```typescript
 import { Agent, mock } from 'agentfootprint';
-import { mcpClient } from 'agentfootprint/tool-providers';
+import { mcpClient } from 'agentfootprint/providers';
 
 const client = await mcpClient({ /* transport config */ });
 const agent = Agent.create({ provider: mock(), model: 'mock-model' })
@@ -203,7 +203,7 @@ const agent = Agent.create({ provider: mock(), model: 'mock-model' })
 The fourth "provider" — the `LLMProvider` that actually calls the model — is
 covered separately. See the [Adapters Guide](adapters.md) for `mock`, the browser
 adapters, `createProvider`, and the vendor-SDK adapters at
-`agentfootprint/llm-providers`.
+`agentfootprint/providers`.
 
 ---
 

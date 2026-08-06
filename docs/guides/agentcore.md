@@ -15,12 +15,12 @@ onto AgentCore.
 
 | AgentCore service | agentfootprint | How |
 |---|---|---|
-| **Runtime** (deploy/scale) | ✅ adapter | `agentCoreRuntimeHost()` + `agentCoreSessions()` — `agentfootprint/hosting-providers` |
-| **Memory** | ✅ adapter | `AgentCoreStore` (incl. `search()` over `RetrieveMemoryRecords`) — `agentfootprint/memory-providers` |
-| **Observability** | ✅ adapter | `agentcoreObservability` (CloudWatch) / `otelObservability` (OTLP) — `agentfootprint/observability-providers` |
-| **Gateway** (tools) | ✅ via MCP | `gatewayTransport()` + `mcpClient()` — per-request vended auth — `agentfootprint/tool-providers` |
-| **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/llm-providers` |
-| **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/identity` |
+| **Runtime** (deploy/scale) | ✅ adapter | `agentCoreRuntimeHost()` + `agentCoreSessions()` — `agentfootprint/hosting` |
+| **Memory** | ✅ adapter | `AgentCoreStore` (incl. `search()` over `RetrieveMemoryRecords`) — `agentfootprint/memory` |
+| **Observability** | ✅ adapter | `agentcoreObservability` (CloudWatch) / `otelObservability` (OTLP) — `agentfootprint/observe` |
+| **Gateway** (tools) | ✅ via MCP | `gatewayTransport()` + `mcpClient()` — per-request vended auth — `agentfootprint/providers` |
+| **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/providers` |
+| **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/security` |
 | **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
 | **Policy** | ✅ adapter | `agentCorePolicy()` (the `PermissionChecker` port), or local `gatedTools` — `agentfootprint/security` |
 | **Evaluations** | ✅ overlaps | emit `$eval` + `QualityRecorder`; export via the observability adapter |
@@ -57,7 +57,7 @@ entry point is:
 
 ```ts
 import { standingAgent } from 'agentfootprint/hosting';
-import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting';
 
 const handle = await standingAgent({
   agent,
@@ -149,7 +149,7 @@ hydrates as "no conversation".
 
 ```ts
 import { Agent, defineMemory, MEMORY_TYPES } from 'agentfootprint';
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 
 const store = new AgentCoreStore({
   memoryId: 'arn:aws:bedrock:us-east-1:123:memory/my-mem',
@@ -189,7 +189,7 @@ store wrote — their ids belong to AgentCore, and results carry
 ## Observability — `agentcoreObservability`
 
 ```ts
-import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
 agent.enable.observability({
@@ -213,8 +213,8 @@ specific code:
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { agentCoreIdentity } from 'agentfootprint/identity';
-import { gatewayTransport, mcpClient, staticTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient, staticTools } from 'agentfootprint/providers';
 
 const gateway = await mcpClient({
   name: 'gateway',
@@ -247,7 +247,7 @@ credential is never in `inputSchema`, so the LLM never sees it:
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint';
-import { agentCoreIdentity } from 'agentfootprint/identity'; // or staticTokens({...}) for dev
+import { agentCoreIdentity } from 'agentfootprint/security'; // or staticTokens({...}) for dev
 
 const listRepos = defineTool({
   name: 'list_repos',

@@ -13,7 +13,7 @@ If you developed against the [mocks-first stack](doc:quick-start), the deploymen
 |---|---|---|
 | LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (on the roadmap) |
-| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (both from `agentfootprint/memory-providers`) |
+| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (both from `agentfootprint/memory`) |
 | MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
 | Tool execute | inline closure | real implementation |
 
@@ -52,10 +52,10 @@ npm install @modelcontextprotocol/sdk                    # if using mcpClient()
 
 Lazy-required at first call with friendly install hints. `npm install agentfootprint` on its own works for mocks-first dev.
 
-The vendor-SDK provider factories live on the `agentfootprint/llm-providers` subpath — the main barrel only exports the zero-peer-dep providers (`mock`, `browserAnthropic`, `browserOpenai`, `createProvider`):
+The vendor-SDK provider factories live on the `agentfootprint/providers` subpath — the main barrel only exports the zero-peer-dep providers (`mock`, `browserAnthropic`, `browserOpenai`, `createProvider`):
 
 ```ts
-import { anthropic, openai, bedrock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, bedrock } from 'agentfootprint/providers';
 ```
 
 ### 3. Secrets in env, not code

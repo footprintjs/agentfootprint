@@ -21,7 +21,7 @@
  */
 
 import { Agent } from '../../src/index.js';
-import { liveStateRecorder } from '../../src/observe.js';
+import { liveStateRecorder } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

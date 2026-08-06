@@ -6,15 +6,15 @@ _Recorded 2026-08-06._
 
 ## In plain words
 
-The package publishes **25 import paths** carrying **1215 distinct named exports**, plus **69 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **27 import paths** carrying **1216 distinct named exports**, plus **69 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**422 of 1215 exports (35%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**426 of 1216 exports (35%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **37 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **138 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
-- **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
-- **600 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **329 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **135 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **19 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
+- **599 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
+- **332 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **20** of the 69 typed events are both described on the site and were seen firing in a real run. **4** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **45** are not described in prose on the site at all.
 
@@ -24,21 +24,21 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 
 | Counting rule | Undocumented |
 |---|---|
-| every named export not in site prose | 793 |
-| … of those, absent from every prose anywhere in the repo | 637 |
-| only functions and classes (things you can call) | 199 |
-| only exports on the root barrel | 154 |
-| **functions and classes on the root barrel** | **27** |
+| every named export not in site prose | 790 |
+| … of those, absent from every prose anywhere in the repo | 636 |
+| only functions and classes (things you can call) | 197 |
+| only exports on the root barrel | 153 |
+| **functions and classes on the root barrel** | **26** |
 | functions and classes that a reference run proves work | 15 |
 | typed events | 45 |
 
-The closest analogue to the remembered 36 is the **27 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 793 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
+The closest analogue to the remembered 36 is the **26 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 790 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
 
 **The worst class is empty: nowhere do the published docs tell a reader to import something that does not exist.** That check is not baselined — it fails the build immediately, always, because a reader who copies such a line is simply broken.
 
 **The most alarming single finding is a different shape, and it is a library defect rather than a documentation one: 2 event(s) that the code really emits are missing from the typed event registry.** The docs describe them, the runtime fires them, and yet they are not in `ALL_EVENT_TYPES` — so they have no payload type, no domain wildcard, and a consumer cannot subscribe to them in TypeScript at all. Details in section 2. This report does not fix them: which names are correct is a public-contract decision for the author.
 
-Separately, **9 import path(s) named in prose do not exist in the export map**. That list needs human eyes rather than a build failure, because it legitimately mixes real errors (a "legacy alias" the docs say still resolves, but which the export map dropped) with deliberate future-tense notes ("we would promote it to … in a future minor"). It is section 8, and it never fails the build.
+Separately, **6 import path(s) named in prose do not exist in the export map**. That list needs human eyes rather than a build failure, because it legitimately mixes real errors (a "legacy alias" the docs say still resolves, but which the export map dropped) with deliberate future-tense notes ("we would promote it to … in a future minor"). It is section 8, and it never fails the build.
 
 Reference-run evidence: **95 of 95** example scripts in `examples/` ran green with **zero credentials** on 2026-07-28 (Node v22.16.0), and **45** distinct event types were observed firing.
 
@@ -49,17 +49,17 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | Location | Files | Counts as documentation? |
 |---|---|---|
 | `docs-next/content/docs/**.mdx` (hand-written) | 77 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
-| `docs-next/content/docs/api/**` (TypeDoc-generated) | 297 | **No — excluded.** |
-| `docs/api-reference/**` (TypeDoc-generated) | 297 | **No — excluded.** |
+| `docs-next/content/docs/api/**` (TypeDoc-generated) | 298 | **No — excluded.** |
+| `docs/api-reference/**` (TypeDoc-generated) | 298 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 51 | **No** — but tracked as its own state, "written but not published". |
 
-Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **154** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
+Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **153** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
 Neither generated tree is trustworthy as documentation for a second reason: **nothing in CI checks either one.** `docs/api-reference/` is regenerated only by `npm run docs:api`, which no workflow runs; it was last committed well behind `src/`, so it is known-stale. That is a pre-existing problem the author already knows about, and this check deliberately does not try to fix it — but it should not be mistaken for documentation.
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **16 of the 273 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **171 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **16 of the 274 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **174 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -96,38 +96,38 @@ These provably work — a reference run touches them — and no page on the site
 
 | Symbol | Kind | Exported from |
 |---|---|---|
-| `LLMToolSchema` | interface | `agentfootprint` `agentfootprint/llm-providers` |
+| `LLMToolSchema` | interface | `agentfootprint` `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `ServerToolEntry` | interface | `agentfootprint` |
 | `analyzeToolCatalog` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `callTraceTool` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `compareFinders` | function | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` |
+| `compareFinders` | function | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` `agentfootprint/observe` |
 | `contextLedger` | function | `agentfootprint/observe` |
-| `decideSkill` | function | `agentfootprint/injection-engine` |
-| `embeddingScorer` | function | `agentfootprint/injection-engine` |
+| `decideSkill` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `embeddingScorer` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `formatToolCatalogReport` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `keywordScorer` | function | `agentfootprint/injection-engine` |
+| `keywordScorer` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `ledgerGated` | function | `agentfootprint/observe` |
 | `ledgerToolGate` | function | `agentfootprint/observe` |
 | `pairwiseSimilarity` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `rankEntries` | function | `agentfootprint/injection-engine` |
-| `renderStatusLine` | function | `agentfootprint/status` |
-| `selectStatus` | function | `agentfootprint/status` |
+| `rankEntries` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `renderStatusLine` | function | `agentfootprint/observe` `agentfootprint/status` |
+| `selectStatus` | function | `agentfootprint/observe` `agentfootprint/status` |
 | `toolLineageRecorder` | function | `agentfootprint/observe` |
 | `MOCK_EMBEDDER_CALIBRATION` | const | `agentfootprint/debug` `agentfootprint/observe` |
-| `rankSuspects` | const | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` |
+| `rankSuspects` | const | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` `agentfootprint/observe` |
 | `semanticAlignmentStrategy` | const | `agentfootprint/debug` `agentfootprint/observe` |
-| `testManyCombos` | const | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` |
+| `testManyCombos` | const | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` `agentfootprint/observe` |
 | `AblationRerun` | interface | `agentfootprint/debug` `agentfootprint/observe` |
 | `CapturedEventLike` | interface | `agentfootprint/debug` `agentfootprint/observe` |
 | `CatalogTool` | interface | `agentfootprint/debug` `agentfootprint/observe` |
-| `EntryScorer` | interface | `agentfootprint/injection-engine` |
-| `FindInput` | interface | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` |
+| `EntryScorer` | interface | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `FindInput` | interface | `agentfootprint/debug/finders` `agentfootprint/observability/contextError/finders` `agentfootprint/observe` |
 | `InfluenceStrategy` | interface | `agentfootprint/debug` `agentfootprint/observe` |
-| `OtelSpanLike` | interface | `agentfootprint/observability-providers` |
-| `OtelSpanOptions` | interface | `agentfootprint/observability-providers` |
-| `OtelTracerLike` | interface | `agentfootprint/observability-providers` |
-| `RedisLikeClient` | interface | `agentfootprint/memory-providers` |
-| `RedisLikePipeline` | interface | `agentfootprint/memory-providers` |
+| `OtelSpanLike` | interface | `agentfootprint/observability-providers` `agentfootprint/observe` |
+| `OtelSpanOptions` | interface | `agentfootprint/observability-providers` `agentfootprint/observe` |
+| `OtelTracerLike` | interface | `agentfootprint/observability-providers` `agentfootprint/observe` |
+| `RedisLikeClient` | interface | `agentfootprint/memory` `agentfootprint/memory-providers` |
+| `RedisLikePipeline` | interface | `agentfootprint/memory` `agentfootprint/memory-providers` |
 | `ToolCatalogReport` | interface | `agentfootprint/debug` `agentfootprint/observe` |
 | `ToolChoiceCall` | interface | `agentfootprint/observe` |
 | `ToolChoiceSummary` | interface | `agentfootprint/observe` |
@@ -147,7 +147,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.skill.activated` | `docs-next/content/docs/build/skills.mdx` |
 | `agentfootprint.middleware.decision` | `docs-next/content/docs/build/middleware.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (126).** The other 203 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (127).** The other 205 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -180,114 +180,114 @@ The site describes it and it really is exported, but no reference run touches it
 | `RoutingDecisionError` | class | `agentfootprint` |
 | `RunnerBase` | class | `agentfootprint` |
 | `Workflow` | class | `agentfootprint` |
-| `agentCoreIdentity` | function | `agentfootprint/identity` |
-| `agentcoreObservability` | function | `agentfootprint/observability-providers` |
+| `agentCoreIdentity` | function | `agentfootprint/identity` `agentfootprint/security` |
+| `agentcoreObservability` | function | `agentfootprint/observability-providers` `agentfootprint/observe` |
 | `agentCorePolicy` | function | `agentfootprint/security` |
-| `agentCoreRuntimeHost` | function | `agentfootprint/hosting-providers` |
-| `agentCoreRuntimeWire` | function | `agentfootprint/hosting-providers` |
-| `agentCoreSessions` | function | `agentfootprint/hosting-providers` |
+| `agentCoreRuntimeHost` | function | `agentfootprint/hosting` `agentfootprint/hosting-providers` |
+| `agentCoreRuntimeWire` | function | `agentfootprint/hosting` `agentfootprint/hosting-providers` |
+| `agentCoreSessions` | function | `agentfootprint/hosting` `agentfootprint/hosting-providers` |
 | `agentRecorder` | function | `agentfootprint/observe` |
-| `anthropic` | function | `agentfootprint/llm-providers` |
-| `apiKey` | function | `agentfootprint/identity` |
-| `bearer` | function | `agentfootprint/identity` |
-| `bedrock` | function | `agentfootprint/llm-providers` |
+| `anthropic` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `apiKey` | function | `agentfootprint/identity` `agentfootprint/security` |
+| `bearer` | function | `agentfootprint/identity` `agentfootprint/security` |
+| `bedrock` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `boundaryRecorder` | function | `agentfootprint/observe` |
-| `browserAnthropic` | function | `agentfootprint/llm-providers` |
-| `browserOpenai` | function | `agentfootprint/llm-providers` |
+| `browserAnthropic` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `browserOpenai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `checkEnvelope` | function | `agentfootprint/hosting` |
-| `cloudwatchObservability` | function | `agentfootprint/observability-providers` |
-| `composeCost` | function | `agentfootprint/strategies` |
-| `composeLens` | function | `agentfootprint/strategies` |
-| `composeLiveStatus` | function | `agentfootprint/strategies` |
-| `composeMessages` | function | `agentfootprint/locales` |
-| `composeObservability` | function | `agentfootprint/strategies` |
+| `cloudwatchObservability` | function | `agentfootprint/observability-providers` `agentfootprint/observe` |
+| `composeCost` | function | `agentfootprint/observe` `agentfootprint/strategies` |
+| `composeLens` | function | `agentfootprint/observe` `agentfootprint/strategies` |
+| `composeLiveStatus` | function | `agentfootprint/observe` `agentfootprint/strategies` |
+| `composeMessages` | function | `agentfootprint/locales` `agentfootprint/observe` |
+| `composeObservability` | function | `agentfootprint/observe` `agentfootprint/strategies` |
 | `compositionRecorder` | function | `agentfootprint/observe` |
 | `contentHash` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `costRecorder` | function | `agentfootprint/observe` |
-| `createProvider` | function | `agentfootprint/llm-providers` |
-| `encodeSSE` | function | `agentfootprint/stream` |
+| `createProvider` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `defineInjection` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `encodeSSE` | function | `agentfootprint/observe` `agentfootprint/stream` |
 | `explainChoice` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `extractSequence` | function | `agentfootprint/security` |
 | `fallbackProvider` | function | `agentfootprint/resilience` |
 | `formatDefault` | function | `agentfootprint/memory` |
-| `gatewayTransport` | function | `agentfootprint/tool-providers` |
-| `headers` | function | `agentfootprint/identity` |
+| `gatewayTransport` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
+| `headers` | function | `agentfootprint/identity` `agentfootprint/security` |
 | `headerValue` | function | `agentfootprint/hosting` |
 | `httpHost` | function | `agentfootprint/hosting` |
-| `initialBreakerState` | function | `agentfootprint/reliability` |
-| `inMemorySinkCost` | function | `agentfootprint/strategies` |
+| `initialBreakerState` | function | `agentfootprint/reliability` `agentfootprint/resilience` |
+| `inMemorySinkCost` | function | `agentfootprint/observe` `agentfootprint/strategies` |
 | `joinVariableSlice` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `lastNValidationErrorsMatch` | function | `agentfootprint/reliability` |
+| `lastNValidationErrorsMatch` | function | `agentfootprint/reliability` `agentfootprint/resilience` |
 | `loadRecent` | function | `agentfootprint/memory` |
-| `localEmbedder` | function | `agentfootprint/embedders` |
-| `mcpServe` | function | `agentfootprint/tool-providers` |
+| `localEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
+| `mcpServe` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `memorySessions` | function | `agentfootprint/hosting` |
-| `mockMcpClient` | function | `agentfootprint/tool-providers` |
+| `mockMcpClient` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `mountMemoryPipeline` | function | `agentfootprint/memory` |
 | `mountMemoryRead` | function | `agentfootprint/memory` |
 | `nodeHost` | function | `agentfootprint/hosting` |
-| `noopLens` | function | `agentfootprint/strategies` |
-| `ollama` | function | `agentfootprint/llm-providers` |
-| `openai` | function | `agentfootprint/llm-providers` |
-| `openaiEmbedder` | function | `agentfootprint/embedders` |
+| `noopLens` | function | `agentfootprint/observe` `agentfootprint/strategies` |
+| `ollama` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `openai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `openaiEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
 | `persistence` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `pickByBudget` | function | `agentfootprint/memory` |
-| `readAgentCoreConversation` | function | `agentfootprint/hosting-providers` |
+| `readAgentCoreConversation` | function | `agentfootprint/hosting` `agentfootprint/hosting-providers` |
 | `readEnvelope` | function | `agentfootprint/hosting` |
 | `readPausedRun` | function | `agentfootprint/hosting` |
 | `redactContent` | function | `agentfootprint/observe` |
 | `requireCapability` | function | `agentfootprint/hosting` |
 | `resilienceRecorder` | function | `agentfootprint/observe` |
-| `resolveSurfaceMode` | function | `agentfootprint/injection-engine` |
-| `skillScopedTools` | function | `agentfootprint/tool-providers` |
-| `skillsFromDir` | function | `agentfootprint/injection-engine` |
+| `resolveSurfaceMode` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `skillScopedTools` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
+| `skillsFromDir` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `sqliteSessions` | function | `agentfootprint/hosting` |
 | `standingAgent` | function | `agentfootprint/hosting` |
-| `staticEmbedder` | function | `agentfootprint/embedders` |
+| `staticEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
 | `streamRecorder` | function | `agentfootprint/observe` |
 | `summarize` | function | `agentfootprint/memory` |
 | `toEnvelope` | function | `agentfootprint/hosting` |
 | `toPausedEnvelope` | function | `agentfootprint/hosting` |
-| `toSSE` | function | `agentfootprint/stream` |
+| `toSSE` | function | `agentfootprint/observe` `agentfootprint/stream` |
 | `traceVariable` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `validateMessages` | function | `agentfootprint/locales` |
+| `validateMessages` | function | `agentfootprint/locales` `agentfootprint/observe` |
 | `variableToBacktrackTrace` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `verdictFor` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `walkToRoot` | function | `agentfootprint/debug` `agentfootprint/observe` |
-| `xrayObservability` | function | `agentfootprint/observability-providers` |
+| `xrayObservability` | function | `agentfootprint/observability-providers` `agentfootprint/observe` |
 | `AwaitingDecisionError` | class | `agentfootprint/hosting` |
-| `BedrockAgentMemory` | class | `agentfootprint/memory-providers` |
-| `BrowserAnthropicProvider` | class | `agentfootprint/llm-providers` |
-| `BrowserOpenAIProvider` | class | `agentfootprint/llm-providers` |
+| `BedrockAgentMemory` | class | `agentfootprint/memory` `agentfootprint/memory-providers` |
+| `BrowserAnthropicProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `BrowserOpenAIProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `ConcurrentRunError` | class | `agentfootprint/hosting` |
 | `ContextRecorder` | class | `agentfootprint/observe` |
 | `ConversationClosedError` | class | `agentfootprint/hosting` |
 | `EventDispatcher` | class | `agentfootprint/events` |
 | `FrameTooLargeError` | class | `agentfootprint/hosting` |
-| `GatewayAuthorizationRequiredError` | class | `agentfootprint/tool-providers` |
+| `GatewayAuthorizationRequiredError` | class | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `HostClosedError` | class | `agentfootprint/hosting` |
 | `NoPendingAskError` | class | `agentfootprint/hosting` |
-| `OpenAIProvider` | class | `agentfootprint/llm-providers` |
+| `OpenAIProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `PauseNotCarriedError` | class | `agentfootprint/hosting` |
 | `PermissionPolicy` | class | `agentfootprint/security` |
-| `SkillRegistry` | class | `agentfootprint/injection-engine` |
+| `SkillRegistry` | class | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `SqliteUnavailableError` | class | `agentfootprint/hosting` |
-| `SSEFormatter` | class | `agentfootprint/stream` |
+| `SSEFormatter` | class | `agentfootprint/observe` `agentfootprint/stream` |
 | `UnreadableEnvelopeError` | class | `agentfootprint/hosting` |
-| `UnreadableMemoryEntryError` | class | `agentfootprint/memory-providers` |
+| `UnreadableMemoryEntryError` | class | `agentfootprint/memory` `agentfootprint/memory-providers` |
 | `UnreadableSessionFileError` | class | `agentfootprint/hosting` |
-| `ValidationFailure` | class | `agentfootprint/reliability` |
+| `ValidationFailure` | class | `agentfootprint/reliability` `agentfootprint/resilience` |
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **138 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **135 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
 | `makeRunId` | function | `agentfootprint` | `docs/MENTAL_MODEL.md` |
 | `mapReduce` | function | `agentfootprint` | `README.md`, `docs/guides/README.md`, `docs/guides/concepts.md` |
 | `milestoneFor` | function | `agentfootprint` | `docs/design/time-travel-milestones.md` |
-| `providerFromEnv` | function | `agentfootprint` | `docs/guides/adapters.md`, `docs/guides/agentcore.md` |
 | `selfConsistency` | function | `agentfootprint` | `README.md`, `docs/guides/README.md`, `docs/guides/concepts.md` |
 | `stageRole` | function | `agentfootprint` | `docs/proposals/005-trajectory-assembler.md` |
 | `toolContractCheckup` | function | `agentfootprint` | `docs/proposals/010-contextual-error-types.md` |
@@ -308,30 +308,30 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `TraversalContext` | interface | `agentfootprint` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `BranchOutcome` | type | `agentfootprint` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md` |
 | `GroupKind` | type | `agentfootprint` | `docs/MENTAL_MODEL.md` |
-| `ResilienceReport` | type | `agentfootprint` `agentfootprint/llm-providers` | `docs/MENTAL_MODEL.md` |
+| `ResilienceReport` | type | `agentfootprint` `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/MENTAL_MODEL.md` |
 | `ablationForSuspect` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/007-root-cause-backtrack.md` |
 | `adaptWeights` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `agentThinkingTrace` | function | `agentfootprint/observe` | `docs/design/skill-graph-spec.md`, `docs/proposals/002-skill-graph.md` |
 | `assignCostVerdicts` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/two-score-localization.md` |
 | `averageRelevancy` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
-| `azureOpenai` | function | `agentfootprint/llm-providers` | `docs/guides/adapters.md` |
+| `azureOpenai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/guides/adapters.md` |
 | `bisectCulprits` | function | `agentfootprint/debug` `agentfootprint/observe` | `README.md`, `docs/proposals/007-root-cause-backtrack.md` |
-| `browserAzureOpenai` | function | `agentfootprint/llm-providers` | `docs/guides/adapters.md` |
+| `browserAzureOpenai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/guides/adapters.md` |
 | `bucketByAnchors` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
-| `buildInjectionEngineSubflow` | function | `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
+| `buildInjectionEngineSubflow` | function | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
 | `buildRunSteps` | function | `agentfootprint/observe` | `docs/guides/recorders.md` |
 | `buildStepGraph` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `buildWriterFrameIndex` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/008-tool-output-provenance.md` |
 | `cacheRecorder` | function | `agentfootprint/cache` | `docs/guides/caching.md` |
-| `canonicalJson` | function | `agentfootprint/observability-providers` | `docs/guides/security.md` |
+| `canonicalJson` | function | `agentfootprint/observability-providers` `agentfootprint/observe` | `docs/guides/security.md` |
 | `causalEvidenceRecorder` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md` |
-| `checkSkillContract` | function | `agentfootprint/injection-engine` | `docs/proposals/009-skill-body-tool-contract-check.md` |
+| `checkSkillContract` | function | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/proposals/009-skill-body-tool-contract-check.md` |
 | `classifySuspect` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/two-score-localization.md`, `docs/proposals/004-two-score-localization.md` |
 | `compositeScore` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `confusabilityText` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/tool-catalog-lint.md` |
 | `contextEvaluatedRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `defaultSuspectClassifier` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md`, `docs/proposals/008-tool-output-provenance.md` |
-| `defineRelevanceHint` | function | `agentfootprint/injection-engine` | `docs/skill-graph-guide.md` |
+| `defineRelevanceHint` | function | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/skill-graph-guide.md` |
 | `evalRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/providers.md` |
 | `finalAnswerSimilarity` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `findDroppedContext` | function | `agentfootprint/debug` `agentfootprint/observe` | `README.md`, `docs/design/skill-graph-spec.md`, `docs/guides/missing-context.md` |
@@ -347,12 +347,11 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `memoryRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
 | `mountMemoryWrite` | function | `agentfootprint/memory` | `docs/MENTAL_MODEL.md` |
 | `permissionRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/quick-start.md` |
-| `projectActiveInjection` | function | `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
+| `projectActiveInjection` | function | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
 | `rankingConfidence` | function | `agentfootprint/debug` `agentfootprint/observe` | `README.md`, `docs/design/skill-graph-spec.md`, `docs/guides/contrastive-influence.md` |
 | `ratioStrategy` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/ranking-confidence.md`, `docs/proposals/003-per-loop-influence-credit.md` |
 | `redactThinkingBlocks` | function | `agentfootprint/security` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
 | `registerCacheStrategy` | function | `agentfootprint/cache` | `docs/guides/caching.md` |
-| `routeRecorder` | function | `agentfootprint/observe` | `docs/skill-graph-guide.md` |
 | `runAblationProbe` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/004-two-score-localization.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `runStepRecorder` | function | `agentfootprint/observe` | `docs/guides/recorders.md` |
 | `scoreContrastiveInfluence` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/design/skill-graph-spec.md`, `docs/guides/contrastive-influence.md`, `docs/proposals/003-per-loop-influence-credit.md` |
@@ -360,35 +359,34 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `scoreMargin` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `shortlistEarlyCulprits` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md`, `docs/proposals/007-root-cause-backtrack.md`, `docs/proposals/008-tool-output-provenance.md` |
 | `skillRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
-| `staticTokens` | function | `agentfootprint/identity` | `docs/guides/agentcore.md` |
+| `staticTokens` | function | `agentfootprint/identity` `agentfootprint/security` | `docs/guides/agentcore.md` |
 | `stepOutputText` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `structuralProximity` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md` |
 | `toBacktrackTrace` | function | `agentfootprint/debug` `agentfootprint/observe` | `README.md`, `docs/proposals/007-root-cause-backtrack.md` |
 | `toolsRecorder` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/concepts.md`, `docs/guides/recorders.md` |
 | `traceToolpack` | function | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/README.md`, `docs/guides/trace-debugging.md` |
 | `typedEmit` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
-| `withCredentialRetry` | function | `agentfootprint/identity` | `docs/guides/agentcore.md` |
-| `AnthropicProvider` | class | `agentfootprint/llm-providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
-| `BedrockProvider` | class | `agentfootprint/llm-providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
+| `withCredentialRetry` | function | `agentfootprint/identity` `agentfootprint/security` | `docs/guides/agentcore.md` |
+| `AnthropicProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
+| `BedrockProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
 | `BoundaryRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/boundary-commit-ranges.md`, `docs/design/governance.md` |
-| `BrowserAzureOpenAIProvider` | class | `agentfootprint/llm-providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
+| `BrowserAzureOpenAIProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/guides/adapters.md` |
 | `EmbeddingCache` | class | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/contrastive-influence.md`, `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `LiveStateRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/recorders.md` |
 | `RunStepRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/boundary-commit-ranges.md`, `docs/proposals/001-lens-subflow-recorder.md` |
 | `ALL_EVENT_TYPES` | const | `agentfootprint/events` | `docs/MENTAL_MODEL.md`, `docs/guides/recorders.md` |
-| `EVENT_NAMES` | const | `agentfootprint/events` | `docs/guides/recorders.md`, `docs/guides/streaming.md` |
 | `TOOLPACK_HARD_CAPS` | const | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/trace-debugging.md` |
 | `AblationRunStats` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/004-two-score-localization.md` |
 | `AblationVerdict` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/004-two-score-localization.md` |
-| `ActiveInjection` | interface | `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
+| `ActiveInjection` | interface | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/MENTAL_MODEL.md` |
 | `AgentfootprintEventMap` | interface | `agentfootprint/events` | `docs/guides/recorders.md` |
-| `AuditBundle` | interface | `agentfootprint/observability-providers` | `docs/guides/security.md` |
+| `AuditBundle` | interface | `agentfootprint/observability-providers` `agentfootprint/observe` | `docs/guides/security.md` |
 | `ConfidenceStrategy` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/ranking-confidence.md`, `docs/proposals/003-per-loop-influence-credit.md` |
 | `ContextUnit` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/missing-context.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `CostVerdict` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/two-score-localization.md` |
-| `Credential` | interface | `agentfootprint/identity` | `docs/guides/prompt-injection.md` |
-| `DefineSkillOptions` | interface | `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
-| `DefineSteeringOptions` | interface | `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
+| `Credential` | interface | `agentfootprint/identity` `agentfootprint/security` | `docs/guides/prompt-injection.md` |
+| `DefineSkillOptions` | interface | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
+| `DefineSteeringOptions` | interface | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
 | `EventMeta` | interface | `agentfootprint/events` | `docs/guides/recorders.md`, `docs/guides/streaming.md` |
 | `EvidenceInput` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `FallbackProviderOptions` | interface | `agentfootprint/resilience` | `docs/guides/security.md` |
@@ -397,7 +395,7 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `LoopCandidate` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
 | `LoopRecallShortlist` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
 | `MissingContextResult` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/missing-context.md` |
-| `MockProviderOptions` | interface | `agentfootprint/llm-providers` | `docs/guides/adapters.md` |
+| `MockProviderOptions` | interface | `agentfootprint/llm-providers` `agentfootprint/providers` | `docs/guides/adapters.md` |
 | `RankingConfidence` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/ranking-confidence.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `RestoredCandidate` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/missing-context.md` |
 | `RootCausePath` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/007-root-cause-backtrack.md` |
@@ -405,27 +403,27 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `RunStep` | interface | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/guides/recorders.md` |
 | `ScoreContrastiveInfluenceArgs` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/contrastive-influence.md` |
 | `SignalScores` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/006-loop-recall-shortlist.md` |
-| `SkillRouting` | interface | `agentfootprint/injection-engine` | `docs/proposals/002-skill-graph.md` |
+| `SkillRouting` | interface | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/proposals/002-skill-graph.md` |
 | `StepGraph` | interface | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md`, `docs/design/ui-boundary.md` |
 | `StepNode` | interface | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
 | `Suspect` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/missing-context.md`, `docs/proposals/004-two-score-localization.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `SyntheticQuestionNode` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
-| `ThinkingHandler` | interface | `agentfootprint/thinking` | `docs/MENTAL_MODEL.md` |
-| `ToSSEOptions` | interface | `agentfootprint/stream` | `docs/guides/streaming.md` |
+| `ThinkingHandler` | interface | `agentfootprint/providers` `agentfootprint/thinking` | `docs/MENTAL_MODEL.md` |
+| `ToSSEOptions` | interface | `agentfootprint/observe` `agentfootprint/stream` | `docs/guides/streaming.md` |
 | `Trajectory` | interface | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/005-trajectory-assembler.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `WithCircuitBreakerOptions` | interface | `agentfootprint/resilience` | `docs/guides/security.md` |
 | `ActorArrow` | type | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
-| `DefineFactOptions` | type | `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
-| `DefineInstructionOptions` | type | `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
+| `DefineFactOptions` | type | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
+| `DefineInstructionOptions` | type | `agentfootprint/context` `agentfootprint/injection-engine` | `docs/INSTRUCTION_ARCHITECTURE.md` |
 | `DomainEvent` | type | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/boundary-commit-ranges.md`, `docs/design/governance.md` |
 | `HonestyFlagKind` | type | `agentfootprint/debug` `agentfootprint/observe` | `docs/proposals/005-trajectory-assembler.md` |
 | `SuspectClass` | type | `agentfootprint/debug` `agentfootprint/observe` | `docs/guides/two-score-localization.md` |
-| `ToolGatePredicate` | type | `agentfootprint/tool-providers` | `docs/guides/security.md` |
+| `ToolGatePredicate` | type | `agentfootprint/providers` `agentfootprint/tool-providers` | `docs/guides/security.md` |
 | `Payloads` | other | `agentfootprint/events` | `README.md` |
 
 ### 6. Mentioned only inside a code sample
 
-The name appears in a fenced block on the site and nowhere in the surrounding text. Reported as its own class rather than silently counted either way. **18 symbols.**
+The name appears in a fenced block on the site and nowhere in the surrounding text. Reported as its own class rather than silently counted either way. **19 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -434,8 +432,9 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 | `ToolCallEntry` | interface | `agentfootprint` `agentfootprint/security` |
 | `AgentOutput` | type | `agentfootprint` |
 | `ToolResultContent` | type | `agentfootprint` `agentfootprint/security` |
-| `buildReadSkillTool` | function | `agentfootprint/injection-engine` |
+| `buildReadSkillTool` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `embeddingCache` | function | `agentfootprint/debug` `agentfootprint/observe` |
+| `routeRecorder` | function | `agentfootprint/observe` |
 | `AnthropicCacheStrategy` | class | `agentfootprint/cache` |
 | `BedrockCacheStrategy` | class | `agentfootprint/cache` |
 | `NoOpCacheStrategy` | class | `agentfootprint/cache` |
@@ -444,13 +443,13 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 | `CacheCapabilities` | interface | `agentfootprint/cache` |
 | `CacheMetrics` | interface | `agentfootprint/cache` |
 | `ContextBugArtifacts` | interface | `agentfootprint/debug` `agentfootprint/observe` |
-| `ObservabilityStrategy` | interface | `agentfootprint/strategies` |
+| `ObservabilityStrategy` | interface | `agentfootprint/observe` `agentfootprint/strategies` |
 | `AgentfootprintEventType` | type | `agentfootprint/events` |
 | `MakeChatAgent` | type | `agentfootprint/debug` `agentfootprint/observe` |
 
 ### 7. Declared + not documented + not exercised — unknown
 
-Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **600 symbols.**
+Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **599 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -555,7 +554,7 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `ContextEngineeringUnsubscribe` | type | `agentfootprint` |
 | `ContextInjectedEvent` | type | `agentfootprint` |
 | `ContextInjectedListener` | type | `agentfootprint` |
-| `CreateProviderOptions` | type | `agentfootprint` `agentfootprint/llm-providers` |
+| `CreateProviderOptions` | type | `agentfootprint` `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `EmittedEvent` | type | `agentfootprint` |
 | `EvidencePreset` | type | `agentfootprint` |
 | `FlowchartResultMapper` | type | `agentfootprint` |
@@ -568,13 +567,13 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `ObserverDeliveryOptions` | type | `agentfootprint` |
 | `ObserverDrainResult` | type | `agentfootprint` |
 | `ParallelOutput` | type | `agentfootprint` |
-| `ProviderKind` | type | `agentfootprint` `agentfootprint/llm-providers` |
+| `ProviderKind` | type | `agentfootprint` `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `ReadTrackingMode` | type | `agentfootprint` |
 | `SequenceOutput` | type | `agentfootprint` |
 | `StageRole` | type | `agentfootprint` |
 | `TokenKind` | type | `agentfootprint` |
 | `ToolArgValidationMode` | type | `agentfootprint` |
-| … | | _480 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
+| … | | _479 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
 
 ### 8. Advisory — import paths named in prose that the export map does not expose
 
@@ -584,12 +583,9 @@ Never fails the build, because this bucket needs judgement. It mixes two kinds o
 |---|---|
 | `agentfootprint/cache-anthropic` | `docs-next/content/docs/reference/strategy-everywhere.mdx` |
 | `agentfootprint/governance` | `docs-next/content/docs/build/sequence-governance.mdx` |
-| `agentfootprint/memory-agentcore` | `docs-next/content/docs/build/agentcore.mdx`, `docs-next/content/docs/build/memory-stores.mdx`, `docs-next/content/docs/build/memory.mdx`, `docs-next/content/docs/reference/dependency-graph.mdx` |
-| `agentfootprint/memory-redis` | `docs-next/content/docs/build/memory-stores.mdx`, `docs-next/content/docs/build/memory.mdx`, `docs-next/content/docs/reference/dependency-graph.mdx` |
 | `agentfootprint/observability-agentcore` | `docs-next/content/docs/reference/strategy-everywhere.mdx` |
 | `agentfootprint/observability-cloudwatch` | `docs-next/content/docs/reference/strategy-everywhere.mdx` |
 | `agentfootprint/observability-xray` | `docs-next/content/docs/reference/strategy-everywhere.mdx` |
-| `agentfootprint/providers` | `docs-next/content/docs/build/anthropic.mdx`, `docs-next/content/docs/debug/error-handling.mdx`, `docs-next/content/docs/reference/dependency-graph.mdx` |
 | `agentfootprint/reliability/strictOutput` | `docs-next/content/docs/build/strict-output.mdx` |
 
 ## Per-subpath surface
@@ -598,31 +594,33 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 296 | 142 | 48% |
+| `agentfootprint` | 297 | 144 | 48% |
+| `agentfootprint/providers` | 83 | 48 | 58% |
+| `agentfootprint/memory` | 155 | 40 | 26% |
 | `agentfootprint/cache` | 17 | 2 | 12% |
-| `agentfootprint/events` | 24 | 6 | 25% |
-| `agentfootprint/memory` | 141 | 33 | 23% |
+| `agentfootprint/observe` | 459 | 83 | 18% |
+| `agentfootprint/events` | 24 | 7 | 29% |
+| `agentfootprint/context` | 65 | 14 | 22% |
+| `agentfootprint/resilience` | 24 | 16 | 67% |
+| `agentfootprint/hosting` | 70 | 70 | 100% |
+| `agentfootprint/security` | 46 | 15 | 33% |
 | `agentfootprint/llm-providers` | 37 | 19 | 51% |
+| `agentfootprint/embedders` | 9 | 6 | 67% |
+| `agentfootprint/tool-providers` | 28 | 23 | 82% |
+| `agentfootprint/thinking` | 9 | 0 | 0% |
 | `agentfootprint/memory-providers` | 14 | 7 | 50% |
-| `agentfootprint/strategies` | 36 | 12 | 33% |
 | `agentfootprint/observability-providers` | 28 | 6 | 21% |
-| `agentfootprint/observe` | 362 | 50 | 14% |
+| `agentfootprint/strategies` | 36 | 12 | 33% |
+| `agentfootprint/stream` | 4 | 3 | 75% |
+| `agentfootprint/status` | 6 | 1 | 17% |
+| `agentfootprint/locales` | 8 | 7 | 88% |
 | `agentfootprint/debug` | 226 | 38 | 17% |
 | `agentfootprint/debug/finders` | 16 | 5 | 31% |
 | `agentfootprint/observability/contextError/finders` | 16 | 5 | 31% |
-| `agentfootprint/resilience` | 10 | 6 | 60% |
-| `agentfootprint/stream` | 4 | 3 | 75% |
-| `agentfootprint/injection-engine` | 65 | 13 | 20% |
-| `agentfootprint/tool-providers` | 28 | 23 | 82% |
-| `agentfootprint/security` | 21 | 10 | 48% |
-| `agentfootprint/identity` | 25 | 5 | 20% |
-| `agentfootprint/hosting` | 57 | 57 | 100% |
-| `agentfootprint/hosting-providers` | 13 | 13 | 100% |
 | `agentfootprint/reliability` | 16 | 12 | 75% |
-| `agentfootprint/thinking` | 9 | 0 | 0% |
-| `agentfootprint/locales` | 8 | 7 | 88% |
-| `agentfootprint/status` | 6 | 1 | 17% |
-| `agentfootprint/embedders` | 9 | 6 | 67% |
+| `agentfootprint/hosting-providers` | 13 | 13 | 100% |
+| `agentfootprint/injection-engine` | 65 | 14 | 22% |
+| `agentfootprint/identity` | 25 | 5 | 20% |
 
 ## Honest limits of this report
 
@@ -640,6 +638,6 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 - a new export not described in site prose → **fail**
 - a new typed event not described in site prose → **fail**
 - the published docs promising something that does not exist → **fail, always, baseline or not**
-- the 793 pre-existing undocumented exports recorded in the baseline → **pass**. They are known debt, not a surprise. Failing on them would turn the check red on day one and get it deleted in a week, which is worse than no check.
+- the 790 pre-existing undocumented exports recorded in the baseline → **pass**. They are known debt, not a surprise. Failing on them would turn the check red on day one and get it deleted in a week, which is worse than no check.
 
 Fixed some gaps? `npm run docs:truth:baseline` re-records the baseline and regenerates this report, so an improvement is locked in and cannot silently regress. Refresh the reference-run evidence with `npm run docs:truth:exercise` — it needs no credentials and never reads any.

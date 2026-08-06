@@ -14,7 +14,7 @@
  */
 
 import { type LLMProvider } from '../../src/index.js'
-import { skillGraph, defineSkill } from '../../src/injection-engine.js';
+import { skillGraph, defineSkill } from '../../src/doors/context.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

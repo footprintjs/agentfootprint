@@ -98,13 +98,23 @@ describe('Block B — package.json exports table', () => {
     expect(exp['./security']).toBeDefined();
   });
 
-  it('legacy alias subpaths removed in 4.0.0 (collapsed into canonical)', () => {
+  it('per-adapter memory aliases stayed removed (collapsed in 4.0.0)', () => {
     const exp = loadExports();
-    // ./providers collapsed into ./llm-providers; ./memory-redis +
-    // ./memory-agentcore collapsed into ./memory-providers.
-    expect(exp['./providers']).toBeUndefined();
+    // ./memory-redis + ./memory-agentcore collapsed into ./memory-providers,
+    // which 8.0.0 in turn folded into ./memory. They do not come back.
     expect(exp['./memory-redis']).toBeUndefined();
     expect(exp['./memory-agentcore']).toBeUndefined();
+  });
+
+  it('./providers is back in 8.0.0 — as a DOOR, not the old per-vendor alias', () => {
+    const exp = loadExports();
+    // 4.0.0 removed `./providers` as a one-file alias of ./llm-providers.
+    // 8.0.0 reintroduces the name for a different, bigger job: every "plug in
+    // a backend" surface behind one door. It resolves to its own barrel, NOT
+    // to the llm-providers file the 4.0.0 alias pointed at.
+    expect(exp['./providers']).toBeDefined();
+    expect(exp['./providers'].require.default).toBe('./dist/doors/providers.js');
+    expect(exp['./providers'].require.default).not.toBe('./dist/llm-providers.js');
   });
 
   it('every exports entry serves per-condition types (import→ESM, require→CJS)', () => {
@@ -139,5 +149,108 @@ describe('Block B — package.json exports table', () => {
     expect(exp['./llm-providers'].require.default).toBe('./dist/llm-providers.js');
     expect(exp['./memory-providers'].import.types).toBe('./dist/esm/memory-providers.d.ts');
     expect(exp['./memory-providers'].require.default).toBe('./dist/memory-providers.js');
+  });
+});
+
+// ─── 8.0.0 — the door map ─────────────────────────────────────────
+
+describe('8.0.0 door map — every path a consumer can type still resolves', () => {
+  function loadPkg(): {
+    exports: Record<string, { import: { types: string; default: string } } | string>;
+    typesVersions: Record<string, Record<string, string[]>>;
+  } {
+    return JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
+  }
+
+  /** The 10 canonical doors. `./cache` and `./events` stand alone by design. */
+  const DOORS = [
+    '.',
+    './providers',
+    './memory',
+    './cache',
+    './observe',
+    './events',
+    './context',
+    './resilience',
+    './hosting',
+    './security',
+  ];
+
+  /** Every path 7.x consumers could type. NONE of these may ever disappear
+   *  during 8.x — that is the whole promise of the consolidation. */
+  const SEVEN_X_PATHS = [
+    '.',
+    './cache',
+    './events',
+    './memory',
+    './llm-providers',
+    './memory-providers',
+    './strategies',
+    './observability-providers',
+    './observe',
+    './debug',
+    './debug/finders',
+    './observability/contextError/finders',
+    './resilience',
+    './stream',
+    './injection-engine',
+    './tool-providers',
+    './security',
+    './identity',
+    './hosting',
+    './hosting-providers',
+    './reliability',
+    './thinking',
+    './locales',
+    './status',
+    './embedders',
+    './package.json',
+  ];
+
+  it('every 7.x import path still resolves in 8.x', () => {
+    const exp = loadPkg().exports;
+    for (const path of SEVEN_X_PATHS) {
+      expect(exp[path], `${path} worked in 7.x and must keep working`).toBeDefined();
+    }
+  });
+
+  it('every door is present and points at a real barrel', () => {
+    const exp = loadPkg().exports;
+    for (const door of DOORS) expect(exp[door], `door ${door} missing`).toBeDefined();
+  });
+
+  it('the two doors added in 8.0.0 are exactly ./providers and ./context', () => {
+    const exp = loadPkg().exports;
+    const added = Object.keys(exp).filter((k) => !SEVEN_X_PATHS.includes(k));
+    expect(added.sort()).toEqual(['./context', './providers']);
+  });
+
+  it('typesVersions covers every non-root export path (TS < 4.7 fallback)', () => {
+    const pkg = loadPkg();
+    const tv = pkg.typesVersions['*'];
+    for (const key of Object.keys(pkg.exports)) {
+      if (key === '.' || key === './package.json') continue;
+      expect(tv[key.slice(2)], `typesVersions missing ${key}`).toBeDefined();
+    }
+  });
+
+  it('typesVersions agrees with the require condition, entry for entry', () => {
+    const pkg = loadPkg();
+    const tv = pkg.typesVersions['*'];
+    for (const [key, entry] of Object.entries(pkg.exports)) {
+      if (key === '.' || key === './package.json' || typeof entry === 'string') continue;
+      const fromExports = (entry as { require: { types: string } }).require.types;
+      expect(tv[key.slice(2)], `typesVersions drifted for ${key}`).toEqual([fromExports]);
+    }
+  });
+
+  it('the manifest declares its module type and a full git URL (publint)', () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as {
+      type: string;
+      repository: { url: string };
+    };
+    // The root build is CJS; dist/esm carries its own {"type":"module"}.
+    expect(pkg.type).toBe('commonjs');
+    expect(pkg.repository.url).toMatch(/^git\+https:\/\//);
   });
 });

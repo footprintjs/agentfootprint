@@ -238,6 +238,7 @@ title: agentfootprint
 - [ToolResultContent](/docs/api/type-aliases/ToolResultContent)
 - [ToolResultOutcome](/docs/api/type-aliases/ToolResultOutcome)
 - [UntilGuard](/docs/api/type-aliases/UntilGuard)
+- [Watcher](/docs/api/type-aliases/Watcher)
 - [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason)
 - [WireRole](/docs/api/type-aliases/WireRole)
 - [WriteProvenanceMode](/docs/api/type-aliases/WriteProvenanceMode)

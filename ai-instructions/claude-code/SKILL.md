@@ -75,7 +75,7 @@ Build the entire agent + context engineering + tools + memory + RAG + MCP with i
 | Mock | Production swap |
 |---|---|
 | `mock({ reply })` · `mock({ replies })` for scripted multi-turn | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
-| `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · Dynamo · Postgres · Pinecone (planned) |
+| `InMemoryStore` | `RedisStore` (`agentfootprint/memory`) · `AgentCoreStore` (`agentfootprint/memory`) · Dynamo · Postgres · Pinecone (planned) |
 | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
 | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` real server |
 | inline `defineTool({ execute: async () => '...' })` | real implementation |
@@ -253,7 +253,7 @@ The 7 **strategies**:
 
 ```typescript
 import { Agent } from 'agentfootprint';
-import { mcpClient } from 'agentfootprint/tool-providers';
+import { mcpClient } from 'agentfootprint/providers';
 
 const slack = await mcpClient({
   name: 'slack',

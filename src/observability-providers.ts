@@ -37,6 +37,10 @@
  * and `otelObservability` covers the Datadog use case. We'll ship a
  * dedicated `dd-trace`-based adapter only if real-world feedback
  * demands the native Datadog APM client.
+ *
+ * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
+ * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
+ * here is the same symbol on the new door, not a copy.
  */
 
 export {

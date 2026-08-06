@@ -10,10 +10,10 @@ description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreSt
 | Store | Subpath | Peer-dep | Vector search | When to use |
 |---|---|---|---|---|
 | `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
-| `RedisStore` | `agentfootprint/memory-providers` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
-| `AgentCoreStore` | `agentfootprint/memory-providers` | `@aws-sdk/client-bedrock-agentcore` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+| `RedisStore` | `agentfootprint/memory` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
+| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
 
-Both store adapters live on the canonical `agentfootprint/memory-providers` subpath. Per-adapter aliases (`agentfootprint/memory-redis`, `agentfootprint/memory-agentcore`) still resolve for back-compat, but new code should import from `agentfootprint/memory-providers`.
+Both store adapters live on the canonical `agentfootprint/memory` subpath. Per-adapter aliases (`agentfootprint/memory`, `agentfootprint/memory`) still resolve for back-compat, but new code should import from `agentfootprint/memory`.
 
 All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
 
@@ -33,7 +33,7 @@ Resets on process restart. Per-process — multi-instance deploys lose state.
 Subpath import keeps the main barrel small. Lazy-required `ioredis`:
 
 ```ts
-import { RedisStore } from 'agentfootprint/memory-providers';
+import { RedisStore } from 'agentfootprint/memory';
 
 const store = new RedisStore({ url: 'redis://localhost:6379' });
 // or share an existing client:
@@ -49,7 +49,7 @@ Implements every `MemoryStore` method except `search()`. `putIfVersion` uses an 
 AWS Bedrock AgentCore Memory adapter. Subpath import; lazy-required AWS SDK:
 
 ```ts
-import { AgentCoreStore } from 'agentfootprint/memory-providers';
+import { AgentCoreStore } from 'agentfootprint/memory';
 
 const store = new AgentCoreStore({
   memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',
@@ -73,7 +73,7 @@ them, but you can't `put` arbitrary entries. So it's **not a `MemoryStore`** (th
 "store that can't store") — it's a small **reader**:
 
 ```ts
-import { BedrockAgentMemory } from 'agentfootprint/memory-providers';
+import { BedrockAgentMemory } from 'agentfootprint/memory';
 
 const mem = new BedrockAgentMemory({ agentId, agentAliasId, region: 'us-west-2' });
 
@@ -92,7 +92,7 @@ In hybrid memory setups (multiple `.memory(...)` calls on one agent), each layer
 
 ```ts
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint/memory';
-import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
+import { RedisStore, AgentCoreStore } from 'agentfootprint/memory';
 
 const recent = defineMemory({
   id: 'recent',

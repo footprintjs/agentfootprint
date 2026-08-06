@@ -58,7 +58,7 @@ await agent.run({ message: 'How long does a refund take?' });
 |---|---|---|
 | LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
-| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · DynamoDB / Postgres / Pinecone (planned) |
+| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory`) · `AgentCoreStore` (`agentfootprint/memory`) · DynamoDB / Postgres / Pinecone (planned) |
 | MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
 | Tool execute | inline `async () => '...'` closure | real implementation |
 
@@ -67,8 +67,8 @@ When generating starter code for users, **default to the mock surface** unless t
 **Subpath imports** for memory adapters keep the main barrel small + tree-shaking clean:
 
 ```typescript
-import { RedisStore } from 'agentfootprint/memory-redis';
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+import { RedisStore } from 'agentfootprint/memory';
+import { AgentCoreStore } from 'agentfootprint/memory';
 ```
 
 Both lazy-require their SDK (`ioredis` / `@aws-sdk/client-bedrock-agent-runtime`) and accept `_client` for test injection.
@@ -152,7 +152,7 @@ agent.rag(docs);
 
 ```typescript
 import { Agent, defineTool } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 const agent = Agent.create({
   provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
@@ -177,7 +177,7 @@ Builder methods:
 
 ```typescript
 import { LLMCall } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
+import { anthropic } from 'agentfootprint/providers';
 
 const call = LLMCall.create({ provider: anthropic(...), model: 'claude-sonnet-4-5-20250929' })
   .system('You are a terse assistant.')
@@ -402,7 +402,7 @@ Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnabl
 ```typescript
 import { mock } from 'agentfootprint';
 // Vendor-SDK providers (lazy peer-deps) live on the dedicated subpath:
-import { anthropic, openai, bedrock, ollama } from 'agentfootprint/llm-providers';
+import { anthropic, openai, bedrock, ollama } from 'agentfootprint/providers';
 
 // Adapter-swap testing: same agent, different provider, $0 in CI
 const provider = process.env.NODE_ENV === 'production'
@@ -413,7 +413,7 @@ const provider = process.env.NODE_ENV === 'production'
 Every provider implements the same `LLMProvider` interface. `mock`,
 `browserAnthropic`, `browserOpenai`, and `createProvider` ship on the main
 barrel; the vendor-SDK-backed providers (`anthropic` · `openai` · `bedrock`
-· `ollama`) live ONLY at `agentfootprint/llm-providers` (legacy alias:
+· `ollama`) live ONLY at `agentfootprint/providers` (legacy alias:
 `agentfootprint/providers`) so bundlers never walk their lazy peer-dep
 requires. Browser variants exist for client-side use.
 
@@ -444,7 +444,7 @@ if (isPaused(result)) {
 
 ```typescript
 import { withRetry, withFallback, fallbackProvider, withCircuitBreaker } from 'agentfootprint/resilience';
-import { anthropic, openai, ollama } from 'agentfootprint/llm-providers';
+import { anthropic, openai, ollama } from 'agentfootprint/providers';
 
 const reliable = withRetry(provider, { maxAttempts: 3 });
 const resilient = withFallback(primary, fallback);
@@ -478,7 +478,7 @@ Recorders (auto-attached when relevant builder method is called):
 - `evalRecorder` · `memoryRecorder` · `skillRecorder`
 
 **Observer delivery tier (RFC-001 Block 10):** `Agent.create({ observerDelivery:
-'deferred' })` routes the bridge recorders above + consumer `.recorder()` /
+'deferred' })` routes the bridge recorders above + consumer `.watch()` /
 `agent.attach()` recorders through footprintjs's bounded capture queue —
 capture inline (≈ µs), deliver one beat behind, drain synchronously at run
 resolve / reject / pause. Default `'inline'` = byte-identical attach path, no
@@ -502,7 +502,7 @@ One builder call mounts ONE skill that, when the user asks a why-question, unloc
 
 - ❌ **Don't ship a `ReflexionAgent` class.** Compose `Sequence(Agent, critique-LLM, Agent)`.
 - ❌ **Don't use `agent.run('string')`** — use `agent.run({ message: '...', identity? })`.
-- ❌ **Don't import from non-existent subpaths** like `'agentfootprint/instructions'` — the injection factories live on the main barrel (or `'agentfootprint/injection-engine'`). NOTE: `'agentfootprint/observe'`, `'agentfootprint/security'`, `'agentfootprint/resilience'`, `'agentfootprint/llm-providers'`, `'agentfootprint/memory'`, `'agentfootprint/tool-providers'`, `'agentfootprint/locales'` ARE real subpaths — some surfaces (vendor providers, resilience decorators) live ONLY there, not on the main barrel.
+- ❌ **Don't import from non-existent subpaths** like `'agentfootprint/instructions'` — the injection factories live on the main barrel (or `'agentfootprint/context'`). NOTE: `'agentfootprint/observe'`, `'agentfootprint/security'`, `'agentfootprint/resilience'`, `'agentfootprint/providers'`, `'agentfootprint/memory'`, `'agentfootprint/providers'`, `'agentfootprint/observe'` ARE real subpaths — some surfaces (vendor providers, resilience decorators) live ONLY there, not on the main barrel.
 - ❌ **Don't use `.memoryPipeline(pipeline)`** — that's the v1 API. Use `.memory(defineMemory({...}))`.
 - ❌ **Don't fall back when TopK threshold returns nothing.** Strict semantics: garbage past context > none is wrong.
 - ❌ **Don't store closures or class instances in scope** — TransactionBuffer can't clone functions. Memory-store entries serialize to JSON.

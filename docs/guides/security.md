@@ -179,10 +179,10 @@ console.log(audit);
 
 ## Tamper-Evident Audit Export — `auditExport` + `verifyAuditBundle`
 
-The events above tell you *what happened*; for compliance record-keeping (EU AI Act Art. 12 shape) you also need to show the log *hasn't been modified since capture*. `auditExport()` (on `agentfootprint/observability-providers`) hash-chains every typed event — decisions, tool calls, validation rejections, permission verdicts, credential lifecycle, costs — into an append-only `AuditBundle`: each record carries the SHA-256 of its canonical serialization plus the previous record's hash, anchored per run by a genesis record (runId + agent identity + library versions).
+The events above tell you *what happened*; for compliance record-keeping (EU AI Act Art. 12 shape) you also need to show the log *hasn't been modified since capture*. `auditExport()` (on `agentfootprint/observe`) hash-chains every typed event — decisions, tool calls, validation rejections, permission verdicts, credential lifecycle, costs — into an append-only `AuditBundle`: each record carries the SHA-256 of its canonical serialization plus the previous record's hash, anchored per run by a genesis record (runId + agent identity + library versions).
 
 ```typescript
-import { auditExport, verifyAuditBundle } from 'agentfootprint/observability-providers';
+import { auditExport, verifyAuditBundle } from 'agentfootprint/observe';
 
 const audit = auditExport({ agent: 'ledger-auditor' });
 const stop = agent.enable.observability({ strategy: audit });
@@ -209,11 +209,11 @@ See [`examples/features/19-audit-export.ts`](../../examples/features/19-audit-ex
 
 ## Provider Fallback — `fallbackProvider`
 
-Wraps multiple `LLMProvider` instances into one. Tries providers in order. On failure, falls through to the next. It lives on the `agentfootprint/resilience` subpath, and the vendor providers come from `agentfootprint/llm-providers`.
+Wraps multiple `LLMProvider` instances into one. Tries providers in order. On failure, falls through to the next. It lives on the `agentfootprint/resilience` subpath, and the vendor providers come from `agentfootprint/providers`.
 
 ```typescript
 import { fallbackProvider } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 // Providers are passed as varargs (not an array)
 const provider = fallbackProvider(
@@ -274,7 +274,7 @@ For full production resilience, wrap each provider in `withCircuitBreaker` and c
 
 ```typescript
 import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 const provider = withFallback(
   withCircuitBreaker(anthropic(), { failureThreshold: 3, cooldownMs: 30_000 }),
@@ -332,7 +332,7 @@ These compose into a layered security + resilience strategy:
 ```typescript
 import { Agent, PermissionPolicy, gatedTools, staticTools } from 'agentfootprint';
 import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
-import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { anthropic, openai } from 'agentfootprint/providers';
 
 // 1. Permission policy (centralized, shared) — immutable
 const policy = PermissionPolicy.fromRoles({

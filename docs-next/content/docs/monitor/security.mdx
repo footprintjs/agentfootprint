@@ -82,10 +82,10 @@ const agent = Agent.create({ provider, model: 'mock', permissionChecker: policy 
 Two surfaces, one primitive. `PermissionPolicy`:
 
 1. **Implements `PermissionChecker`** — drop it into `Agent.create({ permissionChecker })`. Async `check()` returns `{ result, policyRuleId, rationale }`. The `policyRuleId` (`readonly.allowlist` / `readonly.allowlist.miss`) makes audit traces self-explaining.
-2. **Exposes sync `isAllowed(toolId)`** — pair it with `gatedTools` from [agentfootprint/tool-providers](doc:tool-providers) to filter the tool list at composition time:
+2. **Exposes sync `isAllowed(toolId)`** — pair it with `gatedTools` from [agentfootprint/providers](doc:tool-providers) to filter the tool list at composition time:
 
 ```ts
-import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { gatedTools, staticTools } from 'agentfootprint/providers';
 import { PermissionPolicy } from 'agentfootprint/security';
 
 const policy = PermissionPolicy.fromRoles({...}, 'readonly');

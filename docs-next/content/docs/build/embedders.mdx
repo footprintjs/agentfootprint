@@ -3,7 +3,7 @@ title: Embedders
 description: openaiEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
 ---
 
-> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/embedders` is where the three real ones live.
+> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/providers` is where the three real ones live.
 
 ## The three
 
@@ -24,7 +24,7 @@ needs it.
 The type they all return is exported from the same subpath:
 
 ```ts twoslash
-import { staticEmbedder, type Embedder } from 'agentfootprint/embedders';
+import { staticEmbedder, type Embedder } from 'agentfootprint/providers';
 
 const embedder: Embedder = staticEmbedder();
 ```
@@ -35,7 +35,7 @@ No install: it is a `fetch` call. It needs a key, from `OPENAI_API_KEY` or
 passed directly.
 
 ```ts twoslash
-import { openaiEmbedder } from 'agentfootprint/embedders';
+import { openaiEmbedder } from 'agentfootprint/providers';
 // ---cut---
 // apiKey defaults to OPENAI_API_KEY from the environment
 const embedder = openaiEmbedder({
@@ -50,7 +50,7 @@ cheaper to store, still usable. Pass `dimensions` and agentfootprint sends it to
 the API **and** reports it:
 
 ```ts twoslash
-import { openaiEmbedder } from 'agentfootprint/embedders';
+import { openaiEmbedder } from 'agentfootprint/providers';
 // ---cut---
 const small = openaiEmbedder({ model: 'text-embedding-3-large', dimensions: 256 });
 // small.dimensions === 256, and the vectors really are 256 long
@@ -70,7 +70,7 @@ Two things worth knowing:
   this version), there is no size it can know, so it asks rather than guesses:
 
 ```ts twoslash
-import { openaiEmbedder } from 'agentfootprint/embedders';
+import { openaiEmbedder } from 'agentfootprint/providers';
 // ---cut---
 // Throws: unknown model 'nomic-embed-text' — pass { dimensions }
 // openaiEmbedder({ baseURL: 'http://localhost:11434/v1', model: 'nomic-embed-text' });
@@ -97,7 +97,7 @@ npm install @huggingface/transformers
 ```
 
 ```ts
-import { localEmbedder } from 'agentfootprint/embedders';
+import { localEmbedder } from 'agentfootprint/providers';
 
 const embedder = localEmbedder(); // 384 dimensions
 ```
@@ -134,7 +134,7 @@ npm install @yarflam/potion-base-8m   # ~30 MB, weights included
 ```
 
 ```ts
-import { staticEmbedder } from 'agentfootprint/embedders';
+import { staticEmbedder } from 'agentfootprint/providers';
 
 const embedder = staticEmbedder(); // 256 dimensions
 ```
@@ -168,7 +168,7 @@ The fix is to let *your* bundler resolve it. Import the module yourself and hand
 it in as `backend`:
 
 ```ts
-import { localEmbedder } from 'agentfootprint/embedders';
+import { localEmbedder } from 'agentfootprint/providers';
 import * as transformers from '@huggingface/transformers';
 
 const embedder = localEmbedder({ backend: transformers });
@@ -194,7 +194,7 @@ modules satisfy them without agentfootprint taking a hard type dependency on
 either optional peer — and so does a stub of your own in a test:
 
 ```ts twoslash
-import { staticEmbedder, type Model2VecBackend } from 'agentfootprint/embedders';
+import { staticEmbedder, type Model2VecBackend } from 'agentfootprint/providers';
 
 const fake: Model2VecBackend = { embed: (texts) => texts.map(() => [0.1, 0.2]) };
 const embedder = staticEmbedder({ backend: fake, dimensions: 2 });
@@ -214,7 +214,7 @@ identity](doc:semantic-retrieval) for how to migrate when you do want to switch.
 downstream accepts it:
 
 ```ts twoslash
-import type { Embedder } from 'agentfootprint/embedders';
+import type { Embedder } from 'agentfootprint/providers';
 
 const myEmbedder: Embedder = {
   dimensions: 1024,

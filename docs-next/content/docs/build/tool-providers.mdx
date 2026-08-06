@@ -38,7 +38,7 @@ Takes any inner `ToolProvider` and a per-tool predicate. Filters the inner outpu
 The composability is the point. Two concerns, two layers, decorator-shaped:
 
 ```ts
-import { staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { staticTools, gatedTools } from 'agentfootprint/providers';
 
 const isReadonly = (toolName: string) => toolName.startsWith('read_');
 const skillToolMap: Record<string, readonly string[]> = {
@@ -65,7 +65,7 @@ Pass the provider to `.toolProvider(...)` on the builder. The agent consults it 
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { gatedTools, staticTools } from 'agentfootprint/providers';
 
 const provider = gatedTools(staticTools(allTools), (name) => name.startsWith('read_'));
 

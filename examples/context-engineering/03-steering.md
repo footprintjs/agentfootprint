@@ -34,7 +34,7 @@ append in registration order.
 
 ```ts
 import { Agent } from 'agentfootprint'
-import { defineSteering } from 'agentfootprint/injection-engine';
+import { defineSteering } from 'agentfootprint/context';
 
 const jsonOnly = defineSteering({
   id: 'json-only',

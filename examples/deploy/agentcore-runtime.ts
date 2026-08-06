@@ -34,9 +34,9 @@ import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
 
 import { Agent, type LLMProvider } from '../../src/index.js';
-import { mock } from '../../src/llm-providers.js';
-import { standingAgent } from '../../src/hosting/index.js';
-import { agentCoreRuntimeHost, agentCoreSessions } from '../../src/hosting-providers.js';
+import { mock } from '../../src/doors/providers.js';
+import { standingAgent } from '../../src/doors/hosting.js';
+import { agentCoreRuntimeHost, agentCoreSessions } from '../../src/doors/hosting.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -39,7 +39,7 @@ There are **69 typed events across 20 domains**: `agent` (incl. `output_schema_v
 
 ## Tier-3 — `.enable.liveStatus()` and `.enable.observability()`
 
-The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners over a **strategy** — pick a built-in (`chatBubbleLiveStatus`, `consoleObservability` from `agentfootprint/strategies`) or a vendor one.
+The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners over a **strategy** — pick a built-in (`chatBubbleLiveStatus`, `consoleObservability` from `agentfootprint/observe`) or a vendor one.
 
 <CodeFile path="examples/features/04-observability.ts" region="enable-livestatus" title="examples/features/04-observability.ts (region: enable-livestatus)" />
 
@@ -58,7 +58,7 @@ Both return a `stop()` function — call it on shutdown to detach the listener c
 For shipping events to a vendor backend (CloudWatch, X-Ray, OTel, AgentCore), `.enable.observability(...)` accepts a typed strategy + optional `detach` driver. The strategy is the WHERE; the detach is the HOW (sync inline vs fire-and-forget):
 
 ```ts
-import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
 const stop = agent.enable.observability({
@@ -109,7 +109,7 @@ process.on('SIGTERM', async () => {
 });
 ```
 
-### Vendor adapters — `agentfootprint/observability-providers`
+### Vendor adapters — `agentfootprint/observe`
 
 Vendor strategies ship under one grouped subpath (parallel-providers pattern, mirrors `llm-providers` / `tool-providers` / `memory-providers`):
 
@@ -192,10 +192,10 @@ On `context.injected`, `asRole` is a **`ContextRole`** — `'system' | 'user' | 
 
 ## OpenTelemetry
 
-`otelObservability` ships in `agentfootprint/observability-providers`. It maps agentfootprint events onto OTel spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.*` attributes) via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
+`otelObservability` ships in `agentfootprint/observe`. It maps agentfootprint events onto OTel spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.*` attributes) via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
 
 ```ts
-import { otelObservability } from 'agentfootprint/observability-providers';
+import { otelObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 import { trace } from '@opentelemetry/api';
 
@@ -218,7 +218,7 @@ For operator-level decide()/select() evidence (`creditScore gt 700 → 750 (true
 
 ```ts
 const agent = Agent.create({ provider, model })
-  .recorder(otel.decisionEvidenceRecorder()) // decide()/select() evidence → span events
+  .watch(otel.decisionEvidenceRecorder()) // decide()/select() evidence → span events
   .build();
 ```
 

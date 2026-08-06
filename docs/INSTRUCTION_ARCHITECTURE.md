@@ -21,7 +21,7 @@ factories that produce it: `defineInstruction`, `defineSkill`, `defineSteering`,
 `defineFact`. Every flavor lands content into one of the three LLM API positions
 (system prompt, tools, messages) according to its `inject` shape, and activates
 according to its `trigger`. You import the factories from `agentfootprint` (or the
-`agentfootprint/injection-engine` subpath).
+`agentfootprint/context` subpath).
 
 ```typescript
 import {

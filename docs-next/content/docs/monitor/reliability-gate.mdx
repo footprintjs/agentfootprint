@@ -11,7 +11,7 @@ Rules-based retry, fallback, and fail-fast around every LLM call inside an Agent
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+import { ReliabilityFailFastError } from 'agentfootprint/resilience';
 
 const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
   .system('You triage support tickets.')
@@ -108,7 +108,8 @@ The single example below exercises happy / retry / fail-fast scenarios. The docs
 ## Reference
 
 - `Agent.create({...}).reliability(config)` — fluent builder method
-- `ReliabilityConfig` — the rule list shape (see [`agentfootprint/reliability` types](https://github.com/footprintjs/agentfootprint/blob/main/src/reliability/types.ts))
+- `ReliabilityConfig` — the rule list shape (see [`agentfootprint/resilience` types](https://github.com/footprintjs/agentfootprint/blob/main/src/reliability/types.ts))
 - `ReliabilityFailFastError` — thrown at `agent.run()` on `fail-fast` decisions; carries `kind`, `reason`, `cause`, `payload`, `snapshot`
-- `initialBreakerState`, `CircuitOpenError`, and the `BreakerState` / `CircuitState` types — circuit-breaker primitives exported from `agentfootprint/reliability` for consumers hydrating breaker state from a persistence store
-- Schema-retry helpers (v2.13) — `ValidationFailure`, `lastNValidationErrorsMatch`, `defaultStuckLoopRule`, and the `OutputSchemaValidator` type, also from `agentfootprint/reliability`. Pair with a rule's `feedbackForLLM` to run Instructor-style retry that tells the model what to fix, and short-circuit stuck loops where it keeps making the same mistake.
+- `initialBreakerState` and the `BreakerState` / `CircuitState` types — circuit-breaker primitives exported from `agentfootprint/resilience` for consumers hydrating breaker state from a persistence store
+- `CircuitOpenError` — **the one name that did NOT move to the door.** The gate throws a different class than the [provider decorator](doc:resilience) does; `agentfootprint/resilience` carries the decorator's. If you `instanceof`-check the error the GATE throws, import it from `agentfootprint/reliability`, which stays available for all of 8.x
+- Schema-retry helpers (v2.13) — `ValidationFailure`, `lastNValidationErrorsMatch`, `defaultStuckLoopRule`, and the `OutputSchemaValidator` type, also from `agentfootprint/resilience`. Pair with a rule's `feedbackForLLM` to run Instructor-style retry that tells the model what to fix, and short-circuit stuck loops where it keeps making the same mistake.

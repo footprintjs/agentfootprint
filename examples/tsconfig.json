@@ -1,4 +1,5 @@
 {
+  "//": "Examples import relative source paths (../../src/…) so they typecheck against the working tree. The `paths` block exists so an example MAY use the package specifier instead; it mirrors package.json#exports and must be kept in step with src/doors/.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -11,9 +12,15 @@
     "noUnusedParameters": false,
     "paths": {
       "agentfootprint": ["../src/index.ts"],
-      "agentfootprint/providers": ["../src/providers.barrel.ts"],
-      "agentfootprint/observe": ["../src/observe.barrel.ts"],
-      "agentfootprint/instructions": ["../src/instructions.barrel.ts"]
+      "agentfootprint/providers": ["../src/doors/providers.ts"],
+      "agentfootprint/memory": ["../src/doors/memory.ts"],
+      "agentfootprint/observe": ["../src/doors/observe.ts"],
+      "agentfootprint/context": ["../src/doors/context.ts"],
+      "agentfootprint/resilience": ["../src/doors/resilience.ts"],
+      "agentfootprint/security": ["../src/doors/security.ts"],
+      "agentfootprint/hosting": ["../src/doors/hosting.ts"],
+      "agentfootprint/events": ["../src/events.ts"],
+      "agentfootprint/cache": ["../src/cache/index.ts"]
     }
   },
   "include": ["**/*.ts"]

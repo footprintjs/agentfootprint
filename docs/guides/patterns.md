@@ -147,7 +147,7 @@ Iterative self-refinement. Each iteration proposes a candidate, then a critic cr
 import { mock } from 'agentfootprint';
 import { reflection } from 'agentfootprint/patterns';
 
-const provider = mock();   // swap for a real provider from 'agentfootprint/llm-providers'
+const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
 const reviewer = reflection({
   provider,
@@ -199,7 +199,7 @@ Each level fans out `branchingFactor` parallel thoughts, scores them with a cons
 import { mock } from 'agentfootprint';
 import { tot } from 'agentfootprint/patterns';
 
-const provider = mock();   // swap for a real provider from 'agentfootprint/llm-providers'
+const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
 const thinker = tot({
   provider,
@@ -255,7 +255,7 @@ A consumer-supplied `split(input, shardCount)` chops the input into exactly `sha
 import { mock } from 'agentfootprint';
 import { mapReduce } from 'agentfootprint/patterns';
 
-const provider = mock();   // swap for a real provider from 'agentfootprint/llm-providers'
+const provider = mock();   // swap for a real provider from 'agentfootprint/providers'
 
 const pipeline = mapReduce({
   provider,

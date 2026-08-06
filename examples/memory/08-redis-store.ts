@@ -1,12 +1,12 @@
 /**
  * 08 — RedisStore: persistent MemoryStore via Redis (peer-dep `ioredis`).
  *
- * Subpath import: `agentfootprint/memory-redis`. Lazy-required SDK —
+ * Subpath import: `agentfootprint/memory`. Lazy-required SDK —
  * the host process never loads `ioredis` unless this adapter is used.
  *
  * Production usage:
  *
- *   import { RedisStore } from 'agentfootprint/memory-providers';
+ *   import { RedisStore } from 'agentfootprint/memory';
  *   const store = new RedisStore({ url: 'redis://localhost:6379' });
  *
  * This example uses an injected mock Redis client (`_client`) so the
@@ -15,8 +15,8 @@
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js'
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/memory/index.js'
-import { mock } from '../../src/llm-providers.js';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/doors/memory.js'
+import { mock } from '../../src/doors/providers.js';
 import {
   RedisStore,
   type RedisLikeClient,

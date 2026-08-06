@@ -32,7 +32,7 @@ import {
   ReliabilityFailFastError,
   type ReliabilityRule,
   type ReliabilityScope,
-} from '../../src/reliability/index.js';
+} from '../../src/doors/resilience.js';
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
