@@ -222,6 +222,8 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // graph through the entry router (cold start). The Injection Engine advances
   // it each iteration; undefined for agents without a skillGraph().
   scope.currentSkillId = undefined;
+  // The model's `read_skill` pick — nothing picked yet on a fresh turn.
+  scope.pendingSkillPick = undefined;
 
   // `.configure()` — resolved ONCE here (seed runs exactly once per run)
   // and written to scope, which means the run's commit log records the

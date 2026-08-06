@@ -369,6 +369,15 @@ export function buildToolCallsHandler(
       }
       // `lookupTool` is hoisted to the handler closure (shared with resume).
 
+      // ── The model's `read_skill` pick: one-shot by construction ──────
+      // Cleared at the TOP of every iteration that dispatches tools, and set
+      // below only when the gate ACCEPTS a pick. Since the only way back into
+      // the ReAct loop is through this handler, a pick can never survive into a
+      // later iteration and drag the cursor backwards after a declared edge has
+      // moved it. Written only for skill-graph agents (the gate is what makes a
+      // pick "validated"); a plain read_skill agent never sees this key.
+      if (deps.allowedSkillIds) scope.pendingSkillPick = undefined;
+
       // Capture run identity from scope for the enriched permission ctx.
       // Same value the Tools slot passes to ToolProvider.list(ctx) so the
       // checker sees consistent identity across both gates.
@@ -805,6 +814,17 @@ export function buildToolCallsHandler(
             if (!current.includes(requestedId)) {
               scope.activatedInjectionIds = [...current, requestedId];
             }
+            // (3) The same call is also a MOVE through the graph. `read_skill`
+            //     answers "activated for the next iteration", and for a skill
+            //     whose activation is cursor-gated (a route target, an exclusive
+            //     entry) or rule-gated (an intent entry whose rule didn't match)
+            //     appending the id alone never made that true — the sentence was
+            //     a promise the engine didn't keep. Record the pick the gate just
+            //     accepted; the Injection Engine hands it to `graph.nextSkill`,
+            //     which moves the cursor unless a declared edge fired first.
+            //     Last accepted pick of a parallel batch wins the cursor; all of
+            //     them still land in `activatedInjectionIds`.
+            if (deps.allowedSkillIds) scope.pendingSkillPick = requestedId;
           }
         }
 

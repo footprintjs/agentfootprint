@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.3.0] - 2026-08-06
+
+**`read_skill` stops lying.** When a skill graph offered the model `read_skill`
+and the model called it, the tool answered:
+
+```text
+Skill 'esxi-inventory' activated for the next iteration.
+```
+
+For most graphs that sentence was false. The id was appended to
+`activatedInjectionIds`, which only a bare `llm-activated` skill ever reads — so a
+skill whose activation was cursor-gated (a route target, an exclusive entry) or
+rule-gated (an intent entry whose rule didn't match) simply never loaded. The
+agent was told a thing had happened that had not happened, in its own context,
+and then reasoned on top of it.
+
+The worst shape of it: a `start: { rules: [...] }` graph, and a user phrasing no
+rule anticipated. Nothing matches, so nothing activates; `read_skill` is the only
+tool offered; the model calls it, is told the skill is active, and gets the same
+empty tool list on the next iteration — **forever**. No skill, no tools, no error,
+no event. Our own guide listed that fallback under "shipped and usable", and the
+design doc had specified the missing step (§4A.1 "D2 — validated volunteer
+reroute") three versions ago. The gate was built; the move it gated was not.
+
+### An accepted pick now moves the cursor
+
+`read_skill` is already bounded to `graph.reachableSkills(cursor)` — the declared
+successors of where the model stands, plus the entries. A pick that gate **accepts**
+now moves the graph's cursor exactly like a declared edge does, so the skill's
+body and tools land on the next iteration and the graph's own `steps` run from
+there. What the gate allows and what takes effect are the same set.
+
+```
+a declared edge that fired   >   the model's pick   >   stay where you are
+```
+
+The author's determinism is untouched: an edge that fires on the same turn
+outranks the pick (a model guess never overrides a route the author pinned). The
+dropped pick is reported rather than swallowed — see the new event below.
+
+### `agentfootprint.skill.reroute_superseded` (new typed event — 70 total)
+
+Fires in exactly one case: a `read_skill` the gate accepted did not end up active
+because a declared edge won the same turn (the model emitted a domain tool *and*
+`read_skill` in one message). Payload: `{ volunteeredId, wonId, fromSkillId,
+iteration }`. It is derived from the real active set, not from which clause won,
+so it cannot fire for a pick that did take effect.
+
+### Two behavior changes worth naming
+
+Both are activations that previously no-opped and now work. Nothing that worked
+before stops working; a graph whose rules match is byte-for-byte unchanged (the
+rule is evaluated first and short-circuits), and an agent with no `skillGraph()`
+never engages any of this.
+
+1. **A declared `step` INTO a skill that is also a rule entry now activates it.**
+   This was live and silent: `steps: [{ from: 'esxi', to: 'volume-lookup' }]`
+   where `volume-lookup` is also an entry rule moved the cursor and left the
+   skill dark, because its compiled trigger was its own entry rule — written for
+   the user's message, not for the hop. The cursor and the active set disagreed,
+   which the skill-graph module's own keystone says can't happen. Now an intent
+   entry is active when **its rule matches OR the cursor is on it**.
+2. **A `when`-gated entry the model explicitly picks now loads.** `when` gates the
+   AUTOMATIC pick; it was never authorization (no identity is in scope for it).
+   Previously the pick was accepted, reported as activated, and dropped —
+   documented as a caveat on `.entryByRead()`, which is just this bug wearing a
+   disclaimer. Use `when` to say "don't route here on your own", not as a lock.
+
+### Also
+
+- `skillScopedTools()`'s doc was stale in a way that cost people wiring time: it
+  said the runtime populating `ctx.activeSkillId` was still to come (it ships),
+  and never said that `activeSkillId` is the last **`read_skill`** activation
+  only — a skill activated by a rule or by a graph edge does not match it — nor
+  that an agent takes **one** `ToolProvider` (a second `.toolProvider()` call
+  throws). It now leads with the case where you don't need the provider at all:
+  `defineSkill({ tools, autoActivate: 'currentSkill' })`.
+- `graph.nextSkill(ctx)` reads the new `InjectionContext.pendingSkillPick`, and
+  the compiled triggers share one memoized view of the resolver per evaluation
+  pass — a 15-entry regex router costs the same per iteration as it did before.
+
+→ runnable + tested: **`examples/features/42-skill-graph-model-pick.ts`**.
+
 ## [8.2.0] - 2026-08-06
 
 **Durable compaction.** An agent that has been up for a week folds week one

@@ -137,6 +137,9 @@ interface InjectionEngineArgs {
    *  route triggers compare against). Carried by the mount mappers; undefined
    *  on cold start and for non-skillGraph agents. */
   currentSkillId?: string;
+  /** The `read_skill` pick the gate accepted last iteration (one-shot). Moves the
+   *  cursor unless a declared edge fired first. Carried by the mount mappers. */
+  pendingSkillPick?: string;
   /** The relevance entry ranking (from an entry scorer) — read by defineRelevanceHint. */
   entryScores?: InjectionContext['entryScores'];
   /** Name of the entry scorer that produced `entryScores`. */
@@ -203,6 +206,7 @@ function makeEvaluateStage(
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
       activatedInjectionIds: args.activatedInjectionIds ?? [],
       ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
+      ...(args.pendingSkillPick !== undefined && { pendingSkillPick: args.pendingSkillPick }),
       ...(args.entryScores !== undefined && { entryScores: args.entryScores }),
       ...(args.entryScorer !== undefined && { entryScorer: args.entryScorer }),
     };
@@ -213,11 +217,31 @@ function makeEvaluateStage(
     // (`nextSkillCursor`) because `currentSkillId` arrives as a readonly INPUT
     // here; the mount's outputMapper maps it onto the parent's mutable
     // `currentSkillId` for the next iteration. Skill-graph agents only.
+    const cursor = nextSkill ? nextSkill(ctx) : undefined;
     if (nextSkill) {
-      scope.$setValue('nextSkillCursor', nextSkill(ctx));
+      scope.$setValue('nextSkillCursor', cursor);
     }
 
     const evaluation = evaluateInjections(injections, ctx);
+
+    // The told-the-truth check. `read_skill` answered "Skill 'X' activated for the
+    // next iteration" and the gate accepted the pick — so X must be in THIS pass's
+    // active set. It normally is (the pick moved the cursor). The one case where it
+    // isn't: a declared edge fired the same turn and won the cursor (`D1 > D2` —
+    // the model emitted a domain tool AND read_skill in one message, and the domain
+    // tool's result matched a route). Rather than let a promise quietly go unmet,
+    // say so on the record. Checked against the REAL active set, not against which
+    // clause won, so it can never fire for a pick that did take effect (e.g. an
+    // additive rules-form entry that activated while the cursor sat elsewhere).
+    const pick = ctx.pendingSkillPick;
+    if (pick !== undefined && !evaluation.active.some((inj) => inj.id === pick)) {
+      typedEmit(scope, 'agentfootprint.skill.reroute_superseded', {
+        volunteeredId: pick,
+        ...(cursor !== undefined && { wonId: cursor }),
+        ...(ctx.currentSkillId !== undefined && { fromSkillId: ctx.currentSkillId }),
+        iteration: ctx.iteration,
+      });
+    }
 
     // activeInjections — the REAL output the slot subflows read. POJO
     // projections (no trigger functions, no Tool execute functions) so they

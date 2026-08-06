@@ -328,6 +328,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // Skill-graph cursor as of the previous iteration — the `from`-gate the
           // route triggers compare against. Undefined on cold start / no graph.
           currentSkillId: parent.currentSkillId as string | undefined,
+          // The `read_skill` pick the gate accepted last iteration — the model's
+          // own move through the graph (one-shot; the tool-calls stage rewrites it).
+          pendingSkillPick: parent.pendingSkillPick as string | undefined,
           // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
           entryScores: parent.entryScores as
             | ReadonlyArray<{ id: string; score: number; relevance: number }>

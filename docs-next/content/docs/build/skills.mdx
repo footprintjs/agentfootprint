@@ -42,6 +42,30 @@ The LLM's tool-call to `read_skill({ id: 'billing' })` is the activation event. 
 
 The skill stays active until the agent run ends. The next `agent.run()` starts fresh.
 
+### Inside a skill graph, the pick also MOVES the graph
+
+When the agent was built with `.skillGraph(...)`, `read_skill` is bounded to the
+skills reachable from where the graph currently stands (`graph.reachableSkills`),
+and a pick the gate accepts moves the graph's cursor — the same cursor a declared
+route edge moves. That is what makes the read-the-menu fallback real: when no
+entry rule matches the user's phrasing, the model picks a skill, the skill loads
+on the next iteration with its body and tools, and the graph's own `steps` run
+from there.
+
+One rule decides a tie. If a declared edge fires on the same turn (the model
+emitted a domain tool *and* `read_skill` in one message), **the declared edge
+wins** — an author's deterministic route is never overridden by a model guess —
+and the run emits `agentfootprint.skill.reroute_superseded` with
+`{ volunteeredId, wonId, fromSkillId, iteration }` so the pick that was dropped is
+on the record rather than silently forgotten.
+
+<Callout type="info">
+Before 8.3.0 an accepted pick was reported to the model as activated and then
+ignored for any skill whose activation was cursor-gated or rule-gated — including
+the case where a `start: { rules }` graph matched no rule and therefore could
+never load a skill at all. See the CHANGELOG for the full shape of that fix.
+</Callout>
+
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts

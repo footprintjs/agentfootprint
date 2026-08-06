@@ -249,6 +249,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 39 | [`39-approve-once.ts`](features/39-approve-once.ts) | Approve once — session trust that says whose trust it is | A ~10-line tool middleware: the first matching call asks a person, the decision  |
 | 40 | [`40-output-schema-retry.ts`](features/40-output-schema-retry.ts) | The schema teaches back — retries on outputSchema | 7.26 —  |
 | 41 | [`41-local-model.ts`](features/41-local-model.ts) | Local model — the free middle rung of the adapter ladder | ollama( |
+| 42 | [`42-skill-graph-model-pick.ts`](features/42-skill-graph-model-pick.ts) | Skill graph — the model picks, and the pick takes effect | When no entry rule matches, the model picks a skill from the read_skill menu and the pick moves the graph |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

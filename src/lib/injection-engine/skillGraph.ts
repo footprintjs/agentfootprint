@@ -24,8 +24,16 @@
  * compiled trigger is always a `rule`. `toMermaid()` renders declared === drawn.
  *
  * A decision `tree()` routes per-iteration by stable `ctx` predicates (no cursor)
- * and is unaffected by `from`-gating. Scoped `read_skill` (bounding the
- * model-reachable set by graph position) remains deferred — see proposal 002.
+ * and is unaffected by `from`-gating.
+ *
+ * **The model moves too (`read_skill`).** Scoped `read_skill` bounds the model to
+ * `reachableSkills(cursor)` — the declared successors of where it stands, plus the
+ * entries. A pick the gate ACCEPTS moves the cursor exactly like a declared edge
+ * does (`ctx.pendingSkillPick`, honoured in `makeNextSkill`), so what the gate
+ * allows and what actually takes effect are the same set. A declared edge that
+ * fires the same turn wins (`D1 > D2`, docs/design/skill-graph.md §4A.1) and the
+ * run emits `agentfootprint.skill.reroute_superseded` rather than leaving the
+ * model's answered-"activated" claim quietly unmet.
  */
 
 import { isDevMode } from 'footprintjs';
@@ -239,9 +247,13 @@ export interface SkillGraph {
   /**
    * The CURSOR resolver — given an iteration context, where is the graph next?
    * Returns the skill id the graph should be *in* after this iteration:
-   *   • cold start (`ctx.currentSkillId` unset) → the first matching `entry`;
+   *   • cold start (`ctx.currentSkillId` unset) → the first matching `entry`,
+   *     else the entry the model picked with `read_skill`;
    *   • a `from`-gated route whose predicate matches `ctx.lastToolResult` → its target;
+   *   • else the model's `read_skill` pick (`ctx.pendingSkillPick`), which the
+   *     runtime sets only after the reachability gate accepted it;
    *   • otherwise the current cursor unchanged (sticky stay).
+   * A declared edge that fires always beats a same-turn model pick.
    * Pure + deterministic — the single source of truth shared by the compiled
    * route triggers and the agent loop's cursor-update stage, so the two can never
    * disagree. Flat entry/route graphs only; a decision `tree()` routes per-iteration
@@ -312,11 +324,10 @@ export interface SkillGraphBuilder {
    * route poorly for your domain) — the agent's own LLM understands the request.
    * Flat graphs only; mutually exclusive with `.entryByRelevance()`.
    *
-   * Caveat: prefer UNCONDITIONAL entries here. A `when`-gated entry may still be
-   * offered in the read_skill menu (the cold-start gate can't evaluate `when`), but
-   * if the model picks it while its `when` is false it won't load — the turn wastes
-   * an iteration with no skill. For intent-gating, use `.entryByRelevance()` or plain
-   * `.entry(s, { when })` (v1 always-on) instead.
+   * A `when` on an entry gates the AUTOMATIC pick only: if the model explicitly
+   * picks a `when`-gated entry from the menu, it loads (8.3.0 — before, the pick
+   * was accepted, reported as activated, and then silently dropped). Use `when`
+   * here to say "don't route here on your own", never as a lock.
    */
   entryByRead(): SkillGraphBuilder;
   build(opts?: BuildOptions): SkillGraph;
@@ -480,6 +491,9 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // one via `read_skill`, and that choice becomes the cursor (see makeNextSkill).
         const llmReadEntry = entryByReadFlag;
         nextSkill = makeNextSkill(entries, routes, llmReadEntry);
+        // Triggers share ONE memoized view of the resolver per evaluation pass —
+        // see memoizePerPass. `nextSkill` (public, one call per iteration) stays raw.
+        const nextSkillForTriggers = memoizePerPass(nextSkill);
         reachableSkills = makeReachableSkills(entries, routes);
         if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
         for (const [id, skill] of skillsById) {
@@ -488,7 +502,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             skill,
             entries,
             routes,
-            nextSkill,
+            nextSkillForTriggers,
             entryScorer !== undefined || llmReadEntry,
           );
           const routing = routingFor(id, entries, routes);
@@ -654,10 +668,25 @@ function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
  * The cursor resolver (the keystone). Pure + deterministic. Given the iteration
  * context, returns the skill the graph should be *in* after this iteration:
  *   • cold start (`currentSkillId` unset) → first `entry` whose `when` passes
- *     (an `always`-entry — no `when` — matches unconditionally);
+ *     (an `always`-entry — no `when` — matches unconditionally), else the entry
+ *     the MODEL picked with `read_skill` (see "the model's pick" below);
  *   • a `from`-gated route (`fromId === currentSkillId`) whose predicate matches
  *     `lastToolResult`, first by declaration order → its target (the transition);
+ *   • else the model's pick, when the read_skill gate accepted one this turn;
  *   • otherwise the current cursor unchanged (sticky stay).
+ *
+ * **The model's pick (`ctx.pendingSkillPick`) — the D2 "validated volunteer".**
+ * `read_skill(id)` is already GATED to `reachableSkills(cursor)` (the model may
+ * only name a skill the graph declares as reachable from where it stands), and
+ * the tool answers "Skill 'id' activated for the next iteration." Until 8.3.0 the
+ * cursor ignored that answer for every form except `.entryByRead()`'s cold start,
+ * so the sentence was false wherever the skill's activation was cursor-gated or
+ * rule-gated. It is honoured here, at ONE place, with the precedence the design
+ * pinned (docs/design/skill-graph.md §4A.1): a declared edge that fired this hop
+ * WINS over a same-turn pick (`D1 > D2`) — the author's determinism is never
+ * overridden by a model guess. The pick is one-shot (the tool-calls stage rewrites
+ * it every iteration), so a pick can never drag the cursor backwards after a later
+ * edge has moved it.
  *
  * Each candidate predicate runs in its OWN try/catch so one throwing edge can't
  * block its siblings or crash the loop — a throw is treated as "no match" and,
@@ -668,20 +697,16 @@ function makeNextSkill(
   routes: readonly RouteDecl[],
   llmReadEntry = false,
 ): (ctx: InjectionContext) => string | undefined {
+  const isEntry = (id: string): boolean => entries.some((e) => e.id === id);
   return (ctx) => {
     const cur = ctx.currentSkillId;
     if (cur === undefined) {
-      if (llmReadEntry) {
-        // LLM-read entry (`.entryByRead()`): the library does NOT auto-pick. The
-        // cursor is whichever entry the model has chosen via `read_skill` (so it's
-        // in `activatedInjectionIds`) and whose intent predicate passes — the first
-        // such in declaration order. Until the model picks, there is NO current skill
-        // (so no entry body loads), and `read_skill`'s cold-start gate offers exactly
-        // the entries (see makeReachableSkills). This reuses the existing
-        // read_skill → activatedInjectionIds path; the chosen entry's EXCLUSIVE
-        // trigger (`nextSkill(ctx) === id`) then fires and the cursor takes over.
+      // Cold start: declaration-order first entry whose intent predicate passes.
+      // `.entryByRead()` skips this — there the library deliberately does NOT
+      // auto-pick; the model reads the menu and picks (below), so no entry body
+      // loads until it does.
+      if (!llmReadEntry) {
         for (const e of entries) {
-          if (!ctx.activatedInjectionIds.includes(e.id)) continue;
           if (!e.when) return e.id;
           try {
             if (e.when(ctx)) return e.id;
@@ -689,20 +714,23 @@ function makeNextSkill(
             warnMatcherThrew(`entry "${e.id}"`, err);
           }
         }
-        return undefined;
       }
-      // Cold start: declaration-order first entry whose intent predicate passes.
+      // The model's pick becomes the starting cursor. This is what `.entryByRead()`
+      // has always done; 8.3.0 makes it true for EVERY start form, which is what
+      // makes the rules form's documented fallback ("no rule matched → the model
+      // picks from the read_skill menu") actually work. An entry's `when` is the
+      // AUTOMATIC pick's condition, not a lock on the manual one: the model asked
+      // for this skill by name and the gate allowed it.
+      if (ctx.pendingSkillPick !== undefined && isEntry(ctx.pendingSkillPick)) {
+        return ctx.pendingSkillPick;
+      }
       for (const e of entries) {
-        if (!e.when) return e.id;
-        try {
-          if (e.when(ctx)) return e.id;
-        } catch (err) {
-          warnMatcherThrew(`entry "${e.id}"`, err);
-        }
+        if (ctx.activatedInjectionIds.includes(e.id)) return e.id;
       }
       return undefined;
     }
-    // Transition: first from-gated deterministic edge that fires.
+    // D1 — transition: first from-gated deterministic edge that fires. Wins over
+    // a same-turn model pick (the author's declared edge is never overridden).
     for (const r of routes) {
       if (r.fromId !== cur) continue;
       if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
@@ -712,7 +740,42 @@ function makeNextSkill(
         warnMatcherThrew(`route ${r.fromId}→${r.toId}`, err);
       }
     }
+    // D2 — the validated volunteer: no declared edge fired, so the model's own
+    // (already gated) pick moves the cursor. A pick of the CURRENT skill is a
+    // no-op stay, not a hop.
+    if (ctx.pendingSkillPick !== undefined && ctx.pendingSkillPick !== cur) {
+      return ctx.pendingSkillPick;
+    }
     return cur; // sticky stay — no edge out of the current skill fired
+  };
+}
+
+/**
+ * Memoize `nextSkill` per EVALUATION PASS.
+ *
+ * `evaluateInjections` hands ONE `ctx` object to every trigger in a pass, and
+ * (since 8.3.0) every graph-compiled trigger — entry and route target alike —
+ * asks `nextSkill(ctx)`. Without this, a graph with E entries and R routes pays
+ * O(E × (E + R)) predicate calls per iteration instead of O(E + R): a 15-entry
+ * regex router would re-run all 15 regexes 15 times per turn.
+ *
+ * Keyed on ctx IDENTITY in a WeakMap, so entries vanish with the context object
+ * and a fresh iteration always recomputes. Safe because `nextSkill` is pure over
+ * `ctx` (route/entry predicates are documented as "pure + total"); the memo can
+ * only make a pass MORE self-consistent, never less. `graph.nextSkill` itself is
+ * left un-memoized — it is public API called once per iteration, and a consumer
+ * that mutates a ctx object between calls must still get a fresh answer.
+ */
+function memoizePerPass(
+  nextSkill: (ctx: InjectionContext) => string | undefined,
+): (ctx: InjectionContext) => string | undefined {
+  const cache = new WeakMap<InjectionContext, { value: string | undefined }>();
+  return (ctx) => {
+    const hit = cache.get(ctx);
+    if (hit) return hit.value;
+    const value = nextSkill(ctx);
+    cache.set(ctx, { value });
+    return value;
   };
 }
 
@@ -756,9 +819,23 @@ function deriveTrigger(
       return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
     }
     // Default (v1): a persistent base (always) or intent-conditional (rule).
-    // `currentSkillId` tracks the latest transitioned-into skill, orthogonal to an
-    // always-on base, so entry semantics are non-breaking without entryByRelevance.
-    return entry.when ? { kind: 'rule', activeWhen: entry.when } : { kind: 'always' };
+    // An unconditional entry is `always` — the cursor can add nothing to it.
+    if (!entry.when) return { kind: 'always' };
+    // An intent-conditional entry is active when its RULE matches **or the graph's
+    // CURSOR is on it** (8.3.0). Before, this was the one compiled trigger in the
+    // whole file that ignored the cursor, which broke the keystone invariant this
+    // module's header states — "the active set and the persisted cursor never
+    // disagree" — in two ways that both reached real graphs:
+    //   • a declared `step` INTO an entry skill moved the cursor there and the
+    //     skill still didn't activate (its rule was written for the user's message,
+    //     not for the hop), so the author's cross-domain edge silently did nothing;
+    //   • the model's `read_skill` pick moved nothing at all, so the tool's
+    //     "activated for the next iteration" was simply false.
+    // The rule is evaluated FIRST and short-circuits, so a matching-rule graph is
+    // byte-identical: `nextSkill` is not consulted, and a throwing predicate still
+    // surfaces as the evaluator's `skipped: 'predicate-threw'`.
+    const activeWhen = entry.when;
+    return { kind: 'rule', activeWhen: (ctx) => activeWhen(ctx) || nextSkill(ctx) === id };
   }
 
   // Deterministic incoming edges (when / onToolReturn) → cursor-gated + sticky.

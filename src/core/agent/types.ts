@@ -492,6 +492,13 @@ export interface AgentState {
    *  turn re-enters via the entry router). `from`-gates the route triggers.
    *  Undefined for agents without a skill graph. */
   currentSkillId?: string;
+  /** The `read_skill` pick the skill-graph gate ACCEPTED on this iteration — the
+   *  model's own move through the graph. Written by the tool-calls stage EVERY
+   *  iteration it runs (cleared when no pick was accepted), so it is one-shot by
+   *  construction and can never re-apply a stale pick. Read by the Injection
+   *  Engine, where it moves the cursor unless a declared edge fired first.
+   *  Undefined for agents without a skill graph (the gate is what validates it). */
+  pendingSkillPick?: string;
   /** The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    *  `.entryByRelevance()`) — written by the PickEntry stage once per turn (the
    *  "Why this skill?" relevance %). `score` is the raw strategy score; `relevance`

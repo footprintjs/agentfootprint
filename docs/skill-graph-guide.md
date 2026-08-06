@@ -115,7 +115,7 @@ stay in a skill until an edge takes you out (sticky), and the hand-off is clean 
 old skill switches off the same step the new one switches on). `.route(...)`'s `when`
 receives the **tool result** `{ toolName, result }` (a string) — *not* the full context.
 
-## 6. Scoped `read_skill` (the gate, 6.35.0)
+## 6. Scoped `read_skill` — the gate, and the move (6.35.0 · honoured since 8.3.0)
 
 `read_skill('id')` is **rejected** unless `id` is reachable from the current cursor —
 so the model can't jump out of the graph. The allowed set is
@@ -125,10 +125,42 @@ a full escape hatch there). On an out-of-set call the model gets a re-prompt nam
 the allowed skills, the cursor stays put, and an `agentfootprint.skill.rejected`
 event fires. **Agents with no skill graph are unaffected** (the gate is off).
 
+**A pick the gate ACCEPTS moves the cursor** — the same cursor a declared edge
+moves. So the skill loads on the next iteration: body, tools, and the graph's own
+`steps` out of it. What the gate allows and what actually takes effect are the same
+set, which is the whole point of having a gate.
+
+> **Fixed in 8.3.0.** Before, an accepted pick only appended the id to
+> `activatedInjectionIds` — which nothing but a bare `llm-activated` skill reads. So
+> `read_skill` answered *"Skill 'x' activated for the next iteration"* and, for a
+> rules-form entry, an exclusive entry or a route target, nothing happened. A
+> `start: { rules }` graph whose rules missed the user's phrasing could never load a
+> skill at all: no tools, on any iteration, forever.
+
+Precedence, when both want the cursor on the same turn (the model can emit a domain
+tool and `read_skill` in one message):
+
+```
+a declared edge that fired   >   the model's pick   >   stay where you are
+```
+
+The author's declared route always wins — a model guess never overrides
+determinism the author pinned. The pick is not silently dropped, though: the run
+emits `agentfootprint.skill.reroute_superseded` with what was picked and what won,
+so the answered "activated" claim is never left quietly unmet.
+
+```ts
+agent.on('agentfootprint.skill.reroute_superseded', (e) =>
+  console.log(e.payload), // { volunteeredId, wonId, fromSkillId, iteration }
+);
+```
+→ runnable + tested: **`examples/features/42-skill-graph-model-pick.ts`**.
+
 ## 7. Observe the routing
 
 - `agentfootprint.context.evaluated` (per iteration) → `payload.activeIds` + `payload.routing` (which edge/decision activated each).
 - `agentfootprint.skill.rejected` → `{ requestedId, currentSkillId, allowed, iteration }`.
+- `agentfootprint.skill.reroute_superseded` → `{ volunteeredId, wonId, fromSkillId, iteration }` — an accepted `read_skill` pick a declared edge outranked on the same turn.
 - `scope.entryScores` (snapshot) → the relevance ranking.
 - `graph.toMermaid()` → the diagram. Renders in **agentThinkingUI** (rack + "Why this tool?" panel) — live: https://footprintjs.github.io/agentThinkingUI/
 
@@ -209,11 +241,14 @@ Agent.create({ provider, model }).skillGraph(graph).instruction(defineRelevanceH
 
 ## 9. Honest status (so your agent doesn't invent APIs)
 
-**✅ Shipped + usable (6.38.0):** `defineSkill`; `skillGraph()` fluent **and** object-literal
+**✅ Shipped + usable (8.3.0):** `defineSkill`; `skillGraph()` fluent **and** object-literal
 forms with `.entry` / `.route` / `.tree` / `.entryByRelevance` / `.entryByRead` / `.build({check})`;
 tool-result `from`-gated routing; scoped `read_skill` + `skill.rejected`; `toMermaid()`; `read_skill`
-as the model-picks entry/fallback; `graph.nextSkill` / `graph.reachableSkills` / `graph.scoreEntries` /
-`graph.checkup`; `routeRecorder()` (path + governor trips); `defineRelevanceHint()`.
+as the model-picks entry/fallback — **the pick moves the cursor and the skill really loads
+(8.3.0; before that it was accepted, reported, and ignored)**, with `skill.reroute_superseded`
+when a declared edge outranks it; `graph.nextSkill` / `graph.reachableSkills` /
+`graph.scoreEntries` / `graph.checkup`; `routeRecorder()` (path + governor trips);
+`defineRelevanceHint()`.
 
 **🔶 NOT built yet — don't call these:** a runtime governor *force-stop* (today `getTrips()` only
 *labels* a spinning run; the iteration cap is the hard stop), `cursorBefore`/`cursorAfter` fields on

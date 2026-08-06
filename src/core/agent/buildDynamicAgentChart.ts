@@ -211,6 +211,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // Skill-graph cursor from the previous iteration (carried into sf-llm-call
         // by its outer boundary below). The `from`-gate for the route triggers.
         currentSkillId: parent.currentSkillId as string | undefined,
+        // The `read_skill` pick the gate accepted last iteration — the model's own
+        // move through the graph (one-shot; the tool-calls stage rewrites it).
+        pendingSkillPick: parent.pendingSkillPick as string | undefined,
         // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
         entryScores: parent.entryScores as
           | ReadonlyArray<{ id: string; score: number; relevance: number }>
@@ -458,6 +461,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Skill-graph cursor carried into sf-llm-call (like activatedInjectionIds
           // / lastToolResult — a direct cross-iteration read, not a prior* alias).
           currentSkillId: p.currentSkillId,
+          // The model's accepted `read_skill` pick — written by tool-calls on the
+          // OUTER chart, read by the injection engine inside this boundary.
+          pendingSkillPick: p.pendingSkillPick,
           // Relevance entry ranking — carried in so defineRelevanceHint can read it.
           entryScores: p.entryScores,
           entryScorer: p.entryScorer,

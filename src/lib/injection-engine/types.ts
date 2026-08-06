@@ -139,6 +139,20 @@ export interface InjectionContext {
    */
   readonly currentSkillId?: string;
   /**
+   * The skill the MODEL asked for with `read_skill` on the previous iteration —
+   * and that the skill-graph reachability gate ACCEPTED. One-shot: the tool-calls
+   * stage rewrites it every iteration, so it names a pick made just now, never a
+   * stale one (which is what keeps it from dragging the cursor backwards after a
+   * declared edge has moved on).
+   *
+   * `graph.nextSkill` honours it as the "validated volunteer" hop — but only after
+   * a declared edge has had its say, so an author's deterministic route is never
+   * overridden by a model guess. Present only for agents with a `skillGraph()`
+   * whose gate is wired; absent everywhere else, which is why plain `read_skill`
+   * agents are untouched by it.
+   */
+  readonly pendingSkillPick?: string;
+  /**
    * The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    * `.entryByRelevance()`) — written by the PickEntry stage at turn start.
    * `defineRelevanceHint()` reads it to detect a near-tie. Absent unless the graph

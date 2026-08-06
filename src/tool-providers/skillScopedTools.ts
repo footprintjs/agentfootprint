@@ -1,32 +1,42 @@
 /**
- * skillScopedTools — ToolProvider that exposes a tool subset only when
- * a specific Skill is active in the current iteration's context.
+ * skillScopedTools — ToolProvider that exposes a tool subset only while a
+ * specific Skill is the one the model most recently loaded.
  *
- * The Block A5 piece. Pairs with `defineSkill({ autoActivate: 'currentSkill' })`
- * to give the LLM a sharper choice space: when `billing` activates, the
- * tool list flips from "all 25 agent tools" to "the 7 billing tools" +
- * any baseline (always-on) tools the consumer composes alongside.
+ * **You probably don't need this.** If the tools belong to the skill, hand them
+ * to the skill: `defineSkill({ tools: [...], autoActivate: 'currentSkill' })`
+ * already narrows the LLM's tool list to the active skill, with no provider
+ * wiring at all. This provider is for tools that CAN'T ride on the skill —
+ * a list assembled elsewhere, discovered at runtime, or owned by another module.
  *
- * Pattern: gated ToolProvider keyed by `ctx.activeSkillId`. Pure compute;
- *          no Agent-runtime dependency. Composes freely with `staticTools`
- *          for the always-on baseline.
+ * Three facts worth knowing before you wire it:
+ *
+ * 1. **`ctx.activeSkillId` is the last `read_skill` activation, not the graph
+ *    cursor.** The runtime fills it from the tail of `scope.activatedInjectionIds`,
+ *    which only `read_skill` ever appends to. A skill that activated because an
+ *    entry RULE matched, or because a `skillGraph()` edge routed into it, does
+ *    NOT set it — `list(ctx)` will return `[]` for that skill. Scope by graph
+ *    position with the skill's own `tools:[]` instead.
+ * 2. **One ToolProvider per agent.** `AgentBuilder.toolProvider()` throws on the
+ *    second call. Compose several scopes into ONE provider (see the example
+ *    below) rather than calling it in a loop.
+ * 3. It is pure compute — no Agent-runtime dependency — so it is equally usable
+ *    from a test or a design-time inspection.
  *
  * @example  One skill's tools, scoped by activation
  *   const billingTools = skillScopedTools('billing', [refundTool, chargeTool]);
  *   billingTools.list({ iteration: 1, activeSkillId: 'billing' });
  *   // → [refundTool, chargeTool]
  *   billingTools.list({ iteration: 1, activeSkillId: 'refund' });
- *   // → [] (different skill active)
+ *   // → [] (a different skill was loaded)
  *   billingTools.list({ iteration: 1 });
- *   // → [] (no skill active)
+ *   // → [] (nothing loaded via read_skill — see fact 1 above)
  *
  * @example  Compose with baseline + multiple skills
  *   const baseline   = staticTools([lookupOrderTool, listSkills, readSkill]);
  *   const billingTbx = skillScopedTools('billing', [refundTool, chargeTool]);
  *   const refundTbx  = skillScopedTools('refund',  [reverseTool]);
  *
- *   // Wrap each scope-provider in a gatedTools for downstream composition,
- *   // OR build a small wrapper that concatenates list(ctx) outputs:
+ *   // ONE provider for the agent (see fact 2) — concatenate the scopes:
  *   const provider: ToolProvider = {
  *     id: 'composite',
  *     list: (ctx) => [
@@ -35,10 +45,7 @@
  *       ...refundTbx.list(ctx),
  *     ],
  *   };
- *
- * Note: the runtime that POPULATES `ctx.activeSkillId` from
- * `scope.activatedInjectionIds` lands in Block C / v2.5+. Today,
- * consumers can drive it manually for tests + design-time inspection.
+ *   Agent.create({ provider: llm, model }).toolProvider(provider).build();
  */
 
 import type { Tool } from '../core/tools.js';

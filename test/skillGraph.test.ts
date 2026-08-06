@@ -1087,7 +1087,7 @@ describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => 
     expect(g.scoreEntries).toBeUndefined();
   });
 
-  it('nextSkill cold-start: undefined until the model picks; then the activated entry (respecting when)', () => {
+  it('nextSkill cold-start: undefined until the model picks; then the entry it picked', () => {
     const billing = skill('billing');
     const incident = skill('incident');
     const g = skillGraph().entry(billing).entry(incident).entryByRead().build();
@@ -1097,13 +1097,17 @@ describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => 
     ).toBeUndefined();
     // the model read_skill('incident') → that becomes the cursor (NOT first-declared billing)
     expect(g.nextSkill(ctx({ activatedInjectionIds: ['incident'] }))).toBe('incident');
-    // a when-gated entry the model picked but whose intent fails → still no cursor
+    // 8.3.0 — a `when`-gated entry the model EXPLICITLY picked now loads. `when`
+    // gates the automatic pick; it is not a lock on the model's own choice. Before,
+    // read_skill answered "activated for the next iteration" and then nothing
+    // happened — the turn burned an iteration with no skill and no explanation.
     const gated = skillGraph()
       .entry(billing, { when: () => false })
       .entry(incident)
       .entryByRead()
       .build();
-    expect(gated.nextSkill(ctx({ activatedInjectionIds: ['billing'] }))).toBeUndefined();
+    expect(gated.nextSkill(ctx({ activatedInjectionIds: ['billing'] }))).toBe('billing');
+    expect(gated.nextSkill(ctx({ pendingSkillPick: 'billing' }))).toBe('billing');
   });
 
   it('through the evaluator: cold start loads NO entry; the read_skill choice loads exactly that one', () => {

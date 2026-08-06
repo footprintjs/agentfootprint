@@ -542,6 +542,26 @@ export interface SkillDeactivatedPayload {
  * (cursor/activations unchanged); the model gets a synthetic re-prompt naming
  * `allowed`. Powers the lens / Why-panel "it tried to leave the graph here".
  */
+/**
+ * Fired when a `read_skill` pick the gate ACCEPTED did not end up active — the
+ * model was told "Skill 'X' activated for the next iteration" and something else
+ * won. There is exactly one way to get here: a declared route edge fired on the
+ * same turn (the model emitted a domain tool AND `read_skill` in one message, and
+ * the tool's result matched the edge). The author's declared edge wins by design
+ * (`D1 > D2`), so the pick is superseded — and reported here rather than silently
+ * dropped. The next iteration shows the model where it actually is.
+ */
+export interface SkillRerouteSupersededPayload {
+  /** The skill the model picked with `read_skill` (accepted, then superseded). */
+  readonly volunteeredId: string;
+  /** The skill the declared edge routed to instead (the cursor that won). */
+  readonly wonId?: string;
+  /** The cursor the hop started from. */
+  readonly fromSkillId?: string;
+  /** The ReAct iteration whose evaluation dropped the pick. */
+  readonly iteration: number;
+}
+
 export interface SkillRejectedPayload {
   /** The skill id the model requested via `read_skill`. */
   readonly requestedId: string;
