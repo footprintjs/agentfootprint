@@ -308,10 +308,17 @@ export {
 //   summarizeOldest  fold the oldest span into a summary  (what `.compaction()` is)
 //   slidingWindow    keep the last N turns, drop older ones
 //   tokenBudget      counted-token trigger, drop instead of summarize
+//
+// A commit log lives as long as the process; a conversation lives longer. So
+// `.compaction({ retain })` carries the folded originals on the conversation
+// checkpoint too, and `foldedSpanFor(conversation, message)` is the door back
+// to them after a restart.
 export {
   CompactionUnmeasurableError,
   COMPACTED_FRAME_PREFIX,
   DROP_NOTICE_PREFIX,
+  foldedMessages,
+  foldedSpanFor,
   isCompactedSummary,
   isDropNotice,
   slidingWindow,
@@ -319,6 +326,9 @@ export {
   tokenBudget,
   type CompactionOptions,
   type CompactionRecord,
+  type CompactionRetention,
+  type FoldedConversation,
+  type FoldedSpan,
   type FoldRefusal,
   type FoldRefusalReason,
   type RemovalFacts,

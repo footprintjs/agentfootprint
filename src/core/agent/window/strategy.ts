@@ -40,7 +40,7 @@
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { Turn, RemovalPlan } from './turns.js';
-import type { WindowRecord } from './types.js';
+import type { FoldedSpan, WindowRecord } from './types.js';
 
 /** One message leaving the window, with the facts an eviction event needs. */
 export interface WindowEviction {
@@ -77,6 +77,16 @@ export interface WindowStrategyInput {
   readonly measured: { readonly input: number; readonly output: number } | undefined;
   /** The ReAct iteration this decision belongs to. */
   readonly iteration: number;
+  /**
+   * The run this decision belongs to.
+   *
+   * A strategy that retains what it removed has to name the run whose commit
+   * log held it — that is the honest answer to "where else could I have found
+   * this?", and the answer is "nowhere, once that process ended", which is the
+   * whole reason retention exists. `'unknown'` when the runtime could not name
+   * the run, never a fabricated id.
+   */
+  readonly runId: string;
   /** The agent's own model — the sensible default for a strategy that bills. */
   readonly agentModel: string;
   /** `provider.name` of the MAIN provider, for a refusal that names it. */
@@ -133,6 +143,21 @@ export interface WindowStrategyResult {
   readonly record: WindowRecord;
   /** Messages that left the window, for `context.evicted`. */
   readonly evictions: readonly WindowEviction[];
+  /**
+   * Spans this visit removed, in the form that OUTLIVES the process: appended
+   * to the conversation checkpoint, so a restart can still say what a summary
+   * stands for — and, under `retain: 'conversation'`, produce it verbatim.
+   *
+   * OMIT IT unless your strategy replaced messages with something that stands
+   * for them. `summarizeOldest` fills it because a summary is a claim that
+   * needs its evidence; the drop strategies do not, because a drop replaces
+   * nothing and its authored notice claims nothing.
+   *
+   * The stage writes these in the SAME commit as the window change, so there
+   * is no state in which messages left the window and the record of what they
+   * were did not follow them.
+   */
+  readonly folded?: readonly FoldedSpan[];
   /**
    * The budget reading to report on `agentfootprint.context.budget_pressure`.
    *

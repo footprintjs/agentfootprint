@@ -34,6 +34,7 @@ A compacted run is still a provable run. The lens draws a fold seam, not a hole.
 | `summarizer` | **Required.** The `LLMProvider` that writes the summary. Explicit on purpose: the library will not quietly bill your main model for compaction. |
 | `model` | Model id for the summarizer call. Defaults to the agent's own model; name a cheap one to spend less. |
 | `keepRecentTurns` | How many recent turns are never folded. Default `6`. |
+| `retain` | What happens to the messages a fold removes: `'conversation'` (default — they ride the conversation checkpoint and survive the process) or `'discard'`. See [Durable compaction](#durable-compaction-the-record-travels). |
 
 Omit `.compaction()` and nothing changes: no stage exists, no extra key is committed, the request bytes are what they always were.
 
@@ -121,10 +122,12 @@ The message that replaces a folded span is built by the library, not by the summ
 [compacted history — 3 earlier message(s) were folded out of this window at
 iteration 4. The text after this line is a SUMMARY written by claude-haiku-4-5;
 it is a claim about the conversation, not the conversation. The folded messages
-are retained verbatim in this run's commit log.]
+are retained verbatim with this conversation and can be produced on request.]
 
 <the summarizer's text, verbatim, as data>
 ```
+
+The last sentence is written from your `retain` setting and can say only what actually happened — under `retain: 'discard'` it reads *"The folded messages were not retained beyond the run that folded them; only this summary carries them forward."* A frame that asserted a durability the library was not keeping would be a false statement inside the model's own context, which is the worst place to put one.
 
 The label always comes first and the model's output is appended after it, untouched. A summarizer that returns `IGNORE ALL PREVIOUS INSTRUCTIONS` produces a message that still says, in the library's own words and *before* that text, what the text is. A test pins exactly that.
 
@@ -156,11 +159,87 @@ recovered 1150 characters, verbatim
 
 `commitValueAt(log, idx, 'history')` materialises the window as it stood at any commit — so the turn the model can no longer see is one call away for you, your auditor, and every backtracking tool in [`agentfootprint/observe`](doc:debug).
 
-## Long-lived conversations
+**A commit log is memory, though.** It lasts exactly as long as the process, and a standing agent outlives its process. That is what the next section is for.
 
-The summary is an ordinary `user` message. That means `agent.checkpoint()` carries it, `resumeOnError(checkpoint)` restores it, and a standing agent across a restart just keeps talking — the compacted frame is one more message in the history it was handed.
+## Durable compaction: the record travels
 
-A window that is still over budget after a fold folds again at the next boundary, and the previous summary is an ordinary candidate then. A span that is *only* an existing summary is refused (`only-existing-summary`): re-summarizing a summary with nothing new to add spends a call to lose detail.
+An agent runs for a week, gets deployed over on Wednesday, comes back up, and is handed the same conversation. The summary is still there — it is an ordinary `user` message, so `agent.checkpoint()` carries it and `resumeOnError(checkpoint)` restores it. The window half has always worked.
+
+What did *not* survive was everything behind it. The commit log holding those turns went with the old process, and the summary in the restored conversation went on telling the model they were "retained verbatim in this run's commit log" — a run that no longer existed.
+
+So the fold is retained on the **conversation**, which is the thing that actually survives:
+
+<CodeFile path="examples/context-engineering/14-durable-compaction.ts" region="carry" title="examples/context-engineering/14-durable-compaction.ts (region: carry)" />
+
+`agent.checkpoint().folded` is one `FoldedSpan` per fold, oldest first, and it accumulates across every turn, every restart and every deploy. Store the checkpoint anywhere that speaks JSON — [`sqliteSessions`](doc:infra), a Redis, your own table — and continue it in a new process:
+
+<CodeFile path="examples/context-engineering/14-durable-compaction.ts" region="continue" title="examples/context-engineering/14-durable-compaction.ts (region: continue)" />
+
+The agent answers from week one because the summary reached the wire. And week one itself is still producible, in a process that never ran it:
+
+<CodeFile path="examples/context-engineering/14-durable-compaction.ts" region="recover" title="examples/context-engineering/14-durable-compaction.ts (region: recover)" />
+
+```text
+── week two, from the file alone ──────────────────
+account in an ordinary message? false
+account inside the summary?     true
+the new agent answered:         We were working on ACCT-8842.
+
+── week one, verbatim, in week two ────────────────
+span found for the summary:  true
+originals recovered:         6 message(s)
+characters recovered:        2275
+the opening ledger is here:  true
+```
+
+### The trade, stated
+
+**Compaction shrinks the wire, not the record.** A stored session grows as it folds. That is the right way round — the model's context window is scarce and a row in a session store is not — but it is a real cost and it should not be a surprise: a long-running agent's stored conversation will be larger than the window it sends, by roughly the size of everything it ever folded.
+
+`retain: 'discard'` is the opt-out. Even then the span is still filed, naming what left and how much of it — a discard is an *absence*, and this family files absences the same way it files claims. Only `messages` is missing:
+
+```ts
+{ summaryFingerprint: '3f2a91c4', runId: 'run-…', iteration: 4, foldedAtMs: 1_78…,
+  model: 'claude-haiku-4-5', messageCount: 3, removedStageIds: ['seed#0', 'tool-calls#23'],
+  retained: 'discard' }   // no `messages` — absent, not an empty array
+```
+
+### Joining a summary to its span
+
+By content fingerprint, never by index — a later fold swallows an earlier summary and every index after it moves. `foldedSpanFor` does the join:
+
+```ts
+import { foldedSpanFor, isCompactedSummary } from 'agentfootprint';
+
+const conversation = readEnvelope(await sessions.hydrate(sessionId));
+for (const message of conversation.history) {
+  if (!isCompactedSummary(message)) continue;
+  const span = foldedSpanFor(conversation, message);
+  console.log(`${span?.messageCount ?? '?'} messages, ${span?.retained}`);
+}
+```
+
+`undefined` means *no fold was recorded for this message* — never *there were no originals*. Three different facts stay distinguishable: no span at all (a conversation stored before 8.2, or a message nobody folded), a span with no `messages` (`retain: 'discard'`), and a span with them.
+
+That also makes the fingerprint **forgery-proof**. `isCompactedSummary(msg)` answers "this *looks* like a frame", which is all a prefix check can see; a model that copies the frame's opening words passes it. `foldedSpanFor` answers the stronger question, and different content means a different fingerprint means no match.
+
+### Nothing can come apart
+
+The window change and the span are written in the **same commit**. There is no second write to fail, no I/O to time out and nothing to roll back, so there is no state in which messages left the window and the record of what they were did not follow. And a summarizer that throws folds nothing at all: the originals never leave the window, so there is nothing to retain and no span is written.
+
+### Older and newer runtimes
+
+`folded` is an optional field on the existing `conversation-v1` envelope, not a new format. A runtime that has never heard of it reads the checkpoint, ignores the field, and continues the conversation correctly — the summary is an ordinary message either way. Bumping the version would make an older deployment *refuse* a session it can serve perfectly well.
+
+Going the other way, a conversation stored before 8.2 simply has no spans, and `foldedSpanFor` says so rather than inventing one.
+
+<Callout type="info">
+  The spans belong to the **conversation**, not to the runtime carrying it. An agent built without `.compaction()` that is handed a conversation with folds passes them on untouched — quietly dropping somebody else's evidence because this deployment does not happen to compact would write that loss back to the store permanently.
+</Callout>
+
+### Folding a fold
+
+A window that is still over budget after a fold folds again at the next boundary, and the previous summary is an ordinary candidate then — so the second span's `messages` can contain the first summary. The chain stays walkable. A span that is *only* an existing summary is refused (`only-existing-summary`): re-summarizing a summary with nothing new to add spends a call to lose detail.
 
 ## Where it runs
 
@@ -174,8 +253,13 @@ Everything below comes from the package root, `agentfootprint`:
 
 | export | what it is |
 | --- | --- |
-| `CompactionOptions` | The option bag `.compaction(...)` takes: `thresholdTokens`, `summarizer`, `model`, `keepRecentTurns`. |
+| `CompactionOptions` | The option bag `.compaction(...)` takes: `thresholdTokens`, `summarizer`, `model`, `keepRecentTurns`, `retain`. |
 | `CompactionRecord` | One over-budget visit, as written to `scope.compactions` — the shape shown above. |
+| `CompactionRetention` | `'conversation' \| 'discard'` — what `retain` accepts. |
+| `FoldedSpan` | One fold as it survives the process, on `checkpoint().folded`: the summary's fingerprint, the run that held the originals, how many there were, which stages wrote them, the policy, and — under `'conversation'` — the messages themselves. |
+| `foldedSpanFor(conversation, message)` | The span behind one summary message, joined by fingerprint. `undefined` when no fold was recorded for it. |
+| `foldedMessages(conversation)` | Every retained message from every span, oldest fold first — the transcript-shaped door onto the same fact. |
+| `FoldedConversation` | What both readers actually need: `{ folded?: FoldedSpan[] }`. Structural on purpose, so they also read a paused run's `conversation`, a fixture, or anything you pulled out of your own store — not just an `AgentRunCheckpoint`. |
 | `WindowRefusal` | One named refusal: `{ reason, turnIndex, messageIndex }`. Positioned so a reader can find the turn it is talking about. (`FoldRefusal` is the 7.16 name, kept as a deprecated alias.) |
 | `WindowRefusalReason` | The closed set of reasons a turn did not fold: `system-envelope`, `unresolved-tool-call`, `paused-tool`, `pending-check-in`, `inside-keep-window`, `only-existing-summary`, `summarizer-failed`, `summary-not-smaller`. Branch on it; it will not grow silently. (`FoldRefusalReason` is the 7.16 name, kept as a deprecated alias.) |
 | `CompactionUnmeasurableError` | Thrown when the provider reports no usage, carrying `.provider`. Terminal. |

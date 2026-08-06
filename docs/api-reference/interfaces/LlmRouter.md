@@ -6,7 +6,7 @@
 
 # Interface: LlmRouter
 
-Defined in: [src/patterns/LlmRouter.ts:169](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L169)
+Defined in: [src/patterns/LlmRouter.ts:169](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L169)
 
 A packaged routing decision-maker. Hold one per swarm.
 
@@ -16,7 +16,7 @@ A packaged routing decision-maker. Hold one per swarm.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:171](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L171)
+Defined in: [src/patterns/LlmRouter.ts:171](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L171)
 
 Stable id (also the `conditionalId` on its `route_decided` events).
 
@@ -26,7 +26,7 @@ Stable id (also the `conditionalId` on its `route_decided` events).
 
 > `readonly` **route**: (`input`) => `string` \| `undefined`
 
-Defined in: [src/patterns/LlmRouter.ts:190](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L190)
+Defined in: [src/patterns/LlmRouter.ts:190](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L190)
 
 The sync seam `swarm({ route })` wants. Returns the agent id decided
 FOR THAT EXACT message, or `undefined` (which halts the swarm) when no
@@ -51,7 +51,7 @@ Pre-bound — pass it directly as `route`.
 
 > `readonly` **step**: [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/LlmRouter.ts:183](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L183)
+Defined in: [src/patterns/LlmRouter.ts:183](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L183)
 
 The runner that MAKES a decision: one LLM call, parsed and validated.
 Returns the decision's `message`, so it drops into any chain that
@@ -63,7 +63,7 @@ passes text along. Pre-bound — safe to pass around.
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:177](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L177)
+Defined in: [src/patterns/LlmRouter.ts:177](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L177)
 
 The compiled system prompt — the authored frame with the roster
 encoded inside it. Byte-stable for the same options, so you can diff
@@ -75,7 +75,7 @@ it in a test or paste it in a bug report.
 
 > **decisionFor**(`message`): [`RoutingDecision`](/agentfootprint/api/generated/interfaces/RoutingDecision.md) \| `undefined`
 
-Defined in: [src/patterns/LlmRouter.ts:194](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L194)
+Defined in: [src/patterns/LlmRouter.ts:194](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L194)
 
 The decision recorded for a message, if there is one.
 
@@ -95,7 +95,7 @@ The decision recorded for a message, if there is one.
 
 > **decisions**(): readonly [`RoutingDecision`](/agentfootprint/api/generated/interfaces/RoutingDecision.md)[]
 
-Defined in: [src/patterns/LlmRouter.ts:192](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/patterns/LlmRouter.ts#L192)
+Defined in: [src/patterns/LlmRouter.ts:192](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/patterns/LlmRouter.ts#L192)
 
 Every decision this router has made, oldest first (recent window).
 

@@ -185,6 +185,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 11 | [`11-compaction.ts`](context-engineering/11-compaction.ts) | Compaction — a smaller window, the same record | Folds the oldest turns into one summary when the measured window  |
 | 12 | [`12-window-strategies.ts`](context-engineering/12-window-strategies.ts) | Window strategies — slidingWindow and tokenBudget | Runs one conversation under slidingWindow and tokenBudget, showing that  |
 | 13 | [`13-messages-delivery.ts`](context-engineering/13-messages-delivery.ts) | Messages delivery — declared content, delivered into the window | slot: |
+| 14 | [`14-durable-compaction.ts`](context-engineering/14-durable-compaction.ts) | Durable compaction — a week-old summary you can still unpack | Folds a long window into a summary, stores the conversation in a SQLite  |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 

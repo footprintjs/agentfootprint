@@ -55,6 +55,7 @@
  */
 
 import type { LLMMessage } from '../adapters/types.js';
+import type { FoldedSpan } from './agent/window/types.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -87,6 +88,29 @@ export interface AgentRunCheckpoint {
   readonly originalInput: { readonly message: string };
   /** Wall-clock when the checkpoint was captured. Diagnostic only. */
   readonly checkpointedAt: number;
+  /**
+   * Every span this conversation folded into a summary, oldest first — what
+   * makes a compacted conversation still a provable one after the process
+   * that compacted it is gone.
+   *
+   * Written by `.compaction()`; absent on a conversation that never folded,
+   * and absent on one stored by a runtime older than 8.2. Under the default
+   * `retain: 'conversation'` each span carries the folded messages verbatim;
+   * under `retain: 'discard'` the span is still here, naming what left, and
+   * only `messages` is absent.
+   *
+   * Join a summary in {@link history} to its span with `foldedSpanFor(...)` —
+   * by content fingerprint, never by index, because a later fold moves every
+   * index after it.
+   *
+   * **Version 1 still, deliberately.** An optional field is not a format
+   * change: a runtime that has never heard of `folded` reads this checkpoint,
+   * ignores it, and continues the conversation correctly — the summary is an
+   * ordinary message in `history` either way. Bumping the version would make
+   * an older deployment REFUSE a session it can serve perfectly well, which is
+   * the opposite of what the version field is for.
+   */
+  readonly folded?: readonly FoldedSpan[];
   /** Where the failure happened. Diagnostic — surfaces in oncall
    *  triage so you can tell "LLM 500 mid-iteration" from "tool
    *  threw" from "validation kept failing". */
@@ -181,6 +205,13 @@ export function buildCheckpoint(
         : never
       : never;
   },
+  /**
+   * Spans this run folded, read from committed state by the caller. Passed in
+   * rather than tracked, because the tracker follows `history` through events
+   * and a fold's span is committed state — and because the same reader then
+   * serves both checkpoint carriers, so neither can lose what the other keeps.
+   */
+  folded?: readonly FoldedSpan[],
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -190,6 +221,7 @@ export function buildCheckpoint(
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
+    ...(folded !== undefined && folded.length > 0 && { folded }),
   };
 }
 

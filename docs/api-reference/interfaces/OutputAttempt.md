@@ -6,7 +6,7 @@
 
 # Interface: OutputAttempt
 
-Defined in: [src/core/agent/outputEnforcement.ts:50](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L50)
+Defined in: [src/core/agent/outputEnforcement.ts:50](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L50)
 
 One row per final-answer attempt an enforcing agent made, in order.
 
@@ -20,7 +20,7 @@ looks at it, and this key is never written.
 
 > `readonly` **attempt**: `number`
 
-Defined in: [src/core/agent/outputEnforcement.ts:52](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L52)
+Defined in: [src/core/agent/outputEnforcement.ts:52](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L52)
 
 1-based attempt number within this run.
 
@@ -30,7 +30,7 @@ Defined in: [src/core/agent/outputEnforcement.ts:52](https://github.com/footprin
 
 > `readonly` `optional` **correctiveMessageHash?**: `string`
 
-Defined in: [src/core/agent/outputEnforcement.ts:72](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L72)
+Defined in: [src/core/agent/outputEnforcement.ts:72](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L72)
 
 `fnv1a` of the corrective message this row's failure produced. Present
  only on a `'retried'` row — it is the join back to the message in the
@@ -42,7 +42,7 @@ Defined in: [src/core/agent/outputEnforcement.ts:72](https://github.com/footprin
 
 > `readonly` `optional` **error?**: `string`
 
-Defined in: [src/core/agent/outputEnforcement.ts:66](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L66)
+Defined in: [src/core/agent/outputEnforcement.ts:66](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L66)
 
 The validator's own message, verbatim. Absent on a passing row.
 
@@ -52,7 +52,7 @@ The validator's own message, verbatim. Absent on a passing row.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/outputEnforcement.ts:54](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L54)
+Defined in: [src/core/agent/outputEnforcement.ts:54](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L54)
 
 The ReAct iteration that produced the answer.
 
@@ -62,7 +62,7 @@ The ReAct iteration that produced the answer.
 
 > `readonly` **outcome**: `"retried"` \| `"passed"` \| `"exhausted"`
 
-Defined in: [src/core/agent/outputEnforcement.ts:62](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L62)
+Defined in: [src/core/agent/outputEnforcement.ts:62](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L62)
 
 What became of this attempt:
   • `'passed'`    — the answer satisfied the schema; the run returns it.
@@ -76,7 +76,7 @@ What became of this attempt:
 
 > `readonly` `optional` **path?**: `string`
 
-Defined in: [src/core/agent/outputEnforcement.ts:68](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L68)
+Defined in: [src/core/agent/outputEnforcement.ts:68](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L68)
 
 Failing field path when the parser exposes one (Zod-style issues).
 
@@ -86,6 +86,6 @@ Failing field path when the parser exposes one (Zod-style issues).
 
 > `readonly` `optional` **stage?**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: [src/core/agent/outputEnforcement.ts:64](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/outputEnforcement.ts#L64)
+Defined in: [src/core/agent/outputEnforcement.ts:64](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/outputEnforcement.ts#L64)
 
 Which half of validation failed. Absent on a passing row.

@@ -21,6 +21,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
   CompactionRecord,
+  CompactionRetention,
+  FoldedConversation,
+  FoldedSpan,
   FoldRefusal,
   FoldRefusalReason,
   RemovalPlan,
@@ -35,7 +38,13 @@ import type {
   WindowStrategyInput,
   WindowStrategyResult,
 } from '../../src/index';
-import { slidingWindow, summarizeOldest, tokenBudget } from '../../src/index';
+import {
+  foldedMessages,
+  foldedSpanFor,
+  slidingWindow,
+  summarizeOldest,
+  tokenBudget,
+} from '../../src/index';
 
 /**
  * A third-party strategy, written using nothing but the public types: drop
@@ -173,6 +182,45 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
       'token-budget',
     ]);
     expect(ledger.every((r) => r.removedStageIds.length > 0)).toBe(true);
+  });
+
+  it('a consumer strategy can RETAIN what it removed, using exported types only', () => {
+    // 8.2 made the durable half of the seam public too: a third-party strategy
+    // that replaces messages with something standing for them can file the
+    // spans, and the stage carries them onto the conversation. If `FoldedSpan`
+    // or the `folded` field stops being exported, this stops compiling.
+    const span: FoldedSpan = {
+      summaryFingerprint: 'deadbeef',
+      runId: 'run-1',
+      iteration: 2,
+      foldedAtMs: 1,
+      model: 'm',
+      messageCount: 2,
+      removedStageIds: ['seed#0'],
+      retained: 'conversation',
+      messages: [{ role: 'user', content: 'hello' }],
+    };
+    const result: WindowStrategyResult = {
+      record: {
+        strategy: 'mine',
+        iteration: 2,
+        removedStageIds: ['seed#0'],
+        removedMessageCount: 2,
+        windowCharsBefore: 10,
+        windowCharsAfter: 5,
+        refusals: [],
+      },
+      evictions: [],
+      folded: [span],
+    };
+    expect(result.folded?.[0]?.retained).toBe('conversation');
+
+    // Both policies are namable, and the reader reads a bare conversation.
+    const policies: CompactionRetention[] = ['conversation', 'discard'];
+    const conversation: FoldedConversation = { folded: result.folded };
+    expect(policies).toHaveLength(2);
+    expect(foldedSpanFor(conversation, { role: 'user', content: 'nope' })).toBeUndefined();
+    expect(foldedMessages(conversation).map((m) => m.content)).toEqual(['hello']);
   });
 
   it('the 7.16 refusal names still compile as aliases of the family names', () => {

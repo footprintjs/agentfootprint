@@ -14,6 +14,12 @@
  * runtimeStageId whose messages left. A compacted (or trimmed) run is still a
  * provable run.
  *
+ * A commit log is memory, though, and a conversation outlives the process that
+ * held it. So a strategy may also hand back `folded` spans — the durable form
+ * of the same fact — and this stage commits them to `scope.foldedSpans`, which
+ * `agent.checkpoint()` carries onto the conversation. A compacted CONVERSATION
+ * is still a provable conversation, in the next process and the one after.
+ *
  * This file is deliberately all WIRING. The decision — what the window should
  * become — lives behind `WindowStrategy` (window/strategy.ts, public since
  * 7.17), so the duty to record, emit and cost what happened stays in exactly
@@ -48,7 +54,7 @@ import { emitCostTick } from '../../cost.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
-import type { WindowRecord } from '../window/types.js';
+import type { FoldedSpan, WindowRecord } from '../window/types.js';
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
@@ -60,6 +66,13 @@ export interface WindowStageDeps {
   readonly agentModel: string;
   /** The MAIN provider's name, for a refusal that names it. */
   readonly providerName: string;
+  /**
+   * The current run's id, read per run (the stage is built once, at chart
+   * build time, and outlives every run it serves). A strategy that retains
+   * what it removed stamps this on the span, so a stored conversation can say
+   * which run's commit log used to hold those messages.
+   */
+  readonly getRunId?: () => string | undefined;
   /** Optional pricing adapter, so a summarizer call is costed like any other. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
@@ -101,6 +114,9 @@ export function buildWindowStage(
       measured:
         metered === undefined ? undefined : { input: metered.input, output: metered.output },
       iteration: (scope.iteration as number | undefined) ?? 1,
+      // 'unknown' rather than a fabricated id: a span that cannot name its run
+      // should say so, not invent a plausible-looking answer.
+      runId: deps.getRunId?.() ?? 'unknown',
       agentModel: deps.agentModel,
       providerName: deps.providerName,
       signal: scope.$getEnv?.()?.signal,
@@ -130,6 +146,19 @@ export function buildWindowStage(
 
     const prior = (scope.compactions as readonly WindowRecord[] | undefined) ?? [];
     scope.compactions = [...prior, result.record];
+
+    // The durable half, written in the SAME commit as the window change and
+    // the record above. That co-location is the guarantee: there is no state,
+    // and no failure, in which messages left the window and the record of what
+    // they were did not follow them — no second transaction to fail, no I/O to
+    // time out, nothing to roll back. A strategy that removed nothing (or
+    // replaced nothing) omits `folded`, and then this key is never written,
+    // so an agent whose strategy does not retain commits exactly the keys it
+    // always did.
+    if (result.folded !== undefined && result.folded.length > 0) {
+      const priorFolds = (scope.foldedSpans as readonly FoldedSpan[] | undefined) ?? [];
+      scope.foldedSpans = [...priorFolds, ...result.folded];
+    }
 
     // One eviction per message that left, in the slot vocabulary consumers
     // already subscribe to. The hash uses the SAME formula the messages slot

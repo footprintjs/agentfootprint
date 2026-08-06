@@ -8,7 +8,7 @@
 
 > **slidingWindow**(`options`): [`WindowStrategy`](/agentfootprint/api/generated/interfaces/WindowStrategy.md)
 
-Defined in: [src/core/agent/window/strategies/slidingWindow.ts:53](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategies/slidingWindow.ts#L53)
+Defined in: [src/core/agent/window/strategies/slidingWindow.ts:53](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategies/slidingWindow.ts#L53)
 
 Keep the most recent `keepRecentTurns` turns in the live window and drop
 the older ones — except anything that refuses.
@@ -27,10 +27,10 @@ the older ones — except anything that refuses.
 
 ```ts
 import { Agent, slidingWindow } from 'agentfootprint';
-import { ollama } from 'agentfootprint/llm-providers';
+import { ollama } from 'agentfootprint/providers';
 
 // Works on a provider that reports no usage at all: the trigger is turns.
-const agent = Agent.create({ provider: ollama(), model: 'llama3' })
+const agent = Agent.create({ provider: ollama('llama3.2'), model: 'llama3.2' })
   .window(slidingWindow({ keepRecentTurns: 12 }))
   .build();
 ```

@@ -6,7 +6,7 @@
 
 # Interface: WindowStrategyResult
 
-Defined in: [src/core/agent/window/strategy.ts:117](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L117)
+Defined in: [src/core/agent/window/strategy.ts:127](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L127)
 
 What the stage should do next.
 
@@ -16,7 +16,7 @@ What the stage should do next.
 
 > `readonly` `optional` **budgetPressure?**: `object`
 
-Defined in: [src/core/agent/window/strategy.ts:144](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L144)
+Defined in: [src/core/agent/window/strategy.ts:169](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L169)
 
 The budget reading to report on `agentfootprint.context.budget_pressure`.
 
@@ -43,9 +43,30 @@ no budget_pressure event.
 
 > `readonly` **evictions**: readonly [`WindowEviction`](/agentfootprint/api/generated/interfaces/WindowEviction.md)[]
 
-Defined in: [src/core/agent/window/strategy.ts:135](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L135)
+Defined in: [src/core/agent/window/strategy.ts:145](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L145)
 
 Messages that left the window, for `context.evicted`.
+
+***
+
+### folded?
+
+> `readonly` `optional` **folded?**: readonly [`FoldedSpan`](/agentfootprint/api/generated/interfaces/FoldedSpan.md)[]
+
+Defined in: [src/core/agent/window/strategy.ts:160](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L160)
+
+Spans this visit removed, in the form that OUTLIVES the process: appended
+to the conversation checkpoint, so a restart can still say what a summary
+stands for — and, under `retain: 'conversation'`, produce it verbatim.
+
+OMIT IT unless your strategy replaced messages with something that stands
+for them. `summarizeOldest` fills it because a summary is a claim that
+needs its evidence; the drop strategies do not, because a drop replaces
+nothing and its authored notice claims nothing.
+
+The stage writes these in the SAME commit as the window change, so there
+is no state in which messages left the window and the record of what they
+were did not follow them.
 
 ***
 
@@ -53,7 +74,7 @@ Messages that left the window, for `context.evicted`.
 
 > `readonly` `optional` **rebase?**: `object`
 
-Defined in: [src/core/agent/window/strategy.ts:127](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L127)
+Defined in: [src/core/agent/window/strategy.ts:137](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L137)
 
 How the meter must re-align its provenance to the new window, which is
 `[...head, (one new message)?, ...tail]`. Present exactly when `window`
@@ -79,7 +100,7 @@ nothing.
 
 > `readonly` **record**: [`WindowRecord`](/agentfootprint/api/generated/interfaces/WindowRecord.md)
 
-Defined in: [src/core/agent/window/strategy.ts:133](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L133)
+Defined in: [src/core/agent/window/strategy.ts:143](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L143)
 
 What the ledger is told. Always present — an engaged visit explains itself.
 
@@ -89,7 +110,7 @@ What the ledger is told. Always present — an engaged visit explains itself.
 
 > `readonly` `optional` **spend?**: `object`
 
-Defined in: [src/core/agent/window/strategy.ts:150](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L150)
+Defined in: [src/core/agent/window/strategy.ts:175](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L175)
 
 A billed call the strategy made, for the cost channel.
 
@@ -115,7 +136,7 @@ A billed call the strategy made, for the cost channel.
 
 > `readonly` `optional` **warning?**: `string`
 
-Defined in: [src/core/agent/window/strategy.ts:155](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L155)
+Defined in: [src/core/agent/window/strategy.ts:180](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L180)
 
 A one-per-run dev warning the stage should print.
 
@@ -125,6 +146,6 @@ A one-per-run dev warning the stage should print.
 
 > `readonly` `optional` **window?**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/core/agent/window/strategy.ts:119](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/strategy.ts#L119)
+Defined in: [src/core/agent/window/strategy.ts:129](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/strategy.ts#L129)
 
 The new window. Absent = leave the window alone.

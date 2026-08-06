@@ -17,10 +17,16 @@
  *
  *          The frame is authored. The summary is data. Neither can become
  *          the other.
+ *
+ *          A third rule joined them in 8.2: the frame may only claim what is
+ *          true. It names where the folded messages went, and it reads that
+ *          from the resolved retention policy rather than asserting a
+ *          constant — see {@link retentionSentence}.
  * Emits:   N/A (the stage emits; this file only builds and calls).
  */
 
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../../adapters/types.js';
+import type { CompactionRetention } from './types.js';
 
 /** Opening of the authored label. Stable — tests and readers match on it. */
 export const COMPACTED_FRAME_PREFIX = '[compacted history';
@@ -66,6 +72,24 @@ export function renderTranscript(messages: readonly LLMMessage[]): string {
 }
 
 /**
+ * Where the folded messages went, said in the frame itself.
+ *
+ * Through 8.1 this sentence was a constant: *"The folded messages are retained
+ * verbatim in this run's commit log."* True inside the process, and false the
+ * moment the run ended — which is exactly when a standing agent reads it back
+ * out of storage. A library asserting something false inside the model's own
+ * context is worse than saying nothing, so the sentence is now written FROM
+ * the resolved retention policy and can only say what actually happened.
+ */
+function retentionSentence(retain: CompactionRetention): string {
+  return retain === 'conversation'
+    ? `The folded messages are retained verbatim with this conversation and can be produced ` +
+        `on request.`
+    : `The folded messages were not retained beyond the run that folded them; only this ` +
+        `summary carries them forward.`;
+}
+
+/**
  * Build the message that replaces the folded span IN THE WINDOW.
  *
  * `role: 'user'` because the folded span always contains message 0 — the
@@ -74,6 +98,10 @@ export function renderTranscript(messages: readonly LLMMessage[]): string {
  * The label is written by this function and always comes first. `summary` is
  * appended to it verbatim: the library never edits model output, and it never
  * lets model output speak in the library's voice either.
+ *
+ * The label states the retention policy, and states it truthfully — see
+ * {@link retentionSentence}. `COMPACTED_FRAME_PREFIX` is unchanged: it is what
+ * every reader and every test matches on, and it stays put.
  */
 export function buildSummaryMessage(
   summary: string,
@@ -81,13 +109,14 @@ export function buildSummaryMessage(
     readonly foldedMessageCount: number;
     readonly iteration: number;
     readonly model: string;
+    readonly retain: CompactionRetention;
   },
 ): LLMMessage {
   const label =
     `${COMPACTED_FRAME_PREFIX} — ${facts.foldedMessageCount} earlier message(s) were folded ` +
     `out of this window at iteration ${facts.iteration}. The text after this line is a SUMMARY ` +
     `written by ${facts.model}; it is a claim about the conversation, not the conversation. ` +
-    `The folded messages are retained verbatim in this run's commit log.]`;
+    `${retentionSentence(facts.retain)}]`;
   return { role: 'user', content: `${label}\n\n${summary}` };
 }
 

@@ -17,9 +17,15 @@
  * filed as a claim — its own recorded step, naming every `runtimeStageId` it
  * folded. A drop is an ABSENCE, and it is filed the same way: the record and
  * the eviction events name what left, by id.
+ *
+ * That law holds for as long as the PROCESS holds — a commit log is memory.
+ * A conversation outlives its process, so the durable half of the same law
+ * lives on the conversation checkpoint: `.compaction({ retain })` carries the
+ * folded originals there, beside the summary that stands for them. See
+ * {@link CompactionRetention} and {@link FoldedSpan}.
  */
 
-import type { LLMProvider } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
 
 // ─────────────────────────────────────────────────────────────────
 // Refusals — shared by every strategy
@@ -185,6 +191,93 @@ export interface TokenBudgetRecord extends WindowRecord {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Retention — what happens to the messages a fold removes
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * What becomes of the messages a fold removes from the window.
+ *
+ * The commit log keeps them for as long as the PROCESS keeps them, and that
+ * is the whole of what 8.1 offered. A standing agent outlives its process, so
+ * "the folded turns are still in the commit log" stops being true the moment
+ * the run ends — and the summary sitting in the restored conversation went on
+ * claiming otherwise. Retention is the fix: the originals ride with the
+ * CONVERSATION, which is the thing that actually survives.
+ *
+ * The trade is stated rather than hidden: **compaction shrinks the wire, not
+ * the record.** A stored session grows as it folds. That is the right way
+ * round — the model's context window is scarce and a session row is not.
+ */
+export type CompactionRetention =
+  /**
+   * The folded messages ride with the conversation checkpoint, so a restart —
+   * a new process, a new machine, a deploy — can still produce them verbatim.
+   * The default: originals are never destroyed unless you say so.
+   */
+  | 'conversation'
+  /**
+   * The folded messages are NOT carried forward. The span is still recorded,
+   * naming what left and how much of it, because a discard is an absence and
+   * this family files absences the same way it files claims. Choose it when
+   * the conversation is the only thing you want to keep and the storage cost
+   * of the transcript is not worth paying.
+   */
+  | 'discard';
+
+/**
+ * One fold, as it survives the process: the summary's fingerprint, what it
+ * stands for, and — under `retain: 'conversation'` — the messages themselves.
+ *
+ * These accumulate on the conversation checkpoint across every turn and every
+ * restart, so a standing agent that folded week one in April can still produce
+ * week one in July.
+ *
+ * ## Joining a span to its summary
+ *
+ * By CONTENT FINGERPRINT, never by index: a later fold can swallow an earlier
+ * summary, and every index in the window moves when it does. {@link
+ * foldedSpanFor} does the join for you.
+ */
+export interface FoldedSpan {
+  /**
+   * Fingerprint of the summary message this span was folded into — the join
+   * key back to the message sitting in `history`.
+   *
+   * It is a hash of the message's full content (authored frame included), so
+   * it costs no extra bytes on the wire and cannot be forged by a summary that
+   * merely copies the frame's opening words: different content, different
+   * fingerprint, no match.
+   */
+  readonly summaryFingerprint: string;
+  /**
+   * The run whose commit log held these messages. Diagnostic, and the honest
+   * answer to "where else could I have found this?" — that log is gone with
+   * the process, which is why the messages are here.
+   */
+  readonly runId: string;
+  /** ReAct iteration the fold happened at, in that run. */
+  readonly iteration: number;
+  /** Wall clock of the fold. */
+  readonly foldedAtMs: number;
+  /** The model that wrote the summary — a claim's author is part of the claim. */
+  readonly model: string;
+  /** How many messages the summary stands for. Always recorded, both policies. */
+  readonly messageCount: number;
+  /** `runtimeStageId`s of the stages that appended those messages. */
+  readonly removedStageIds: readonly string[];
+  /** Which policy this fold ran under. */
+  readonly retained: CompactionRetention;
+  /**
+   * The folded messages, verbatim and in order. Present exactly when
+   * `retained` is `'conversation'`.
+   *
+   * Absent under `'discard'` — and absent is the honest shape there, rather
+   * than an empty array that reads like "there were none".
+   */
+  readonly messages?: readonly LLMMessage[];
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Options
 // ─────────────────────────────────────────────────────────────────
 
@@ -229,6 +322,23 @@ export interface CompactionOptions {
    * `summarizer: anthropic()` alone works; name a cheap model to spend less.
    */
   readonly model?: string;
+  /**
+   * What happens to the messages a fold removes. Default `'conversation'` —
+   * they ride with the conversation checkpoint and survive the process.
+   *
+   * Pass `'discard'` to opt out. Nothing is ever destroyed silently: the only
+   * way to lose the originals is to name this.
+   *
+   * @example
+   * ```ts
+   * .compaction({
+   *   thresholdTokens: 120_000,
+   *   summarizer: anthropic(),
+   *   retain: 'conversation',   // the default, spelled out
+   * })
+   * ```
+   */
+  readonly retain?: CompactionRetention;
 }
 
 /** Resolved form — defaults applied at build time, validated once. */
@@ -237,6 +347,7 @@ export interface ResolvedCompaction {
   readonly keepRecentTurns: number;
   readonly summarizer: LLMProvider;
   readonly model: string | undefined;
+  readonly retain: CompactionRetention;
 }
 
 /**

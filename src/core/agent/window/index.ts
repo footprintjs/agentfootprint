@@ -8,6 +8,11 @@
  * is a claim about the past, so this library files it as a claim — not as the
  * past. A drop is an absence, and it is named the same way.
  *
+ * A commit log lives as long as the process. A conversation lives longer, so
+ * `.compaction({ retain })` also carries the folded originals on the
+ * conversation checkpoint — `foldedSpanFor(conversation, message)` is the door
+ * back to them, in this process or the one after the deploy.
+ *
  * Three strategies ship, all sharing one turn segmentation and one refusal
  * engine:
  *   `summarizeOldest`  fold the oldest span into a summary (`.compaction()`)
@@ -21,6 +26,8 @@ export { CompactionUnmeasurableError } from './errors.js';
 export type {
   CompactionOptions,
   CompactionRecord,
+  CompactionRetention,
+  FoldedSpan,
   FoldRefusal,
   FoldRefusalReason,
   ResolvedCompaction,
@@ -32,6 +39,7 @@ export type {
   WindowRefusal,
   WindowRefusalReason,
 } from './types.js';
+export { foldedMessages, foldedSpanFor, type FoldedConversation } from './folded.js';
 export type {
   RemovalFacts,
   WindowEviction,

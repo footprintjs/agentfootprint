@@ -10,8 +10,10 @@
  * This is what `.compaction({...})` configures, and the market's familiar
  * move (Claude Code / the Claude Agent SDK call it compaction). What is
  * different here is not the fold — it is that the fold is filed as a claim:
- * a summary is a claim ABOUT the past, and the past itself stays in the
- * commit log, byte for byte.
+ * a summary is a claim ABOUT the past, and the past itself stays. In the
+ * commit log for as long as the process lives, and — since 8.2, under
+ * `retain: 'conversation'` — on the conversation checkpoint for as long as
+ * the conversation does, which is the half a standing agent actually needs.
  *
  * Everything it decides, it explains. Every engaged path returns a record —
  * including the paths that change nothing, which are the ones a person
@@ -19,12 +21,13 @@
  */
 
 import { CompactionUnmeasurableError } from '../errors.js';
+import { summaryFingerprint } from '../folded.js';
 import { resolveCompactionOptions } from '../options.js';
 import { indexRange } from '../removal.js';
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '../strategy.js';
 import { buildSummaryMessage, isCompactedSummary, runSummarizer } from '../summarize.js';
 import { windowChars } from '../turns.js';
-import type { CompactionOptions, CompactionRecord, WindowRefusal } from '../types.js';
+import type { CompactionOptions, CompactionRecord, FoldedSpan, WindowRefusal } from '../types.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
 export const SUMMARIZE_OLDEST = 'summarize-oldest';
@@ -138,6 +141,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         foldedMessageCount: span.length,
         iteration,
         model,
+        retain: config.retain,
       });
       const spend = { model, usage: summary.usage };
 
@@ -161,6 +165,26 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       const foldedAtMs = input.now();
       const facts = input.removalFacts(indexRange(spanStart, spanEnd), foldedAtMs);
       const window = [...head, summaryMessage, ...tail];
+
+      // The durable half. It rides the SAME result the window change rides,
+      // so the stage commits both together — there is no ordering in which
+      // the messages leave and the record of what they were does not follow.
+      // Under 'discard' the span is still filed: a discard is an absence, and
+      // this family files absences the same way it files claims.
+      const foldedSpan: FoldedSpan = {
+        summaryFingerprint: summaryFingerprint(summaryMessage.content),
+        runId: input.runId,
+        iteration,
+        foldedAtMs,
+        model,
+        messageCount: span.length,
+        removedStageIds: facts.removedStageIds,
+        retained: config.retain,
+        // Detached before it is handed on: `history` came off a live scope and
+        // a stored conversation must never hold a reference into the heap.
+        ...(config.retain === 'conversation' && { messages: span.map((m) => ({ ...m })) }),
+      };
+
       const record: CompactionRecord = {
         ...base,
         removedStageIds: facts.removedStageIds,
@@ -183,6 +207,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         },
         record,
         evictions: facts.evictions,
+        folded: [foldedSpan],
         budgetPressure: {
           capTokens: config.thresholdTokens,
           projectedTokens: measured.input,

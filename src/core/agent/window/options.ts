@@ -16,6 +16,7 @@
 
 import type {
   CompactionOptions,
+  CompactionRetention,
   ResolvedCompaction,
   SlidingWindowOptions,
   TokenBudgetOptions,
@@ -23,6 +24,15 @@ import type {
 
 /** Default depth of the "never touch this" recent window. */
 export const DEFAULT_KEEP_RECENT_TURNS = 6;
+
+/**
+ * What happens to folded messages when nobody said. The originals ride with
+ * the conversation: losing them has to be a choice somebody typed, not a
+ * default they inherited.
+ */
+export const DEFAULT_RETENTION: CompactionRetention = 'conversation';
+
+const RETENTIONS: readonly CompactionRetention[] = ['conversation', 'discard'];
 
 function requireObject(options: unknown, label: string, shape: string): void {
   if (options === null || typeof options !== 'object') {
@@ -64,7 +74,7 @@ export function resolveCompactionOptions(
   label: string,
 ): ResolvedCompaction {
   requireObject(options, label, '{ thresholdTokens, summarizer, ... }');
-  const { thresholdTokens, summarizer, keepRecentTurns, model } = options;
+  const { thresholdTokens, summarizer, keepRecentTurns, model, retain } = options;
   requireThreshold(thresholdTokens, label);
   if (
     summarizer === null ||
@@ -81,11 +91,22 @@ export function resolveCompactionOptions(
   if (model !== undefined && (typeof model !== 'string' || model.length === 0)) {
     throw new Error(`${label}: model must be a non-empty model id, got ${String(model)}.`);
   }
+  if (retain !== undefined && !RETENTIONS.includes(retain)) {
+    throw new Error(
+      `${label}: retain must be ${RETENTIONS.map((r) => `'${r}'`).join(' or ')}, got ` +
+        `${String(retain)}. It decides what happens to the messages a fold removes: ` +
+        `'conversation' (the default) carries them on the conversation checkpoint so a ` +
+        `restart can still produce them, and 'discard' does not. A value this library does ` +
+        `not recognise is refused rather than treated as one of them — guessing here would ` +
+        `mean guessing whether to keep somebody's transcript.`,
+    );
+  }
   return {
     thresholdTokens,
     keepRecentTurns: keepRecentTurns ?? DEFAULT_KEEP_RECENT_TURNS,
     summarizer,
     model,
+    retain: retain ?? DEFAULT_RETENTION,
   };
 }
 

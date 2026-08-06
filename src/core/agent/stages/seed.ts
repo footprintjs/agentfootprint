@@ -21,6 +21,7 @@ import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
+import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
@@ -43,6 +44,16 @@ export interface SeedStageDeps {
    * `undefined` for the normal (non-resume) path.
    */
   readonly consumePendingResumeHistory: () => readonly LLMMessage[] | undefined;
+  /**
+   * The same read-AND-CLEAR accessor for the conversation's folded spans.
+   *
+   * A restored window can contain summaries that stand for messages this
+   * process never saw. Restoring the window without the spans would leave the
+   * agent holding claims whose evidence nothing can produce — and the next
+   * `checkpoint()` would then write that loss back to the store permanently.
+   * Undefined for a fresh run, and for any conversation stored before 8.2.
+   */
+  readonly consumePendingResumeFolded?: () => readonly FoldedSpan[] | undefined;
   /**
    * Accessor for the current run's id, used to default the memory
    * identity when consumer didn't pass `agent.run({ identity })`. Set
@@ -142,6 +153,17 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
     scope.history = [...resumeHistory];
   } else {
     scope.history = [{ role: 'user', content: message }];
+  }
+
+  // The window's durable companion. Restored whether or not THIS agent is
+  // configured to fold: the spans belong to the conversation, not to the
+  // runtime that happens to be carrying it, and a runtime with no
+  // `.compaction()` must still hand them on rather than quietly drop somebody
+  // else's evidence. Written only when there is something to restore, so a
+  // conversation that never folded commits exactly the keys it always did.
+  const resumeFolded = deps.consumePendingResumeFolded?.();
+  if (resumeFolded && resumeFolded.length > 0) {
+    scope.foldedSpans = [...resumeFolded];
   }
 
   // Default identity uses the runId so multi-run isolation works

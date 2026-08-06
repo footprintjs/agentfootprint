@@ -8,6 +8,6 @@
 
 > **GraphOutput** = `Record`\<`string`, `unknown`\>
 
-Defined in: [src/core-flow/Graph.ts:198](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core-flow/Graph.ts#L198)
+Defined in: [src/core-flow/Graph.ts:198](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core-flow/Graph.ts#L198)
 
 Outputs keyed by node id. Every node that ran contributes one entry.

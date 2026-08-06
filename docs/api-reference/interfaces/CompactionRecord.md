@@ -6,7 +6,7 @@
 
 # Interface: CompactionRecord
 
-Defined in: [src/core/agent/window/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L141)
+Defined in: [src/core/agent/window/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L147)
 
 What one OVER-BUDGET visit to `summarizeOldest` (what `.compaction()`
 configures) put in the ledger.
@@ -21,7 +21,7 @@ configures) put in the ledger.
 
 > `readonly` **foldedMessageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L157)
+Defined in: [src/core/agent/window/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L163)
 
 #### Deprecated
 
@@ -34,7 +34,7 @@ for the same value, published alongside it since 7.17. Both are written.
 
 > `readonly` **foldedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L152)
+Defined in: [src/core/agent/window/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L158)
 
 #### Deprecated
 
@@ -47,7 +47,7 @@ the same value, published alongside it since 7.17. Both are written.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/window/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L125)
+Defined in: [src/core/agent/window/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L131)
 
 ReAct iteration this visit belongs to.
 
@@ -61,7 +61,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` **measuredTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L143)
+Defined in: [src/core/agent/window/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L149)
 
 Adapter-reported input tokens of the last call — what tripped the check.
 
@@ -71,7 +71,7 @@ Adapter-reported input tokens of the last call — what tripped the check.
 
 > `readonly` **overBudget**: `boolean`
 
-Defined in: [src/core/agent/window/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L147)
+Defined in: [src/core/agent/window/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L153)
 
 True when the measurement was over budget (a fold was attempted).
 
@@ -81,7 +81,7 @@ True when the measurement was over budget (a fold was attempted).
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/agentfootprint/api/generated/interfaces/WindowRefusal.md)[]
 
-Defined in: [src/core/agent/window/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L134)
+Defined in: [src/core/agent/window/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L140)
 
 Every turn that refused to leave, named.
 
@@ -95,7 +95,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L129)
+Defined in: [src/core/agent/window/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L135)
 
 How many messages left the window.
 
@@ -109,7 +109,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L127)
+Defined in: [src/core/agent/window/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L133)
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -123,7 +123,7 @@ Defined in: [src/core/agent/window/types.ts:127](https://github.com/footprintjs/
 
 > `readonly` **strategy**: `string`
 
-Defined in: [src/core/agent/window/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L123)
+Defined in: [src/core/agent/window/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L129)
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -138,7 +138,7 @@ Defined in: [src/core/agent/window/types.ts:123](https://github.com/footprintjs/
 
 > `readonly` `optional` **summarizerTokens?**: `object`
 
-Defined in: [src/core/agent/window/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L161)
+Defined in: [src/core/agent/window/types.ts:167](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L167)
 
 What the summarizer call itself cost, when it reported usage.
 
@@ -156,7 +156,7 @@ What the summarizer call itself cost, when it reported usage.
 
 > `readonly` **summaryChars**: `number`
 
-Defined in: [src/core/agent/window/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L159)
+Defined in: [src/core/agent/window/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L165)
 
 Length of the summary text the summarizer produced (0 when none).
 
@@ -166,7 +166,7 @@ Length of the summary text the summarizer produced (0 when none).
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L145)
+Defined in: [src/core/agent/window/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L151)
 
 The budget it was compared against.
 
@@ -176,7 +176,7 @@ The budget it was compared against.
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: [src/core/agent/window/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L132)
+Defined in: [src/core/agent/window/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L138)
 
 #### Inherited from
 
@@ -188,7 +188,7 @@ Defined in: [src/core/agent/window/types.ts:132](https://github.com/footprintjs/
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: [src/core/agent/window/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L131)
+Defined in: [src/core/agent/window/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L137)
 
 Window size in chars before / after this visit. Exact, and not tokens.
 

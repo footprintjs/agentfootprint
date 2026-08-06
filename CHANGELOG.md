@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.2.0] - 2026-08-06
+
+**Durable compaction.** An agent that has been up for a week folds week one
+into a summary. Then it gets deployed over. It comes back, is handed the same
+conversation — and now it can still tell you what week one was about, *and*
+show you week one, word for word.
+
+The window half of that already worked: a summary is an ordinary message, so
+`agent.checkpoint()` carried it and `resumeOnError()` restored it. What did not
+survive was everything behind it. The folded turns lived in the run's commit
+log, which is memory, and memory ends when the process does.
+
+### The one behavior change: the summary stops making a promise it cannot keep
+
+Through 8.1 every compacted frame ended with a fixed sentence:
+
+```text
+The folded messages are retained verbatim in this run's commit log.]
+```
+
+True while the run was alive. False the moment it ended — which is exactly when
+a standing agent reads that message back out of storage and hands it to the
+model. A library asserting something false inside the model's own context is
+worse than a library saying nothing, so the sentence is now written from the
+retention policy and can only say what actually happened:
+
+```text
+The folded messages are retained verbatim with this conversation and can be
+produced on request.]                                    ← retain: 'conversation'
+
+The folded messages were not retained beyond the run that folded them; only
+this summary carries them forward.]                      ← retain: 'discard'
+```
+
+This changes the bytes sent to the model for every agent using `.compaction()`.
+`COMPACTED_FRAME_PREFIX` is **unchanged**, so `isCompactedSummary()` and every
+reader matching on the prefix keep working exactly as before.
+
+### `.compaction({ retain })` — the originals ride the conversation
+
+```ts
+.compaction({
+  thresholdTokens: 120_000,
+  summarizer: anthropic(),
+  retain: 'conversation',   // the default, spelled out
+})
+```
+
+`agent.checkpoint().folded` is now one `FoldedSpan` per fold — the summary's
+fingerprint, the run whose commit log held the originals, how many there were,
+which stages wrote them, the policy, and (under the default) the messages
+themselves. It accumulates across every turn, restart and deploy, and rides
+into whatever store you chose: `sqliteSessions`, a Redis, your own table.
+
+- **`'conversation'` is the default.** Losing the originals takes a deliberate
+  `retain: 'discard'` — the honest behavior is not something you opt into.
+- **A discard is still recorded.** Under `'discard'` the span is filed anyway,
+  naming what left and how much of it; only `messages` is absent. An absence is
+  a fact, and this family has always filed absences.
+- **One commit.** The window change and its span are written together, so there
+  is no state in which messages left the window and the record of what they
+  were did not follow. A summarizer that throws still folds nothing at all.
+- **No format bump.** `folded` is an optional field on `conversation-v1`. An
+  older runtime reads the checkpoint, ignores the field and continues the
+  conversation correctly; a newer runtime meeting a pre-8.2 conversation finds
+  no spans and says so rather than inventing them.
+
+**The trade, stated plainly: compaction shrinks the wire, not the record.** A
+stored session grows as it folds, by roughly the size of everything it has ever
+folded. That is the right way round — the model's context window is scarce and
+a session row is not — but it is a real cost on disk and should not be a
+surprise.
+
+### New exports
+
+| export | what it is |
+| --- | --- |
+| `foldedSpanFor(conversation, message)` | The span behind one summary, joined by **content fingerprint** rather than index — a later fold swallows an earlier summary and every index after it moves. `undefined` means "no fold was recorded for this message", never "there were no originals". |
+| `foldedMessages(conversation)` | Every retained message from every span, oldest fold first. |
+| `FoldedSpan` · `CompactionRetention` · `FoldedConversation` | The types. |
+
+The fingerprint is also what makes the join **forgery-proof**: `isCompactedSummary`
+answers "this *looks* like a frame", which is all a prefix check can see, and a
+model that copies the frame's opening words passes it. `foldedSpanFor` answers
+the stronger question — different content, different fingerprint, no match.
+
+The strategy seam grew with it: `WindowStrategyResult.folded` lets any custom
+strategy that replaces messages with something standing for them carry the
+originals the same way, and `WindowStrategyInput.runId` names the run for it.
+
+- Docs: [Durable compaction](docs-next/content/docs/build/compaction.mdx)
+- Example: `examples/context-engineering/14-durable-compaction.ts` — folds, stores
+  the session in a real SQLite file, and continues it on a brand-new agent that
+  answers from week one and can still print week one verbatim.
+
 ## [8.1.0] - 2026-08-06
 
 **The middle rung of the ladder now holds weight.** `ollama('llama3.2')` runs a

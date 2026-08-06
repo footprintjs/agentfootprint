@@ -191,6 +191,8 @@ Two things are deliberately not left to you:
 
 The **trigger** is entirely yours: `plan` is called at every ReAct iteration boundary and returns `undefined` when your strategy did not engage. That is exactly how `slidingWindow` runs on a provider that reports nothing while the token-triggered ones refuse by name.
 
+A strategy that replaces messages with something standing *for* them may also answer with `folded` — spans the stage carries onto the conversation checkpoint, so a restart can still say what the replacement stands for and, when the policy retained them, produce the originals. `summarizeOldest` fills it because a summary is a claim that needs its evidence; the drop strategies do not, because a drop replaces nothing and its authored notice claims nothing. See [Durable compaction](doc:compaction#durable-compaction-the-record-travels).
+
 Each shipped factory is its own module and registers nothing at import, so a bundle that never mentions `summarizeOldest` never carries the summarizer machinery.
 
 ## Where it runs
@@ -199,7 +201,7 @@ The window stage is the **ReAct loop target** when configured — the first thin
 
 Both chart shapes support it (`reactMode: 'dynamic'`, `'classic'` and `'dynamic-grouped'`); in the grouped shape it sits in the outer chart, because the window crosses the `sf-llm-call` boundary as a read-only input.
 
-`agent.checkpoint()` carries a trimmed window, `resumeOnError(checkpoint)` restores it, and a standing agent across a restart just keeps talking — a drop notice and a compaction summary are both ordinary messages in the history it was handed.
+`agent.checkpoint()` carries a trimmed window, `resumeOnError(checkpoint)` restores it, and a standing agent across a restart just keeps talking — a drop notice and a compaction summary are both ordinary messages in the history it was handed. A compaction summary carries one thing more: the span behind it rides `checkpoint().folded`, so what it stands for survives the process too — see [Durable compaction](doc:compaction#durable-compaction-the-record-travels).
 
 ## What the package exports
 
@@ -215,7 +217,8 @@ Everything below comes from the package root, `agentfootprint`:
 | `CompactionOptions` | What `summarizeOldest` and `.compaction()` accept. |
 | `WindowStrategy` | The seam: `{ name, plan(input) }`. Implement it to write your own. |
 | `WindowStrategyInput` | Everything a strategy may look at, including the bound `planRemoval` and `removalFacts`. |
-| `WindowStrategyResult` | What a strategy answers with — the new window, the record, the evictions, an optional budget reading, an optional spend. Return `undefined` instead to say "I did not engage". |
+| `WindowStrategyResult` | What a strategy answers with — the new window, the record, the evictions, optional `folded` spans, an optional budget reading, an optional spend. Return `undefined` instead to say "I did not engage". |
+| `FoldedSpan` | One span carried onto the conversation checkpoint: the replacement's fingerprint, what it stands for, and — when retained — the messages themselves. |
 | `WindowRecord` | The record every strategy files, shown above. |
 | `SlidingWindowRecord` | A `WindowRecord` plus `keepRecentTurns`, `turnsBefore`, `turnsAfter`. |
 | `TokenBudgetRecord` | A `WindowRecord` plus `measuredTokens`, `thresholdTokens`, `overBudget`, `keepRecentTurns`. |

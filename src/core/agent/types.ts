@@ -31,7 +31,7 @@ import type { CredentialProvider } from '../../identity/types.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
-import type { WindowRecord } from './window/types.js';
+import type { FoldedSpan, WindowRecord } from './window/types.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
 import type { OutputAttempt } from './outputEnforcement.js';
@@ -536,6 +536,20 @@ export interface AgentState {
    *  than break every reader for a better word. Narrow a record by its
    *  `strategy` field, not by the key it lives under. */
   compactions?: readonly WindowRecord[];
+  /** The DURABLE half of the same law: one span per fold, carrying what the
+   *  summary stands for and — under `retain: 'conversation'`, the default —
+   *  the folded messages themselves.
+   *
+   *  `compactions` is a record of what a RUN did and dies with the run's
+   *  commit log. This is what a CONVERSATION carries: `agent.checkpoint()`
+   *  copies it onto `AgentRunCheckpoint.folded`, `resumeOnError` restores it,
+   *  and so a standing agent's spans accumulate across every turn, every
+   *  restart and every deploy.
+   *
+   *  Written only when a strategy actually replaced messages with something
+   *  that stands for them (today: `summarizeOldest`). Absent otherwise, so an
+   *  agent that never folds commits exactly the keys it always did. */
+  foldedSpans?: readonly FoldedSpan[];
 
   // ── Policy halt state (v2.12) ───────────────────────────────
   /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.

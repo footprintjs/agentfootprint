@@ -6,7 +6,7 @@
 
 # Interface: CompactionOptions
 
-Defined in: [src/core/agent/window/types.ts:206](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L206)
+Defined in: [src/core/agent/window/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L299)
 
 What `.compaction({...})` — and `summarizeOldest({...})` — accepts.
 
@@ -29,7 +29,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > `readonly` `optional` **keepRecentTurns?**: `number`
 
-Defined in: [src/core/agent/window/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L221)
+Defined in: [src/core/agent/window/types.ts:314](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L314)
 
 How many of the most recent turns are never folded. Default 6.
 
@@ -42,10 +42,34 @@ them is how a compacting agent loses the thread.
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: [src/core/agent/window/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L231)
+Defined in: [src/core/agent/window/types.ts:324](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L324)
 
 Model id for the summarizer call. Defaults to the agent's own model, so
 `summarizer: anthropic()` alone works; name a cheap model to spend less.
+
+***
+
+### retain?
+
+> `readonly` `optional` **retain?**: [`CompactionRetention`](/agentfootprint/api/generated/type-aliases/CompactionRetention.md)
+
+Defined in: [src/core/agent/window/types.ts:341](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L341)
+
+What happens to the messages a fold removes. Default `'conversation'` —
+they ride with the conversation checkpoint and survive the process.
+
+Pass `'discard'` to opt out. Nothing is ever destroyed silently: the only
+way to lose the originals is to name this.
+
+#### Example
+
+```ts
+.compaction({
+  thresholdTokens: 120_000,
+  summarizer: anthropic(),
+  retain: 'conversation',   // the default, spelled out
+})
+```
 
 ***
 
@@ -53,7 +77,7 @@ Model id for the summarizer call. Defaults to the agent's own model, so
 
 > `readonly` **summarizer**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/window/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L226)
+Defined in: [src/core/agent/window/types.ts:319](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L319)
 
 The provider that writes the summary. Explicitly chosen — the library
 never quietly bills your main model for compaction.
@@ -64,7 +88,7 @@ never quietly bills your main model for compaction.
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/7e60be4bdc7314eb1aa9110d77f8f728bb948866/src/core/agent/window/types.ts#L214)
+Defined in: [src/core/agent/window/types.ts:307](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/core/agent/window/types.ts#L307)
 
 Fold when the LAST call's adapter-reported input tokens exceed this.
 

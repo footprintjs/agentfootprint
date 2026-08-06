@@ -68,6 +68,7 @@ import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
 import { messagesRoleRefusal } from '../lib/injection-engine/messagesSlotRefusal.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
+import type { FoldedSpan } from './agent/window/types.js';
 import {
   resolveCheckInConfig,
   type CheckInBuilderOptions,
@@ -342,6 +343,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  function restores `scope.history` from this instead of starting
    *  fresh. Cleared on first read so subsequent runs start clean. */
   private pendingResumeHistory?: readonly LLMMessage[];
+
+  /** Its sibling for the folded spans. A restored conversation that dropped
+   *  them would carry summaries nobody could unpack — the evidence would be
+   *  destroyed by the act of continuing, which is the one thing retention
+   *  exists to prevent. Cleared on first read, exactly like the history. */
+  private pendingResumeFolded?: readonly FoldedSpan[];
 
   /** The last completed run's final answer — see `checkpoint()` for why it is
    *  kept here rather than read back from the recording. Undefined after a run
@@ -787,10 +794,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // retry into the same wall.
           cause instanceof CompactionUnmeasurableError);
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
-        const checkpoint = buildCheckpoint(tracker, {
-          iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
-          phase: classifyFailurePhase(cause),
-        });
+        const checkpoint = buildCheckpoint(
+          tracker,
+          {
+            iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
+            phase: classifyFailurePhase(cause),
+          },
+          // Read from the live snapshot rather than the tracker: the tracker
+          // follows `history` through iteration_end events, and a fold's spans
+          // are committed state. A crash checkpoint that carried the summary
+          // in its history but not the span behind it would resume into a
+          // conversation whose evidence the crash had quietly eaten.
+          this.foldedSpansOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+        );
         throw new RunCheckpointError(cause, checkpoint);
       }
       throw cause;
@@ -851,6 +867,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Stash the checkpointed history on the side channel; the seed
     // function reads + clears it before scope.history initializes.
     this.pendingResumeHistory = cp.history as readonly LLMMessage[];
+    // And the folded spans beside it. A conversation stored before 8.2 has
+    // none, and `undefined` is the right answer there — it means "this
+    // conversation recorded no folds", which is exactly true.
+    this.pendingResumeFolded = cp.folded;
     return this.run({ message: cp.originalInput.message }, options);
   }
 
@@ -955,6 +975,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {
       history.push({ role: 'assistant', content: this.lastRunAnswer });
     }
+    const folded = this.foldedSpansOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -962,7 +983,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
       originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
       checkpointedAt: Date.now(),
+      // Absent when nothing ever folded — a key that is always there and
+      // usually empty reads like "no folds were retained", which is a
+      // different claim from "there were no folds".
+      ...(folded !== undefined && { folded }),
     };
+  }
+
+  /**
+   * The folded spans this run has committed, cloned on the way out.
+   *
+   * One reader for both carriers — `checkpoint()` and the crash checkpoint
+   * `RunCheckpointError` carries — so a conversation cannot keep its spans on
+   * one path and silently lose them on the other. The clone is the same
+   * promise `checkpoint()` makes about history: a persistence layer never gets
+   * a reference into the live heap.
+   *
+   * @internal
+   */
+  private foldedSpansOf(state?: Partial<AgentState>): readonly FoldedSpan[] | undefined {
+    const spans = state?.foldedSpans;
+    if (spans === undefined || spans.length === 0) return undefined;
+    return structuredClone(spans) as readonly FoldedSpan[];
   }
 
   /**
@@ -1355,6 +1397,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.pendingResumeHistory = undefined;
         return h;
       },
+      consumePendingResumeFolded: () => {
+        const f = this.pendingResumeFolded;
+        this.pendingResumeFolded = undefined;
+        return f;
+      },
       getCurrentRunId: () => this.currentRunContext?.runId,
       // The `'input'` half of the message chain, run BEFORE `userMessage` and
       // `history` are committed — see SeedStageDeps.messageMiddleware.
@@ -1468,6 +1515,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               meter: this.compactionMeterHandle,
               agentModel: model,
               providerName: provider.name,
+              getRunId: () => this.currentRunContext?.runId,
               ...(pricingTable !== undefined && { pricingTable }),
               ...(costBudget !== undefined && { costBudget }),
             }),
