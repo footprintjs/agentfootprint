@@ -635,7 +635,7 @@ describe('model pick — byte-identity for paths that already worked', () => {
     assertToldTheTruth(log);
   });
 
-  it('a decision tree() is unaffected — no cursor, read_skill stays a full escape hatch', async () => {
+  it('a decision tree() routes as before — and is not read_skill-jumpable (8.5.0)', async () => {
     const io = defineSkill({ id: 'io', description: 'io', body: 'IO' });
     const cap = defineSkill({ id: 'cap', description: 'cap', body: 'CAP' });
     const { decideSkill } = await import('../src/injection-engine.js');
@@ -655,7 +655,13 @@ describe('model pick — byte-identity for paths that already worked', () => {
 
     await agent.run({ message: 'why is it slow' });
 
+    // The tree's own routing is untouched — the predicate still picks `io`.
     expect(log.active[0]!.ids).toEqual(['io']);
-    expect(graph.reachableSkills(undefined)).toEqual(['io', 'cap']);
+    // But nothing is read_skill-reachable: a tree re-decides by predicate every
+    // iteration and has no cursor to move, so a leaf pick could only be accepted and
+    // then dropped. Empty since 8.5.0; the escape hatch under a tree is the OPEN
+    // skills the agent's gate admits (anything registered beside the graph).
+    expect(graph.reachableSkills(undefined)).toEqual([]);
+    expect(graph.reachableSkills('io')).toEqual([]);
   });
 });

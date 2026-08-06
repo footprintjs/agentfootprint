@@ -885,7 +885,7 @@ describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () 
     expect([...g.reachableSkills('a')].sort()).toEqual(['b']); // successor b + entries a,b minus a → [b]
   });
 
-  it('tree mode → all leaf skills (read_skill stays a full escape hatch)', () => {
+  it('tree mode → EMPTY: a tree has no cursor for read_skill to jump (8.5.0)', () => {
     const io = skill('io');
     const sfp = skill('sfp');
     const tri = skill('tri');
@@ -899,8 +899,16 @@ describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () 
         ),
       )
       .build();
-    expect([...g.reachableSkills('io')].sort()).toEqual(['io', 'sfp', 'tri']);
-    expect([...g.reachableSkills(undefined)].sort()).toEqual(['io', 'sfp', 'tri']);
+    // Until 8.5.0 this answered all three leaves, and every one of those picks was a
+    // lie: a leaf compiles to a `rule` trigger, `read_skill` writes only
+    // `activatedInjectionIds`, and no rule trigger reads that — so the gate accepted,
+    // the tool said "activated", and the leaf never activated. The graph is not
+    // "reachable from nowhere"; it is not jumpable at all.
+    expect(g.reachableSkills('io')).toEqual([]);
+    expect(g.reachableSkills(undefined)).toEqual([]);
+    // The leaves are still the graph's skills — `reachableSkills` was never the way
+    // to enumerate them, which is why nothing else needs to change.
+    expect(g.skills.map((s) => s.id).sort()).toEqual(['io', 'sfp', 'tri']);
   });
 
   it('property: for ANY cursor, reachableSkills excludes the cursor and is a subset of declared skills', () => {

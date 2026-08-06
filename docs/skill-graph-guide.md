@@ -2,12 +2,14 @@
 
 A complete, copy-pasteable reference to the declarative **skill-graph routing** in
 agentfootprint. Written so a coding agent can build with it without inventing APIs.
-Current as of **`agentfootprint@6.36.0`**. Companion reference: [`skill-graph-spec.md`](./design/skill-graph-spec.md).
+Current as of **`agentfootprint@8.5.0`**. Companion reference: [`skill-graph-spec.md`](./design/skill-graph-spec.md).
 
 **Every snippet below has a runnable, tested counterpart** under `examples/features/` (they run in the
 `test:examples` suite, so they can't silently drift from the API): `15-skill-graph.ts` (basics),
 `23-skill-graph-scoped-read-skill.ts`, `24-skill-graph-entry-relevance.ts`, `25-skill-graph-checkup.ts`,
-`26-skill-graph-route-recorder.ts`, `27-skill-graph-relevance-hint.ts`. Run any with
+`26-skill-graph-route-recorder.ts`, `27-skill-graph-relevance-hint.ts`,
+`42-skill-graph-model-pick.ts`, `43-skill-graph-tree-pick.ts`,
+`44-skill-graph-read-skill-offer.ts`. Run any with
 `npx tsx examples/features/<file>` — and prefer reading those (they carry a "why" header) over trusting
 the prose here if the two ever disagree.
 
@@ -122,10 +124,55 @@ so the model can't move the graph somewhere the graph doesn't go. (A skill the g
 never wires at all is a separate question: see *Skills the graph doesn't route*
 below.) The allowed set is
 `graph.reachableSkills(currentSkillId)` = the cursor's direct successors ∪ the entry
-skills, minus the cursor (a decision `tree()` returns all leaves — `read_skill` stays
-a full escape hatch there). On an out-of-set call the model gets a re-prompt naming
+skills, minus the cursor. On an out-of-set call the model gets a re-prompt naming
 the allowed skills, the cursor stays put, and an `agentfootprint.skill.rejected`
 event fires. **Agents with no skill graph are unaffected** (the gate is off).
+
+**`read_skill` offers what the gate will grant (8.5.0).** The tool's description is
+rebuilt each iteration from the same reachability the gate enforces, so the menu and
+the verdict cannot disagree:
+
+```text
+Reachable from here:
+  - volume-lookup: Resolve a volume by WWN
+  - escalation: How to page the on-call engineer
+
+Not reachable from here (read_skill for these will be refused):
+  - capacity-report: Report free capacity per volume
+```
+
+The **enum stays the full catalog** on purpose. Tool-argument validation runs *before*
+the gate, so a narrowed enum would turn every out-of-reach pick into a generic schema
+error — silently retiring the gate's teaching refusal, the `skill.rejected` event,
+`routeRecorder`'s rejection hops and the rejected-cap governor's only input. Under
+`reactMode: 'classic'` the tools slot is cached after turn 1, so the menu stays the
+full catalog there (a cursor-scoped menu would freeze at the turn-1 cursor); dev mode
+warns when that applies.
+
+**A decision `tree()` cannot be jumped at all (8.5.0).** `reachableSkills()` is empty
+for a tree, and a leaf pick is refused with a message that explains why:
+
+```text
+read_skill("capacity") cannot move a decision tree. A tree routes by predicate on
+every iteration — it has no cursor to jump, so this skill would not activate even
+though the tool accepted the name. Answer with the skill the tree routed to, or finish.
+```
+
+> **Fixed in 8.5.0.** Before, tree mode reported *all* the leaves as reachable, so the
+> gate accepted a leaf pick and `read_skill` answered *"activated for the next
+> iteration"* — and nothing happened: a leaf compiles to a `rule` trigger, a
+> `read_skill` call writes only `activatedInjectionIds`, and no rule trigger reads
+> that. The run then emitted `reroute_superseded` naming a winner that did not exist,
+> because tree mode never writes a cursor at all. Honouring the pick instead would
+> have broken three of the tree's own rules — exactly one leaf per iteration, leaf-
+> scoped tools, and declared === drawn — so the gate refuses. The escape hatch under
+> a tree is the **open** skills (anything registered beside the graph), which really
+> do activate by `read_skill`.
+
+→ runnable + tested: **`examples/features/43-skill-graph-tree-pick.ts`** (a refused
+leaf pick and an accepted open skill in one run) and
+**`examples/features/44-skill-graph-read-skill-offer.ts`** (the menu tracking the
+cursor hop by hop).
 
 **A pick the gate ACCEPTS moves the cursor** — the same cursor a declared edge
 moves. So the skill loads on the next iteration: body, tools, and the graph's own
@@ -277,10 +324,26 @@ const routes = routeRecorder();                       // { pingPongWindow?, maxR
 Agent.create({ provider, model }).skillGraph(graph).recorder(routes).build();
 // after a run:
 routes.getPath();        // ['triage','billing']  — the skill sequence
-routes.getHops();        // per-hop: { fromSkill, toSkill, outcome:'entry'|'route'|'stay'|'rejected', why, edgeLabel, lastTool }
+routes.getHops();        // per-hop: { fromSkill, toSkill, outcome, why, edgeLabel, lastTool }
+                         // outcome: 'entry'|'route'|'model-pick'|'stay'|'rejected'
 routes.getRejections();  // out-of-reach read_skill attempts
 routes.getTrips();       // governor trips: oscillation (A→B→A→B) + a run of rejected jumps
 ```
+
+**`'model-pick'` is new in 8.5.0**, and it is a *type widening* — an exhaustive
+`switch` over `RouteOutcome` now needs the extra case. A hop the model drove with
+`read_skill` used to be recorded as a `'route'` wearing the caption of whatever
+declared edge happened to point at the same skill, so the trace asserted that edge
+had fired when it had not. The cause now comes from the graph's own cursor resolver
+(`context.evaluated`'s new `cursorMove.by`), and a `'model-pick'` hop deliberately
+carries **no** `edgeLabel`.
+
+**`maxRejectedRetries` can actually trip now (8.5.0).** The counter used to reset on
+every iteration's evaluation — and an evaluation fires between every pair of
+rejections — so it never passed 1 and the governor was unreachable outside a parallel
+tool batch. It now resets only when the cursor really **moves**, which is exactly the
+case a model stuck re-asking never reaches, and each run of rejections trips once
+rather than once per iteration past the cap.
 → runnable + tested: **`examples/features/26-skill-graph-route-recorder.ts`** (path + governor trips).
 
 **`defineRelevanceHint()`** — an advisory note when `entryByRelevance`'s top entries are a near-tie.

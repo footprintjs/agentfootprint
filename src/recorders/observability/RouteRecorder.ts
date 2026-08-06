@@ -26,8 +26,17 @@ interface RunBoundaryEvent {
   readonly traversalContext?: { readonly runId?: string };
 }
 
-/** How the graph arrived at a skill on a hop. */
-export type RouteOutcome = 'entry' | 'route' | 'stay' | 'rejected';
+/**
+ * How the graph arrived at a skill on a hop.
+ *
+ * `'model-pick'` joined the union in 8.5.0 — a `read_skill` the gate accepted, which
+ * moved the cursor because no declared edge fired. It used to be recorded as a
+ * `'route'`, borrowing the label of whatever edge happened to point at the same
+ * skill, so the trace asserted that an edge fired when it had not. The cause now
+ * comes from the graph's own resolver (`cursorMove.by`), not from the drawn
+ * build-time provenance.
+ */
+export type RouteOutcome = 'entry' | 'route' | 'model-pick' | 'stay' | 'rejected';
 
 /** One hop of the route — the skill the graph was in at one iteration + how. */
 export interface RouteHop {
@@ -93,6 +102,12 @@ export function formatRouteHop(hop: RouteHop): string {
       return `"${hop.fromSkill}" → "${hop.toSkill}"${hop.edgeLabel ? ` (${hop.edgeLabel})` : ''}${
         hop.lastTool ? ` on ${hop.lastTool}` : ''
       }`;
+    case 'model-pick':
+      // Deliberately carries no edge caption: no declared edge fired, and lending it
+      // one is the exact misattribution this outcome exists to end.
+      return hop.fromSkill === undefined
+        ? `read_skill("${hop.toSkill}") accepted at cold start`
+        : `read_skill("${hop.toSkill}") accepted from "${hop.fromSkill}"`;
     case 'stay':
       return `stayed in "${hop.toSkill}"`;
     case 'rejected':
@@ -107,6 +122,30 @@ interface RoutingProjection {
   readonly via?: unknown;
   readonly from?: unknown;
   readonly label?: unknown;
+}
+
+/**
+ * The hop's cause as the GRAPH reported it (`context.evaluated`'s `cursorMove.by`,
+ * 8.5.0) — or `undefined` when the event carries none, so the caller can fall back
+ * to inferring it from the destination.
+ *
+ * `'none'` maps to `undefined` on purpose: it means the graph has no cursor at all
+ * this iteration, which is not a hop cause. A decision `tree()` reports it every
+ * iteration, and there the inferred outcome (entry, then stay) is the right story:
+ * a tree really does re-route by predicate rather than move a cursor.
+ */
+function causeOf(cursorMove: unknown): RouteOutcome | undefined {
+  if (cursorMove === null || typeof cursorMove !== 'object') return undefined;
+  const by = (cursorMove as { by?: unknown }).by;
+  switch (by) {
+    case 'entry':
+    case 'route':
+    case 'model-pick':
+    case 'stay':
+      return by;
+    default:
+      return undefined;
+  }
 }
 
 /** The current cursor skill from a `context.evaluated` routing[] — prefer a
@@ -138,6 +177,7 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
   let cursor: string | undefined;
   let lastTool: string | undefined;
   let consecutiveRejected = 0;
+  let trippedRejectedCap = false;
 
   const reset = (): void => {
     store.clear();
@@ -146,6 +186,7 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
     cursor = undefined;
     lastTool = undefined;
     consecutiveRejected = 0;
+    trippedRejectedCap = false;
   };
 
   const detectPingPong = (iteration: number): void => {
@@ -185,8 +226,16 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
           if (cur === undefined) break; // no skill-graph routing this iteration
           const iteration = Number(p.iteration ?? 0);
           const from = cursor;
+          // The CAUSE, from the graph's own resolver when it reported one (8.5.0).
+          // Falling back to inferring it from the destination — what this recorder
+          // did before — is kept for a graph too old to explain itself, and is the
+          // only path that can still mistake a model pick for a declared edge.
+          const cause = causeOf(p.cursorMove);
           const outcome: RouteOutcome =
-            cursor === undefined ? 'entry' : cur.id !== cursor ? 'route' : 'stay';
+            cause ?? (cursor === undefined ? 'entry' : cur.id !== cursor ? 'route' : 'stay');
+          // An edge caption belongs to a hop a declared EDGE drove. On a model pick
+          // the caption is the label of an edge that did not fire.
+          const wearsEdgeLabel = outcome === 'route' || outcome === 'entry';
           const hop: RouteHop = {
             runtimeStageId: event.runtimeStageId,
             iteration,
@@ -194,17 +243,26 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
             toSkill: cur.id,
             outcome,
             why: '',
-            ...(cur.label !== undefined ? { edgeLabel: cur.label } : {}),
+            ...(wearsEdgeLabel && cur.label !== undefined ? { edgeLabel: cur.label } : {}),
             ...(outcome === 'route' && lastTool !== undefined ? { lastTool } : {}),
           };
           const finished = { ...hop, why: formatRouteHop(hop) };
           store.push(finished);
-          if (outcome !== 'stay') {
+          const moved = outcome !== 'stay';
+          if (moved) {
             transitions.push(cur.id);
             detectPingPong(iteration);
           }
           cursor = cur.id;
-          consecutiveRejected = 0; // a successful evaluation breaks a rejection run
+          // Only a CURSOR MOVE breaks a rejection run (8.5.0). Resetting on every
+          // evaluation made `maxRejectedRetries` untrippable: one evaluation fires
+          // between every pair of rejections, so the count never passed 1 and a model
+          // could re-ask for the same out-of-reach skill until the iteration cap. A
+          // 'stay' is precisely the case where the model asked and got nowhere.
+          if (moved) {
+            consecutiveRejected = 0;
+            trippedRejectedCap = false;
+          }
           break;
         }
         case 'agentfootprint.skill.rejected': {
@@ -220,10 +278,11 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
           };
           store.push({ ...hop, why: formatRouteHop(hop) });
           consecutiveRejected += 1;
-          if (
-            consecutiveRejected >= maxRejectedRetries &&
-            !trips.some((t) => t.kind === 'rejected-cap' && t.iteration === iteration)
-          ) {
+          // ONE trip per run of rejections, re-armed when the cursor next moves.
+          // The old guard was per-ITERATION, so once the count passed the cap every
+          // further iteration pushed another identical trip.
+          if (consecutiveRejected >= maxRejectedRetries && !trippedRejectedCap) {
+            trippedRejectedCap = true;
             trips.push({
               kind: 'rejected-cap',
               iteration,

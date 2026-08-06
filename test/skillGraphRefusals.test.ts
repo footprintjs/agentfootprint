@@ -90,7 +90,10 @@ describe('skillGraph refusals — .tree() owns the graph (fluent)', () => {
       .tree(decideSkill((c: InjectionContext) => /a/.test(c.userMessage), a, b, 'a?'))
       .build({ check: 'off' });
     expect(g.skills.map((s) => s.id)).toEqual(['a', 'b']);
-    expect(g.reachableSkills()).toEqual(['a', 'b']);
+    // Both leaves compile; neither is read_skill-jumpable (8.5.0 — a tree has no
+    // cursor, so `reachableSkills` is empty rather than advertising a pick the
+    // resolver would discard).
+    expect(g.reachableSkills()).toEqual([]);
   });
 });
 

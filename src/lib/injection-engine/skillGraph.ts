@@ -12,8 +12,9 @@
  *
  * **v2 keystone — `from` IS enforced (a sticky cursor state machine).** A skill
  * graph is a state machine over skills; the engine tracks which node it is in via
- * `InjectionContext.currentSkillId` (the cursor). One pure resolver — `nextSkill(ctx)`
- * (see `makeNextSkill`) — is the single source of truth: each route target B
+ * `InjectionContext.currentSkillId` (the cursor). One pure resolver — `resolveCursor`
+ * (see `makeResolveCursor`), of which `nextSkill(ctx)` is the `.to` projection — is the
+ * single source of truth: each route target B
  * compiles to the trigger `nextSkill(ctx) === B`, which delivers `from`-gating
  * (an edge `A→B` fires only while the cursor is on A — no cross-skill edge bleed),
  * stickiness (the cursor stays on B until an edge leaves B), and a clean handoff
@@ -24,16 +25,26 @@
  * compiled trigger is always a `rule`. `toMermaid()` renders declared === drawn.
  *
  * A decision `tree()` routes per-iteration by stable `ctx` predicates (no cursor)
- * and is unaffected by `from`-gating.
+ * and is unaffected by `from`-gating. It has no cursor for `read_skill` to move
+ * either, so `reachableSkills()` is EMPTY there and the gate refuses a leaf pick
+ * (8.5.0) — see `reachableSkills` for why honouring it would break three of this
+ * module's own invariants.
  *
  * **The model moves too (`read_skill`).** Scoped `read_skill` bounds the model to
  * `reachableSkills(cursor)` — the declared successors of where it stands, plus the
  * entries. A pick the gate ACCEPTS moves the cursor exactly like a declared edge
- * does (`ctx.pendingSkillPick`, honoured in `makeNextSkill`), so what the gate
+ * does (`ctx.pendingSkillPick`, honoured in `makeResolveCursor`), so what the gate
  * allows and what actually takes effect are the same set. A declared edge that
  * fires the same turn wins (`D1 > D2`, docs/design/skill-graph.md §4A.1) and the
  * run emits `agentfootprint.skill.reroute_superseded` rather than leaving the
  * model's answered-"activated" claim quietly unmet.
+ *
+ * **The resolver says WHY, it is not asked to be guessed.** `explainNextSkill(ctx)`
+ * returns the destination AND the winning clause (`CursorMove`), decided at the same
+ * `return`. The agent stamps it on `context.evaluated` as `cursorMove`, which is how
+ * `routeRecorder()` can tell a model pick from a declared edge that happens to point
+ * at the same skill (8.5.0 — before, the drawn build-time provenance was read as the
+ * per-hop cause, so a model pick was recorded under a declared edge's label).
  */
 
 import { isDevMode } from 'footprintjs';
@@ -170,8 +181,15 @@ export interface TreeOptions {
    * A decision tree routes to EXACTLY ONE skill per iteration, so each leaf is
    * stamped `autoActivate: 'currentSkill'` — its `inject.tools` reach the LLM
    * ONLY when the tree routes there, instead of every skill's tools landing in
-   * the always-on static registry on every call. `read_skill` stays available as
-   * the escape hatch to reach another skill mid-run.
+   * the always-on static registry on every call.
+   *
+   * `read_skill` cannot reach another LEAF mid-run (8.5.0): a tree has no cursor to
+   * move, and this "exactly one leaf" property is one of the reasons — admitting a
+   * second leaf would put two leaves' tools on the wire and make the dev-mode
+   * exactly-one monitor warn. It said otherwise until 8.5.0, and the pick was
+   * accepted and then silently dropped. The escape hatch is a skill registered
+   * BESIDE the graph (`.skill(x)`, `.selfExplain()`), which really does activate by
+   * `read_skill` and is admitted from anywhere.
    *
    * Default `true`. Set `false` for the legacy additive behavior (all leaves'
    * tools always visible). A leaf that sets its OWN `autoActivate` in
@@ -220,6 +238,35 @@ export function decideSkill(
 
 function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
   return (n as DecisionNode).kind === 'decision';
+}
+
+/**
+ * WHY the cursor landed where it did on one iteration — the winning clause of the
+ * one cursor resolver, reported rather than guessed (8.5.0).
+ *
+ *   • `'entry'`      — cold start: the first entry whose `when` passed;
+ *   • `'route'`      — a declared, `from`-gated edge fired (D1);
+ *   • `'model-pick'` — no declared edge fired, so the model's gate-accepted
+ *                      `read_skill` pick moved the cursor (D2), at cold start or mid-run;
+ *   • `'stay'`       — nothing fired; the cursor is sticky and stayed put;
+ *   • `'none'`       — no cursor at all (cold start with nothing to enter, or a
+ *                      decision `tree()`, which routes by predicate and has no cursor).
+ *
+ * This exists because the DRAWN provenance on a skill (`metadata.skillGraph`) answers
+ * "how is this skill reachable" — a build-time fact — and was being read as "how did
+ * we get here this turn". A model pick into a skill that also has a declared edge was
+ * therefore attributed to that edge, label and all, in the recorded route.
+ */
+export type CursorMoveCause = 'entry' | 'route' | 'model-pick' | 'stay' | 'none';
+
+/** The cursor resolver's full answer: where, and by which clause. */
+export interface CursorMove {
+  /** The cursor after this iteration (what `nextSkill` returns). */
+  readonly to?: string;
+  /** The cursor before it. */
+  readonly from?: string;
+  /** The winning clause. */
+  readonly by: CursorMoveCause;
 }
 
 /** A node in the drawn graph — a `predicate` diamond or a `skill` box. */
@@ -295,14 +342,38 @@ export interface SkillGraph {
    */
   nextSkill(ctx: InjectionContext): string | undefined;
   /**
+   * The same answer as `nextSkill`, plus WHICH CLAUSE produced it — the resolver
+   * reporting its own reasoning instead of a consumer inferring it from the drawn
+   * provenance (8.5.0). `explainNextSkill(ctx).to === nextSkill(ctx)`, always: there
+   * is one resolver and `nextSkill` is a thin projection of this one, so the two can
+   * never drift.
+   *
+   * The agent threads this into the injection engine, which stamps the result on
+   * `agentfootprint.context.evaluated` as `cursorMove` — that is what lets
+   * `routeRecorder()` mark a model-pick hop as a model pick instead of borrowing the
+   * label of a declared edge that never fired.
+   */
+  explainNextSkill(ctx: InjectionContext): CursorMove;
+  /**
    * The REACHABLE set — which skills the model may `read_skill`-jump to from the
    * current cursor. The agent's runtime gate rejects any `read_skill('id')` whose
    * `id` is not in this set (so the model can't leave the graph mid-run).
    *   • cold start (`currentSkillId` undefined) → the entry skills;
    *   • otherwise → the current skill's direct successors ∪ the entry skills, minus
    *     the current skill itself (deliberate "stay" is the no-tool-call ReAct stop).
-   * Pure + deterministic. A decision `tree()` has no cursor, so it returns ALL leaf
-   * skills — `read_skill` stays a full escape hatch there.
+   *
+   * A decision `tree()` returns EMPTY (8.5.0). A tree routes by predicate on every
+   * iteration and has no cursor to jump: its leaves compile to `rule` triggers, and a
+   * `read_skill` call writes only `activatedInjectionIds`, which a `rule` trigger does
+   * not read. Until 8.5.0 this returned all the leaves, so the gate accepted a leaf
+   * pick, the tool answered "activated for the next iteration", and the leaf never
+   * activated. That is the same clause 8.4.0 already applies everywhere else — a skill
+   * is open only when its trigger is `llm-activated` — reaching the one set that had
+   * escaped it. The escape hatch under a tree is the OPEN skills (anything registered
+   * beside the graph: `.skill(x)`, `.selfExplain()`), which the agent's gate still
+   * admits from any cursor.
+   *
+   * Pure + deterministic.
    */
   reachableSkills(currentSkillId?: string): readonly string[];
   /**
@@ -545,7 +616,15 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       // routing. Flat mode wires it into each route target's trigger AND returns it
       // for the loop's cursor-update stage. Tree mode has no cursor (per-iteration
       // predicate routing), so it stays a no-op there.
-      let nextSkill: (ctx: InjectionContext) => string | undefined = (ctx) => ctx.currentSkillId;
+      //
+      // It resolves to a `CursorMove` — where AND by which clause — and `nextSkill`
+      // is the `.to` projection of it (8.5.0). ONE resolver still: the cause is
+      // decided at the same `return` that decides the destination, so an observer
+      // can never disagree with the routing about why the cursor moved.
+      let resolveCursor: (ctx: InjectionContext) => CursorMove = (ctx) =>
+        ctx.currentSkillId === undefined
+          ? { by: 'none' }
+          : { from: ctx.currentSkillId, to: ctx.currentSkillId, by: 'stay' };
       // The reachable-set resolver — what `read_skill` may jump to from the cursor
       // (the runtime gate enforces it). Default empty; set per mode below.
       let reachableSkills: (currentSkillId?: string) => readonly string[] = () => [];
@@ -589,19 +668,39 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
               `with .skill(${id}) to keep it read_skill-reachable.`,
           );
         }
-        // Tree mode has no cursor — `read_skill` stays a full escape hatch (all leaves).
-        reachableSkills = () => leafIds;
+        // Tree mode has no cursor, so `read_skill` has nothing to jump — EMPTY (8.5.0).
+        //
+        // Until 8.5.0 this answered `leafIds`, which made the gate accept a leaf pick
+        // that could never take effect: a leaf compiles to `{ kind: 'rule', activeWhen:
+        // pathCond }`, and a `read_skill` call writes only `activatedInjectionIds`,
+        // which no `rule` trigger reads. The pick was accepted, the tool answered
+        // "Skill 'x' activated for the next iteration", the tree re-decided by
+        // predicate, and `reroute_superseded` fired naming a winner that did not exist
+        // (tree mode never writes a cursor at all). Three of the library's own
+        // invariants say the pick cannot be honoured here instead: exactly ONE leaf
+        // fires per iteration (`attachExactlyOneLeafMonitor` warns otherwise), each
+        // leaf's tools are scoped on that basis (`TreeOptions.scopeTools`), and
+        // `toMermaid()` draws what is declared — a model lever over predicate routing
+        // is not on the drawing. So the gate refuses, in the same terms 8.4.0 already
+        // uses for every other rule-triggered skill.
+        //
+        // `read_skill` is not dead under a tree: the OPEN skills (anything registered
+        // beside the graph — `.skill(x)`, `.skills(reg)`, `.selfExplain()`) are still
+        // admitted from any cursor by the agent's gate, which is the only place that
+        // knows what else is registered.
+        reachableSkills = () => [];
       } else {
         // Flat entry/route mode (v1 + v2 keystone). `from`-gating + sticky cursor
         // both derive from one pure resolver so they can never diverge.
         // `.entryByRead()` makes the entries EXCLUSIVE (like `.entryByRelevance()`),
         // but the cold-start pick is the model's: no entry auto-loads — the LLM picks
-        // one via `read_skill`, and that choice becomes the cursor (see makeNextSkill).
+        // one via `read_skill`, and that choice becomes the cursor (see
+        // makeResolveCursor).
         const llmReadEntry = entryByReadFlag;
-        nextSkill = makeNextSkill(entries, routes, llmReadEntry);
+        resolveCursor = makeResolveCursor(entries, routes, llmReadEntry);
         // Triggers share ONE memoized view of the resolver per evaluation pass —
-        // see memoizePerPass. `nextSkill` (public, one call per iteration) stays raw.
-        const nextSkillForTriggers = memoizePerPass(nextSkill);
+        // see memoizePerPass. The public resolvers (one call per iteration) stay raw.
+        const nextSkillForTriggers = memoizePerPass(resolveCursor);
         reachableSkills = makeReachableSkills(entries, routes);
         if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
         for (const [id, skill] of skillsById) {
@@ -655,7 +754,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         edges,
         nodes,
         toMermaid: () => renderMermaid(nodes, edges),
-        nextSkill: (ctx: InjectionContext) => nextSkill(ctx),
+        // `nextSkill` is the `.to` PROJECTION of the one resolver, not a second
+        // implementation — the two cannot answer differently.
+        nextSkill: (ctx: InjectionContext) => resolveCursor(ctx).to,
+        explainNextSkill: (ctx: InjectionContext) => resolveCursor(ctx),
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
         checkup,
         ...(scoreEntries && { scoreEntries }),
@@ -794,7 +896,8 @@ function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
 
 /**
  * The cursor resolver (the keystone). Pure + deterministic. Given the iteration
- * context, returns the skill the graph should be *in* after this iteration:
+ * context, returns the skill the graph should be *in* after this iteration AND the
+ * clause that decided it (`CursorMove`; `nextSkill` is the `.to` projection):
  *   • cold start (`currentSkillId` unset) → first `entry` whose `when` passes
  *     (an `always`-entry — no `when` — matches unconditionally), else the entry
  *     the MODEL picked with `read_skill` (see "the model's pick" below);
@@ -819,15 +922,21 @@ function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
  * Each candidate predicate runs in its OWN try/catch so one throwing edge can't
  * block its siblings or crash the loop — a throw is treated as "no match" and,
  * in dev mode, warned. This is the design's `routeForResult` pin-table target.
+ *
+ * The `by` on each return is decided at the same statement as the destination
+ * (8.5.0). That matters most in the case an outside observer cannot reconstruct:
+ * a declared edge and a same-turn model pick naming the SAME target. `D1 > D2`
+ * makes it a `'route'`, and only this function knows.
  */
-function makeNextSkill(
+function makeResolveCursor(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
   llmReadEntry = false,
-): (ctx: InjectionContext) => string | undefined {
+): (ctx: InjectionContext) => CursorMove {
   const isEntry = (id: string): boolean => entries.some((e) => e.id === id);
   return (ctx) => {
     const cur = ctx.currentSkillId;
+    const from = cur !== undefined ? { from: cur } : {};
     if (cur === undefined) {
       // Cold start: declaration-order first entry whose intent predicate passes.
       // `.entryByRead()` skips this — there the library deliberately does NOT
@@ -835,9 +944,9 @@ function makeNextSkill(
       // loads until it does.
       if (!llmReadEntry) {
         for (const e of entries) {
-          if (!e.when) return e.id;
+          if (!e.when) return { to: e.id, by: 'entry' };
           try {
-            if (e.when(ctx)) return e.id;
+            if (e.when(ctx)) return { to: e.id, by: 'entry' };
           } catch (err) {
             warnMatcherThrew(`entry "${e.id}"`, err);
           }
@@ -850,20 +959,22 @@ function makeNextSkill(
       // AUTOMATIC pick's condition, not a lock on the manual one: the model asked
       // for this skill by name and the gate allowed it.
       if (ctx.pendingSkillPick !== undefined && isEntry(ctx.pendingSkillPick)) {
-        return ctx.pendingSkillPick;
+        return { to: ctx.pendingSkillPick, by: 'model-pick' };
       }
       for (const e of entries) {
-        if (ctx.activatedInjectionIds.includes(e.id)) return e.id;
+        if (ctx.activatedInjectionIds.includes(e.id)) return { to: e.id, by: 'model-pick' };
       }
-      return undefined;
+      return { by: 'none' };
     }
     // D1 — transition: first from-gated deterministic edge that fires. Wins over
-    // a same-turn model pick (the author's declared edge is never overridden).
+    // a same-turn model pick (the author's declared edge is never overridden) —
+    // INCLUDING when both name the same target, which is why the cause is decided
+    // here and not inferred downstream from the destination.
     for (const r of routes) {
       if (r.fromId !== cur) continue;
       if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
       try {
-        if (routeMatches(r, ctx)) return r.toId;
+        if (routeMatches(r, ctx)) return { ...from, to: r.toId, by: 'route' };
       } catch (err) {
         warnMatcherThrew(`route ${r.fromId}→${r.toId}`, err);
       }
@@ -872,9 +983,9 @@ function makeNextSkill(
     // (already gated) pick moves the cursor. A pick of the CURRENT skill is a
     // no-op stay, not a hop.
     if (ctx.pendingSkillPick !== undefined && ctx.pendingSkillPick !== cur) {
-      return ctx.pendingSkillPick;
+      return { ...from, to: ctx.pendingSkillPick, by: 'model-pick' };
     }
-    return cur; // sticky stay — no edge out of the current skill fired
+    return { ...from, to: cur, by: 'stay' }; // sticky stay — no edge out of cur fired
   };
 }
 
@@ -888,20 +999,24 @@ function makeNextSkill(
  * regex router would re-run all 15 regexes 15 times per turn.
  *
  * Keyed on ctx IDENTITY in a WeakMap, so entries vanish with the context object
- * and a fresh iteration always recomputes. Safe because `nextSkill` is pure over
+ * and a fresh iteration always recomputes. Safe because the resolver is pure over
  * `ctx` (route/entry predicates are documented as "pure + total"); the memo can
- * only make a pass MORE self-consistent, never less. `graph.nextSkill` itself is
- * left un-memoized — it is public API called once per iteration, and a consumer
- * that mutates a ctx object between calls must still get a fresh answer.
+ * only make a pass MORE self-consistent, never less. `graph.nextSkill` and
+ * `graph.explainNextSkill` are left un-memoized — they are public API called once
+ * per iteration, and a consumer that mutates a ctx object between calls must still
+ * get a fresh answer.
+ *
+ * Memoizes the whole `CursorMove` and projects `.to` for the triggers (8.5.0), so
+ * one pass computes the destination and the cause together, exactly once.
  */
 function memoizePerPass(
-  nextSkill: (ctx: InjectionContext) => string | undefined,
+  resolveCursor: (ctx: InjectionContext) => CursorMove,
 ): (ctx: InjectionContext) => string | undefined {
   const cache = new WeakMap<InjectionContext, { value: string | undefined }>();
   return (ctx) => {
     const hit = cache.get(ctx);
     if (hit) return hit.value;
-    const value = nextSkill(ctx);
+    const value = resolveCursor(ctx).to;
     cache.set(ctx, { value });
     return value;
   };

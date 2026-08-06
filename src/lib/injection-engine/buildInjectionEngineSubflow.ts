@@ -65,7 +65,7 @@ import {
   type Injection,
   type InjectionContext,
 } from './types.js';
-import { SKILL_GRAPH_METADATA_KEY, type SkillRouting } from './skillGraph.js';
+import { SKILL_GRAPH_METADATA_KEY, type CursorMove, type SkillRouting } from './skillGraph.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -81,6 +81,17 @@ export interface InjectionEngineConfig {
    * (the keystone). Absent → `currentSkillId` is never written (no graph routing).
    */
   readonly nextSkill?: (ctx: InjectionContext) => string | undefined;
+  /**
+   * The same resolver, reporting the clause that WON (`graph.explainNextSkill`,
+   * 8.5.0). Preferred over `nextSkill` when present — the stage takes the cursor
+   * from `.to`, so the graph is still consulted exactly once per iteration, and
+   * stamps the cause on `context.evaluated` as `cursorMove`.
+   *
+   * Optional for forward-compat with graphs built before it existed; without it
+   * the stage falls back to `nextSkill` and emits no `cursorMove` (an observer
+   * then sees exactly what it saw in 8.4.0).
+   */
+  readonly explainNextSkill?: (ctx: InjectionContext) => CursorMove;
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -158,7 +169,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
   })
     .addFunction(
       'Evaluate',
-      makeEvaluateStage(injections, config.nextSkill),
+      makeEvaluateStage(injections, config.nextSkill, config.explainNextSkill),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
     )
@@ -195,6 +206,7 @@ function gatherStage(scope: TypedScope<InjectionEngineState>): void {
 function makeEvaluateStage(
   injections: readonly Injection[],
   nextSkill?: (ctx: InjectionContext) => string | undefined,
+  explainNextSkill?: (ctx: InjectionContext) => CursorMove,
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -217,8 +229,13 @@ function makeEvaluateStage(
     // (`nextSkillCursor`) because `currentSkillId` arrives as a readonly INPUT
     // here; the mount's outputMapper maps it onto the parent's mutable
     // `currentSkillId` for the next iteration. Skill-graph agents only.
-    const cursor = nextSkill ? nextSkill(ctx) : undefined;
-    if (nextSkill) {
+    // ONE consultation of the graph per iteration: when the graph can explain
+    // itself (8.5.0) the cursor comes out of `.to`, so asking for the cause costs
+    // nothing extra and cannot answer a different destination than the routing did.
+    const move = explainNextSkill ? explainNextSkill(ctx) : undefined;
+    const routes = explainNextSkill !== undefined || nextSkill !== undefined;
+    const cursor = move ? move.to : nextSkill ? nextSkill(ctx) : undefined;
+    if (routes) {
       scope.$setValue('nextSkillCursor', cursor);
     }
 
@@ -252,6 +269,15 @@ function makeEvaluateStage(
     scope.$setValue('activeInjections', activePOJOs);
 
     const routing = routingEntriesOf(evaluation.active);
+    // Structural copy (the events layer stays decoupled from `CursorMove`), and a
+    // POJO so it survives the emit channel's clone.
+    const cursorMove = move
+      ? {
+          ...(move.from !== undefined && { from: move.from }),
+          ...(move.to !== undefined && { to: move.to }),
+          by: move.by,
+        }
+      : undefined;
 
     // Aggregate evaluation metadata is pure OBSERVABILITY — no flow stage
     // reads it — so it goes out the EMIT channel where a recorder/Lens can
@@ -270,7 +296,17 @@ function makeEvaluateStage(
       skillCatalog: skillCatalogOf(injections),
       // Routing PROVENANCE for active skill-graph injections — the decision path
       // / edge that reached each. Undefined when none came from a skillGraph().
+      //
+      // NOTE the difference from `cursorMove` below, which is the whole reason the
+      // latter exists: `routing[]` is BUILD-TIME provenance ("how is this skill
+      // reachable at all"), stamped once by the compiler. It answers per SKILL, not
+      // per HOP. Reading it as the cause of this turn's move is what made a model
+      // pick get recorded under a declared edge's label.
       ...(routing && { routing }),
+      // How the CURSOR actually moved this iteration, straight from the clause that
+      // won inside the resolver (8.5.0). Skill-graph agents only; absent for a graph
+      // built before `explainNextSkill` existed.
+      ...(cursorMove && { cursorMove }),
     });
   };
 }

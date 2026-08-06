@@ -250,6 +250,8 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 40 | [`40-output-schema-retry.ts`](features/40-output-schema-retry.ts) | The schema teaches back — retries on outputSchema | 7.26 —  |
 | 41 | [`41-local-model.ts`](features/41-local-model.ts) | Local model — the free middle rung of the adapter ladder | ollama( |
 | 42 | [`42-skill-graph-model-pick.ts`](features/42-skill-graph-model-pick.ts) | Skill graph — the model picks, and the pick takes effect | When no entry rule matches, the model picks a skill from the read_skill menu and the pick moves the graph |
+| 43 | [`43-skill-graph-tree-pick.ts`](features/43-skill-graph-tree-pick.ts) | Skill graph — a tree routes by predicate, and read_skill cannot jump it | A decision tree() has no cursor, so read_skill has nothing to move: a leaf pick is refused with a message explaining the tree, instead of being accepted and silently dropped. Skills registered beside the tree stay reachable, because those really do activate by read_skill. |
+| 44 | [`44-skill-graph-read-skill-offer.ts`](features/44-skill-graph-read-skill-offer.ts) | Skill graph — read_skill offers only what the gate will grant | read_skill |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

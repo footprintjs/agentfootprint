@@ -126,6 +126,40 @@ Two consequences worth knowing:
 1. **`'tool-only'` is recency-first by protocol.** The LLM sees the body as the most recent tool result on the next iteration — providers' attention to the latest message is consistently strong. No reliance on system-prompt training adherence.
 2. **`'auto'` keeps the body in the system slot** so existing consumers see no surprises. To get provider-aware resolution (Claude ≥ 3.5 → `'both'`; everything else → `'tool-only'`), call `resolveSurfaceMode(provider, model)` yourself and pass the concrete mode, or set a registry-level default via `new SkillRegistry({ surfaceMode })`.
 
+### `'tool-only'` requires that `read_skill` is what activates the skill (8.5.0)
+
+Look at the table again: `'tool-only'` means "the body is **suppressed** from the
+system slot and delivered as the `read_skill` tool result." That channel only exists
+when the model *calls* `read_skill`.
+
+A skill a **skill graph** activates never gets that call. A route target, a graph
+entry and a decision-tree leaf all activate off the graph's cursor — so the tool
+result never happens, the system slot suppresses the body anyway, and **the body
+reaches the model through no channel at all**. Its *tools* still arrive, which is
+worse than the skill not loading: the model is handed the tools of a procedure nobody
+described.
+
+The agent now refuses that combination at build time, naming every offending skill
+and how it is routed:
+
+```text
+Agent: This skill sets surfaceMode: 'tool-only', which delivers the body as the
+read_skill tool result — but nothing here activates by read_skill, so its body would
+reach the model NOWHERE: the system slot suppresses a tool-only body by design, and
+no read_skill call happens to carry it.
+  • "beta" — a route target (the graph routes "alpha" → "beta")
+Use 'both' (system prompt AND tool result) or 'system-prompt'. Only a skill read_skill
+actually activates — trigger 'llm-activated', which is every skill a graph does not
+route — can be 'tool-only'.
+```
+
+**`'both'` is the fix** when a skill is reachable both ways: the body lands in the
+system slot on a cursor hop *and* in the tool result on a `read_skill` pick.
+
+Unaffected: a `.skill()` registered outside a graph, a bare model edge target
+(`.route(a, m)` with no `when`/`onToolReturn`), and any **open** skill — all keep the
+`llm-activated` trigger, so `read_skill` really is what activates them.
+
 ## Long-context refresh (`refreshPolicy`)
 
 ```ts

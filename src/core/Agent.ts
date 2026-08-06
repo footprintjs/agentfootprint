@@ -82,9 +82,11 @@ import {
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
+import { isDevMode } from 'footprintjs';
+import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
-import type { EntryScoring } from '../lib/injection-engine/skillGraph.js';
+import type { CursorMove, EntryScoring } from '../lib/injection-engine/skillGraph.js';
 import { makePickEntryStage } from './agent/stages/pickEntry.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
 import {
@@ -230,6 +232,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The `to` end of every edge the mounted graph declares — which skills the graph
    *  WIRES. Empty for a graph-less agent. Read only by `openSkillIds()`. */
   private readonly skillGraphEdgeTargets: ReadonlySet<string>;
+  /** Skill-graph cursor resolver that also reports WHICH CLAUSE won
+   *  (`graph.explainNextSkill`, 8.5.0). Threaded to the Injection Engine, which
+   *  stamps the result on `context.evaluated` as `cursorMove`. Optional — a graph
+   *  built before it existed falls back to `nextSkill` and emits no `cursorMove`. */
+  private readonly skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove;
+  /** Is the mounted graph a decision `tree()`? Derived at build time from
+   *  `graph.nodes` (a tree is the only shape with `predicate` nodes) — no new
+   *  public field on `SkillGraph`. Read for ONE thing: the read_skill gate's
+   *  refusal has to explain that a tree has no cursor to jump (8.5.0). */
+  private readonly skillGraphIsTree: boolean;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -436,6 +448,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     messageMiddleware?: readonly MessageMiddleware[],
     outputEnforcement?: ResolvedOutputEnforcement,
     skillGraphEdgeTargets?: readonly string[],
+    skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove,
+    skillGraphIsTree?: boolean,
   ) {
     super();
     this.provider = opts.provider;
@@ -460,6 +474,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphReachable = skillGraphReachable;
     this.skillGraphScoreEntries = skillGraphScoreEntries;
     this.skillGraphEdgeTargets = new Set(skillGraphEdgeTargets ?? []);
+    this.skillGraphExplainNextSkill = skillGraphExplainNextSkill;
+    this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -1060,6 +1076,56 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       .map((i) => i.id);
   }
 
+  /**
+   * The per-iteration `read_skill` offer builder — or `undefined` to leave the tool
+   * exactly as it has always been (8.5.0).
+   *
+   * `read_skill` enumerated every registered skill while the gate admitted only
+   * `reachableSkills(cursor) ∪ open`, so under a graph the model was handed ids it
+   * would be refused, every iteration, and could spend a whole run re-asking. The
+   * OFFER is rebuilt here from the same two functions the gate itself calls — one
+   * source of truth, so the menu cannot drift from the verdict.
+   *
+   * Two guards:
+   *
+   *   • no graph → `undefined`. A plain `read_skill` agent has no cursor and no
+   *     gate; every registered skill really is reachable, and the tool keeps its
+   *     byte-identical description.
+   *   • `reactMode: 'classic'` → `undefined`, plus a dev-mode warning. Classic
+   *     composes the tools slot on turn 1 ONLY (see the Context selector's
+   *     `includeStatic`), so a cursor-scoped menu would freeze at the cold-start
+   *     cursor and keep advertising it for the rest of the run — a worse lie than
+   *     the honest full catalog. `.selfExplain()` refuses under classic for exactly
+   *     this caching reason; here the full catalog is a correct fallback, so this
+   *     warns instead of refusing.
+   */
+  private readSkillOfferFor(): ((currentSkillId?: string) => LLMToolSchema) | undefined {
+    if (!this.skillGraphReachable) return undefined;
+    const skills = this.injections.filter((i) => i.flavor === 'skill');
+    if (skills.length === 0) return undefined;
+    if (this.reactMode === 'classic') {
+      if (isDevMode()) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "agentfootprint Agent: read_skill's menu is built at turn 1 under " +
+            "reactMode: 'classic', which caches the tools slot — so it lists every " +
+            'registered skill instead of the ones reachable from the cursor, and the ' +
+            "model will be offered ids the graph will refuse. Use the default 'dynamic' " +
+            "mode (or 'dynamic-grouped') for a cursor-tracking menu.",
+        );
+      }
+      return undefined;
+    }
+    const open = this.openSkillIds();
+    const reachable = this.skillGraphReachable;
+    return (currentSkillId?: string) => {
+      const grantable = [...new Set([...reachable(currentSkillId), ...open])];
+      // Non-null: `skills` is non-empty, so the builder always returns a tool.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      return buildReadSkillTool(skills, { grantable })!.schema;
+    };
+  }
+
   private assertDeliverableRoles(): void {
     const carries = carriedRoles(this.provider);
     const carried = new Set(carries);
@@ -1474,6 +1540,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const injectionEngineSubflow = buildInjectionEngineSubflow({
       injections: this.injections,
       ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
+      ...(this.skillGraphExplainNextSkill && {
+        explainNextSkill: this.skillGraphExplainNextSkill,
+      }),
     });
     // Relevance entry router — a once-per-turn stage (off the ReAct loop) that
     // picks the starting skill by embedding similarity. Only built (and mounted)
@@ -1505,10 +1574,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // A fresh chart (and thus fresh cache) is built per `agent.run()`,
     // so concurrent runs don't share state.
     const providerToolCache: ProviderToolCache = { current: [] };
+    const readSkillFor = this.readSkillOfferFor();
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
+      ...(readSkillFor && { readSkillFor }),
     });
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
@@ -1584,6 +1655,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.skillGraphReachable && {
         allowedSkillIds: this.skillGraphReachable,
         openSkillIds: this.openSkillIds(),
+        skillGraphIsTree: this.skillGraphIsTree,
       }),
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.

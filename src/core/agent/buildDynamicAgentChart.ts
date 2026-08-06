@@ -312,6 +312,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         runIdentity: parent.runIdentity as
           | { tenant?: string; principal?: string; conversationId: string }
           | undefined,
+        // The skill-graph cursor, for the per-iteration `read_skill` offer (8.5.0).
+        // Inside sf-llm-call the advanced cursor lands under `nextSkillCursor` (the
+        // boundary's `currentSkillId` is a readonly INPUT here and still holds the
+        // PREVIOUS iteration's value, which would offer a stale menu). The Injection
+        // Engine mounts before this branch, so `nextSkillCursor` is already written.
+        currentSkillId: (parent.nextSkillCursor ?? parent.currentSkillId) as string | undefined,
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,

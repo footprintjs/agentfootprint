@@ -27,7 +27,8 @@ import {
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
-import type { EntryScoring } from '../../lib/injection-engine/skillGraph.js';
+import type { CursorMove, EntryScoring } from '../../lib/injection-engine/skillGraph.js';
+import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
@@ -102,6 +103,14 @@ export class AgentBuilder {
    *  which skills the graph WIRES. Read only by the read_skill gate's open-skill
    *  rule (8.4.0). */
   private skillGraphEdgeTargets?: readonly string[];
+  /** Captured from `.skillGraph(graph)` — the cursor resolver that also reports the
+   *  clause that won (`graph.explainNextSkill`, 8.5.0). Optional: a graph built
+   *  before it existed still routes, it just cannot narrate the hop. */
+  private skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove;
+  /** Is the mounted graph a decision `tree()`? DERIVED from `graph.nodes` — a tree
+   *  is the only shape that draws `predicate` diamonds — so no new field had to be
+   *  added to the public `SkillGraph`. Feeds the gate's tree-specific refusal. */
+  private skillGraphIsTree = false;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -753,6 +762,14 @@ export class AgentBuilder {
      *  (see `openSkillIds` in `build()`). Optional for forward-compat with graphs
      *  built before `edges` existed; absent → the graph wires nothing. */
     edges?: ReadonlyArray<{ readonly to: string }>;
+    /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
+     *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */
+    explainNextSkill?: (ctx: InjectionContext) => CursorMove;
+    /** The drawn nodes. Read for ONE thing: a `predicate` node means this graph is a
+     *  decision `tree()`, which the gate's refusal has to say out loud. Derived here
+     *  rather than added to `SkillGraph` as a mode field — the shape is already
+     *  public, and one fact should not be declared twice. */
+    nodes?: ReadonlyArray<{ readonly kind: string }>;
   }): this {
     // One agent routes with ONE graph. The second call used to replace the cursor,
     // the reachable set and the entry scorer while the FIRST graph's skills stayed
@@ -785,6 +802,10 @@ export class AgentBuilder {
     // bare). The gate uses it to leave a bare model edge `A → M` from-gated while
     // opening skills the graph never mentions.
     this.skillGraphEdgeTargets = (graph.edges ?? []).map((e) => e.to);
+    // The clause-reporting resolver (8.5.0) and the one fact the gate's refusal
+    // needs beyond the reachable set: is this a tree?
+    this.skillGraphExplainNextSkill = graph.explainNextSkill;
+    this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
     return this;
   }
 
@@ -1496,6 +1517,14 @@ export class AgentBuilder {
           this.toolProviderRef,
         )
       : this.toolProviderRef;
+    // A skill may claim the `read_skill` delivery channel only if `read_skill` is
+    // what activates it — otherwise its body reaches the model through no channel at
+    // all (8.5.0). Checked HERE, on the final list, for the same reason
+    // `resolveOutputEnforcement` lives here: the answer depends on the WHOLE agent.
+    // `.skillGraph()` compiles the triggers, `.skill()` may add more after it, and
+    // `.selfExplain()` adds one right above — only this line sees all of them.
+    const deliveryRefusal = toolOnlyDeliveryRefusal(injections);
+    if (deliveryRefusal) throw new Error(deliveryRefusal);
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -1522,6 +1551,8 @@ export class AgentBuilder {
       this.messageMiddlewareList,
       this.resolveOutputEnforcement(),
       this.skillGraphEdgeTargets,
+      this.skillGraphExplainNextSkill,
+      this.skillGraphIsTree,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

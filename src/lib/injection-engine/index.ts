@@ -82,6 +82,10 @@ export {
   type DecisionNode,
   type SkillRouting,
   type SkillRoutingStep,
+  // 8.5.0 — the return type of `graph.explainNextSkill(ctx)`. On the barrel because
+  // a public method returns it; without it a consumer cannot name what they receive.
+  type CursorMove,
+  type CursorMoveCause,
   type EntryScore,
   type EntryScoring,
   type SkillGraphConfig,

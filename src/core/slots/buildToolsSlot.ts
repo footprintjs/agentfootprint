@@ -55,6 +55,19 @@ export interface ToolsSlotConfig {
    * calling `list()` a second time. Required when `toolProvider` is set.
    */
   readonly providerToolCache?: ProviderToolCache;
+  /**
+   * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
+   *
+   * Set only for a `.skillGraph()` agent in a per-iteration ReAct mode. The tool's
+   * enum is the full catalog and never changes; what varies is the DESCRIPTION —
+   * which ids the gate will actually grant from where the cursor stands. Without it
+   * the menu advertised every registered skill on every iteration while the gate
+   * admitted a subset, so the model was routinely offered ids it would be refused.
+   *
+   * Substituted by NAME in Compose, so dispatch is untouched: the tool-calls handler
+   * resolves executables from `registryByName`, never from the schema list.
+   */
+  readonly readSkillFor?: (currentSkillId?: string) => LLMToolSchema;
   /** Budget cap (chars). Default: 2000. */
   readonly budgetCap?: number;
 }
@@ -74,7 +87,8 @@ interface ToolsSubflowState {
  */
 export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const budgetCap = config.budgetCap ?? 2000;
-  const tools = config.tools;
+  const staticTools = config.tools;
+  const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
   const providerToolCache = config.providerToolCache;
   // Dedup latch for the human-facing warning, scoped to THIS built chart:
@@ -167,8 +181,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // into the tool slot. Pure compute, sync, fast. Reads provider tools
   // from `providerToolCache.current` populated by the Discover stage.
   const composeStage = (scope: TypedScope<ToolsSubflowState>): void => {
-    const args = scope.$getArgs<{ iteration?: number }>();
+    const args = scope.$getArgs<{ iteration?: number; currentSkillId?: string }>();
     const iteration = args.iteration ?? 1;
+
+    // Per-iteration `read_skill` offer. The cursor arriving here is THIS iteration's:
+    // the Injection Engine already advanced it and its outputMapper wrote it to the
+    // parent before this slot mounts — the same value the read_skill gate will read
+    // when the model answers. Substituted by name so nothing else in the list moves.
+    const tools = readSkillFor
+      ? staticTools.map((t) => (t.name === 'read_skill' ? readSkillFor(args.currentSkillId) : t))
+      : staticTools;
 
     const injections: InjectionRecord[] = tools.map((t, i) => {
       const summary = `${t.name}: ${t.description}`;

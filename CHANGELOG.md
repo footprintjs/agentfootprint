@@ -7,6 +7,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.5.0] - 2026-08-06
+
+**`read_skill` tells the whole truth.** 8.4.0 stopped a skill graph from throwing
+away what the author declared. This one stops it from telling the *model* things
+that were not so. Five findings, all of the same shape: the library said a thing had
+happened, or offered a thing it would refuse, or recorded a cause that was not the
+cause. One is a build-time refusal, one is a gate refusal, three are fixes.
+
+### A decision `tree()` cannot be jumped — and now says so
+
+A `tree()` routes by predicate on every iteration. It has no cursor, so `read_skill`
+has nothing to move. But `graph.reachableSkills()` reported **all the leaves**, so
+the gate accepted a leaf pick and `read_skill` answered *"Skill 'x' activated for the
+next iteration"* — and nothing happened. A leaf compiles to a `rule` trigger; a
+`read_skill` call writes only `activatedInjectionIds`; no `rule` trigger reads that.
+The leaf never activated, the tree re-decided by predicate, and the run then emitted
+`agentfootprint.skill.reroute_superseded` naming a winner that **did not exist** —
+tree mode never writes a cursor at all, so the payload carried neither `wonId` nor
+`fromSkillId`. Three sentences of the library, false at once.
+
+Honouring the pick was the other option, and the tree's own rules refuse it: exactly
+ONE leaf fires per iteration (the library ships a dev-mode monitor that warns
+otherwise), each leaf's tools are scoped on that basis (`TreeOptions.scopeTools`),
+and `toMermaid()` draws only predicate branches — a model lever over that routing is
+not on the drawing. And 8.4.0 already settled the general rule: a pick is admitted
+only for the one trigger `read_skill` can fire, `llm-activated`. A leaf's trigger is
+a `rule`. Tree mode was the single set that had escaped that rule.
+
+So the gate refuses, in terms that teach:
+
+```text
+read_skill("capacity") cannot move a decision tree. A tree routes by predicate on
+every iteration — it has no cursor to jump, so this skill would not activate even
+though the tool accepted the name. Answer with the skill the tree routed to, or finish.
+```
+
+**Behavior change:** `graph.reachableSkills()` now returns `[]` for a decision
+`tree()`, from every cursor. Its contract is "what `read_skill` may jump to", and
+all-leaves was the lie; use `graph.skills` to enumerate leaves, which is what it was
+always for. `read_skill` is not dead under a tree — anything registered *beside* the
+graph (`.skill(x)`, `.skills(reg)`, `.selfExplain()`) is **open** and still admitted
+from anywhere, because those really do activate by `read_skill`. Two docstrings that
+promised "read_skill stays a full escape hatch there" are corrected.
+
+### `read_skill` offers what the gate will actually grant
+
+The tool enumerated every registered skill — in its enum and in the catalog inside
+its own description — while the gate admitted only `reachableSkills(cursor) ∪ open`.
+The model was handed a menu the library already knew it would reject: a route target
+the cursor cannot reach was advertised on every iteration and refused on every call,
+which costs tokens and can burn a whole run on re-asking.
+
+The description is now rebuilt each iteration from the same two functions the gate
+itself calls, so the menu and the verdict cannot disagree:
+
+```text
+Reachable from here:
+  - volume-lookup: Resolve a volume by WWN
+  - escalation: How to page the on-call engineer
+
+Not reachable from here (read_skill for these will be refused):
+  - capacity-report: Report free capacity per volume
+```
+
+**The enum stays the full catalog, deliberately.** `toolArgValidation` defaults to
+`'enforce'` and runs *before* the gate; an off-enum id is rejected with a generic
+schema error and never reaches it. Narrowing the enum would therefore have retired
+the gate's teaching refusal, the `agentfootprint.skill.rejected` event,
+`routeRecorder`'s rejection hops and the rejected-cap governor's only input — four
+honesty mechanisms traded for one.
+
+Under `reactMode: 'classic'` the tools slot is composed on turn 1 only, so a
+cursor-scoped menu would freeze at the cold-start cursor and keep advertising it: the
+full catalog stays there (the honest fallback), and dev mode warns and names the fix.
+Agents with no skill graph keep the byte-identical description they always had.
+
+### `surfaceMode: 'tool-only'` is refused when nothing activates by `read_skill`
+
+`'tool-only'` means "suppress the body from the system slot and deliver it as the
+`read_skill` tool result." That channel exists only when the model calls
+`read_skill`. A skill the **graph** activates never gets that call — so for a route
+target, a graph entry or a tree leaf, the tool result never happened, the system slot
+suppressed the body anyway, and the body reached the model **nowhere at all**. Its
+tools still arrived, which is worse than the skill not loading: the model was handed
+the tools of a procedure nobody described.
+
+Refused now at agent build time, keyed on the compiled trigger — the same
+`llm-activated` clause 8.4.0's gate turns on — and naming every offender with its
+routing, so a `skillsFromDir({ surfaceMode: 'tool-only' })` directory refuses as a
+readable list rather than one mystery:
+
+```text
+Agent: This skill sets surfaceMode: 'tool-only', … its body would reach the model
+NOWHERE …
+  • "beta" — a route target (the graph routes "alpha" → "beta")
+Use 'both' (system prompt AND tool result) or 'system-prompt'.
+```
+
+Refusal rather than a quiet fall back to the system slot: the author wrote
+`'tool-only'` to keep the body *out* of the system prompt, and silently putting it
+back would honour the activation while breaking the declaration — a different lie,
+not a fix. `'both'` already means "deliver it either way".
+
+Unaffected: `.skill()` outside a graph, a bare model edge target (`.route(a, m)` with
+no `when`/`onToolReturn`), and every open skill — all keep `llm-activated`. A new
+`resolvedSurfaceModeOf()` helper routes both the current question and the
+provider-resolution question through one function, so wiring the `'auto'` cascade
+into the runtime later cannot reopen this hole for non-Claude providers by accident.
+
+### `routeRecorder` stops attributing a model pick to a declared edge
+
+A `read_skill` hop the gate accepted was recorded as `outcome: 'route'` wearing the
+caption of whatever declared edge happened to point at the same skill — so the trace
+asserted that edge had fired when its predicate never ran. The cause was being
+inferred from `routing[]`, which is per-**skill** build-time provenance ("how is this
+skill reachable at all"), not per-**hop** runtime truth.
+
+The graph's one cursor resolver now reports the clause that won. `nextSkill(ctx)` is
+unchanged and is the `.to` projection of it, so there is no second implementation to
+drift:
+
+- `SkillGraph.explainNextSkill(ctx)` → `{ from?, to?, by }` where `by` is
+  `'entry' | 'route' | 'model-pick' | 'stay' | 'none'`;
+- `agentfootprint.context.evaluated` carries it as the new optional `cursorMove`;
+- `routeRecorder()` reads it, and a `'model-pick'` hop carries **no** `edgeLabel`.
+
+This settles the one case no observer could reconstruct: an edge and a same-turn pick
+naming the *same* skill resolves to `'route'` (`D1 > D2`), and only the resolver
+knows. Without `cursorMove` (an older graph, an older recording) the previous
+inference still stands.
+
+**Type widening:** `RouteOutcome` gains `'model-pick'`. An exhaustive `switch` over
+it will fail to compile until the case is added.
+
+### `routeRecorder({ maxRejectedRetries })` can finally trip
+
+`consecutiveRejected` reset on every `context.evaluated` — and one fires between
+every pair of rejections — so the count never passed 1 and the governor was
+unreachable outside a single iteration's parallel tool batch. Five consecutive
+out-of-reach jumps against a cap of two produced zero trips.
+
+It now resets only when the cursor actually **moves**, which is precisely what a
+model stuck re-asking never achieves; a `'stay'` no longer clears the run. Each run
+of rejections trips **once** and re-arms on the next real move, instead of pushing a
+duplicate trip on every iteration past the cap.
+
 ## [8.4.0] - 2026-08-06
 
 **Dead skills.** Five combinations a skill graph accepted and then silently gutted.

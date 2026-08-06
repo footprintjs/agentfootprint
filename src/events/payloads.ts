@@ -327,6 +327,23 @@ export interface ContextEvaluatedPayload {
     /** Tool names this injection unlocked. */
     readonly tools?: readonly string[];
   }[];
+  /**
+   * How the skill-graph CURSOR moved on THIS iteration — the winning clause of the
+   * graph's one cursor resolver, reported by it (8.5.0). Present only for an agent
+   * built with `.skillGraph()` (and a graph new enough to explain itself).
+   *
+   * Distinct from `routing[]` above, and the distinction is the point: `routing[]`
+   * is per-SKILL build-time provenance ("how is this skill reachable"), while this
+   * is per-HOP runtime truth ("what moved us, this turn"). `by: 'model-pick'` is the
+   * case the two disagree on — a `read_skill` pick the gate accepted, into a skill
+   * that also has a declared edge whose predicate never fired.
+   */
+  readonly cursorMove?: {
+    readonly from?: string;
+    readonly to?: string;
+    /** `'entry' | 'route' | 'model-pick' | 'stay' | 'none'`. */
+    readonly by: string;
+  };
 }
 
 // error.fatal + pause (always-on from library core)

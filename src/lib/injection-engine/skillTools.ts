@@ -60,6 +60,55 @@ export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefi
 }
 
 /**
+ * What the gate will ACTUALLY grant right now — the ids `read_skill` should be
+ * offering, as opposed to the ids it can dispatch (8.5.0).
+ *
+ * Without this the tool enumerated every registered skill while the skill-graph gate
+ * admitted only `reachableSkills(cursor) ∪ open`, so a route target the cursor cannot
+ * reach was advertised on every iteration and refused on every call. The model was
+ * being asked to choose from a menu the library knew it would reject.
+ */
+export interface ReadSkillOffer {
+  /** Ids the gate will grant from the current cursor. */
+  readonly grantable: readonly string[];
+  /** Say the rest are refusable rather than hiding them. Hiding a skill it can see
+   *  in `list_skills` (and in the enum) would just move the confusion; naming the
+   *  boundary lets the model route around it in one step instead of guessing. */
+  readonly showRefusable?: boolean;
+}
+
+/** Compose the tool description: one catalog, or the offer split in two. */
+function describeOffer(
+  skills: readonly Injection[],
+  line: (s: Injection) => string,
+  fullCatalog: string,
+  offer?: ReadSkillOffer,
+): string {
+  const tail =
+    `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
+    `gated tools become available on the next call.`;
+  if (!offer) {
+    return `Activate a skill for the next iteration. Available skills:\n${fullCatalog}\n\n${tail}`;
+  }
+  const grantable = new Set(offer.grantable);
+  const open = skills.filter((s) => grantable.has(s.id));
+  const shut = skills.filter((s) => !grantable.has(s.id));
+  const parts = [
+    open.length > 0
+      ? `Reachable from here:\n${open.map(line).join('\n')}`
+      : 'Nothing is reachable from here — answer with the skill you are in, or finish.',
+  ];
+  if (offer.showRefusable !== false && shut.length > 0) {
+    parts.push(
+      `Not reachable from here (read_skill for these will be refused):\n${shut
+        .map(line)
+        .join('\n')}`,
+    );
+  }
+  return `Activate a skill for the next iteration.\n\n${parts.join('\n\n')}\n\n${tail}`;
+}
+
+/**
  * Build the `read_skill` tool — activates a skill for the next
  * iteration. The LLM picks WHICH skill via the `id` argument.
  *
@@ -80,14 +129,20 @@ export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefi
  *
  * Returns `undefined` when there are no skills — callers should
  * guard or filter undefined out of their tool list.
+ *
+ * Pass `offer` to scope the DESCRIPTION to what the graph's gate will actually
+ * grant from the current cursor (8.5.0); the enum stays the full catalog either
+ * way. Omit it and the tool is byte-identical to what it has always been.
  */
-export function buildReadSkillTool(skills: readonly Injection[]): Tool | undefined {
+export function buildReadSkillTool(
+  skills: readonly Injection[],
+  offer?: ReadSkillOffer,
+): Tool | undefined {
   if (skills.length === 0) return undefined;
 
   const skillIds = skills.map((s) => s.id);
-  const skillCatalog = skills
-    .map((s) => `  - ${s.id}: ${s.description ?? '(no description)'}`)
-    .join('\n');
+  const line = (s: Injection): string => `  - ${s.id}: ${s.description ?? '(no description)'}`;
+  const skillCatalog = skills.map(line).join('\n');
 
   // Index per-skill body + surfaceMode (Block C — runtime per-mode dispatch).
   // For 'tool-only' / 'both' surface modes, the read_skill tool result
@@ -106,15 +161,21 @@ export function buildReadSkillTool(skills: readonly Injection[]): Tool | undefin
 
   return defineTool<{ id: string }, string>({
     name: 'read_skill',
-    description:
-      `Activate a skill for the next iteration. Available skills:\n${skillCatalog}\n\n` +
-      `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
-      `gated tools become available on the next call.`,
+    description: describeOffer(skills, line, skillCatalog, offer),
     inputSchema: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
+          // The FULL catalog, always — deliberately NOT narrowed to the reachable
+          // set (8.5.0). `toolArgValidation` defaults to `'enforce'` and runs BEFORE
+          // the skill-graph gate, rejecting an off-enum id with a generic schema
+          // error and `error = true`, which the gate then skips. Narrowing this
+          // would silently retire the gate's teaching refusal, the
+          // `agentfootprint.skill.rejected` event, `routeRecorder`'s rejection hops
+          // and the rejected-cap governor's only input — four honesty mechanisms
+          // traded for one. The OFFER is narrowed in the description instead, which
+          // is what the model actually reads to choose.
           enum: skillIds,
           description: 'The skill id to activate.',
         },

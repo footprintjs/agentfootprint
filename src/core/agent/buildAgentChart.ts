@@ -462,6 +462,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         runIdentity: parent.runIdentity as
           | { tenant?: string; principal?: string; conversationId: string }
           | undefined,
+        // The skill-graph cursor, for the per-iteration `read_skill` offer (8.5.0).
+        // ALREADY ADVANCED: the Injection Engine mounts before this branch and its
+        // outputMapper writes `currentSkillId = nextSkillCursor`, so this is the
+        // cursor the gate will use when the model answers — not last turn's.
+        currentSkillId: parent.currentSkillId as string | undefined,
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,

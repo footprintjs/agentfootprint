@@ -119,6 +119,16 @@ export interface ToolCallsHandlerDeps {
    */
   readonly openSkillIds?: readonly string[];
   /**
+   * Is the mounted graph a decision `tree()`? Changes only the REFUSAL TEXT (8.5.0).
+   *
+   * A tree routes by predicate every iteration and has no cursor, so
+   * `reachableSkills()` is empty and every leaf pick is refused. Told with the
+   * generic message that reads "No skills are reachable from here", which is true
+   * but teaches nothing — the model would keep trying. The tree-shaped message says
+   * why the graph cannot be jumped at all, so the model stops asking and answers.
+   */
+  readonly skillGraphIsTree?: boolean;
+  /**
    * Check-in config (evidence-carrying human consent). Resolved from the Agent
    * builder (`.checkIn({...})`) — defaults to `standard` evidence + the
    * deterministic lexical scorer, so a tool that declares `checkIn` works even
@@ -163,6 +173,35 @@ export interface ToolCallsHandlerDeps {
  *  and the `skill.rejected` payload both report as "what this gate accepts". */
 function dedupeIds(ids: readonly string[]): readonly string[] {
   return [...new Set(ids)];
+}
+
+/**
+ * The re-prompt a refused `read_skill` gets back. It is the model's only feedback,
+ * so it names what IS allowed rather than only what isn't.
+ *
+ * Three shapes, because "not reachable" has three different reasons and only the
+ * first two share a fix:
+ *   • something is reachable → name it, and ask for one of those;
+ *   • a decision `tree()` → nothing is EVER reachable by `read_skill`, because a
+ *     tree has no cursor to move (8.5.0). Saying "no skills are reachable from
+ *     here" would invite the model to try again from somewhere else; there is no
+ *     "elsewhere", so the message explains the tree instead;
+ *   • a flat graph that happens to be at a dead end → the original message.
+ */
+function skillRefusal(requestedId: string, allowed: readonly string[], isTree: boolean): string {
+  const head = `read_skill("${requestedId}") is not reachable from here. `;
+  if (allowed.length > 0) {
+    return `${head}Reachable skills: ${allowed.join(', ')}. Pick one of these, or finish.`;
+  }
+  if (isTree) {
+    return (
+      `read_skill("${requestedId}") cannot move a decision tree. A tree routes by ` +
+      'predicate on every iteration — it has no cursor to jump, so this skill would ' +
+      'not activate even though the tool accepted the name. Answer with the skill the ' +
+      'tree routed to, or finish.'
+    );
+  }
+  return `${head}No skills are reachable from here — answer with the current skill, or finish.`;
 }
 
 /**
@@ -771,11 +810,7 @@ export function buildToolCallsHandler(
             const allowed = dedupeIds([...hops, ...(deps.openSkillIds ?? [])]);
             if (!allowed.includes(reqId)) {
               skillRejected = true;
-              result =
-                `read_skill("${reqId}") is not reachable from here. ` +
-                (allowed.length
-                  ? `Reachable skills: ${allowed.join(', ')}. Pick one of these, or finish.`
-                  : 'No skills are reachable from here — answer with the current skill, or finish.');
+              result = skillRefusal(reqId, allowed, deps.skillGraphIsTree === true);
               typedEmit(scope, 'agentfootprint.skill.rejected', {
                 requestedId: reqId,
                 ...(currentSkillId !== undefined && { currentSkillId }),
