@@ -227,6 +227,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     ctx: InjectionContext,
     signal?: AbortSignal,
   ) => Promise<EntryScoring>;
+  /** The `to` end of every edge the mounted graph declares — which skills the graph
+   *  WIRES. Empty for a graph-less agent. Read only by `openSkillIds()`. */
+  private readonly skillGraphEdgeTargets: ReadonlySet<string>;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -432,6 +435,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     toolMiddleware?: readonly ToolMiddleware[],
     messageMiddleware?: readonly MessageMiddleware[],
     outputEnforcement?: ResolvedOutputEnforcement,
+    skillGraphEdgeTargets?: readonly string[],
   ) {
     super();
     this.provider = opts.provider;
@@ -455,6 +459,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphNextSkill = skillGraphNextSkill;
     this.skillGraphReachable = skillGraphReachable;
     this.skillGraphScoreEntries = skillGraphScoreEntries;
+    this.skillGraphEdgeTargets = new Set(skillGraphEdgeTargets ?? []);
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -1022,6 +1027,39 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Called from the ONE place `run()` and `resume()` share, so no entry point
    * can slip past it.
    */
+  /**
+   * The OPEN skills — the ones `read_skill` may reach from anywhere, whatever the
+   * graph's cursor says (8.4.0). Two clauses, both load-bearing:
+   *
+   *   • `trigger.kind === 'llm-activated'` — the trigger that reads
+   *     `activatedInjectionIds`, which is the ONLY thing a `read_skill` call writes.
+   *     It is exactly "read_skill can really activate this", so admitting anything
+   *     else (a hand-built `rule` injection, say) would replace one lie with another:
+   *     the tool would answer "activated" and nothing would activate.
+   *   • the graph declares no incoming edge to it — a bare model edge `.route(a, m)`
+   *     is a declared, drawn, `from`-gated affordance ("from a, the model may hop to
+   *     m"), and opening every such target would silently globalize it. What is left
+   *     is skills the graph never mentions at all.
+   *
+   * That covers three shapes that were all dead before: `.selfExplain()`'s debug
+   * skill under a graph, a `.skill()`/`.skills()` registration beside a graph, and a
+   * skill listed in `skills[]` and wired to nothing (whose own check-up warning says
+   * "it can only be reached by the model via read_skill" — true again now).
+   *
+   * An open pick ACTIVATES but never moves the cursor — see the tool-calls gate.
+   * Computed once per chart build; the injection list is fixed at construction.
+   */
+  private openSkillIds(): readonly string[] {
+    return this.injections
+      .filter(
+        (i) =>
+          i.flavor === 'skill' &&
+          i.trigger.kind === 'llm-activated' &&
+          !this.skillGraphEdgeTargets.has(i.id),
+      )
+      .map((i) => i.id);
+  }
+
   private assertDeliverableRoles(): void {
     const carries = carriedRoles(this.provider);
     const carried = new Set(carries);
@@ -1543,7 +1581,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
-      ...(this.skillGraphReachable && { allowedSkillIds: this.skillGraphReachable }),
+      ...(this.skillGraphReachable && {
+        allowedSkillIds: this.skillGraphReachable,
+        openSkillIds: this.openSkillIds(),
+      }),
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,

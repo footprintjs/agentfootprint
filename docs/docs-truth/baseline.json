@@ -5,23 +5,23 @@
   "recordedAt": "2026-08-06",
   "surface": {
     "subpaths": 27,
-    "declaredSymbols": 1216,
-    "declaredEvents": 69,
-    "eventSource": "src/events/registry.ts:518"
+    "declaredSymbols": 1232,
+    "declaredEvents": 70,
+    "eventSource": "src/events/registry.ts:524"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 332,
+      "documented-never-exercised": 349,
       "exercised-undocumented": 37,
-      "undocumented-unexercised": 599,
+      "undocumented-unexercised": 598,
       "site-code-sample-only": 19,
       "written-but-not-published": 135,
       "ok": 94
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 4,
+      "documented-never-exercised": 5,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 19,
       "site-code-sample-only": 5,
@@ -30,7 +30,7 @@
     },
     "phantoms": 0,
     "unregisteredEvents": 2,
-    "advisories": 6
+    "advisories": 5
   },
   "exercisedEvidence": {
     "recordedAt": "2026-07-28",
@@ -543,7 +543,6 @@
     "SkillEntryOptions",
     "SkillGraph",
     "SkillGraphBuilder",
-    "SkillGraphConfig",
     "SkillNode",
     "SkillRecorderOptions",
     "SkillRegistryOptions",

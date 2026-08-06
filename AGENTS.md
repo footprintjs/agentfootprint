@@ -251,14 +251,17 @@ const billing = defineSkill({
   body: 'Confirm identity before processing refunds.',
   tools: [refundTool],
 });
-// A declarative `skillGraph()` EXISTS + is usable (lib/injection-engine/skillGraph.ts,
-// proposal 002 v1): a fluent builder — .entry(skill,{when?}) .route(from,to,{when|onToolReturn})
-// .tree(decide(...)) .build() + toMermaid(). Predicate-on-tool-result routes + decision trees
-// work today. GATED v2 hardening (NOT built): `from`-gating via a new `currentSkillId` on
-// InjectionContext (v1 does NOT enforce `from` → cross-skill edge bleed), per-matcher try/catch
-// (skillGraph.ts:330 ORs via .some()), scoped read_skill gate at toolCalls.ts, a 'score-match'
-// entry strategy, grey-area governors, RouteDecisionRecorder, build-time validation.
-// Spec + how-to-use: docs/design/skill-graph-spec.md; full v2 design: docs/design/skill-graph.md.
+// A declarative `skillGraph()` is fully shipped (lib/injection-engine/skillGraph.ts):
+// fluent builder — .entry(skill,{when?}) .route(from,to,{when|onToolReturn}) .tree(decide(...))
+// .build() + toMermaid() — or the config form skillGraph({skills, start, steps} | {skills, tree}).
+// The v2 hardening ALL shipped versions ago: from-gating via currentSkillId, the scoped
+// read_skill gate (toolCalls.ts), per-matcher try/catch, entry scorers (entryBy/entryByRelevance/
+// entryByRead), governors + routeRecorder, and build-time validation (graph.checkup()).
+// Since 8.3.0 an accepted read_skill pick really activates (and can move the cursor);
+// since 8.4.0 invalid combinations refuse at build() with teaching messages, and skills the
+// graph doesn't route ("open skills": llm-activated + no incoming edge) activate via read_skill
+// without moving the cursor — so .selfExplain() works alongside a graph.
+// Spec: docs/design/skill-graph-spec.md; guide: docs/skill-graph-guide.md.
 
 // Developer-supplied data (not behavior)
 const userProfile = defineFact({

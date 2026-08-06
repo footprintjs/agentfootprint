@@ -98,6 +98,10 @@ export class AgentBuilder {
     ctx: InjectionContext,
     signal?: AbortSignal,
   ) => Promise<EntryScoring>;
+  /** Captured from `.skillGraph(graph)` — the `to` end of every declared edge, i.e.
+   *  which skills the graph WIRES. Read only by the read_skill gate's open-skill
+   *  rule (8.4.0). */
+  private skillGraphEdgeTargets?: readonly string[];
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -744,20 +748,43 @@ export class AgentBuilder {
     nextSkill: (ctx: InjectionContext) => string | undefined;
     reachableSkills?: (currentSkillId?: string) => readonly string[];
     scoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>;
+    /** The declared edges. Read for ONE thing: which skills the graph wires, so the
+     *  read_skill gate can tell a skill the graph routes from one it never mentions
+     *  (see `openSkillIds` in `build()`). Optional for forward-compat with graphs
+     *  built before `edges` existed; absent → the graph wires nothing. */
+    edges?: ReadonlyArray<{ readonly to: string }>;
   }): this {
+    // One agent routes with ONE graph. The second call used to replace the cursor,
+    // the reachable set and the entry scorer while the FIRST graph's skills stayed
+    // registered and active — so graph 1's route targets could never activate again
+    // (their ids are absent from graph 2's reachable set, so even a model pick is
+    // refused) and only its unconditional entries survived, as always-on bodies with
+    // dead wiring. Nothing about that is recoverable at runtime, so it is refused
+    // here (8.4.0).
+    if (this.skillGraphNextSkill !== undefined) {
+      throw new Error(
+        'Agent.skillGraph(): a skill graph is already mounted, and one agent routes with ' +
+          'ONE graph. The second call replaces the cursor, the reachable set and the entry ' +
+          "scorer — the first graph's skills stay registered and active, so its own routes " +
+          'could never fire again. Merge the two graphs into one skillGraph(...) ' +
+          'declaration, or build one agent per graph.',
+      );
+    }
     for (const skill of graph.skills) this.injection(skill);
     // Capture the cursor resolver so the Injection Engine can `from`-gate route
     // triggers against the persisted `currentSkillId`. `nextSkill` is REQUIRED
-    // (every `skillGraph().build()` supplies it) — assigned directly so two
-    // `.skillGraph()` calls can't leave a stale resolver from the first graph
-    // gating the second graph's topology. Pass the full `build()` result here;
-    // for a bare skill list use `.skills({ list })` instead.
+    // (every `skillGraph().build()` supplies it). Pass the full `build()` result
+    // here; for a bare skill list use `.skills({ list })` instead.
     this.skillGraphNextSkill = graph.nextSkill;
     // The reachable-set resolver gates read_skill to in-graph jumps (optional for
     // forward-compat with graphs built before reachableSkills existed).
     this.skillGraphReachable = graph.reachableSkills;
     // The relevance entry scorer (present only with `.entryByRelevance()`).
     this.skillGraphScoreEntries = graph.scoreEntries;
+    // Which skills the graph WIRES (any declared incoming edge, deterministic or
+    // bare). The gate uses it to leave a bare model edge `A → M` from-gated while
+    // opening skills the graph never mentions.
+    this.skillGraphEdgeTargets = (graph.edges ?? []).map((e) => e.to);
     return this;
   }
 
@@ -1494,6 +1521,7 @@ export class AgentBuilder {
       this.toolMiddlewareList,
       this.messageMiddlewareList,
       this.resolveOutputEnforcement(),
+      this.skillGraphEdgeTargets,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

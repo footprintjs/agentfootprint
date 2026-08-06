@@ -1,5 +1,5 @@
 /**
- * 25 — Skill graph: build-time check-up + the object-literal form.
+ * 25 — Skill graph: build-time check-up, the object-literal form, and the refusals.
  *
  * WHY THIS EXISTS (the rationale, for humans + coding agents):
  * A skill graph is a state machine; a wiring mistake (a skill nobody can reach, two
@@ -10,19 +10,25 @@
  * was listed but never wired — the fluent builder only ever sees skills that appear
  * in an edge, so it can't.
  *
+ * A check-up REPORTS; some declarations are past reporting. Four combinations can
+ * never work — one of the two routing declarations is compiled out, or two skills
+ * claim one id — so instead of dropping half of what you wrote, the library refuses
+ * it and names the fix (8.4.0). They are shown at the bottom.
+ *
  * Run:  npx tsx examples/features/25-skill-graph-checkup.ts
  */
 
-import { type LLMProvider } from '../../src/index.js'
-import { skillGraph, defineSkill } from '../../src/doors/context.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { skillGraph, defineSkill, decideSkill } from '../../src/doors/context.js';
+import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
   id: 'features/25-skill-graph-checkup',
-  title: 'Skill graph — build-time check-up + object form',
+  title: 'Skill graph — build-time check-up + object form + the refusals',
   group: 'features',
   description:
-    'graph.checkup() / .build({ check }) flags unreachable skills, unknown ids, ambiguous routes, no-entry, and self-loops before you run. The object-literal form lists skills independently of the wiring so the check-up catches a listed-but-unwired skill.',
+    'graph.checkup() / .build({ check }) flags unreachable skills, unknown ids, ambiguous routes, no-entry, and self-loops before you run. The object-literal form lists skills independently of the wiring so the check-up catches a listed-but-unwired skill. Past reporting: the five declarations the library refuses outright, each message naming the fix.',
   defaultInput: '(no input — pure build-time validation)',
   providerSlots: [],
   tags: ['feature', 'skills', 'graph', 'validation', 'checkup'],
@@ -71,14 +77,60 @@ export async function run(_input: string, _provider?: LLMProvider): Promise<unkn
     threw = (e as Error).message.split('\n')[0]!;
   }
 
+  // ── What is past reporting: the four refusals (8.4.0) ──────────────────────
+  // Each of these used to compile, drop half of what was declared, and say
+  // nothing — two of them even reported `{ ok: true, problems: [] }`.
+  const refused = (fn: () => unknown): string => {
+    try {
+      fn();
+      return '(no refusal — this should not happen)';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+  const refusals = {
+    // 1. A tree and the flat wiring both declare the routing; only the tree compiles.
+    treePlusFlat: refused(() =>
+      skillGraph().entry(triage).tree(decideSkill(() => true, billing, refund)).build(),
+    ),
+    // 2. Same trap in the config vocabulary (the TYPE refuses this pair too).
+    treePlusStart: refused(() =>
+      // @ts-expect-error — SkillGraphConfig is a union: `tree` and `start` cannot coexist
+      skillGraph({ skills: [billing, refund], tree: decideSkill(() => true, billing, refund), start: 'billing' }),
+    ),
+    // 3. A tree routes only to its leaves, so a listed non-leaf never loads.
+    strandedUnderTree: refused(() =>
+      skillGraph({ skills: [triage, billing, refund], tree: decideSkill(() => true, billing, refund) }),
+    ),
+    // 4. Two different skills claiming one id — last (or first) write used to win.
+    duplicateId: refused(() => {
+      const otherTriage = defineSkill({
+        id: 'triage',
+        description: 'a SECOND triage skill (from the shared catalog)',
+        body: 'other body',
+      });
+      return skillGraph({ skills: [triage, otherTriage], start: 'triage', check: 'off' });
+    }),
+    // 5. One agent routes with ONE graph.
+    twoGraphs: refused(() =>
+      Agent.create({ provider: mock({ reply: 'x' }), model: 'mock' })
+        .skillGraph(clean)
+        .skillGraph(viaObject),
+    ),
+  };
+
   return {
     cleanGraph: clean.checkup(), // { ok: true, problems: [] }
     flawedGraph: flawed.checkup().problems.map((p) => `[${p.kind}] ${p.code}: ${p.skill ?? p.from ?? ''}`),
+    // 'orphan' is wired to nothing — a WARNING, not an error, because the model can
+    // still reach it with read_skill (true again since 8.4.0: a skill the graph does
+    // not wire is open from any cursor). See example 23.
     objectForm_findsOrphan: viaObject
       .checkup()
       .problems.filter((p) => p.code === 'unreachable-skill')
       .map((p) => p.skill), // ['orphan']
     buildThrowOnError: threw, // "skillGraph: build-time check-up failed: …no-entry…"
+    refusals,
   };
 }
 

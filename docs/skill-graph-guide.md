@@ -118,7 +118,9 @@ receives the **tool result** `{ toolName, result }` (a string) — *not* the ful
 ## 6. Scoped `read_skill` — the gate, and the move (6.35.0 · honoured since 8.3.0)
 
 `read_skill('id')` is **rejected** unless `id` is reachable from the current cursor —
-so the model can't jump out of the graph. The allowed set is
+so the model can't move the graph somewhere the graph doesn't go. (A skill the graph
+never wires at all is a separate question: see *Skills the graph doesn't route*
+below.) The allowed set is
 `graph.reachableSkills(currentSkillId)` = the cursor's direct successors ∪ the entry
 skills, minus the cursor (a decision `tree()` returns all leaves — `read_skill` stays
 a full escape hatch there). On an out-of-set call the model gets a re-prompt naming
@@ -155,6 +157,57 @@ agent.on('agentfootprint.skill.reroute_superseded', (e) =>
 );
 ```
 → runnable + tested: **`examples/features/42-skill-graph-model-pick.ts`**.
+
+### Skills the graph doesn't route (8.4.0)
+
+The gate bounds where the **cursor** can go. It does not own your whole skill
+catalog. A skill the graph never **wires** — no entry, no `steps` edge, no tree leaf
+— is **open**: `read_skill` may reach it from any cursor, it activates like any
+`read_skill` activation, and it does **not** move the cursor.
+
+```ts
+Agent.create({ provider, model })
+  .skillGraph(graph)          // routing: bounded, cursor-gated, drawn
+  .skill(escalationPolicy)    // open: reference material, reachable from anywhere
+  .selfExplain()              // open: the debug skill, reachable from anywhere
+  .build();
+```
+
+Two conditions, both required, and both there for a reason:
+
+- the skill's trigger is `llm-activated` (the default from `defineSkill`) — that is
+  the trigger `read_skill` actually activates, so admitting a rule-gated injection
+  would just be a different lie;
+- the graph declares no incoming edge to it — a **bare model edge** `.route(a, m)` is
+  a declared, drawn affordance ("from `a`, the model may hop to `m`"), so `m` stays
+  reachable only from `a`.
+
+> **Fixed in 8.4.0.** Before, everything outside the graph's reachable set was
+> rejected — including `.selfExplain()`'s own debug skill, any `.skill()` registered
+> beside the graph, and a skill listed in `skills[]` and wired to nothing (whose
+> check-up warning says *"it can only be reached by the model via read_skill"*). All
+> three were offered to the model in `read_skill`'s menu and refused on every call,
+> so their bodies could never load. Worth naming plainly: if you registered unrelated
+> skills beside a graph expecting the graph to hide them, they are now reachable by
+> name. The cursor still cannot leave the graph, and nothing routes from them.
+
+→ runnable + tested: **`examples/features/23-skill-graph-scoped-read-skill.ts`**.
+
+## 6b. What the graph refuses (8.4.0)
+
+A check-up reports; these are past reporting. Each of the following used to compile
+and then silently discard half of what you declared — so each is now an error whose
+message names the fix:
+
+| declaration | what used to happen |
+|---|---|
+| `.tree()` + `.entry()`/`.route()` | the tree won; every entry and route was dropped |
+| `skillGraph({ tree, start })` / `{ tree, steps }` | same, in the config form — and a **type error** now, too |
+| a skill in `skills[]` that is not a tree leaf | compiled out of the graph entirely — never reached the agent |
+| two different skills with one id | last write won (first, under a tree); the loser vanished |
+| a second `.skillGraph()` on one agent | the routing was replaced; graph 1's skills stayed registered with dead wiring |
+
+→ runnable: **`examples/features/25-skill-graph-checkup.ts`**.
 
 ## 7. Observe the routing
 

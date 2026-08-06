@@ -112,6 +112,13 @@ export interface ToolCallsHandlerDeps {
    */
   readonly allowedSkillIds?: (currentSkillId?: string) => readonly string[];
   /**
+   * The OPEN skills — registered skills the graph never wires, admitted by the gate
+   * from ANY cursor (8.4.0; see `Agent.openSkillIds`). They ACTIVATE and never move
+   * the cursor: a skill the graph does not route is not a node, so it cannot be a
+   * hop. Only meaningful alongside `allowedSkillIds`.
+   */
+  readonly openSkillIds?: readonly string[];
+  /**
    * Check-in config (evidence-carrying human consent). Resolved from the Agent
    * builder (`.checkIn({...})`) — defaults to `standard` evidence + the
    * deterministic lexical scorer, so a tool that declares `checkIn` works even
@@ -150,6 +157,12 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly awaitDurable?: () => Promise<void> | undefined;
+}
+
+/** Declaration order preserved, ids de-duplicated — the shape the gate's re-prompt
+ *  and the `skill.rejected` payload both report as "what this gate accepts". */
+function dedupeIds(ids: readonly string[]): readonly string[] {
+  return [...new Set(ids)];
 }
 
 /**
@@ -737,12 +750,25 @@ export function buildToolCallsHandler(
         // the model re-picks) and skip the activation below — cursor + activations
         // stay unchanged. Off when no skillGraph (deps.allowedSkillIds undefined),
         // so plain read_skill agents are byte-for-byte unaffected.
+        //
+        // The allowed set is two kinds of id, and the difference is the whole
+        // design (8.4.0): a HOP — a skill the graph routes, reachable from where
+        // the cursor stands — and an OPEN skill, one the graph never wires (a
+        // `.selfExplain()` debug skill, a `.skill()` registered beside the graph,
+        // a skill listed in `skills[]` and wired to nothing). Both activate; only a
+        // hop moves the cursor. Before 8.4.0 the open ones were offered in
+        // read_skill's own menu and then rejected on every single call — the
+        // library refused its own flagship debug feature under its own routing
+        // feature, and the model could burn a whole run re-asking.
         let skillRejected = false;
+        let skillHop = false;
         if (deps.allowedSkillIds && tc.name === 'read_skill' && !error && !denied) {
           const reqId = (callArgs as { id?: unknown }).id;
           if (typeof reqId === 'string' && reqId.length > 0) {
             const currentSkillId = scope.currentSkillId as string | undefined;
-            const allowed = deps.allowedSkillIds(currentSkillId);
+            const hops = deps.allowedSkillIds(currentSkillId);
+            skillHop = hops.includes(reqId);
+            const allowed = dedupeIds([...hops, ...(deps.openSkillIds ?? [])]);
             if (!allowed.includes(reqId)) {
               skillRejected = true;
               result =
@@ -824,7 +850,13 @@ export function buildToolCallsHandler(
             //     which moves the cursor unless a declared edge fired first.
             //     Last accepted pick of a parallel batch wins the cursor; all of
             //     them still land in `activatedInjectionIds`.
-            if (deps.allowedSkillIds) scope.pendingSkillPick = requestedId;
+            //
+            //     Only a HOP moves the cursor. An OPEN skill (one the graph never
+            //     wires) is not a node, so parking the cursor on it would strand
+            //     the graph: every route trigger reads `nextSkill(ctx) === id`, and
+            //     from a non-node nothing can fire. It activates through its own
+            //     `llm-activated` trigger and the graph stays exactly where it was.
+            if (deps.allowedSkillIds && skillHop) scope.pendingSkillPick = requestedId;
           }
         }
 

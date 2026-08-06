@@ -61,47 +61,81 @@ export interface BuildOptions {
   readonly check?: GraphCheckMode;
 }
 
+/** Where a turn starts, in the object-literal (flat) form. */
+export type SkillGraphStart =
+  | string
+  | { readonly use: string }
+  | {
+      readonly rules: ReadonlyArray<{
+        readonly when: (ctx: InjectionContext) => boolean;
+        readonly use: string;
+      }>;
+    }
+  | {
+      readonly entries: readonly string[];
+      /** Rank the entries with a scorer strategy (`keywordScorer()`,
+       *  `embeddingScorer(e)`, or your own). Takes precedence over `byRelevance`. */
+      readonly scoredBy?: EntryScorer;
+      /** Sugar: rank the entries with an embedder (cosine/softmax). Omit both → the
+       *  LLM reads the menu and picks (`.entryByRead()`) — no model call. */
+      readonly byRelevance?: Embedder;
+    };
+
+/** One tool-result transition in the object-literal (flat) form. */
+export interface SkillGraphStep {
+  readonly from: string;
+  readonly to: string;
+  readonly when?: SkillRouteOptions['when'];
+  readonly onToolReturn?: string | RegExp;
+  readonly label?: string;
+}
+
+/**
+ * Object-literal form, FLAT arm — `start` + `steps` declare the routing.
+ * `tree` is typed `never` here so `{ tree, start }` is a COMPILE error, not just
+ * a build-time refusal (see `SkillGraphConfig`).
+ */
+export interface SkillGraphFlatConfig {
+  /** Every skill in the graph (wired or not). */
+  readonly skills: readonly Injection[];
+  /** Where a turn starts. */
+  readonly start?: SkillGraphStart;
+  /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
+  readonly steps?: readonly SkillGraphStep[];
+  readonly tree?: never;
+  readonly check?: GraphCheckMode;
+}
+
+/**
+ * Object-literal form, TREE arm — a decision tree owns the routing, so there is
+ * no entry menu and no cursor for `start`/`steps` to describe. Both are typed
+ * `never` so the contradiction is a compile error.
+ */
+export interface SkillGraphTreeConfig {
+  /** Every skill in the graph. Under `tree` this must be exactly the leaf set —
+   *  a listed skill that is not a leaf would never load, and is refused. */
+  readonly skills: readonly Injection[];
+  /** A decision tree (instead of `start` + `steps`). */
+  readonly tree: DecisionNode | Injection;
+  readonly start?: never;
+  readonly steps?: never;
+  readonly check?: GraphCheckMode;
+}
+
 /**
  * Object-literal form of a skill graph — an alternative to the fluent builder.
  * Listing `skills` INDEPENDENTLY of the wiring is the point: the check-up can then
  * flag a skill that was listed but never wired (the fluent builder only ever sees
  * skills that appear in an edge). Compiles to the SAME `SkillGraph`. `check`
  * defaults to `'throw'` here (a new surface, fail-loud).
+ *
+ * A UNION of two arms, because `tree` and `start`/`steps` are two ways to declare
+ * the same thing and only one of them compiles: `{ tree, start }` is a type error
+ * for a TypeScript consumer and a build-time refusal for everyone else (8.4.0 —
+ * before, the tree silently won and the flat wiring was discarded). Valid tree-only
+ * and flat-only configs typecheck exactly as they did.
  */
-export interface SkillGraphConfig {
-  /** Every skill in the graph (wired or not). */
-  readonly skills: readonly Injection[];
-  /** Where a turn starts. Omit when using `tree`. */
-  readonly start?:
-    | string
-    | { readonly use: string }
-    | {
-        readonly rules: ReadonlyArray<{
-          readonly when: (ctx: InjectionContext) => boolean;
-          readonly use: string;
-        }>;
-      }
-    | {
-        readonly entries: readonly string[];
-        /** Rank the entries with a scorer strategy (`keywordScorer()`,
-         *  `embeddingScorer(e)`, or your own). Takes precedence over `byRelevance`. */
-        readonly scoredBy?: EntryScorer;
-        /** Sugar: rank the entries with an embedder (cosine/softmax). Omit both → the
-         *  LLM reads the menu and picks (`.entryByRead()`) — no model call. */
-        readonly byRelevance?: Embedder;
-      };
-  /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
-  readonly steps?: ReadonlyArray<{
-    readonly from: string;
-    readonly to: string;
-    readonly when?: SkillRouteOptions['when'];
-    readonly onToolReturn?: string | RegExp;
-    readonly label?: string;
-  }>;
-  /** A decision tree (instead of `start` + `steps`). */
-  readonly tree?: DecisionNode | Injection;
-  readonly check?: GraphCheckMode;
-}
+export type SkillGraphConfig = SkillGraphFlatConfig | SkillGraphTreeConfig;
 
 // `EntryScore` / `EntryScoring` are owned by ./entryScorer.ts now (the scorer
 // strategy produces them). Re-exported here so existing `from './skillGraph.js'`
@@ -355,6 +389,16 @@ function toolMatcher(toolName: string | RegExp): (name: string) => boolean {
   return typeof toolName === 'string' ? (n) => n === toolName : (n) => toolName.test(n);
 }
 
+/** How a skill is identified back to its author in a refusal — the description is
+ *  what tells two same-id skills apart (mirrors skillsFromDir naming both files). */
+function describe(skill: Injection): string {
+  return skill.description ?? '(no description)';
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 export function skillGraph(): SkillGraphBuilder;
 export function skillGraph(config: SkillGraphConfig): SkillGraph;
 export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | SkillGraph {
@@ -366,9 +410,33 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   let entryScorer: EntryScorer | undefined;
   let entryByReadFlag = false;
 
+  /**
+   * Register a skill under its id, refusing a second DIFFERENT skill under an id
+   * already taken (8.4.0). Until then this was a bare `Map.set` — last write won,
+   * silently, and the loser vanished from the compiled graph entirely: the flat
+   * form kept the LAST body under the FIRST declaration's routing, the config form
+   * dropped the first skill outright, and a tree kept the FIRST body and discarded
+   * the second. `skillsFromDir` has always refused a collision inside its own
+   * directory and `Agent.injection()` has always refused one on the agent, so the
+   * graph was the only place in the library where two skills could quietly claim
+   * one id — the id `read_skill` dispatches by and every edge routes by.
+   *
+   * Identity-based, deliberately: re-registering the SAME object is how the fluent
+   * form works (`.entry(a).route(a, b)` remembers `a` twice) and how one skill sits
+   * at two tree leaves (the compiler merges those into one ORed trigger).
+   */
   const remember = (skill: Injection): string => {
     if (skill.flavor !== 'skill') {
       throw new Error(`skillGraph: "${skill.id}" is not a skill (flavor='${skill.flavor}').`);
+    }
+    const claimed = skillsById.get(skill.id);
+    if (claimed && claimed !== skill) {
+      throw new Error(
+        `skillGraph: two different skills claim the id "${skill.id}" — ` +
+          `"${describe(claimed)}" and "${describe(skill)}". Skill ids must be unique ` +
+          `(read_skill dispatches by id, and every edge routes by id); rename one, or ` +
+          `pass the SAME skill object to both places.`,
+      );
     }
     skillsById.set(skill.id, skill);
     return skill.id;
@@ -433,6 +501,24 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             '.tree() already routes by predicate (the scorer would be ignored).',
         );
       }
+      // A tree and the flat entry/route wiring are two ways to declare the same
+      // thing, and only ONE of them compiles: the tree branch below never reads
+      // `entries` or `routes`. Until 8.4.0 that was silent — the tree won and every
+      // declared entry and route was dropped without a word, `checkup()` answered
+      // `{ ok: true, problems: [] }` because its tree arm short-circuits, and the
+      // author's flat wiring simply never existed at runtime.
+      if (treeRoot && (entries.length > 0 || routes.length > 0)) {
+        const dropped = [
+          ...(entries.length > 0 ? [plural(entries.length, 'entry', 'entries')] : []),
+          ...(routes.length > 0 ? [plural(routes.length, 'route', 'routes')] : []),
+        ].join(' and ');
+        throw new Error(
+          'skillGraph: .tree() and .entry()/.route() both declare the routing and only one ' +
+            `can compile — the tree wins, so the ${dropped} declared here would be silently ` +
+            'dropped. tree() owns the graph: remove the .entry()/.route() calls, or drop ' +
+            '.tree() and route with the flat entry/route form.',
+        );
+      }
       const skills: Injection[] = [];
       const nodes: SkillNode[] = [];
       const edges: SkillEdge[] = [];
@@ -470,6 +556,13 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
+        // Every leaf is REGISTERED as it compiles (8.4.0). Two things ride on that:
+        // the duplicate-id refusal now covers leaves (before, two different skills
+        // sharing an id as two leaves merged, first body wins, silently), and the
+        // skill-CONTRACT checks finally run for a fluent `.tree()` graph — until
+        // 8.4.0 `skillsById` stayed empty there, so `checkup()` answered
+        // `{ ok: true, problems: [] }` for a tree whose body called a tool that
+        // does not exist, while the byte-identical config-form graph reported it.
         compileTree(
           treeRoot,
           () => true,
@@ -478,10 +571,25 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           { n: 0 },
           [],
           treeScopeTools,
+          remember,
         );
         attachExactlyOneLeafMonitor(skills);
-        // Tree mode has no cursor — `read_skill` stays a full escape hatch (all leaves).
         const leafIds = skills.map((s) => s.id);
+        // A tree routes to its LEAVES and to nothing else, so a skill listed in
+        // `skills[]` that is not a leaf is compiled out of the graph entirely — it
+        // never reaches the agent, so no trigger, no `read_skill`, no body, ever.
+        // Refused by name rather than dropped (8.4.0).
+        const leafSet = new Set(leafIds);
+        for (const id of skillsById.keys()) {
+          if (leafSet.has(id)) continue;
+          throw new Error(
+            `skillGraph({ tree }): skill "${id}" is listed in skills[] but is not a leaf of ` +
+              'the tree, so it would never load — a tree routes only to its leaves. Add it ' +
+              `to the tree as a leaf, drop it from skills[], or register it on the agent ` +
+              `with .skill(${id}) to keep it read_skill-reachable.`,
+          );
+        }
+        // Tree mode has no cursor — `read_skill` stays a full escape hatch (all leaves).
         reachableSkills = () => leafIds;
       } else {
         // Flat entry/route mode (v1 + v2 keystone). `from`-gating + sticky cursor
@@ -559,6 +667,26 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   // independently of the wiring is what lets the check-up flag a listed-but-unwired
   // skill (every config skill is registered, even if no edge references it).
   if (config) {
+    // `tree` and `start`/`steps` are two ways to declare the routing and only one
+    // compiles. The TYPE already refuses the pair (SkillGraphConfig is a union with
+    // `tree?: never` on the flat arm), so this is the runtime half of the same
+    // refusal — for JavaScript callers and for a config assembled through `any`.
+    // Until 8.4.0 `start` was skipped by an `else if` and `steps` were compiled into
+    // routes the tree branch then ignored: both vanished without a word.
+    const overruled = [
+      ...(config.start !== undefined ? ['start'] : []),
+      ...(config.steps !== undefined ? ['steps'] : []),
+    ];
+    if (config.tree !== undefined && overruled.length > 0) {
+      const quoted = overruled.map((k) => `\`${k}\``).join(' and ');
+      const one = overruled.length === 1;
+      throw new Error(
+        `skillGraph({ tree, ${overruled.join(', ')} }): ${quoted} declare${one ? 's' : ''} the ` +
+          `routing that \`tree\` already owns, so ${one ? 'it' : 'they'} would be silently ` +
+          'ignored — a tree routes by predicate on every iteration and has no entry menu ' +
+          `and no cursor. Remove ${quoted}, or drop \`tree\` and route with the flat form.`,
+      );
+    }
     for (const s of config.skills) remember(s);
     const resolve = (id: string): Injection => {
       const s = skillsById.get(id);
@@ -856,6 +984,9 @@ function compileTree(
   counter: { n: number },
   path: readonly SkillRoutingStep[],
   scopeTools: boolean,
+  /** Registers each leaf under its id — the duplicate-id refusal and the
+   *  skill-contract checks both read that registry (8.4.0). */
+  register: (skill: Injection) => string,
 ): void {
   if (isDecisionNode(node)) {
     const id = `d${counter.n++}`;
@@ -875,6 +1006,7 @@ function compileTree(
       counter,
       [...path, { label, branch: 'yes' }],
       scopeTools,
+      register,
     );
     compileTree(
       node.whenFalse,
@@ -884,6 +1016,7 @@ function compileTree(
       counter,
       [...path, { label, branch: 'no' }],
       scopeTools,
+      register,
     );
   } else {
     if (node.flavor !== 'skill') {
@@ -891,6 +1024,10 @@ function compileTree(
         `skillGraph.tree: leaf "${node.id}" is not a skill (flavor='${node.flavor}').`,
       );
     }
+    // Claim the id. The SAME object at two leaves is the merge below; two DIFFERENT
+    // skills under one id is refused here rather than merged (8.4.0) — the merge
+    // kept the first body and dropped the second one's silently.
+    register(node);
     // The SAME skill may be the leaf of several branches ("ESXi questions" and
     // "io questions" both route to the io-profile bundle). Compile it ONCE:
     // merge repeated leaves into one injection whose trigger ORs the path

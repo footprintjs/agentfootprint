@@ -66,6 +66,30 @@ the case where a `start: { rules }` graph matched no rule and therefore could
 never load a skill at all. See the CHANGELOG for the full shape of that fix.
 </Callout>
 
+### Skills the graph doesn't route are open (8.4.0)
+
+The gate bounds where the graph's **cursor** can go; it does not own the agent's
+whole skill catalog. A skill the graph never **wires** — no entry, no `steps`
+edge, no tree leaf — is **open**: `read_skill` reaches it from any cursor, it
+activates through its own `llm-activated` trigger, and it does **not** move the
+cursor (a skill the graph does not route is not a node, so it cannot be a hop).
+That is what lets `.selfExplain()`, a `.skill()` registered beside the graph, and
+a skill listed in `skills[]` but wired to nothing all work under a graph; before
+8.4.0 every one of them was offered in `read_skill`'s menu and then refused on
+every call. What the graph *does* wire stays bounded — including a bare model
+edge `.route(a, m)`, which is still reachable only from `a`.
+
+### Declaring the graph: the object form is a union
+
+`skillGraph({ ... })` takes a `SkillGraphConfig`, which is a union of two arms
+that cannot be mixed: `SkillGraphFlatConfig` (`start` + `steps` — where `start`
+is a `SkillGraphStart` and each step is a `SkillGraphStep`) and
+`SkillGraphTreeConfig` (a `tree`, which owns the routing outright, so it has no
+entry menu and no cursor for `start`/`steps` to describe). Passing both is a type
+error and a build-time refusal, because only one of them ever compiled: before
+8.4.0 the tree won and the flat wiring — plus every listed skill that was not a
+leaf — was discarded in silence.
+
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts

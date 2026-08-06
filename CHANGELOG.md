@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.4.0] - 2026-08-06
+
+**Dead skills.** Five combinations a skill graph accepted and then silently gutted.
+Four of them threw away part of what the author declared at build time and said
+nothing — two even reported `checkup() → { ok: true, problems: [] }` afterwards. The
+fifth threw away a capability at run time: the gate that keeps the model inside the
+graph also refused every skill the graph does not route, including the library's own
+`.selfExplain()` debug skill. Three are now refusals that name the fix, one is a
+refusal on the agent, and the gate one is a fix, not a refusal.
+
+### The `read_skill` gate stops refusing skills the graph never routed
+
+`.skillGraph()` bounds `read_skill` to `graph.reachableSkills(cursor)`, so the model
+cannot move the graph somewhere the graph doesn't go. That set is about the CURSOR,
+but it was being used as the whole catalog, so three shapes were dead:
+
+| you wrote | before | now |
+|---|---|---|
+| `.skillGraph(g).selfExplain()` | `read_skill('self-explain')` rejected on every call — the debug skill and its six trace tools could never load | activates; the trace tools reach the model on the next iteration |
+| `.skillGraph(g).skill(x)` / `.skills(reg)` | `x` was listed in `read_skill`'s own menu and refused every time; its body was unreachable | activates |
+| `skillGraph({ skills: [..., x] })` with `x` wired to nothing | refused — while its check-up warning said *"it can only be reached by the model via read_skill"* | activates; the warning is true again |
+
+A skill is **open** when its trigger is `llm-activated` (the trigger `read_skill`
+actually activates — a rule-gated injection is still refused, because admitting it
+would just be a different lie) **and** the graph declares no incoming edge to it. An
+open pick **activates but never moves the cursor**: a skill the graph does not route
+is not a node, so it cannot be a hop, and the graph stays exactly where it was.
+
+What stays bounded is everything the graph wires — including a **bare model edge**
+`.route(a, m)`, which is a declared, drawn affordance and remains reachable only from
+`a`. `graph.reachableSkills()` is unchanged: it still answers about the graph alone,
+and the union with the open skills happens at the agent's gate, which is the only
+place that knows what else is registered. The gate's re-prompt and the
+`agentfootprint.skill.rejected` payload both report that union — what the gate
+accepts — so a graph with no open skills reports byte-identically to before.
+
+Named plainly: if you registered unrelated skills beside a graph expecting the graph
+to hide them, they are now reachable by name. They were already being advertised to
+the model in `read_skill`'s menu and then refused, which cost tokens and could burn a
+whole run on re-asking; the cursor still cannot leave the graph, and nothing routes
+from an open skill.
+
+### Four refusals, each naming the fix
+
+**A `.tree()` and the flat wiring are two declarations of one thing.** Only the tree
+compiled; every `.entry()` and `.route()` — and, in the config form, `start` and
+`steps` — was dropped in silence.
+
+```text
+skillGraph: .tree() and .entry()/.route() both declare the routing and only one can
+compile — the tree wins, so the 1 entry declared here would be silently dropped.
+tree() owns the graph: remove the .entry()/.route() calls, or drop .tree() and route
+with the flat entry/route form.
+```
+
+`SkillGraphConfig` is now a **union** of a tree arm and a flat arm, so
+`skillGraph({ tree, start })` is a compile error as well as a build-time refusal.
+Valid tree-only and flat-only configs typecheck exactly as before; the two arms are
+exported as `SkillGraphFlatConfig` / `SkillGraphTreeConfig` (plus `SkillGraphStart`
+and `SkillGraphStep`) for consumers that name the shape.
+
+**A tree routes to its leaves and nothing else.** A skill listed in `skills[]` that
+was not a leaf was compiled out of the graph entirely — it never reached the agent,
+so it had no trigger, no `read_skill` row, no body, ever.
+
+```text
+skillGraph({ tree }): skill "alpha" is listed in skills[] but is not a leaf of the
+tree, so it would never load — a tree routes only to its leaves. Add it to the tree
+as a leaf, drop it from skills[], or register it on the agent with .skill(alpha) to
+keep it read_skill-reachable.
+```
+
+That last option is the escape hatch this release makes real.
+
+**Two skills, one id.** `skillsFromDir` refuses a collision inside its own directory
+and `Agent.injection()` refuses one on the agent; the graph was the only place where
+two skills could quietly claim one id — the id `read_skill` dispatches by and every
+edge routes by. Last write won in the flat form, FIRST write won under a tree, and
+the loser vanished. Now refused, naming both by description. Re-registering the SAME
+object is still fine: `.entry(a).route(a, b)` and one skill at two tree leaves are
+how the builder is meant to be used.
+
+**One agent, one graph.** A second `.skillGraph()` replaced the cursor, the reachable
+set and the entry scorer while the first graph's skills stayed registered and active
+— so graph 1's route targets could never activate again (their ids are absent from
+graph 2's reachable set, so even a model pick was refused) and only its unconditional
+entries survived, as always-on bodies with dead wiring. Refused, with the merge as
+the fix.
+
+### The tree check-up stops being a no-op
+
+Tree leaves are now registered as they compile. Two things follow: the duplicate-id
+refusal covers leaves, and the **skill-contract checks finally run for a fluent
+`.tree()` graph** — before, `skillsById` stayed empty there, so `checkup()` answered
+`{ ok: true, problems: [] }` for a tree whose body called a tool that exists nowhere,
+while the byte-identical config-form graph reported it. A valid fluent tree may
+therefore report contract WARNINGS it never reported before. That is the fix working;
+contract findings are warnings only, so `check: 'throw'` is unaffected.
+
+Everything else about a valid graph is unchanged: same `skills`, `edges`, `nodes`,
+triggers, `toMermaid()` and `reachableSkills()`.
+
 ## [8.3.0] - 2026-08-06
 
 **`read_skill` stops lying.** When a skill graph offered the model `read_skill`
