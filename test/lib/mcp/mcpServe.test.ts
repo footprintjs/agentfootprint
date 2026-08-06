@@ -776,6 +776,11 @@ describe('mcpServe — security', () => {
     expect(ran).toBe(0);
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/authorization required for 'github'/);
+    // 8.6.0 — and NOT the consent link. Out here the only channel is the MCP
+    // result, which lands in another agent's transcript across a process
+    // boundary; a bearer capability must not cross it.
+    expect(result.content[0]?.text).not.toMatch(/https?:\/\//);
+    expect(result.content[0]?.text).not.toContain('example.test/authorize');
   });
 });
 

@@ -329,9 +329,20 @@ async function buildExecutionContext(
     });
     // Fail-closed, mirroring the Agent's tool-call stage: a tool that
     // asked for a credential never runs without one.
+    //
+    // The consent URL is NOT returned (8.6.0). Out here there is no run to
+    // pause and no caller to hand a `PendingAsk` — the only channel is the MCP
+    // tool result, which lands in some other agent's transcript, across a
+    // process boundary this library has no record of and no reach into. That
+    // is the widest possible audience for a bearer capability carrying a
+    // session-correlating `state`, so the client is told WHAT is missing and
+    // WHO can fix it, and the URL stays with the operator of this server.
     if (resolved.status !== 'issued') {
       return {
-        blocked: `authorization required for '${need.credential}': ${resolved.authorizationUrl}`,
+        blocked:
+          `authorization required for '${need.credential}': a person must consent ` +
+          `before this tool can run. The consent link is not returned over MCP — ` +
+          `ask the operator of this server to authorize '${need.credential}'.`,
       };
     }
     credential = resolved.credential;

@@ -6,8 +6,11 @@
  * is the production swap — the tool code never changes.
  *
  *   - mode 'machine' (2LO) → token returned directly.
- *   - mode 'user'    (3LO) → may return `authorization-required` with a consent
- *     URL to surface to the user (e.g. pause the run), then retry after consent.
+ *   - mode 'user'    (3LO) → may return `authorization-required`. Since 8.6.0 the
+ *     run PAUSES and the CALLER receives the consent URL; after the person
+ *     consents, `resume()` runs the tool that was waiting. See
+ *     `examples/features/45-credential-consent.ts` for that whole flow — this
+ *     example uses a vault that always issues, so it never reaches consent.
  *
  * SECURITY: the token is used LOCALLY inside `execute` (as a header) and is never
  * written to tracked scope — so it stays out of the snapshot / narrative. This
@@ -31,7 +34,7 @@ export const meta: ExampleMeta = {
   title: 'Identity — a tool vends a downstream OAuth credential (AgentCore)',
   group: 'features',
   description:
-    'Declare-and-push: the tool declares needs:{credential}; the framework resolves it BEFORE execute and injects ctx.credential. staticTokens() offline; agentCoreIdentity() in prod (one-line swap). withCredentialRetry() retries transient vault blips before failing closed. 3LO consent surfaces a URL; the credential never enters the trace.',
+    'Declare-and-push: the tool declares needs:{credential}; the framework resolves it BEFORE execute and injects ctx.credential. staticTokens() offline; agentCoreIdentity() in prod (one-line swap). withCredentialRetry() retries transient vault blips before failing closed. 3LO consent pauses the run and hands the URL to the caller (example 45); the credential never enters the trace.',
   defaultInput: 'list my repos',
   providerSlots: ['default'],
   tags: ['feature', 'identity', 'agentcore', 'credentials', 'security', 'oauth'],

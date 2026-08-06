@@ -7,6 +7,203 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.6.0] - 2026-08-06
+
+### Consent is work, not conversation
+
+A tool declares `needs: { credential: 'billing', mode: 'user' }`. The vault
+answers `authorization-required` — a person has to click a link. Until now this
+library wrote that link into the tool result and handed it to the model.
+
+The model is the one party in the room that cannot click it. So it did what
+models do with a refusal: it adapted, wrote a plausible final answer, and the run
+returned `"done"` — 200, complete, invoice unpaid, nobody asked. That is not an
+error path. It is a success report for work that never happened, and it is the
+exact failure the `checkIn` gate, the middleware `ask`, and `PendingAsk` were all
+built to prevent. The machinery to ask a human was already here; the credential
+seam was the one door that never used it.
+
+**A run now pauses when a declared credential needs consent.** `agent.run()`
+returns a pause outcome; a `standingAgent` answers **202 Accepted** with
+`{ awaiting }` carrying the service, the session id and the authorization URL;
+`agent.resume(checkpoint)` re-resolves the credential and runs the tool that was
+waiting. Same run, same conversation, work actually done.
+`onAuthorizationRequired: 'tell-model'` keeps the model in the loop for callers
+who want it — and even then the turn cannot report a completion it did not earn:
+it raises `CredentialConsentRequiredError`.
+
+### Added
+
+- **`Agent.create({ onAuthorizationRequired })`** — `'pause'` (default) or
+  `'tell-model'`. Governs what a run does when a tool's DECLARED credential comes
+  back `authorization-required`.
+- **`CredentialConsentRequiredError`** (`ERR_CREDENTIAL_CONSENT_REQUIRED`, from
+  `agentfootprint/identity`) — carries `service`, `sessionId`, `authorizationUrl`,
+  `tool` and `iteration`. The error *message* deliberately omits the URL, because
+  a message is the one string that reliably reaches a log line.
+- **`pauseData.authorization`** — `{ service, authorizationUrl, sessionId }` on a
+  consent pause, surfaced by `standingAgent` as `PendingAsk.pauseData`. The
+  hosting layer needed no change at all.
+- **Example** `features/45-credential-consent.ts` — the pause, the caller's URL,
+  the resume that does the work, and a grep over the whole recording proving the
+  URL is in none of it.
+
+### Security
+
+- **An OAuth consent URL was written into the conversation, the trace, and every
+  recording. It is a bearer capability, and it should never have been in any of
+  them.**
+
+  A 3-legged consent URL carries a `state` parameter that correlates the
+  authorization session. Anyone holding the URL can complete the consent flow.
+  Since **6.11.0** the library interpolated it into the tool result string, and
+  from there it was copied — correctly, by design — into every channel that
+  preserves tool output: the conversation history, `stream.tool_end`,
+  `agent.iteration_end` (once per remaining iteration), `context.injected`, the
+  footprintjs commit log and snapshot, the narrative recorder's `rawValue`, and
+  any `recordRun()` recording. A single blocked tool call put the URL in a
+  recording **78 times**.
+
+  This is the mirror image of a guarantee the library kept carefully everywhere
+  else. `agentfootprint.credential.authorization_required` was designed to carry
+  `{ service, sessionId }` and never the URL; OTel and X-Ray record the tool
+  result's *type* and never its value; the audit bundle's default `bounded` mode
+  maps `tool_end.result` to `[type: string]`. Every observer channel was
+  disciplined. The one channel nobody thought of as an observer — the
+  conversation — was not, and it feeds all the others.
+
+  The URL is now delivered only to the caller: on `PendingAsk` / the pause
+  outcome under `'pause'`, and on `CredentialConsentRequiredError` under
+  `'tell-model'`. What the model reads names the service and never the URL.
+  `mcpServe` does the same at the served boundary, where the string previously
+  crossed a process line into another agent's transcript.
+
+- **Existing recordings and logs may contain consent URLs.** If you ran a tool
+  with `needs: { mode: 'user' }` against a provider that returned
+  `authorization-required` on **6.11.0 through 8.5.0**, the authorization URL —
+  `state` parameter included — is in the artifacts of those runs. Consent URLs
+  are normally short-lived and single-use, which bounds the exposure, but the
+  durable sinks are worth walking:
+
+  - **`sqliteSessions` / `agentCoreSessions` rows** — the conversation is
+    persisted as plaintext JSON and survives restarts. `forget(sessionId)`
+    removes it.
+  - **CloudWatch log groups** (`cloudwatchObservability`) — the full event is
+    written with no bounding layer. Log-group retention applies.
+  - **`recordRun()` recordings written to disk** — both `snapshot` and `events`
+    carry it.
+  - **Audit bundles exported with `payloadMode: 'verbatim'`** — these are
+    hash-chained and tamper-evident, so the record **cannot be redacted after the
+    fact without breaking the chain**. Rotating the affected OAuth grants is the
+    remedy, not editing the bundle. The default `'bounded'` mode was never
+    affected.
+  - **`consoleObservability()`** prints the payload to stdout — check whatever
+    captures it.
+
+  OTel spans, X-Ray segments, audit bundles in default `bounded` mode, and the
+  context ledger were never affected.
+
+- **Where the URL lives now, stated plainly.** Under `'pause'` it is on the
+  pause outcome, on `PendingAsk`, and inside the engine checkpoint — so a
+  `standingAgent` that persists a paused run writes it into **your** session
+  store, alongside the conversation and shared state that store already holds.
+  That is the caller's own durable store, chosen by the operator, and it is a
+  strictly smaller exposure than the transcript sitting next to it; `forget(sessionId)`
+  clears both. What changed is that the URL no longer travels to places nobody
+  chose: the model's context, the narrative, the typed event stream, exported
+  telemetry, and recordings meant to be shared with a viewer.
+
+- **A blocked tool call is now flagged as an error.** In the main dispatch loop
+  the `authorization-required` result set no `error` flag, so `stream.tool_end`
+  reported it as an ordinary result and the OTel tool span closed **OK**. A tool
+  that was refused a credential and never ran is not a success. This is a payload
+  change in every mode, including `'tell-model'`.
+
+### Changed
+
+- **One behavior change, and it is the point of the release.** A tool whose
+  declared credential comes back `authorization-required` no longer hands the
+  consent URL to the model and lets the turn finish. By default the run
+  **pauses** — `agent.run()` returns a `RunnerPauseOutcome`, a `standingAgent`
+  answers **202** with `{ awaiting }`, and `agent.resume(checkpoint)` re-resolves
+  the credential and runs the tool. Callers who relied on the model adapting
+  in-loop set `onAuthorizationRequired: 'tell-model'`; the model then reads a
+  refusal (never a URL) and the run raises `CredentialConsentRequiredError`
+  rather than reporting a completion it did not earn.
+
+  **Nothing that worked stops working.** The tool never ran under the old
+  behavior either. What stops is the run's claim to have finished.
+
+  **Unchanged:** `CredentialProvider`, `CredentialResult`, `CredentialNeed`,
+  `ToolEndPayload`, `PendingAsk`, and every `credential.*` event payload. Issued
+  credentials, machine mode, and provider-failure handling are byte-identical.
+  `agentfootprint.credential.authorization_required` carries
+  `{ service, sessionId }` exactly as before.
+
+- **Docs stop saying the consent URL is surfaced to the LLM.** The AgentCore
+  guide and `examples/features/17-identity.ts` both described the old flow in
+  prose; both now point at the pause and at example 45.
+
+### The judgements these rest on
+
+**Consent is unfinished work, and unfinished work is a pause.** Every other place
+this library needs a person — `checkIn`, a middleware `ask`, `askHuman` — stops
+the run and hands the question to the caller through `PendingAsk`, which by
+construction carries no checkpoint and no conversation. Consent was the one case
+that instead wrote the question into the transcript and asked the model to solve
+it. Routing it onto the same wire is not new machinery; it is the credential seam
+finally using the machinery that was already load-bearing everywhere else.
+`standingAgent`, `httpHost`, the session stores and the resume path needed no
+change at all — the test that proves it is a copy of the `askHuman` one.
+
+**Nothing that worked stops working.** Under the old behavior the tool did not
+run. It still does not run. What stops is the run's claim to have finished — the
+same judgement 7.19.1 and 7.20.0 rest on.
+
+**The event was always right; the sentence was always wrong.**
+`credential.authorization_required` has carried `{ service, sessionId }` since
+6.11.0 precisely because a URL is not telemetry. The fix is not to redact a
+channel — it is to stop putting a capability in a string that every channel is
+built to preserve.
+
+**A pause payload is not automatically private.**
+`agentfootprint.pause.request` mirrors the whole `pauseData` into its
+`questionPayload`, which is right for a check-in's evidence pack and wrong for a
+bearer URL. The consent URL is withheld from that payload by name — the same
+discipline the audit adapter's bounded fields already apply to
+`tool_end.result` — and the token-secrecy suite now pins both halves as one law:
+**no credential material, vended token or consent capability, reaches the
+conversation, the snapshot, the narrative, the event stream, or a recording.**
+The security tests are written as a grep over the serialized artifacts rather
+than a field-by-field check, so a NEW sink that starts copying tool output fails
+them too. That property is what was missing: the old clause only ever looked for
+an issued token, and the consent URL walked straight past it.
+
+**The `'tell-model'` record travels off tracked state.** A tracked write is a
+commit-log entry, which is the snapshot, the narrative and every recording —
+so a scope key holding the URL would have rebuilt the exact leak this release
+removes. It rides a private field on the Agent for the length of the run, and
+leaves only as the typed error.
+
+**A resume cannot pause again, and the design does not pretend otherwise.**
+footprintjs's `ResumeFn` returns `void`. If consent is still ungranted when a run
+resumes, the tool gets the URL-free refusal with `error: true`, the loop carries
+on, and a further attempt can checkpoint afresh through `execute` — a new consent
+round with a new URL on `PendingAsk`. The resume input is ignored throughout: the
+person's answer is "I authorized it", not a result, which is the same reasoning
+that gave the middleware-ask outcome union no `result` arm.
+
+### Deferred (documented follow-ups)
+
+- **Per-tool `needs: { onAuthorizationRequired }`** — an agent-level default is
+  what ships, because one canonical path first. The asymmetric case is real and
+  named here so the destination is on record: a payment tool must pause, while an
+  optional enrichment tool may legitimately want the model to route around a
+  consent block. Resolution would be `need.onAuthorizationRequired ?? agentDefault`
+  — three lines — and it earns its knob on field evidence, not on this argument.
+  (6.11.0 deferred "auto-pause-on-3LO" in exactly this way and it was the right
+  call; what was missing was anyone reading the note for five minors.)
+
 ## [8.5.0] - 2026-08-06
 
 **`read_skill` tells the whole truth.** 8.4.0 stopped a skill graph from throwing

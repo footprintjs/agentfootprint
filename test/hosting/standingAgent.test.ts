@@ -522,6 +522,66 @@ describe('standingAgent — a run that paused', () => {
     }
   });
 
+  it('a 3LO consent block is the SAME pause path — the caller gets the URL, the model never did', async () => {
+    // 8.6.0. The hosting layer needed no change for this: a credential that
+    // needs consent rides the wire `askHuman` and `ask` already ride. What it
+    // proves here is the delivery — the person who has to click the link is
+    // handed it, over the one channel that was built to carry a question.
+    const CONSENT_URL = 'https://idp.example.test/authorize?state=st_HOST_0003';
+    const pay = defineTool<Record<string, never>, string>({
+      name: 'pay_invoice',
+      description: 'pay an invoice',
+      parameters: { type: 'object', properties: {} },
+      needs: { credential: 'billing', mode: 'user' },
+      execute: () => 'PAID',
+    });
+    const agent = Agent.create({
+      provider: mock({ replies: [{ toolCalls: [{ id: 't1', name: 'pay_invoice', args: {} }] }] }),
+      model: 'test-model',
+      maxIterations: 3,
+      credentials: {
+        id: 'consent-vault',
+        getCredential: async () => ({
+          status: 'authorization-required' as const,
+          authorizationUrl: CONSENT_URL,
+          sessionId: 'sess_host',
+        }),
+      },
+    })
+      .system('SECRET-SYSTEM-RULE')
+      .tool(pay)
+      .build();
+
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent, sessions, host });
+    try {
+      const reply = await host.deliver({ input: 'pay INV-42', sessionId: 'consenting' });
+      // The third terminal, not an error and not an answer.
+      expect(reply.error).toBeUndefined();
+      expect(reply.output).toBeUndefined();
+      expect(reply.awaiting?.tool).toBe('pay_invoice');
+      expect(reply.awaiting?.question).toMatch(/Authorize access to 'billing'/);
+      // The caller — and ONLY the caller — gets the capability.
+      expect(reply.awaiting?.pauseData).toMatchObject({
+        authorization: {
+          service: 'billing',
+          authorizationUrl: CONSENT_URL,
+          sessionId: 'sess_host',
+        },
+      });
+      // Still no checkpoint and no conversation on the way out.
+      const asJson = JSON.stringify(reply.awaiting);
+      expect(asJson).not.toContain('SECRET-SYSTEM-RULE');
+      expect(reply.awaiting).not.toHaveProperty('checkpoint');
+      // The model was never told anything at all.
+      const paused = readPausedRun(await sessions.hydrate('consenting'));
+      expect(paused.conversation.history.filter((m) => m.role === 'tool')).toHaveLength(0);
+    } finally {
+      await handle.close();
+    }
+  });
+
   it('a middleware ask is the SAME pause path — carried, with the middleware named', async () => {
     // `ask` was built on the shipped pause wire rather than on a second
     // mechanism of its own, and this is what that keeps buying: the hosting

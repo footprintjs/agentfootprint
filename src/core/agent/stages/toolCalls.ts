@@ -51,6 +51,8 @@ import { extractSequence } from '../../../security/extractSequence.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
+import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
+import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest } from '../../pause.js';
 import {
   shouldCheckIn,
@@ -167,6 +169,40 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly awaitDurable?: () => Promise<void> | undefined;
+  /**
+   * What to do when a tool's DECLARED credential needs 3LO consent (8.6.0).
+   * Default `'pause'`. See `AgentOptions.onAuthorizationRequired`.
+   */
+  readonly onAuthorizationRequired?: AuthorizationRequiredMode;
+  /**
+   * Side channel for the `'tell-model'` consent record — the ONLY route the
+   * authorization URL takes out of this handler in that mode.
+   *
+   * It is a callback rather than a scope key on purpose. A tracked write lands
+   * in the commit log, which is the snapshot, the narrative and every
+   * recording; writing the URL there would rebuild the exact leak 8.6.0
+   * removes. This hands it to a private field on the Agent instead, where it
+   * lives for the length of the run and leaves only as
+   * `CredentialConsentRequiredError`.
+   *
+   * @internal
+   */
+  readonly reportConsentOutstanding?: (record: {
+    readonly service: string;
+    readonly authorizationUrl: string;
+    readonly sessionId: string;
+    readonly tool: string;
+    readonly iteration: number;
+  }) => void;
+  /**
+   * Clears an outstanding consent record for `service` — called whenever a
+   * credential for it is successfully ISSUED. Without this, a run that was
+   * blocked, resumed, and then succeeded would still raise at the end: the
+   * record is about work that has since been done.
+   *
+   * @internal
+   */
+  readonly clearConsentOutstanding?: (service: string) => void;
 }
 
 /** Declaration order preserved, ids de-duplicated — the shape the gate's re-prompt
@@ -212,6 +248,10 @@ export function buildToolCallsHandler(
 ): PausableHandler<TypedScope<AgentState>> {
   const { registryByName, externalToolProvider, providerToolCache, permissionChecker } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
+  // 8.6.0 — default `'pause'`. Consent is work waiting on a person, and every
+  // other place this library needs a person stops the run and asks the caller.
+  const onAuthorizationRequired: AuthorizationRequiredMode =
+    deps.onAuthorizationRequired ?? 'pause';
   // Fail-closed: when no provider is attached, `ctx.credentials` is a provider
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
@@ -329,15 +369,28 @@ export function buildToolCallsHandler(
             kind: cred.credential.kind,
             ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
           });
+          // The consent that was outstanding for this service has been given.
+          deps.clearConsentOutstanding?.(need.credential);
         } else {
           typedEmit(scope, 'agentfootprint.credential.authorization_required', {
             service: need.credential,
             sessionId: cred.sessionId,
           });
-          return {
-            result: `authorization required for '${need.credential}': ${cred.authorizationUrl}`,
-            error: true,
-          };
+          // Still not authorized on the far side of a resume. A resume cannot
+          // pause again (`ResumeFn` returns void), so the honest move is the
+          // URL-free refusal plus `error: true`: the model reads it, the loop
+          // continues, and if it calls the tool again `execute` CAN pause — a
+          // fresh consent round with a fresh URL on `PendingAsk`. The
+          // consent record still goes out on the side channel so the turn
+          // cannot end quietly.
+          deps.reportConsentOutstanding?.({
+            service: need.credential,
+            authorizationUrl: cred.authorizationUrl,
+            sessionId: cred.sessionId,
+            tool: toolName,
+            iteration,
+          });
+          return { result: modelRefusal(need.credential), error: true };
         }
       } catch (credErr) {
         const reason = credErr instanceof Error ? credErr.message : String(credErr);
@@ -727,13 +780,60 @@ export function buildToolCallsHandler(
                   kind: cred.credential.kind,
                   ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
                 });
+                deps.clearConsentOutstanding?.(need.credential);
               } else {
                 credentialBlocked = true;
+                // The event has ALWAYS carried `{ service, sessionId }` and
+                // never the URL (6.11.0's contract). That was right; what was
+                // wrong was the tool-result string below, which carried the URL
+                // to the one party that cannot click it and to every channel
+                // built to preserve tool output.
                 typedEmit(scope, 'agentfootprint.credential.authorization_required', {
                   service: need.credential,
                   sessionId: cred.sessionId,
                 });
-                result = `authorization required for '${need.credential}': ${cred.authorizationUrl}`;
+                if (onAuthorizationRequired === 'pause') {
+                  // Consent is unfinished work, and unfinished work is a pause
+                  // — the same wire the check-in gate and a middleware `ask`
+                  // ride. Commit partial state so resume() finds history
+                  // intact; the proposed args ride the checkpoint so the tool
+                  // can run once the person has consented.
+                  scope.history = newHistory;
+                  scope.pausedToolCallId = tc.id;
+                  scope.pausedToolName = tc.name;
+                  scope.pausedToolStartMs = startMs;
+                  scope.pausedCredential = true;
+                  scope.pausedCredentialArgs = callArgs;
+                  scope.pausedCredentialService = need.credential;
+                  // A defined return value triggers the footprintjs pause; this
+                  // object becomes the checkpoint's pauseData, and standingAgent's
+                  // describePause hands it to the caller as `PendingAsk`.
+                  // `CONSENT_PAUSE_KEY` is what lets `pause.request` withhold
+                  // the URL from the event stream by name.
+                  return {
+                    toolCallId: tc.id,
+                    toolName: tc.name,
+                    question: consentQuestion(need.credential, tc.name),
+                    [CONSENT_PAUSE_KEY]: {
+                      service: need.credential,
+                      authorizationUrl: cred.authorizationUrl,
+                      sessionId: cred.sessionId,
+                    },
+                  };
+                }
+                // `'tell-model'`: the model reads a refusal naming the service
+                // and never the URL, and may route around the block. The turn
+                // cannot report a clean completion — the record goes out on the
+                // side channel and `Agent.finalizeResult` raises.
+                error = true;
+                result = modelRefusal(need.credential);
+                deps.reportConsentOutstanding?.({
+                  service: need.credential,
+                  authorizationUrl: cred.authorizationUrl,
+                  sessionId: cred.sessionId,
+                  tool: tc.name,
+                  iteration,
+                });
               }
             } catch (credErr) {
               credentialBlocked = true;
@@ -1209,6 +1309,82 @@ export function buildToolCallsHandler(
         scope.pausedToolStartMs = 0;
         scope.pausedCheckIn = false;
         scope.pausedCheckInArgs = undefined;
+        return;
+      }
+
+      // ── Credential-consent decision path (8.6.0) ─────────────────────
+      // Discriminated by `scope.pausedCredential`, restored from the checkpoint.
+      //
+      // The resume input is IGNORED, and that is the design rather than an
+      // omission. The person's answer here is "I authorized it", not a result:
+      // they consented at the identity provider, out of band. So resume asks
+      // the provider again and, if it now issues, runs the tool that was
+      // waiting — the same reasoning that gave the middleware-ask outcome union
+      // no `result` arm. A human never writes a tool's answer.
+      //
+      // Still not authorized? `resolveCredentialAndExecute` returns the
+      // URL-free refusal with `error: true` and reports the outstanding
+      // consent; the loop carries on and a further attempt can pause afresh.
+      if (scope.pausedCredential === true) {
+        const iteration = scope.iteration as number;
+        const args = (scope.pausedCredentialArgs ?? {}) as Readonly<Record<string, unknown>>;
+        const env = scope.$getEnv();
+        const tool = lookupTool(toolName);
+        const dispatched = await resolveCredentialAndExecute(
+          scope,
+          tool,
+          toolName,
+          args,
+          toolCallId,
+          iteration,
+          env,
+        );
+        const result = dispatched.result;
+        const error = dispatched.error;
+        let modelResult: unknown;
+        if (dispatched.executed === true) {
+          modelResult = await afterMoment(scope, {
+            ...(tool && { tool }),
+            toolName,
+            toolCallId,
+            iteration,
+            args,
+            result,
+            ...(error === true && { error: true }),
+            history: [...(scope.history as readonly LLMMessage[])],
+            ...(scope.runIdentity && { identity: scope.runIdentity }),
+            ...(env.signal && { signal: env.signal }),
+          });
+        }
+        if (modelResult === undefined) modelResult = result;
+        const consentResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        const consentHistory: LLMMessage[] = [
+          ...(scope.history as readonly LLMMessage[]),
+          { role: 'tool', content: consentResultStr, toolCallId, toolName },
+        ];
+        scope.history = consentHistory;
+        scope.lastToolResult = { toolName, result: consentResultStr };
+        typedEmit(scope, 'agentfootprint.stream.tool_end', {
+          toolCallId,
+          result,
+          durationMs: Date.now() - startMs,
+          ...(error === true && { error: true }),
+        });
+        typedEmit(scope, 'agentfootprint.agent.iteration_end', {
+          turnIndex: 0,
+          iterIndex: iteration,
+          toolCallCount: 1,
+          history: consentHistory,
+        });
+        scope.iteration = iteration + 1;
+        // Clear ALL pause checkpoint fields (shared + credential).
+        scope.pausedToolCallId = '';
+        scope.pausedToolName = '';
+        scope.pausedToolStartMs = 0;
+        scope.pausedCredential = false;
+        scope.pausedCredentialArgs = undefined;
+        scope.pausedCredentialService = undefined;
         return;
       }
 

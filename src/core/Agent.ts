@@ -44,6 +44,8 @@ import type {
   PricingTable,
 } from '../adapters/types.js';
 import type { CredentialProvider } from '../identity/types.js';
+import type { AuthorizationRequiredMode } from '../identity/consent.js';
+import { CredentialConsentRequiredError } from '../identity/CredentialConsentRequiredError.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { contextEvaluatedRecorder } from '../recorders/core/ContextEvaluatedRecorder.js';
@@ -282,6 +284,30 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  unless a consumer opts in. See AgentOptions.writeProvenance. */
   private readonly writeProvenance: WriteProvenanceMode;
   private readonly credentialProvider?: CredentialProvider;
+  /** What a run does when a declared credential needs 3LO consent (8.6.0).
+   *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
+  private readonly onAuthorizationRequired: AuthorizationRequiredMode;
+  /**
+   * Consent blocks outstanding in THIS run, keyed by service — the
+   * `'tell-model'` honesty ledger, and the only place the authorization URL
+   * lives between the block and the caller.
+   *
+   * It is a plain instance field rather than a scope key on purpose: tracked
+   * state is the commit log, which is the snapshot, the narrative and every
+   * recording, and this value is a bearer capability. Cleared at the top of
+   * every `run()` / `resume()` so one run can never raise on another's block,
+   * and cleared per service the moment that credential is issued.
+   */
+  private readonly consentOutstanding = new Map<
+    string,
+    {
+      readonly service: string;
+      readonly authorizationUrl: string;
+      readonly sessionId: string;
+      readonly tool: string;
+      readonly iteration: number;
+    }
+  >();
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
   /** Observer delivery tier (RFC-001 Block 10). `'inline'` (default) is
@@ -541,6 +567,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     this.observerDeliveryOptions = opts.observerDeliveryOptions;
     if (opts.credentials) this.credentialProvider = opts.credentials;
+    // 8.6.0 — default `'pause'`: consent is work waiting on a person, and the
+    // model is the one party that cannot click a link.
+    this.onAuthorizationRequired = opts.onAuthorizationRequired ?? 'pause';
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
     //   - thinkingHandlerValue === undefined → auto-wire by provider.name
@@ -777,6 +806,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // keeps it. Cleared here so a failed or paused run cannot hand back the
     // previous run's answer.
     this.lastRunAnswer = undefined;
+    // One run can never raise on another run's consent block.
+    this.consentOutstanding.clear();
 
     try {
       const result = await executor.run({
@@ -813,7 +844,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // A provider that reports no usage will report none on resume
           // either — wrapping this in a checkpoint would invite the caller to
           // retry into the same wall.
-          cause instanceof CompactionUnmeasurableError);
+          cause instanceof CompactionUnmeasurableError ||
+          // 8.6.0 — a consent block is answered by a PERSON at the identity
+          // provider, not by replaying the run. Wrapping it in a crash
+          // checkpoint would hand the caller a retry handle for a wall, and
+          // would bury the `authorizationUrl` one `.cause` deep where the
+          // person who has to click it will not look.
+          cause instanceof CredentialConsentRequiredError);
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
         const checkpoint = buildCheckpoint(
           tracker,
@@ -939,6 +976,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // executor between run/resume.
     const executor = this.createExecutor(options);
     this.lastRunAnswer = undefined;
+    // One run can never raise on another run's consent block.
+    this.consentOutstanding.clear();
     const result = await executor.resume(checkpoint, input, options);
     const finalized = this.finalizeResult(executor, result);
     if (typeof finalized === 'string') this.lastRunAnswer = finalized;
@@ -1450,6 +1489,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         });
       }
     }
+    // Credential-consent translation (8.6.0, `'tell-model'` only) — a tool
+    // DECLARED a credential, the provider answered `authorization-required`,
+    // and the model was told to route around it. The run reached the end
+    // anyway, which means it is about to hand back an answer string for work a
+    // tool never did.
+    //
+    // `AgentOutput` is a bare string, so there is nowhere to annotate "…and a
+    // consent is still outstanding". An event alone would relocate the silent
+    // success rather than remove it. So the turn raises, carrying the URL to
+    // the caller — the party that can actually act on it. Under the default
+    // `'pause'` this is unreachable for the first block (the run pauses and
+    // `detectPause` returned above); it still fires if a RESUME found consent
+    // ungranted and the model then finished the turn on its own.
+    if (this.consentOutstanding.size > 0) {
+      const [record] = [...this.consentOutstanding.values()];
+      if (record) {
+        this.consentOutstanding.clear();
+        throw new CredentialConsentRequiredError(record);
+      }
+    }
     if (result instanceof Error) throw result;
     if (typeof result === 'string') return result;
     throw new Error('Agent: unexpected result shape — expected final-answer string');
@@ -1668,6 +1727,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // later, so a direct field read here would be stale forever. Answers
       // `undefined` — no await, no microtask — until one is installed.
       awaitDurable: () => pendingDurableWrite(this),
+      // 8.6.0 — what a run does when a declared credential needs 3LO consent.
+      onAuthorizationRequired: this.onAuthorizationRequired,
+      // The `'tell-model'` consent record travels OFF tracked state (a tracked
+      // write is a commit-log entry, and the URL is a bearer capability), so
+      // these two callbacks are its whole route to the caller. Cleared at the
+      // top of every run; read in `finalizeResult`.
+      reportConsentOutstanding: (record) => {
+        this.consentOutstanding.set(record.service, record);
+      },
+      clearConsentOutstanding: (service) => {
+        this.consentOutstanding.delete(service);
+      },
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

@@ -117,6 +117,44 @@ describe('declare-and-push — security', () => {
   });
 });
 
+describe('declare-and-push — credential material, both halves', () => {
+  // The law this file has always enforced was written for ONE kind of secret:
+  // an issued token. A 3LO consent URL is the other kind — a bearer capability
+  // carrying a session-correlating `state` — and until 8.6.0 it walked straight
+  // past this suite into the conversation and every channel that preserves tool
+  // output. The clause below is the law stated once, for both.
+  it('is one law: no credential material — token OR consent URL — reaches the trace', async () => {
+    const CONSENT_URL = 'https://idp.example.test/authorize?state=st_LAW_0002';
+    const consentOnly: CredentialProvider = {
+      id: 'consent-only',
+      getCredential: () =>
+        Promise.resolve({
+          status: 'authorization-required',
+          authorizationUrl: CONSENT_URL,
+          sessionId: 'sess_law',
+        }),
+    };
+    const tool = defineTool({
+      name: 'needs_consent',
+      description: 'x',
+      inputSchema: { type: 'object', properties: {} },
+      needs: { credential: 'github', mode: 'user' },
+      execute: async () => 'should not run',
+    });
+    const out = await runWithTool(tool, consentOnly);
+
+    for (const blob of [out.snapshot, out.narrative, JSON.stringify(out.events), out.answer]) {
+      expect(blob).not.toContain('st_LAW_0002');
+      expect(blob).not.toContain('idp.example.test');
+    }
+    // …and the event that IS designed for this still says only which service.
+    const ev = out.events.find(
+      (e) => e.name === 'agentfootprint.credential.authorization_required',
+    );
+    expect(ev?.payload).toEqual({ service: 'github', sessionId: 'sess_law' });
+  });
+});
+
 describe('declare-and-push — the LLM never sees the credential', () => {
   it('the credential is not in the tool input schema sent to the model', () => {
     const tool = defineTool({

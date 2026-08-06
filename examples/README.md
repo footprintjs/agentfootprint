@@ -252,6 +252,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 42 | [`42-skill-graph-model-pick.ts`](features/42-skill-graph-model-pick.ts) | Skill graph — the model picks, and the pick takes effect | When no entry rule matches, the model picks a skill from the read_skill menu and the pick moves the graph |
 | 43 | [`43-skill-graph-tree-pick.ts`](features/43-skill-graph-tree-pick.ts) | Skill graph — a tree routes by predicate, and read_skill cannot jump it | A decision tree() has no cursor, so read_skill has nothing to move: a leaf pick is refused with a message explaining the tree, instead of being accepted and silently dropped. Skills registered beside the tree stay reachable, because those really do activate by read_skill. |
 | 44 | [`44-skill-graph-read-skill-offer.ts`](features/44-skill-graph-read-skill-offer.ts) | Skill graph — read_skill offers only what the gate will grant | read_skill |
+| 45 | [`45-credential-consent.ts`](features/45-credential-consent.ts) | Credentials — 3LO consent pauses the run instead of asking the model | A declared credential comes back authorization-required. The run PAUSES and the caller receives the consent URL on the pause outcome; the model is never told, because it cannot click a link. After consent, resume() re-resolves the credential and runs the tool that was waiting — same run, work actually done. The URL is a bearer capability and appears in no snapshot, narrative, event or recording. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

@@ -265,10 +265,22 @@ const agent = Agent.create({
 ```
 
 - **Resolve-before-invoke**: issued → injected as `ctx.credential`; 3LO consent
-  needed → the consent URL is surfaced to the LLM (the tool is skipped) and
-  `agentfootprint.credential.authorization_required` is emitted; provider failure
-  → the reason is surfaced + emitted, and the tool **never runs half-authed**.
+  needed → **the run PAUSES** (8.6.0) and the caller receives
+  `{ service, sessionId, authorizationUrl }` on the pause outcome — a
+  `standingAgent` answers 202 with `{ awaiting }`, and `agent.resume(checkpoint)`
+  re-resolves the credential and runs the tool that was waiting;
+  `agentfootprint.credential.authorization_required` is emitted throughout,
+  carrying `{ service, sessionId }` and never the URL. Provider failure → the
+  reason is surfaced + emitted, and the tool **never runs half-authed**.
   AgentCore caches refresh tokens, so consent usually happens once.
+
+  The consent URL is a **bearer capability** — it carries a session-correlating
+  `state` parameter, so whoever holds it can complete the flow. It reaches the
+  caller and nothing else: not the conversation, the snapshot, the narrative,
+  the event stream or a recording. Set `onAuthorizationRequired: 'tell-model'`
+  if you want the model to route around a consent block instead; the turn then
+  raises `CredentialConsentRequiredError` rather than reporting a completion
+  the tool never earned.
 - **`mode`**: omitted → `machine` (2-legged/M2M). Declare `mode: 'user'`
   explicitly for on-behalf-of-user (3-legged) delegation.
 - **Per-request identity scoping** (opt-in via `workloadName`): pass

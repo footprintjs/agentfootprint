@@ -49,6 +49,14 @@ export {
   type HeadersCredential,
 } from './identity/kinds.js';
 export { staticTokens, type StaticTokensOptions } from './identity/staticTokens.js';
+// 3LO consent (8.6.0) — the mode, the caller-facing block, and the typed
+// terminal. The authorization URL reaches a caller HERE (or on `PendingAsk`)
+// and deliberately nowhere else; see the note on the error class.
+export type { AuthorizationRequiredMode, ConsentRequest } from './identity/consent.js';
+export {
+  CredentialConsentRequiredError,
+  type CredentialConsentRequiredContext,
+} from './identity/CredentialConsentRequiredError.js';
 export {
   withCredentialRetry,
   type WithCredentialRetryOptions,

@@ -16,6 +16,7 @@ import type {
   RunOptions,
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
+import { redactConsentUrlForEvent } from '../identity/consent.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
 import type {
@@ -380,9 +381,14 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       type: 'agentfootprint.pause.request',
       payload: {
         reason: reasonFromData,
+        // This mirrors the WHOLE `pauseData` onto the wire, which is right for
+        // a check-in's evidence pack and wrong for a bearer capability. A 3LO
+        // consent URL is withheld here BY NAME (8.6.0) — the same discipline
+        // the audit adapter's BOUND_FIELDS applies to `tool_end.result`. Every
+        // other pause shape passes through by reference, unchanged.
         questionPayload:
           typeof pauseData === 'object' && pauseData !== null
-            ? (pauseData as Readonly<Record<string, unknown>>)
+            ? redactConsentUrlForEvent(pauseData as Readonly<Record<string, unknown>>)
             : { data: pauseData },
       },
       meta: {

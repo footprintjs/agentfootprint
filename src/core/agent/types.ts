@@ -28,6 +28,7 @@ import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
+import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
@@ -165,6 +166,28 @@ export interface AgentOptions {
    * `staticTokens({ ... })`, or any `CredentialProvider`).
    */
   readonly credentials?: CredentialProvider;
+  /**
+   * What the run does when a tool's DECLARED credential (`needs: { credential }`)
+   * comes back `authorization-required` — a person has to click a consent link
+   * before the tool can run. Default **`'pause'`** (8.6.0).
+   *
+   * - `'pause'` — the run stops at the block. `agent.run()` returns a pause
+   *   outcome whose `pauseData.authorization` carries `{ service, sessionId,
+   *   authorizationUrl }`; a `standingAgent` answers **202** with
+   *   `{ awaiting }`; `agent.resume(checkpoint)` re-resolves the credential and
+   *   runs the tool that was waiting. The model is never told, so it cannot
+   *   adapt around work that has not happened.
+   * - `'tell-model'` — the model reads a refusal naming the service (never the
+   *   URL) and may route around the block. The turn still cannot report a clean
+   *   completion: `agent.run()` raises `CredentialConsentRequiredError`, which
+   *   carries the URL to the caller.
+   *
+   * In BOTH modes the authorization URL stays out of the conversation, the
+   * snapshot, the narrative, the typed event stream and any recording. It is a
+   * bearer capability carrying a session-correlating `state` parameter; before
+   * 8.6.0 it was interpolated into the tool result and copied into all of them.
+   */
+  readonly onAuthorizationRequired?: AuthorizationRequiredMode;
   /**
    * Global cache kill switch (v2.6+). `'off'` disables the cache
    * layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -407,6 +430,24 @@ export interface AgentState {
   pausedAskArgs?: Readonly<Record<string, unknown>>;
   pausedAskIndex?: number;
   pausedAskMiddleware?: string;
+  // Credential-consent checkpoint (8.6.0) — set when a tool's DECLARED
+  // credential comes back `authorization-required` under the default
+  // `onAuthorizationRequired: 'pause'`. Same wire as the check-in and ask
+  // pauses, discriminated the same way. `pausedCredentialArgs` carries the
+  // proposed args so the tool can run on resume; there is no
+  // `pausedCredentialUrl`, deliberately — the URL rides `pauseData` to the
+  // caller and is re-fetched from the provider on resume, so it never has to
+  // live in tracked state (which is the commit log, and therefore the trace).
+  pausedCredential?: boolean;
+  pausedCredentialArgs?: Readonly<Record<string, unknown>>;
+  pausedCredentialService?: string;
+  // NOTE (8.6.0) — there is deliberately NO scope key for the `'tell-model'`
+  // consent record. A tracked write is a commit-log entry, which is the
+  // snapshot, the narrative and every recording; putting the consent URL there
+  // would rebuild the exact leak this release removes. It travels instead on a
+  // side channel (`ToolCallsHandlerDeps.reportConsentOutstanding`) to a private
+  // field on the Agent, lives for the length of the run, and reaches the caller
+  // only as `CredentialConsentRequiredError`.
 
   // ── The middleware ledger (`.toolMiddleware()` / `.messageMiddleware()`) ──
   /** One row per middleware decision, in the order they were decided —
