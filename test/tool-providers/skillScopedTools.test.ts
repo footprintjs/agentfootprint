@@ -10,11 +10,17 @@
  *   - Pure / deterministic per (skillId, ctx).
  */
 
-import { describe, expect, it } from 'vitest';
-import { defineTool, type Tool } from '../../src/index.js';
+import { describe, expect, it, vi } from 'vitest';
+import { enableDevMode, disableDevMode } from 'footprintjs';
+import { defineTool, Agent, type Tool } from '../../src/index.js';
 import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js';
-import { skillScopedTools, staticTools } from '../../src/tool-providers/index.js';
-import { defineSkill } from '../../src/injection-engine.js';
+import {
+  skillScopedTools,
+  skillScopedToolsTarget,
+  staticTools,
+} from '../../src/tool-providers/index.js';
+import { defineSkill, skillGraph } from '../../src/injection-engine.js';
+import { mock } from '../../src/llm-providers.js';
 import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
@@ -265,5 +271,191 @@ describe('skillScopedTools — ROI: per-skill choice space narrowing', () => {
     expect(iter3.length).toBe(2);
     expect(iter3.map((t) => t.schema.name)).toContain('reverse_charge');
     expect(iter3.map((t) => t.schema.name)).not.toContain('process_refund');
+  });
+});
+
+// ─── 8.7.0 — the silent-empty is reported, and the graph signal exists ────────
+
+describe('skillScopedTools — the silent empty (8.7.0)', () => {
+  it('unit: warns when its skill IS active but did not arrive by read_skill', () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const provider = skillScopedTools('billing', [fakeTool('process_refund')]);
+      // `activeSkillIds` is the real active set — the graph routed into `billing`.
+      // `activeSkillId` is the read_skill tail, and read_skill was never called.
+      const tools = provider.list({ iteration: 2, activeSkillIds: ['billing'] });
+      expect(tools).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]![0]);
+      expect(line).toMatch(/IS active on iteration 2/);
+      expect(line).toMatch(/not activated by read_skill/);
+      expect(line).toMatch(/ctx\.activeSkillIds/);
+    } finally {
+      warn.mockRestore();
+      disableDevMode();
+    }
+  });
+
+  it('unit: latched — a long loop gets one line, not one per iteration', () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const provider = skillScopedTools('billing', [fakeTool('process_refund')]);
+      for (let i = 1; i <= 10; i++) provider.list({ iteration: i, activeSkillIds: ['billing'] });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+      disableDevMode();
+    }
+  });
+
+  it('functional: silent when the skill is genuinely not active, and outside dev mode', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const provider = skillScopedTools('billing', [fakeTool('process_refund')]);
+      enableDevMode();
+      expect(provider.list({ iteration: 1, activeSkillIds: ['refund'] })).toEqual([]);
+      expect(provider.list({ iteration: 1 })).toEqual([]); // nothing active at all
+      expect(warn).not.toHaveBeenCalled();
+      disableDevMode();
+      // dev mode off → no console cost even when the condition holds
+      expect(provider.list({ iteration: 1, activeSkillIds: ['billing'] })).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      disableDevMode();
+      warn.mockRestore();
+    }
+  });
+
+  it('functional: the happy path is untouched — read_skill activation still yields tools', () => {
+    const provider = skillScopedTools('billing', [fakeTool('process_refund')]);
+    const tools = provider.list({
+      iteration: 1,
+      activeSkillId: 'billing',
+      activeSkillIds: ['billing'],
+    });
+    expect(tools.map((t) => t.schema.name)).toEqual(['process_refund']);
+  });
+
+  it('integration: ctx.activeSkillIds lets a provider follow the GRAPH position', async () => {
+    // The escape hatch the header could not offer before 8.7.0.
+    const graphScoped = (id: string, tools: readonly Tool[]): ToolProvider => ({
+      id: `graph-scoped:${id}`,
+      list: (ctx) => (ctx.activeSkillIds?.includes(id) ? [...tools] : []),
+    });
+    const alpha = defineSkill({
+      id: 'alpha',
+      description: 'use alpha',
+      body: 'a',
+      tools: [fakeTool('alpha_tool')],
+      autoActivate: 'currentSkill',
+    });
+    const beta = defineSkill({ id: 'beta', description: 'use beta', body: 'b' });
+    const graph = skillGraph({
+      skills: [alpha, beta],
+      start: 'alpha',
+      steps: [{ from: 'alpha', to: 'beta', onToolReturn: 'alpha_tool' }],
+      check: 'throw',
+    });
+    const offered: string[][] = [];
+    let step = 0;
+    const agent = Agent.create({
+      provider: mock({
+        respond: () =>
+          step++ === 0
+            ? {
+                content: 'c',
+                toolCalls: [{ id: 'c1', name: 'alpha_tool', args: {} }],
+                stopReason: 'tool_use',
+              }
+            : { content: 'done', toolCalls: [], stopReason: 'stop' },
+      }),
+      model: 'mock',
+      maxIterations: 4,
+    })
+      .system('s')
+      .skillGraph(graph)
+      .toolProvider(graphScoped('beta', [fakeTool('beta_scoped')]))
+      .watch({
+        id: 'w',
+        onEmit: (e) => {
+          if (e.name === 'agentfootprint.stream.llm_start') {
+            offered.push(
+              ((e.payload as { tools?: { name: string }[] }).tools ?? []).map((t) => t.name),
+            );
+          }
+        },
+      })
+      .build();
+    await agent.run({ message: 'hi' });
+    // Iteration 1: cursor on alpha → no beta tool. Iteration 2: the EDGE routed into
+    // beta, no read_skill involved — and the provider sees it.
+    expect(offered[0]).not.toContain('beta_scoped');
+    expect(offered[1]).toContain('beta_scoped');
+  });
+});
+
+describe('skillScopedTools — the redundant pairing is named at build (8.7.0)', () => {
+  it('unit: warns when the target skill already scopes its own tools', () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const alpha = defineSkill({
+        id: 'alpha',
+        description: 'use alpha',
+        body: 'a',
+        tools: [fakeTool('alpha_tool')],
+        autoActivate: 'currentSkill',
+      });
+      const graph = skillGraph({ skills: [alpha], start: 'alpha', check: 'throw' });
+      Agent.create({
+        provider: mock({ respond: () => ({ content: 'x', toolCalls: [], stopReason: 'stop' }) }),
+        model: 'mock',
+      })
+        .skillGraph(graph)
+        .toolProvider(skillScopedTools('alpha', [fakeTool('extra_tool')]))
+        .build();
+      const lines = warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('alpha'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/already carries autoActivate: 'currentSkill'/);
+    } finally {
+      warn.mockRestore();
+      disableDevMode();
+    }
+  });
+
+  it('functional: silent when the skill carries no tools of its own, or is not autoActivate', () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const bare = defineSkill({
+        id: 'alpha',
+        description: 'use alpha',
+        body: 'a',
+        autoActivate: 'currentSkill',
+      });
+      const graph = skillGraph({ skills: [bare], start: 'alpha', check: 'throw' });
+      Agent.create({
+        provider: mock({ respond: () => ({ content: 'x', toolCalls: [], stopReason: 'stop' }) }),
+        model: 'mock',
+      })
+        .skillGraph(graph)
+        .toolProvider(skillScopedTools('alpha', [fakeTool('extra_tool')]))
+        .build();
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes('already carries'))).toHaveLength(
+        0,
+      );
+    } finally {
+      warn.mockRestore();
+      disableDevMode();
+    }
+  });
+
+  it('security: a provider id that merely LOOKS like one is not matched by accident', () => {
+    expect(skillScopedToolsTarget('skill-scoped:alpha')).toBe('alpha');
+    expect(skillScopedToolsTarget('skill-scoped:')).toBeUndefined();
+    expect(skillScopedToolsTarget('composite')).toBeUndefined();
+    expect(skillScopedToolsTarget(undefined)).toBeUndefined();
   });
 });

@@ -84,11 +84,48 @@ Predicates receive a read-only context per iteration:
 | Field | Meaning |
 |---|---|
 | `iteration` | Current ReAct iteration (1-based) |
-| `activeSkillId?` | The id of the currently-activated Skill, if any. Set by `read_skill(id)` |
+| `activeSkillId?` | The id of the currently-activated Skill, if any. Set by `read_skill(id)` — and **only** by it |
+| `activeSkillIds?` | **Every** skill active this iteration, however it got there: a `read_skill` call, an entry rule, a `skillGraph()` route, a tree leaf (8.7.0) |
 | `identity?` | Caller identity tuple — `{ tenant?, principal?, conversationId }` for role checks |
 | `signal?` | Optional `AbortSignal` propagated from `run({ env })`. Async (discovery) providers MUST honor it; sync providers ignore it |
 
 Predicates MUST be pure — no side effects, no async. They run dozens of times per `agent.run()`.
+
+### `activeSkillId` vs `activeSkillIds` — the distinction that bites
+
+`activeSkillId` is the tail of `activatedInjectionIds`, which only `read_skill` writes.
+A skill the GRAPH activated — an entry rule matched, an edge routed into it — does not
+set it. So `skillScopedTools('billing', …)` returns `[]` on exactly the iterations
+`billing` is loaded, if `billing` arrived by routing rather than by the model asking.
+Since 8.7.0 that mismatch dev-warns from inside the provider instead of passing in
+silence.
+
+`activeSkillIds` is the real active set, which is what to scope on when you want to
+follow the graph's POSITION:
+
+```ts
+const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
+  id: `graph-scoped:${id}`,
+  list: (ctx) => (ctx.activeSkillIds?.includes(id) ? tools : []),
+});
+```
+
+Every `skillScopedTools` provider carries the id `` `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}` ``,
+and `skillScopedToolsTarget(providerId)` recovers the skill id from one — the convention
+the agent builder itself reads to warn when a scoped provider is aimed at a skill that
+already narrows its own tools with `autoActivate: 'currentSkill'`.
+
+### When two sources claim one tool name
+
+A provider tool and an active skill's tool can share a name, and they lose in opposite
+directions: the tools slot merges `[static, provider, skill]` first-wins, so the model
+reads the **provider's** description — while dispatch resolves the static registry
+first, which holds every skill tool and no provider tool, so the **skill's**
+implementation runs. The model reads one contract and calls another. Since 8.7.0 the run
+emits `agentfootprint.tools.shadowed` (`ToolsShadowedPayload` — names only, never args or
+results) every iteration it happens, plus one dev-mode console line. It is reported
+rather than refused because a provider's list is resolved per iteration: a dynamic
+provider can begin shadowing mid-run, long after build time.
 
 ## When to use this vs flat `agent.tools(arr)`
 

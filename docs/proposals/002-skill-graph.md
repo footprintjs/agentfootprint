@@ -79,7 +79,8 @@ The activation *mechanism* is done; the **declarative + drawable layer** is what
 ## v1 API sketch (compiles to existing Injections)
 
 ```ts
-import { Agent, skillGraph, defineSkill } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { skillGraph, defineSkill } from 'agentfootprint/context';
 
 const triage = defineSkill({ id: 'mds-interface-issues', description: '…', body: '…', tools: [...] });
 const sfp    = defineSkill({ id: 'sfp-diagnostics',       description: '…', body: '…', tools: [...] });
@@ -164,7 +165,7 @@ the compiled triggers; it is NOT a one-shot traversal to a leaf). So v3 is a
 between skills layer on top (a leaf can route onward when a tool returns).
 
 ### v3 = three pieces
-1. **Tree-declaration API** — `decide(...)` builds a plain **data node**; `.tree(root)`
+1. **Tree-declaration API** — `decideSkill(...)` builds a plain **data node**; `.tree(root)`
    mounts it. The open "nested-builder vs data literal" question resolved toward the
    **data literal** — `decide` returns a value you compose and reuse, which is the
    cleanest to read AND the easiest to render (the renderer walks the same `nodes`):

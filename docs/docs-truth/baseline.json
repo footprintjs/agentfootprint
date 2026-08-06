@@ -5,23 +5,23 @@
   "recordedAt": "2026-08-06",
   "surface": {
     "subpaths": 27,
-    "declaredSymbols": 1232,
-    "declaredEvents": 70,
-    "eventSource": "src/events/registry.ts:524"
+    "declaredSymbols": 1244,
+    "declaredEvents": 71,
+    "eventSource": "src/events/registry.ts:530"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 349,
-      "exercised-undocumented": 37,
-      "undocumented-unexercised": 598,
-      "site-code-sample-only": 19,
+      "documented-never-exercised": 362,
+      "exercised-undocumented": 36,
+      "undocumented-unexercised": 596,
+      "site-code-sample-only": 18,
       "written-but-not-published": 135,
-      "ok": 94
+      "ok": 97
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 5,
+      "documented-never-exercised": 6,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 19,
       "site-code-sample-only": 5,
@@ -684,8 +684,6 @@
     "canonicalJson",
     "catalogFromTools",
     "causalEvidenceRecorder",
-    "checkSkillContract",
-    "checkSkillContracts",
     "classifySuspect",
     "coerceCatalog",
     "compareFinders",
@@ -702,7 +700,6 @@
     "defaultPipeline",
     "defaultStructuralRules",
     "defaultSuspectClassifier",
-    "defineRelevanceHint",
     "descriptionRule",
     "differentiationHint",
     "embedMessages",
@@ -785,7 +782,6 @@
     "registerCacheStrategy",
     "renderCommentary",
     "renderStatusLine",
-    "routeRecorder",
     "runAblationProbe",
     "runRestorationProbe",
     "runStepRecorder",

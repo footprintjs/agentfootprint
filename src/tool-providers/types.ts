@@ -64,8 +64,33 @@ export interface ToolDispatchContext {
    * The id of the currently-activated Skill, if any.
    * Set by `read_skill(id)` activation; cleared between turns.
    * Used by `autoActivate`-driven per-skill tool gating.
+   *
+   * **This is the last `read_skill` activation, not the graph's position.** It is
+   * filled from the tail of `activatedInjectionIds`, which only `read_skill` ever
+   * appends to. For "which skills are actually loaded right now", including the ones
+   * an entry rule or a `skillGraph()` edge activated, read {@link activeSkillIds}.
    */
   readonly activeSkillId?: string;
+  /**
+   * **Every skill active on this iteration** — the real active set, however each one
+   * got there: a `read_skill` activation, an entry rule, a `skillGraph()` route, a
+   * decision-tree leaf. Added in 8.7.0.
+   *
+   * `activeSkillId` answers "what did the model most recently open"; this answers
+   * "what is loaded". A provider that wants to follow the graph's POSITION — which
+   * `skillScopedTools`' own docs said was impossible — reads this one:
+   *
+   * ```ts
+   * const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
+   *   id: `graph-scoped:${id}`,
+   *   list: (ctx) => (ctx.activeSkillIds?.includes(id) ? tools : []),
+   * });
+   * ```
+   *
+   * Optional for forward-compat: a provider written before 8.7.0 sees `undefined` and
+   * behaves exactly as it always did.
+   */
+  readonly activeSkillIds?: readonly string[];
   /**
    * Caller identity tuple — passed through from `agent.run({ identity })`.
    * Permission predicates can role-check based on `identity.principal`

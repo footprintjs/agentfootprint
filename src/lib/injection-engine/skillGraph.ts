@@ -53,8 +53,14 @@ import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';
 import type { EntryScore, EntryScoring, EntryScorer } from './entryScorer.js';
 import { embeddingScorer } from './entryScorer.js';
-import { checkupGraph, formatCheckup, type GraphCheckup } from './skillGraphCheckup.js';
+import {
+  checkupGraph,
+  formatCheckup,
+  type CheckupTriggerKind,
+  type GraphCheckup,
+} from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
+export { formatCheckup } from './skillGraphCheckup.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
 
 /** How `.build({ check })` reacts to the graph check-up. */
@@ -67,9 +73,37 @@ export interface BuildOptions {
    *   • `'throw'` — throw if any ERROR-level problem (unknown-skill / no-entry);
    *   • `'warn'`  — console.warn every problem in dev mode (`enableDevMode()`), silent otherwise;
    *   • `'off'`   — skip it entirely.
-   * Default `'warn'`. `graph.checkup()` is always available regardless.
+   *
+   * **Default `'throw'` since 8.7.0** (was `'warn'`), matching the object-literal
+   * form. A graph with an error-level problem cannot start a turn at all, and under
+   * the old default it built silently outside dev mode and failed at run time
+   * instead. `'warn'` still means exactly what it says — never throws — so an
+   * explicit `check: 'warn'` keeps the old soft behavior.
+   *
+   * `graph.checkup()` is always available regardless.
    */
   readonly check?: GraphCheckMode;
+  /**
+   * Tool names the AGENT exposes to every skill (`.tool()` / `.tools()` / a baseline
+   * `ToolProvider`). Without them the skill-body contract check reads a body's
+   * `lookup_order(id)` as a typo, because the graph only knows the tools its own
+   * skills carry. Same field as `checkup({ knownTools })` — see `SkillGraph.checkup`.
+   */
+  readonly knownTools?: readonly string[];
+}
+
+/** Options for `graph.checkup()`. */
+export interface CheckupOptions {
+  /**
+   * Tool names the AGENT exposes to every skill — `.tool()` / `.tools()`
+   * registrations and any always-on `ToolProvider`. A skill body may name them
+   * freely: they are callable from every skill, so they are neither `body-unknown-tool`
+   * (they exist) nor `body-foreign-tool` (they are not somebody else's).
+   *
+   * @example
+   *   graph.checkup({ knownTools: ['lookup_order', 'list_skills'] });
+   */
+  readonly knownTools?: readonly string[];
 }
 
 /** Where a turn starts, in the object-literal (flat) form. */
@@ -114,7 +148,12 @@ export interface SkillGraphFlatConfig {
   /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
   readonly steps?: readonly SkillGraphStep[];
   readonly tree?: never;
+  /** `tree`-only (there are no leaves to scope here) — typed `never` so the
+   *  contradiction is a compile error, the same way `tree` is on this arm. */
+  readonly scopeTools?: never;
   readonly check?: GraphCheckMode;
+  /** Baseline agent tool names — see {@link BuildOptions.knownTools}. */
+  readonly knownTools?: readonly string[];
 }
 
 /**
@@ -128,9 +167,18 @@ export interface SkillGraphTreeConfig {
   readonly skills: readonly Injection[];
   /** A decision tree (instead of `start` + `steps`). */
   readonly tree: DecisionNode | Injection;
+  /**
+   * Scope each leaf's tools to the routed leaf. The object form's half of
+   * `.tree(root, { scopeTools })` — added in 8.7.0, because until then this form
+   * hard-coded `true` and the fluent form's only opt-out had no object-form twin.
+   * Default `true`. See {@link TreeOptions.scopeTools}.
+   */
+  readonly scopeTools?: boolean;
   readonly start?: never;
   readonly steps?: never;
   readonly check?: GraphCheckMode;
+  /** Baseline agent tool names — see {@link BuildOptions.knownTools}. */
+  readonly knownTools?: readonly string[];
 }
 
 /**
@@ -339,6 +387,14 @@ export interface SkillGraph {
    * route triggers and the agent loop's cursor-update stage, so the two can never
    * disagree. Flat entry/route graphs only; a decision `tree()` routes per-iteration
    * by predicate (no cursor) and returns the unchanged `ctx.currentSkillId`.
+   *
+   * **The cursor is PER RUN.** It describes where the graph is inside ONE
+   * `agent.run()`, across that run's iterations. A second `run()` on the same agent
+   * starts cold — at the entry — whatever skill the first run ended on: a skill graph
+   * is a per-turn state machine, not conversation memory, and `currentSkillId` lives
+   * in the run's own state. To resume where the last turn stopped, persist the id
+   * yourself and start the next turn's graph from it (`start: { rules: [...] }`);
+   * nothing in the graph will carry it across for you.
    */
   nextSkill(ctx: InjectionContext): string | undefined;
   /**
@@ -387,10 +443,21 @@ export interface SkillGraph {
   /**
    * Build-time check-up — inspect the declared graph for wiring mistakes (a skill
    * nobody can reach, an edge to an unknown skill, two un-prioritized edges from one
-   * skill, no entry, a self-loop). Pure + side-effect-free; call it whenever.
-   * `ok` is false iff there's an error-level problem (`unknown-skill` / `no-entry`).
+   * skill, no entry, a self-loop, an entry menu with no way to choose from it, a
+   * transition the cold-start cursor can never take). Pure + side-effect-free; call
+   * it whenever. `ok` is false iff there's an error-level problem (`unknown-skill` /
+   * `no-entry`) — everything else is a warning, because a graph the model can still
+   * navigate is not a broken graph.
+   *
+   * Pass `knownTools` when the agent registers baseline tools with `.tool()`: the
+   * graph only knows the tools its own skills carry, so without them a body that
+   * says `lookup_order(id)` is reported as naming a tool that exists nowhere.
+   *
+   * @example
+   *   const report = graph.checkup({ knownTools: ['lookup_order'] });
+   *   if (!report.ok) throw new Error(formatCheckup(report));
    */
-  checkup(): GraphCheckup;
+  checkup(options?: CheckupOptions): GraphCheckup;
 }
 
 export interface SkillGraphBuilder {
@@ -596,18 +663,30 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
 
       // The build-time check-up — pure over the declared entries/routes/skills,
       // PLUS the proposal-009 Tier-1 skill-body ↔ tool-contract checks (warnings).
-      const checkup = (): GraphCheckup => {
+      //
+      // `triggerKinds` reads the COMPILED `skills` array (filled below, before any
+      // caller can reach this closure) rather than the declaration, because that is
+      // where the truth is: `deriveTrigger` returns null for an unwired skill, so the
+      // skill keeps whatever trigger it arrived with — and `unreachable-skill`'s
+      // sentence about read_skill is only true for `llm-activated`.
+      const checkup = (options: CheckupOptions = {}): GraphCheckup => {
         const wiring = checkupGraph({
           skillIds: new Set(skillsById.keys()),
-          entryIds: entries.map((e) => e.id),
+          entries: entries.map((e) => ({ id: e.id, conditional: e.when !== undefined })),
           routes: routes.map((r) => ({
             fromId: r.fromId,
             toId: r.toId,
             deterministic: !!(r.when || r.onToolReturn),
           })),
           isTree: treeRoot !== undefined,
+          exclusiveEntries: entryScorer !== undefined || entryByReadFlag,
+          triggerKinds: new Map(
+            skills.map((s) => [s.id, s.trigger.kind as CheckupTriggerKind] as const),
+          ),
         });
-        const contract = checkSkillContracts([...skillsById.values()]);
+        const contract = checkSkillContracts([...skillsById.values()], {
+          ...(options.knownTools && { knownTools: options.knownTools }),
+        });
         const problems = [...wiring.problems, ...contract];
         return { ok: !problems.some((p) => p.kind === 'error'), problems };
       };
@@ -735,11 +814,17 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         );
       }
 
-      // Run the check-up per the `check` mode (default 'warn'): 'throw' fails loud on
-      // an error; 'warn' prints in dev mode only (quiet in prod / tests); 'off' skips.
-      const check = opts.check ?? 'warn';
+      // Run the check-up per the `check` mode: 'throw' fails loud on an error; 'warn'
+      // prints in dev mode only (quiet in prod / tests) and NEVER throws; 'off' skips.
+      //
+      // The default is `'throw'` since 8.7.0, matching the object-literal form. It was
+      // `'warn'`, which meant a fluent graph with `no-entry` or `unknown-skill` — a
+      // graph that cannot start a turn at all — built in silence outside dev mode and
+      // surfaced as a run that entered no skill. An explicit `check: 'warn'` still
+      // never throws, so the opt-down survives with its name intact.
+      const check = opts.check ?? 'throw';
       if (check !== 'off') {
-        const result = checkup();
+        const result = checkup({ ...(opts.knownTools && { knownTools: opts.knownTools }) });
         if (check === 'throw' && !result.ok) {
           throw new Error(`skillGraph: build-time check-up failed:\n${formatCheckup(result)}`);
         }
@@ -759,7 +844,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         nextSkill: (ctx: InjectionContext) => resolveCursor(ctx).to,
         explainNextSkill: (ctx: InjectionContext) => resolveCursor(ctx),
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
-        checkup,
+        checkup: (options?: CheckupOptions) => checkup(options),
         ...(scoreEntries && { scoreEntries }),
       };
     },
@@ -796,7 +881,12 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       return s;
     };
     if (config.tree) {
-      builder.tree(config.tree);
+      // `scopeTools` reaches the compiler here since 8.7.0 — the fluent form's
+      // `.tree(root, { scopeTools: false })` had no object-form twin, so this arm
+      // silently forced every leaf to `autoActivate: 'currentSkill'`.
+      builder.tree(config.tree, {
+        ...(config.scopeTools !== undefined && { scopeTools: config.scopeTools }),
+      });
     } else if (config.start !== undefined) {
       const start = config.start;
       if (typeof start === 'string') builder.entry(resolve(start));
@@ -818,7 +908,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         ...(step.label && { label: step.label }),
       });
     }
-    return builder.build({ check: config.check ?? 'throw' });
+    return builder.build({
+      check: config.check ?? 'throw',
+      ...(config.knownTools && { knownTools: config.knownTools }),
+    });
   }
 
   return builder;

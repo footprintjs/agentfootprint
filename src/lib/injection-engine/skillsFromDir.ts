@@ -29,6 +29,25 @@
  * body (what it reads after deciding). That is the same file convention Claude
  * Code made familiar, so a skill folder is portable between the two.
  *
+ * ── What a SKILL.md can and cannot carry ─────────────────────────────────────
+ * `name`, `description`, the body. That is the whole per-file surface, and the
+ * limits follow from it rather than from an oversight:
+ *
+ *   - **no `tools`** — a tool is code with an `execute`, and a markdown file has
+ *     none. Every loaded skill is body-only. To give one tools, define that skill
+ *     with `defineSkill` and mix the lists (`[...loaded, codeAuthored]`), or put
+ *     the tools on the route target you declare in code.
+ *   - **no `autoActivate`** — so a loaded skill never scopes the agent's tool list
+ *     on its own (it has no tools to scope).
+ *   - **no per-file `surfaceMode`, `cache` or `refreshPolicy`** — `surfaceMode` is
+ *     settable for the WHOLE directory via `opts`, all of them or none; the others
+ *     take `defineSkill`'s defaults.
+ *   - unknown frontmatter keys are IGNORED, not rejected, so a file carrying
+ *     another tool's metadata still loads here.
+ *
+ * A worked example feeding this into a graph:
+ * `examples/features/47-skills-from-dir-graph.ts`.
+ *
  * ── Why authorship is decided here, at load time ─────────────────────────────
  * A Skill body is *instructions to a model*. Where it came from is therefore a
  * security property, not a convenience: content fetched at run time from
@@ -64,6 +83,11 @@ export interface SkillsFromDirOptions {
   /**
    * Override the activation tool name for every loaded skill. Defaults to
    * `defineSkill`'s own default, `'read_skill'`.
+   *
+   * @deprecated Since 8.7.0 — see {@link DefineSkillOptions.viaToolName}. Nothing has
+   * ever read the field, and mounting a skill that carries another value is now
+   * refused, so a directory loaded with this option produces skills no agent will
+   * accept. Removed in 9.0.0.
    */
   readonly viaToolName?: string;
   /**

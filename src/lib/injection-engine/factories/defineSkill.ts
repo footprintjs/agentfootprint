@@ -96,6 +96,15 @@ export interface DefineSkillOptions {
    * Override the activation tool name. Defaults to `'read_skill'`.
    * Multiple Skills sharing one activation tool is the common pattern;
    * the LLM picks WHICH skill via the tool's argument.
+   *
+   * @deprecated Since 8.7.0 — `'read_skill'` is the only value that has ever worked,
+   * and anything else is now REFUSED when the skill is mounted on an agent. No tool is
+   * built from this name: the evaluator activates an `llm-activated` skill by matching
+   * `ctx.activatedInjectionIds`, which only `read_skill` writes, and it never reads
+   * this field. A skill declaring another name activated through `read_skill` exactly
+   * like every other skill, so the declaration described a door that does not exist.
+   * Drop it — skills already share ONE activation tool and the model picks which skill
+   * by id. Removed in 9.0.0.
    */
   readonly viaToolName?: string;
   /**

@@ -24,7 +24,7 @@ only fire from the right place.
 ## 2. Define skills
 
 ```ts
-import { defineSkill } from 'agentfootprint';
+import { defineSkill } from 'agentfootprint/context';
 
 const triage = defineSkill({
   id: 'triage',
@@ -38,10 +38,64 @@ Every `defineSkill` is **`read_skill`-activatable by default** (the agent
 auto-attaches a `read_skill` tool when ≥1 skill is registered) — the model's escape
 hatch.
 
+> **`viaToolName` is refused since 8.7.0.** It read as a promise — name a tool and that
+> tool activates the skill — and no such tool was ever built. Nothing read the field;
+> a skill declaring `viaToolName: 'open_playbook'` activated through `read_skill` like
+> every other skill. Mounting one now throws and names the fix. The option is removed
+> in 9.0.0.
+
+### Skills authored as FILES — `skillsFromDir`
+
+Keep bodies where prose belongs: in files, next to the code they describe, reviewable
+in a diff. The loader reads a directory of `SKILL.md` files and hands each to
+`defineSkill` — it is a loader, not a second mechanism.
+
+```ts
+import { skillsFromDir, skillGraph } from 'agentfootprint/context';
+
+// skills/billing/SKILL.md
+// ---
+// name: billing
+// description: Use for refunds, charges and billing questions.
+// ---
+// When handling billing: confirm identity first, then …
+
+const loaded = await skillsFromDir('./skills');   // sorted by name, so a chart is stable
+const graph = skillGraph({
+  skills: loaded,
+  start: 'billing',
+  steps: [{ from: 'billing', to: 'refund', onToolReturn: 'get_invoice' }],
+  check: 'throw',
+});
+Agent.create({ provider, model }).skillGraph(graph).build();
+```
+
+**What it can and cannot carry.** The frontmatter grammar is deliberately small —
+`name` and `description`, and everything after the closing `---` is the body. That is
+the whole per-file surface:
+
+| In a `SKILL.md` | Not in a `SKILL.md` |
+|---|---|
+| `name` → the skill id (`/^[a-zA-Z0-9_-]{1,64}$/`) | `tools` — a tool is code, and a markdown file cannot carry an `execute` |
+| `description` → the only thing the model reads before opening it | `autoActivate` — so a loaded skill never scopes the tool list on its own |
+| the body, after the closing `---` | `surfaceMode` per file — `skillsFromDir(dir, { surfaceMode })` applies to ALL of them, or none |
+| extra frontmatter keys (ignored, so a file stays portable) | `cache`, `refreshPolicy` — `defineSkill` defaults apply |
+
+So a loaded skill is body-only. To give one tools, wire the loaded skill into a graph
+and put the tools on the *route target* you define in code — or define that skill with
+`defineSkill` instead and mix the two lists (`[...loaded, codeAuthoredSkill]`). Layout:
+`dir/<skill>/SKILL.md` (preferred — the folder can hold the skill's other assets) or
+`dir/SKILL.md` (the directory IS one skill); both can be mixed. Node-only, local paths
+only — a URL is refused by name, because "these files are mine" is a claim you can only
+make about your own disk at build time. Two files claiming one `name` is refused naming
+both files.
+→ runnable + tested: **`examples/features/47-skills-from-dir-graph.ts`**.
+
 ## 3. Build a graph + wire it to an agent
 
 ```ts
-import { skillGraph, decide, Agent } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { skillGraph, decideSkill } from 'agentfootprint/context';
 
 const graph = skillGraph()
   .entry(triage)                                            // where a turn starts
@@ -64,8 +118,8 @@ skillGraph().entry(triage, { when: (ctx) => /refund|invoice/.test(ctx.userMessag
 
 // (b) decision tree — intent routing, exactly one leaf fires
 skillGraph().tree(
-  decide((c) => /billing|payment/.test(c.userMessage), billing,
-  decide((c) => /down|error|outage/.test(c.userMessage), incident, triage, 'incident?'),
+  decideSkill((c) => /billing|payment/.test(c.userMessage), billing,
+  decideSkill((c) => /down|error|outage/.test(c.userMessage), incident, triage, 'incident?'),
   'billing?')
 )
 
@@ -76,7 +130,7 @@ skillGraph().tree(
 // (d) entryByRelevance — pick by MEANING (6.35.0). Embeds the message + each entry's
 //     description, cosine → softmax → best match. LLM-free, reproducible. Entries
 //     become EXCLUSIVE (only the picked one loads). Needs an embedder.
-import { mockEmbedder } from 'agentfootprint';   // swap for a real embedder in prod
+import { mockEmbedder } from 'agentfootprint/memory';   // swap for a real embedder in prod
 skillGraph().entry(triage).entry(billing).entry(incident).entryByRelevance(mockEmbedder())
 
 // (e) entryByRead — the agent's OWN LLM reads the menu and picks (6.38.0). Like (d),
@@ -274,12 +328,45 @@ Agent.create({ provider, model }).skillGraph(graph).recorder(rec).build();
 
 **Build-time check-up** — catch wiring mistakes before you run.
 ```ts
+import { formatCheckup } from 'agentfootprint/context';
+
 const result = graph.checkup();   // { ok, problems: [{ kind:'error'|'warning', code, message, skill? }] }
-//   wiring codes: unknown-skill (error), no-entry (error), unreachable-skill, ambiguous-routes, self-loop (warnings)
+if (!result.ok) throw new Error(formatCheckup(result));   // 8.7.0 — the library's own formatter
+//   ERRORS (fail `ok`, and `.build()`):
+//     unknown-skill   — an edge/entry names a skill that is not in skills[]
+//     no-entry        — nothing can start a turn
+//   WARNINGS (never fail a build — a graph the model can still navigate is not broken):
+//     unreachable-skill   — no deterministic edge reaches it. Since 8.7.0 the message is told
+//                           per TRIGGER KIND, so it is true for a hand-authored trigger too.
+//     model-edge-only     — 8.7.0. The only way in is a BARE `.route(a, b)`, which compiles to
+//                           no trigger: the model must read_skill it, and only from `a`.
+//     multi-entry-fanout  — 8.7.0. ≥2 entries and no way to choose between them, so every
+//                           matching entry loads while only ONE can be the cursor.
+//     dead-entry-step     — 8.7.0. An entry declared after an unconditional one can never be
+//                           the cold-start cursor, so the routes out of it never fire from there.
+//     ambiguous-routes, self-loop
 //   contract codes (6.39.0): body-foreign-tool, body-unknown-tool (warnings) — see below
 skillGraph().entry(a).route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' }); // throw on error
-//   check: 'warn' (default — dev-mode console) | 'throw' | 'off'
+//   check: 'throw' (DEFAULT since 8.7.0 — matches the object form) | 'warn' (dev console, never
+//          throws) | 'off'
 ```
+
+**Baseline tools the graph cannot see (8.7.0).** A graph knows only the tools its own skills
+carry, so a body that says `lookup_order(id)` — a tool you registered with `.tool()` on the
+agent — used to be reported as naming a tool that exists nowhere. Tell it:
+```ts
+graph.checkup({ knownTools: ['lookup_order'] });                 // or
+skillGraph().entry(a).build({ knownTools: ['lookup_order'] });   // same field at build time
+```
+A `knownTools` name is neither `body-unknown-tool` (it exists) nor `body-foreign-tool` (it is
+not somebody else's) — it is callable from every skill, which is the whole point.
+
+**The cursor is PER RUN (8.7.0 — documented, always true).** `graph.nextSkill(ctx)` and
+`InjectionContext.currentSkillId` describe where the graph is *inside one `agent.run()`*. A
+second `run()` on the same agent starts cold again, at the entry, whatever the first run
+ended on — the graph is a per-turn state machine, not conversation memory. If a turn needs to
+resume where the last one stopped, carry the id yourself (persist it and start the next turn's
+graph with `start: { rules: [...] }` keyed on it) rather than expecting the cursor to survive.
 
 **Body ↔ tool-contract check (6.39.0)** — `checkup()` also runs a deterministic, no-LLM
 pass over each skill's `body` vs the tools it unlocks (proposal 009 Tier 1). It catches
@@ -289,7 +376,7 @@ the "the model refuses a tool that's right there / is told about one it can't ca
 //                        here; usually an intentional read_skill handoff — confirm it).
 //   body-unknown-tool  — the body has a `tool_name(` call to a tool that exists NOWHERE
 //                        (a typo or a renamed/removed tool).
-import { checkSkillContract } from 'agentfootprint';
+import { checkSkillContract } from 'agentfootprint/context';
 checkSkillContract(skill, knownToolNames?);   // check ONE skill standalone (outside a graph)
 ```
 Both are WARNINGS — they never fail `.build()`. (The *semantic* contradiction Tier 1 can't
@@ -348,7 +435,7 @@ rather than once per iteration past the cap.
 
 **`defineRelevanceHint()`** — an advisory note when `entryByRelevance`'s top entries are a near-tie.
 ```ts
-import { defineRelevanceHint } from 'agentfootprint';
+import { defineRelevanceHint } from 'agentfootprint/context';
 Agent.create({ provider, model }).skillGraph(graph).instruction(defineRelevanceHint({ threshold: 0.15 })).build();
 // at turn start, IF the top two entry skills are within `threshold`, drops a NON-binding note into the
 // system prompt ("a keyword scorer ranked these close — use your judgment"). A hint, never an order.

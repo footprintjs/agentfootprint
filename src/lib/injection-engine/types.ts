@@ -136,6 +136,14 @@ export interface InjectionContext {
    * Set by the loop's cursor-update stage to `graph.nextSkill(ctx)` each
    * iteration; absent for agents that don't use `skillGraph()`. Plain
    * `rule`/`always`/`on-tool-return` predicates may ignore it.
+   *
+   * **Scope: ONE run.** "Persisted across iterations" means across the iterations of
+   * a single `agent.run()`. It lives in that run's state, so a second `run()` on the
+   * same agent begins cold — at the entry, not at the skill the previous turn ended
+   * on. That is deliberate: a skill graph declares how ONE turn is routed, and a
+   * cursor that survived would silently make turn 2 start somewhere the author never
+   * declared. To carry a position between turns, persist the id in your own store and
+   * start the next turn's graph from it.
    */
   readonly currentSkillId?: string;
   /**

@@ -26,6 +26,22 @@ export interface RelevanceHintOptions {
   readonly threshold?: number;
 }
 
+/**
+ * The metadata marker that says "this injection reads `ctx.entryScores`" (8.7.0).
+ *
+ * Only `.entryBy()` / `.entryByRelevance()` ever write `entryScores` — the PickEntry
+ * stage runs a scorer and stamps them. Mounted on a graph with no scorer, the hint's
+ * trigger simply can never be true, and nothing said so: the injection registered,
+ * evaluated false on every iteration for the life of the agent, and the author saw a
+ * feature that was configured and inert.
+ *
+ * A marker rather than an id match, because the id is the caller's to choose
+ * (`defineRelevanceHint({ id })`) — matching on `'relevance-hint'` would miss every
+ * renamed one and would false-positive on anybody else's injection of that name.
+ * `AgentBuilder.build()` reads it and dev-warns.
+ */
+export const READS_ENTRY_SCORES_METADATA_KEY = 'readsEntryScores' as const;
+
 /** Is the top entry a near-tie with the runner-up? */
 function isNearTie(scores: InjectionContext['entryScores'], threshold: number): boolean {
   if (!scores || scores.length < 2) return false;
@@ -43,6 +59,7 @@ export function defineRelevanceHint(options: RelevanceHintOptions = {}): Injecti
       kind: 'rule',
       activeWhen: (ctx) => ctx.iteration === 1 && isNearTie(ctx.entryScores, threshold),
     },
+    metadata: { [READS_ENTRY_SCORES_METADATA_KEY]: true },
     inject: {
       systemPrompt:
         'Note: an offline relevance scorer found two or more starting skills nearly tied for ' +

@@ -28,7 +28,11 @@ export {
 
 // Sugar factories — Ships four; more flavors planned (RAG / Memory / Guardrail)
 export { defineInstruction, type DefineInstructionOptions } from './factories/defineInstruction.js';
-export { defineRelevanceHint, type RelevanceHintOptions } from './factories/defineRelevanceHint.js';
+export {
+  defineRelevanceHint,
+  READS_ENTRY_SCORES_METADATA_KEY,
+  type RelevanceHintOptions,
+} from './factories/defineRelevanceHint.js';
 
 export {
   defineSkill,
@@ -70,6 +74,11 @@ export {
 export {
   skillGraph,
   decideSkill,
+  // 8.7.0 — render a `graph.checkup()` for a log line or a CI failure. The formatter
+  // the library itself uses; without it every consumer wrote their own. `checkupGraph`
+  // stays private: its input is the graph's internal wiring shape, and `graph.checkup()`
+  // is already the door to it.
+  formatCheckup,
   SKILL_GRAPH_METADATA_KEY,
   type SkillGraph,
   type SkillGraphBuilder,
@@ -94,6 +103,7 @@ export {
   type SkillGraphStart,
   type SkillGraphStep,
   type BuildOptions,
+  type CheckupOptions,
   type GraphCheckMode,
   type GraphCheckup,
   type GraphProblem,
@@ -107,4 +117,9 @@ export {
   type EntryScorerInput,
   type EntryCandidate,
 } from './entryScorer.js';
-export { checkSkillContract, checkSkillContracts, skillToolNames } from './skillContract.js';
+export {
+  checkSkillContract,
+  checkSkillContracts,
+  skillToolNames,
+  type SkillContractOptions,
+} from './skillContract.js';

@@ -7,6 +7,8 @@
  * `AgentBuilder` from `'../core/Agent.js'` continue to work.
  */
 
+import { isDevMode } from 'footprintjs';
+
 import {
   buildDefaultInstruction,
   type OutputSchemaOptions,
@@ -31,6 +33,8 @@ import type { CursorMove, EntryScoring } from '../../lib/injection-engine/skillG
 import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
+import { READS_ENTRY_SCORES_METADATA_KEY } from '../../lib/injection-engine/factories/defineRelevanceHint.js';
+import { skillScopedToolsTarget } from '../../tool-providers/skillScopedTools.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
@@ -709,6 +713,7 @@ export class AgentBuilder {
         throw new Error(messagesToolRoleRefusal(`Agent.injection('${injection.id}')`));
       }
     }
+    assertReadSkillActivation(injection);
     this.injectionList.push(injection);
     return this;
   }
@@ -1525,6 +1530,11 @@ export class AgentBuilder {
     // `.selfExplain()` adds one right above — only this line sees all of them.
     const deliveryRefusal = toolOnlyDeliveryRefusal(injections);
     if (deliveryRefusal) throw new Error(deliveryRefusal);
+    // Two dev-mode warnings about wiring that is inert rather than wrong (8.7.0).
+    // Both need the WHOLE agent — one asks whether a scorer exists, the other pairs a
+    // provider against an injection — so both live here, beside the refusal above.
+    warnInertRelevanceHint(injections, this.skillGraphScoreEntries !== undefined);
+    warnRedundantSkillScopedTools(this.toolProviderRef, injections);
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -1569,6 +1579,104 @@ export class AgentBuilder {
     }
     return agent;
   }
+}
+
+/**
+ * Refuse an `llm-activated` trigger whose `viaToolName` is not `'read_skill'` (8.7.0).
+ *
+ * `viaToolName` reads as a promise the library never kept: name a tool, and that tool
+ * activates the skill. No such tool has ever been created. The one consumer of an
+ * `llm-activated` trigger is the evaluator, which matches on
+ * `ctx.activatedInjectionIds.includes(inj.id)` and never looks at the field
+ * (`evaluator.ts`); the only writer of that array is `read_skill`. So a skill carrying
+ * `viaToolName: 'open_playbook'` activated by `read_skill` exactly like every other
+ * skill, and the declaration meant nothing at all — a configuration that was never
+ * read is worse than one that is refused, because it looks like it worked.
+ *
+ * Refused HERE because `injection()` is the one funnel every flavor passes through:
+ * `defineSkill`, `skillsFromDir({ viaToolName })`, `.skill()`, `.skills(registry)`,
+ * `.skillGraph()` and a hand-built Injection all arrive at this line. The option
+ * itself is removed in 9.0.0.
+ */
+function assertReadSkillActivation(injection: Injection): void {
+  const trigger = injection.trigger;
+  if (trigger.kind !== 'llm-activated') return;
+  if (trigger.viaToolName === 'read_skill') return;
+  throw new Error(
+    `Agent.injection('${injection.id}'): viaToolName is '${trigger.viaToolName}', but ` +
+      `'read_skill' is the only activation tool this library builds — nothing reads the field, ` +
+      `and no tool named '${trigger.viaToolName}' is ever offered to the model. This skill would ` +
+      `have activated through read_skill like every other one, so the name was decoration on a ` +
+      `door that does not exist. Drop \`viaToolName\` (skills already share one activation tool ` +
+      `and the model picks WHICH skill by id), or gate the skill on something the engine does ` +
+      `read — a \`rule\` trigger, or a skillGraph() edge. The option is removed in 9.0.0.`,
+  );
+}
+
+/**
+ * Dev-warn a `defineRelevanceHint()` mounted where no scorer can feed it (8.7.0).
+ *
+ * The hint's trigger reads `ctx.entryScores`, and only the PickEntry stage writes it
+ * — which runs only when the graph was built with `.entryBy()` / `.entryByRelevance()`
+ * / `start: { entries, scoredBy | byRelevance }`. Without one, the injection mounts,
+ * evaluates false on every iteration for the life of the agent, and reports nothing:
+ * a feature that is configured and inert looks exactly like a feature that is working
+ * and simply has not been needed yet.
+ *
+ * Keyed on the `readsEntryScores` metadata marker, not on the id — the id is the
+ * caller's to rename.
+ */
+function warnInertRelevanceHint(injections: readonly Injection[], hasScorer: boolean): void {
+  if (hasScorer || !isDevMode()) return;
+  for (const inj of injections) {
+    const meta = inj.metadata as Record<string, unknown> | undefined;
+    if (meta?.[READS_ENTRY_SCORES_METADATA_KEY] !== true) continue;
+    // eslint-disable-next-line no-console
+    console.warn(
+      `agentfootprint Agent: injection '${inj.id}' reads ctx.entryScores, which only an ENTRY ` +
+        `SCORER produces — and this agent's skill graph has none, so the injection can never ` +
+        `activate. Build the graph with .entryBy(keywordScorer()) or .entryByRelevance(embedder) ` +
+        `(object form: start: { entries, scoredBy }), or drop the injection. Note .entryByRead() ` +
+        `does NOT score — there the model picks, so there is no near-tie to report.`,
+    );
+  }
+}
+
+/**
+ * Dev-warn a `skillScopedTools(id, …)` pointed at a skill that already scopes its own
+ * tools (8.7.0).
+ *
+ * `defineSkill({ tools, autoActivate: 'currentSkill' })` already narrows the LLM's
+ * tool list to the active skill, with no provider at all — that is what
+ * `skillScopedTools`' own header means by "you probably don't need this". Wiring both
+ * gives one skill two tool sources keyed on two DIFFERENT signals (the graph's active
+ * set vs. the last `read_skill` call), which is how a tool ends up visible on
+ * iterations nobody expected — and it is the exact pairing that put a shadowed tool
+ * name into a field agent.
+ */
+function warnRedundantSkillScopedTools(
+  provider: ToolProvider | undefined,
+  injections: readonly Injection[],
+): void {
+  if (!isDevMode()) return;
+  const target = skillScopedToolsTarget(provider?.id);
+  if (target === undefined) return;
+  const skill = injections.find((i) => i.id === target);
+  if (!skill) return;
+  const meta = skill.metadata as { autoActivate?: string } | undefined;
+  if (meta?.autoActivate !== 'currentSkill') return;
+  if ((skill.inject?.tools ?? []).length === 0) return;
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint Agent: skillScopedTools('${target}') is wired, but skill '${target}' already ` +
+      `carries autoActivate: 'currentSkill' with its own tools:[] — which narrows the tool list ` +
+      `to that skill on its own. The two gates key on DIFFERENT signals (the provider on the ` +
+      `last read_skill call, the skill on the graph's active set), so a tool can appear on ` +
+      `iterations you did not expect, and a name declared on both sides shadows (the model ` +
+      `reads the provider's description and the skill's implementation runs). Keep one: the ` +
+      `skill's tools:[] if the tools belong to the skill, the provider if they are assembled ` +
+      `elsewhere.`,
+  );
 }
 
 /**

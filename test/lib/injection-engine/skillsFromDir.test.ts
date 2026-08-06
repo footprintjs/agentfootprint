@@ -113,17 +113,31 @@ describe('skillsFromDir — unit', () => {
     expect(billing?.description).toBe('Refunds and charges.');
   });
 
-  it('passes viaToolName + surfaceMode through to every loaded skill', async () => {
+  it('passes surfaceMode through to every loaded skill', async () => {
     const dir = makeDir();
     writeSkill(dir, 'billing', skillFile('billing', 'Refunds.', 'Body.'));
 
-    const [billing] = await skillsFromDir(dir, {
-      viaToolName: 'open_playbook',
-      surfaceMode: 'tool-only',
-    });
+    const [billing] = await skillsFromDir(dir, { surfaceMode: 'both' });
 
+    expect((billing?.metadata as { surfaceMode?: string }).surfaceMode).toBe('both');
+  });
+
+  it('a custom viaToolName still loads here — and is refused when the agent mounts it (8.7.0)', async () => {
+    // The loader is a thin wrapper over `defineSkill`, so it forwards the option as
+    // it always did. What changed is that the option is no longer allowed to be a
+    // silent no-op: nothing has ever read `viaToolName`, and a directory loaded with
+    // one produced skills that activated through `read_skill` like every other skill
+    // while the declaration said otherwise. The refusal is at the mount, which is the
+    // one funnel every flavor and every loader passes through.
+    const dir = makeDir();
+    writeSkill(dir, 'billing', skillFile('billing', 'Refunds.', 'Body.'));
+
+    const [billing] = await skillsFromDir(dir, { viaToolName: 'open_playbook' });
     expect(billing?.trigger).toEqual({ kind: 'llm-activated', viaToolName: 'open_playbook' });
-    expect((billing?.metadata as { surfaceMode?: string }).surfaceMode).toBe('tool-only');
+
+    expect(() =>
+      Agent.create({ provider: mock({ reply: 'done' }), model: 'mock' }).skill(billing!),
+    ).toThrow(/viaToolName is 'open_playbook'/);
   });
 
   it('ignores subdirectories that hold no SKILL.md', async () => {

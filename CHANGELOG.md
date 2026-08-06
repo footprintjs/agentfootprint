@@ -7,6 +7,203 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.7.0] - 2026-08-06
+
+**The check-up stops being quiet, and a dead option stops pretending.** 8.4.0 stopped a
+skill graph from throwing away what the author declared; 8.5.0 stopped it telling the
+model things that were not so. This one is about the configurations the library
+*watched you build and said nothing about* — an entry menu with no way to choose from
+it, a transition the cursor can never take, a tool name two sources claim, a scoped
+tool provider that returns nothing forever. Nine findings, one shape: the library knew,
+and did not say.
+
+### An entry menu with no way to choose from it
+
+Declare two entries and no `.entryBy()` / `.entryByRead()`, and both of them load on
+every call. An entry's compiled trigger is cursor-*independent* — no `when` compiles to
+`{ kind: 'always' }` — while exactly ONE of them can be the cursor: the first whose
+`when` passes. So the extras pay for their body and their tools on every iteration and
+route nothing, which is the opposite of what a skill graph is for.
+
+Worse, and exactly decidable: the cursor resolver returns at the **first entry with no
+`when`**, in declaration order. Every entry after that one can never be the cold-start
+cursor — so a `step` declared out of it never fires from there. A graph could pass
+`check: 'throw'` with a transition that had no way to happen.
+
+```text
+[warning] multi-entry-fanout: The graph declares 2 entries ("triage" and "billing") and
+no way to choose between them … Only ONE of them can be the cursor …
+[warning] dead-entry-step: Entry "billing" is declared after "triage", which has no
+`when` and therefore always wins the cold-start cursor … The one remaining path is a
+read_skill pick onto "billing" mid-run (entries are always offered) …
+```
+
+Both are **warnings**, and the second one deliberately. The stranded entry is still in
+`reachableSkills()` from every cursor, so a `read_skill` pick really can put the cursor
+there — and refusing to build something the model can reach would claim more than the
+declaration supports. The message names that path instead of pretending it does not
+exist.
+
+### A bare `.route(a, b)` was counted as reachability
+
+A bare edge compiles to **no trigger at all**: the target keeps its `llm-activated`
+default, and the model has to ask for it by name. The check-up's BFS walked it anyway,
+so a skill nothing in the graph could activate was reported as reachable — the exact
+question the check exists to answer, answered wrongly.
+
+The BFS now walks deterministic edges only (`when` / `onToolReturn`), and bare-edge
+targets get their own code, which says what is actually true — including the one cursor
+position the gate will grant the jump from:
+
+```text
+[warning] model-edge-only: Skill "incident" has no deterministic edge into it — only a
+bare route from "triage" … the model has to ask for it with read_skill, and the gate
+grants that only while the cursor is on "triage" (never at cold start).
+```
+
+`unreachable-skill` and `model-edge-only` now partition cleanly: nothing incoming at
+all versus only bare edges incoming.
+
+### `unreachable-skill` is told per trigger kind
+
+The sentence *"it can only be reached by the model via read_skill"* is true for an
+`llm-activated` trigger and for no other kind — `Agent.openSkillIds()` admits an open
+pick only for that one. But `deriveTrigger` returns null for an unwired skill, so a
+skill that arrived carrying a hand-authored `rule` trigger **kept it**, and the warning
+promised a `read_skill` the gate would refuse. Three messages now, one per case: the
+open skill, the `always` skill (which loads on every iteration rather than being
+routed), and the rule-gated one (which `read_skill` cannot open at all).
+
+### A tool name two sources claim, and which one actually runs
+
+A `ToolProvider` and an active Skill can both declare `shared_tool`, and the two lose in
+**opposite directions** — each by a rule of this codebase, not by a race:
+
+- the tools slot merges `[static, provider, skill]` first-wins, and an
+  `autoActivate: 'currentSkill'` skill's tools are deliberately kept out of the static
+  registry — so the **provider's** schema, description and `inputSchema` are what the
+  model reads;
+- `lookupTool` resolves `registryByName` first, which holds every skill tool and no
+  provider tool — so the **skill's** implementation is what executes.
+
+The model reads one tool's contract and calls another's, and nothing anywhere said so.
+Now `agentfootprint.tools.shadowed` fires every iteration, plus a latched dev-mode
+console line. Not a refusal: a provider's list is resolved per iteration, so there is no
+build-time moment at which this is knowable — a dynamic provider can begin shadowing on
+iteration 9 of a run nobody is watching, which is exactly why the event is not
+dev-gated. (The static `.tool()` ↔ skill-tool pair is unchanged: it is still refused at
+build time, which is the better answer when the answer is available that early.)
+
+### `skillScopedTools` returning `[]` forever
+
+`ctx.activeSkillId` is the tail of `activatedInjectionIds`, which only `read_skill` ever
+writes. A skill that activated because an entry rule matched or a `skillGraph()` edge
+routed into it does not set it — so the provider returned an empty list on the very
+iterations its skill was loaded. Its own docstring said so; nothing said it at the
+moment it happened, and the tools simply never appeared.
+
+`ToolDispatchContext` now carries **`activeSkillIds`** — every skill active this
+iteration, however it got there. That makes the mismatch detectable from inside the
+provider (composed into a larger provider or not), where it dev-warns; and it hands
+every provider the graph-position signal `skillScopedTools`' own header called
+impossible:
+
+```ts
+const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
+  id: `graph-scoped:${id}`,
+  list: (ctx) => (ctx.activeSkillIds?.includes(id) ? tools : []),
+});
+```
+
+### Added
+
+- **`multi-entry-fanout`, `dead-entry-step`, `model-edge-only`** — three `GraphProblemCode`
+  values, all warnings. `GraphProblem.kind` gains no third member: widening that union
+  would break an exhaustive consumer `switch`, and the codes carry the distinction.
+- **`graph.checkup({ knownTools })`** (and the same field on `.build()` /
+  `skillGraph({ knownTools })`) — the agent's baseline `.tool()` names. A graph knows
+  only the tools its own skills carry, so a body saying `lookup_order(id)` was reported
+  as naming a tool that exists nowhere. A `knownTools` name is now neither
+  `body-unknown-tool` (it exists) nor `body-foreign-tool` (it is not somebody else's) —
+  it is callable from every skill, which is the whole point. `checkSkillContract` /
+  `checkSkillContracts` take the same option.
+- **`formatCheckup`** is public on `agentfootprint/context` — the formatter the library
+  itself uses to render a check-up for a thrown error, so a consumer printing
+  `graph.checkup()` in CI stops writing their own. `checkupGraph` stays private: its
+  input is the graph's internal wiring shape, and `graph.checkup()` is already the door.
+- **`skillGraph({ tree, scopeTools })`** — parity with `.tree(root, { scopeTools })`.
+  The object form hard-coded `true`, so the fluent form's only opt-out had no twin.
+- **`ToolDispatchContext.activeSkillIds`** — the real active set for this iteration.
+  Optional, so a provider written before 8.7.0 sees `undefined` and behaves as it did.
+- **`agentfootprint.tools.shadowed`** (71 typed events now) — `{ toolName, iteration,
+  schemaFrom, schemaFromId?, dispatchTo, dispatchToId? }`. Names only: never args, never
+  results, never a description body.
+- **`skillScopedToolsTarget` / `SKILL_SCOPED_TOOLS_ID_PREFIX`** — the provider-id
+  convention, readable by anyone composing providers.
+- **Dev-mode warnings** for two inert configurations: a `defineRelevanceHint()` mounted
+  on a graph with no entry scorer (its trigger reads `ctx.entryScores`, which only
+  `.entryBy()` / `.entryByRelevance()` writes — so it could never fire), and a
+  `skillScopedTools(id, …)` aimed at a skill that already scopes its own tools with
+  `autoActivate: 'currentSkill'`.
+- **Examples** `features/46-skill-graph-checkup-deepens.ts` and
+  `features/47-skills-from-dir-graph.ts`.
+
+### Changed
+
+- **`skillGraph().build()` defaults to `check: 'throw'`** (was `'warn'`), matching the
+  object-literal form since 8.4.0. **Behavior change.** A fluent graph with an
+  error-level problem — `no-entry` or `unknown-skill`, i.e. a graph that cannot start a
+  turn at all — built in silence outside dev mode and surfaced as a run that entered no
+  skill. What still builds: every graph whose check-up has no *error* (warnings never
+  throw, however many); every call passing `check: 'warn'` explicitly, which still never
+  throws, so the mode keeps its name and its meaning; `check: 'off'` skips entirely.
+  Only code that was already shipping a graph the library could not start is affected.
+- **`defineSkill({ viaToolName })` other than `'read_skill'` is refused when the skill is
+  mounted.** **Behavior change.** It read as a promise — name a tool, and that tool
+  activates the skill — and no such tool has ever been built. The evaluator activates an
+  `llm-activated` skill by matching `ctx.activatedInjectionIds`, which only `read_skill`
+  writes, and it has never read the field. A skill declaring `viaToolName:
+  'open_playbook'` activated through `read_skill` exactly like every other skill, so the
+  declaration described a door that does not exist. Nothing that worked stops working;
+  a silent no-op becomes a named one, at `Agent.injection()` — the one funnel `.skill()`,
+  `.skills()`, `.skillGraph()`, `skillsFromDir()` and a hand-built Injection all pass
+  through. A graph that COMPILES the trigger away (an `.entry()` becomes `always`) has
+  nothing left to refuse and is unaffected. The option is `@deprecated` on both
+  `DefineSkillOptions` and `SkillsFromDirOptions`, and is removed in 9.0.0.
+
+### Fixed
+
+- **Six documentation files imported skill-graph symbols from doors that do not export
+  them** — `README.md`, `docs/skill-graph-guide.md` (×5), `docs/design/skill-graph.md`,
+  `docs/design/skill-graph-spec.md`, `docs/proposals/002-skill-graph.md` and
+  `docs/guides/caching.md`. `src/index.ts` does not re-export the injection engine, so
+  every `import { defineSkill } from 'agentfootprint'` in prose was broken; two also
+  named `decide`, which was renamed `decideSkill` in 7.0.0 to stop colliding with
+  footprintjs's own `decide()`, and one named `agentfootprint/observe`. All 18 runnable
+  examples were already correct — they are compiled by `test:examples`, and markdown
+  fences are not, which is precisely how this drifted.
+
+### Documentation
+
+- **The cursor is per RUN**, on `SkillGraph.nextSkill` and
+  `InjectionContext.currentSkillId`. "Persisted across iterations" meant across the
+  iterations of ONE `agent.run()`; a second run starts cold, at the entry, whatever the
+  first ended on. Deliberate — a graph declares how one turn is routed, and a surviving
+  cursor would make turn 2 start somewhere nobody declared — but never written down.
+- **What a `SKILL.md` can and cannot carry.** `skillsFromDir` loads `name`,
+  `description` and the body, and that is the entire per-file surface: no `tools` (a
+  tool is code with an `execute`, and markdown has none), no `autoActivate`, no per-file
+  `surfaceMode` (settable for the whole directory or not at all). Every loaded skill is
+  body-only, with the pattern that limit points at — mix the loaded list with
+  `defineSkill`-authored, tool-carrying skills and hand both to `skillGraph({ skills })`
+  — shown in example 47.
+
+### Tests
+
+- +60, including the audit probes that found each of these as named regression seeds,
+  and the two laws of the tool shadow pinned separately (which schema the model reads,
+  which implementation dispatch resolves) so a change to either one fails loudly.
+
 ## [8.6.0] - 2026-08-06
 
 ### Consent is work, not conversation

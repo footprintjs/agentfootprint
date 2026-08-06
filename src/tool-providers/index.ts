@@ -50,7 +50,13 @@
 
 export { staticTools } from './staticTools.js';
 export { gatedTools } from './gatedTools.js';
-export { skillScopedTools } from './skillScopedTools.js';
+export {
+  skillScopedTools,
+  // 8.7.0 — the provider-id convention, readable by anyone composing providers (and
+  // by the agent builder, which uses it to name a redundant pairing at build time).
+  skillScopedToolsTarget,
+  SKILL_SCOPED_TOOLS_ID_PREFIX,
+} from './skillScopedTools.js';
 export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
 // Re-export tool sources from the MCP module so consumers find them in

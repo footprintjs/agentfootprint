@@ -48,8 +48,20 @@
  *   Agent.create({ provider: llm, model }).toolProvider(provider).build();
  */
 
+import { isDevMode } from 'footprintjs';
+
 import type { Tool } from '../core/tools.js';
 import type { ToolProvider, ToolDispatchContext } from './types.js';
+
+/** The `ToolProvider.id` prefix every `skillScopedTools(...)` carries. */
+export const SKILL_SCOPED_TOOLS_ID_PREFIX = 'skill-scoped:';
+
+/** Recover the skill id from a `skillScopedTools` provider id, or `undefined`. */
+export function skillScopedToolsTarget(providerId: string | undefined): string | undefined {
+  if (!providerId?.startsWith(SKILL_SCOPED_TOOLS_ID_PREFIX)) return undefined;
+  const id = providerId.slice(SKILL_SCOPED_TOOLS_ID_PREFIX.length);
+  return id.length > 0 ? id : undefined;
+}
 
 // #region skillScopedTools
 export function skillScopedTools(skillId: string, tools: readonly Tool[]): ToolProvider {
@@ -60,11 +72,35 @@ export function skillScopedTools(skillId: string, tools: readonly Tool[]): ToolP
   // call (matches the staticTools / gatedTools convention so the
   // agent's reference-equality check always sees an update).
   const captured = [...tools];
+  // Dev-mode latch: fact 1 above is a one-time lesson, not a per-iteration one.
+  let warnedNotByReadSkill = false;
   return {
-    id: `skill-scoped:${skillId}`,
+    id: `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}`,
     list(ctx: ToolDispatchContext): readonly Tool[] {
       // Empty list when the skill is not active.
-      if (ctx.activeSkillId !== skillId) return [];
+      if (ctx.activeSkillId !== skillId) {
+        // The silent-empty this provider is most often wired into (8.7.0): the skill
+        // IS loaded this iteration — an entry rule matched, or a skillGraph() edge
+        // routed into it — but it did not arrive by `read_skill`, and `activeSkillId`
+        // only ever reports a `read_skill` activation. Fact 1 in the header says so;
+        // nothing said it at the moment it happened, so the tools simply never
+        // appeared and the run looked fine. `activeSkillIds` (8.7.0) is the real
+        // active set, which is what makes this detectable from inside the provider —
+        // composed into a bigger provider or not.
+        if (isDevMode() && !warnedNotByReadSkill && ctx.activeSkillIds?.includes(skillId)) {
+          warnedNotByReadSkill = true;
+          // eslint-disable-next-line no-console
+          console.warn(
+            `agentfootprint skillScopedTools('${skillId}'): skill '${skillId}' IS active on ` +
+              `iteration ${ctx.iteration}, but it was not activated by read_skill — so ` +
+              `ctx.activeSkillId does not name it and this provider returned NO tools. That is ` +
+              `what happens to a skill an entry rule or a skillGraph() edge activates. Put the ` +
+              `tools on the skill itself (defineSkill({ tools, autoActivate: 'currentSkill' })), ` +
+              `or scope on ctx.activeSkillIds, which follows the graph's position.`,
+          );
+        }
+        return [];
+      }
       return [...captured];
     },
   };

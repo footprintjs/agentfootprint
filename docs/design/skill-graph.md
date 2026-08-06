@@ -74,7 +74,7 @@ Determinism is **per-decision**: the entry pick is the single non-deterministic 
 We keep the **shipped fluent builder** (`skillGraph().entry().route().build()` — neo and the lens depend on it) and add an **object-literal façade** that compiles to the same edges. The object form is required anyway for build-time validation to mean anything (skills must be enumerable independently of edges — see §6.1).
 
 ```ts
-import { skillGraph, defineSkill } from 'agentfootprint';
+import { skillGraph, defineSkill } from 'agentfootprint/context';
 
 const interfaceTriage = defineSkill({
   id: 'interface-triage',

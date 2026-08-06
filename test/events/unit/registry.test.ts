@@ -71,7 +71,7 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 69 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 71 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -90,7 +90,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     when the answer failed the schema; see CHANGELOG.)
     //    (skill.reroute_superseded added with 8.3.0 — a read_skill pick the gate
     //     accepted that a declared edge then outranked; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(70);
+    expect(ALL_EVENT_TYPES.length).toBe(71);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

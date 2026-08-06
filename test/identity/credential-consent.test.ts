@@ -73,7 +73,10 @@ function buildAgent(
   const agent = Agent.create({
     provider: mock({
       replies: (replies ?? [
-        { content: 'paying', toolCalls: [{ id: 'c1', name: 'pay_invoice', args: { id: 'INV-42' } }] },
+        {
+          content: 'paying',
+          toolCalls: [{ id: 'c1', name: 'pay_invoice', args: { id: 'INV-42' } }],
+        },
         { content: 'done', toolCalls: [] },
       ]) as never,
     }),
@@ -186,9 +189,7 @@ describe('3LO consent — the URL never reaches a channel the caller did not ask
   it('the authorization_required event still carries {service, sessionId} and nothing more', async () => {
     const h = buildAgent(consentVault({ granted: false, calls: 0 }));
     await h.agent.run({ message: 'go' });
-    const ev = h.events.find(
-      (e) => e.name === 'agentfootprint.credential.authorization_required',
-    );
+    const ev = h.events.find((e) => e.name === 'agentfootprint.credential.authorization_required');
     expect(ev?.payload).toEqual({ service: 'billing', sessionId: SESSION_ID });
   });
 });
@@ -224,8 +225,9 @@ describe('3LO consent — the run behaves honestly', () => {
 
     expect(h.ran()).toBe(true);
     expect(String(final)).toBe('Invoice INV-42 is paid.');
-    const history = (h.agent.getSnapshot()?.sharedState as { history?: { role: string; content: string }[] })
-      ?.history;
+    const history = (
+      h.agent.getSnapshot()?.sharedState as { history?: { role: string; content: string }[] }
+    )?.history;
     const toolMsgs = (history ?? []).filter((m) => m.role === 'tool');
     expect(toolMsgs).toHaveLength(1);
     expect(toolMsgs[0]!.content).toContain('PAID');

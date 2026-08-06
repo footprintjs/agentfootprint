@@ -392,3 +392,78 @@ describe('skillGraph refusals — valid graphs compile exactly as before', () =>
     expect(fluent.checkup().ok).toBe(true); // a contract finding is a WARNING
   });
 });
+
+// ── 5. viaToolName: a door that was never built (8.7.0) ──────────────────────
+
+describe('viaToolName other than read_skill is refused at mount', () => {
+  const custom = () =>
+    defineSkill({
+      id: 'custom',
+      description: 'use custom',
+      body: 'b',
+      viaToolName: 'open_playbook',
+    });
+
+  it('unit: .skill() refuses it, naming the field and the fix', () => {
+    expect(() => agent().skill(custom())).toThrow(/viaToolName is 'open_playbook'/);
+    expect(() => agent().skill(custom())).toThrow(/removed in 9\.0\.0/);
+  });
+
+  it('unit: every mounting door funnels through injection(), so all of them refuse', () => {
+    const make = agent;
+    expect(() => make().injection(custom())).toThrow(/read_skill/);
+    expect(() => make().skills({ list: () => [custom()] })).toThrow(/read_skill/);
+    // An UNWIRED graph skill keeps the trigger it arrived with, so it still refuses.
+    const unwired = skillGraph({
+      skills: [skill('a'), custom()],
+      start: 'a',
+      check: 'off',
+    });
+    expect(() => make().skillGraph(unwired)).toThrow(/read_skill/);
+  });
+
+  it('functional: a graph that COMPILES the trigger away has nothing left to refuse', () => {
+    // `.entry()` replaces the trigger with `always`, so `viaToolName` is not merely
+    // unread there — it is gone. Refusing would be refusing a field that no longer
+    // exists on the injection the agent receives.
+    const asEntry = skillGraph({ skills: [custom()], start: 'custom', check: 'off' });
+    expect(asEntry.skills[0]!.trigger.kind).toBe('always');
+    expect(() => agent().skillGraph(asEntry).build()).not.toThrow();
+  });
+
+  it("functional: the default 'read_skill' is untouched, explicit or not", () => {
+    const implicit = defineSkill({ id: 'a', description: 'use a', body: 'a' });
+    const explicit = defineSkill({
+      id: 'b',
+      description: 'use b',
+      body: 'b',
+      viaToolName: 'read_skill',
+    });
+    expect(() => agent().skill(implicit).skill(explicit).build()).not.toThrow();
+  });
+
+  it('functional: non-skill flavors are unaffected (they have no llm-activated trigger)', () => {
+    expect(() =>
+      agent()
+        .instruction(defineInstruction({ id: 'i', when: yes, prompt: 'x' }))
+        .build(),
+    ).not.toThrow();
+  });
+
+  it('security: the refusal quotes the offending name, and nothing from the body', () => {
+    const secret = defineSkill({
+      id: 'x',
+      description: 'd',
+      body: 'INTERNAL ESCALATION PROCEDURE',
+      viaToolName: 'open_x',
+    });
+    try {
+      agent().skill(secret);
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain('open_x');
+      expect(message).not.toContain('INTERNAL ESCALATION PROCEDURE');
+    }
+  });
+});

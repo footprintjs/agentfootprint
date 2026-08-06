@@ -11,7 +11,7 @@
  * tool filtering arrives in Phase 5.
  */
 
-import { flowChart } from 'footprintjs';
+import { flowChart, isDevMode } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMToolSchema } from '../../adapters/types.js';
 import { INJECTION_KEYS } from '../../conventions.js';
@@ -96,6 +96,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // typed `context.budget_pressure` event still fires every iteration and
   // carries the per-iteration truth.
   let warnedOverflow = false;
+  // Same latch discipline for the provider↔skill tool-name shadow warning (8.7.0):
+  // one console line per offending NAME per built chart. The typed event is unlatched.
+  const warnedShadow = new Set<string>();
 
   // Stage 1 — Discover: consult the external ToolProvider (if any) and
   // resolve its Tool[] for this iteration. ALWAYS runs (even when no
@@ -124,9 +127,19 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const identity = scope.$getValue('runIdentity') as
       | { tenant?: string; principal?: string; conversationId: string }
       | undefined;
+    // `activeSkillIds` is the REAL active set (8.7.0) — every skill the injection
+    // engine resolved for this iteration, whatever activated it. `activeSkillId`
+    // stays what it always was: the tail of `activatedInjectionIds`, which only
+    // `read_skill` writes. The two answer different questions and both are needed.
+    const activeSkillIds = (
+      (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? []
+    )
+      .filter((inj) => inj.flavor === 'skill')
+      .map((inj) => inj.id);
     const ctx: ToolDispatchContext = {
       iteration,
       ...(activatedIds.length > 0 && { activeSkillId: activatedIds[activatedIds.length - 1] }),
+      ...(activeSkillIds.length > 0 && { activeSkillIds }),
       ...(identity && { identity }),
       ...(env.signal && { signal: env.signal }),
     };
@@ -276,6 +289,13 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       merged.push(t);
     }
     scope.toolSchemas = merged;
+    reportShadowedTools(scope, {
+      iteration,
+      ...(toolProvider?.id && { providerId: toolProvider.id }),
+      providerSchemas,
+      activeInjections,
+      warnedShadow,
+    });
     const composition = composeSlot(
       'tools',
       iteration,
@@ -314,4 +334,73 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   })
     .addFunction('Compose', composeStage, 'compose', 'Compose tools slot')
     .build();
+}
+
+/**
+ * Report a tool name a `ToolProvider` and an active SKILL both claim (8.7.0).
+ *
+ * The two sources disagree in opposite directions, and both directions are laws of
+ * this codebase rather than races:
+ *
+ *   • **The provider wins the LLM's tool list.** The merge above is
+ *     `[static, provider, skill]` with first-occurrence-wins, and an
+ *     `autoActivate: 'currentSkill'` skill's tools are deliberately kept OUT of the
+ *     static registry (`buildToolRegistry`), so the provider's schema — its name, its
+ *     description, its `inputSchema` — is the one the model reads.
+ *   • **The skill wins dispatch.** `lookupTool` checks `registryByName` first, and
+ *     every skill tool is in that map (`buildToolRegistry` adds autoActivate tools
+ *     explicitly so dispatch resolves once the skill is active). Provider tools are
+ *     not in it. So the skill's `execute` is what runs.
+ *
+ * The model therefore reads one contract and calls a different implementation, with
+ * nothing in the trace saying so. Reported rather than refused: the provider's list
+ * is resolved per iteration (`list(ctx)`) and the skill has to be active, so there is
+ * no build-time moment at which this is knowable.
+ *
+ * A static `.tool()` colliding with a skill tool is NOT reported here —
+ * `buildToolRegistry` already throws on that pair at build time, which is the better
+ * answer when the answer is available that early.
+ */
+function reportShadowedTools(
+  scope: TypedScope<ToolsSubflowState>,
+  input: {
+    iteration: number;
+    providerId?: string;
+    providerSchemas: readonly LLMToolSchema[];
+    activeInjections: readonly ActiveInjection[];
+    /** Dedup latch for the console line, scoped to ONE built chart. */
+    warnedShadow: Set<string>;
+  },
+): void {
+  const { iteration, providerId, providerSchemas, activeInjections, warnedShadow } = input;
+  if (providerSchemas.length === 0) return;
+  const providerNames = new Set(providerSchemas.map((s) => s.name));
+  for (const inj of activeInjections) {
+    for (const tool of inj.inject.tools ?? []) {
+      const toolName = tool.schema.name;
+      if (!providerNames.has(toolName)) continue;
+      // The EVENT fires every iteration — it is the channel that reaches production,
+      // where a dynamic provider can start shadowing on iteration 9 of a run nobody
+      // is watching. The console line is dev-mode only and latched per tool name, so
+      // a 20-iteration loop prints once (same discipline as the overflow warning).
+      typedEmit(scope, 'agentfootprint.tools.shadowed', {
+        toolName,
+        iteration,
+        schemaFrom: 'provider',
+        ...(providerId && { schemaFromId: providerId }),
+        dispatchTo: 'skill',
+        dispatchToId: inj.id,
+      });
+      if (!isDevMode() || warnedShadow.has(toolName)) continue;
+      warnedShadow.add(toolName);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `agentfootprint tools: '${toolName}' is declared by BOTH the tool provider` +
+          `${providerId ? ` '${providerId}'` : ''} and the active skill '${inj.id}'. The model ` +
+          `is shown the PROVIDER's description, but dispatch always resolves the SKILL's ` +
+          `implementation — so the model reads one tool's contract and calls another's. Rename ` +
+          `one of them, or drop it from the skill's tools:[] if the provider is meant to own it.`,
+      );
+    }
+  }
 }

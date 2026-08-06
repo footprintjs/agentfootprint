@@ -127,7 +127,7 @@ For llama.cpp's `llama-server`, vLLM, Together or Groq, use `openai({ baseURL: '
 A real agent carries more than one prompt and one tool: facts about the user, always-on rules, skills that unlock on demand. Declare each piece — the framework decides **when** it fires and **which slot** it lands in, and every piece is born tracked:
 
 ```typescript
-import { defineFact, defineSteering, defineSkill } from 'agentfootprint';
+import { defineFact, defineSteering, defineSkill } from 'agentfootprint/context';
 
 const agent = Agent.create({ provider, model })
   .system('You are a support agent.')

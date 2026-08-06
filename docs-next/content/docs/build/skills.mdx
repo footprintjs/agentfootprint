@@ -90,6 +90,57 @@ error and a build-time refusal, because only one of them ever compiled: before
 8.4.0 the tree won and the flat wiring — plus every listed skill that was not a
 leaf — was discarded in silence.
 
+### Checking the graph before you run it — `graph.checkup()`
+
+`graph.checkup()` inspects the declared graph like a spell-checker and returns
+`{ ok, problems }`. Only `unknown-skill` and `no-entry` are errors; everything else is
+a warning, because a graph the model can still navigate with `read_skill` is not a
+broken graph. Since 8.7.0 it also reports `multi-entry-fanout` (two or more entries and
+no `.entryBy()` / `.entryByRead()` to choose between them, so every matching entry loads
+while only one can be the cursor), `dead-entry-step` (an entry declared after an
+unconditional one can never be the cold-start cursor, so the routes out of it never fire
+from there) and `model-edge-only` (the only way in is a bare `.route(a, b)`, which
+compiles to no trigger at all — the model has to ask, and only from `a`).
+
+Pass `CheckupOptions` — today, `knownTools` — to tell it about the tools the AGENT
+registers with `.tool()`. A graph knows only the tools its own skills carry, so without
+this a body saying `lookup_order(id)` reads as naming a tool that exists nowhere.
+`checkSkillContract` and `checkSkillContracts` take the same `SkillContractOptions`.
+`formatCheckup(report)` renders a report the way the library's own build-time refusal
+does, which is what to print in CI:
+
+```ts
+import { formatCheckup } from 'agentfootprint/context';
+
+const report = graph.checkup({ knownTools: ['lookup_order'] });
+if (!report.ok) throw new Error(formatCheckup(report));
+```
+
+`.build()` runs the same check, and since 8.7.0 defaults to `check: 'throw'` for both
+the fluent and the object form — a graph with no entry cannot start a turn, and used to
+build in silence. `check: 'warn'` still never throws.
+
+### Where the graph stands, and why it resets — `CursorMove`
+
+`graph.explainNextSkill(ctx)` returns a `CursorMove`: where the cursor landed and, in
+`by`, the `CursorMoveCause` that decided it — `'entry'`, `'route'`, `'model-pick'`,
+`'stay'` or `'none'`. That is what lets `routeRecorder()` tell a model's `read_skill`
+pick from a declared edge that happens to point at the same skill.
+
+**The cursor is per run.** It tracks position across the iterations of ONE `agent.run()`;
+a second run starts cold, at the entry, whatever the first ended on. A skill graph
+declares how one turn is routed, so a cursor that survived would make turn two start
+somewhere nobody declared. To carry a position between turns, persist the id yourself
+and start the next turn's graph from it.
+
+### When a hint cannot fire
+
+`defineRelevanceHint()` reads `ctx.entryScores`, which only an entry SCORER
+(`.entryBy()` / `.entryByRelevance()`) ever writes. Mounted on a graph without one it
+can never activate, so in dev mode the agent build now says so — keyed on the
+`READS_ENTRY_SCORES_METADATA_KEY` marker the factory stamps, so a renamed hint is caught
+too.
+
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts

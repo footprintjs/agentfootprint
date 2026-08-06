@@ -90,7 +90,7 @@ const c      = scoreContrastiveInfluence({ evidence, answerText, referenceText, 
 
 ## Part 3 — `skillGraph()`: declarative skill routing — ✅ **v1 EXISTS** · 🔶 v2 hardening proposed
 
-> **`skillGraph()` is real and usable today** (`src/lib/injection-engine/skillGraph.ts`, proposal 002 v1) — a **fluent builder**: `.entry(skill, {when?})` · `.route(from, to, {when | onToolReturn})` · `.tree(decide(...))` · `.build()`, plus `toMermaid()`. `defineSkill` exists. Your friend can use it now. ✅
+> **`skillGraph()` is real and usable today** (`src/lib/injection-engine/skillGraph.ts`, proposal 002 v1) — a **fluent builder**: `.entry(skill, {when?})` · `.route(from, to, {when | onToolReturn})` · `.tree(decideSkill(...))` · `.build()`, plus `toMermaid()`. `defineSkill` exists. Your friend can use it now. ✅
 >
 > ✅ **The keystone SHIPPED (2026-06-17, panel-reviewed *SHIP WITH NITS*):**
 > 1. the **keystone** `currentSkillId` on `InjectionContext` + **`from`-gating** — an edge `A→B on get_wwn` now fires **only while the cursor is on A**, so the cross-skill edge bleed is gone. The cursor is a sticky state machine: you stay in a skill until a `from`-gated edge moves you out, with a clean handoff (the leaving skill deactivates the same step the next one activates). Driven by one pure resolver `graph.nextSkill(ctx)`.
@@ -103,7 +103,7 @@ const c      = scoreContrastiveInfluence({ evidence, answerText, referenceText, 
 
 **v1 API (works today):**
 ```ts
-import { skillGraph, decide } from 'agentfootprint/observe';
+import { skillGraph, decideSkill } from 'agentfootprint/context';
 const graph = skillGraph()
   .entry(mdsInterface, { when: ctx => /flap|crc/.test(ctx.userMessage ?? '') })
   .route(esxiInventory, volumeLookup, { when: r => !!parse(r.result).wwn })   // predicate-on-tool-result

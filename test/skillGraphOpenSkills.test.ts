@@ -187,14 +187,18 @@ describe('read_skill gate — skills the graph never routed are OPEN', () => {
       steps: [{ from: 'alpha', to: 'beta', onToolReturn: 'alpha_tool' }],
       check: 'off',
     });
-    // The check-up has always said this; before 8.4.0 the gate made it false.
+    // The check-up has always said this; before 8.4.0 the gate made it false. Since
+    // 8.7.0 the sentence is told per TRIGGER KIND, and `gamma` — unwired, so it keeps
+    // the `llm-activated` default — is the case the old wording described correctly.
     expect(graph.checkup().problems).toEqual([
       {
         kind: 'warning',
         code: 'unreachable-skill',
         message:
-          'Skill "gamma" is not reachable from any entry — it can only be reached by the ' +
-          'model via read_skill.',
+          'Skill "gamma" is not reachable from any entry over the graph\'s deterministic edges — ' +
+          'the model can still open it by name with read_skill (it is an OPEN skill: the ' +
+          "agent's gate admits it from any cursor). Wire an edge to it if the graph is meant " +
+          'to route there.',
         skill: 'gamma',
       },
     ]);

@@ -31,21 +31,47 @@ export function skillToolNames(skill: Injection): readonly string[] {
 }
 
 /**
+ * Tools that are callable from EVERY skill — the agent's baseline (`.tool()` /
+ * `.tools()` registrations, an always-on `ToolProvider`). Both checks below need
+ * them, and need them differently, which is why they are a third set rather than
+ * more entries in `knownToolNames` (8.7.0):
+ *
+ *   • `body-unknown-tool` must treat them as KNOWN — `lookup_order(id)` in a body is
+ *     not a typo when the agent really registers `lookup_order`;
+ *   • `body-foreign-tool` must EXCLUDE them — that check means "a tool that belongs
+ *     to another skill and is therefore not callable here", and a baseline tool is
+ *     callable here. Folding them into `knownToolNames` alone would have swapped one
+ *     false warning for another.
+ */
+export interface SkillContractOptions {
+  /**
+   * Tool names the agent exposes to every skill (`.tool()`, `.tools()`, a baseline
+   * provider). Pass `agent`-level names when checking a graph whose skills rely on
+   * them: `graph.checkup({ knownTools: ['lookup_order'] })`.
+   */
+  readonly knownTools?: readonly string[];
+}
+
+/**
  * Check ONE skill's body against its tool contract. Pure + side-effect-free.
  *
  * @param skill           the skill to check
  * @param knownToolNames  every tool name reachable in the wider graph/agent (lets
  *                        the check tell a cross-skill HANDOFF from a typo). Omit to
  *                        check a skill in isolation (only its own tools are "known").
+ * @param options         `knownTools` — baseline tools callable from every skill.
+ *                        See {@link SkillContractOptions}.
  */
 export function checkSkillContract(
   skill: Injection,
   knownToolNames?: ReadonlySet<string>,
+  options: SkillContractOptions = {},
 ): GraphProblem[] {
   const id = (skill as { id: string }).id;
   const body = (skill as { inject?: { systemPrompt?: string } }).inject?.systemPrompt ?? '';
   if (body.length === 0) return [];
 
+  const baseline = new Set(options.knownTools ?? []);
   const own = new Set(skillToolNames(skill));
   const known = knownToolNames ?? own;
   const problems: GraphProblem[] = [];
@@ -56,6 +82,7 @@ export function checkSkillContract(
   //    add the tool / reword. Word-boundary match (tool names are distinctive).
   for (const name of known) {
     if (own.has(name)) continue;
+    if (baseline.has(name)) continue; // callable from every skill — not foreign
     if (new RegExp(`\\b${escapeRegExp(name)}\\b`).test(body)) {
       problems.push({
         kind: 'warning',
@@ -75,7 +102,7 @@ export function checkSkillContract(
   const seen = new Set<string>();
   for (const m of body.matchAll(TOOL_CALL_RE)) {
     const name = m[1];
-    if (seen.has(name) || own.has(name) || known.has(name)) continue;
+    if (seen.has(name) || own.has(name) || known.has(name) || baseline.has(name)) continue;
     seen.add(name);
     problems.push({
       kind: 'warning',
@@ -92,8 +119,12 @@ export function checkSkillContract(
 }
 
 /** Run the contract check across many skills with a shared known-tool set. Pure. */
-export function checkSkillContracts(skills: readonly Injection[]): GraphProblem[] {
+export function checkSkillContracts(
+  skills: readonly Injection[],
+  options: SkillContractOptions = {},
+): GraphProblem[] {
   const known = new Set<string>();
   for (const s of skills) for (const n of skillToolNames(s)) known.add(n);
-  return skills.flatMap((s) => checkSkillContract(s, known));
+  for (const n of options.knownTools ?? []) known.add(n);
+  return skills.flatMap((s) => checkSkillContract(s, known, options));
 }

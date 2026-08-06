@@ -57,7 +57,7 @@ Each injection flavor has a sensible default:
 Override per injection:
 
 ```typescript
-import { defineSkill } from 'agentfootprint';
+import { defineSkill } from 'agentfootprint/context';
 
 defineSkill({
   id: 'port-error-triage',

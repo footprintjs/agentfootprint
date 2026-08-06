@@ -145,6 +145,33 @@ The role map is shared across instances; only the active role differs. No re-con
 - Per-Skill capability scoping (today: skill activation unlocks ALL skill.tools; planned: scope by sub-tool)
 - `Policy` + `BudgetTracker` (Governance subsystem — v2.6)
 
+## Consent is work, not conversation (8.6.0)
+
+When a tool declares `needs: { credential, mode: 'user' }` and the vault answers
+`authorization-required`, a PERSON has to click a link before the tool can run. The
+model is the one party in the room that cannot click it, so the library never asks it
+to.
+
+`Agent.create({ onAuthorizationRequired })` takes an `AuthorizationRequiredMode`:
+
+- **`'pause'`** (the default) — the run stops at the block. `agent.run()` returns a
+  pause outcome carrying a `ConsentRequest` (`{ service, authorizationUrl, sessionId }`)
+  under `pauseData.authorization`; a `standingAgent` answers **202 Accepted** with
+  `{ awaiting }`; `agent.resume(checkpoint)` re-resolves the credential and runs the
+  tool that was waiting. Same run, same conversation, work actually done.
+- **`'tell-model'`** — the model is told the service is blocked (never the URL) and may
+  route around it. The turn still cannot report a completion it did not earn: it raises
+  **`CredentialConsentRequiredError`** (`ERR_CREDENTIAL_CONSENT_REQUIRED`, built from a
+  `CredentialConsentRequiredContext` and carrying `service`, `sessionId`,
+  `authorizationUrl`, `tool` and `iteration`).
+
+**The consent URL is a bearer capability.** Its `state` parameter correlates the
+authorization session, so anyone holding the URL can complete the flow. It is delivered
+to the CALLER only — on the pause outcome or on the error object — and never to the
+model, the conversation, the trace or any recording. The error's `message` deliberately
+omits it, because a message is the one string that reliably reaches a log line; read
+`error.authorizationUrl` instead.
+
 ## Audit trail via Causal memory
 
 For compliance scenarios where you need to prove WHY the agent made a decision six months later, [Causal memory](doc:memory#causal-memory--replay-decisions-not-just-messages) persists the full decision evidence per run. The same JSON snapshot the framework records for cross-run replay IS the audit artifact. No separate audit pipeline; no duplicated state.

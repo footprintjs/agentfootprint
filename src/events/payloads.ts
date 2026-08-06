@@ -518,6 +518,36 @@ export interface ToolsDiscoveryFailedPayload {
   readonly durationMs: number;
 }
 
+/**
+ * Emitted when two sources claim ONE tool name and the source the model READS is not
+ * the source that will RUN (8.7.0).
+ *
+ * Today that is exactly one pair: a `ToolProvider` and an active Skill's
+ * `inject.tools`. The tools slot merges `[static, provider, skill]` first-wins, so the
+ * provider's schema reaches the LLM; the dispatcher resolves `registryByName` first,
+ * which holds every skill tool and no provider tool, so the skill's `execute` runs.
+ * The model reads one description and calls a different function.
+ *
+ * Not an error event: the run continues, a tool really executes, and the fix is a
+ * rename. It fires once per offending name PER ITERATION, because a provider list is
+ * resolved per iteration and a shadow can begin mid-run.
+ *
+ * Carries names only — never args, never results, never a description body.
+ */
+export interface ToolsShadowedPayload {
+  /** The contested tool name. */
+  readonly toolName: string;
+  readonly iteration: number;
+  /** Which source's SCHEMA the model was shown. */
+  readonly schemaFrom: 'provider' | 'registry' | 'skill';
+  /** That source's id — the `ToolProvider.id`, when it has one. */
+  readonly schemaFromId?: string;
+  /** Which source's IMPLEMENTATION the dispatcher will resolve. */
+  readonly dispatchTo: 'provider' | 'registry' | 'skill';
+  /** That source's id — the skill id, for the provider↔skill pair. */
+  readonly dispatchToId?: string;
+}
+
 // validation.* (1)
 /**
  * Emitted when LLM-produced tool args fail validation against the tool's
