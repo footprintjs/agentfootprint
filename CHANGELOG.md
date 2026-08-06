@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.28.0] - 2026-08-05
+
+A paused agent is a promise you made to a person. Until this release the library
+handed you that promise as JSON and wished you luck: *store it anywhere.*
+Anywhere was the whole of the offer.
+
+`sqliteSessions({ file })` is the first battery included — the same
+`SessionLifecycle` port `memorySessions()` implements, backed by a real file, on
+Node's built-in `node:sqlite`. **No dependency to install, no service to run.**
+
+```ts
+import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: sqliteSessions({ file: './sessions.db' }), // ← the whole change
+  host: nodeHost({ port: 8080 }),
+});
+```
+
+**Two gaps, and they turn out to be the same gap.** A conversation had two homes
+and no middle: `memorySessions()` is a `Map`, exactly as durable as the process,
+and the next step up was "bring a Redis" — a service to run, secure, back up and
+pay for, to keep a few kilobytes of chat. Everyone in between wrote the same
+little file store themselves and each one re-decided what a half-written file
+means. A pause had no home at all: a question outstanding is the one piece of
+agent state that *must* outlive the process, because the answer arrives on human
+time — after lunch, after the deploy, tomorrow. Both land in one table here,
+because `CheckpointEnvelope` was already a union of the two and a session store
+has no business caring which half it is holding.
+
+**What it is, stated as a ceiling rather than left to be discovered.** One
+process (or a few) on ONE machine, writing ONE file. It survives anything that
+ends the process and leaves the disk alone. It is **not** a distributed store:
+two machines do not share a session by both opening a file over a network
+filesystem. WAL gives many readers plus **one writer at a time**, and that is
+the ceiling — a second writer waits for the lock up to `busyTimeoutMs` (default
+5000) and then fails loudly rather than queueing forever. When you outgrow it,
+one argument to `standingAgent` changes and nothing above it moves.
+
+**A refusal where a fallback would have been easier.** `node:sqlite` ships with
+Node 22.5+ (as-is from 22.13 and 23.4; behind `--experimental-sqlite` on
+22.5–22.12). `engines` did **not** move for one optional adapter — it stays
+`>=20`, the module is loaded only when you construct a store, and its absence
+raises `SqliteUnavailableError` naming the Node you are on, the flag, and
+`memorySessions()` as the honest alternative. There is deliberately no silent
+degrade to memory: a store that quietly forgot every conversation on restart
+passes every smoke test and looks, from the outside, exactly like a brand-new
+user.
+
+**"Unreadable is not absent", one level up.** The envelope law already said an
+unreadable stored conversation and an absent one are different facts, and only
+one is safe to answer with a fresh start. A file store can break that promise
+higher up — point it at a log file and a careless adapter opens it as an *empty*
+store. So the file is checked at construction and refused with
+`UnreadableSessionFileError`, whose `problem` field is the fact to branch on:
+`'cannot-open'`, `'not-our-schema'` (somebody else's table of that name), or
+`'newer-schema'` (written by a newer runtime — refused, never half-read). Only a
+session that was never written hydrates as `undefined`.
+
+**The file is inspectable on purpose.** `format` and `saved_at` are columns as
+well as fields inside the JSON, so during an incident `sqlite3` answers "which
+sessions are waiting on a person, and since when?" with no JSON parser and
+without this library. `journalMode` on the returned store reports what the file
+*actually got* rather than what was asked for — a silent downgrade from WAL on a
+network filesystem is the kind of thing only ever discovered under load.
+
+Added, all on the existing `agentfootprint/hosting` door — no new subpath:
+
+- `sqliteSessions(options)` → `SqliteSessions` (`hydrate` / `persist` from the
+  port, plus `forget`, `close` and `journalMode`)
+- `SqliteSessionsOptions` — `{ file, busyTimeoutMs? }`; the file and its parent
+  directories are created if missing, and `':memory:'` is refused because it
+  looks durable and is not
+- `SqliteUnavailableError` (`ERR_SQLITE_UNAVAILABLE`)
+- `UnreadableSessionFileError` (`ERR_UNREADABLE_SESSION_FILE`)
+
+Docs: [Sessions in a file](https://footprintjs.github.io/agentfootprint/docs/build/infra/sqlite).
+Runnable: `examples/deploy/sqlite-sessions.ts` — serves a conversation, throws
+away everything but the file, serves the same session again, holds a
+human-in-the-loop turn across that boundary, and proves an unreadable store is
+refused rather than restarted. A resume is not a replay, and the example counts
+the side effect to prove it.
+
 ## [7.27.1] - 2026-08-05
 
 A test that fails when the machine is busy is not a guard. It is a coin flip

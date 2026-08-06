@@ -1,0 +1,203 @@
+---
+title: Sessions in a file — survive a restart with nothing to install
+description: sqliteSessions({ file }) is the SessionLifecycle port backed by Node's built-in node:sqlite. Conversations and runs paused waiting on a person live in one table, so a restart, a crash or a deploy does not lose them. Zero dependencies, one machine, one file — and a loud refusal instead of a silent fallback.
+---
+
+> **A paused agent is a promise you made to a person.** Until now the library
+> handed you that promise as JSON and wished you luck: *store it anywhere.*
+> Anywhere was the whole of the offer.
+
+`sqliteSessions({ file })` is the first battery included — the same
+`SessionLifecycle` port [`memorySessions()`](/docs/build/infra/hosting#sessions-what-crosses-the-restart)
+implements, backed by a real file, with nothing to install.
+
+```ts
+import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: sqliteSessions({ file: './sessions.db' }), // ← the whole change
+  host: nodeHost({ port: 8080 }),
+});
+```
+
+That is a deployed agent whose conversations — and whose *outstanding questions*
+— survive a restart, a crash and a deploy.
+
+## Why this exists
+
+Two things were missing, and they turn out to be the same thing.
+
+**A conversation had two homes and no middle.** `memorySessions()` is a `Map`:
+exactly as durable as the process, which its own docstring says out loud. The
+next step up was "bring a Redis" — a service to run, secure, back up and pay
+for, to keep a few kilobytes of chat for one deployment. Everyone in between
+wrote the same little file store themselves, and each one re-decided what a
+half-written file means.
+
+**A pause had no home at all.** `agent.run()` can stop to ask a person
+something, and the checkpoint it hands back is documented as JSON you can keep
+anywhere. But a question outstanding is the one piece of agent state that
+*must* outlive the process, because the answer arrives on human time — after
+lunch, after the deploy, tomorrow. A framework that can pause but cannot
+remember that it paused has shipped half a feature.
+
+Both land in one table here, because `CheckpointEnvelope` was already a union of
+the two and a session store has no business caring which half it is holding.
+
+<CodeFile path="examples/deploy/sqlite-sessions.ts" region="store" title="examples/deploy/sqlite-sessions.ts (region: store)" />
+
+## What it is — and what it is not
+
+<Callout type="warn" title="One machine, one file, one writer at a time">
+This survives **restarts**, not datacentres. It is not a distributed store, and
+nothing here tries to make one out of a file: two machines do not share a
+session by both opening it over a network filesystem. WAL gives you many readers
+plus **one writer at a time**, which is the stated ceiling — several processes
+on one box is fine, a fleet is not what this is. A second writer waits for the
+lock up to `busyTimeoutMs` (default 5000) and then fails loudly rather than
+queueing forever, because a request hung on a lock looks exactly like a slow
+model and the two need different fixes.
+</Callout>
+
+When you outgrow it you change one argument to `standingAgent` and nothing above
+it moves. That is what the port is for.
+
+## The Node floor, and the refusal instead of a fallback
+
+SQLite is *inside Node* — `node:sqlite`, no install, no native build, no peer
+dependency. The price is a version floor this package does not otherwise have:
+the module ships with **Node 22.5 and newer** (as-is from 22.13 and 23.4; behind
+`--experimental-sqlite` on 22.5–22.12). agentfootprint still supports Node 20,
+so `engines` did not move for one optional adapter. The module is loaded when
+you actually construct a store, and its absence is refused by name:
+
+```
+[hosting] sqliteSessions() needs Node's built-in 'node:sqlite' module, and this
+process (Node v20.19.1) does not have it… upgrade Node, add that flag, or use
+memorySessions() — which keeps conversations in a Map and loses them on restart,
+and says so in its name. This refuses rather than falling back to memory on your
+behalf: a store that silently forgot every conversation on restart looks, from
+the outside, exactly like a brand-new user.
+```
+
+That is a `SqliteUnavailableError` (`code: 'ERR_SQLITE_UNAVAILABLE'`), and the
+last sentence is the design decision. **There is deliberately no fallback.** A
+store that quietly degraded to memory would pass every smoke test, answer every
+request, and lose a person's conversation at 3am with nothing in the log.
+
+## Unreadable is not absent — one level up
+
+The [envelope law](/docs/build/infra/hosting#unreadable-is-not-the-same-as-absent)
+says an unreadable stored conversation and an absent one are different facts,
+and only one of them is safe to answer with a fresh start. A file store can
+break that promise one level higher: point it at a log file, or at a database
+half-written by a disk that filled up, and a careless adapter opens it as an
+*empty* store and hands every returning user a blank slate.
+
+So the file is checked at construction, where you can still act on it, and
+refused with `UnreadableSessionFileError` (`code:
+'ERR_UNREADABLE_SESSION_FILE'`). Its `problem` field is the fact to branch on,
+because the three cases need different answers:
+
+| `problem` | What happened | What to do |
+|---|---|---|
+| `'cannot-open'` | Not a SQLite database, or not readable — permissions, a directory, a truncated file | Check the path; move the file aside to start a new one |
+| `'not-our-schema'` | A database whose `agent_sessions` table is somebody else's table of that name | Give the store a file of its own |
+| `'newer-schema'` | Written by a newer agentfootprint than this one | Roll forward — the same answer the envelope `format` field gives |
+
+A row whose payload this runtime cannot read raises the ordinary
+`UnreadableEnvelopeError`, naming the session. Only a session that was **never
+written** hydrates as `undefined`.
+
+<CodeFile path="examples/deploy/sqlite-sessions.ts" region="unreadable" title="examples/deploy/sqlite-sessions.ts (region: unreadable)" />
+
+## A pause that outlives the process
+
+This is the headline, and it is worth reading as two processes rather than one
+function. The first one asks:
+
+<CodeFile path="examples/deploy/sqlite-sessions.ts" region="pause" title="examples/deploy/sqlite-sessions.ts (region: pause)" />
+
+The second one — a deploy later, a different process — reads it back and
+finishes the run:
+
+```ts
+const sessions = sqliteSessions({ file: './sessions.db' });
+const paused = readPausedRun(await sessions.hydrate(sessionId));
+
+const answer = await agent.resume(
+  paused.checkpoint,
+  checkInApproved({ by: 'alice@ops' }),
+);
+```
+
+**A resume is not a replay.** The tool that ran before the pause does not run a
+second time on the way back — the runnable example asserts exactly that, with a
+side effect you can count.
+
+Under `standingAgent` you write none of it: a request carrying `decision`
+continues the stored run, and the store is the only argument that changed.
+
+## What the file looks like
+
+Two tables. `format` and `saved_at` are **columns** as well as fields inside the
+JSON, and that redundancy is deliberate — during an incident the file answers
+"which sessions are waiting on a person, and since when?" from the `sqlite3`
+command line, with no JSON parser and without this library:
+
+```sql
+SELECT session_id, datetime(saved_at / 1000, 'unixepoch') AS since
+FROM agent_sessions WHERE format = 'flowchart-v1' ORDER BY saved_at;
+```
+
+A store you cannot inspect with the tools already on the box is a store you
+debug by guessing. `agent_store_meta` holds one row, `schema_version` — the hook
+that lets a future version refuse an older reader by name rather than
+half-reading it. Schema changes are **additive only**; there is no migration
+engine here, and a version this runtime does not know is a refusal, not a
+best-effort upgrade.
+
+## The surface
+
+`SqliteSessionsOptions` is `{ file, busyTimeoutMs? }`. `file` is created if it
+is missing, along with its parent directories — "no infrastructure" would be a
+thin promise if you still had to `mkdir` first. `':memory:'` is refused: it
+looks like a file, keeps nothing across a restart, and that is the one thing
+this adapter exists to do.
+
+What you get back is a `SqliteSessions` — the two port methods plus the three
+things a real store owns beyond it:
+
+| | |
+|---|---|
+| `hydrate` / `persist` | the `SessionLifecycle` port, unchanged |
+| `forget(sessionId)` | drop one session |
+| `close()` | close the file; idempotent, and using the store afterwards refuses by name |
+| `journalMode` | the journalling mode the file **actually got**, read back from SQLite rather than assumed |
+
+`journalMode` is normally `'wal'`. It is something else when the file lives
+somewhere WAL cannot work — a network filesystem is the usual reason — and that
+is worth being able to read, because a silent downgrade to one-at-a-time access
+is the kind of thing that is only ever discovered under load.
+
+<Callout title="What a crash costs you">
+The file is opened with `synchronous = NORMAL`, which with WAL is durable across
+a **process** crash — the thing this store promises — without paying a disk sync
+every turn. A power cut or kernel panic can still cost the most recent commits.
+That is a real distinction, and the answer to the second one is a
+fleet-grade store, not a different pragma.
+</Callout>
+
+## Runnable
+
+[`examples/deploy/sqlite-sessions.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/sqlite-sessions.ts)
+does all three of these over a real socket and a real file: it serves a
+conversation, throws away everything but the file and serves the same session
+again, holds a human-in-the-loop turn across that boundary, and proves an
+unreadable store is refused rather than restarted. On a Node without
+`node:sqlite` it prints the refusal instead of the run.
+
+```bash
+npm run example examples/deploy/sqlite-sessions.ts
+```

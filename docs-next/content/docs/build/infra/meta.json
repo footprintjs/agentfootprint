@@ -1,5 +1,5 @@
 {
   "title": "Infrastructure",
   "icon": "Cloud",
-  "pages": ["adapters", "hosting", "aws"]
+  "pages": ["adapters", "hosting", "sqlite", "aws"]
 }

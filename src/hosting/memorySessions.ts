@@ -10,6 +10,9 @@
  * — which is also how the "a crashed process resumes the conversation" test is
  * written: keep the store, throw away everything else, and watch the
  * conversation come back through the envelope alone.
+ *
+ * The next step up ships beside this one: `sqliteSessions({ file })` is the same
+ * port in a file, with nothing to install.
  */
 
 import type { CheckpointEnvelope, SessionLifecycle } from './types.js';

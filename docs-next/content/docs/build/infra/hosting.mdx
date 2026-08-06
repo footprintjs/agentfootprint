@@ -568,7 +568,10 @@ until 7.19 because nothing could produce it, and naming reasons nothing fires
 would describe a system that does not exist.
 
 `memorySessions()` is a Map. It is exactly as durable as the process, which is
-the point: swap it for Redis and nothing above it changes.
+the point: swap it for Redis and nothing above it changes. The step in between
+ships beside it — [`sqliteSessions({ file })`](/docs/build/infra/sqlite) is the
+same port in one file, on Node's built-in SQLite, so a restart is not an amnesia
+event and there is still nothing to install.
 
 What gets stored is a `CheckpointEnvelope` — a union of two shapes,
 discriminated on `format`:

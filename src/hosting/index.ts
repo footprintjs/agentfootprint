@@ -50,6 +50,13 @@
  *     purpose: hiding a cap inside auto-chunking decides a protocol question
  *     for every consumer at once.
  *   • `memorySessions()` — conversations in a Map, for tests and local dev.
+ *   • `sqliteSessions({ file })` — the same port, in a file, so a restart is not
+ *     an amnesia event. Conversations AND runs paused waiting on a person, in
+ *     one table, on Node's built-in `node:sqlite` — nothing to install and no
+ *     peer dependency. One machine, one file, one writer at a time is the
+ *     stated ceiling; it is not a distributed store. Refuses BY NAME on a Node
+ *     without `node:sqlite` rather than falling back to memory, because a store
+ *     that silently forgot everything looks exactly like a new user.
  *   • `standingAgent({ agent, sessions, host, durability? })` — the composer.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to
  *     unpack a format this runtime does not know.
@@ -89,6 +96,15 @@ export type {
 } from './httpHost.js';
 
 export { memorySessions } from './memorySessions.js';
+export {
+  sqliteSessions,
+  SqliteUnavailableError,
+  UnreadableSessionFileError,
+} from './sqliteSessions.js';
+// The `node:sqlite` shape types (`SqliteModuleLike` and friends) stay OFF this
+// barrel on purpose: they exist to type the adapter's internal test seam, and a
+// name on the public door is a name somebody will build on.
+export type { SqliteSessions, SqliteSessionsOptions } from './sqliteSessions.js';
 export {
   toEnvelope,
   toPausedEnvelope,
