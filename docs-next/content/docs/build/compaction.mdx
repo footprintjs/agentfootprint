@@ -171,7 +171,7 @@ So the fold is retained on the **conversation**, which is the thing that actuall
 
 <CodeFile path="examples/context-engineering/14-durable-compaction.ts" region="carry" title="examples/context-engineering/14-durable-compaction.ts (region: carry)" />
 
-`agent.checkpoint().folded` is one `FoldedSpan` per fold, oldest first, and it accumulates across every turn, every restart and every deploy. Store the checkpoint anywhere that speaks JSON — [`sqliteSessions`](doc:infra), a Redis, your own table — and continue it in a new process:
+`agent.checkpoint().folded` is one `FoldedSpan` per fold, oldest first, and it accumulates across every turn, every restart and every deploy. Store the checkpoint anywhere that speaks JSON — [`sqliteSessions`](doc:sqlite), a Redis, your own table — and continue it in a new process:
 
 <CodeFile path="examples/context-engineering/14-durable-compaction.ts" region="continue" title="examples/context-engineering/14-durable-compaction.ts (region: continue)" />
 
