@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -38,6 +38,8 @@
     "claude",
     "openai",
     "bedrock",
+    "ollama",
+    "local-llm",
     "mcp",
     "a2a",
     "human-in-the-loop",

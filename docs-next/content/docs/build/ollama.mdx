@@ -1,23 +1,32 @@
 ---
 title: Ollama
-description: ollama() — local-model provider via Ollama's OpenAI-compatible API. Run llama3, mistral, qwen, deepseek locally; same agent code as production providers.
+description: ollama() — run a real model on your laptop. Free, no API key, no vendor SDK. The middle rung between mock() and a paid API, with the same agent code on all three.
 ---
 
-> Ollama runs local models on your machine. agentfootprint's `ollama()` factory wraps Ollama's OpenAI-compatible endpoint as an `LLMProvider` — your agent code is identical between local-Ollama dev and cloud-Anthropic production.
+> `ollama('llama3.2')` runs a real model on your own machine. No API key, no bill, no vendor SDK — and the agent code above it is identical to the code you ship against Claude or GPT.
 
-## Install
+## Why this rung exists
 
-Ollama itself: see [ollama.com/download](https://ollama.com/download). Pull a model:
+The strongest version of "the test run and the production run are the same code path" is one where the middle step **costs nothing**.
 
-```bash
-ollama pull llama3.1
+A mock proves your control flow. It cannot tell you whether a real model actually calls your tool, or what it does with a tool description you wrote in a hurry, or how your prompt behaves when nobody is scripting the reply. A real model can tell you all of that — and if finding out is free, you will actually do it before you pay for it.
+
+```
+mock({ reply })        →   ollama('llama3.2')      →   anthropic({ apiKey })
+shape the logic            a real model, $0            production
 ```
 
-agentfootprint side: `ollama()` uses the `openai` SDK under the hood (via OpenAI-compatible endpoint), so install the OpenAI peer dep:
+One argument changes between the three. Nothing else.
+
+## Setup
+
+Install Ollama from [ollama.com/download](https://ollama.com/download), then pull a model:
 
 ```bash
-npm install openai
+ollama pull llama3.2
 ```
+
+That is the whole setup. **Nothing to install on the agentfootprint side** — the adapter talks to Ollama's native API over `fetch`, so there is no SDK and no peer dependency.
 
 ## Use
 
@@ -25,45 +34,178 @@ npm install openai
 import { Agent } from 'agentfootprint';
 import { ollama } from 'agentfootprint/providers';
 
-const provider = ollama({
-  defaultModel: 'llama3.1',         // used when the request model is the 'ollama' shorthand
-  host: 'http://localhost:11434',   // default — talks to http://localhost:11434/v1
-});
-
 const agent = Agent.create({
-  provider,
-  model: 'llama3.1',
+  provider: ollama('llama3.2'),
+  model: 'llama3.2',
 }).build();
+
+const answer = await agent.run({ message: 'How long do refunds take?' });
 ```
 
-`ollama()` is a thin convenience over `openai()` — it lives on the `agentfootprint/providers` subpath (vendor-SDK-backed providers are kept off the main barrel for tree-shaking). Options: `host` (defaults to `http://localhost:11434`), `baseURL` (overrides `host`), `apiKey` (Ollama ignores it; defaults to `'ollama'`), `defaultModel` (defaults to `llama3.2`), and `defaultMaxTokens`.
+Running somewhere other than the default `http://localhost:11434`:
 
-## When to use Ollama
+```ts
+ollama('llama3.2', { baseUrl: 'http://192.168.1.20:11434' });
+```
 
-- **Local development** — no API key, no cost, no network.
-- **Privacy-sensitive workloads** — model + data never leave the machine.
-- **Cost-sensitive batch jobs** — local inference for high-volume background processing.
-- **Edge / offline deployments** — bundle the model with your app.
+The address also comes from `OLLAMA_HOST` when you don't pass one.
 
-## Limitations
+### Options
 
-- Local models are smaller and less capable than frontier models. Tool-calling reliability varies by model — llama3.1 + qwen2.5 + deepseek work; smaller models may struggle.
-- No streaming for some local models (depends on Ollama config).
-- Multi-modal not exposed.
+| Option | What it does |
+|---|---|
+| `baseUrl` | Where Ollama is listening. Defaults to `OLLAMA_HOST`, then `http://localhost:11434`. A bare `host:port` gets `http://`; a trailing `/v1` is trimmed. |
+| `defaultModel` | Model used when the request model is the `'ollama'` shorthand. The positional form (`ollama('qwen3')`) sets this. |
+| `defaultMaxTokens` | Token cap when the request doesn't set one (maps to `num_predict`). |
+| `think` | `true`, or a `ThinkLevel` — `'low'`/`'medium'`/`'high'`/`'max'`. See [Reasoning models](#reasoning-models). |
+| `keepAlive` | How long Ollama keeps the model in memory after a call, e.g. `'30m'`. |
+| `timeoutMs` | How long to wait for the daemon to *answer*. Default `10000`. Bounds the wait for a response, **not** generation — a slow model is fine. |
 
-## Switching to Anthropic / OpenAI for production
+The full options type is exported as `OllamaProviderOptions`, and `ThinkLevel` is the union of the four thinking levels — name either one when you're passing configuration around your own code.
 
-Same agent code; swap the provider one line:
+If you prefer classes to factories, `OllamaProvider` is the same adapter behind a constructor and takes the same two forms:
+
+```ts
+import { OllamaProvider } from 'agentfootprint/providers';
+
+const provider = new OllamaProvider('llama3.2');
+```
+
+## When it can't work, it says why
+
+Two things go wrong with a local runtime, and both have a one-command fix. So both get a typed error whose message *is* the fix — never a raw `ECONNREFUSED`, never a bare `404`, and never a hang.
+
+**Ollama isn't running:**
+
+```
+ollama: nothing is answering at http://localhost:11434. Start it with `ollama serve`
+(or open the Ollama app); install it from https://ollama.com/download.
+Running somewhere else? Pass ollama('<model>', { baseUrl: '...' }) or set OLLAMA_HOST.
+```
+
+**The model isn't pulled** — and it tells you what this machine *does* have:
+
+```
+ollama: model 'qwen3' is not pulled on the machine at http://localhost:11434.
+Run: ollama pull qwen3. Models on this machine: llama3.2:latest, deepseek-r1:8b.
+```
+
+Both are `OllamaUnavailableError`, discriminated by `reason`, so you can branch on them:
+
+```ts
+import { OllamaUnavailableError } from 'agentfootprint/providers';
+
+try {
+  await agent.run({ message: 'hello' });
+} catch (err) {
+  if (err instanceof OllamaUnavailableError) {
+    console.error(err.reason);          // 'daemon-unreachable' | 'model-not-pulled'
+    console.error(err.baseUrl);         // what it tried
+    console.error(err.availableModels); // what is on the machine, when it could ask
+  }
+}
+```
+
+## Reasoning models
+
+Reasoning models (deepseek-r1, qwen3, gpt-oss) think out loud. **Where that thinking lands depends on whether you ask for it.**
+
+Ask, and Ollama lifts the reasoning out of the answer into its own field, which arrives as normalized thinking blocks:
+
+```ts
+const provider = ollama('deepseek-r1', { think: true }); // or 'low' | 'medium' | 'high' | 'max'
+```
+
+Don't ask, and the same model writes `<think>…</think>` into the answer text. agentfootprint **recognizes that shape and surfaces the reasoning as thinking blocks — but it does not edit the answer.** The tags stay exactly where the model put them. Silently rewriting a model's output is a change of meaning, and that is your application's call to make, not a library's. If you want the reasoning out of the answer, ask for it with `think`.
+
+`ollamaThinkingHandler` does the normalizing and auto-wires on the provider name, so there is nothing to register. The value it reads is `LLMResponse.rawThinking`, typed as `OllamaRawThinking` — a tagged union that records **which** of the two situations produced the reasoning: `{ kind: 'field' }` when Ollama lifted it out, `{ kind: 'inline' }` when it was found in the answer. Reading that tag is how you tell whether the reasoning is also still sitting in the text your user sees.
+
+If you are parsing tagged text yourself — a custom adapter, or a transcript from somewhere else — `extractInlineThinking(text)` is exported and returns the contents of each `<think>` block, including an unclosed one from a truncated answer.
+
+```ts
+import { ollamaThinkingHandler, extractInlineThinking } from 'agentfootprint/providers';
+
+extractInlineThinking('<think>weigh the options</think>Yes.'); // ['weigh the options']
+ollamaThinkingHandler.normalize({ kind: 'field', thinking: 'weigh the options' });
+// [{ type: 'thinking', content: 'weigh the options' }]
+```
+
+## Streaming, tools, and the ceilings
+
+**Streaming** works, and reports real token counts — `usage.input` / `usage.output` are populated on the terminal chunk of every stream. That matters beyond curiosity: `.compaction()` and cost budgets are *counted, not guessed*, so a provider that reports zero silently disarms them.
+
+**Tool calling** works. Be aware of the honest ceilings:
+
+- **Tool calling is model-dependent.** Ollama forwards your `tools` array to any model; a model that was not trained for tools simply answers in prose and no tool call arrives. This adapter does not preflight the model's advertised capabilities in order to refuse first — a wrong refusal is worse than a weak answer. Pick a tool-capable model (llama3.1+, qwen2.5+, mistral-nemo and friends), and if tools are being ignored, that is the model telling you something.
+- **No forced tool choice.** Ollama supports no `tool_choice` on either of its APIs, so `carriesForcedToolChoice` is `false` and an agent using `.outputSchema(parser, { strategy: 'tool-forced' })` refuses at run start, naming this provider. Use the prompt-based strategy instead.
+- **Tool-call ids are synthesized.** Most local models emit tool calls with no id; the adapter assigns one so the result still correlates, and the wire matches on the tool name regardless.
+- **No multi-modal**, **no prompt caching**, and **no `providerRef`** (the native API returns no response id, and inventing one would point at nothing).
+
+## Picking by environment
+
+`providerFromEnv()` reads your environment and hands back a configured provider with no branching in your code. Setting **`OLLAMA_MODEL`** selects the local rung:
+
+```bash
+OLLAMA_MODEL=llama3.2    # → ollama('llama3.2')
+```
+
+```ts
+import { Agent, providerFromEnv } from 'agentfootprint';
+
+const { provider, model } = providerFromEnv({ fallbackToMock: true });
+const agent = Agent.create({ provider, model }).build();
+```
+
+`OLLAMA_MODEL` is checked **first**, ahead of the cloud credentials. Every other arm triggers on a *credential*, and credentials linger in a shell long after the project that needed them; `OLLAMA_MODEL` is a model name that somebody chose and typed for this run. Honoring a leftover API key over an explicit local model would both ignore the intent and charge for the privilege. (`OLLAMA_HOST` on its own is **not** a trigger — people export it just to run Ollama, and it must not hijack an app that never asked for a local model.)
+
+`providerFromEnv()` reads environment variables and nothing else. It never opens a socket to check whether the daemon is up, so its answer stays instant and identical on a laptop and in CI. If the daemon is down you still get the provider, and the refusal arrives from the call, with `ollama serve` in the message.
+
+## Moving to production
 
 ```ts
 import { anthropic, ollama } from 'agentfootprint/providers';
 
-const provider = process.env.NODE_ENV === 'production'
-  ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  : ollama({ defaultModel: 'llama3.1' });
+const provider =
+  process.env.NODE_ENV === 'production'
+    ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+    : ollama('llama3.2');
+```
+
+Everything else — tools, injections, memory, recorders, the trace — is unchanged.
+
+## Upgrading from 8.0.0
+
+In 8.0.0, `ollama()` was a thin wrapper over `openai({ baseURL })`. That meant the free rung needed the `openai` package installed, labelled its failures `[openai]`, and reported **zero tokens** on every streamed call. Since **8.1.0** it talks Ollama's native API directly.
+
+**Your code keeps working.** The object form is still accepted, including `host`, `baseURL`, `defaultModel` and `apiKey` (accepted and ignored — there is no key to send):
+
+```ts
+ollama({ host: 'http://localhost:11434', defaultModel: 'llama3.1' }); // still fine
+ollama('llama3.1'); // the shorter form
+```
+
+What changes without you doing anything: `npm install openai` is no longer required, errors are the typed refusals above, and streamed calls report real token counts.
+
+**Still want the SDK path?** It never went away — ask for it by name:
+
+```ts
+import { openai } from 'agentfootprint/providers';
+
+const provider = openai({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+```
+
+That route is also how you reach any other OpenAI-compatible server (vLLM, Together, Groq, LM Studio).
+
+## Worked example
+
+[`examples/features/41-local-model.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/41-local-model.ts) runs one agent across all three rungs and prints what changed. It runs offline, so you can read the output before installing anything.
+
+```bash
+npx tsx examples/features/41-local-model.ts
 ```
 
 ## Next steps
 
-- [OpenAI](doc:openai) — `baseURL` pattern works with any OpenAI-compatible endpoint
+- [OpenAI](doc:openai) — the `baseURL` pattern for any OpenAI-compatible endpoint
+- [Custom provider](doc:custom-provider) — implement `LLMProvider` for anything else
 - [Mocks-first development](doc:quick-start) — `mock()` for $0 deterministic tests

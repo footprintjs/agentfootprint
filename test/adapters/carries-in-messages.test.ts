@@ -25,7 +25,8 @@ import { describe, it, expect } from 'vitest';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { bedrock } from '../../src/adapters/llm/BedrockProvider.js';
 import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider.js';
-import { openai, azureOpenai, ollama } from '../../src/adapters/llm/OpenAIProvider.js';
+import { openai, azureOpenai } from '../../src/adapters/llm/OpenAIProvider.js';
+import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
 import { browserOpenai, browserAzureOpenai } from '../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
@@ -62,11 +63,14 @@ describe('the declared capability matches the wire', () => {
     expect(browserAnthropic({ apiKey: 'k' }).carriesInMessages).toEqual(FLOOR);
   });
 
+  it('Ollama carries all three — its native chat has no separate system field', () => {
+    expect(ollama('llama3.2').carriesInMessages).toEqual(ALL);
+  });
+
   it('the OpenAI family carries all three', () => {
     // The chat-completions shape takes the system prompt as a message like any
     // other (as `developer` on reasoning models).
     expect(openai({ _client: {} as never }).carriesInMessages).toEqual(ALL);
-    expect(ollama({ _client: {} as never }).carriesInMessages).toEqual(ALL);
     expect(azureOpenai({ _client: {} as never, deployment: 'd' }).carriesInMessages).toEqual(ALL);
     expect(browserOpenai({ apiKey: 'k' }).carriesInMessages).toEqual(ALL);
     expect(

@@ -88,6 +88,8 @@ describe('providerFromEnv()', () => {
     'ANTHROPIC_API_KEY',
     'OPENAI_API_KEY',
     'LLM_MODEL',
+    'OLLAMA_MODEL',
+    'OLLAMA_HOST',
   ];
   let saved: Record<string, string | undefined>;
   beforeEach(() => {
@@ -104,7 +106,45 @@ describe('providerFromEnv()', () => {
     }
   });
 
-  it('detects Azure first (Azure env → the azure branch)', () => {
+  it('OLLAMA_MODEL selects the local provider', () => {
+    process.env.OLLAMA_MODEL = 'qwen3';
+    const r = providerFromEnv();
+    expect(r.kind).toBe('ollama');
+    expect(r.model).toBe('qwen3');
+    expect(r.provider.name).toBe('ollama');
+  });
+
+  it('OLLAMA_MODEL wins over a cloud key — a named model is a declaration', () => {
+    // Every other arm triggers on a CREDENTIAL, and credentials linger in a
+    // shell. `OLLAMA_MODEL=qwen3` is something a person chose and typed for
+    // this run; honoring the leftover key instead would ignore them and
+    // charge them for it.
+    process.env.ANTHROPIC_API_KEY = 'k';
+    process.env.OPENAI_API_KEY = 'k';
+    process.env.OLLAMA_MODEL = 'qwen3';
+    expect(providerFromEnv().kind).toBe('ollama');
+  });
+
+  it('OLLAMA_HOST alone does NOT hijack an app that never asked for a local model', () => {
+    // People export OLLAMA_HOST just to run Ollama. It configures the address;
+    // it does not declare intent.
+    process.env.OLLAMA_HOST = 'http://localhost:11434';
+    process.env.ANTHROPIC_API_KEY = 'k';
+    expect(() => providerFromEnv()).toThrow(/@anthropic-ai\/sdk|anthropic/i);
+  });
+
+  it('reads no socket — resolution is env-only and instant', () => {
+    // No daemon is running in this test process. If the function probed, this
+    // would either hang or fail; it must simply hand back the provider and let
+    // the eventual CALL be the thing that refuses.
+    process.env.OLLAMA_MODEL = 'qwen3';
+    process.env.OLLAMA_HOST = 'http://127.0.0.1:1';
+    const started = Date.now();
+    expect(providerFromEnv().kind).toBe('ollama');
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+
+  it('detects Azure first among the credential arms (Azure env → the azure branch)', () => {
     process.env.OPENAI_BASE_URL = 'https://x.openai.azure.com';
     process.env.AZURE_OPENAI_API_KEY = 'k';
     process.env.AZURE_OPENAI_API_VERSION = '2024-12-01-preview';
@@ -132,6 +172,8 @@ describe('providerFromEnv()', () => {
   });
 
   it('throws a helpful error when no creds and no fallback', () => {
-    expect(() => providerFromEnv()).toThrow(/no provider credentials/i);
+    expect(() => providerFromEnv()).toThrow(/no provider declared/i);
+    // The cheapest fix goes first, because it is the cheapest fix.
+    expect(() => providerFromEnv()).toThrow(/OLLAMA_MODEL/);
   });
 });

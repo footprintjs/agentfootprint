@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { openai, OpenAIProvider, ollama } from '../../../src/adapters/llm/OpenAIProvider.js';
+import { openai, OpenAIProvider } from '../../../src/adapters/llm/OpenAIProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
@@ -511,21 +511,38 @@ describe('OpenAIProvider — performance', () => {
   );
 });
 
-// ─── ROI — Ollama compatibility ────────────────────────────────────
+// ─── ROI — any OpenAI-compatible endpoint ──────────────────────────
+//
+// `ollama()` moved to its own native adapter in 8.1.0, but the
+// OpenAI-COMPATIBLE route it used to take is still supported and still
+// how you reach vLLM / Together / Groq / LM Studio / a local runtime you
+// specifically want to drive through the SDK. That route is what these
+// cover: one option (`baseURL`) buys every server speaking this dialect.
 
-describe('OpenAIProvider — ROI (Ollama via baseURL)', () => {
-  it('ollama() factory wires baseURL + name correctly', () => {
-    const p = ollama({ _client: makeFakeClient(baseResponse) });
-    expect(p.name).toBe('ollama');
+describe('OpenAIProvider — ROI (any OpenAI-compatible endpoint)', () => {
+  it('baseURL points the same adapter at a local runtime, name unchanged', () => {
+    const p = openai({
+      baseURL: 'http://localhost:11434/v1',
+      apiKey: 'ollama',
+      _client: makeFakeClient(baseResponse),
+    });
+    expect(p.name).toBe('openai');
+    // A compatible server's `tool_choice` support is that server's promise,
+    // not this library's — so the capability is withheld behind a baseURL.
+    expect(p.carriesForcedToolChoice).toBe(false);
   });
 
-  it('ollama() rewrites "ollama" model shorthand to defaultModel', async () => {
+  it('a compatible endpoint keeps the legacy `max_tokens` param', async () => {
     const recorder = { params: [] as unknown[] };
-    const p = ollama({
+    const p = openai({
+      baseURL: 'http://localhost:11434/v1',
+      apiKey: 'ollama',
       defaultModel: 'llama3.2',
       _client: makeFakeClient(baseResponse, recorder),
     });
-    await p.complete({ ...baseRequest, model: 'ollama' });
-    expect((recorder.params[0] as { model: string }).model).toBe('llama3.2');
+    await p.complete({ ...baseRequest, model: 'llama3.2', maxTokens: 128 });
+    const params = recorder.params[0] as { max_tokens?: number; max_completion_tokens?: number };
+    expect(params.max_tokens).toBe(128);
+    expect(params.max_completion_tokens).toBeUndefined();
   });
 });

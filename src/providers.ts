@@ -14,14 +14,21 @@
  *
  * What's here today:
  *   • `mock` / `MockProvider` — deterministic + realistic-mode mock
+ *   • `ollama` / `OllamaProvider` — local models, free, no API key
  *   • `anthropic` / `AnthropicProvider` — real provider (Claude)
  *   • `openai` / `OpenAIProvider` — real provider (GPT)
+ *   • `bedrock`, `azureOpenai`, and the `browser*` variants
+ *
+ * The ladder these are FOR: `mock()` while you shape the logic →
+ * `ollama('<model>')` for a real model that costs nothing and needs no
+ * key → a paid API in production. The agent code above them does not
+ * change between the three; that is the whole point of the port.
  *
  * Bring your own (BYO):
- *   For Bedrock / Ollama / Cohere / on-prem / fine-tuned models,
- *   implement the `LLMProvider` interface (see `LLMProvider` exported
- *   from the main barrel) — `complete()` is required, `stream()` is
- *   optional. The `MockProvider` source is the canonical reference.
+ *   For Cohere / on-prem / fine-tuned models, implement the
+ *   `LLMProvider` interface (see `LLMProvider` exported from the main
+ *   barrel) — `complete()` is required, `stream()` is optional. The
+ *   `MockProvider` source is the canonical reference.
  */
 
 export {
@@ -41,11 +48,18 @@ export {
 export {
   openai,
   OpenAIProvider,
-  ollama,
   azureOpenai,
   type OpenAIProviderOptions,
   type AzureOpenAIProviderOptions,
 } from './adapters/llm/OpenAIProvider.js';
+
+export {
+  ollama,
+  OllamaProvider,
+  OllamaUnavailableError,
+  type OllamaProviderOptions,
+  type ThinkLevel,
+} from './adapters/llm/OllamaProvider.js';
 
 export {
   bedrock,

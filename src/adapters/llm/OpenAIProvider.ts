@@ -461,27 +461,17 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
   });
 }
 
-/**
- * Convenience factory for Ollama (OpenAI-compatible endpoint).
- *
- * @example
- *   import { ollama } from 'agentfootprint/llm-providers';
- *
- *   const provider = ollama({ defaultModel: 'llama3.2' });
- *   // Talks to http://localhost:11434/v1 by default.
- */
-export function ollama(
-  options: OpenAIProviderOptions & { readonly host?: string } = {},
-): LLMProvider {
-  const host = options.host ?? 'http://localhost:11434';
-  const inner = openai({
-    ...options,
-    baseURL: options.baseURL ?? `${host}/v1`,
-    apiKey: options.apiKey ?? 'ollama', // Ollama ignores the key; SDK requires non-empty.
-    defaultModel: options.defaultModel ?? 'llama3.2',
-  });
-  return { ...inner, name: 'ollama' };
-}
+// ─── Ollama ─────────────────────────────────────────────────────────
+//
+// `ollama()` used to live here as a thin wrapper over `openai({ baseURL })`.
+// It moved to its own native adapter in 8.1.0 (`./OllamaProvider.ts`) so the
+// free rung of the ladder stops needing the `openai` package, stops labelling
+// its failures `[openai]`, and starts reporting real token counts.
+//
+// The OpenAI-compatible endpoint still works and is still supported — it is
+// now something you ask for explicitly:
+//
+//   openai({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' })
 
 // ─── Internals ──────────────────────────────────────────────────────
 

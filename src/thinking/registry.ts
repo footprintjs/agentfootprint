@@ -16,6 +16,7 @@
 
 import { anthropicThinkingHandler } from './AnthropicThinkingHandler.js';
 import { mockThinkingHandler } from './MockThinkingHandler.js';
+import { ollamaThinkingHandler } from './OllamaThinkingHandler.js';
 import { openAIThinkingHandler } from './OpenAIThinkingHandler.js';
 import type { ThinkingHandler } from './types.js';
 
@@ -26,6 +27,7 @@ import type { ThinkingHandler } from './types.js';
 export const SHIPPED_THINKING_HANDLERS: readonly ThinkingHandler[] = [
   anthropicThinkingHandler,
   mockThinkingHandler,
+  ollamaThinkingHandler,
   openAIThinkingHandler,
 ];
 

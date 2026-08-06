@@ -15,7 +15,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
-import { openai, ollama } from '../../../src/adapters/llm/OpenAIProvider.js';
+import { openai } from '../../../src/adapters/llm/OpenAIProvider.js';
+import { ollama } from '../../../src/adapters/llm/OllamaProvider.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
@@ -117,9 +118,9 @@ describe('OpenAI — forced tool choice on the wire', () => {
       openai({ baseURL: 'http://localhost:1234/v1', _client: fakeClient({ params: [] }) as never })
         .carriesForcedToolChoice,
     ).toBe(false);
-    expect(ollama({ _client: fakeClient({ params: [] }) as never }).carriesForcedToolChoice).toBe(
-      false,
-    );
+    // Ollama supports no forced tool choice on EITHER of its wires, so the
+    // native adapter says so outright rather than inheriting the answer.
+    expect(ollama('llama3.2').carriesForcedToolChoice).toBe(false);
   });
 });
 

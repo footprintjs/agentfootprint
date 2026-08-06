@@ -57,4 +57,10 @@ export { anthropicThinkingHandler } from './AnthropicThinkingHandler.js';
 
 export { openAIThinkingHandler } from './OpenAIThinkingHandler.js';
 
+export {
+  ollamaThinkingHandler,
+  extractInlineThinking,
+  type OllamaRawThinking,
+} from './OllamaThinkingHandler.js';
+
 export { SHIPPED_THINKING_HANDLERS, findThinkingHandler } from './registry.js';

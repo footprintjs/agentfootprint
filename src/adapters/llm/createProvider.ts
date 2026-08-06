@@ -15,7 +15,7 @@
  *     defaultModel: process.env.LLM_MODEL,
  *   } as CreateProviderOptions);
  *
- * For provider-specific options (Bedrock region, Ollama host, Browser
+ * For provider-specific options (Bedrock region, Ollama baseUrl, Browser
  * apiUrl, etc.) construct the underlying factory directly — this
  * helper deliberately exposes only the common subset.
  */
@@ -23,7 +23,8 @@
 import type { LLMProvider } from '../types.js';
 import { mock, type MockProviderOptions } from './MockProvider.js';
 import { anthropic, type AnthropicProviderOptions } from './AnthropicProvider.js';
-import { openai, ollama, azureOpenai, type OpenAIProviderOptions } from './OpenAIProvider.js';
+import { openai, azureOpenai, type OpenAIProviderOptions } from './OpenAIProvider.js';
+import { ollama, type OllamaProviderOptions } from './OllamaProvider.js';
 import { bedrock, type BedrockProviderOptions } from './BedrockProvider.js';
 import {
   browserAnthropic,
@@ -51,7 +52,7 @@ export type CreateProviderOptions =
   | ({ readonly kind: 'mock' } & MockProviderOptions)
   | ({ readonly kind: 'anthropic' } & AnthropicProviderOptions)
   | ({ readonly kind: 'openai' } & OpenAIProviderOptions)
-  | ({ readonly kind: 'ollama' } & OpenAIProviderOptions & { readonly host?: string })
+  | ({ readonly kind: 'ollama' } & OllamaProviderOptions)
   | ({ readonly kind: 'bedrock' } & BedrockProviderOptions)
   | ({ readonly kind: 'browser-anthropic' } & BrowserAnthropicProviderOptions)
   | ({ readonly kind: 'browser-openai' } & BrowserOpenAIProviderOptions);
@@ -90,7 +91,7 @@ export function createProvider(options: CreateProviderOptions): LLMProvider {
 export interface ProviderFromEnv {
   readonly provider: LLMProvider;
   readonly model: string;
-  readonly kind: 'azure-openai' | 'anthropic' | 'openai' | 'mock';
+  readonly kind: 'ollama' | 'azure-openai' | 'anthropic' | 'openai' | 'mock';
 }
 
 /**
@@ -100,11 +101,29 @@ export interface ProviderFromEnv {
  * only for the detected provider.)
  *
  * Detection order (first match wins):
- *   1. **Azure OpenAI** — `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` |
+ *   1. **Ollama (local)** — `OLLAMA_MODEL` names a model, e.g. `qwen3`
+ *      [+ `OLLAMA_HOST` for a runtime that isn't on localhost]
+ *   2. **Azure OpenAI** — `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` |
  *      `OPENAI_BASE_URL`) [+ `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT`|`MODEL_NAME`]
- *   2. **Anthropic** — `ANTHROPIC_API_KEY`
- *   3. **OpenAI** — `OPENAI_API_KEY`
+ *   3. **Anthropic** — `ANTHROPIC_API_KEY`
+ *   4. **OpenAI** — `OPENAI_API_KEY`
  * Otherwise throws (or returns the mock when `{ fallbackToMock: true }`).
+ *
+ * **Why the local model goes first.** Every other arm triggers on a
+ * CREDENTIAL, and credentials arrive in a shell by accident all the time —
+ * a key exported in `.zshrc` two months ago for something else. `OLLAMA_MODEL`
+ * triggers on a NAME you had to choose and type, so its presence is a
+ * declaration rather than a leftover: someone who writes `OLLAMA_MODEL=qwen3`
+ * has said which model they want this run to use, and honoring the cloud key
+ * instead would both ignore them and cost them money. (`OLLAMA_HOST` alone is
+ * NOT a trigger — people export it just to run Ollama, and it must not hijack
+ * an app that never asked for a local model.)
+ *
+ * **No probing.** This function reads environment variables and nothing else.
+ * It never opens a socket to see whether a daemon is up — its answer stays
+ * deterministic, instant, and identical on a laptop and in CI. If `OLLAMA_MODEL`
+ * is set and the daemon is down, you get the provider, and the refusal arrives
+ * from the call itself with `ollama serve` in the message.
  *
  * @example
  *   import { providerFromEnv } from 'agentfootprint';
@@ -116,6 +135,15 @@ export function providerFromEnv(opts: { readonly fallbackToMock?: boolean } = {}
     string,
     string | undefined
   >;
+  if (env.OLLAMA_MODEL) {
+    return {
+      provider: ollama(env.OLLAMA_MODEL, {
+        ...(env.OLLAMA_HOST && { baseUrl: env.OLLAMA_HOST }),
+      }),
+      model: env.OLLAMA_MODEL,
+      kind: 'ollama',
+    };
+  }
   const azureEndpoint = env.AZURE_OPENAI_ENDPOINT ?? env.OPENAI_BASE_URL;
   if (env.AZURE_OPENAI_API_KEY && azureEndpoint) {
     return {
@@ -153,7 +181,8 @@ export function providerFromEnv(opts: { readonly fallbackToMock?: boolean } = {}
     };
   }
   throw new Error(
-    'providerFromEnv: no provider credentials in the environment. Set one of:\n' +
+    'providerFromEnv: no provider declared in the environment. Set one of:\n' +
+      '  • Ollama:    OLLAMA_MODEL (a local model, e.g. qwen3 — free, no API key)\n' +
       '  • Azure:     AZURE_OPENAI_API_KEY + (AZURE_OPENAI_ENDPOINT | OPENAI_BASE_URL)\n' +
       '               + AZURE_OPENAI_API_VERSION + (AZURE_OPENAI_DEPLOYMENT | MODEL_NAME)\n' +
       '  • Anthropic: ANTHROPIC_API_KEY\n' +

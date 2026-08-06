@@ -74,7 +74,7 @@ Build the entire agent + context engineering + tools + memory + RAG + MCP with i
 
 | Mock | Production swap |
 |---|---|
-| `mock({ reply })` · `mock({ replies })` for scripted multi-turn | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
+| `mock({ reply })` · `mock({ replies })` for scripted multi-turn | `ollama('<model>')` — a real model, still $0 and no key · then `anthropic()` / `openai()` / `bedrock()` |
 | `InMemoryStore` | `RedisStore` (`agentfootprint/memory`) · `AgentCoreStore` (`agentfootprint/memory`) · Dynamo · Postgres · Pinecone (planned) |
 | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
 | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` real server |

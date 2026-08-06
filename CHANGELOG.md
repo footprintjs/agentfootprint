@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.0] - 2026-08-06
+
+**The middle rung of the ladder now holds weight.** `ollama('llama3.2')` runs a
+real model on your own machine: no API key, no bill, and — new in this release —
+no vendor SDK.
+
+The adapter ladder is `mock()` → a local model → a paid API, and the strongest
+version of "the test run and the production run are the same code path" is one
+where the middle step costs nothing. A mock proves your control flow; it cannot
+tell you whether a real model calls your tool, or what it makes of a tool
+description you wrote in a hurry. A local model can — and if finding out is
+free, you'll actually do it before you pay for it.
+
+### `ollama()` now talks Ollama's native API
+
+Through 8.0.0, `ollama()` was a thin wrapper over `openai({ baseURL })`. Three
+things followed from that, and all three contradicted what the name promises:
+
+- it required `npm install openai` — **the free rung depended on a paid
+  vendor's SDK**;
+- its failures were labelled `[openai]`, on a provider named `ollama`;
+- it reported **zero tokens on every streamed call**, which silently disarmed
+  `.compaction()` and any cost budget counted from adapter-reported usage.
+
+It now speaks `/api/chat` directly over `fetch`. Same public contract (the
+`LLMProvider` port), higher fidelity, one fewer dependency.
+
+**Your code keeps working.** The object form shipped in 8.0.0 is still accepted
+as an overload — `host`, `baseURL`, `defaultModel`, and `apiKey` (accepted and
+ignored; there is no key to send) all keep their meaning. The shorter positional
+form is new:
+
+```ts
+ollama({ host: 'http://localhost:11434', defaultModel: 'llama3.1' }); // still fine
+ollama('llama3.1'); // new, and the one to reach for
+```
+
+**If you specifically want the SDK path, it never went away** — ask for it by
+name, which is also how you reach any other OpenAI-compatible server:
+
+```ts
+openai({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+```
+
+### Refusals that contain the fix
+
+Two things go wrong with a local runtime, and each has a one-command answer. Both
+now raise a typed `OllamaUnavailableError` (discriminated by `reason`) whose
+message *is* the instruction — never a raw `ECONNREFUSED`, never a bare `404`,
+and never a hang: a deadline bounds the wait for the daemon to answer (not
+generation, so a slow model is untouched).
+
+- **Daemon not running** — names the address it tried, `ollama serve`, the
+  install link, and how to point somewhere else.
+- **Model not pulled** — names `ollama pull <model>`, and asks `/api/tags` so it
+  can also list what this machine *does* have.
+
+### Also in this release
+
+- **Real token counts, streaming included.** `/api/chat` reports
+  `prompt_eval_count` / `eval_count` on every response with no opt-in flag, so
+  compaction and cost budgets work against a local model.
+- **Thinking blocks from local reasoning models.** `ollama('deepseek-r1', { think: true })`
+  asks Ollama to lift reasoning out of the answer; the new `ollamaThinkingHandler`
+  auto-wires by provider name and normalizes it. When a model was *not* asked and
+  writes `<think>…</think>` into the answer instead, the library **recognizes the
+  shape and surfaces the blocks, but does not edit the answer** — silently
+  rewriting model output is a change of meaning, and that belongs to the
+  application.
+- **`providerFromEnv()` gains a local arm.** `OLLAMA_MODEL=<model>` selects it,
+  and is checked **first**. Every other arm triggers on a credential, and
+  credentials linger in a shell; `OLLAMA_MODEL` is a name someone chose and typed
+  for this run, so honoring a leftover API key over it would ignore the intent and
+  charge for the privilege. (`OLLAMA_HOST` alone is not a trigger.) No probing —
+  the function reads environment variables and never opens a socket, so its answer
+  stays instant and identical on a laptop and in CI.
+- **Honest ceilings, stated rather than worked around.** Tool calling is
+  model-dependent (no capability preflight — a wrong refusal is worse than a weak
+  answer); `carriesForcedToolChoice` stays `false` because Ollama supports no
+  `tool_choice`; tool-call ids are synthesized because most local models emit
+  none; no multi-modal, no prompt caching, no `providerRef`.
+- Docs: [Ollama](https://footprintjs.github.io/agentfootprint/docs/build/ollama)
+  rewritten, with an upgrade note. Worked example:
+  `examples/features/41-local-model.ts` runs one agent across all three rungs and
+  runs offline.
+- Tests: +116, including an adapter-swap law (same agent on `mock()` and
+  `ollama()` produces the same answer, tool dispatch, iteration count and event
+  sequence) and a live-daemon suite behind `AGENTFOOTPRINT_OLLAMA_LIVE` that skips
+  loudly when the flag is absent.
+
 ## [8.0.0] - 2026-08-05
 
 **26 doors become 10.** Nothing about how agentfootprint behaves changed. What

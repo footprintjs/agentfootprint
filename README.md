@@ -104,19 +104,23 @@ console.log(result);  // → "I checked: it is 72°F and sunny."
 
 For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
-### Run against a local model (Ollama, llama.cpp, vLLM — any OpenAI-compatible endpoint)
+### Run against a local model — the free rung between the mock and the bill
 
-No cloud account, no API key, $0 per token. `openai({ baseURL })` targets any server that speaks the OpenAI Chat Completions API — Ollama has its own one-line shortcut:
+No cloud account, no API key, no vendor SDK, $0 per token:
 
 ```typescript
 import { Agent } from 'agentfootprint';
 import { ollama } from 'agentfootprint/providers';
 
-const agent = Agent.create({ provider: ollama({ defaultModel: 'llama3.1' }), model: 'llama3.1' }).build();
-// → talks to http://localhost:11434/v1 (run `ollama pull llama3.1` first)
+const agent = Agent.create({ provider: ollama('llama3.2'), model: 'llama3.2' }).build();
+// → talks to http://localhost:11434 (run `ollama pull llama3.2` first)
 ```
 
-For llama.cpp's `llama-server` or vLLM, swap in `openai({ baseURL: 'http://localhost:8080/v1', apiKey: 'not-needed', defaultModel: '…' })` — same `Agent` code either way. Local servers usually ignore `apiKey`, and most only accept the older `max_tokens` field; both are handled automatically whenever `baseURL` is set. Full recipes: [OpenAI-compatible endpoints](https://footprintjs.github.io/agentfootprint/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio) · [Ollama guide](https://footprintjs.github.io/agentfootprint/docs/build/ollama/).
+This is the step that makes "the test run and the production run are the same code path" more than a slogan. A mock proves your control flow; it can't tell you whether a real model calls your tool, or what it makes of a tool description you wrote in a hurry. A local model can — and because it's free, you'll actually check before you pay.
+
+`ollama()` talks Ollama's native API directly, so there's nothing to install on this side, streamed calls report real token counts (so `.compaction()` and cost budgets work), and when it can't work it says why in words that contain the fix — `ollama serve` when nothing is listening, `ollama pull <model>` when the model isn't there, never a raw connection error and never a hang.
+
+For llama.cpp's `llama-server`, vLLM, Together or Groq, use `openai({ baseURL: 'http://localhost:8080/v1', apiKey: 'not-needed', defaultModel: '…' })` — any server speaking the OpenAI Chat Completions API, same `Agent` code either way. Full recipes: [Ollama guide](https://footprintjs.github.io/agentfootprint/docs/build/ollama/) · [OpenAI-compatible endpoints](https://footprintjs.github.io/agentfootprint/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
 
 ### Then add context
 
@@ -793,7 +797,7 @@ Build the entire app against in-memory mocks with **zero API cost**, then swap r
 
 | Boundary | Dev | Prod |
 |---|---|---|
-| LLM provider | `mock(...)` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| LLM provider | `mock(...)` | `ollama('<model>')` free · `anthropic()` · `openai()` · `bedrock()` |
 | Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` |
 | MCP | `mockMcpClient(...)` | `mcpClient({ transport })` |
 | Cache strategy | `NoOpCacheStrategy` | auto-selected per provider |
@@ -823,7 +827,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 | `anthropic` | Claude (Sonnet, Opus, Haiku) via `@anthropic-ai/sdk` |
 | `openai` | GPT-4o, GPT-4-turbo via `openai` SDK |
 | `bedrock` | Claude / Titan / Mistral via AWS Bedrock runtime |
-| `ollama` | Local models via Ollama · `openai({ baseURL })` also reaches llama.cpp, vLLM, and any other OpenAI-compatible endpoint |
+| `ollama` | Local models, over Ollama's native API — no SDK, no key, real token counts, refusals that name `ollama serve` / `ollama pull` · `openai({ baseURL })` reaches llama.cpp, vLLM, and any other OpenAI-compatible endpoint |
 | `browserAnthropic` | Browser-side Claude calls (no proxy server) |
 | `browserOpenai` | Browser-side OpenAI calls (no proxy server) |
 | `mock` | Deterministic dev/test (zero API cost) |

@@ -30,9 +30,10 @@ export class CompactionUnmeasurableError extends Error {
         `tokens for the last call, so the window cannot be measured against thresholdTokens. ` +
         `Compaction refuses rather than guess the size of the window or leave a configured ` +
         `budget silently unenforced. Fixes: use a provider that reports usage (anthropic, ` +
-        `openai, bedrock and the mock provider all do), or remove .compaction() from this agent. ` +
-        `Note that some OpenAI-compatible endpoints (Ollama, vLLM) do not send usage while ` +
-        `streaming.`,
+        `openai, bedrock, ollama and the mock provider all do), or remove .compaction() from ` +
+        `this agent. Note that an OpenAI-COMPATIBLE endpoint reached through openai({ baseURL }) ` +
+        `may not send usage while streaming — for a local model, ollama() talks the native API ` +
+        `and always reports it.`,
     );
     this.provider = provider;
   }

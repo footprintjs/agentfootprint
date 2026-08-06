@@ -42,10 +42,10 @@ export const SLIDING_WINDOW = 'sliding-window';
  * @example
  * ```ts
  * import { Agent, slidingWindow } from 'agentfootprint';
- * import { ollama } from 'agentfootprint/llm-providers';
+ * import { ollama } from 'agentfootprint/providers';
  *
  * // Works on a provider that reports no usage at all: the trigger is turns.
- * const agent = Agent.create({ provider: ollama(), model: 'llama3' })
+ * const agent = Agent.create({ provider: ollama('llama3.2'), model: 'llama3.2' })
  *   .window(slidingWindow({ keepRecentTurns: 12 }))
  *   .build();
  * ```

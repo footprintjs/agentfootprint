@@ -247,6 +247,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 38 | [`38-act.ts`](features/38-act.ts) | act() — the five moments of the loop | One block that says what an agent does at every moment of its turn: input,  |
 | 39 | [`39-approve-once.ts`](features/39-approve-once.ts) | Approve once — session trust that says whose trust it is | A ~10-line tool middleware: the first matching call asks a person, the decision  |
 | 40 | [`40-output-schema-retry.ts`](features/40-output-schema-retry.ts) | The schema teaches back — retries on outputSchema | 7.26 —  |
+| 41 | [`41-local-model.ts`](features/41-local-model.ts) | Local model — the free middle rung of the adapter ladder | ollama( |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

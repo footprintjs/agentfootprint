@@ -56,7 +56,7 @@ await agent.run({ message: 'How long does a refund take?' });
 
 | Boundary | Mock for development | Production swap |
 |---|---|---|
-| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `ollama('<model>')` — a real model, still $0 and no key · then `anthropic()` · `openai()` · `bedrock()` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
 | Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory`) · `AgentCoreStore` (`agentfootprint/memory`) · DynamoDB / Postgres / Pinecone (planned) |
 | MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
@@ -401,21 +401,26 @@ Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnabl
 
 ```typescript
 import { mock } from 'agentfootprint';
-// Vendor-SDK providers (lazy peer-deps) live on the dedicated subpath:
 import { anthropic, openai, bedrock, ollama } from 'agentfootprint/providers';
 
-// Adapter-swap testing: same agent, different provider, $0 in CI
+// The ladder: shape the logic on the mock → check it against a REAL model for
+// free → pay only in production. One argument changes; the agent does not.
 const provider = process.env.NODE_ENV === 'production'
   ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  : mock({ reply: 'test response' });
+  : ollama('llama3.2');   // or mock({ reply: 'test response' }) for determinism
 ```
 
 Every provider implements the same `LLMProvider` interface. `mock`,
 `browserAnthropic`, `browserOpenai`, and `createProvider` ship on the main
-barrel; the vendor-SDK-backed providers (`anthropic` · `openai` · `bedrock`
-· `ollama`) live ONLY at `agentfootprint/providers` (legacy alias:
-`agentfootprint/providers`) so bundlers never walk their lazy peer-dep
-requires. Browser variants exist for client-side use.
+barrel; `anthropic` · `openai` · `bedrock` · `ollama` live ONLY at
+`agentfootprint/providers` so bundlers never walk the vendor-SDK requires.
+Browser variants exist for client-side use.
+
+`ollama('<model>')` is the middle rung and needs NO vendor SDK — it talks
+Ollama's native API over `fetch`. Install Ollama, `ollama pull llama3.2`, done.
+When it can't work it says so in words that contain the fix (`ollama serve`,
+`ollama pull <model>`), never a raw connection error. `OLLAMA_MODEL=<model>`
+makes `providerFromEnv()` pick it, ahead of the cloud credentials.
 
 ### Pause / Resume (Human-in-the-Loop)
 
@@ -448,7 +453,7 @@ import { anthropic, openai, ollama } from 'agentfootprint/providers';
 
 const reliable = withRetry(provider, { maxAttempts: 3 });
 const resilient = withFallback(primary, fallback);
-const chain = fallbackProvider(anthropic({...}), openai({...}), ollama({...}));
+const chain = fallbackProvider(anthropic({...}), openai({...}), ollama('llama3.2'));
 const guarded = withCircuitBreaker(provider);
 ```
 
