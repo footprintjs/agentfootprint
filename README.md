@@ -18,11 +18,11 @@
 
 <p align="center">
   <a href="https://footprintjs.github.io/agentThinkingUI/">
-    <img src="docs/assets/hero-atui.png" alt="An agent run replayed in AgentThinkingUI — the LLM 'brain' calls the Flight-search tool, the step inspector shows the tool's raw output and the brain's reasoning about it, and the timeline scrubs every step of the run." width="100%">
+    <img src="docs/assets/hero-atui.png" alt="An agent run replayed in Story Lens — the LLM 'brain' calls the Flight-search tool, the step inspector shows the tool's raw output and the brain's reasoning about it, and the timeline scrubs every step of the run." width="100%">
   </a>
 </p>
 <p align="center">
-  <sub>A real run, replayed — rendered with <a href="https://github.com/footprintjs/agentThinkingUI"><b>AgentThinkingUI</b></a> (<code>npm i agentthinkingui</code>). Every frame is generated from the run's own trace; <a href="https://footprintjs.github.io/agentThinkingUI/">▶ watch it live</a>.</sub>
+  <sub>A real run, replayed — rendered with <a href="https://github.com/footprintjs/agentThinkingUI"><b>Story Lens</b></a> (<code>npm i agentthinkingui</code>). Every frame is generated from the run's own trace; <a href="https://footprintjs.github.io/agentThinkingUI/">▶ watch it live</a>.</sub>
 </p>
 
 <p align="center">
@@ -277,7 +277,7 @@ confident, wrong #1. Guides: [ranking-confidence](docs/guides/ranking-confidence
 [missing-context](docs/guides/missing-context.md).
 
 **The same walk, visual.** `toBacktrackTrace()` serializes the report into
-[AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s `<BacktrackView>`
+[Story Lens](https://github.com/footprintjs/agentThinkingUI)'s `<BacktrackView>`
 — the "why?" board, triggerable from any decision point (final answer, a mid-loop tool
 choice, a deterministic `decide()` rule):
 
@@ -657,10 +657,10 @@ There is deliberately no list of "watch moments" to go with `.act()`'s five. A r
 ## 🐛 Debug — see what your agent did
 
 <p align="center">
-  <img src="docs/assets/lens-run.png" alt="A real agent run in the Lens: the conversation (with live PII redaction), the executed path lit on the merge-tree flowchart, the WHAT-HAPPENED timeline of every iteration/context/LLM turn/route, run stats, and the step inspector — all generated from the run's own trace." width="100%">
+  <img src="docs/assets/lens-run.png" alt="A real agent run in Why Lens: the conversation (with live PII redaction), the executed path lit on the merge-tree flowchart, the WHAT-HAPPENED timeline of every iteration/context/LLM turn/route, run stats, and the step inspector — all generated from the run's own trace." width="100%">
 </p>
 <p align="center">
-  <sub>One real run, fully explained — the <a href="https://github.com/footprintjs/agentfootprint-lens"><b>Lens</b></a> (<code>npm i agentfootprint-lens</code>): conversation · executed path · per-step timeline · stats, every pixel from the trace.</sub>
+  <sub>One real run, fully explained — <a href="https://github.com/footprintjs/agentfootprint-lens"><b>Why Lens</b></a> (<code>npm i agentfootprint-lens</code>): conversation · executed path · per-step timeline · stats, every pixel from the trace.</sub>
 </p>
 
 Because we own the loop, every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence as a JSON-portable, scrubbable, queryable, exportable artifact — and every LLM call backtracks to four typed answers: **what** was injected, **who** triggered it (which rule), **when** it fired, **how** it landed (slot · position · cache). Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
@@ -677,9 +677,9 @@ Four views, one trace — pick by question:
 
 | View | Shows | When to use |
 |---|---|---|
-| **AgentThinkingUI** (the hero up top) | The run replayed as an animated, scrubbable story — the brain, the tools, the reasoning | Show anyone *what the agent did* |
+| **Story Lens** (the hero up top) | The run replayed as an animated, scrubbable story — the brain, the tools, the reasoning | Show anyone *what the agent did* |
 | **BacktrackView** ([the board above](#one-contextual-error-walked-end-to-end)) | A decision walked backwards — suspects, influence meters, ablation stamps, custody rewind | Answer *why it decided that* |
-| **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did the agent see at step 5?" |
+| **Why Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did the agent see at step 5?" |
 | **Explainable Trace** | Structural — subflow tree, full flowchart, memory inspector, per-stage execution timeline | Architecture review, root-cause analysis |
 
 And two **conversational** doors over the same evidence — ask instead of look:
@@ -852,8 +852,8 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - OTel GenAI span export · hash-chained tamper-evident audit bundles with an offline verifier
 
 **Tooling**
-- **AgentThinkingUI** — animated run player + BacktrackView why-board (separate `agentthinkingui` package)
-- **Lens** · **Explainable Trace** — two visual replays of the causal trace (separate `agentfootprint-lens` package)
+- **Story Lens** — animated run player + BacktrackView why-board (separate `agentthinkingui` package)
+- **Why Lens** · **Explainable Trace** — two visual replays of the causal trace (separate `agentfootprint-lens` package)
 - AI-coding-tool support — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
 
 </details>

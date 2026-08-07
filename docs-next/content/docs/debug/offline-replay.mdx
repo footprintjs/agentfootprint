@@ -1,6 +1,6 @@
 ---
 title: Replay a saved run
-description: Save a run as three things — snapshot, events, structure — then show it in Lens or Explainable UI. Nothing re-runs, no model is called.
+description: Save a run as three things — snapshot, events, structure — then show it in Why Lens or Flow Lens. Nothing re-runs, no model is called.
 ---
 
 You have a run. You want to look at it later — in a bug report, in a review, on
@@ -85,7 +85,7 @@ const recording = {
 };
 ```
 
-## Step 2a — Render it in Lens (the agent view)
+## Step 2a — Render it in Why Lens (the agent view)
 
 ```tsx
 import { observeRecording, Lens } from 'agentfootprint-lens';
@@ -106,7 +106,7 @@ Nothing re-runs, no model is called, no network is touched. `boundaryRanges === 
 means the run was recorded without a commit-tracking boundary recorder — the step
 strip stays quiet rather than inventing stops.
 
-## Step 2b — Render it in Explainable UI (the pipeline view)
+## Step 2b — Render it in Flow Lens (the pipeline view)
 
 ```tsx
 import { ExplainableShell, overlayFromSnapshot } from 'footprint-explainable-ui';
