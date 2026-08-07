@@ -213,7 +213,14 @@ export function _buildCloudWatchObservability(
   }
 
   async function doFlush(): Promise<void> {
-    if (buffer.length === 0 || stopped) return;
+    // `stopped` is deliberately NOT a guard here (8.11.1). `stop()` stops this
+    // strategy ACCEPTING events and cancels its timer; it does not authorise
+    // throwing away events already accepted. Guarding here made `flush()`
+    // after `stop()` unable to make progress while its loop waited for
+    // progress — an infinite microtask spin that starved the event loop of
+    // the very process trying to shut down. Same stance as `auditExport`:
+    // stop observing, never destroy what was collected.
+    if (buffer.length === 0) return;
     // Snapshot + clear so concurrent emits during the in-flight put
     // accumulate into the next batch.
     const batch = buffer.splice(0);
@@ -302,23 +309,36 @@ export function _buildCloudWatchObservability(
      * into your own shutdown or the last batch is lost:
      *
      *   process.on('SIGTERM', async () => { await strategy.flush(); strategy.stop(); });
+     *
+     * Safe in any order relative to `stop()` since 8.11.1: a flush after a
+     * stop still ships what was already accepted.
      */
     async flush(): Promise<void> {
-      // Drain anything pending. Awaits both an in-flight put AND any
-      // newly-buffered events that arrived during it.
-      while (buffer.length > 0 || lastFlushPromise !== Promise.resolve()) {
-        const before = lastFlushPromise;
-        await before;
-        if (buffer.length > 0) {
-          lastFlushPromise = doFlush();
-        }
-        // Loop one more pass if the chained doFlush() queued more
-        // work, then bail.
-        if (lastFlushPromise === before && buffer.length === 0) break;
+      // BOUNDED BY CONSTRUCTION. Every pass must remove at least one buffered
+      // event; a pass that removes none ends the drain instead of trying
+      // again. The previous shape looped `while (buffer.length > 0)` and
+      // trusted `doFlush()` to make progress — which it stopped doing once
+      // `stop()` had been called, turning shutdown into an infinite microtask
+      // spin (no timer could fire, no deadline could expire, 100% of a core).
+      // A drain that cannot finish must return, never retry forever.
+      for (;;) {
+        const pending = buffer.length;
+        // Chain, never replace: CloudWatch requires per-stream ordering, so a
+        // drain waits for the in-flight put rather than racing it.
+        lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
+        await lastFlushPromise;
+        if (buffer.length === 0) return;
+        if (buffer.length >= pending) return;
       }
     },
-    /** Stop the flush timer. **The framework does not call this for you** —
-     *  an un-stopped strategy keeps a `setTimeout` alive. */
+    /** Stop the flush timer and stop accepting events. **The framework does
+     *  not call this for you** — an un-stopped strategy keeps a `setTimeout`
+     *  alive (one-shot, re-armed per event, so the process lingers up to
+     *  `flushIntervalMs` past the last event).
+     *
+     *  Terminal: events exported after this are dropped and there is no
+     *  restart. What it does NOT do is discard the buffer — `flush()` after
+     *  `stop()` still ships it (8.11.1). */
     stop(): void {
       stopped = true;
       if (timer) {

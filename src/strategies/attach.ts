@@ -17,7 +17,7 @@
  *   7. Return Unsubscribe (or handle for lens)
  */
 
-import { flowChart } from 'footprintjs';
+import { FlowChartExecutor, flowChart } from 'footprintjs';
 import type { FlowChart } from 'footprintjs';
 
 import type { EventDispatcher, Unsubscribe } from '../events/dispatcher.js';
@@ -50,7 +50,15 @@ import {
  * us anywhere to ship; just no-op silently and return a stoppable
  * unsubscribe so the call site stays composable.
  */
-const NOOP_UNSUBSCRIBE: Unsubscribe = (): void => undefined;
+const NOOP_UNSUBSCRIBE: Unsubscribe = Object.assign((): void => undefined, {
+  // Carries no-op `flush` / `stop` alongside the unsubscribe (8.11.1). The
+  // declared return type is still `Unsubscribe`, so this changes nothing you
+  // can reach today; it exists so that when the return type widens into a
+  // handle, the no-subscription case answers that handle's methods instead of
+  // being the one path that throws on `handle.flush()`.
+  flush: (): Promise<void> => Promise.resolve(),
+  stop: (): void => undefined,
+});
 
 // ─── Detach plumbing ─────────────────────────────────────────────────
 //
@@ -90,19 +98,33 @@ function buildDetachWrapperChart(args: DetachRouterArgs): FlowChart {
   ).build();
 }
 
-let detachExecutorSingleton: import('footprintjs').FlowChartExecutor | undefined;
+let detachExecutorSingleton: FlowChartExecutor | undefined;
 
-/** Lazy-import a shared `FlowChartExecutor` we use purely as the
- *  bare-executor entry point for `detachAndForget` / `detachAndJoinLater`.
- *  No chart actually runs through it — we just need its detach methods. */
-async function getDetachExecutor(): Promise<import('footprintjs').FlowChartExecutor> {
+/**
+ * A shared `FlowChartExecutor` used purely as the bare-executor entry point
+ * for `detachAndForget` / `detachAndJoinLater`. No chart actually runs through
+ * it — we just need its detach methods. Built on first detached event; a
+ * consumer who never enables `detach` never constructs one.
+ *
+ * SYNCHRONOUS since 8.11.1, and that is the whole fix. This used to `await
+ * import('footprintjs')`, so scheduling happened in a promise continuation:
+ * the detach handle was registered a microtask AFTER the event was dispatched.
+ * `flushAllDetached()` drains "until the registry is empty" and the registry
+ * was still empty when it looked, so the documented shutdown recipe returned
+ * `{ done: 0, failed: 0, pending: 0 }` — a clean bill of health — while events
+ * were still in flight, and no consumer could wait for them because the
+ * pending work lived in a `.then()` chain this module never handed out. The
+ * dynamic import also bought nothing: this module already imports
+ * `footprintjs` statically for `flowChart`, so the package was loaded either
+ * way.
+ */
+function getDetachExecutor(): FlowChartExecutor {
   if (detachExecutorSingleton) return detachExecutorSingleton;
-  const fp = await import('footprintjs');
   // Trivial host chart — never run, just satisfies the constructor.
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const noopHostStage = async (): Promise<void> => {};
-  const noopChart = fp.flowChart('agentfootprint:detach:host', noopHostStage, 'host').build();
-  detachExecutorSingleton = new fp.FlowChartExecutor(noopChart);
+  const noopChart = flowChart('agentfootprint:detach:host', noopHostStage, 'host').build();
+  detachExecutorSingleton = new FlowChartExecutor(noopChart);
   return detachExecutorSingleton;
 }
 
@@ -117,8 +139,10 @@ async function getDetachExecutor(): Promise<import('footprintjs').FlowChartExecu
  *     chart on the driver. `mode === 'forget'` discards the handle;
  *     `mode === 'join-later'` delivers it to `opts.detach.onHandle`.
  *
- * The detached path is async-loaded — the executor singleton is built
- * on first call so consumers who don't enable detach pay zero cost.
+ * The executor singleton is built on first detached event, so consumers who
+ * don't enable detach pay zero cost. Scheduling itself is SYNCHRONOUS: the
+ * detach handle is registered in the same tick as the event, which is what
+ * makes `flushAllDetached()` able to see it (see `getDetachExecutor`).
  */
 function buildEventHandler(
   detach: DetachOptions | undefined,
@@ -151,24 +175,24 @@ function buildEventHandler(
   }
 
   return (event) => {
-    // Lazy-resolve the executor. The Promise here is fire-and-forget
-    // itself — we never await it, so the agent loop returns sync. Any
-    // error from the import OR the schedule call routes to onError.
-    getDetachExecutor()
-      .then((exec) => {
-        if (mode === 'forget') {
-          exec.detachAndForget(detach.driver, wrapperChart, event);
-        } else {
-          const handle = exec.detachAndJoinLater(detach.driver, wrapperChart, event);
-          // Caller validates onHandle is set when mode !== 'forget' (see
-          // mode-discrimination above; the mode='joinLater' branch requires it).
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          onHandle!(handle);
-        }
-      })
-      .catch((err: unknown) => {
-        args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
-      });
+    // Schedules in THIS tick and returns immediately — the driver owns when
+    // the work runs, we only hand it over. Handing over synchronously is what
+    // puts the handle in the detach registry before the caller's next line,
+    // so a shutdown that calls `flushAllDetached()` actually drains this
+    // event instead of finding an empty registry (8.11.1).
+    try {
+      if (mode === 'forget') {
+        getDetachExecutor().detachAndForget(detach.driver, wrapperChart, event);
+      } else {
+        const handle = getDetachExecutor().detachAndJoinLater(detach.driver, wrapperChart, event);
+        // Caller validates onHandle is set when mode !== 'forget' (see
+        // mode-discrimination above; the mode='joinLater' branch requires it).
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        onHandle!(handle);
+      }
+    } catch (err) {
+      args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
+    }
   };
 }
 

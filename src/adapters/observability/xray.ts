@@ -192,7 +192,13 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   }
 
   async function doFlush(): Promise<void> {
-    if (outbox.length === 0 || stopped) return;
+    // `stopped` is deliberately NOT a guard here (8.11.1). `stop()` stops this
+    // strategy ACCEPTING events and cancels its timer; segments already closed
+    // and queued are still owed to X-Ray. Guarding here made `flush()` after
+    // `stop()` loop forever waiting for a drain that could no longer happen —
+    // an infinite microtask spin that starved the event loop of the process
+    // trying to shut down.
+    if (outbox.length === 0) return;
     const batch = outbox.splice(0, maxBatchSegments);
     try {
       await ensureClient().putTraceSegments({
@@ -485,6 +491,9 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
      * every unfinished turn) is lost:
      *
      *   process.on('SIGTERM', async () => { await strategy.flush(); strategy.stop(); });
+     *
+     * Safe in any order relative to `stop()` since 8.11.1: a flush after a
+     * stop still ships the segments already closed.
      */
     async flush(): Promise<void> {
       // Force-close any in-flight turn segments so partial traces
@@ -493,17 +502,28 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         if (!t.sampled) continue;
         while (t.stack.length > 0) closeSegment(t, undefined);
       }
-      while (outbox.length > 0) {
-        const before = lastFlushPromise;
-        await before;
-        if (outbox.length > 0) {
-          lastFlushPromise = doFlush();
-        }
-        if (lastFlushPromise === before && outbox.length === 0) break;
+      // BOUNDED BY CONSTRUCTION — every pass must shrink the outbox (a put
+      // takes up to `maxBatchSegments` at a time, so several passes are
+      // normal); a pass that shrinks nothing ends the drain instead of trying
+      // again. The previous `while (outbox.length > 0)` trusted `doFlush()` to
+      // make progress, which it stopped doing after `stop()` — an infinite
+      // microtask spin that starved the event loop during shutdown.
+      for (;;) {
+        const pending = outbox.length;
+        // Chain, never replace: segments ship in the order they closed.
+        lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
+        await lastFlushPromise;
+        if (outbox.length === 0) return;
+        if (outbox.length >= pending) return;
       }
     },
-    /** Stop the flush timer. **The framework does not call this for you** —
-     *  an un-stopped strategy keeps a `setTimeout` alive. */
+    /** Stop the flush timer and stop accepting events. **The framework does
+     *  not call this for you** — an un-stopped strategy keeps a `setTimeout`
+     *  alive.
+     *
+     *  Terminal: events exported after this are ignored. What it does NOT do
+     *  is discard the outbox — `flush()` after `stop()` still ships it
+     *  (8.11.1). */
     stop(): void {
       stopped = true;
       if (timer) {

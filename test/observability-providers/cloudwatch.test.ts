@@ -19,6 +19,7 @@ import {
 import { agentcoreObservability } from '../../src/adapters/observability/agentcore.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { expectScalesLinearly } from '../helpers/perf.js';
+import { settlesWithin } from '../helpers/settles.js';
 
 // ── Test client ──────────────────────────────────────────────────────
 
@@ -128,6 +129,43 @@ describe('cloudwatchObservability — P2 boundary', () => {
     expect(batches[0]?.logGroupName).toBe('/cw/group');
     expect(batches[0]?.logStreamName).toBe('cw-stream');
     expect(batches[0]?.logEvents).toHaveLength(2);
+  });
+
+  // ── 8.11.1: flush() after stop() drains instead of spinning ────────
+  //
+  // `doFlush()` used to bail when `stopped`, while `flush()` looped until the
+  // buffer was empty — so a shutdown that stopped before it flushed produced
+  // an infinite microtask spin: 100% of a core, no timer able to fire, no
+  // in-process deadline able to expire, SIGKILL the only way out. `stop()`
+  // means stop ACCEPTING events; it never meant discard the ones already
+  // accepted.
+  it('P2 flush() AFTER stop() still ships the tail batch (8.11.1)', async () => {
+    const { client, batches } = makeMockClient();
+    const strat = cloudwatchObservability({
+      logGroupName: '/cw/group',
+      flushIntervalMs: 0,
+      _client: client,
+    });
+    strat.exportEvent(fakeEvent);
+    strat.exportEvent(fakeEvent);
+    strat.stop?.();
+    await settlesWithin(Promise.resolve(strat.flush?.()), 'flush() after stop()');
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.logEvents).toHaveLength(2);
+  });
+
+  it('P2 flush() on a stopped, empty strategy is a no-op that returns', async () => {
+    const { client, batches } = makeMockClient();
+    const strat = cloudwatchObservability({
+      logGroupName: '/cw/group',
+      flushIntervalMs: 0,
+      _client: client,
+    });
+    strat.stop?.();
+    // Events after stop() are still dropped — that half of stop() is intact.
+    strat.exportEvent(fakeEvent);
+    await settlesWithin(Promise.resolve(strat.flush?.()), 'flush() on a stopped strategy');
+    expect(batches).toHaveLength(0);
   });
 
   // ── 8.11.0: create the log stream on first delivery ────────────────

@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createMicrotaskBatchDriver } from 'footprintjs/detach';
+import { createMicrotaskBatchDriver, detachedCount, flushAllDetached } from 'footprintjs/detach';
 import type { DetachHandle } from 'footprintjs/detach';
 
 import { EventDispatcher } from '../../src/events/dispatcher.js';
@@ -277,5 +277,57 @@ describe('attach × detach — P7 ROI', () => {
     for (let i = 0; i < 20; i++) await Promise.resolve();
     expect(ticks).toHaveLength(1);
     expect(ticks[0]?.model).toBe('gpt-4');
+  });
+});
+
+// ─── 8.11.1 — the detached export a shutdown can actually drain ──────
+//
+// Scheduling used to happen inside `getDetachExecutor().then(...)`, so the
+// detach handle reached footprintjs's registry a microtask AFTER the event was
+// dispatched. `flushAllDetached()` drains "until the registry is empty" and the
+// registry was still empty when it looked — so the documented shutdown recipe
+// returned `{ done: 0, failed: 0, pending: 0 }`, a clean bill of health, while
+// events were still in flight. No consumer could fix it from outside: the
+// pending work lived in a `.then()` chain this module never handed out.
+//
+// Both assertions below FAILED before 8.11.1 (measured: detachedCount 0,
+// exported 0 — cold AND warm, since a resolved promise still defers).
+
+describe('attach × detach — 8.11.1 drainable on shutdown', () => {
+  it('registers the detach handle in the SAME tick as the event', () => {
+    const dispatcher = new EventDispatcher();
+    const strategy = makeObsStrategy();
+    const driver = createMicrotaskBatchDriver(async (_c, event) => {
+      strategy.exportEvent(event as AgentfootprintEvent);
+    });
+    const before = detachedCount();
+    attachObservabilityStrategy(dispatcher, {
+      strategy,
+      tier: 'firehose',
+      detach: { driver, mode: 'forget' },
+    });
+    dispatcher.dispatch(fakeAgentEvent);
+    // No awaits between the dispatch and this line — the shutdown path's view.
+    expect(detachedCount()).toBeGreaterThan(before);
+    expect(strategy.exported).toHaveLength(0); // still deferred, as designed
+  });
+
+  it('flushAllDetached() drains what was dispatched, with no tick loop', async () => {
+    const dispatcher = new EventDispatcher();
+    const strategy = makeObsStrategy();
+    const driver = createMicrotaskBatchDriver(async (_c, event) => {
+      strategy.exportEvent(event as AgentfootprintEvent);
+    });
+    attachObservabilityStrategy(dispatcher, {
+      strategy,
+      tier: 'firehose',
+      detach: { driver, mode: 'forget' },
+    });
+    dispatcher.dispatch(fakeAgentEvent);
+    dispatcher.dispatch(fakeAgentEvent);
+
+    const stats = await flushAllDetached({ timeoutMs: 5_000 });
+    expect(stats.pending).toBe(0);
+    expect(strategy.exported).toHaveLength(2);
   });
 });

@@ -25,6 +25,7 @@ import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { Agent } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { expectScalesLinearly } from '../helpers/perf.js';
+import { settlesWithin } from '../helpers/settles.js';
 
 // ── Test client ──────────────────────────────────────────────────────
 
@@ -117,6 +118,26 @@ describe('xrayObservability — P2 boundary', () => {
     expect((segs[0]?.trace_id as string).startsWith('1-')).toBe(true);
     // Root has no parent.
     expect(segs[0]?.parent_id).toBeUndefined();
+  });
+
+  // ── 8.11.1: flush() after stop() drains instead of spinning ────────
+  //
+  // Same fault as the CloudWatch adapter's: `doFlush()` bailed when `stopped`
+  // while `flush()` looped until the outbox was empty, so stopping before
+  // flushing spun the event loop forever during shutdown. A segment already
+  // closed is owed to X-Ray; `stop()` only stops accepting new events.
+  it('P2 flush() AFTER stop() still ships closed segments (8.11.1)', async () => {
+    const { client, puts } = makeMockClient();
+    const strat = xrayObservability({
+      serviceName: 'my-agent',
+      flushIntervalMs: 0,
+      _client: client,
+    });
+    strat.exportEvent(event('agentfootprint.agent.turn_start'));
+    strat.exportEvent(event('agentfootprint.agent.turn_end'));
+    strat.stop?.();
+    await settlesWithin(Promise.resolve(strat.flush?.()), 'xray flush() after stop()');
+    expect(parseAllSegments(puts)).toHaveLength(1);
   });
 });
 

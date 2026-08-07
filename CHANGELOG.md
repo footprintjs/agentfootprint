@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.11.1] - 2026-08-07
+
+**Two bugs in the shutdown path — one hangs the process, one loses the
+telemetry while reporting success.** Both are failures against behaviour this
+project documented, found by auditing the lifecycle 8.11.0 wrote down. Neither
+changes an API; both change what happens when a process stops.
+
+### `flush()` after `stop()` spun the event loop forever
+
+`cloudwatchObservability` and `xrayObservability` buffer events and drain them
+in `flush()`. Their `flush()` looped until the buffer was empty, while their
+internal drain refused to do anything once `stop()` had been called. Those two
+rules cannot both be satisfied, so a shutdown that stopped before it flushed
+entered **an infinite microtask loop**: 100% of a core, and — because a
+microtask loop never yields to the event loop — no timer could fire, no
+in-process shutdown deadline could expire, and nothing short of `SIGKILL` ended
+the process. Measured on both adapters and on any `compose([...])` containing
+one.
+
+The order documented on the strategy interface (flush, then stop) avoided it,
+which is why every test passed. The reverse order is not a misuse worth
+punishing with a hang.
+
+Fixed at the root: **`stop()` means stop ACCEPTING events — it never meant
+discard the ones already accepted.** The same stance `auditExport()` has always
+taken ("stop observing; never destroy collected evidence"). A `flush()` after a
+`stop()` now ships the tail batch and returns. Events exported after `stop()`
+are still dropped, and the timer is still cleared — that half is unchanged.
+
+The drain loops are now bounded by construction: every pass must remove at
+least one buffered event, and a pass that removes none ends the drain instead
+of trying again. A drain that cannot finish must return, never retry forever.
+
+### `flushAllDetached()` could not see detached exports
+
+With `enable.observability({ detach })`, each export is scheduled onto a
+footprintjs detach driver. Scheduling happened inside a promise continuation,
+so the detach handle reached footprintjs's registry a microtask *after* the
+event was dispatched. `flushAllDetached()` drains until that registry is empty
+— and it was still empty when it looked.
+
+So the shutdown recipe this project documents returned
+`{ done: 0, failed: 0, pending: 0 }`, a clean bill of health, while events were
+still in flight. Worse, **no consumer could fix it from outside**: the pending
+work lived in a `.then()` chain that nothing exposed. Measured both cold and
+warm — a resolved promise still defers.
+
+Scheduling is now synchronous, so the handle is registered in the same tick as
+the event and `flushAllDetached()` drains it exactly as documented. The
+deferral bought nothing in the first place: this module already imports
+`footprintjs` statically, so the dynamic import it was waiting on had loaded
+the package either way.
+
+### Also
+
+- The no-op returned when `enable.observability()` is called without a strategy
+  now carries no-op `flush` / `stop` alongside the unsubscribe. Nothing you can
+  reach today (the declared type is still `Unsubscribe`); it exists so the
+  no-subscription case is not the one path that breaks when that type widens.
+- Removed a dead loop condition in the CloudWatch drain (`lastFlushPromise !==
+  Promise.resolve()` compares against a freshly minted promise and is always
+  true).
+
 ## [8.11.0] - 2026-08-07
 
 **Telemetry that fails invisibly is indistinguishable from telemetry that

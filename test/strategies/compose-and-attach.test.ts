@@ -33,6 +33,8 @@ import {
 import { EventDispatcher } from '../../src/events/dispatcher.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { expectScalesLinearly, expectWithinTimes, measure } from '../helpers/perf.js';
+import { settlesWithin } from '../helpers/settles.js';
+import { cloudwatchObservability } from '../../src/adapters/observability/cloudwatch.js';
 
 const makeEvent = (overrides: Partial<AgentfootprintEvent> = {}): AgentfootprintEvent =>
   ({
@@ -127,6 +129,33 @@ describe('composeObservability', () => {
     composed.stop?.();
     expect(stopA).toHaveBeenCalledTimes(2);
     expect(stopB).toHaveBeenCalledTimes(2);
+  });
+
+  // P4 property (8.11.1): a composite inherits its children's drain safety.
+  // compose() holds no buffer of its own, so `stop()` then `flush()` used to
+  // spin forever on the FIRST batching child it fanned out to — the shape a
+  // real multi-vendor pipeline has.
+  it('P4 flush() after stop() drains a batching child instead of spinning', async () => {
+    const batches: Array<{ logEvents: ReadonlyArray<unknown> }> = [];
+    const child = cloudwatchObservability({
+      logGroupName: '/compose/group',
+      flushIntervalMs: 0,
+      _client: {
+        putLogEvents(input) {
+          batches.push(input);
+          return Promise.resolve();
+        },
+      },
+    });
+    const composed = composeObservability([child]);
+    composed.exportEvent(makeEvent());
+    composed.stop?.();
+    await settlesWithin(
+      Promise.resolve(composed.flush?.()),
+      'composed flush() after composed stop()',
+    );
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.logEvents).toHaveLength(1);
   });
 
   // P5 security: child without _onError logs to console.warn (audit trail)
