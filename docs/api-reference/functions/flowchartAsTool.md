@@ -8,7 +8,7 @@
 
 > **flowchartAsTool**(`opts`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)
 
-Defined in: [src/core/flowchartAsTool.ts:203](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/flowchartAsTool.ts#L203)
+Defined in: [src/core/flowchartAsTool.ts:305](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/flowchartAsTool.ts#L305)
 
 Wrap a footprintjs `FlowChart` as a `Tool` the Agent's LLM can call.
 
@@ -29,6 +29,9 @@ On execute:
   6. If the run threw, the error propagates — the Agent's
      tool-call handler converts it to a synthetic error string for
      the LLM to see + recover from.
+  7. With `keepRecord: true`, files the inner record under
+     `ctx.toolCallId` on ALL THREE exits (ok / error / paused) —
+     "why did it fail?" is the question most likely to come next.
 
 ## Parameters
 

@@ -6,7 +6,7 @@
 
 # Interface: RetrievedCandidate
 
-Defined in: [src/memory/retrieval/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L47)
+Defined in: [src/memory/retrieval/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L47)
 
 One candidate the retrieval considered — admitted or not.
 
@@ -22,7 +22,7 @@ chunk was admitted third, and know that was the picker's doing.
 
 > `readonly` **admitted**: `boolean`
 
-Defined in: [src/memory/retrieval/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L55)
+Defined in: [src/memory/retrieval/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L55)
 
 Did this candidate's text reach the prompt?
 
@@ -32,7 +32,7 @@ Did this candidate's text reach the prompt?
 
 > `readonly` `optional` **docUri?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L59)
+Defined in: [src/memory/retrieval/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L59)
 
 Source document, when the indexed value carried one in its metadata.
 
@@ -42,7 +42,7 @@ Source document, when the indexed value carried one in its metadata.
 
 > `readonly` `optional` **heading?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L63)
+Defined in: [src/memory/retrieval/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L63)
 
 Section heading, when the splitter knew one.
 
@@ -52,7 +52,7 @@ Section heading, when the splitter knew one.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L49)
+Defined in: [src/memory/retrieval/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L49)
 
 The store entry's id. For an indexed corpus this is the chunk id.
 
@@ -62,7 +62,7 @@ The store entry's id. For an indexed corpus this is the chunk id.
 
 > `readonly` `optional` **page?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L61)
+Defined in: [src/memory/retrieval/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L61)
 
 Page number, when the loader knew one (PDFs).
 
@@ -72,7 +72,7 @@ Page number, when the loader knew one (PDFs).
 
 > `readonly` `optional` **promptFragment?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L72)
+Defined in: [src/memory/retrieval/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L72)
 
 The exact prompt bytes this chunk contributed, set by the formatter
 for admitted candidates. Joining every admitted candidate's fragment
@@ -87,7 +87,7 @@ model sees.
 
 > `readonly` `optional` **promptPosition?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L83)
+Defined in: [src/memory/retrieval/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L83)
 
 Where this chunk sat in the injected message, 0-based.
 
@@ -104,7 +104,7 @@ a record that only kept one of the two orders could not show.
 
 > `readonly` **rank**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L53)
+Defined in: [src/memory/retrieval/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L53)
 
 1-based position by score, descending, across the whole candidate pool.
 
@@ -114,7 +114,7 @@ Defined in: [src/memory/retrieval/types.ts:53](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **reason?**: [`RetrievalRejectReason`](/agentfootprint/api/generated/type-aliases/RetrievalRejectReason.md)
 
-Defined in: [src/memory/retrieval/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L57)
+Defined in: [src/memory/retrieval/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L57)
 
 Present exactly when `admitted` is false.
 
@@ -124,6 +124,6 @@ Present exactly when `admitted` is false.
 
 > `readonly` **score**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/memory/retrieval/types.ts#L51)
+Defined in: [src/memory/retrieval/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/types.ts#L51)
 
 Similarity as the store reported it. Cosine ([-1, 1]) for every shipped store.

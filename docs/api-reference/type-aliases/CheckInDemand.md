@@ -8,7 +8,7 @@
 
 > **CheckInDemand**\<`TArgs`\> = `"always"` \| ((`args`, `ctx`) => `boolean`)
 
-Defined in: [src/core/checkin.ts:175](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/checkin.ts#L175)
+Defined in: [src/core/checkin.ts:175](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/checkin.ts#L175)
 
 What a tool declares to demand a check-in. `'always'` trips on every call;
 a predicate trips selectively (e.g. only high-value refunds). A predicate
