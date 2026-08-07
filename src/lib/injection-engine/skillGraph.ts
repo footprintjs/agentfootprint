@@ -30,6 +30,17 @@
  * (8.5.0) — see `reachableSkills` for why honouring it would break three of this
  * module's own invariants.
  *
+ * **One skill's turn at a time (8.15.0).** The keystone's third property — "B
+ * deactivates the same iteration C activates" — now holds for EVERY node in a flat
+ * graph, including an entry that carries a `when`. Such an entry used to compile to
+ * `when(ctx) || cursor === id`, and the leftover rule clause meant an entry that
+ * routed onward stayed loaded beside its own successor, on that iteration and every
+ * one after it. A conditional entry is active exactly while the cursor is on it;
+ * `when` decides where a turn STARTS. The one declared way to be co-active beside
+ * the cursor is an entry with no `when` at all (`{ kind: 'always' }`), which is
+ * untouched. A rule that matched while the cursor was elsewhere is reported, not
+ * swallowed — see `supersededEntries`.
+ *
  * **The model moves too (`read_skill`).** Scoped `read_skill` bounds the model to
  * `reachableSkills(cursor)` — the declared successors of where it stands, plus the
  * entries. A pick the gate ACCEPTS moves the cursor exactly like a declared edge
@@ -215,8 +226,24 @@ export interface SkillRouteOptions {
 
 /** Where a turn starts. `when` (optional) makes entry intent-conditional. */
 export interface SkillEntryOptions {
-  /** Predicate on the iteration context (e.g. `ctx.userMessage`). Omit → the
-   *  skill is always active (a persistent base procedure). */
+  /**
+   * Which entry the turn STARTS on — a predicate over the iteration context
+   * (e.g. `ctx.userMessage`). The first entry whose `when` passes wins the
+   * cold-start cursor.
+   *
+   * **It decides the start; it does not keep the skill on the wire (8.15.0).**
+   * A conditional entry is active exactly while the cursor is on it — a route out
+   * of it ends its turn, and its rule cannot bring it back while the graph is
+   * somewhere else. Before 8.15.0 the rule re-activated it on every iteration, so an
+   * entry that routed onward stayed loaded beside its own successor.
+   *
+   * Omit `when` → the skill is `always` active: a persistent base procedure, on
+   * beside whatever the cursor is on. That is the declared way to ask for an
+   * always-on skill; `when: () => true` is NOT the same thing any more. For "on
+   * whenever this matches, wherever the graph is", use the flavor built for it —
+   * `.steering(...)` / `.skill(...)` with its own `rule` trigger — rather than an
+   * entry, which is a position in a state machine.
+   */
   readonly when?: (ctx: InjectionContext) => boolean;
   readonly label?: string;
 }
@@ -410,6 +437,29 @@ export interface SkillGraph {
    * label of a declared edge that never fired.
    */
   explainNextSkill(ctx: InjectionContext): CursorMove;
+  /**
+   * The entries whose OWN `when` matched this iteration but which the cursor
+   * SUPERSEDED — declaration order, ids only (8.15.0). Empty for a graph with no
+   * conditional entries, for a decision `tree()`, and whenever the graph has no
+   * cursor at all.
+   *
+   * A conditional entry is active exactly while the cursor is on it. That is a
+   * suppression, and a suppression the run must not swallow: the agent threads this
+   * into the injection engine, which stamps it on `agentfootprint.context.evaluated`
+   * as `supersededIds`, beside the `cursorMove` that says where the graph went
+   * instead. Reading the two together answers "why isn't my entry loading?" without
+   * anyone having to re-run a predicate to guess.
+   *
+   * It rides the per-iteration event rather than `skill.reroute_superseded` on
+   * purpose: this is a CONTINUOUS condition (an entry whose rule stays true while
+   * the cursor is parked elsewhere is suppressed every iteration), while that event
+   * means a discrete broken promise — a `read_skill` pick the gate accepted and
+   * something else outranked. Per-iteration state belongs on the per-iteration event.
+   *
+   * Pure + deterministic. A predicate that throws is reported by the evaluator as
+   * `skipped: 'predicate-threw'`, not here.
+   */
+  supersededEntries(ctx: InjectionContext): readonly string[];
   /**
    * The REACHABLE set — which skills the model may `read_skill`-jump to from the
    * current cursor. The agent's runtime gate rejects any `read_skill('id')` whose
@@ -707,6 +757,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       // The reachable-set resolver — what `read_skill` may jump to from the cursor
       // (the runtime gate enforces it). Default empty; set per mode below.
       let reachableSkills: (currentSkillId?: string) => readonly string[] = () => [];
+      // The suppression reporter (8.15.0) — conditional entries whose rule matched
+      // while the cursor was elsewhere. Nothing to suppress without a cursor, so tree
+      // mode and cursor-less graphs keep the empty default.
+      let supersededEntries: (ctx: InjectionContext) => readonly string[] = () => [];
       // The relevance entry scorer — present only with `.entryByRelevance()` (flat).
       let scoreEntries:
         | ((ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>)
@@ -781,6 +835,11 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // see memoizePerPass. The public resolvers (one call per iteration) stay raw.
         const nextSkillForTriggers = memoizePerPass(resolveCursor);
         reachableSkills = makeReachableSkills(entries, routes);
+        // Exclusive entries are cursor-gated with no rule clause at all, so nothing
+        // there can be superseded by one — the reporter is for the DEFAULT form.
+        if (!entryScorer && !llmReadEntry) {
+          supersededEntries = makeSupersededEntries(entries, resolveCursor);
+        }
         if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
         for (const [id, skill] of skillsById) {
           const trigger = deriveTrigger(
@@ -843,6 +902,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // implementation — the two cannot answer differently.
         nextSkill: (ctx: InjectionContext) => resolveCursor(ctx).to,
         explainNextSkill: (ctx: InjectionContext) => resolveCursor(ctx),
+        supersededEntries: (ctx: InjectionContext) => supersededEntries(ctx),
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
         checkup: (options?: CheckupOptions) => checkup(options),
         ...(scoreEntries && { scoreEntries }),
@@ -1083,6 +1143,50 @@ function makeResolveCursor(
 }
 
 /**
+ * The suppression reporter (8.15.0) — the honesty half of the one law.
+ *
+ * A conditional entry is active exactly while the cursor is on it, so an entry whose
+ * own `when` matched while the graph is somewhere else is SUPPRESSED. Before 8.15.0
+ * it would have loaded beside the cursor's skill, which is precisely the double
+ * activation the law removes — so the run has to be able to SAY it happened, or an
+ * author debugging "why isn't my entry loading?" has nothing to read.
+ *
+ * Pure: one resolver pass plus, at most, one predicate call per OTHER conditional
+ * entry — O(E), inside the ceiling `memoizePerPass` sets for the whole evaluation.
+ * The RAW resolver (not the memoized projection) is used deliberately, matching the
+ * freshness policy of the other public resolvers: called once per iteration, always
+ * recomputed.
+ *
+ * A throwing predicate is swallowed HERE and reported by the evaluator instead
+ * (`skipped: 'predicate-threw'`) — one throw must not be told as two different
+ * stories on the same event.
+ */
+function makeSupersededEntries(
+  entries: readonly EntryDecl[],
+  resolveCursor: (ctx: InjectionContext) => CursorMove,
+): (ctx: InjectionContext) => readonly string[] {
+  const conditional = entries.filter((e) => e.when !== undefined);
+  if (conditional.length === 0) return () => [];
+  return (ctx) => {
+    const to = resolveCursor(ctx).to;
+    // No cursor at all → the trigger falls back to the rule alone, so nothing is
+    // being superseded.
+    if (to === undefined) return [];
+    const out: string[] = [];
+    for (const e of conditional) {
+      if (e.id === to) continue; // this is the one that won
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        if (e.when!(ctx)) out.push(e.id);
+      } catch {
+        // Reported by the evaluator as `predicate-threw`, not as a suppression.
+      }
+    }
+    return out;
+  };
+}
+
+/**
  * Memoize `nextSkill` per EVALUATION PASS.
  *
  * `evaluateInjections` hands ONE `ctx` object to every trigger in a pass, and
@@ -1155,23 +1259,44 @@ function deriveTrigger(
       return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
     }
     // Default (v1): a persistent base (always) or intent-conditional (rule).
-    // An unconditional entry is `always` — the cursor can add nothing to it.
+    // An unconditional entry is `always` — the cursor can add nothing to it. This is
+    // the ONE declared way to be co-active beside whatever the cursor is on, and it
+    // is untouched by 8.15.0.
     if (!entry.when) return { kind: 'always' };
-    // An intent-conditional entry is active when its RULE matches **or the graph's
-    // CURSOR is on it** (8.3.0). Before, this was the one compiled trigger in the
-    // whole file that ignored the cursor, which broke the keystone invariant this
-    // module's header states — "the active set and the persisted cursor never
-    // disagree" — in two ways that both reached real graphs:
-    //   • a declared `step` INTO an entry skill moved the cursor there and the
-    //     skill still didn't activate (its rule was written for the user's message,
-    //     not for the hop), so the author's cross-domain edge silently did nothing;
-    //   • the model's `read_skill` pick moved nothing at all, so the tool's
-    //     "activated for the next iteration" was simply false.
-    // The rule is evaluated FIRST and short-circuits, so a matching-rule graph is
-    // byte-identical: `nextSkill` is not consulted, and a throwing predicate still
-    // surfaces as the evaluator's `skipped: 'predicate-threw'`.
+    // An intent-conditional entry is active EXACTLY WHILE THE CURSOR IS ON IT (8.15.0)
+    // — the same expression the exclusive-entry arm above and the route-target arm
+    // below already use. One law for a flat graph: a skill is active iff the cursor is
+    // on it, or it declared itself unconditional.
+    //
+    // 8.3.0 added the cursor clause to a rule-only trigger and left the rule clause
+    // standing as an OR. That leftover was the bug: an entry S with a `when` that
+    // routes to T stayed active on the hop (its rule reads the user's message, which
+    // does not change mid-turn), so S and T were both on the wire — two skill bodies,
+    // two tool sets — for a graph drawn as a single-file state machine. And it was the
+    // steady state, not a blip: every later iteration parked the cursor on T while S's
+    // rule still matched, so S came back. This finishes 8.3.0 rather than reverting
+    // it — both failures 8.3.0 names (a declared `step` INTO an entry skill; a
+    // `read_skill` pick onto one) are carried by the CURSOR clause, which survives.
+    //
+    // The rule is still evaluated FIRST, and deliberately: a throwing entry predicate
+    // must keep surfacing as the evaluator's `skipped: 'predicate-threw'`, which it
+    // only can if the trigger calls it. Its answer is then used for exactly one thing
+    // — the cold-start fallback below, when the graph has no cursor at all.
+    //
+    // A rule that matched while the cursor is elsewhere is a SUPPRESSION, and the run
+    // says so: `supersededEntries(ctx)` reports it and the Injection Engine stamps it
+    // on `agentfootprint.context.evaluated` as `supersededIds`.
     const activeWhen = entry.when;
-    return { kind: 'rule', activeWhen: (ctx) => activeWhen(ctx) || nextSkill(ctx) === id };
+    return {
+      kind: 'rule',
+      activeWhen: (ctx) => {
+        const matched = activeWhen(ctx);
+        const to = nextSkill(ctx);
+        if (to === id) return true; // the cursor lands here — my turn
+        if (to !== undefined) return false; // the graph is engaged elsewhere — not my turn
+        return matched; // no cursor at all → the rule alone
+      },
+    };
   }
 
   // Deterministic incoming edges (when / onToolReturn) → cursor-gated + sticky.

@@ -37,7 +37,9 @@ The flavors are how you *mark intent* — but they all reduce to one `Injection`
 Build the entire app — agent, context engineering, tools, memory, RAG, MCP — against in-memory mocks first. Validate logic and patterns end-to-end with $0 API cost. Swap real infrastructure in, one boundary at a time, only after the flow is right.
 
 ```typescript
-import { Agent, mock, InMemoryStore, mockEmbedder, defineTool } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
 
 // Mock LLM provider — no API key, deterministic reply.
 const provider = mock({ reply: 'Refunds take 3 business days.' });
@@ -413,8 +415,7 @@ Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnabl
 ### Providers
 
 ```typescript
-import { mock } from 'agentfootprint';
-import { anthropic, openai, bedrock, ollama } from 'agentfootprint/providers';
+import { mock, anthropic, openai, bedrock, ollama } from 'agentfootprint/providers';
 
 // The ladder: shape the logic on the mock → check it against a REAL model for
 // free → pay only in production. One argument changes; the agent does not.

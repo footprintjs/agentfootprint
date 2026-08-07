@@ -92,6 +92,16 @@ export interface InjectionEngineConfig {
    * then sees exactly what it saw in 8.4.0).
    */
   readonly explainNextSkill?: (ctx: InjectionContext) => CursorMove;
+  /**
+   * The graph's suppression reporter (`graph.supersededEntries`, 8.15.0) — the
+   * conditional entries whose own `when` matched this iteration while the cursor was
+   * elsewhere, so the cursor law kept them off the wire. Stamped on
+   * `context.evaluated` as `supersededIds`.
+   *
+   * Optional for forward-compat with graphs built before it existed; absent → the
+   * field is omitted and an observer sees exactly what it saw in 8.14.0.
+   */
+  readonly supersededEntries?: (ctx: InjectionContext) => readonly string[];
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -169,7 +179,12 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
   })
     .addFunction(
       'Evaluate',
-      makeEvaluateStage(injections, config.nextSkill, config.explainNextSkill),
+      makeEvaluateStage(
+        injections,
+        config.nextSkill,
+        config.explainNextSkill,
+        config.supersededEntries,
+      ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
     )
@@ -207,6 +222,7 @@ function makeEvaluateStage(
   injections: readonly Injection[],
   nextSkill?: (ctx: InjectionContext) => string | undefined,
   explainNextSkill?: (ctx: InjectionContext) => CursorMove,
+  supersededEntries?: (ctx: InjectionContext) => readonly string[],
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -241,6 +257,11 @@ function makeEvaluateStage(
 
     const evaluation = evaluateInjections(injections, ctx);
 
+    // The suppression the cursor law performs (8.15.0). Asked ONCE, on the same ctx
+    // the triggers gated on, so the reported suppression and the active set are two
+    // views of one evaluation and cannot disagree.
+    const supersededIds = supersededEntries ? [...supersededEntries(ctx)] : [];
+
     // The told-the-truth check. `read_skill` answered "Skill 'X' activated for the
     // next iteration" and the gate accepted the pick — so X must be in THIS pass's
     // active set. It normally is (the pick moved the cursor). The one case where it
@@ -248,8 +269,15 @@ function makeEvaluateStage(
     // the model emitted a domain tool AND read_skill in one message, and the domain
     // tool's result matched a route). Rather than let a promise quietly go unmet,
     // say so on the record. Checked against the REAL active set, not against which
-    // clause won, so it can never fire for a pick that did take effect (e.g. an
-    // additive rules-form entry that activated while the cursor sat elsewhere).
+    // clause won — the question is "did the promised skill load?", and only the
+    // active set answers it.
+    //
+    // 8.15.0 widened WHEN that answer is "no", without changing the question. A
+    // superseded pick onto a rules-form entry used to slip through: the pick lost the
+    // cursor, but the entry's own rule kept it active anyway, so the promise looked
+    // kept by accident. Conditional entries are cursor-gated now, so the same hop
+    // reports itself. `supersededIds` below is a DIFFERENT fact — a continuous
+    // suppression, nobody's broken promise — and deliberately does not come out here.
     const pick = ctx.pendingSkillPick;
     if (pick !== undefined && !evaluation.active.some((inj) => inj.id === pick)) {
       typedEmit(scope, 'agentfootprint.skill.reroute_superseded', {
@@ -307,6 +335,11 @@ function makeEvaluateStage(
       // won inside the resolver (8.5.0). Skill-graph agents only; absent for a graph
       // built before `explainNextSkill` existed.
       ...(cursorMove && { cursorMove }),
+      // Entries whose own `when` matched and which the cursor law kept OFF the wire
+      // (8.15.0). A conditional entry is active exactly while the cursor is on it,
+      // and a suppression the run cannot name is a silent drop. Omitted when nothing
+      // was suppressed, so the common iteration is byte-identical to 8.14.0.
+      ...(supersededIds.length > 0 && { supersededIds }),
     });
   };
 }

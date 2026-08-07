@@ -13,8 +13,10 @@
  *   1. the five shapes of that lie, each fixed;
  *   2. the told-the-truth invariant — an accepted pick is in the NEXT iteration's
  *      active set, or the run says why not (`skill.reroute_superseded`);
- *   3. byte-identity for every path that already worked (a matching rule, an
- *      unconditional entry, a graph-less agent);
+ *   3. byte-identity for every path that already worked (an unconditional entry, a
+ *      graph-less agent, and a matching rule wherever the rule and the cursor agree —
+ *      8.15.0 made the CURSOR the sole activator of a conditional entry, so the two
+ *      only part company where the old OR was the bug: an entry that routed onward);
  *   4. the precedence: a declared edge beats a same-turn pick, and a pick never
  *      drags the cursor backwards afterwards.
  */
@@ -128,7 +130,10 @@ describe('model pick — trigger compilation', () => {
     expect(g.skills.find((s) => s.id === 'a')!.trigger.kind).toBe('always');
   });
 
-  it('an intent entry is active when its rule matches OR the cursor is on it', () => {
+  // Since 8.15.0 the rule no longer activates an entry directly — it decides the
+  // cold-start CURSOR, and the cursor activates. For every case below the two answers
+  // coincide, which is why this pin is byte-identical across the change.
+  it('an intent entry is active when the cursor is on it (its rule decides that)', () => {
     const a = defineSkill({ id: 'a', description: 'a', body: 'A' });
     const b = defineSkill({ id: 'b', description: 'b', body: 'B' });
     const g = skillGraph()
@@ -153,7 +158,11 @@ describe('model pick — trigger compilation', () => {
     expect(fire('b', ctx({ userMessage: 'alpha', pendingSkillPick: 'b' }))).toBe(false);
   });
 
-  it('a matching rule short-circuits — the cursor resolver is never consulted', () => {
+  it('the cursor resolver is consulted exactly ONCE per evaluation pass', () => {
+    // Until 8.15.0 a matching entry rule short-circuited the whole trigger, so the
+    // resolver was never consulted at all. It has to be now — "am I still the cursor?"
+    // is the question that ends a skill's turn when its own route fires — so what this
+    // pins is the COST: one pass, no matter how many graph triggers ask.
     let routeChecks = 0;
     const a = defineSkill({ id: 'a', description: 'a', body: 'A' });
     const b = defineSkill({ id: 'b', description: 'b', body: 'B' });
@@ -166,13 +175,39 @@ describe('model pick — trigger compilation', () => {
         },
       })
       .build();
-    const trig = g.skills.find((s) => s.id === 'a')!.trigger as {
-      activeWhen: (c: InjectionContext) => boolean;
-    };
-    expect(
-      trig.activeWhen(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 't', result: 'r' } })),
-    ).toBe(true);
-    expect(routeChecks).toBe(0);
+    const c = ctx({ currentSkillId: 'a', lastToolResult: { toolName: 't', result: 'r' } });
+    // The whole pass: both compiled triggers, sharing one memoized resolver view.
+    const out = evaluateInjections(g.skills, c);
+    expect(out.active.map((i) => i.id)).toEqual(['a']); // no edge fired → sticky stay
+    expect(routeChecks).toBe(1);
+  });
+
+  it('an entry that routes onward ends its own turn (8.15.0)', () => {
+    // The 8.3.0 shape was `when(ctx) || cursor === id`, and the leftover rule clause
+    // meant an entry that handed off stayed loaded beside its own successor — two
+    // bodies, two tool sets. A conditional entry is now active exactly while the
+    // cursor is on it.
+    const a = defineSkill({ id: 'a', description: 'a', body: 'A' });
+    const b = defineSkill({ id: 'b', description: 'b', body: 'B' });
+    const g = skillGraph()
+      .entry(a, { when: () => true })
+      .route(a, b, { onToolReturn: 't' })
+      .build();
+    const handoff = ctx({ currentSkillId: 'a', lastToolResult: { toolName: 't', result: 'r' } });
+    expect(g.nextSkill(handoff)).toBe('b');
+    expect(evaluateInjections(g.skills, handoff).active.map((i) => i.id)).toEqual(['b']);
+    // The suppression is on the record, not swallowed.
+    expect(g.supersededEntries(handoff)).toEqual(['a']);
+  });
+
+  it('an UNCONDITIONAL entry is still `always` — co-activation stays declarable', () => {
+    const base = defineSkill({ id: 'base', description: 'base', body: 'BASE' });
+    const b = defineSkill({ id: 'b', description: 'b', body: 'B' });
+    const g = skillGraph().entry(base).route(base, b, { onToolReturn: 't' }).build();
+    expect(g.skills.find((s) => s.id === 'base')!.trigger.kind).toBe('always');
+    const handoff = ctx({ currentSkillId: 'base', lastToolResult: { toolName: 't', result: 'r' } });
+    expect(evaluateInjections(g.skills, handoff).active.map((i) => i.id)).toEqual(['base', 'b']);
+    expect(g.supersededEntries(handoff)).toEqual([]);
   });
 
   it('a throwing entry rule still surfaces as `predicate-threw` (unchanged)', () => {

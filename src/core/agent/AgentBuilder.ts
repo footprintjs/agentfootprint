@@ -112,6 +112,11 @@ export class AgentBuilder {
    *  clause that won (`graph.explainNextSkill`, 8.5.0). Optional: a graph built
    *  before it existed still routes, it just cannot narrate the hop. */
   private skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove;
+  /** Captured from `.skillGraph(graph)` — the suppression reporter
+   *  (`graph.supersededEntries`, 8.15.0). Optional: a graph built before it existed
+   *  routes identically, it just cannot name the entries the cursor kept off the
+   *  wire. */
+  private skillGraphSupersededEntries?: (ctx: InjectionContext) => readonly string[];
   /** Is the mounted graph a decision `tree()`? DERIVED from `graph.nodes` — a tree
    *  is the only shape that draws `predicate` diamonds — so no new field had to be
    *  added to the public `SkillGraph`. Feeds the gate's tree-specific refusal. */
@@ -816,6 +821,9 @@ export class AgentBuilder {
     /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
      *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */
     explainNextSkill?: (ctx: InjectionContext) => CursorMove;
+    /** The entries the cursor law superseded this iteration (8.15.0). Optional for
+     *  forward-compat; absent → no `supersededIds` on `context.evaluated`. */
+    supersededEntries?: (ctx: InjectionContext) => readonly string[];
     /** The drawn nodes. Read for ONE thing: a `predicate` node means this graph is a
      *  decision `tree()`, which the gate's refusal has to say out loud. Derived here
      *  rather than added to `SkillGraph` as a mode field — the shape is already
@@ -856,6 +864,8 @@ export class AgentBuilder {
     // The clause-reporting resolver (8.5.0) and the one fact the gate's refusal
     // needs beyond the reachable set: is this a tree?
     this.skillGraphExplainNextSkill = graph.explainNextSkill;
+    // The suppression reporter (8.15.0) — what the cursor law kept off the wire.
+    this.skillGraphSupersededEntries = graph.supersededEntries;
     this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
     return this;
   }
@@ -1621,6 +1631,7 @@ export class AgentBuilder {
       this.skillGraphEdgeTargets,
       this.skillGraphExplainNextSkill,
       this.skillGraphIsTree,
+      this.skillGraphSupersededEntries,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

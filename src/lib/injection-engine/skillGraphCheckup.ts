@@ -210,33 +210,54 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
     });
   }
 
-  // 4. multi-entry-fanout (WARNING) — an entry MENU with no way to choose from it.
-  //    Provable without running a predicate: an entry's compiled trigger is
-  //    cursor-INDEPENDENT (no `when` → `{ kind: 'always' }`; a `when` → active whenever
-  //    its own rule matches), so every matching entry is on the wire at once — while
-  //    exactly ONE of them can be the cursor, the first whose `when` passes. The extras
-  //    pay tokens on every call and route nothing. `.entryBy()`/`.entryByRead()` exist
-  //    to make the menu exclusive, which is why this is silent under either.
-  if (!exclusiveEntries && entries.length >= 2) {
-    const unconditional = entries.filter((e) => !e.conditional).map((e) => e.id);
+  // 4. multi-entry-fanout (WARNING) — an entry menu with entries that DON'T take turns.
+  //
+  //    Provable without running a predicate, and only for UNCONDITIONAL entries: an
+  //    entry with no `when` compiles to `{ kind: 'always' }` and is therefore on the
+  //    wire beside whatever the cursor is on, every iteration, forever. That is the
+  //    fan-out — extras loading their body and tools without routing anything.
+  //
+  //    An entry that HAS a `when` is not a fan-out (8.15.0). It compiles cursor-gated,
+  //    so it is active exactly while the cursor is on it and exactly one entry is
+  //    loaded at a time — a deterministic rule-router, which is a taught shape, not a
+  //    mistake. This check used to fire on `entries.length >= 2` full stop, so a
+  //    three-rule router was warned at with advice ("give the extras a `when`") they
+  //    had already taken. It computed the `unconditional` list and then only used it to
+  //    soften the middle of the sentence.
+  //
+  //    (The old rationale here — "an entry's compiled trigger is cursor-INDEPENDENT" —
+  //    stopped being true of conditional entries in 8.3.0 and is wholly false in
+  //    8.15.0. It is why the check over-fired.)
+  //
+  //    `.entryBy()`/`.entryByRead()` make the menu exclusive by construction, which is
+  //    why this is silent under either.
+  const unconditional = entries.filter((e) => !e.conditional).map((e) => e.id);
+  if (!exclusiveEntries && entries.length >= 2 && unconditional.length > 0) {
     problems.push({
       kind: 'warning',
       code: 'multi-entry-fanout',
       message:
         `The graph declares ${plural(entries.length, 'entry', 'entries')} ` +
-        `(${quoteList(entryIds)}) and no way to choose between them, so every entry whose ` +
-        `trigger matches is active at once` +
-        (unconditional.length > 0
-          ? ` — and ${quoteList(unconditional)} ${
-              unconditional.length === 1 ? 'has' : 'have'
-            } no \`when\`, so ${unconditional.length === 1 ? 'it is' : 'they are'} active on ` +
-            `every iteration`
-          : '') +
-        `. Only ONE of them can be the cursor (the first whose \`when\` passes), so the others ` +
-        `load their body and tools without routing anything. Rank them with ` +
-        `.entryBy(keywordScorer()), let the model choose with .entryByRead(), give the extras a ` +
-        `\`when\`, or make them route targets instead of entries.`,
-      skill: entryIds[0],
+        `(${quoteList(entryIds)}), and ${quoteList(unconditional)} ${
+          unconditional.length === 1 ? 'has' : 'have'
+        } no \`when\` — so ${
+          unconditional.length === 1 ? 'it compiles' : 'they compile'
+        } to \`always\` and ${
+          unconditional.length === 1 ? 'is' : 'are'
+        } on the wire on EVERY iteration, beside whatever the cursor is on. Only one entry ` +
+        `can be the cursor, so ${
+          unconditional.length === 1 ? 'that one loads its' : 'those load their'
+        } body and tools without routing anything. Give ${quoteList(unconditional)} a ` +
+        `\`when\` (a conditional entry is active only while the cursor is on it), make ` +
+        `${
+          unconditional.length === 1 ? 'it a route target' : 'them route targets'
+        } instead of ${unconditional.length === 1 ? 'an entry' : 'entries'}, rank the menu ` +
+        `with .entryBy(keywordScorer()), or let the model choose with .entryByRead(). If ` +
+        `${
+          unconditional.length === 1 ? 'it is' : 'they are'
+        } meant to be always-on beside the graph, that is what .steering(...) / .skill(...) ` +
+        `are for.`,
+      skill: unconditional[0],
     });
   }
 

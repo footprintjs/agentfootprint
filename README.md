@@ -77,7 +77,8 @@ npm install agentfootprint footprintjs
 ```
 
 ```typescript
-import { Agent, defineTool, mock } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
 
 const weather = defineTool({
   name: 'weather',

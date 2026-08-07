@@ -381,6 +381,23 @@ export interface ContextEvaluatedPayload {
     /** `'entry' | 'route' | 'model-pick' | 'stay' | 'none'`. */
     readonly by: string;
   };
+  /**
+   * Skill-graph entries whose own `when` matched this iteration and which the cursor
+   * law kept OFF the wire (8.15.0). A conditional entry is active exactly while the
+   * cursor is on it — `when` says where a turn STARTS, not what stays loaded — so an
+   * entry whose rule still matches while the graph is elsewhere is suppressed.
+   *
+   * Read it beside `cursorMove`, which names where the graph went instead: together
+   * they answer "why isn't my entry loading?" without re-running a predicate to
+   * guess. Absent when nothing was suppressed, and for every non-skill-graph run.
+   *
+   * Distinct from `agentfootprint.skill.reroute_superseded`, which reports a DISCRETE
+   * broken promise (a `read_skill` pick the gate accepted and a declared edge
+   * outranked). This is a CONTINUOUS condition — an entry whose rule stays true while
+   * the cursor is parked elsewhere is suppressed on every iteration — so it rides the
+   * per-iteration event.
+   */
+  readonly supersededIds?: readonly string[];
 }
 
 // error.fatal + pause (always-on from library core)

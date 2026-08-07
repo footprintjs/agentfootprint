@@ -166,7 +166,15 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   });
   const contestedGraph = skillGraph({
     skills: [esxi, volume, parked],
-    start: { rules: [{ when: () => true, use: 'esxi-inventory' }] },
+    // An entry's `when` says where a turn STARTS — it does not keep the skill on the
+    // wire (8.15.0). A conditional entry is active exactly while the cursor is on it,
+    // so when the step below fires, `esxi-inventory` hands off cleanly instead of
+    // staying loaded beside `volume-lookup`. Write a real predicate, not `() => true`:
+    // "always on" is what an entry with NO `when` means (`always`), and the two are no
+    // longer the same thing.
+    start: {
+      rules: [{ when: (c) => /storage|db-/i.test(c.userMessage ?? ''), use: 'esxi-inventory' }],
+    },
     steps: [
       { from: 'esxi-inventory', to: 'volume-lookup', onToolReturn: 'get_vm_storage', label: 'WWN' },
       { from: 'esxi-inventory', to: 'capacity-report', when: (r) => r.toolName === 'never' },

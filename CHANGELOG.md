@@ -7,6 +7,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.15.0] - 2026-08-07
+
+**One skill's turn at a time.** A skill graph is a state machine, and every node in
+it obeyed that except one: an entry that carries a `when`. Such an entry stayed
+loaded beside the skill it had just handed off to — two skill bodies in the system
+prompt, two tool sets on the wire — and the check-up then warned about a fan-out
+using advice the author had already taken.
+
+Both come from the same leftover clause, and both are fixed here.
+
+### Behaviour change 1 — a handoff ends the previous skill's turn
+
+A conditional entry compiled to `when(ctx) || nextSkill(ctx) === id`. 8.3.0 added the
+cursor half and left the rule half standing, and the rule half is the bug: an entry's
+`when` reads the user's message, which does not change mid-turn. So when entry `S`
+routed to `T`, `S`'s rule still matched and `S` and `T` were both active. Measured on
+a two-skill support graph:
+
+| iteration | active | tool menu | skill bodies |
+|---|---|---|---|
+| 1 | `triage` | `read_skill`, `lookup_order` | triage |
+| 2 — the handoff | `triage`, `refund` | `read_skill`, `lookup_order`, `issue_refund` | triage + refund |
+| 3 | `triage`, `refund` | same | triage + refund |
+
+Note iteration 3. This was never a one-iteration blip: with the cursor parked on
+`refund`, `triage`'s rule kept matching, so it came back and stayed. The overlap was
+the steady state.
+
+**A conditional entry is now active exactly while the cursor is on it** — the same
+compiled expression a route target and an exclusive entry already used. One law for a
+flat graph: *a skill is active iff the cursor is on it, or it declared itself
+unconditional.* `when` chooses where a turn STARTS.
+
+This finishes 8.3.0 rather than reverting it. Both failures 8.3.0 named — a declared
+step INTO an entry skill, and a `read_skill` pick onto one — are carried by the cursor
+clause, which survives untouched. A throwing entry predicate still surfaces as
+`predicate-threw`: the rule is still evaluated, its answer is just no longer allowed
+to override the cursor.
+
+**What is unchanged:** an entry with no `when` (`{ kind: 'always' }` — the persistent
+base, and the declared way to be co-active beside the cursor); `.entryBy()` /
+`.entryByRelevance()` / `.entryByRead()` (already cursor-exclusive); decision `tree()`
+graphs; route targets; every injection registered beside the graph (`.fact()`,
+`.steering()`, `.skill()`, memory, RAG); and cold start for the entry whose rule wins.
+
+**Who has to change something.** One shape: a conditional entry used as an always-on
+overlay — `.entry(base, { when: () => true })`, or a locale/persona predicate that
+stays true for the whole turn. `when: () => true` used to be a synonym for omitting
+`when`; it is not any more. Two-line migration, pick one:
+
+```ts
+.entry(base)                                    // drop the `when` → `always`, on beside the cursor
+.steering(defineSteering({ id, prompt, ... }))  // or move the predicate to the flavor built for
+.skill(defineSkill({ id, ... }))                // "on whenever this matches, wherever the graph is"
+```
+
+An entry is a position in a state machine. If a skill is not a position, it was never
+an entry.
+
+**A second consequence, deliberate:** `agentfootprint.skill.reroute_superseded` now
+fires in one case it used to stay quiet for — a `read_skill` pick that lost the cursor
+to a declared edge but happened to be an entry whose own rule matched. It was active
+by accident, so the promise looked kept. It is now reported like every other
+superseded pick.
+
+### Behaviour change 2 — a rule-router is not a fan-out
+
+`multi-entry-fanout` fired whenever a graph declared two or more entries, including
+when every one of them carried a `when` — a deterministic rule-router, which is a
+taught shape. Worse, the advice it gave was *"give the extras a `when`"*, to entries
+that already had one. It computed which entries were unconditional and then used that
+only to soften the middle of the sentence.
+
+- Every entry conditional → **silent**. The entries take turns; there is nothing to
+  warn about, and after behaviour change 1 that is literally true at runtime.
+- Some entries unconditional → still a warning, and the advice now names **only**
+  those. `problem.skill` points at the first unconditional entry rather than at
+  whichever entry happened to be declared first.
+
+The rationale comment in the check-up claimed an entry's compiled trigger was
+"cursor-INDEPENDENT". That stopped being true in 8.3.0 and is wholly false now; it is
+why the check over-fired. Rewritten.
+
+### New — `supersededIds` on `agentfootprint.context.evaluated`
+
+A suppression the run cannot name is a silent drop. When a conditional entry's rule
+matched and the cursor law kept it off the wire, the entry's id is now reported on the
+per-iteration evaluation event, beside the `cursorMove` that says where the graph went
+instead. Together they answer *"why isn't my entry loading?"* without anyone
+re-running a predicate to guess.
+
+Omitted when nothing was suppressed, and for every non-skill-graph run — so an
+ordinary iteration is byte-identical to 8.14.0. It rides the per-iteration event
+rather than `skill.reroute_superseded` because it is a **continuous** condition (an
+entry whose rule stays true while the cursor is parked elsewhere is suppressed every
+iteration), while that event means a **discrete** broken promise. `skill.reroute_superseded`
+keeps its meaning exactly.
+
+`SkillGraph` gains `supersededEntries(ctx)` — pure, deterministic, empty for a graph
+with no conditional entries and for a decision `tree()`. It is threaded through
+`.skillGraph(graph)` like `explainNextSkill`, optional at every hop, so a graph built
+before it existed routes identically and simply emits no `supersededIds`.
+
+### Docs
+
+`SkillEntryOptions.when` and the skill-graph module header rewrote the law they were
+describing wrongly. The v2 design note that blessed the additive reading
+(`docs/design/skill-graph.md`, "orthogonal to a base") is kept as the record with a
+SUPERSEDED block naming what it got wrong. `examples/features/42-skill-graph-model-pick.ts`
+now writes a real entry predicate instead of `when: () => true`.
+
+`README.md` and `AGENTS.md` taught `import { mock } from 'agentfootprint'`, which has
+never compiled against the 8.x exports map — `mock` lives on
+`agentfootprint/providers` (and `InMemoryStore`/`mockEmbedder` on
+`agentfootprint/memory`). The snippets now import from the doors that exist. The
+repo's own agent skill file (`.claude/skills/agentfootprint/SKILL.md`) is rewritten
+against the current `.d.ts` for the same reason.
+
 ## [8.14.0] - 2026-08-07
 
 **Budgets tell one truth.** Eight ways this library reported a number, a limit

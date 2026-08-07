@@ -76,7 +76,12 @@ describe('multi-entry-fanout — an entry menu with no way to choose from it', (
     expect(g.checkup().ok).toBe(true); // a warning, never an error
   });
 
-  it('unit: the rules form trips it too (audit R13 — both entries `when`-gated)', () => {
+  it('unit: a rule-router does NOT trip it — its entries take turns (8.15.0)', () => {
+    // The inverse of the pin this test carried until 8.15.0. It used to assert that
+    // the rules form fanned out — `['a', 'b']` both active on one context — and that
+    // the check-up warned about it. Both halves were the bug: conditional entries are
+    // cursor-gated, so exactly one is loaded, and the warning's advice ("give the
+    // extras a `when`") was addressed to entries that already had one.
     const g = skillGraph({
       skills: [skill('a'), skill('b')],
       start: {
@@ -87,15 +92,32 @@ describe('multi-entry-fanout — an entry menu with no way to choose from it', (
       },
       check: 'off',
     });
-    expect(codes(g)).toContain('multi-entry-fanout');
-    // Both triggers evaluate active on the SAME context — the fan-out, demonstrated.
+    expect(codes(g)).not.toContain('multi-entry-fanout');
+    // ONE entry is on the wire — the one that won the cursor.
     const active = g.skills
       .filter((s) => {
         const t = s.trigger as { kind: string; activeWhen?: (c: InjectionContext) => boolean };
         return t.kind === 'always' || t.activeWhen?.(ctx()) === true;
       })
       .map((s) => s.id);
-    expect(active).toEqual(['a', 'b']);
+    expect(active).toEqual(['a']);
+    expect(g.nextSkill(ctx())).toBe('a');
+    // And the one that lost is REPORTED, not silently dropped.
+    expect(g.supersededEntries(ctx())).toEqual(['b']);
+  });
+
+  it('unit: one unconditional entry among conditional ones still trips it, named', () => {
+    const g = skillGraph()
+      .entry(skill('router'), { when: (c) => /go/.test(c.userMessage) })
+      .entry(skill('base'))
+      .build({ check: 'off' });
+    const [problem] = find(g, 'multi-entry-fanout');
+    expect(problem).toBeDefined();
+    // The advice names ONLY the offender — the entry that really is always on.
+    expect(problem!.message).toMatch(/Give "base" a `when`/);
+    expect(problem!.message).not.toMatch(/Give "router"/);
+    // …and the problem points at the offender, not at whichever entry came first.
+    expect(problem!.skill).toBe('base');
   });
 
   it('functional: ONE entry is silent, and so is an exclusive menu', () => {
@@ -138,7 +160,9 @@ describe('dead-entry-step — a transition the cold start can never take', () =>
     // The `rules` form gives every entry a `when`, so which one wins the cold start
     // depends on predicates this check cannot run. It reports what it can prove.
     expect(codes(g)).not.toContain('dead-entry-step');
-    expect(codes(g)).toContain('multi-entry-fanout'); // the fan-out IS provable
+    // …and there is nothing else to report either: every entry is conditional, so the
+    // entries take turns and there is no fan-out to warn about (8.15.0).
+    expect(codes(g)).not.toContain('multi-entry-fanout');
   });
 
   it('unit: names the winner, the stranded entry, and the one remaining path', () => {

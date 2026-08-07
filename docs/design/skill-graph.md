@@ -571,6 +571,29 @@ The agent is already a footprintjs chart: an injection-engine subflow runs Gathe
 > - the loop's cursor-update stage sets `currentSkillId = nextSkill(ctx)` each iteration.
 > `entry` (`always`/`rule`) triggers are UNCHANGED — an `always`-entry stays a persistent base; `currentSkillId` tracks the latest *transitioned-into* skill, orthogonal to a base. So the change is **non-breaking for entry skills** and tightens only route-target activation (which v1 admits was never `from`-enforced). `nextSkill` is exactly the design's `routeForResult` pin-table target (§9).
 
+> ### ⚠️ SUPERSEDED (8.15.0) — "orthogonal to a base" was only ever true of an `always`-entry
+>
+> The paragraph above is kept as the v2 record; its last sentence is where this design
+> was wrong. Leaving a **`rule`**-entry's trigger unchanged meant an entry with a `when`
+> compiled to `when(ctx) || nextSkill(ctx) === id`, and that OR is not orthogonal to
+> anything: an entry that routes onward keeps matching its own rule (the rule reads the
+> user's message, which does not change mid-turn), so it stayed loaded **beside its own
+> successor** — two skill bodies, two tool sets — on the handoff iteration and on every
+> iteration after it. The same OR made a `rules`-form router fan out: every entry whose
+> rule matched loaded, while only one could be the cursor.
+>
+> The law since 8.15.0: **in a flat graph a skill is active iff the cursor is on it, or
+> it declared itself unconditional.** A conditional entry compiles to the same
+> cursor-gated expression as a route target, so "clean handoff — B deactivates the same
+> step C activates" finally holds for every node. `when` chooses where a turn STARTS.
+>
+> The persistent base survives exactly as designed — it is the `always`-entry (no
+> `when`), which is untouched. What is gone is the *conditional* always-on entry:
+> `when: () => true` is no longer a synonym for omitting `when`. For "on whenever this
+> matches, wherever the graph is", use `.steering(...)` / `.skill(...)`, the flavors
+> built for it. A rule that matched while the cursor was elsewhere is reported as
+> `supersededIds` on `agentfootprint.context.evaluated`, never silently dropped.
+
 > ## ✅ IMPLEMENTATION STATUS (2026-06-17) — the keystone SHIPPED; the rest is still proposed
 > **Shipped in this increment** (panel-reviewed, verdict *SHIP WITH NITS*; full suite 3073 green + per-reactMode real-loop e2e tests):
 > - `currentSkillId` on `InjectionContext` + `AgentState` (the keystone), reset per turn at seed.

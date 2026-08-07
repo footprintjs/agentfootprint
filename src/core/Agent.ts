@@ -242,6 +242,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  stamps the result on `context.evaluated` as `cursorMove`. Optional — a graph
    *  built before it existed falls back to `nextSkill` and emits no `cursorMove`. */
   private readonly skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove;
+  /** Skill-graph suppression reporter (`graph.supersededEntries`, 8.15.0) — the
+   *  conditional entries whose `when` matched while the cursor was elsewhere.
+   *  Threaded to the Injection Engine, which stamps them on `context.evaluated` as
+   *  `supersededIds`. Optional — a graph built before it existed routes identically
+   *  and simply emits no `supersededIds`. */
+  private readonly skillGraphSupersededEntries?: (ctx: InjectionContext) => readonly string[];
   /** Is the mounted graph a decision `tree()`? Derived at build time from
    *  `graph.nodes` (a tree is the only shape with `predicate` nodes) — no new
    *  public field on `SkillGraph`. Read for ONE thing: the read_skill gate's
@@ -482,6 +488,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphEdgeTargets?: readonly string[],
     skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove,
     skillGraphIsTree?: boolean,
+    skillGraphSupersededEntries?: (ctx: InjectionContext) => readonly string[],
   ) {
     super();
     this.provider = opts.provider;
@@ -507,6 +514,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphScoreEntries = skillGraphScoreEntries;
     this.skillGraphEdgeTargets = new Set(skillGraphEdgeTargets ?? []);
     this.skillGraphExplainNextSkill = skillGraphExplainNextSkill;
+    this.skillGraphSupersededEntries = skillGraphSupersededEntries;
     this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
@@ -1740,6 +1748,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
       ...(this.skillGraphExplainNextSkill && {
         explainNextSkill: this.skillGraphExplainNextSkill,
+      }),
+      ...(this.skillGraphSupersededEntries && {
+        supersededEntries: this.skillGraphSupersededEntries,
       }),
     });
     // Relevance entry router — a once-per-turn stage (off the ReAct loop) that
