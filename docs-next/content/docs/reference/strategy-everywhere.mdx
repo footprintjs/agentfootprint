@@ -42,7 +42,7 @@ Validated outcome:
 Properties the cache layer demonstrated and v2.8 generalizes:
 
 1. **One DSL** — consumers write declarative intent, not provider-specific calls
-2. **N strategies** — auto-registered by side-effect import; `agentfootprint/cache-anthropic` etc. as subpaths with peer-dep on vendor SDK
+2. **N strategies** — auto-registered by side-effect import from the one grouped `agentfootprint/cache` subpath, each strategy carrying a peer-dep on its vendor SDK. (This memo originally sketched a subpath *per vendor* — `cache-anthropic`, `cache-openai`. What shipped is one subpath per **group**, with one strategy per vendor inside it. The observability adapters below landed the same way, under `agentfootprint/observe`; treat "one grouped subpath, N strategies" as the rule.)
 3. **Wildcard fallback** — unknown provider gets a No-Op strategy that's safe by construction
 4. **Hot-path zero-allocation** — when the strategy says "no work to do," the runtime skips marker emission entirely
 5. **CI-testable with mocks** — every strategy ships a mock variant; production swaps in the real one
@@ -214,14 +214,14 @@ From the 7-expert design review (AWS IAM, Datadog, OTel, Stripe, Vercel, React, 
 
 The library already has `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runtime` peer dep) shipping. Established pattern. Lean into the same ecosystem for observability strategies.
 
-> **Status (4.0.0):** the grouped enablers (`observability`, `cost`, `liveStatus`), the strategy slot + the 4 default sinks (importable from `agentfootprint/observe`), the per-group `compose*` combinators, and the AWS observability adapters (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`) plus `otelObservability` have **all shipped** — under the single `agentfootprint/observe` subpath. The deprecated flat methods `enable.thinking` / `enable.logging` were **removed in 4.0.0** (migrate to `enable.liveStatus` / `enable.observability`); `enable.flowchart` is **kept** (it's a real, non-deprecated composition-graph feature). `cost`/`lens` vendor subpaths and `enable.lens` remain planned. The version numbers below are the original plan, kept for the historical record.
+> **Status (4.0.0):** the grouped enablers (`observability`, `cost`, `liveStatus`), the strategy slot + the 4 default sinks (importable from `agentfootprint/observe`), the per-group `compose*` combinators, and the AWS observability adapters (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`) plus `otelObservability` have **all shipped** — under the single `agentfootprint/observe` subpath. The deprecated flat methods `enable.thinking` / `enable.logging` were **removed in 4.0.0** (migrate to `enable.liveStatus` / `enable.observability`); `enable.flowchart` is **kept** (it's a real, non-deprecated composition-graph feature). `cost`/`lens` vendor subpaths and `enable.lens` remain planned. The version numbers below are the original plan, kept for the historical record — **and so are the per-vendor subpath names in them**. None of `observability-agentcore`, `observability-cloudwatch`, `observability-xray` or `observability-otel` was ever published as an import path; they are plan labels for what became factories inside `agentfootprint/observe`. Do not copy them into an import.
 
 | Version | What ships | Breaking? |
 |---|---|---|
 | **v2.8.0** | Add the 4 grouped enablers (`observability`, `cost`, `liveStatus`, `lens`) + strategy slot + 3 default strategies (`console`, `inMemorySink`, `chatBubble`) + `compose([...])` combinator. Granular methods kept, marked `@deprecated`. | No |
-| **v2.8.1** | **AWS Bedrock AgentCore Observability** — `agentfootprint/observability-agentcore`. Pipes events into AgentCore's native observability. Same peer (`@aws-sdk/client-bedrock-agent-runtime`) as `memory-agentcore`, so consumers already integrated with AgentCore Memory get observability for free. | No |
-| **v2.8.2** | **AWS CloudWatch Logs** — `agentfootprint/observability-cloudwatch`. Generic AWS structured logging. Peer: `@aws-sdk/client-cloudwatch-logs`. | No |
-| **v2.8.3** | **AWS X-Ray** — `agentfootprint/observability-xray`. Distributed tracing. Peer: `@aws-sdk/client-xray`. | No |
+| **v2.8.1** | **AWS Bedrock AgentCore Observability** — planned as `observability-agentcore`; shipped as `agentcoreObservability()` in `agentfootprint/observe`. Pipes events into AgentCore's native observability. Same peer (`@aws-sdk/client-bedrock-agent-runtime`) as `memory-agentcore`, so consumers already integrated with AgentCore Memory get observability for free. | No |
+| **v2.8.2** | **AWS CloudWatch Logs** — planned as `observability-cloudwatch`; shipped as `cloudwatchObservability()` in `agentfootprint/observe`. Generic AWS structured logging. Peer: `@aws-sdk/client-cloudwatch-logs`. | No |
+| **v2.8.3** | **AWS X-Ray** — planned as `observability-xray`; shipped as `xrayObservability()` in `agentfootprint/observe`. Distributed tracing. Peer: `@aws-sdk/client-xray`. | No |
 | **v2.9.x** | OTel exporter (`observability-otel`) — non-AWS but vendor-neutral; OTel SIG offered to contribute | No |
 | **v2.10.x** | Non-AWS observability: Datadog, Pino | No |
 | **v2.11.x** | `cost-stripe`, `cost-webhook` | No |

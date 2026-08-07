@@ -79,10 +79,27 @@ function extractMeta(filePath) {
   if (!m) return null;
   const block = m[1];
 
+  /**
+   * Read one string field out of the meta block.
+   *
+   * The body must be delimited-relative, NOT "any quote ends it". The older
+   * form banned all three quote characters from the body and let any of them
+   * close the string, so a double-quoted description containing an apostrophe
+   * ended at the apostrophe: example 44's
+   *
+   *   description: "read_skill's menu is rebuilt each iteration ..."
+   *
+   * silently became the single word `read_skill`, and the README shipped a
+   * truncated row that read as a complete sentence. Capturing the opening
+   * delimiter and requiring the SAME character to close (backreference `\1`)
+   * lets the other two quote characters live inside the body, which is exactly
+   * what JavaScript's own string rules say. `\\.` still consumes an escaped
+   * delimiter (`'It\'s fine'`) so an escape can never terminate the string.
+   */
   function fieldOf(key) {
-    const re = new RegExp(`${key}\\s*:\\s*['"\`]((?:\\\\.|[^'"\`\\\\])*)['"\`]`);
+    const re = new RegExp(`${key}\\s*:\\s*(['"\`])((?:\\\\.|(?!\\1)[^\\\\])*)\\1`);
     const found = re.exec(block);
-    return found ? found[1] : null;
+    return found ? found[2] : null;
   }
 
   const id = fieldOf('id');
