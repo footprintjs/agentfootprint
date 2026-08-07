@@ -2,35 +2,17 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / RunCheckpointError
+[agentfootprint](/agentfootprint/api/generated/README.md) / InvalidRunInputError
 
-# Class: RunCheckpointError
+# Class: InvalidRunInputError
 
-Defined in: [src/core/runCheckpoint.ts:161](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L161)
+Defined in: [src/core/runInput.ts:45](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runInput.ts#L45)
 
-Thrown by `agent.run()` when a fault occurs mid-run. Carries the
-underlying error AND the last-known-good checkpoint. Catch this
-specifically to engage the resume-on-error path; let other errors
-propagate normally.
+Thrown by `run()` (and `runTyped()`) when the input is not a message.
 
-## Example
-
-```ts
-import { Agent, RunCheckpointError } from 'agentfootprint';
-
-try {
-  const result = await agent.run({ message: 'long task' });
-} catch (err) {
-  if (err instanceof RunCheckpointError) {
-    await checkpointStore.put(sessionId, err.checkpoint);
-    // hours / restart later:
-    const checkpoint = await checkpointStore.get(sessionId);
-    const result = await agent.resumeOnError(checkpoint);
-  } else {
-    throw err; // not a recoverable error — propagate
-  }
-}
-```
+`received` is a short, non-leaking description of what arrived — the type
+and, for an object, its keys. Never the value: an input that was refused
+for being the wrong shape is still the caller's data.
 
 ## Extends
 
@@ -40,23 +22,29 @@ try {
 
 ### Constructor
 
-> **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
+> **new InvalidRunInputError**(`ctx`): `InvalidRunInputError`
 
-Defined in: [src/core/runCheckpoint.ts:171](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L171)
+Defined in: [src/core/runInput.ts:52](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runInput.ts#L52)
 
 #### Parameters
 
-##### cause
+##### ctx
 
-`Error`
+###### hint
 
-##### checkpoint
+`string`
 
-[`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
+###### received
+
+`string`
+
+###### runner
+
+`string`
 
 #### Returns
 
-`RunCheckpointError`
+`InvalidRunInputError`
 
 #### Overrides
 
@@ -64,38 +52,23 @@ Defined in: [src/core/runCheckpoint.ts:171](https://github.com/footprintjs/agent
 
 ## Properties
 
-### cause
+### cause?
 
-> `readonly` **cause**: `Error`
+> `optional` **cause?**: `unknown`
 
-Defined in: [src/core/runCheckpoint.ts:166](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L166)
+Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
-The error that triggered the checkpoint. Inspect for retry
- decisions ("if cause is CircuitOpenError, wait for cooldown
- before resuming").
-
-#### Overrides
+#### Inherited from
 
 `Error.cause`
 
 ***
 
-### checkpoint
-
-> `readonly` **checkpoint**: [`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
-
-Defined in: [src/core/runCheckpoint.ts:169](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L169)
-
-The last-known-good checkpoint. Persist + pass back to
- `agent.resumeOnError(checkpoint)` to continue from here.
-
-***
-
 ### code
 
-> `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
+> `readonly` **code**: `"ERR_INVALID_RUN_INPUT"`
 
-Defined in: [src/core/runCheckpoint.ts:162](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L162)
+Defined in: [src/core/runInput.ts:46](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runInput.ts#L46)
 
 ***
 
@@ -120,6 +93,26 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 #### Inherited from
 
 `Error.name`
+
+***
+
+### received
+
+> `readonly` **received**: `string`
+
+Defined in: [src/core/runInput.ts:48](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runInput.ts#L48)
+
+Short description of what was passed, e.g. `'object with keys: text'`.
+
+***
+
+### runner
+
+> `readonly` **runner**: `string`
+
+Defined in: [src/core/runInput.ts:50](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runInput.ts#L50)
+
+Which runner refused, e.g. `'Agent.run'`.
 
 ***
 

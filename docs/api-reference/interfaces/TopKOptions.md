@@ -6,7 +6,7 @@
 
 # Interface: TopKOptions
 
-Defined in: [src/memory/retrieval/topK.ts:24](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/topK.ts#L24)
+Defined in: [src/memory/retrieval/topK.ts:24](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/memory/retrieval/topK.ts#L24)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/memory/retrieval/topK.ts:24](https://github.com/footprintjs/age
 
 > `readonly` `optional` **k?**: `number`
 
-Defined in: [src/memory/retrieval/topK.ts:30](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/topK.ts#L30)
+Defined in: [src/memory/retrieval/topK.ts:30](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/memory/retrieval/topK.ts#L30)
 
 How many chunks may reach the prompt. Default 3 — enough for more
 than one perspective, few enough that the middle of a long context
@@ -26,7 +26,7 @@ does not swallow the answer.
 
 > `readonly` `optional` **rejectWindow?**: `number`
 
-Defined in: [src/memory/retrieval/topK.ts:51](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/topK.ts#L51)
+Defined in: [src/memory/retrieval/topK.ts:51](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/memory/retrieval/topK.ts#L51)
 
 How many extra candidates to pull past `k` so that rejected ones can
 be reported. Default 10. Raising it costs one larger read and shows
@@ -38,7 +38,7 @@ more near-misses; it can never change which candidates are admitted.
 
 > `readonly` `optional` **threshold?**: `number` \| `null`
 
-Defined in: [src/memory/retrieval/topK.ts:45](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/memory/retrieval/topK.ts#L45)
+Defined in: [src/memory/retrieval/topK.ts:45](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/memory/retrieval/topK.ts#L45)
 
 Minimum similarity to admit, in the store's score space ([-1, 1]
 cosine for every shipped store). Default 0.7.

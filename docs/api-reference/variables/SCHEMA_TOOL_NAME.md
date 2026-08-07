@@ -8,7 +8,7 @@
 
 > `const` **SCHEMA\_TOOL\_NAME**: `"respond_with_schema"` = `'respond_with_schema'`
 
-Defined in: [src/core/agent/outputEnforcement.ts:186](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/outputEnforcement.ts#L186)
+Defined in: [src/core/agent/outputEnforcement.ts:197](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/outputEnforcement.ts#L197)
 
 Name of the tool the schema is presented as.
 

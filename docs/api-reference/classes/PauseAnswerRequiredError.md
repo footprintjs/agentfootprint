@@ -2,35 +2,27 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / RunCheckpointError
+[agentfootprint](/agentfootprint/api/generated/README.md) / PauseAnswerRequiredError
 
-# Class: RunCheckpointError
+# Class: PauseAnswerRequiredError
 
-Defined in: [src/core/runCheckpoint.ts:161](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L161)
+Defined in: [src/core/pause.ts:252](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/pause.ts#L252)
 
-Thrown by `agent.run()` when a fault occurs mid-run. Carries the
-underlying error AND the last-known-good checkpoint. Catch this
-specifically to engage the resume-on-error path; let other errors
-propagate normally.
+Raised when an `askHuman()` / `pauseHere()` pause is resumed with NO answer.
 
-## Example
+That pause exists to collect a value, and the value it collects becomes the
+paused tool's result — the model reads it as what the tool said. Resuming
+with nothing has two live readings, "the person gave no answer" and "just
+carry on", and they produce different conversations. So the caller says
+which; the library does not choose.
 
-```ts
-import { Agent, RunCheckpointError } from 'agentfootprint';
+Until 8.18.0 it chose, and chose invisibly: the missing answer became a
+`role: 'tool'` message with `content: undefined`, and the run died on the
+next turn inside the messages slot with a `TypeError` that named neither the
+tool nor the resume.
 
-try {
-  const result = await agent.run({ message: 'long task' });
-} catch (err) {
-  if (err instanceof RunCheckpointError) {
-    await checkpointStore.put(sessionId, err.checkpoint);
-    // hours / restart later:
-    const checkpoint = await checkpointStore.get(sessionId);
-    const result = await agent.resumeOnError(checkpoint);
-  } else {
-    throw err; // not a recoverable error — propagate
-  }
-}
-```
+Nothing ran before this raised and the checkpoint is unchanged — answer it
+and resume the same checkpoint again.
 
 ## Extends
 
@@ -40,23 +32,25 @@ try {
 
 ### Constructor
 
-> **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
+> **new PauseAnswerRequiredError**(`ctx`): `PauseAnswerRequiredError`
 
-Defined in: [src/core/runCheckpoint.ts:171](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L171)
+Defined in: [src/core/pause.ts:259](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/pause.ts#L259)
 
 #### Parameters
 
-##### cause
+##### ctx
 
-`Error`
+###### toolCallId
 
-##### checkpoint
+`string`
 
-[`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
+###### toolName
+
+`string`
 
 #### Returns
 
-`RunCheckpointError`
+`PauseAnswerRequiredError`
 
 #### Overrides
 
@@ -64,38 +58,23 @@ Defined in: [src/core/runCheckpoint.ts:171](https://github.com/footprintjs/agent
 
 ## Properties
 
-### cause
+### cause?
 
-> `readonly` **cause**: `Error`
+> `optional` **cause?**: `unknown`
 
-Defined in: [src/core/runCheckpoint.ts:166](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L166)
+Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
-The error that triggered the checkpoint. Inspect for retry
- decisions ("if cause is CircuitOpenError, wait for cooldown
- before resuming").
-
-#### Overrides
+#### Inherited from
 
 `Error.cause`
 
 ***
 
-### checkpoint
-
-> `readonly` **checkpoint**: [`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
-
-Defined in: [src/core/runCheckpoint.ts:169](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L169)
-
-The last-known-good checkpoint. Persist + pass back to
- `agent.resumeOnError(checkpoint)` to continue from here.
-
-***
-
 ### code
 
-> `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
+> `readonly` **code**: `"ERR_PAUSE_ANSWER_REQUIRED"`
 
-Defined in: [src/core/runCheckpoint.ts:162](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runCheckpoint.ts#L162)
+Defined in: [src/core/pause.ts:253](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/pause.ts#L253)
 
 ***
 
@@ -154,6 +133,26 @@ not capture any frames.
 #### Inherited from
 
 `Error.stackTraceLimit`
+
+***
+
+### toolCallId
+
+> `readonly` **toolCallId**: `string`
+
+Defined in: [src/core/pause.ts:257](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/pause.ts#L257)
+
+The tool call id the pause is filed under.
+
+***
+
+### toolName
+
+> `readonly` **toolName**: `string`
+
+Defined in: [src/core/pause.ts:255](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/pause.ts#L255)
+
+The tool whose `execute()` paused.
 
 ## Methods
 

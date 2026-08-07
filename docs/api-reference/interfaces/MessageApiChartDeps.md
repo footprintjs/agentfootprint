@@ -6,7 +6,7 @@
 
 # Interface: MessageApiChartDeps
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/buildMessageApiChart.ts#L63)
+Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/buildMessageApiChart.ts#L63)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footp
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/buildMessageApiChart.ts#L65)
+Defined in: [src/core/agent/buildMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/buildMessageApiChart.ts#L65)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:65](https://github.com/footp
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/buildMessageApiChart.ts#L64)
+Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/buildMessageApiChart.ts#L64)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footp
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:67](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/buildMessageApiChart.ts#L67)
+Defined in: [src/core/agent/buildMessageApiChart.ts:67](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/buildMessageApiChart.ts#L67)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:67](https://github.com/footp
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/buildMessageApiChart.ts#L66)
+Defined in: [src/core/agent/buildMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/buildMessageApiChart.ts#L66)

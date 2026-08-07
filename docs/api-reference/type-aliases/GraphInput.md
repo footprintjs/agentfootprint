@@ -8,6 +8,6 @@
 
 > **GraphInput** = `Record`\<`string`, `unknown`\>
 
-Defined in: [src/core-flow/Graph.ts:195](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core-flow/Graph.ts#L195)
+Defined in: [src/core-flow/Graph.ts:195](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core-flow/Graph.ts#L195)
 
 The graph's own input — handed to every ROOT node (one with no parents).

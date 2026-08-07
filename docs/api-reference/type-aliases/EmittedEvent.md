@@ -8,7 +8,7 @@
 
 > **EmittedEvent** = `AgentfootprintEvent`
 
-Defined in: [src/core/runner.ts:311](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/runner.ts#L311)
+Defined in: [src/core/runner.ts:317](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/runner.ts#L317)
 
 Union used in emit() for the `AgentfootprintEvent` type constraint. A
 consumer emitting a custom event passes a plain object payload; the

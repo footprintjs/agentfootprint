@@ -8,7 +8,7 @@
 
 > **deny**(`reason`): [`DenyOutcome`](/agentfootprint/api/generated/interfaces/DenyOutcome.md)
 
-Defined in: [src/core/agent/middleware/outcomes.ts:66](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/middleware/outcomes.ts#L66)
+Defined in: [src/core/agent/middleware/outcomes.ts:66](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/middleware/outcomes.ts#L66)
 
 Refuse the call.
 

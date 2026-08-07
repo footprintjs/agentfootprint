@@ -8,7 +8,7 @@
 
 > **isDropNotice**(`msg`): `boolean`
 
-Defined in: [src/core/agent/window/notice.ts:59](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/window/notice.ts#L59)
+Defined in: [src/core/agent/window/notice.ts:59](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/notice.ts#L59)
 
 True when this message is a notice a previous drop wrote.
 

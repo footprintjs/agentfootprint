@@ -8,7 +8,7 @@
 
 > **slidingWindow**(`options`): [`WindowStrategy`](/agentfootprint/api/generated/interfaces/WindowStrategy.md)
 
-Defined in: [src/core/agent/window/strategies/slidingWindow.ts:53](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/core/agent/window/strategies/slidingWindow.ts#L53)
+Defined in: [src/core/agent/window/strategies/slidingWindow.ts:53](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/strategies/slidingWindow.ts#L53)
 
 Keep the most recent `keepRecentTurns` turns in the live window and drop
 the older ones — except anything that refuses.

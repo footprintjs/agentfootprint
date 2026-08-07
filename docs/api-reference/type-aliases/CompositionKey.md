@@ -8,4 +8,4 @@
 
 > **CompositionKey** = *typeof* [`COMPOSITION_KEYS`](/agentfootprint/api/generated/variables/COMPOSITION_KEYS.md)\[keyof *typeof* [`COMPOSITION_KEYS`](/agentfootprint/api/generated/variables/COMPOSITION_KEYS.md)\]
 
-Defined in: [src/recorders/core/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/b5df2fd7d693fd0ea98d64e321079f8b7da1e085/src/recorders/core/types.ts#L134)
+Defined in: [src/recorders/core/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/recorders/core/types.ts#L134)
