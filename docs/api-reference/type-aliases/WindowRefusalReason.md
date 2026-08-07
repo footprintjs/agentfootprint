@@ -6,9 +6,9 @@
 
 # Type Alias: WindowRefusalReason
 
-> **WindowRefusalReason** = `"system-envelope"` \| `"unresolved-tool-call"` \| `"paused-tool"` \| `"pending-check-in"` \| `"inside-keep-window"` \| `"only-existing-summary"` \| `"summarizer-failed"` \| `"summary-not-smaller"`
+> **WindowRefusalReason** = `"system-envelope"` \| `"unresolved-tool-call"` \| `"paused-tool"` \| `"pending-check-in"` \| `"inside-keep-window"` \| `"only-existing-summary"` \| `"summarizer-failed"` \| `"summary-not-smaller"` \| `"replacement-not-smaller"`
 
-Defined in: [src/core/agent/window/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L43)
+Defined in: [src/core/agent/window/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/types.ts#L43)
 
 Why a turn refused to leave the window. Every one of these is NAMED in the
 commit — a removal that took less than it could have has to say why, or the

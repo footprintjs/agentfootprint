@@ -6,7 +6,7 @@
 
 # Interface: ResolveCtx
 
-Defined in: [src/adapters/types.ts:456](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L456)
+Defined in: [src/adapters/types.ts:456](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L456)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:456](https://github.com/footprintjs/agentfoot
 
 > `readonly` **availableBudgetTokens**: `number`
 
-Defined in: [src/adapters/types.ts:460](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L460)
+Defined in: [src/adapters/types.ts:460](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L460)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:460](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/adapters/types.ts:459](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L459)
+Defined in: [src/adapters/types.ts:459](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L459)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:459](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L461)
+Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L461)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfoot
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/adapters/types.ts:458](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L458)
+Defined in: [src/adapters/types.ts:458](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L458)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/adapters/types.ts:458](https://github.com/footprintjs/agentfoot
 
 > `readonly` **userMessage**: `string`
 
-Defined in: [src/adapters/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L457)
+Defined in: [src/adapters/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L457)

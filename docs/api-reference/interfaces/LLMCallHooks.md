@@ -6,7 +6,7 @@
 
 # Interface: LLMCallHooks
 
-Defined in: [src/adapters/types.ts:381](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L381)
+Defined in: [src/adapters/types.ts:381](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L381)
 
 v7.8 — optional per-call hooks the CALLER hands a provider.
 
@@ -42,7 +42,7 @@ resilience guide's "honest limits".
 
 > `readonly` `optional` **onResilience?**: (`report`) => `void`
 
-Defined in: [src/adapters/types.ts:388](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/adapters/types.ts#L388)
+Defined in: [src/adapters/types.ts:388](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/adapters/types.ts#L388)
 
 Called once per resilience decision (a fallback, a retry, a
 recovery). Decorators forward this hook inward unchanged, so a

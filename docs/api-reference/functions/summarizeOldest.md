@@ -8,7 +8,7 @@
 
 > **summarizeOldest**(`options`): [`WindowStrategy`](/agentfootprint/api/generated/interfaces/WindowStrategy.md)
 
-Defined in: [src/core/agent/window/strategies/summarizeOldest.ts:53](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/strategies/summarizeOldest.ts#L53)
+Defined in: [src/core/agent/window/strategies/summarizeOldest.ts:57](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/strategies/summarizeOldest.ts#L57)
 
 Fold the oldest contiguous run of foldable turns into one summary message,
 keeping the recent turns and stepping over anything unresolved.
@@ -33,7 +33,11 @@ against `thresholdTokens`. A provider that reports no usage gets
 import { Agent, summarizeOldest } from 'agentfootprint';
 
 const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' })
-  .window(summarizeOldest({ thresholdTokens: 120_000, summarizer: anthropic() }))
+  .window(summarizeOldest({
+    thresholdTokens: 120_000,
+    summarizer: anthropic(),
+    model: 'claude-haiku-4-5',
+  }))
   .build();
 // `.compaction({ ... })` is this exact line, spelled shorter.
 ```

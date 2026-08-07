@@ -6,7 +6,7 @@
 
 # Interface: CheckInTrail
 
-Defined in: [src/core/checkin.ts:96](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L96)
+Defined in: [src/core/checkin.ts:96](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/checkin.ts#L96)
 
 A compact grouped summary of the run so far.
 
@@ -16,7 +16,7 @@ A compact grouped summary of the run so far.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/checkin.ts:98](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L98)
+Defined in: [src/core/checkin.ts:98](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/checkin.ts#L98)
 
 Which ReAct iteration this check-in fired on.
 
@@ -26,7 +26,7 @@ Which ReAct iteration this check-in fired on.
 
 > `readonly` **summary**: `string`
 
-Defined in: [src/core/checkin.ts:102](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L102)
+Defined in: [src/core/checkin.ts:102](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/checkin.ts#L102)
 
 One-line human summary, e.g. `"3 tools run over 2 iterations"`.
 
@@ -36,6 +36,6 @@ One-line human summary, e.g. `"3 tools run over 2 iterations"`.
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: [src/core/checkin.ts:100](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L100)
+Defined in: [src/core/checkin.ts:100](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/checkin.ts#L100)
 
 The tool calls already completed this run, oldest first.

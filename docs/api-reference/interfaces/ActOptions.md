@@ -6,7 +6,7 @@
 
 # Interface: ActOptions
 
-Defined in: [src/core/agent/act.ts:45](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L45)
+Defined in: [src/core/agent/act.ts:45](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L45)
 
 The whole steering wheel: one key per moment of the loop, each optional.
 
@@ -18,7 +18,7 @@ The declaration order below is the order the loop reaches them.
 
 > `readonly` `optional` **afterTool?**: readonly [`ToolMiddleware`](/agentfootprint/api/generated/type-aliases/ToolMiddleware.md)[]
 
-Defined in: [src/core/agent/act.ts:51](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L51)
+Defined in: [src/core/agent/act.ts:51](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L51)
 
 Every tool result, after the tool ran and before the model reads it.
 
@@ -28,7 +28,7 @@ Every tool result, after the tool ran and before the model reads it.
 
 > `readonly` `optional` **beforeTool?**: readonly [`ToolMiddleware`](/agentfootprint/api/generated/type-aliases/ToolMiddleware.md)[]
 
-Defined in: [src/core/agent/act.ts:49](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L49)
+Defined in: [src/core/agent/act.ts:49](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L49)
 
 Every tool call, before it is dispatched.
 
@@ -38,7 +38,7 @@ Every tool call, before it is dispatched.
 
 > `readonly` `optional` **input?**: readonly [`MessageMiddleware`](/agentfootprint/api/generated/interfaces/MessageMiddleware.md)[]
 
-Defined in: [src/core/agent/act.ts:47](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L47)
+Defined in: [src/core/agent/act.ts:47](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L47)
 
 The user's message, before the run commits it.
 
@@ -48,7 +48,7 @@ The user's message, before the run commits it.
 
 > `readonly` `optional` **output?**: readonly [`MessageMiddleware`](/agentfootprint/api/generated/interfaces/MessageMiddleware.md)[]
 
-Defined in: [src/core/agent/act.ts:55](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L55)
+Defined in: [src/core/agent/act.ts:55](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L55)
 
 The final answer, before the caller receives it.
 
@@ -58,6 +58,6 @@ The final answer, before the caller receives it.
 
 > `readonly` `optional` **window?**: [`WindowStrategy`](/agentfootprint/api/generated/interfaces/WindowStrategy.md)
 
-Defined in: [src/core/agent/act.ts:53](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/act.ts#L53)
+Defined in: [src/core/agent/act.ts:53](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/act.ts#L53)
 
 What the live context window keeps, at each iteration boundary.

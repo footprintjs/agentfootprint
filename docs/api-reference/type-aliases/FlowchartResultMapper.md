@@ -8,7 +8,7 @@
 
 > **FlowchartResultMapper** = (`snapshot`) => `string`
 
-Defined in: [src/core/flowchartAsTool.ts:129](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/flowchartAsTool.ts#L129)
+Defined in: [src/core/flowchartAsTool.ts:129](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/flowchartAsTool.ts#L129)
 
 Optional result mapper. Receives the flowchart's final snapshot
 (pruned to `FlowchartToolSnapshot`) and returns the string the LLM

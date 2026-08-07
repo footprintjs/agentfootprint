@@ -8,7 +8,7 @@
 
 > **llmRouter**(`opts`): [`LlmRouter`](/agentfootprint/api/generated/interfaces/LlmRouter.md)
 
-Defined in: [src/patterns/LlmRouter.ts:513](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/patterns/LlmRouter.ts#L513)
+Defined in: [src/patterns/LlmRouter.ts:513](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/patterns/LlmRouter.ts#L513)
 
 Build an LLM-driven router for a fixed agent roster.
 

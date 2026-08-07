@@ -8,7 +8,7 @@
 
 > **defineRAG**(`opts`): `MemoryDefinition`
 
-Defined in: [src/lib/rag/defineRAG.ts:248](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/defineRAG.ts#L248)
+Defined in: [src/lib/rag/defineRAG.ts:248](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/defineRAG.ts#L248)
 
 Build a RAG context-engineering definition. The returned
 `MemoryDefinition` is registered on the Agent via `.rag(definition)`

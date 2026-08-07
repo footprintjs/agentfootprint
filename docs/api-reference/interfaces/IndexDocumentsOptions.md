@@ -6,7 +6,7 @@
 
 # Interface: IndexDocumentsOptions
 
-Defined in: [src/lib/rag/indexDocuments.ts:45](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L45)
+Defined in: [src/lib/rag/indexDocuments.ts:45](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L45)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/rag/indexDocuments.ts:45](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **embedderId?**: `string`
 
-Defined in: [src/lib/rag/indexDocuments.ts:77](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L77)
+Defined in: [src/lib/rag/indexDocuments.ts:77](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L77)
 
 Stable id of the embedder. Stored on each entry so a future embedder swap
 doesn't silently mix similarity scores.
@@ -32,7 +32,7 @@ accept vectors from `openaiEmbedder()`.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/lib/rag/indexDocuments.ts:64](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L64)
+Defined in: [src/lib/rag/indexDocuments.ts:64](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L64)
 
 Identity scope to write under. Default: a single shared
 `{ conversationId: '_global' }` namespace, suitable for app-wide
@@ -57,7 +57,7 @@ If you index here under `_global` but query under
 
 > `readonly` `optional` **maxConcurrency?**: `number`
 
-Defined in: [src/lib/rag/indexDocuments.ts:125](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L125)
+Defined in: [src/lib/rag/indexDocuments.ts:125](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L125)
 
 Max number of concurrent embed calls when the embedder doesn't
 implement `embedBatch`. Default `8`. Without this cap, a 10K-doc
@@ -71,7 +71,7 @@ its own batching).
 
 > `readonly` `optional` **onEmbedding?**: (`payload`) => `void`
 
-Defined in: [src/lib/rag/indexDocuments.ts:114](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L114)
+Defined in: [src/lib/rag/indexDocuments.ts:114](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L114)
 
 Called once with the cost of the embedding work this call did (8.9.0).
 
@@ -104,7 +104,7 @@ await indexDocuments(store, embedder, docs, {
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/lib/rag/indexDocuments.ts:96](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L96)
+Defined in: [src/lib/rag/indexDocuments.ts:96](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L96)
 
 Optional abort signal — embedders making network calls thread
 this through to abort batch indexing on shutdown / timeout.
@@ -115,7 +115,7 @@ this through to abort batch indexing on shutdown / timeout.
 
 > `readonly` `optional` **tier?**: `"hot"` \| `"warm"` \| `"cold"`
 
-Defined in: [src/lib/rag/indexDocuments.ts:84](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L84)
+Defined in: [src/lib/rag/indexDocuments.ts:84](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L84)
 
 Optional tier tag to attach to indexed entries (`'hot'` /
 `'warm'` / `'cold'`). Useful when read-side `defineRAG` should
@@ -127,7 +127,7 @@ filter to a subset of the corpus.
 
 > `readonly` `optional` **ttlMs?**: `number`
 
-Defined in: [src/lib/rag/indexDocuments.ts:90](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/lib/rag/indexDocuments.ts#L90)
+Defined in: [src/lib/rag/indexDocuments.ts:90](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/lib/rag/indexDocuments.ts#L90)
 
 Optional TTL in milliseconds from indexing time. Useful for
 compliance retention windows (e.g., re-index quarterly).

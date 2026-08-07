@@ -6,7 +6,7 @@
 
 # Class: RunCheckpointError
 
-Defined in: [src/core/runCheckpoint.ts:147](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/runCheckpoint.ts#L147)
+Defined in: [src/core/runCheckpoint.ts:161](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/runCheckpoint.ts#L161)
 
 Thrown by `agent.run()` when a fault occurs mid-run. Carries the
 underlying error AND the last-known-good checkpoint. Catch this
@@ -42,7 +42,7 @@ try {
 
 > **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
 
-Defined in: [src/core/runCheckpoint.ts:157](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/runCheckpoint.ts#L157)
+Defined in: [src/core/runCheckpoint.ts:171](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/runCheckpoint.ts#L171)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [src/core/runCheckpoint.ts:157](https://github.com/footprintjs/agent
 
 > `readonly` **cause**: `Error`
 
-Defined in: [src/core/runCheckpoint.ts:152](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/runCheckpoint.ts#L152)
+Defined in: [src/core/runCheckpoint.ts:166](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/runCheckpoint.ts#L166)
 
 The error that triggered the checkpoint. Inspect for retry
  decisions ("if cause is CircuitOpenError, wait for cooldown
@@ -84,7 +84,7 @@ The error that triggered the checkpoint. Inspect for retry
 
 > `readonly` **checkpoint**: [`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
 
-Defined in: [src/core/runCheckpoint.ts:155](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/runCheckpoint.ts#L155)
+Defined in: [src/core/runCheckpoint.ts:169](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/runCheckpoint.ts#L169)
 
 The last-known-good checkpoint. Persist + pass back to
  `agent.resumeOnError(checkpoint)` to continue from here.
@@ -95,7 +95,7 @@ The last-known-good checkpoint. Persist + pass back to
 
 > `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
 
-Defined in: [src/core/runCheckpoint.ts:148](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/runCheckpoint.ts#L148)
+Defined in: [src/core/runCheckpoint.ts:162](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/runCheckpoint.ts#L162)
 
 ***
 

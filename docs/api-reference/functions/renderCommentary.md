@@ -8,7 +8,7 @@
 
 > **renderCommentary**(`template`, `vars`): `string`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:422](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/observability/commentary/commentaryTemplates.ts#L422)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:458](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/observability/commentary/commentaryTemplates.ts#L458)
 
 Render a template by substituting `{{name}}` placeholders from the
 vars bag. Missing keys render as empty string — keeps prose

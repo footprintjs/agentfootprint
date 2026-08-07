@@ -6,12 +6,21 @@
 
 # Interface: BudgetPressureRecord
 
-Defined in: [src/recorders/core/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L99)
+Defined in: [src/recorders/core/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L108)
 
 Budget-pressure warning — emitted before evictions fire.
 
-`capTokens` / `projectedTokens` are historical names: slot budgets are
-measured in CHARS. Renaming them would be breaking, so they stay.
+`capTokens` / `projectedTokens` are historical names: on THIS channel the
+numbers are CHARS (`composeSlot` measures `String.length`). Renaming them
+would be breaking, so they stay and [unit](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#unit) / [cap](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#cap) /
+[projected](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#projected) were added beside them in 8.14.0.
+
+The three new fields are OPTIONAL here, unlike on the event payload, because
+this record is written by slot builders — including any a consumer wrote —
+and a record from one of those still typechecks. `ContextRecorder` fills a
+missing `unit` with `'chars'`, which is not a guess: every write to
+`COMPOSITION_KEYS.BUDGET_PRESSURE` comes off a slot composition, and a slot
+composition is counted in characters by construction.
 
 `planAction: 'none'` means no mitigation was performed — nothing was
 evicted or truncated and the full content still went to the LLM. It is
@@ -19,11 +28,25 @@ the honest reading of a slot that composed over its `budgetCap`.
 
 ## Properties
 
-### capTokens
+### cap?
+
+> `readonly` `optional` **cap?**: `number`
+
+Defined in: [src/recorders/core/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L120)
+
+Same value as [capTokens](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#captokens), under a name that asserts no unit.
+
+***
+
+### ~~capTokens~~
 
 > `readonly` **capTokens**: `number`
 
-Defined in: [src/recorders/core/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L101)
+Defined in: [src/recorders/core/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L111)
+
+#### Deprecated
+
+Read [cap](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#cap) with [unit](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#unit). Still written.
 
 ***
 
@@ -31,7 +54,7 @@ Defined in: [src/recorders/core/types.ts:101](https://github.com/footprintjs/age
 
 > `readonly` **overflowBy**: `number`
 
-Defined in: [src/recorders/core/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L103)
+Defined in: [src/recorders/core/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L114)
 
 ***
 
@@ -39,15 +62,29 @@ Defined in: [src/recorders/core/types.ts:103](https://github.com/footprintjs/age
 
 > `readonly` **planAction**: `"abort"` \| `"evict"` \| `"summarize"` \| `"none"`
 
-Defined in: [src/recorders/core/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L104)
+Defined in: [src/recorders/core/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L115)
 
 ***
 
-### projectedTokens
+### projected?
+
+> `readonly` `optional` **projected?**: `number`
+
+Defined in: [src/recorders/core/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L122)
+
+Same value as [projectedTokens](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#projectedtokens), under a name that asserts no unit.
+
+***
+
+### ~~projectedTokens~~
 
 > `readonly` **projectedTokens**: `number`
 
-Defined in: [src/recorders/core/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L102)
+Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L113)
+
+#### Deprecated
+
+Read [projected](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#projected) with [unit](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#unit). Still written.
 
 ***
 
@@ -55,4 +92,15 @@ Defined in: [src/recorders/core/types.ts:102](https://github.com/footprintjs/age
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/recorders/core/types.ts#L100)
+Defined in: [src/recorders/core/types.ts:109](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L109)
+
+***
+
+### unit?
+
+> `readonly` `optional` **unit?**: `"chars"` \| `"tokens"`
+
+Defined in: [src/recorders/core/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/recorders/core/types.ts#L118)
+
+What the numbers count. Absent on a record written before 8.14.0 (or by
+ a third-party slot builder) — the slot channel is `'chars'`.

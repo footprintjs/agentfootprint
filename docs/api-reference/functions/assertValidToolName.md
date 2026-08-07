@@ -8,7 +8,7 @@
 
 > **assertValidToolName**(`name`): `asserts name is string`
 
-Defined in: [src/core/tools.ts:155](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/tools.ts#L155)
+Defined in: [src/core/tools.ts:155](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/tools.ts#L155)
 
 STRICT validation — throws a clear, actionable error if a tool name can't be
 sent to an LLM. Exposed for consumers who want to fail hard (e.g. in a build

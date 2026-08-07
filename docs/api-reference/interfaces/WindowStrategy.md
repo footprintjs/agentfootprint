@@ -6,7 +6,7 @@
 
 # Interface: WindowStrategy
 
-Defined in: [src/core/agent/window/strategy.ts:190](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/strategy.ts#L190)
+Defined in: [src/core/agent/window/strategy.ts:197](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/strategy.ts#L197)
 
 A window strategy: what the live window should become at this iteration
 boundary, and what the record must say about the change.
@@ -16,11 +16,39 @@ Pass one to `AgentBuilder.window(...)`. Exactly one per agent —
 
 ## Properties
 
+### billing?
+
+> `readonly` `optional` **billing?**: `object`
+
+Defined in: [src/core/agent/window/strategy.ts:217](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/strategy.ts#L217)
+
+What this strategy will BILL, when it bills anything (8.14.0).
+
+Omit it if your strategy makes no LLM call — the drop strategies do, and
+a strategy that spends nothing has no billing to declare.
+
+It exists so the agent BUILDER can check a strategy's spending against
+the agent's own provider and model before the first run. Without it,
+`.compaction({...})` could be refused for a configuration that
+`.window(summarizeOldest({...}))` — the same strategy through the other
+door — accepted silently. Two doors onto one policy must refuse the same
+things, or the refusal is advice rather than a rule.
+
+#### model
+
+> `readonly` **model**: `string`
+
+#### provider
+
+> `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
+
+***
+
 ### name
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/window/strategy.ts:196](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/strategy.ts#L196)
+Defined in: [src/core/agent/window/strategy.ts:203](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/strategy.ts#L203)
 
 Stable name — it is written onto every record this strategy files
 (`WindowRecord.strategy`), so a reader can tell which policy produced a
@@ -32,7 +60,7 @@ window, and it names the strategy on the chart's `compact` stage.
 
 > **plan**(`input`): `Promise`\<[`WindowStrategyResult`](/agentfootprint/api/generated/interfaces/WindowStrategyResult.md) \| `undefined`\>
 
-Defined in: [src/core/agent/window/strategy.ts:208](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/strategy.ts#L208)
+Defined in: [src/core/agent/window/strategy.ts:232](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/window/strategy.ts#L232)
 
 Decide. Called at EVERY ReAct iteration boundary.
 

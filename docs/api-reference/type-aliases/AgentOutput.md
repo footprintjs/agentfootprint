@@ -8,4 +8,4 @@
 
 > **AgentOutput** = `string`
 
-Defined in: [src/core/agent/types.ts:355](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/types.ts#L355)
+Defined in: [src/core/agent/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/agent/types.ts#L405)
