@@ -53,7 +53,7 @@ import {
   messagesRoleRefusal,
 } from '../../../lib/injection-engine/messagesSlotRefusal.js';
 import { fnv1a } from '../../slots/helpers.js';
-import { withMemoryRecall } from '../memoryRecallInjections.js';
+import { withMemoryRecall, type MemoryRecallSource } from '../memoryRecallInjections.js';
 import { deliveryKey, keysInWindow, refusalForPlacement, tailWireRole } from '../delivery/rules.js';
 import type { DeferredMessage, DeliveredMessage } from '../delivery/types.js';
 import type { AgentState } from '../types.js';
@@ -61,9 +61,11 @@ import type { AgentState } from '../types.js';
 export interface DeliverStageDeps {
   /** The attached provider — the authority on what the wire can carry. */
   readonly provider: LLMProvider;
-  /** Memory ids whose recall composes into the active set, exactly as the
-   *  slots compose it (so the stage and the slots agree on what is active). */
-  readonly memoryIds: readonly string[];
+  /** Memories whose recall composes into the active set, exactly as the
+   *  slots compose it (so the stage and the slots agree on what is active).
+   *  A bare id keeps the historical call shape; the object form carries the
+   *  `flavor` a corpus retrieval needs (8.8.0). */
+  readonly memoryIds: readonly (string | MemoryRecallSource)[];
 }
 
 /** What a provider carries inside `messages`, with the floor applied. */

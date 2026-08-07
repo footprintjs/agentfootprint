@@ -90,14 +90,22 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
 
   const pipeline = buildPipeline(options);
 
+  // `readOnly` drops the write half entirely (8.8.0). Not "writes are
+  // skipped at runtime" — the subflow is never compiled and never mounted,
+  // so a read-only memory has no write stage in its chart, no write commit
+  // in its log, and nothing to disable later by accident.
+  const write = options.readOnly === true ? undefined : pipeline.write;
+
   const definition: MemoryDefinition = {
     id: options.id,
     ...(options.description !== undefined && { description: options.description }),
     type: options.type,
     read: brandPipeline(pipeline.read),
-    ...(pipeline.write !== undefined && { write: brandPipeline(pipeline.write) }),
+    ...(write !== undefined && { write: brandPipeline(write) }),
     timing: options.timing ?? MEMORY_TIMING.TURN_START,
     ...(options.redact !== undefined && { redact: options.redact }),
+    ...(options.corpus !== undefined && { corpus: options.corpus }),
+    ...(options.flavor !== undefined && { flavor: options.flavor }),
     ...(options.type === MEMORY_TYPES.CAUSAL &&
       (options as DefineCausalOptions).projection !== undefined && {
         projection: (options as DefineCausalOptions).projection,
@@ -122,6 +130,30 @@ function validate(options: DefineMemoryOptions): void {
       `defineMemory[id=${options.id}]: \`store\` is required. ` +
         'Pass `new InMemoryStore()` for dev/tests, or a backed store for production.',
     );
+  }
+  // The shorthand and the spelled-out rule EXCLUDE. Accepting both would
+  // mean one of two numbers silently loses, and the recording would name
+  // a `k` the run did not use.
+  // Read through a structural shape, not the union: the union's arms
+  // declare the OTHER spelling as `never`, so intersecting them here
+  // would make the very field this check reads unreadable.
+  const strategy = options.strategy as {
+    readonly topK?: number;
+    readonly threshold?: number;
+    readonly retrieval?: { readonly name: string };
+  };
+  if (strategy?.retrieval !== undefined) {
+    const shorthand: string[] = [];
+    if (strategy.topK !== undefined) shorthand.push('`topK`');
+    if (strategy.threshold !== undefined) shorthand.push('`threshold`');
+    if (shorthand.length > 0) {
+      throw new Error(
+        `defineMemory[id=${options.id}]: ${shorthand.join(' and ')} cannot be combined with ` +
+          '`retrieval` — they are two spellings of the same rule and could disagree. ' +
+          `Keep the strategy (\`retrieval: ${strategy.retrieval.name}({ ... })\`) and drop ` +
+          `${shorthand.join('/')}, or drop \`retrieval\`.`,
+      );
+    }
   }
 }
 
@@ -230,8 +262,11 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
       const config: SemanticPipelineConfig = {
         store: options.store,
         embedder: t.embedder,
-        k: t.topK,
+        ...(t.topK !== undefined && { k: t.topK }),
         ...(t.threshold !== undefined && { minScore: t.threshold }),
+        ...(t.embedderId !== undefined && { embedderId: t.embedderId }),
+        ...(t.retrieval !== undefined && { retrieval: t.retrieval }),
+        ...(options.flavor !== undefined && { flavor: options.flavor }),
       };
       return semanticPipeline(config);
     }
@@ -351,6 +386,15 @@ function buildCausalPipeline(options: DefineCausalOptions): MemoryPipeline {
       `defineMemory[${options.id}]: CAUSAL type requires a vector-capable store. ` +
         'Pass `new InMemoryStore({ embedder })` for dev/tests, or a vector adapter ' +
         '(pgvector, Pinecone, Qdrant) for production.',
+    );
+  }
+
+  // CAUSAL predates the retrieval seam and reads the shorthand only. A
+  // strategy passed here would be accepted and ignored, so it is refused.
+  if (s.retrieval !== undefined) {
+    throw new Error(
+      `defineMemory[${options.id}]: CAUSAL type does not read \`retrieval\` — snapshot recall ` +
+        'matches a stored query vector, not a document pool. Use `topK` + `threshold`.',
     );
   }
 

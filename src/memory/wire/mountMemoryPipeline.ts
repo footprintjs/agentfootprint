@@ -82,6 +82,33 @@ export interface MountMemoryPipelineConfig<ParentState> {
   readonly writeSubflowId?: string;
 
   /**
+   * Read and write under THIS namespace instead of whatever the parent
+   * scope's identity key holds (8.8.0).
+   *
+   * A conversation memory wants the run's identity — that is how each
+   * conversation remembers its own turns. A shared document corpus does
+   * not: it belongs to the application, not to a conversation, and
+   * scoping it per run is what made `defineRAG`'s documented example
+   * retrieve nothing at all. `MemoryDefinition.corpus` feeds this.
+   */
+  readonly identityOverride?: import('../identity/index.js').MemoryIdentity;
+
+  /**
+   * Scope field the read subflow writes its retrieval record to (8.8.0).
+   *
+   * The record has to be lifted OUT of the subflow to be worth anything:
+   * a subflow's own scope never reaches the root commit log, which is why
+   * a backward slice from the answer used to bottom out at "the memory
+   * mount wrote it" with no way to ask which passage. Lifted here, the
+   * per-chunk ids and scores are ordinary root state, and `sliceForKey`
+   * / `backtrack` / `who_wrote` reach them like any other value.
+   *
+   * Omitted → nothing is lifted, and pipelines that do no retrieval are
+   * unaffected (they never write the record in the first place).
+   */
+  readonly evidenceKey?: keyof ParentState & string;
+
+  /**
    * Evidence source for CAUSAL pipelines (the evidence bridge, backlog #5).
    * Called by the write mount's inputMapper at write time; its result lands on
    * `MemoryState.runEvidence` so `writeSnapshot` persists real decisions /
@@ -131,9 +158,12 @@ export function mountMemoryRead<ParentState>(
   const injectionKey = config.injectionKey ?? DEFAULTS.injectionKey;
   const readSubflowId = config.readSubflowId ?? DEFAULTS.readSubflowId;
 
+  const evidenceKey = config.evidenceKey;
+  const identityOverride = config.identityOverride;
+
   return builder.addSubFlowChartNext(readSubflowId, config.pipeline.read, 'Load Memory', {
     inputMapper: (parentState: Record<string, unknown>) => ({
-      identity: parentState[identityKey],
+      identity: identityOverride ?? parentState[identityKey],
       turnNumber: parentState[turnNumberKey],
       contextTokensRemaining: parentState[contextTokensKey],
       // Pass the current turn's messages through — semantic read stages
@@ -149,6 +179,12 @@ export function mountMemoryRead<ParentState>(
     }),
     outputMapper: (subflowState: Record<string, unknown>) => ({
       [injectionKey]: subflowState.formatted,
+      // The retrieval record, lifted to the parent so it lands in the ROOT
+      // commit log. Only present for pipelines that actually retrieve.
+      ...(evidenceKey !== undefined &&
+        subflowState.retrieved !== undefined && {
+          [evidenceKey]: subflowState.retrieved,
+        }),
     }),
   });
 }
@@ -169,9 +205,11 @@ export function mountMemoryWrite<ParentState>(
   const newMessagesKey = config.newMessagesKey ?? DEFAULTS.newMessagesKey;
   const writeSubflowId = config.writeSubflowId ?? DEFAULTS.writeSubflowId;
 
+  const identityOverride = config.identityOverride;
+
   return builder.addSubFlowChartNext(writeSubflowId, config.pipeline.write, 'Save Memory', {
     inputMapper: (parentState: Record<string, unknown>) => ({
-      identity: parentState[identityKey],
+      identity: identityOverride ?? parentState[identityKey],
       turnNumber: parentState[turnNumberKey],
       contextTokensRemaining: parentState[contextTokensKey] ?? 0,
       newMessages: parentState[newMessagesKey] ?? [],

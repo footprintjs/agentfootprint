@@ -286,6 +286,23 @@ export interface ActiveInjection {
    * decision's own `?? 'never'` default then applies, as it always did.
    */
   readonly cache?: import('../../cache/types.js').CachePolicy;
+  /**
+   * Why THIS piece of retrieved content earned its place (8.8.0).
+   *
+   * Present only on injections a retrieval produced — one per admitted
+   * chunk, carrying that chunk's own similarity score, its rank in the
+   * candidate pool, and the floor it had to clear. The slot composer
+   * copies these onto the `InjectionRecord`, which is what finally fills
+   * `ContextInjectedPayload.retrievalScore` / `.rankPosition` /
+   * `.threshold` — three fields declared since 2.x that nothing has ever
+   * written, because until the recall was split per chunk there was no
+   * single score for a record to carry.
+   */
+  readonly retrieval?: {
+    readonly score: number;
+    readonly rank: number;
+    readonly threshold?: number;
+  };
   readonly inject: {
     readonly systemPrompt?: string;
     readonly messages?: ReadonlyArray<{

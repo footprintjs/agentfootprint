@@ -42,6 +42,8 @@
 import type { LLMProvider } from '../adapters/types.js';
 import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
+import type { MemoryIdentity } from './identity/index.js';
+import type { RetrievalStrategy } from './retrieval/types.js';
 
 // ─── Const-objects (SSOT) ───────────────────────────────────────────
 
@@ -165,12 +167,46 @@ export interface SummarizeStrategy {
  * STRICT threshold: when no entry meets the threshold, return EMPTY.
  * No fallback — garbage in context is worse than no memory.
  */
-export interface TopKStrategy {
+/**
+ * Top-K retrieval, in either of its two spellings — and never both.
+ *
+ * The arms EXCLUDE (8.8.0). `{ topK, threshold }` is the shorthand;
+ * `{ retrieval }` is the same rule written as a {@link RetrievalStrategy},
+ * which is also how a different rule gets in. Accepting both would mean
+ * one of two `k`s silently loses and the recording would name a `k` the
+ * run did not use — so the type refuses it at the keystroke, and
+ * `defineMemory` refuses it again at runtime for JavaScript callers.
+ */
+export type TopKStrategy = TopKShorthandStrategy | TopKRetrievalStrategy;
+
+/** The historical spelling: two loose numbers. Unchanged since 2.x. */
+export interface TopKShorthandStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.TOP_K;
   readonly topK: number;
   /** Min cosine similarity. Strict — no fallback below this. Default 0.7. */
   readonly threshold?: number;
   readonly embedder: Embedder;
+  /**
+   * Stable id of the embedder, filtered against `MemoryEntry.embeddingModel`
+   * at search time so a later embedder swap cannot silently mix two vector
+   * spaces. Pair it with the same value passed to `indexDocuments`.
+   *
+   * Wired in 8.8.0. `defineRAG` has accepted an `embedderId` since 7.x and
+   * never forwarded it — an option the run did not read.
+   */
+  readonly embedderId?: string;
+  readonly retrieval?: never;
+}
+
+/** The spelled-out rule (8.8.0) — and the seam a re-ranker will arrive through. */
+export interface TopKRetrievalStrategy {
+  readonly kind: typeof MEMORY_STRATEGIES.TOP_K;
+  readonly embedder: Embedder;
+  readonly retrieval: RetrievalStrategy;
+  /** See {@link TopKShorthandStrategy.embedderId}. */
+  readonly embedderId?: string;
+  readonly topK?: never;
+  readonly threshold?: never;
 }
 
 /**
@@ -277,7 +313,37 @@ export interface MemoryDefinition<T = unknown> {
 
   /** Snapshot projection — only meaningful when `type === CAUSAL`. */
   readonly projection?: SnapshotProjection;
+
+  /**
+   * The namespace this memory reads and writes (8.8.0).
+   *
+   * Absent — the historical behaviour, and still the right one for
+   * conversation memory — means "whatever identity the run was given",
+   * so each conversation remembers its own turns.
+   *
+   * Present means "always this namespace, whoever is asking", which is
+   * what a shared document corpus is: a corpus does not belong to a
+   * conversation, and reading it under a per-run conversation id is why
+   * `defineRAG`'s own documented example retrieved nothing at all before
+   * 8.8.0. `defineRAG` defaults it to `{ conversationId: '_global' }`,
+   * matching `indexDocuments`'s default so the two sides meet.
+   */
+  readonly corpus?: MemoryIdentity;
+
+  /**
+   * Which claim this memory's injected block makes (8.8.0). `'memory'`
+   * is conversation recall; `'rag'` is corpus retrieval, and it is the
+   * value that reaches the recording as `ContextInjectedPayload.source`.
+   *
+   * The event vocabulary has carried a `'rag'` source since 2.x and
+   * nothing ever emitted it — a declared value no run can produce is a
+   * gap in the contract, not a spare.
+   */
+  readonly flavor?: MemoryFlavor;
 }
+
+/** What an injected memory block is claiming to be. */
+export type MemoryFlavor = 'memory' | 'rag';
 
 /**
  * Opaque tag for the compiled flowchart the factory hands back.
@@ -308,6 +374,26 @@ export interface DefineMemoryOptionsBase {
   // `defineMemory` throws for JavaScript callers and casts. See
   // `./asRoleRefusal.ts` for why it is refused rather than honoured.
   readonly redact?: MemoryRedactionPolicy;
+
+  /**
+   * Read and write under THIS namespace instead of the run's identity
+   * (8.8.0). See {@link MemoryDefinition.corpus}.
+   */
+  readonly corpus?: MemoryIdentity;
+
+  /**
+   * Build a read-only memory (8.8.0): no write subflow is compiled, so
+   * nothing this memory sees is ever stored back.
+   *
+   * The reason it exists: a retrieval corpus and a conversation log are
+   * two different things sharing one pipeline. Writing the conversation
+   * into the corpus makes the user's own question the best-scoring
+   * "document" in it. `defineRAG` sets this.
+   */
+  readonly readOnly?: boolean;
+
+  /** Which claim the injected block makes. See {@link MemoryDefinition.flavor}. */
+  readonly flavor?: MemoryFlavor;
 }
 
 export interface DefineEpisodicOptions extends DefineMemoryOptionsBase {
@@ -369,4 +455,25 @@ export function memoryInjectionKey(id: string): string {
 
 export function isMemoryInjectionKey(key: string): boolean {
   return key.startsWith(MEMORY_INJECTION_KEY_PREFIX);
+}
+
+/**
+ * Scope-key prefix for the retrieval record a memory lifts to the parent
+ * scope (8.8.0), one key per memory id — the same layering rule as
+ * `memoryInjection_`.
+ *
+ * This key is the reason a backward slice can now reach a passage. It is
+ * ORDINARY root state, so `sliceForKey('finalContent')` walks the
+ * system-prompt write, and the record naming every candidate id and score
+ * is one hop away. Before 8.8.0 the scores existed only inside the memory
+ * subflow, which the root commit log never sees.
+ */
+export const RETRIEVAL_EVIDENCE_KEY_PREFIX = 'retrievalEvidence_' as const;
+
+export function retrievalEvidenceKey(id: string): string {
+  return `${RETRIEVAL_EVIDENCE_KEY_PREFIX}${id}`;
+}
+
+export function isRetrievalEvidenceKey(key: string): boolean {
+  return key.startsWith(RETRIEVAL_EVIDENCE_KEY_PREFIX);
 }

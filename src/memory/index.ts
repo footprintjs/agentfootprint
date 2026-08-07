@@ -16,6 +16,7 @@ export * from './pipeline/index.js';
 export * from './stages/index.js';
 export * from './store/index.js';
 export * from './wire/index.js';
+export * from './retrieval/index.js';
 
 // Consumer-facing factory + const-objects for memory configuration.
 export {
@@ -24,12 +25,15 @@ export {
   MEMORY_TIMING,
   SNAPSHOT_PROJECTIONS,
   MEMORY_INJECTION_KEY_PREFIX,
+  RETRIEVAL_EVIDENCE_KEY_PREFIX,
   isMemoryType,
   isMemoryStrategyKind,
   isMemoryTiming,
   isSnapshotProjection,
   memoryInjectionKey,
   isMemoryInjectionKey,
+  retrievalEvidenceKey,
+  isRetrievalEvidenceKey,
   type MemoryType,
   type MemoryStrategyKind,
   type MemoryTiming,
@@ -39,6 +43,9 @@ export {
   type BudgetStrategy,
   type SummarizeStrategy,
   type TopKStrategy,
+  type TopKShorthandStrategy,
+  type TopKRetrievalStrategy,
+  type MemoryFlavor,
   type ExtractStrategy,
   type DecayStrategy,
   type HybridStrategy,

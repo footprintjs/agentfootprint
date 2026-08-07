@@ -2,28 +2,28 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-06",
+  "recordedAt": "2026-08-07",
   "surface": {
     "subpaths": 27,
-    "declaredSymbols": 1244,
-    "declaredEvents": 71,
-    "eventSource": "src/events/registry.ts:530"
+    "declaredSymbols": 1262,
+    "declaredEvents": 72,
+    "eventSource": "src/events/registry.ts:536"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 362,
+      "documented-never-exercised": 381,
       "exercised-undocumented": 36,
       "undocumented-unexercised": 596,
       "site-code-sample-only": 18,
-      "written-but-not-published": 135,
+      "written-but-not-published": 134,
       "ok": 97
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 6,
+      "documented-never-exercised": 8,
       "exercised-undocumented": 9,
-      "undocumented-unexercised": 19,
+      "undocumented-unexercised": 18,
       "site-code-sample-only": 5,
       "written-but-not-published": 12,
       "ok": 20
@@ -330,7 +330,6 @@
     "InjectionEvaluation",
     "InjectionFlavor",
     "InjectionKey",
-    "InjectionRecord",
     "LLMCallBuilder",
     "LLMCallInput",
     "LLMCallOptions",
@@ -849,7 +848,6 @@
     "agentfootprint.error.fatal",
     "agentfootprint.eval.score",
     "agentfootprint.eval.threshold_crossed",
-    "agentfootprint.memory.attached",
     "agentfootprint.memory.detached",
     "agentfootprint.memory.strategy_applied",
     "agentfootprint.memory.written",

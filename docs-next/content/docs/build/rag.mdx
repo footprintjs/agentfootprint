@@ -14,21 +14,54 @@ description: defineRAG — sugar over defineMemory(SEMANTIC + TOP_K) with retrie
 3. Inject those chunks into the next LLM call's system-prompt slot, as one system message
 4. The LLM answers using the retrieved chunks as context
 
-In agentfootprint, RAG is **the same plumbing as `defineMemory({ type: SEMANTIC, strategy: TOP_K })`** — the same engine, the same observability event (`agentfootprint.context.injected` with `source: 'rag'`), the same multi-tenant identity. `defineRAG` is just a friendlier factory with retrieval-tuned defaults (`topK: 3`, `threshold: 0.7`).
+In agentfootprint, RAG runs on **the same machinery as `defineMemory({ type: SEMANTIC, strategy: TOP_K })`** — the same engine, the same three slots, the same `agentfootprint.context.injected` event. `defineRAG` differs from it in three ways that are not cosmetic, and each one is there because a corpus is not a conversation:
+
+| | `defineRAG` | `defineMemory` |
+|---|---|---|
+| **Writes** | Never. A corpus is read-only. | Yes — the conversation is what it stores. |
+| **Namespace** | Its own `corpus`, shared by every run. Defaults to `{ conversationId: '_global' }`. | The identity passed to `agent.run()`. |
+| **Rendering** | `<source id="…" doc="…" score="…">` — citable. | `<memory role="user" turn="5">` — conversational. |
+
+<Callout type="warn">
+**Changed in 8.8.0.** Before 8.8.0 `defineRAG` also mounted the write half, so every conversation turn was embedded into the same namespace as your documents — and the user's own question, re-embedded, scored 1.0 against itself and came back as retrieval hit #1. It also read under the run's identity, so the example in this very page retrieved **nothing at all** unless you passed a matching `identity` by hand. Both are fixed. If you want conversation memory alongside a corpus, register both — see [Pairing a corpus with conversation memory](#pairing-a-corpus-with-conversation-memory).
+</Callout>
 
 ## Define a retriever, attach to an agent
 
-`defineRAG({ id, store, embedder, description?, embedderId?, topK?, threshold? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
+`defineRAG({ id, store, embedder, description?, embedderId?, corpus?, topK?, threshold?, retrieval? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-The store is a `MemoryStore` with vector-search support (it must implement `search()` — `defineRAG` throws at construction time if it doesn't). `InMemoryStore` works for dev. Production vector backends (pgvector / Pinecone / Qdrant / Weaviate) are not yet shipped — wire your own `MemoryStore` adapter against `src/memory/store/types.ts` until then.
+The store is a `MemoryStore` with vector-search support (it must implement `search()` — `defineRAG` throws at construction time if it doesn't). `InMemoryStore` works for dev. Durable vector backends are not yet shipped — wire your own `MemoryStore` adapter against `src/memory/store/types.ts` until then.
+
+### The corpus namespace
+
+A corpus does not belong to a conversation, so it does not read under the run's identity. `corpus` names the namespace it lives in, and it defaults to `{ conversationId: '_global' }` — the same default `indexDocuments` writes to, so index with no options and retrieve with no options and the two meet.
+
+For a per-tenant corpus, pass the same identity to both sides:
+
+```ts
+await indexDocuments(store, embedder, docs, { identity: { tenant: 'acme' } });
+const acmeDocs = defineRAG({ id: 'docs', store, embedder, corpus: { tenant: 'acme' } });
+```
+
+If they ever disagree, you no longer find out by getting a vague answer: the retrieval reports `corpusEmpty: true` on `agentfootprint.memory.retrieved`, and the first time it happens in a process a warning names the namespace it searched.
 
 ## Strict threshold semantics
 
-`threshold` is **strict**. When no chunk meets the threshold, NO injection happens — the LLM gets no context. This is intentional: garbage low-confidence chunks pollute the prompt and make hallucination MORE likely, not less. The library throws on empty by design.
+`threshold` is **strict**. When no chunk meets the threshold, NO injection happens — the LLM gets no context and answers from its own weights. This is intentional: weak low-confidence chunks pollute the prompt and make a confident wrong answer MORE likely, not less. Nothing throws; the turn simply proceeds without context.
 
-If your threshold is too high and you see frequent zero-result skips, lower to ~0.5 (sentence-BERT-class embedders often score relevant matches there). The `defineRAG` JSDoc has provider-specific tuning notes.
+What changed in 8.8.0 is that "no context" is now a **readable outcome instead of an absence**. The near-misses and their scores are on the `agentfootprint.memory.retrieved` event, so the right threshold is a number you read off a run rather than one you guess:
+
+```ts
+agent.on('agentfootprint.memory.retrieved', (e) => {
+  if (e.payload.admittedCount === 0) {
+    console.log('nothing cleared', e.payload.threshold, '— best was', e.payload.candidates?.[0]);
+  }
+});
+```
+
+Sentence-transformer-class embedders (`all-MiniLM-L6-v2` and relatives) often score genuinely relevant chunks at 0.4–0.6, so 0.7 is a high bar for them; OpenAI `text-embedding-3-*` sits comfortably at 0.7.
 
 ## Indexing — `indexDocuments`
 
@@ -53,25 +86,100 @@ await indexDocuments(store, embedder, docs, {
 });
 ```
 
-Identity defaults to `{ conversationId: '_global' }`. **Multi-tenant footgun:** if you index under `_global` but query under `{ tenant: 'acme' }`, you'll get zero results silently. Either index per-tenant (pass `options.identity`) OR query under the same identity. JSDoc spells out the resolution patterns.
+Identity defaults to `{ conversationId: '_global' }` — matching `defineRAG`'s `corpus` default, so the plain path needs no argument on either side. Index per tenant and you must name the same tenant on the retriever; see [The corpus namespace](#the-corpus-namespace).
 
 ## Mocks-first development
 
-For dev, use `mockEmbedder()` — deterministic vectors, zero API cost. Swap to a real embedder when you ship:
+`mockEmbedder()` is deterministic and free, and it is **plumbing-only**: it is a 32-dimension character-frequency hash, so it will happily rank an off-topic sentence above the right one. Use it to prove the pipeline runs; never to judge whether retrieval is any good.
+
+Three real embedders ship, all from `agentfootprint/providers`:
+
+| | key needed | network | notes |
+|---|---|---|---|
+| `staticEmbedder()` | no | no | bundled Model2Vec weights, 256-d. The first rung where ranking is real. |
+| `localEmbedder()` | no | one-time model fetch | on-device sentence-transformer, 384-d. **Truncates input at 512 tokens** (~1,800 characters) — chunk below that or the tail is silently dropped. |
+| `openaiEmbedder()` | yes | yes | hosted, 1536-d by default. |
+
+Never mix two in one store: dimensions differ, and cross-model similarity scores are not comparable. Tag both sides with the same `embedderId` and the mismatch is filtered instead of silently scored.
+
+## Pairing a corpus with conversation memory
+
+They are two registrations over two stores, and that separation is the point — one remembers what the user said, the other retrieves what the corpus says:
 
 ```ts
-const embedder = process.env.NODE_ENV === 'production'
-  ? myOpenAIEmbedder({ model: 'text-embedding-3-small' })  // your Embedder shim
-  : mockEmbedder();
+import { Agent, defineRAG } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
+
+const agent = Agent.create({ provider })
+  .rag(defineRAG({ id: 'product-docs', store: corpusStore, embedder }))
+  .memory(defineMemory({
+    id: 'chat',
+    type: MEMORY_TYPES.EPISODIC,
+    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+    store: conversationStore,
+  }))
+  .build();
 ```
 
-There are no built-in production embedder factories yet (`mockEmbedder` is the only shipped `Embedder`). Wire your provider's embedding API into a small `Embedder` shim — see `src/memory/embedding/types.ts` for the interface.
+## Why did the agent read this passage?
+
+Every retrieval leaves a record, and it names what it rejected as well as what it used.
+
+**On the event stream** — `agentfootprint.memory.retrieved` fires once per retrieval with every candidate, and `agentfootprint.memory.attached` once per chunk that reached the prompt:
+
+```ts
+agent.on('agentfootprint.memory.retrieved', (e) => {
+  for (const c of e.payload.candidates ?? []) {
+    console.log(c.admitted ? '✓' : '✗', c.id, c.score.toFixed(2), c.reason ?? '');
+  }
+});
+// ✓ refunds.md#3   0.81
+// ✓ security.pdf#7 0.72
+// ✗ pricing.md#0   0.68  below-threshold
+```
+
+**On each injection** — one `InjectionRecord` per chunk rather than one per retrieval, so `agentfootprint.context.injected` carries `source: 'rag'`, `sourceId` (the chunk id), `retrievalScore`, `rankPosition` and `threshold` for that one passage.
+
+**In the trace** — the record is lifted onto root state as `retrievalEvidence_<id>`, so a backward slice from the answer reaches the passage instead of stopping at the memory subflow boundary.
+
+Two orderings are recorded and they are not the same thing: `rank` is how the chunk scored, `promptPosition` is where the budget picker put it in the message. Under the default recency ordering the best-scoring chunk can land last.
+
+### Replacing the retrieval rule
+
+`topK` + `threshold` are shorthand for the rule; `retrieval` is that rule spelled out. Passing both is refused — they could disagree, and the recording would then name a `k` the run did not use.
+
+```ts
+import { topK } from 'agentfootprint';
+
+defineRAG({ id: 'docs', store, embedder, retrieval: topK({ k: 5, threshold: 0.55 }) });
+```
+
+A cross-encoder re-ranker and a diversity (MMR) selector are the next two adapters behind this same interface. Neither ships yet; the seam exists so that when they do, nothing else moves.
+
+## Reference — the retrieval record
+
+Types for reading a retrieval back. The record types are on the main barrel (a consumer handling `agentfootprint.memory.retrieved` needs them); the rest are on `agentfootprint/memory`.
+
+| Name | What it is |
+|---|---|
+| `RetrievalEvidence` | The whole record for one retrieval: `queryHash`, `k`, `threshold`, `embedderId`, `dimensions`, `selectionOrder`, the counts, `candidates`, `candidatesComplete`, `corpusEmpty`, `namespace`. |
+| `RetrievedCandidate` | One candidate: `id`, `score`, `rank`, `admitted`, `reason`, `docUri`, `page`, `heading`, plus `promptFragment` / `promptPosition` for admitted ones. |
+| `RetrievalRejectReason` | Why a candidate was refused: `'below-threshold'` · `'over-budget'` · `'over-max-entries'`. |
+| `RetrievalStrategy` | The seam: `{ name, k, threshold?, rejectWindow, select(pool) }`. Given a score-descending pool it returns one `RetrievalVerdict` per candidate, in the same order. It never touches the store and never embeds. |
+| `ScoredCandidate` / `RetrievalVerdict` | A strategy's input row and its ruling. |
+| `topK(options)` / `TopKOptions` | The shipped strategy — `{ k?, threshold?, rejectWindow? }`. `threshold: null` means no floor. |
+| `TopKShorthandStrategy` / `TopKRetrievalStrategy` | The two arms of `TopKStrategy`. They exclude: `{ topK, threshold }` or `{ retrieval }`, never both. |
+| `DEFAULT_CORPUS_IDENTITY` | `{ conversationId: '_global' }` — the namespace both `defineRAG` and `indexDocuments` default to. |
+| `MemoryFlavor` | `'memory' | 'rag'` — which claim an injected block makes, and which `ContextSource` it composes as. |
+| `retrievalEvidenceKey(id)` / `isRetrievalEvidenceKey(key)` / `RETRIEVAL_EVIDENCE_KEY_PREFIX` | The root-state key convention (`retrievalEvidence_<id>`) a slice or a recorder reads the record from. |
+| `chunkProvenance(value)` / `chunkText(value)` / `ChunkProvenance` | Read a stored entry's coordinates (`docUri`, `page`, `heading`) and its text back out. The one place that knows which metadata keys mean what, so the record and the citation cannot disagree. |
 
 ## Anti-patterns
 
-- Don't fall back to top-K-anyway when threshold returns nothing. The library throws by design.
-- Don't change embedders between writes and reads — entries are tagged with the embedder used at index time. Swap silently corrupts retrieval.
-- Don't pass huge documents (50KB) — chunk first. RAG quality is dominated by chunk size + chunk boundary choice.
+- Don't fall back to top-K-anyway when the threshold returns nothing. Read the rejected candidates and set a threshold that fits your embedder instead.
+- Don't change embedders between writes and reads — entries are tagged with the embedder used at index time. A silent swap corrupts retrieval.
+- Don't judge retrieval quality with `mockEmbedder`. It measures letter frequency, not meaning.
+- Don't pass huge documents (50KB) — chunk first. RAG quality is dominated by chunk size and chunk-boundary choice, and `localEmbedder` truncates at 512 tokens regardless.
 
 ## Next steps
 

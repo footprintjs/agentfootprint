@@ -8,7 +8,7 @@
 
 > **isBaselineSource**(`source`): `boolean`
 
-Defined in: [src/recorders/core/contextEngineering.ts:104](https://github.com/footprintjs/agentfootprint/blob/2e3535f98fd1947b0c72b1e5df04d70658249b33/src/recorders/core/contextEngineering.ts#L104)
+Defined in: [src/recorders/core/contextEngineering.ts:104](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/recorders/core/contextEngineering.ts#L104)
 
 Pure classifier: given a `ContextSource`, is it baseline?
 

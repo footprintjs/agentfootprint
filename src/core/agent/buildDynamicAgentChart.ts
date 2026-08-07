@@ -59,7 +59,7 @@ import {
   type ActiveBySlot,
 } from '../../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../lib/injection-engine/types.js';
-import { memoryInjectionKey } from '../../memory/define.types.js';
+import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
@@ -132,7 +132,12 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
 export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // Memory ids whose recall must be bridged into the slot composers (see
   // memoryRecallInjections). Empty → withMemoryRecall is a no-op.
-  const memoryIds = deps.memories.map((m) => m.id);
+  // Carries the flavor too (8.8.0): a corpus retrieval composes as
+  // `source: 'rag'`, conversation recall as `source: 'memory'`.
+  const memoryIds = deps.memories.map((m) => ({
+    id: m.id,
+    ...(m.flavor !== undefined && { flavor: m.flavor }),
+  }));
   // ── Final-branch subflow ─────────────────────────────────────
   // Identical to buildAgentChart: PrepareFinal captures the turn
   // payload, memory-write subflows persist it, BreakFinal terminates
@@ -161,6 +166,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         contextTokensKey: 'contextTokensRemaining',
         newMessagesKey: 'newMessages',
         writeSubflowId: `sf-memory-write-${m.id}`,
+        ...(m.corpus !== undefined && { identityOverride: m.corpus }),
         // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
         ...(m.type === 'causal' &&
           deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
@@ -413,7 +419,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       turnNumberKey: 'turnNumber',
       contextTokensKey: 'contextTokensRemaining',
       injectionKey: memoryInjectionKey(m.id),
+      // The retrieval record, lifted into ROOT state so a backward slice
+      // can reach the passage instead of stopping at this mount.
+      evidenceKey: retrievalEvidenceKey(m.id),
       readSubflowId: `sf-memory-read-${m.id}`,
+      // A corpus reads under its OWN namespace, not the run's identity.
+      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
     });
   }
 

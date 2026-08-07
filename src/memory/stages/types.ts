@@ -65,6 +65,22 @@ export interface MemoryState {
   formatted: Message[];
 
   /**
+   * Retrieval record (8.8.0) — what the search considered, what it
+   * admitted, and why about each candidate.
+   *
+   * Written by `loadRelevant`, refined by `pickByBudget` (budget
+   * rejections) and `formatDefault` (the prompt bytes each admitted chunk
+   * contributed), and lifted to the PARENT scope by `mountMemoryRead` so
+   * it reaches the root commit log — a subflow's own scope never does,
+   * which is why a slice could not previously see past the mount.
+   *
+   * Absent for pipelines that do no retrieval (recency load, fact
+   * extraction). Absence means "this pipeline does not rank", never
+   * "this pipeline ranked and found nothing".
+   */
+  retrieved?: import('../retrieval/types.js').RetrievalEvidence;
+
+  /**
    * Write-side input: messages to persist at the end of this turn. The
    * wire layer populates from the agent's final message state;
    * `writeMessages` wraps each as a `MemoryEntry` and calls `store.put`.

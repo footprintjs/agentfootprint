@@ -132,6 +132,16 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
           sourceId: inj.id,
           reason: inj.description ?? `${inj.flavor} '${inj.id}' active`,
           rawContent: promptContent,
+          // Retrieval provenance (8.8.0) — present only when a retrieval
+          // produced this injection. These are the payload's declared
+          // `retrievalScore` / `rankPosition` / `threshold`, written for
+          // the first time; before the recall was split per chunk there
+          // was no single score a record could honestly carry.
+          ...(inj.retrieval !== undefined && {
+            retrievalScore: inj.retrieval.score,
+            rankPosition: inj.retrieval.rank,
+            ...(inj.retrieval.threshold !== undefined && { threshold: inj.retrieval.threshold }),
+          }),
         });
       }
 

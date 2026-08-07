@@ -137,16 +137,24 @@ const docs = defineRAG({
   id: 'product-docs',
   store, embedder,
   topK: 3,
-  threshold: 0.7,        // STRICT — no fallback when nothing matches
+  threshold: 0.7,        // STRICT — nothing is injected when nothing matches
 });
-// Retrieved chunks land in the SYSTEM-PROMPT slot, as one system message.
+// Retrieved chunks land in the SYSTEM-PROMPT slot, as one system message
+// of citable `<source id=… doc=… score=…>` blocks.
 // `asRole` was removed in 7.20.0 — it was never read, and passing it throws.
 
 // Wire to agent — `.rag()` is an alias for `.memory()`, same plumbing
 agent.rag(docs);
+
+// No identity argument anywhere: a corpus lives in its own namespace
+// (`corpus`, default `{ conversationId: '_global' }`) — the same one
+// indexDocuments writes to.
+await agent.run({ message: 'How long do refunds take?' });
 ```
 
-`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })`. Same plumbing, different intent: RAG = document corpus retrieval; `defineMemory` = conversation/run-state memory.
+`defineRAG` runs on `defineMemory({ type: SEMANTIC, strategy: TOP_K })`. Same machinery, three deliberate differences: a corpus is **read-only** (it never stores the conversation), it reads under its **own namespace** rather than the run's identity, and its chunks render as **citable `<source>` blocks**. For conversation memory alongside a corpus, register both — `.rag(defineRAG(...))` and `.memory(defineMemory(...))`, each with its own store.
+
+**Why did the agent read this passage?** `agentfootprint.memory.retrieved` carries every candidate with its score — including the ones that were rejected and why. `agentfootprint.memory.attached` fires per chunk that reached the prompt. `agentfootprint.context.injected` reports `source: 'rag'` with that chunk's `retrievalScore` / `rankPosition` / `threshold`. The whole record is on root state as `retrievalEvidence_<id>`, where a backward slice can reach it.
 
 ### Agent (ReAct primitive)
 
@@ -464,7 +472,7 @@ Resilience decorators live on the `agentfootprint/resilience` subpath
 (not the main barrel). Each preserves the `LLMProvider` interface and
 stacks freely.
 
-### Observability — 71 typed events across 20 domains
+### Observability — 72 typed events across 20 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

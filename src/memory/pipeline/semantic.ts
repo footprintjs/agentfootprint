@@ -38,7 +38,12 @@
 import { flowChart } from 'footprintjs';
 
 import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
-import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
+import {
+  formatDefault,
+  type FormatDefaultConfig,
+  type MemoryFormatFlavor,
+} from '../stages/formatDefault.js';
+import type { RetrievalStrategy } from '../retrieval/types.js';
 import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages.js';
 import type { MemoryState } from '../stages/index.js';
 import type { MemoryStore } from '../store/index.js';
@@ -89,6 +94,21 @@ export interface SemanticPipelineConfig {
   /** Forwarded to `formatDefault`. */
   readonly formatHeader?: string;
   readonly formatFooter?: string;
+
+  /**
+   * The retrieval rule (8.8.0). Replaces `k` + `minScore` above; see
+   * {@link RetrievalStrategy}. When absent, `topK({ k, threshold: minScore })`
+   * is built from those two — the same rule, spelled the old way.
+   */
+  readonly retrieval?: RetrievalStrategy;
+
+  /**
+   * Which claim the injected block makes (8.8.0). `'rag'` renders each
+   * entry as a citable `<source>` with its document, page and score;
+   * `'memory'` (default) keeps the conversation-recall `<memory>` shape
+   * byte for byte.
+   */
+  readonly flavor?: MemoryFormatFlavor;
 }
 
 /**
@@ -110,6 +130,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     ...(config.k !== undefined && { k: config.k }),
     ...(config.minScore !== undefined && { minScore: config.minScore }),
     ...(config.tiers && { tiers: config.tiers }),
+    ...(config.retrieval !== undefined && { retrieval: config.retrieval }),
   };
   const pickConfig: PickByBudgetConfig = {
     ...(config.reserveTokens !== undefined && { reserveTokens: config.reserveTokens }),
@@ -119,6 +140,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
   const formatConfig: FormatDefaultConfig = {
     ...(config.formatHeader !== undefined && { header: config.formatHeader }),
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
+    ...(config.flavor !== undefined && { flavor: config.flavor }),
   };
   const embedConfig: EmbedMessagesConfig = {
     embedder: config.embedder,

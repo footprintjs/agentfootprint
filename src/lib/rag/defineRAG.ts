@@ -1,23 +1,66 @@
 /**
- * defineRAG — sugar factory for retrieval-augmented generation.
+ * defineRAG — retrieval-augmented generation over a document corpus.
  *
- * RAG is a context-engineering flavor: embed the user's question,
- * retrieve top-K semantically similar chunks from a vector store,
- * inject those chunks into the system-prompt slot of the next LLM call.
- * It's the same plumbing as `defineMemory({ type: SEMANTIC,
- * strategy: TOP_K })` — the rename is for intent + ergonomics.
+ * Embed the user's question, retrieve the most similar chunks from a
+ * vector store, inject them into the system-prompt slot of the next LLM
+ * call. It is the same machinery as `defineMemory({ type: SEMANTIC,
+ * strategy: TOP_K })` — with three differences that are not cosmetic:
  *
  *   defineMemory ─┬─► EPISODIC   (raw conversation)
  *                 ├─► SEMANTIC   (extracted facts / RAG chunks)
  *                 ├─► NARRATIVE  (beats / summaries)
  *                 └─► CAUSAL     (footprintjs decision snapshots)
  *
- *   defineRAG    ─►  SEMANTIC + TOP_K with RAG-specific defaults
- *                    (topK=3, threshold=0.7, no LLM-extract)
+ *   defineRAG    ─►  SEMANTIC + TOP_K, READ-ONLY, over a NAMED CORPUS,
+ *                    rendered as citable <source> blocks.
+ *
+ * ─── What changed in 8.8.0, and why ────────────────────────────────────
+ *
+ * **1. A corpus is read-only.** Until 8.8.0 `defineRAG` also mounted the
+ * semantic pipeline's WRITE half, which embedded every conversation turn
+ * and stored it in the same namespace as the documents. The consequence
+ * was measurable and bad: the user's own question, re-embedded, is the
+ * single best-scoring "document" in the corpus (cosine 1.0 against
+ * itself), so it came back as retrieval hit #1 and consumed a slot in
+ * the top-K budget that a real passage should have had. A corpus is not
+ * a conversation log. Nothing this retriever reads is written back.
+ *
+ * If you want conversation memory ALONGSIDE a corpus, that is what
+ * `defineMemory` is for, and the two are registered separately, each
+ * with its own store:
+ *
+ * ```ts
+ * const agent = Agent.create({ provider })
+ *   .rag(defineRAG({ id: 'product-docs', store: corpusStore, embedder }))
+ *   .memory(defineMemory({
+ *     id: 'chat',
+ *     type: MEMORY_TYPES.EPISODIC,
+ *     strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+ *     store: conversationStore,
+ *   }))
+ *   .build();
+ * ```
+ *
+ * **2. The corpus has its own namespace.** A memory reads under the
+ * identity passed to `agent.run()`. For conversation recall that is
+ * right. For a shared corpus it was the reason the documented example
+ * retrieved NOTHING: `indexDocuments` writes under
+ * `{ conversationId: '_global' }` by default, while a run with no
+ * explicit identity gets `{ conversationId: 'run-<timestamp>-<n>' }` —
+ * so the write side and the read side never met, silently. `corpus`
+ * defaults to the same `'_global'` the indexer uses, so the documented
+ * example works with no extra arguments; pass it explicitly when you
+ * index per tenant.
+ *
+ * **3. Chunks are citable.** Retrieved passages render as
+ * `<source id="refunds.md#3" doc="refunds.md" score="0.81">` under a
+ * corpus header, instead of the conversation-recall shape that printed
+ * `role="unknown" turn="0"` on a page of a PDF and gave the model
+ * nothing to cite.
  *
  * Pattern: Composition over duplication — defineRAG returns a
  *          MemoryDefinition produced by defineMemory. No new engine
- *          code, no new slot subflow, no new event type.
+ *          code, no new slot subflow, no new stage.
  *
  * Role:    Layer-3 context-engineering primitive. Lives next to
  *          defineSkill / defineSteering / defineInstruction / defineFact
@@ -25,27 +68,32 @@
  *          (RAG content is computed at runtime via async retrieval —
  *          can't fit the synchronous Injection.inject shape).
  *
- * Emits:   Indirectly — the underlying memory pipeline emits
- *          `agentfootprint.context.injected` when retrieved chunks
- *          land in the system-prompt slot.
+ * Emits:   `agentfootprint.memory.retrieved` (once per retrieval, with
+ *          every candidate and its score — including the rejected ones),
+ *          `agentfootprint.memory.attached` (once per chunk that reached
+ *          the prompt), and `agentfootprint.context.injected` with
+ *          `source: 'rag'` (once per chunk).
  *
  * @see ./indexDocuments.ts  for the seeding helper
  * @see ../../memory/define.ts  for the underlying factory
+ * @see ../../memory/retrieval/  for the retrieval seam
  * @see ../../memory/asRoleRefusal.ts  for why `asRole` is refused, not honoured
  *
- * @example  Basic usage
+ * @example  Basic usage — works with no identity argument anywhere
  * ```ts
- * import { *   Agent, defineRAG, indexDocuments, * } from 'agentfootprint'
-import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory'
-import { mock } from 'agentfootprint/llm-providers';
+ * import { Agent, defineRAG, indexDocuments } from 'agentfootprint';
+ * import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
+ * import { mock } from 'agentfootprint/providers';
  *
  * const embedder = mockEmbedder();
  * const store = new InMemoryStore();
  *
- * // Seed the store once at startup
+ * // Seed the corpus once at startup (defaults to the '_global' namespace).
  * await indexDocuments(store, embedder, [
- *   { id: 'doc1', content: 'Refunds are processed within 3 business days.' },
- *   { id: 'doc2', content: 'Pro plan costs $20/month.' },
+ *   { id: 'refunds.md#0', content: 'Refunds are processed within 3 business days.',
+ *     metadata: { source: 'refunds.md' } },
+ *   { id: 'pricing.md#0', content: 'Pro plan costs $20/month.',
+ *     metadata: { source: 'pricing.md' } },
  * ]);
  *
  * const docs = defineRAG({
@@ -60,15 +108,32 @@ import { mock } from 'agentfootprint/llm-providers';
  * const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
  *   .rag(docs)
  *   .build();
+ *
+ * agent.on('agentfootprint.memory.retrieved', (e) => {
+ *   // every candidate, admitted or not, with its score and its reason
+ *   console.log(e.payload.candidates);
+ * });
+ *
+ * await agent.run({ message: 'How long do refunds take?' });
  * ```
  */
 
 import type { Embedder } from '../../memory/embedding/index.js';
 import type { MemoryStore } from '../../memory/store/index.js';
+import type { MemoryIdentity } from '../../memory/identity/index.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
+import type { RetrievalStrategy } from '../../memory/retrieval/index.js';
 import { MEMORY_TYPES, MEMORY_STRATEGIES } from '../../memory/define.types.js';
 import { defineMemory } from '../../memory/define.js';
 import { refuseAsRole } from '../../memory/asRoleRefusal.js';
+
+/**
+ * The namespace a corpus lives in unless told otherwise — the same one
+ * `indexDocuments` writes to by default. The two defaults are one value
+ * on purpose: index with no options, retrieve with no options, and the
+ * documents are found.
+ */
+export const DEFAULT_CORPUS_IDENTITY: MemoryIdentity = { conversationId: '_global' };
 
 export interface DefineRAGOptions {
   /** Stable id. Becomes the scope-key suffix and the Lens label. */
@@ -85,14 +150,14 @@ export interface DefineRAGOptions {
    * Vector-capable store containing the indexed corpus. Must implement
    * `search()`. Use `indexDocuments(store, embedder, docs)` at startup
    * to populate it. Ships with `InMemoryStore` for dev/tests; swap to
-   * `pgvector` / Pinecone / Qdrant adapters in production.
+   * a durable adapter in production.
    */
   readonly store: MemoryStore;
 
   /**
    * Embedder used for the read-side query. Pass the SAME embedder
-   * instance (or one with the same `name`) that was used for indexing
-   * — cross-model similarity scores are not comparable.
+   * instance (or one with the same `embedderId`) that was used for
+   * indexing — cross-model similarity scores are not comparable.
    */
   readonly embedder: Embedder;
 
@@ -104,9 +169,28 @@ export interface DefineRAGOptions {
   readonly embedderId?: string;
 
   /**
+   * The namespace this corpus lives in. Default
+   * `{ conversationId: '_global' }` — the same default `indexDocuments`
+   * writes to, so the plain path needs no argument on either side.
+   *
+   * A corpus is deliberately NOT scoped to the run's identity: it is
+   * shared by every conversation, and reading it under a per-run
+   * conversation id is the bug this default fixes.
+   *
+   * **Multi-tenant:** pass the tenant's identity here AND the same one to
+   * `indexDocuments({ identity })`. A namespace that holds nothing is now
+   * reported (`corpusEmpty` on `agentfootprint.memory.retrieved`, plus a
+   * one-time warning naming the namespace), so a mismatch is loud rather
+   * than an empty answer.
+   */
+  readonly corpus?: MemoryIdentity;
+
+  /**
    * Top-K chunks to retrieve per turn. Default 3 (balanced —
    * defends against lost-in-the-middle while giving multiple
    * perspectives). Increase for richer context, decrease for cost.
+   *
+   * Shorthand for `retrieval: topK({ k })`; the two EXCLUDE.
    */
   readonly topK?: number;
 
@@ -117,12 +201,30 @@ export interface DefineRAGOptions {
    *
    * Tuning note: 0.7 is a high bar for some embedders. Sentence-BERT
    * relatives (`all-MiniLM-L6-v2`, etc.) often score 0.4–0.6 even on
-   * relevant chunks. If you see frequent zero-result silent skips,
-   * lower to ~0.5 and observe the `agentfootprint.context.injected`
-   * stream. OpenAI `text-embedding-3-*` and Cohere embed-v3 typically
-   * sit comfortably with 0.7.
+   * relevant chunks. You no longer have to guess: the rejected
+   * candidates and their scores are on every
+   * `agentfootprint.memory.retrieved` event, so the right threshold is
+   * a number you can read off a run.
+   *
+   * Shorthand for `retrieval: topK({ threshold })`; the two EXCLUDE.
    */
   readonly threshold?: number;
+
+  /**
+   * The retrieval rule, spelled out. Replaces `topK` + `threshold`
+   * entirely — passing both is refused, because they could disagree
+   * and the recording would then name a `k` the run did not use.
+   *
+   * ```ts
+   * import { topK } from 'agentfootprint/memory';
+   * defineRAG({ id, store, embedder, retrieval: topK({ k: 5, threshold: 0.55 }) });
+   * ```
+   *
+   * A cross-encoder re-ranker and a diversity (MMR) selector are the
+   * next two adapters behind this same interface; neither ships in
+   * 8.8.0, and the seam exists so that when they do, nothing else moves.
+   */
+  readonly retrieval?: RetrievalStrategy;
 
   // NOTE (7.20.0): `asRole?: ContextRole` used to sit here, documented as
   // defaulting to `'user'` with a paragraph of reasoning about tool-using
@@ -141,6 +243,7 @@ export interface DefineRAGOptions {
  *
  * @throws when `store` does not implement `search()`. RAG requires a
  *         vector-capable adapter.
+ * @throws when `retrieval` is combined with `topK` or `threshold`.
  */
 export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
   if (!opts.id || opts.id.trim() === '') {
@@ -162,17 +265,42 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
         'Pass a vector-capable adapter (InMemoryStore, pgvector, Pinecone, ...).',
     );
   }
+  if (opts.retrieval !== undefined) {
+    const shorthand: string[] = [];
+    if (opts.topK !== undefined) shorthand.push('`topK`');
+    if (opts.threshold !== undefined) shorthand.push('`threshold`');
+    if (shorthand.length > 0) {
+      throw new Error(
+        `defineRAG[${opts.id}]: ${shorthand.join(' and ')} cannot be combined with \`retrieval\` ` +
+          '— they are two spellings of the same rule and could disagree. Keep ' +
+          `\`retrieval: ${opts.retrieval.name}({ ... })\` and drop ${shorthand.join('/')}.`,
+      );
+    }
+  }
 
   return defineMemory({
     id: opts.id,
     ...(opts.description !== undefined && { description: opts.description }),
     type: MEMORY_TYPES.SEMANTIC,
-    strategy: {
-      kind: MEMORY_STRATEGIES.TOP_K,
-      topK: opts.topK ?? 3,
-      threshold: opts.threshold ?? 0.7,
-      embedder: opts.embedder,
-    },
+    strategy:
+      opts.retrieval !== undefined
+        ? {
+            kind: MEMORY_STRATEGIES.TOP_K,
+            embedder: opts.embedder,
+            retrieval: opts.retrieval,
+            ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
+          }
+        : {
+            kind: MEMORY_STRATEGIES.TOP_K,
+            topK: opts.topK ?? 3,
+            threshold: opts.threshold ?? 0.7,
+            embedder: opts.embedder,
+            ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
+          },
     store: opts.store,
+    // A corpus is not a conversation log — see the header.
+    readOnly: true,
+    corpus: opts.corpus ?? DEFAULT_CORPUS_IDENTITY,
+    flavor: 'rag',
   });
 }

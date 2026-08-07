@@ -88,9 +88,11 @@ describe('event registry — names + exhaustiveness', () => {
     //     model-visible retry; see CHANGELOG.)
     //    (agent.output_schema_retry added with 7.26 — the loop asking again
     //     when the answer failed the schema; see CHANGELOG.)
+    //    (memory.retrieved added with 8.8.0 — the candidate set a retrieval
+    //     considered, rejections included; see CHANGELOG 8.8.0.)
     //    (skill.reroute_superseded added with 8.3.0 — a read_skill pick the gate
     //     accepted that a declared edge then outranked; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(71);
+    expect(ALL_EVENT_TYPES.length).toBe(72);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -9,8 +9,15 @@
  *   2. Seed the store with documents (`indexDocuments`).
  *   3. Define the retriever (`defineRAG`).
  *   4. Wire to agent (`agent.rag(...)`).
- *   5. Ask a question — relevant docs are injected as user-role
- *      messages before the LLM call.
+ *   5. Ask a question — the matching passages are injected into the
+ *      SYSTEM-PROMPT slot as citable `<source>` blocks.
+ *
+ * Note what this example does NOT do: pass an identity. A corpus lives in
+ * its own namespace (`corpus`, defaulting to the same `'_global'` that
+ * `indexDocuments` writes to), so the two sides meet with no argument on
+ * either. Before 8.8.0 this example had to pass
+ * `identity: { conversationId: '_global' }` by hand, and anyone who copied
+ * the shorter snippet from the README retrieved nothing at all, silently.
  */
 
 import { Agent, defineRAG, indexDocuments, type LLMProvider } from '../../src/index.js'
@@ -63,9 +70,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     topK: 2,           // up to 2 most-relevant docs per query
     threshold: 0.5,    // strict — drop weak matches
   });
-  // Matches land in the SYSTEM-PROMPT slot, as one system message carrying
-  // every chunk as a citation block. (`asRole` was removed in 7.20.0 — it
-  // was never read, so it described a placement that never happened.)
+  // Matches land in the SYSTEM-PROMPT slot as one system message carrying
+  // every chunk as a `<source id=… doc=… score=…>` block the model can
+  // cite. (`asRole` was removed in 7.20.0 — it was never read, so it
+  // described a placement that never happened.)
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'Refunds are processed within 3 business days.' }),
@@ -77,11 +85,9 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .build();
   // #endregion define-and-attach
 
-  // Identity is shared with the corpus indexing default ('_global').
-  const result = await agent.run({
-    message: input,
-    identity: { conversationId: '_global' },
-  });
+  // No identity needed: the retriever declares its own corpus namespace,
+  // and it defaults to the one `indexDocuments` wrote to.
+  const result = await agent.run({ message: input });
   if (typeof result !== 'string') throw new Error('Agent paused unexpectedly.');
   return result;
 }

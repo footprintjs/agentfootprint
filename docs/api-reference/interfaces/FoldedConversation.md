@@ -6,7 +6,7 @@
 
 # Interface: FoldedConversation
 
-Defined in: src/core/agent/window/folded.ts:59
+Defined in: [src/core/agent/window/folded.ts:59](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core/agent/window/folded.ts#L59)
 
 The smallest thing that can answer "what did this conversation fold?".
 
@@ -21,4 +21,4 @@ checkpoint module, which imports this one's sibling types.
 
 > `readonly` `optional` **folded?**: readonly [`FoldedSpan`](/agentfootprint/api/generated/interfaces/FoldedSpan.md)[]
 
-Defined in: src/core/agent/window/folded.ts:60
+Defined in: [src/core/agent/window/folded.ts:60](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core/agent/window/folded.ts#L60)

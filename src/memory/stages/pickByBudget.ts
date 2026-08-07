@@ -133,10 +133,52 @@ function buildPickDecider(config: PickByBudgetConfig) {
     );
 }
 
-/** Both skip branches share the same body — no entries survive. */
+/**
+ * Both skip branches share the same body — no entries survive.
+ *
+ * When a retrieval record is present, every candidate that had been
+ * admitted by the retrieval strategy is re-marked as rejected here, with
+ * the budget as the reason. A record that still claimed those chunks were
+ * admitted, after a branch that injected nothing, would be a record that
+ * disagrees with the prompt.
+ */
 const skipStage = (scope: TypedScope<MemoryState>): void => {
   scope.selected = [];
+  reviseAdmitted(scope, () => false);
 };
+
+/**
+ * Re-mark the retrieval record against what the budget picker actually
+ * kept. `keptIds` is consulted only for candidates the strategy already
+ * admitted — a below-threshold candidate keeps its own reason, because
+ * the budget never got the chance to reject it.
+ */
+function reviseAdmitted(
+  scope: TypedScope<MemoryState>,
+  wasKept: (id: string) => boolean,
+  overCap?: (id: string) => boolean,
+): void {
+  const evidence = scope.retrieved;
+  if (!evidence?.candidates) return;
+
+  let admittedCount = 0;
+  const candidates = evidence.candidates.map((c) => {
+    if (!c.admitted) return c;
+    if (wasKept(c.id)) {
+      admittedCount += 1;
+      return c;
+    }
+    const reason = overCap?.(c.id) ? 'over-max-entries' : 'over-budget';
+    return { ...c, admitted: false, reason } as typeof c;
+  });
+
+  scope.retrieved = {
+    ...evidence,
+    candidates,
+    admittedCount,
+    rejectedCount: candidates.length - admittedCount,
+  };
+}
 
 /** The `pick` branch: greedy newest-first selection within budget. */
 function buildPickStage(config: PickByBudgetConfig) {
@@ -158,10 +200,22 @@ function buildPickStage(config: PickByBudgetConfig) {
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
     const picked: MemoryEntry<Message>[] = [];
+    const overCap = new Set<string>();
     let used = 0;
 
     for (const entry of byNewest) {
-      if (maxEntries !== undefined && picked.length >= maxEntries) break;
+      if (maxEntries !== undefined && picked.length >= maxEntries) {
+        // Everything from here on is refused by the cap, not by the
+        // budget. The two reasons are not interchangeable: one is fixed
+        // by shortening the corpus, the other by raising `maxEntries`.
+        //
+        // This was a `break` before 8.8.0. It is a `continue` so the
+        // remaining entries can be NAMED as cap-rejected — and it cannot
+        // change what is picked, because once the cap is reached the
+        // condition stays true for every later iteration.
+        overCap.add(entry.id);
+        continue;
+      }
 
       const cost = countMessageTokens(entry.value, countTokens);
       if (used + cost > budget) continue; // skip this entry, try smaller ones
@@ -171,6 +225,13 @@ function buildPickStage(config: PickByBudgetConfig) {
 
     // Emit in chronological order — `picked` is newest-first; reverse.
     scope.selected = picked.reverse();
+
+    const kept = new Set(picked.map((e) => e.id));
+    reviseAdmitted(
+      scope,
+      (id) => kept.has(id),
+      (id) => overCap.has(id),
+    );
   };
 }
 

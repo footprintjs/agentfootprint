@@ -7,6 +7,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.8.0] - 2026-08-06
+
+**Retrieval tells the truth.** A retrieval computed a cosine score for every candidate
+and then threw all of them away one line later. The prompt carried the passages;
+nothing carried the reason. "Why did the agent read this passage" had no answer in the
+recording, and "why did it NOT read that one" had no answer anywhere — a
+below-threshold candidate was filtered inside the store and never came back. A full
+recording of a RAG run was 140,501 bytes and contained the substring `"score"` exactly
+**zero** times.
+
+Three defects came out of the same root, and all three are fixed here.
+
+### THE behavior change: a corpus is read-only
+
+`defineRAG` also mounted the semantic pipeline's WRITE half. Every conversation turn was
+embedded and stored **in the same namespace as your documents**. The consequence is not
+subtle: the user's own question, re-embedded, is the single best-scoring "document" in
+the corpus — cosine 1.0 against itself — so it came back as retrieval hit #1 and spent
+a slot in the top-K budget that a real passage should have had.
+
+```text
+before:  store after one turn → msg-1-0, msg-1-1, refunds.md#0, pricing.md#0, security.md#0
+         top-5 for the question → [{"id":"msg-1-0","score":1}, {"id":"pricing.md#0","score":0.842}, …]
+after:   store after one turn → refunds.md#0, pricing.md#0, security.md#0
+```
+
+A corpus is not a conversation log. `defineRAG` compiles no write subflow at all — not
+"writes are skipped at runtime", but no stage, no commit, nothing to re-enable by
+accident. **Conversation memory alongside a corpus is what `defineMemory` is for**, and
+the two are registered separately, each with its own store:
+
+```ts
+const agent = Agent.create({ provider })
+  .rag(defineRAG({ id: 'product-docs', store: corpusStore, embedder }))
+  .memory(defineMemory({
+    id: 'chat',
+    type: MEMORY_TYPES.EPISODIC,
+    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+    store: conversationStore,
+  }))
+  .build();
+```
+
+This is filed as a fix in a minor because nothing was depending on it deliberately: a
+corpus that ranks the user's own question as its best document is broken, not
+configurable.
+
+### The documented example retrieved nothing at all
+
+`indexDocuments` writes under `{ conversationId: '_global' }` by default. A memory reads
+under the identity passed to `agent.run()` — and a run with no explicit identity gets
+`{ conversationId: 'run-<timestamp>-<n>' }`. So the write side and the read side never
+met, and the snippet in this project's own README and JSDoc returned **zero results,
+silently**. The example file in `examples/` worked only because it passed
+`identity: { conversationId: '_global' }` by hand.
+
+A corpus does not belong to a conversation. `defineRAG` now takes `corpus` — the
+namespace it reads from — defaulting to the same `'_global'` the indexer writes to, so
+index with no options and retrieve with no options and the documents are found. Pass it
+explicitly for a per-tenant corpus, on both sides.
+
+And a namespace that holds nothing is now *reported* rather than answered around:
+`corpusEmpty: true` on the retrieval event, plus a once-per-process warning naming the
+namespace it searched and the usual cause.
+
+### The score survives now — and so do the rejections
+
+`loadRelevant` did `results.map(r => r.entry)`. That one `.map` was the whole loss.
+
+- **`MemoryState.retrieved`** — every candidate with its score, its rank, whether it was
+  admitted, and if not, which of `below-threshold` / `over-budget` / `over-max-entries`
+  refused it. Lifted to ROOT state as `retrievalEvidence_<id>` by the read mount, so a
+  backward slice from the answer reaches the passage instead of stopping at the memory
+  subflow boundary — a subflow's own scope never reaches the root commit log.
+- **The quality floor moved out of the store.** It was passed as `search({ minScore })`,
+  so rejected candidates were filtered server-side and never came back. It is applied in
+  the stage now, over a pool of `k + rejectWindow`. **This cannot change which entries
+  are admitted**: `search` returns score-descending, so either the whole pool clears the
+  floor (admitted = first `k`, as before) or some entry fails it (every later entry fails
+  too, so the pool already holds every entry that clears it). `rejectWindow` only controls
+  how many near-misses can be *shown*.
+- **`agentfootprint.memory.retrieved`** (new, 72 typed events) — one per retrieval,
+  carrying every candidate. `candidates: undefined` means the store ranked server-side
+  and returned nothing comparable; it never means there were none.
+- **`agentfootprint.memory.attached`** — declared since 2.x, emitted by nothing until
+  now. One per chunk that reached the prompt, with its score and rank.
+
+```ts
+agent.on('agentfootprint.memory.retrieved', (e) => {
+  for (const c of e.payload.candidates ?? [])
+    console.log(c.admitted ? '✓' : '✗', c.id, c.score.toFixed(2), c.reason ?? '');
+});
+// ✓ refunds.md#0   0.80
+// ✓ pricing.md#0   0.79
+// ✗ security.md#0  0.75  over-max-entries
+```
+
+### One injection record per passage, and not one byte of prompt changed
+
+A retrieval that put three passages in the prompt produced ONE `InjectionRecord`. So
+ablating a single passage was impossible, the context ledger credited the block rather
+than the passage, and `ContextInjectedPayload.retrievalScore` / `.rankPosition` /
+`.threshold` — declared since 2.x — had nowhere to come from, because one record cannot
+honestly carry three scores. All three are written for the first time in this release.
+
+The recall now splits into one injection per admitted chunk, keyed by the chunk's own id.
+**The prompt is byte-identical.** The formatter records the exact fragment each chunk
+contributed (header on the first, footer on the last), and `callLLM` assembles the system
+prompt by joining every record's `rawContent` with `\n\n` — the same separator the
+formatter joined its blocks with, so splitting and re-joining is the identity function.
+A property test pins it across every `k`, and the split refuses itself if the fragments
+do not rebuild the recall exactly (a custom `renderEntry`, say), falling back to the
+single record, which is always correct and merely coarser.
+
+Two orderings are now recorded because they are two different facts: `rank` is how the
+chunk scored, `promptPosition` is where the budget picker put it. Under the default
+recency ordering the best-scoring chunk can land last.
+
+### Chunks the model can cite
+
+A retrieved page of a PDF rendered as `<memory role="unknown" turn="0">` under the header
+*"Relevant context from prior conversations"* — three claims that were not true of a
+document, and no way to cite it. `defineRAG` renders a corpus as what it is:
+
+```text
+Relevant passages retrieved from the document corpus. Cite the source id when you use one.
+
+<source id="refunds.md#0" doc="refunds.md" heading="Refund timing" score="0.80">
+Refunds are processed within 3 business days of approval.
+</source>
+```
+
+Attributes are omitted when unknown — a fabricated page number is worse than a missing
+one — and both the document metadata and the chunk text are escaped, because a corpus is
+untrusted input. Conversation memory keeps its `<memory>` rendering byte for byte.
+
+### `source: 'rag'` is a value something finally emits
+
+`ContextSource` has carried `'rag'` since 2.x and nothing ever produced it; RAG
+injections reported `source: 'memory'`, while the docs claimed `'rag'`. The vocabulary
+was right and the emitter was wrong, so the emitter changed: a `defineRAG` retriever
+carries `flavor: 'rag'` and its injections compose as `source: 'rag'`.
+
+### The retrieval seam
+
+`topK({ k, threshold, rejectWindow })` is the rule every release before this one applied
+without naming it, now written down as a `RetrievalStrategy` and passable as
+`retrieval`. `topK` + `threshold` remain as shorthand for exactly that rule, and the two
+spellings **exclude** — in the type and again at runtime for JavaScript callers — because
+they could disagree and the recording would then name a `k` the run did not use.
+
+A cross-encoder re-ranker and a diversity (MMR) selector are the next two adapters behind
+this same interface. Neither ships here, and they are named so the destination is on
+record rather than implied: a re-ranker with no shipped re-ranking model is a config with
+nothing to configure.
+
+### Also
+
+- `defineRAG({ embedderId })` has been accepted since 7.x and never forwarded to
+  anything — an option no run read. It reaches `search({ embedderId })` now, which is
+  where it filters out a stale embedding space.
+- `pickByBudget` names cap-rejections separately from budget-rejections. The two are
+  fixed by different changes: one by raising `maxEntries`, the other by shortening the
+  corpus.
+- What did **not** change, deliberately: the budget picker still orders by recency, not
+  by relevance. Reordering it would change which passages reach the prompt under budget
+  pressure, and this release carries one behavior change. The record says
+  `selectionOrder: 'recency'` so a reader can see it rather than assume otherwise.
+- `fnv1a` moved to `lib/fnv1a.ts` and is re-exported from `core/slots/helpers.ts` under
+  the same name. The memory layer needed the same hash and `memory/` cannot import
+  `core/`; a second implementation is how two recordings of the same bytes end up
+  disagreeing about their id.
+
+
 ## [8.7.0] - 2026-08-06
 
 **The check-up stops being quiet, and a dead option stops pretending.** 8.4.0 stopped a

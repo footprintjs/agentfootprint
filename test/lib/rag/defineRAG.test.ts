@@ -25,8 +25,38 @@ describe('defineRAG — unit', () => {
     expect(def.id).toBe('docs');
     expect(def.type).toBe('semantic');
     expect(def.read).toBeDefined();
-    expect(def.write).toBeDefined();
     expect(Object.isFrozen(def)).toBe(true);
+  });
+
+  // THE behavior change of 8.8.0. Before it, `defineRAG` also mounted the
+  // semantic pipeline's write half, which embedded every conversation turn
+  // into the SAME namespace as the documents — making the user's own
+  // question the best-scoring "document" in the corpus (cosine 1.0 against
+  // itself) and spending a top-K slot on it. See the scenario test below
+  // that reproduces exactly that.
+  it('is READ-ONLY — no write subflow is compiled (8.8.0)', () => {
+    const def = defineRAG({ id: 'docs', store: new InMemoryStore(), embedder: mockEmbedder() });
+    expect(def.write).toBeUndefined();
+  });
+
+  it("defaults `corpus` to the same '_global' namespace indexDocuments writes to", () => {
+    const def = defineRAG({ id: 'docs', store: new InMemoryStore(), embedder: mockEmbedder() });
+    expect(def.corpus).toEqual({ conversationId: '_global' });
+  });
+
+  it('carries the rag flavor, so injections compose as source:"rag"', () => {
+    const def = defineRAG({ id: 'docs', store: new InMemoryStore(), embedder: mockEmbedder() });
+    expect(def.flavor).toBe('rag');
+  });
+
+  it('an explicit corpus wins over the default', () => {
+    const def = defineRAG({
+      id: 'docs',
+      store: new InMemoryStore(),
+      embedder: mockEmbedder(),
+      corpus: { tenant: 'acme' },
+    });
+    expect(def.corpus).toEqual({ tenant: 'acme' });
   });
 
   // Two tests used to live here: "default asRole is 'user'" and "asRole is

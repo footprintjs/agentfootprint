@@ -8,7 +8,7 @@
 
 > **foldedMessages**(`conversation`): readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: src/core/agent/window/folded.ts:106
+Defined in: [src/core/agent/window/folded.ts:106](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core/agent/window/folded.ts#L106)
 
 Every message this conversation ever folded, oldest fold first, flattened.
 

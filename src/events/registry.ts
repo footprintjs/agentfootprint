@@ -53,6 +53,7 @@ import type {
   LoopIterationStartPayload,
   MemoryAttachedPayload,
   MemoryDetachedPayload,
+  MemoryRetrievedPayload,
   MemoryStrategyAppliedPayload,
   MemoryWrittenPayload,
   ParallelBranchCompletePayload,
@@ -135,6 +136,7 @@ export const EVENT_NAMES = {
   memory: {
     strategyApplied: 'agentfootprint.memory.strategy_applied',
     attached: 'agentfootprint.memory.attached',
+    retrieved: 'agentfootprint.memory.retrieved',
     detached: 'agentfootprint.memory.detached',
     written: 'agentfootprint.memory.written',
   },
@@ -340,6 +342,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.memory.attached': AgentfootprintEventEnvelope<
     'agentfootprint.memory.attached',
     MemoryAttachedPayload
+  >;
+  'agentfootprint.memory.retrieved': AgentfootprintEventEnvelope<
+    'agentfootprint.memory.retrieved',
+    MemoryRetrievedPayload
   >;
   'agentfootprint.memory.detached': AgentfootprintEventEnvelope<
     'agentfootprint.memory.detached',
@@ -559,6 +565,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.context.evaluated',
   'agentfootprint.memory.strategy_applied',
   'agentfootprint.memory.attached',
+  'agentfootprint.memory.retrieved',
   'agentfootprint.memory.detached',
   'agentfootprint.memory.written',
   'agentfootprint.tools.offered',

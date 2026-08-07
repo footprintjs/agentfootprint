@@ -512,11 +512,25 @@ export * from './patterns/index.js';
 // plus the `indexDocuments` helper for seeding the corpus at startup.
 export {
   defineRAG,
+  DEFAULT_CORPUS_IDENTITY,
   type DefineRAGOptions,
   indexDocuments,
   type IndexDocumentsOptions,
   type RagDocument,
 } from './lib/rag/index.js';
+
+// The retrieval seam (8.8.0) — what a retrieval considered, and the rule
+// that decided what it kept. `topK` is the rule every release before this
+// one applied without naming it. The record types are here because a
+// consumer reading `agentfootprint.memory.retrieved` needs them.
+export {
+  topK,
+  type TopKOptions,
+  type RetrievalStrategy,
+  type RetrievalEvidence,
+  type RetrievedCandidate,
+  type RetrievalRejectReason,
+} from './memory/retrieval/index.js';
 
 // MCP + tool dispatch. Tool sources — `mcpClient` / `mockMcpClient`,
 // which connect to a Model Context Protocol server and expose its tools
