@@ -8,7 +8,7 @@
 
 > **formatToolContractCheckup**(`checkup`): `string`
 
-Defined in: [src/core/toolContract.ts:146](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/toolContract.ts#L146)
+Defined in: [src/core/toolContract.ts:146](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/toolContract.ts#L146)
 
 Format a contract check-up for a thrown error / console warning.
 

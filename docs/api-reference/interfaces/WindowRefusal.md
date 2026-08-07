@@ -6,7 +6,7 @@
 
 # Interface: WindowRefusal
 
-Defined in: [src/core/agent/window/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/types.ts#L92)
+Defined in: [src/core/agent/window/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/types.ts#L92)
 
 One named refusal, positioned so a reader can find the turn.
 
@@ -16,7 +16,7 @@ One named refusal, positioned so a reader can find the turn.
 
 > `readonly` **messageIndex**: `number`
 
-Defined in: [src/core/agent/window/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/types.ts#L97)
+Defined in: [src/core/agent/window/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/types.ts#L97)
 
 Index of the turn's first message in the pre-removal window.
 
@@ -26,7 +26,7 @@ Index of the turn's first message in the pre-removal window.
 
 > `readonly` **reason**: [`WindowRefusalReason`](/agentfootprint/api/generated/type-aliases/WindowRefusalReason.md)
 
-Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/types.ts#L93)
+Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/types.ts#L93)
 
 ***
 
@@ -34,6 +34,6 @@ Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/a
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/core/agent/window/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/core/agent/window/types.ts#L95)
+Defined in: [src/core/agent/window/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/types.ts#L95)
 
 Index of the turn in this iteration's turn segmentation.

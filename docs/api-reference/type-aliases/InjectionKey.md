@@ -8,4 +8,4 @@
 
 > **InjectionKey** = *typeof* [`INJECTION_KEYS`](/agentfootprint/api/generated/variables/INJECTION_KEYS.md)\[keyof *typeof* [`INJECTION_KEYS`](/agentfootprint/api/generated/variables/INJECTION_KEYS.md)\]
 
-Defined in: [src/conventions.ts:357](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/conventions.ts#L357)
+Defined in: [src/conventions.ts:357](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/conventions.ts#L357)

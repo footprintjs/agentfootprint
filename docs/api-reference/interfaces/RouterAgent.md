@@ -6,7 +6,7 @@
 
 # Interface: RouterAgent
 
-Defined in: [src/patterns/LlmRouter.ts:108](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/patterns/LlmRouter.ts#L108)
+Defined in: [src/patterns/LlmRouter.ts:108](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/patterns/LlmRouter.ts#L108)
 
 One line of the roster the router reads. `description` is what the LLM
 sees — write it for the model ("Invoices, refunds and payment methods"),
@@ -22,7 +22,7 @@ description cannot break out of its line or override the rules.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:112](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/patterns/LlmRouter.ts#L112)
+Defined in: [src/patterns/LlmRouter.ts:112](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/patterns/LlmRouter.ts#L112)
 
 What this agent handles, in the model's language.
 
@@ -32,6 +32,6 @@ What this agent handles, in the model's language.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:110](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/patterns/LlmRouter.ts#L110)
+Defined in: [src/patterns/LlmRouter.ts:110](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/patterns/LlmRouter.ts#L110)
 
 Stable id. The router must copy one of these verbatim to hand off.

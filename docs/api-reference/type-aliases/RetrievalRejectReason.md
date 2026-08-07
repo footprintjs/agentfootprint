@@ -6,9 +6,9 @@
 
 # Type Alias: RetrievalRejectReason
 
-> **RetrievalRejectReason** = `"below-threshold"` \| `"over-budget"` \| `"over-max-entries"`
+> **RetrievalRejectReason** = `"below-threshold"` \| `"over-budget"` \| `"over-max-entries"` \| `"over-char-budget"`
 
-Defined in: [src/memory/retrieval/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/2af99f94a1c1703f8c3766c38cab67362ed57f5b/src/memory/retrieval/types.ts#L30)
+Defined in: [src/memory/retrieval/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/memory/retrieval/types.ts#L30)
 
 Why a candidate did not reach the prompt. Every rejected candidate
 names one of these — a rejection without a reason is the silence this
