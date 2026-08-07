@@ -72,6 +72,11 @@ async function allPassiveViews(): Promise<string[]> {
     callTraceTool(tools, 'who_wrote', { key: 'profile' }),
     callTraceTool(tools, 'who_wrote', { key: 'ssn' }),
     callTraceTool(tools, 'read_narrative', { maxLines: 200 }),
+    // A search is a passive view too — and the one an attacker would reach
+    // for first, because it takes free text rather than a key it must know.
+    callTraceTool(tools, 'find_in_trace', { query: PII_HEAD, maxHits: 25 }),
+    callTraceTool(tools, 'find_in_trace', { query: '123-45', maxHits: 25 }),
+    callTraceTool(tools, 'find_in_trace', { query: 'ssn', maxHits: 25 }),
   ]);
 }
 
@@ -122,5 +127,32 @@ describe('traceToolpack — security: redacted stays redacted', () => {
     });
     expect(value).toContain('(redacted by policy)');
     expect(value).toMatch(/REDACTED/);
+  });
+
+  it('find_in_trace searches the REDACTED log only — a scrubbed value is unfindable', async () => {
+    // Searching for the scrubbed content finds nothing, because no copy of
+    // it exists to search: footprintjs replaced it at commit time and the
+    // toolpack has no other source. "Not found" here is the truth.
+    const hunt = await callTraceTool(tools, 'find_in_trace', { query: SSN_SENTINEL });
+    expect(hunt).toContain('no match');
+    // Zero hit lines: the only place the sentinel appears is the caller's
+    // own query echoed back, which came from the caller, not from the run.
+    expect(hunt.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(0);
+    expect(hunt).toContain('redaction removed'); // and it says WHY that can happen
+
+    // Searching for the placeholder DOES find the key — the redaction is
+    // visible as a fact about the run, which is the honest half of this.
+    const placeholder = await callTraceTool(tools, 'find_in_trace', { query: 'REDACTED' });
+    expect(placeholder).toContain('FOUND');
+    expect(placeholder).toContain('(redacted by policy)');
+    expect(placeholder).not.toContain(SSN_SENTINEL);
+  });
+
+  it('find_in_trace never serves more than a bounded window of a long value', async () => {
+    const out = await callTraceTool(tools, 'find_in_trace', { query: PII_HEAD });
+    expect(out).toContain('FOUND');
+    expect(out).toContain(PII_HEAD); // the match itself is shown…
+    expect(out).not.toContain(PII_TAIL); // …but never the whole value
+    expect(out).not.toContain(PII_VALUE);
   });
 });

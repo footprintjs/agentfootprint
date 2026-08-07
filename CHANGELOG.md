@@ -7,6 +7,190 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.16.0] - 2026-08-07
+
+**The agent can now answer "why did you do that?" without re-doing it.**
+
+`.selfExplain()` shipped in 8.12.0 with six tools over the previous completed turn.
+Used in anger, it had four gaps — and every one of them was the same shape: the
+evidence existed, and the model had no way to reach it.
+
+### `find_in_trace(query)` — free text in, step ids out
+
+Every other trace tool needs a name you already have: a step id, a state key, a
+variable. But a follow-up question arrives in the user's words — *"why did you say
+order 7712 was out of warranty?"* — and the model's only options were to guess a
+state key or read the whole narrative.
+
+This searches stage names and descriptions, state keys, every committed value and
+the narrative, and hands back **pointers**. Every hit line ends with the exact call
+that opens it, so a search result is a menu of drills rather than an answer to be
+believed:
+
+```
+FOUND 3 match(es) for '7712' in 12 stage(s), 36 state key(s), 40 committed step(s) …
+- tool-calls#22 wrote 'history' (append): …"Order 7712: sku KB-88…  → get_value('tool-calls#22', 'history')
+- narrative line 41: … wrote lastToolResult …                       → read_narrative({ offset: 41 })
+```
+
+Case-insensitive substring; `maxHits` defaults to 10 and hard-caps at 25; each hit
+serves a bounded **window** around the match, never the value. Values are serialized
+one `(step, key)` payload at a time and discarded — a search never builds a
+serialization of the whole log to look through, and one that exhausts its scan
+budget says so rather than reporting "no match".
+
+It searches the redacted commit log, because that is the only copy that exists. A
+miss names what never enters the record at all — run input, env, pre-run state,
+closures, and anything redaction removed — so "not found" cannot be misread as
+"did not happen".
+
+### `inspect_tool_call(toolCallId)` — four records, joined
+
+A tool call is the most-asked-about thing in an agent run and the most scattered.
+The args the model **proposed** are on an assistant turn; the args it **actually ran
+with** are in the middleware ledger (and only when a rule changed them); the result
+is a `role:'tool'` turn; the timing exists only in the event stream. One id, four
+lookups — so the tool does the join:
+
+```
+TOOL CALL c2 — check_inventory
+step: tool-calls#22 — drill with trace_node('tool-calls#22')
+proposed by the model: {"sku":"KB-88"}
+ran with: {"sku":"KB-88","limit":5} — CHANGED at before-tool by 'clamp-limit': "page size capped at 5"
+result: "Stock for KB-88: 12 units available…"
+outcome: ok
+duration: 4ms
+```
+
+The proposed/ran-with split is the reason it exists. A governance rule that rewrites
+args is invisible in the conversation: the model reads its own proposal in history
+and the tool ran on something else, and that difference is often exactly what "why
+did it do that?" is asking about.
+
+Every source that is missing says so with ⚠ rather than being guessed at: no event
+tail means `duration: ⚠ unavailable` with the reason (the commit log records what
+each step WROTE and has no clock), not a fabricated number. A bad id never throws —
+it comes back naming the run's real tool call ids. Outcomes are `ok` / `error` /
+`denied by '<rule>'` / `paused`, and `⚠ unknown` when nothing supports a claim.
+
+### Behaviour change — the captured turn now carries three things, and both new parts default ON
+
+`SelfExplainBinding` captured the snapshot. It now also captures, at the same
+terminal flush so all three describe one turn:
+
+- the run's **narrative** (`getLastNarrativeEntries()`), and
+- a bounded **tail of the run's typed events** (default 2,000 per turn).
+
+Both are controlled by a new option and **both default to `true`**:
+
+```ts
+.selfExplain({ include: { narrative: true, events: true }, maxEvents: 2000 })
+```
+
+That default is the behaviour change. An agent built with `.selfExplain()` now
+subscribes a wildcard event listener and retains a per-turn event tail it did not
+retain before — a few hundred KB for a typical turn, bounded and rotated per run so
+turn N+1 never carries turn N's events. `include: { events: false }` makes **no**
+subscription at all rather than one that is ignored; `include: { narrative: false }`
+skips the narrative read.
+
+The default is `true` because the tools that read these parts are on the catalog
+either way, and a tool that answers "⚠ no evidence" by default is a tool that
+teaches the model not to call it.
+
+`bindTo()` accepts the bare `getSnapshot` function it always accepted, plus a new
+object form carrying all three sources at once. One call, not three connections —
+the `BoundaryRecorder` lesson in this codebase is that a seam needing three separate
+wirings gets two of them.
+
+### Behaviour change — `read_narrative` now mounts under `.selfExplain()` inline mode
+
+`read_narrative` was eager-only: `traceToolpack` mounted it when the artifacts
+carried a narrative, and the lazy pack behind `.selfExplain()` never did, because
+narrative presence is a property of a run that has not happened yet at build time.
+
+The lazy pack's template is now built over an artifact bag that declares every
+optional part, so it mounts the same nine tools every time. That fixed list is what
+the tool catalog and the builder's name reservation are both keyed on. When a
+resolved run turns out not to carry a part, the tool says which switch turns it back
+on rather than quietly disappearing from the catalog or answering emptily.
+
+**`read_narrative` is therefore now a reserved tool name in inline mode.** A
+consumer tool named `read_narrative` on an agent with `.selfExplain()` now fails at
+build with the existing teaching refusal — previously it would have been allowed,
+and would have shadowed nothing. Same for `find_in_trace` and `inspect_tool_call`.
+
+The full inline reservation is now nine names: `run_overview`, `find_in_trace`,
+`trace_node`, `trace_slice`, `backtrack`, `who_wrote`, `get_value`,
+`inspect_tool_call`, `read_narrative` (delegate mode still reserves only
+`explain_run`). The list is **derived** from the pack (`TRACE_TOOL_NAMES`) rather
+than retyped beside it, so a tool added to the pack is reserved the same day it
+ships.
+
+### `run_overview` gains a COST line
+
+When the run priced itself, the overview now ends with what it spent:
+
+```
+COST: ~$0.012300 (in 900 / out 120 tokens) — estimated by the run's pricing table,
+not a bill — via get_value('call-llm#14', 'cumEstimatedUsd').
+```
+
+Only when `cumEstimatedUsd` is committed and **greater than zero**. It is seeded to
+0 on every agent run and only moves under a configured `pricingTable`, so a zero
+means "this run was not priced" — and printing `$0.00` for it would be a number that
+lies.
+
+### `openRecording(recording)` — a saved run, reopened as evidence
+
+`recordRun(agent)` freezes a run into `{ snapshot, events, structure }`, the shape
+the viewers read. The trace toolpack reads a different shape. Until now a team with
+a recording on disk from last Tuesday and a question about it had to reassemble the
+bag by hand — differently in every integration, losing the narrative and the events
+on the way.
+
+```ts
+const tools = traceToolpack(openRecording(JSON.parse(fs.readFileSync('run.json', 'utf8'))));
+await callTraceTool(tools, 'find_in_trace', { query: 'order 7712' });
+```
+
+Pure: no engine, no agent, no I/O. Exported from `agentfootprint/observe` (and
+`agentfootprint/debug`). Honest about the two things a serialized run cannot carry
+back — `controlDeps` is a lookup *function* and does not serialize (slices say
+`⚠ control edges unavailable`, the marker that already existed), and the narrative
+survives only if a narrative recorder was attached, since `recordRun` deliberately
+attaches none. Two teaching refusals name `recordRun` as the producer: a bundle with
+no snapshot, and a snapshot missing `commitLog` or `executionTree`.
+
+### Internal — one bounded event tail, not two
+
+`recordRun`'s ring buffer and drop counter moved into a shared `eventTail` helper
+that both it and `SelfExplainBinding` now use. Written twice, the two would
+eventually disagree about what "dropped" means and one would stop reporting it —
+which is the failure that matters, because a tail that silently starts mid-run reads
+as the whole run. `recordRun`'s public surface (`eventCount`, `droppedEvents`,
+`maxEvents`) is unchanged.
+
+### New example
+
+`examples/features/49-self-explain-live.ts` — an order-support agent looks up a
+damaged order, checks inventory, and **skips the refund** because the item is in
+stock and under warranty. Turn 2 asks "why did you skip the refund?" and it answers
+through visible `find_in_trace` → `inspect_tool_call` → `run_overview` calls. It
+prints per-tool execution counters either side of the explanation to prove nothing
+re-ran, that no business tool was called in turn 2, that `issue_refund` executed zero
+times across both turns, and the total spend against the budget. Runs on a scripted
+mock by default ($0, deterministic, CI-safe); `ANTHROPIC_API_KEY` switches it live
+with `DEMO_MODEL` (default `claude-haiku-4-5` — a small model reading its own record
+is the claim), and `AGENTFOOTPRINT_DEMO_OFFLINE=1` forces the mock.
+
+### A note on the tools slot
+
+Nine tool definitions land on the tools slot for the one activated iteration. That is
+a real bulge past the 2000-char `contextBudget.tools` default, which is a **signal,
+not a limiter** — nothing is ever truncated. An agent that opts into `.selfExplain()`
+should raise it (`contextBudget: { tools: 6000 }`); example 49 does, and says why.
+
 ## [8.15.0] - 2026-08-07
 
 **One skill's turn at a time.** A skill graph is a state machine, and every node in

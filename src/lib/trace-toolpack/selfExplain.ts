@@ -49,11 +49,35 @@ import { defineSkill } from '../injection-engine/factories/defineSkill.js';
 import type { Injection } from '../injection-engine/types.js';
 import { defineTool, type Tool } from '../../core/tools.js';
 import type { AgentOptions } from '../../core/agent/types.js';
+import type { Unsubscribe } from '../../events/dispatcher.js';
+import { eventTail, type EventTail } from '../../events/eventTail.js';
+import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
 import { lazyTraceToolpack, NO_COMPLETED_RUN_MESSAGE } from './lazyToolpack.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
+
+/**
+ * How much of a turn's evidence the binding keeps.
+ *
+ * Both default to TRUE, which is the point: the tools that read them
+ * (`read_narrative`, `inspect_tool_call`) are on the catalog either way,
+ * and a tool that answers "⚠ no evidence" by default is a tool that
+ * teaches the model not to call it. Turn one off when the cost matters
+ * more than the answer — a very long-running turn, or a run whose
+ * narrative would repeat what the structured tools already say.
+ */
+export interface SelfExplainInclude {
+  /** The run's plain-English story → the `read_narrative` tool. Default true. */
+  readonly narrative?: boolean;
+  /**
+   * A bounded tail of the run's typed events → tool-call timings and
+   * outcomes in `inspect_tool_call`. Default true. Off means no wildcard
+   * event subscription is made at all, not a subscription that is ignored.
+   */
+  readonly events?: boolean;
+}
 
 /** Consumer surface for `.selfExplain()` on the Agent builder. */
 export interface SelfExplainOptions {
@@ -73,9 +97,39 @@ export interface SelfExplainOptions {
   readonly id?: string;
   /** Bounding dials forwarded to the toolpack. */
   readonly toolpack?: TraceToolpackOptions;
+  /** Which optional parts of a turn's evidence to capture. Both default true. */
+  readonly include?: SelfExplainInclude;
+  /**
+   * Cap on retained events per turn (only with `include.events`). Default
+   * 2,000 — enough for a long tool-using turn, small enough that a server
+   * holding one binding per agent does not grow without limit. A tail that
+   * dropped events says so in `inspect_tool_call`.
+   */
+  readonly maxEvents?: number;
 }
 
 type CtrlRecorder = ReturnType<typeof controlDepRecorder>;
+
+/** Default per-turn event cap for the self-explain binding. */
+export const SELF_EXPLAIN_MAX_EVENTS = 2000;
+
+/**
+ * What the binding reads a completed turn's evidence FROM.
+ *
+ * One object rather than three wiring calls, on purpose: the
+ * `BoundaryRecorder` lesson in this codebase is that a seam needing three
+ * separate connections gets two of them in some integrations, and the
+ * missing third fails silently. Here the only caller is `AgentBuilder`,
+ * and it hands over all of it at once.
+ */
+export interface SelfExplainSource {
+  /** The just-finished run's snapshot — `agent.getLastSnapshot()`. */
+  getSnapshot(): RuntimeSnapshot | undefined;
+  /** The run's narrative entries — `agent.getLastNarrativeEntries()`. */
+  getNarrative?(): readonly { readonly text: string }[];
+  /** The typed event stream — `agent.on('*', …)`. */
+  on?(type: '*', listener: (event: AgentfootprintEvent) => void): Unsubscribe;
+}
 
 /**
  * The late-binding seam. Create one per built Agent, attach
@@ -84,12 +138,45 @@ type CtrlRecorder = ReturnType<typeof controlDepRecorder>;
  * previous COMPLETED run — never the in-flight one.
  */
 export class SelfExplainBinding {
-  private getSnapshot: (() => RuntimeSnapshot | undefined) | undefined;
+  private source: SelfExplainSource | undefined;
   private ctrl: CtrlRecorder = controlDepRecorder();
-  private captured: { snapshot: RuntimeSnapshot; ctrl: CtrlRecorder } | undefined;
+  private tail: EventTail | undefined;
+  private captured:
+    | {
+        snapshot: RuntimeSnapshot;
+        ctrl: CtrlRecorder;
+        narrative?: readonly string[];
+        events?: readonly AgentfootprintEvent[];
+      }
+    | undefined;
 
-  bindTo(getSnapshot: () => RuntimeSnapshot | undefined): void {
-    this.getSnapshot = getSnapshot;
+  constructor(
+    private readonly include: SelfExplainInclude = {},
+    private readonly maxEvents: number = SELF_EXPLAIN_MAX_EVENTS,
+  ) {}
+
+  private get wantsNarrative(): boolean {
+    return this.include.narrative !== false;
+  }
+
+  private get wantsEvents(): boolean {
+    return this.include.events !== false;
+  }
+
+  /**
+   * Point the binding at the agent it explains.
+   *
+   * Accepts the bare `getSnapshot` function it has always accepted (the
+   * evidence a completed run leaves behind on its own), or the full
+   * source, which adds the two parts a snapshot does NOT carry: the
+   * narrative, and the typed event stream.
+   */
+  bindTo(source: SelfExplainSource | (() => RuntimeSnapshot | undefined)): void {
+    this.source = typeof source === 'function' ? { getSnapshot: source } : source;
+    if (this.wantsEvents && this.source.on) {
+      this.tail = eventTail(this.maxEvents);
+      this.source.on('*', (event) => this.tail?.push(event));
+    }
   }
 
   /** Evidence of the previous completed run, or undefined before the first. */
@@ -98,14 +185,30 @@ export class SelfExplainBinding {
     return {
       snapshot: this.captured.snapshot,
       controlDeps: this.captured.ctrl.asLookup(),
+      ...(this.captured.narrative !== undefined && { narrative: this.captured.narrative }),
+      ...(this.captured.events !== undefined && { events: this.captured.events }),
     };
   }
 
   /** The recorder to attach — forwards flow events to the per-run ctrl. */
   recorder(): CombinedRecorder {
     const capture = (): void => {
-      const snapshot = this.getSnapshot?.();
-      if (snapshot) this.captured = { snapshot, ctrl: this.ctrl };
+      const snapshot = this.source?.getSnapshot();
+      if (!snapshot) return;
+      // The narrative and the event tail are read at the SAME terminal
+      // flush as the snapshot, so the three describe one turn. Reading
+      // either later would mean reading it during the NEXT turn.
+      const narrative =
+        this.wantsNarrative && this.source?.getNarrative
+          ? this.source.getNarrative().map((entry) => entry.text)
+          : undefined;
+      const events = this.tail?.snapshot().events;
+      this.captured = {
+        snapshot,
+        ctrl: this.ctrl,
+        ...(narrative !== undefined && { narrative }),
+        ...(events !== undefined && { events }),
+      };
     };
     return {
       id: 'self-explain-binding',
@@ -115,7 +218,11 @@ export class SelfExplainBinding {
       onRunStart: () => {
         // Rotate FIRST: the retired ctrl never sees this run's events,
         // so the captured lookup survives Convention-4's runId reset.
+        // The event tail rotates for the same reason — turn N+1's
+        // evidence must not carry turn N's events. The retired tail is
+        // the one `captured` already holds, so it is not lost.
         this.ctrl = controlDepRecorder();
+        if (this.wantsEvents && this.source?.on) this.tail = eventTail(this.maxEvents);
       },
       onRunEnd: capture,
       onRunFailed: capture,

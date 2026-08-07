@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 import {
   callTraceTool,
   TOOLPACK_HARD_CAPS,
+  TRACE_TOOL_NAMES,
   traceToolpack,
   type TraceToolpackArtifacts,
 } from '../../../src/observe.js';
@@ -149,20 +150,29 @@ function manyStageArtifacts(count: number): TraceToolpackArtifacts {
 // ─── traceToolpack factory ─────────────────────────────────────────────────
 
 describe('traceToolpack — factory', () => {
-  it('returns the 6 core tools, plus read_narrative only when narrative is provided', () => {
+  it('returns the 8 core tools, plus read_narrative only when narrative is provided', () => {
     const withNarrative = traceToolpack(fixture.artifacts);
     expect(withNarrative.map((t) => t.schema.name)).toEqual([
       'run_overview',
+      'find_in_trace',
       'trace_node',
       'trace_slice',
       'backtrack',
       'who_wrote',
       'get_value',
+      'inspect_tool_call',
       'read_narrative',
     ]);
     const bare = traceToolpack(fixture.artifactsBare);
     expect(bare.map((t) => t.schema.name)).not.toContain('read_narrative');
-    expect(bare).toHaveLength(6);
+    expect(bare).toHaveLength(8);
+  });
+
+  it('TRACE_TOOL_NAMES is the pack, not a second list beside it (anti-drift)', () => {
+    // The builder reserves names from this constant. A tool added to the
+    // pack without joining it would be shadowable by a consumer tool.
+    const mounted = traceToolpack(fixture.artifacts).map((t) => t.schema.name);
+    expect([...TRACE_TOOL_NAMES].sort()).toEqual([...mounted].sort());
   });
 
   it('embeds an id enum in schemas for small runs (free #9 validation)', () => {
@@ -419,6 +429,132 @@ describe('read_narrative', () => {
     const tools = traceToolpack({ ...fixture.artifactsBare, narrative: longNarrative });
     const out = await callTraceTool(tools, 'read_narrative', { maxLines: 5000 });
     expect(out).toContain(`lines 0–${TOOLPACK_HARD_CAPS.narrativeMaxLines - 1} of 500`);
+  });
+});
+
+// ─── find_in_trace ─────────────────────────────────────────────────────────
+
+describe('find_in_trace', () => {
+  it('turns free text into pointers — every hit line ends with the call that opens it', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'find_in_trace', { query: '90210' });
+    expect(out).toContain('FOUND');
+    expect(out).toContain('derive#1'); // the step that wrote the zip
+    expect(out).toMatch(/→ get_value\('derive#1', 'customer'\)/);
+    // Every reported line carries a drill hint — a search result is a menu.
+    for (const line of out.split('\n').filter((l) => l.startsWith('- '))) {
+      expect(line).toContain('→ ');
+    }
+  });
+
+  it('finds stage names and descriptions, pointing at the step id', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'Seed the figures' });
+    expect(out).toContain("→ trace_node('seed#0')");
+  });
+
+  it('finds narrative lines and hands back the page offset', async () => {
+    const tools = traceToolpack({
+      ...fixture.artifactsBare,
+      narrative: ['nothing here', 'the CULPRIT sentence', 'nor here'],
+    });
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'culprit' });
+    expect(out).toContain('narrative line 1');
+    expect(out).toContain('read_narrative({ offset: 1 })');
+  });
+
+  it('is case-insensitive', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const upper = await callTraceTool(tools, 'find_in_trace', { query: 'SEED THE FIGURES' });
+    expect(upper).toContain('FOUND');
+  });
+
+  it('caps hits and says more may exist (never a silent cut)', async () => {
+    const tools = traceToolpack(manyStageArtifacts(30));
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'key', maxHits: 3 });
+    expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(3);
+    expect(out).toContain('⚠ stopped at maxHits 3');
+  });
+
+  it('clamps maxHits to the hard cap', async () => {
+    const tools = traceToolpack(manyStageArtifacts(60));
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'key', maxHits: 99999 });
+    expect(out).toContain(`⚠ stopped at maxHits ${TOOLPACK_HARD_CAPS.findMaxHits}`);
+    expect(out.split('\n').filter((l) => l.startsWith('- ')).length).toBe(
+      TOOLPACK_HARD_CAPS.findMaxHits,
+    );
+  });
+
+  it('answers a miss by naming what NEVER enters the record', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'no-such-string-anywhere' });
+    expect(out).toContain('no match');
+    expect(out).toContain('⚠');
+    expect(out).toContain('run input (args)');
+    expect(out).toContain('redaction removed');
+    expect(out).toContain('Tool internals are not traced');
+  });
+
+  it('refuses a query too short to mean anything, and teaches instead', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'find_in_trace', { query: 'a' });
+    expect(out).toContain('too short to search');
+    expect(out).toContain('minimum 2 characters');
+  });
+
+  it('never leaks the engine path delimiter into a hit line', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'find_in_trace', { query: '90210' });
+    expect(out).not.toContain('\u001F'); // the engine delimiter never leaks
+  });
+});
+
+// ─── inspect_tool_call — honest absence on a run with no tool calls ────────
+
+describe('inspect_tool_call — honest absence', () => {
+  it('says plainly when the run recorded no tool calls at all', async () => {
+    const tools = traceToolpack(fixture.artifacts);
+    const out = await callTraceTool(tools, 'inspect_tool_call', { toolCallId: 'c1' });
+    expect(out).toContain('this run recorded NO tool calls at all');
+    expect(out).toContain('run_overview');
+  });
+});
+
+// ─── run_overview COST line ────────────────────────────────────────────────
+
+describe('run_overview — cost', () => {
+  it('prints a COST line only when the run actually priced itself', async () => {
+    // The flowchart fixture never writes cumEstimatedUsd → no line at all.
+    const unpriced = await callTraceTool(traceToolpack(fixture.artifacts), 'run_overview');
+    expect(unpriced).not.toContain('COST:');
+
+    const priced = manyStageArtifacts(3);
+    const bundle = priced.snapshot.commitLog[1] as unknown as {
+      trace: { path: string; verb: 'set' }[];
+      overwrite: Record<string, unknown>;
+    };
+    bundle.trace = [
+      { path: 'cumEstimatedUsd', verb: 'set' },
+      { path: 'cumTokensInput', verb: 'set' },
+      { path: 'cumTokensOutput', verb: 'set' },
+    ];
+    bundle.overwrite = { cumEstimatedUsd: 0.0123, cumTokensInput: 900, cumTokensOutput: 120 };
+    const out = await callTraceTool(traceToolpack(priced), 'run_overview');
+    expect(out).toContain('COST: ~$0.012300 (in 900 / out 120 tokens)');
+    expect(out).toContain('not a bill'); // an estimate says it is one
+    expect(out).toContain("get_value('stage-1#1', 'cumEstimatedUsd')");
+  });
+
+  it('a zero spend is NOT reported as $0.00 — it means the run was never priced', async () => {
+    const zero = manyStageArtifacts(2);
+    const bundle = zero.snapshot.commitLog[0] as unknown as {
+      trace: { path: string; verb: 'set' }[];
+      overwrite: Record<string, unknown>;
+    };
+    bundle.trace = [{ path: 'cumEstimatedUsd', verb: 'set' }];
+    bundle.overwrite = { cumEstimatedUsd: 0 };
+    const out = await callTraceTool(traceToolpack(zero), 'run_overview');
+    expect(out).not.toContain('COST:');
   });
 });
 

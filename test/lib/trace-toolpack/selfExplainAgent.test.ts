@@ -9,13 +9,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../../src/index';
+import type { AgentfootprintEvent } from '../../../src/events.js';
 import { mock } from '../../../src/llm-providers.js';
 import {
   callTraceTool,
   lazyTraceToolpack,
   NO_COMPLETED_RUN_MESSAGE,
+  SelfExplainBinding,
   traceDebugAgent,
   traceToolpack,
+  TRACE_TOOL_NAMES,
   type TraceToolpackArtifacts,
 } from '../../../src/observe';
 
@@ -106,18 +109,25 @@ const contentOf = (out: unknown): string =>
 describe('lazyTraceToolpack — late-bound artifacts', () => {
   it('serves the honest no-run answer from every tool before a run exists', async () => {
     const tools = lazyTraceToolpack(() => undefined);
+    // The lazy pack's shape is FIXED at build time — including the two
+    // tools whose evidence is optional per run — because the tool catalog
+    // and the builder's name reservation both need the list before any run
+    // exists. A run that lacks a part answers per-tool, not by vanishing.
     expect(tools.map((t) => t.schema.name)).toEqual([
       'run_overview',
+      'find_in_trace',
       'trace_node',
       'trace_slice',
       'backtrack',
       'who_wrote',
       'get_value',
+      'inspect_tool_call',
+      'read_narrative',
     ]);
     for (const tool of tools) {
       // minimal valid args per tool so validation passes and execute runs
       const args =
-        tool.schema.name === 'run_overview'
+        tool.schema.name === 'run_overview' || tool.schema.name === 'read_narrative'
           ? {}
           : tool.schema.name === 'who_wrote'
           ? { key: 'x' }
@@ -127,9 +137,31 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
           ? { runtimeStageId: 'a#0' }
           : tool.schema.name === 'backtrack'
           ? { variable: 'x' }
+          : tool.schema.name === 'find_in_trace'
+          ? { query: 'anything' }
+          : tool.schema.name === 'inspect_tool_call'
+          ? { toolCallId: 'c1' }
           : { runtimeStageId: 'a#0' };
       expect(await callTraceTool([tool], tool.schema.name, args)).toBe(NO_COMPLETED_RUN_MESSAGE);
     }
+  });
+
+  it('a tool whose optional evidence is missing says which switch turns it back on', async () => {
+    // Artifacts without a narrative: `read_narrative` is still mounted (the
+    // catalog is fixed at build time) and answers honestly instead of
+    // pretending the run had an empty story.
+    const bare = lazyTraceToolpack(() => ({
+      snapshot: {
+        commitLog: [],
+        executionTree: undefined,
+        sharedState: {},
+        commitValues: 'full',
+      } as never,
+    }));
+    const out = await callTraceTool(bare, 'read_narrative', {});
+    expect(out).toContain('read_narrative has nothing to read for this run');
+    expect(out).toContain('include: { narrative: false }');
+    expect(out).toContain('The other trace tools are unaffected.');
   });
 
   it('template schemas bake no step-id enums (ids are unknowable pre-run)', () => {
@@ -299,6 +331,184 @@ describe('.selfExplain() — inline mode', () => {
       .tool(shadow)
       .selfExplain({ delegate: { provider: mock({ reply: 'y' }), model: 'd' } });
     expect(() => okBuilder.build()).not.toThrow();
+  });
+
+  it('EVERY name the pack can mount is reserved — count-asserted, so a new tool cannot be forgotten', () => {
+    // 9 tools; the count is pinned deliberately. Adding one to the pack
+    // without adding it here fails HERE, which is the reminder that a new
+    // toolpack tool also needs a CHANGELOG line and a CLAUDE.md update.
+    expect(TRACE_TOOL_NAMES).toHaveLength(9);
+    for (const reserved of TRACE_TOOL_NAMES) {
+      const shadow = defineTool<{ x: string }, string>({
+        name: reserved,
+        description: 'consumer tool with a colliding name',
+        inputSchema: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'] },
+        execute: ({ x }) => x,
+      });
+      const builder = Agent.create({ provider: mock({ reply: 'x' }), model: 'm' })
+        .tool(shadow)
+        .selfExplain();
+      expect(() => builder.build(), `'${reserved}' must be reserved`).toThrow(
+        /reserved by \.selfExplain/,
+      );
+    }
+  });
+
+  it('read_narrative is on the inline catalog and answers from the captured turn', async () => {
+    const { agent } = buildScriptedAgent();
+    await agent.run({ message: 'Refund order A-1001?' });
+    const tools = lazyTraceToolpack(() => bindingArtifactsOf(agent));
+    expect(tools.map((t) => t.schema.name)).toContain('read_narrative');
+    const page = await callTraceTool(tools, 'read_narrative', { maxLines: 2 });
+    expect(page).toMatch(/NARRATIVE lines 0–1 of \d+/);
+  });
+});
+
+/* ── the binding: what a captured turn carries ────────────────────────── */
+
+/** Reach the binding's artifacts the way the mounted tools do. */
+function bindingArtifactsOf(agent: ReturnType<ReturnType<typeof Agent.create>['build']>) {
+  return {
+    snapshot: agent.getLastSnapshot()!,
+    narrative: agent.getLastNarrativeEntries().map((e) => e.text),
+  };
+}
+
+describe('SelfExplainBinding — what one captured turn carries', () => {
+  it('captures the narrative and a bounded event tail by DEFAULT (both include flags default true)', () => {
+    const binding = new SelfExplainBinding();
+    let emit: ((event: AgentfootprintEvent) => void) | undefined;
+    binding.bindTo({
+      getSnapshot: () => ({ commitLog: [], sharedState: {} } as never),
+      getNarrative: () => [{ text: 'step one happened' }],
+      on: (_type, listener) => {
+        emit = listener;
+        return () => undefined;
+      },
+    });
+    const recorder = binding.recorder();
+    recorder.onRunStart?.({} as never);
+    emit?.({ type: 'agentfootprint.stream.tool_start', payload: {}, meta: {} } as never);
+    recorder.onRunEnd?.({} as never);
+
+    expect(binding.artifacts?.narrative).toEqual(['step one happened']);
+    expect(binding.artifacts?.events).toHaveLength(1);
+  });
+
+  it('include:{narrative:false} captures no narrative — and nothing else changes', () => {
+    const binding = new SelfExplainBinding({ narrative: false });
+    binding.bindTo({
+      getSnapshot: () => ({ commitLog: [], sharedState: {} } as never),
+      getNarrative: () => [{ text: 'should not be captured' }],
+    });
+    const recorder = binding.recorder();
+    recorder.onRunStart?.({} as never);
+    recorder.onRunEnd?.({} as never);
+    expect(binding.artifacts?.narrative).toBeUndefined();
+    expect(binding.artifacts?.snapshot).toBeDefined();
+  });
+
+  it('include:{events:false} makes NO wildcard subscription at all (not a subscription ignored)', () => {
+    const binding = new SelfExplainBinding({ events: false });
+    let subscribed = false;
+    binding.bindTo({
+      getSnapshot: () => ({ commitLog: [], sharedState: {} } as never),
+      on: () => {
+        subscribed = true;
+        return () => undefined;
+      },
+    });
+    expect(subscribed).toBe(false);
+    const recorder = binding.recorder();
+    recorder.onRunStart?.({} as never);
+    recorder.onRunEnd?.({} as never);
+    expect(binding.artifacts?.events).toBeUndefined();
+  });
+
+  it('the bare function form of bindTo still works (back-compat)', () => {
+    const binding = new SelfExplainBinding();
+    binding.bindTo(() => ({ commitLog: [], sharedState: {} } as never));
+    const recorder = binding.recorder();
+    recorder.onRunEnd?.({} as never);
+    expect(binding.artifacts?.snapshot).toBeDefined();
+    expect(binding.artifacts?.narrative).toBeUndefined(); // no source to read
+  });
+
+  it('rotates the event tail per run — turn N+1 never carries turn N events', () => {
+    const binding = new SelfExplainBinding();
+    let emit: ((event: AgentfootprintEvent) => void) | undefined;
+    binding.bindTo({
+      getSnapshot: () => ({ commitLog: [], sharedState: {} } as never),
+      on: (_type, listener) => {
+        emit = listener;
+        return () => undefined;
+      },
+    });
+    const recorder = binding.recorder();
+    const fire = (n: number) =>
+      emit?.({ type: 'agentfootprint.stream.token', payload: { n }, meta: {} } as never);
+
+    recorder.onRunStart?.({} as never);
+    fire(1);
+    fire(2);
+    recorder.onRunEnd?.({} as never);
+    expect(binding.artifacts?.events).toHaveLength(2);
+
+    recorder.onRunStart?.({} as never); // turn 2 begins
+    fire(3);
+    recorder.onRunEnd?.({} as never);
+    const second = binding.artifacts?.events ?? [];
+    expect(second).toHaveLength(1);
+    expect((second[0]!.payload as { n: number }).n).toBe(3);
+  });
+});
+
+/* ── integration: capture survives deferred observer delivery ─────────── */
+
+describe('.selfExplain() — under observerDelivery: deferred', () => {
+  it('still captures at the terminal flush, narrative and events included', async () => {
+    const catalogs: string[][] = [];
+    const provider = mock({
+      chunkDelayMs: 0,
+      respond: (req: ProviderReq) => {
+        catalogs.push(toolNames(req));
+        const names = toolNames(req);
+        const lastTool = lastToolText(req);
+        if (names.includes('inspect_tool_call')) {
+          if (lastTool.startsWith('TOOL CALL')) return `EXPLained: ${lastTool.slice(0, 600)}`;
+          return {
+            toolCalls: [{ id: 'i1', name: 'inspect_tool_call', args: { toolCallId: 't1' } }],
+          };
+        }
+        if (/why/i.test(String(req.messages.find((m) => m.role === 'user')?.content ?? ''))) {
+          return { toolCalls: [{ id: 's1', name: 'read_skill', args: { id: 'self-explain' } }] };
+        }
+        if (names.includes('lookup_order') && !lastTool) {
+          return { toolCalls: [{ id: 't1', name: 'lookup_order', args: { orderId: 'A-1001' } }] };
+        }
+        return 'Refund APPROVED for order A-1001.';
+      },
+    });
+    const agent = Agent.create({
+      provider,
+      model: 'mock-1',
+      maxIterations: 6,
+      observerDelivery: 'deferred',
+    })
+      .system('You are a refunds assistant.')
+      .tool(lookupOrder)
+      .selfExplain()
+      .build();
+
+    await agent.run({ message: 'Refund order A-1001?' });
+    const why = contentOf(await agent.run({ message: 'Why did you approve it?' }));
+
+    // The binding is attached `delivery: 'inline'` precisely so capture
+    // lands at the terminal flush regardless of the executor's tier.
+    expect(why).toContain('TOOL CALL t1 — lookup_order');
+    expect(why).toContain('outcome: ok');
+    // And the event tail survived the deferred tier — a real duration.
+    expect(why).toMatch(/duration: \d+ms/);
   });
 
   it("reactMode 'classic' fails loud — frozen slots could never surface the trace tools", () => {

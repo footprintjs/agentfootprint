@@ -50,6 +50,7 @@ import {
   SelfExplainBinding,
   type SelfExplainOptions,
 } from '../../lib/trace-toolpack/selfExplain.js';
+import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolpack.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
 import type { CompactionOptions } from './window/types.js';
@@ -1554,9 +1555,13 @@ export class AgentBuilder {
     // FIRST — a consumer tool named like a trace tool would silently shadow
     // it, and the skill body would instruct the model into the wrong tool.
     if (this.selfExplainConfig) {
-      const reserved = this.selfExplainConfig.delegate
+      // Inline mode reserves whatever the pack can mount — read from
+      // `TRACE_TOOL_NAMES` rather than retyped here, so a tool added to the
+      // pack is reserved the same day it ships. Delegate mode mounts one
+      // tool and reserves one name.
+      const reserved: readonly string[] = this.selfExplainConfig.delegate
         ? ['explain_run']
-        : ['run_overview', 'trace_node', 'trace_slice', 'backtrack', 'who_wrote', 'get_value'];
+        : TRACE_TOOL_NAMES;
       const clash = this.registry.find((entry) => reserved.includes(entry.name));
       if (clash) {
         throw new Error(
@@ -1567,7 +1572,9 @@ export class AgentBuilder {
         );
       }
     }
-    const selfExplainBinding = this.selfExplainConfig ? new SelfExplainBinding() : undefined;
+    const selfExplainBinding = this.selfExplainConfig
+      ? new SelfExplainBinding(this.selfExplainConfig.include, this.selfExplainConfig.maxEvents)
+      : undefined;
     const injections = selfExplainBinding
       ? [...this.injectionList, buildSelfExplainSkill(this.selfExplainConfig!)]
       : this.injectionList;
@@ -1643,7 +1650,16 @@ export class AgentBuilder {
     if (selfExplainBinding) {
       // Late binding: capture fires at each run's terminal flush, when
       // getLastSnapshot() IS the just-completed run (never in-flight).
-      selfExplainBinding.bindTo(() => agent.getLastSnapshot());
+      //
+      // All THREE sources in one call, because a turn's evidence is three
+      // things that a snapshot alone does not carry: what happened
+      // (snapshot), how it read in English (narrative), and when each tool
+      // call started and ended (events — the commit log has no clock).
+      selfExplainBinding.bindTo({
+        getSnapshot: () => agent.getLastSnapshot(),
+        getNarrative: () => agent.getLastNarrativeEntries(),
+        on: (type, listener) => agent.on(type, listener),
+      });
       agent.attach(selfExplainBinding.recorder());
     }
     return agent;

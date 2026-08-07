@@ -60,6 +60,7 @@
 import type { Runner } from '../../core/runner.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
+import { DEFAULT_MAX_EVENTS, eventTail } from '../../events/eventTail.js';
 import { boundaryRecorder, type BoundaryRecorder } from './BoundaryRecorder.js';
 
 /**
@@ -129,9 +130,6 @@ export interface RunRecorder {
   stop(): void;
 }
 
-/** Default retained-event cap — see `RecordRunOptions.maxEvents`. */
-const DEFAULT_MAX_EVENTS = 10_000;
-
 /**
  * Start recording a runner. Call BEFORE `run()` — a recording is
  * collected as the run happens and cannot be reconstructed after it.
@@ -150,19 +148,15 @@ const DEFAULT_MAX_EVENTS = 10_000;
  * ```
  */
 export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRecorder {
-  const maxEvents = options.maxEvents ?? DEFAULT_MAX_EVENTS;
-  const events: AgentfootprintEvent[] = [];
-  let dropped = 0;
-
   // 1. THE TIMELINE. Subscribed before the run so nothing is missed —
   //    the dispatcher drops events with no listener rather than queuing
-  //    them, so a late subscription starts mid-story.
+  //    them, so a late subscription starts mid-story. The bounded tail
+  //    (cap + drop count) is the shared `eventTail` helper, so a
+  //    recording and the self-explaining agent's evidence keep the same
+  //    amount and report a shortfall the same way.
+  const tail = eventTail(options.maxEvents ?? DEFAULT_MAX_EVENTS);
   const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
-    events.push(event);
-    if (events.length > maxEvents) {
-      events.shift();
-      dropped += 1;
-    }
+    tail.push(event);
   });
 
   // 2. THE BOUNDARIES — all three connections, which is the whole reason
@@ -183,17 +177,17 @@ export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRe
       // Read at freeze time. Before the run there is no snapshot; during
       // one it grows; after it, it is the finished run's.
       snapshot: runner.getLastSnapshot(),
-      events: events.slice(),
+      events: tail.snapshot().events,
       // The one piece a run does not leave behind — it lives on the
       // chart, which is built once and never changes.
       structure: (runner.getSpec() as { buildTimeStructure?: unknown }).buildTimeStructure,
     }),
     boundary,
     get eventCount() {
-      return events.length;
+      return tail.count;
     },
     get droppedEvents() {
-      return dropped;
+      return tail.dropped;
     },
     stop: () => {
       // Idempotent: a consumer that stops in both a finally block and an

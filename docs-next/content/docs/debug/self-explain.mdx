@@ -15,13 +15,32 @@ That's it. Day to day nothing changes — the agent runs with its production too
 
 `.selfExplain()` mounts **one skill**. Day to day the tool catalog carries only that skill's activation row — your production tools are untouched, and the model never sees the trace tools. When the user asks "why…", the LLM activates the skill (`read_skill`), and **that iteration alone** gains the trace tools, late-bound to the previous run:
 
-- `run_overview` — the catalog of what ran (steps, stages, loops, errors, honesty markers)
+- `run_overview` — the catalog of what ran (steps, stages, loops, errors, honesty markers, and what the run cost)
+- `find_in_trace` — **free text in, step ids out.** The user's words ("order 7712") searched across stage names, state keys, every committed value and the narrative; each hit line ends with the exact call that opens it. The first move when the question names something you have no id for.
 - `trace_node` — inspect one step by id (its reads / writes / data + control parents / errors)
 - `who_wrote` — which step last wrote a value (backtrack a key to its source)
 - `get_value` — fetch **one** value by id + key, lazily — only the piece it needs, never the whole trace
 - `trace_slice` — the backward causal slice around a node
+- `backtrack` — variable-first: why is `K` what it is, and (with `element`) which step produced `K[i]`
+- `inspect_tool_call` — **one tool call end to end**: the args the model *proposed*, the args it actually *ran with* (they differ when a governance rule rewrote them), the result, the outcome, the duration, and the step that ran it
+- `read_narrative` — the run's plain-English story, paginated
 
 So the cost model is honest: the production catalog stays clean, and the trace tools appear **exactly once**, on the iteration where the question was asked. The example prints the per-call catalog to prove it.
+
+Nine definitions is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should raise it: `contextBudget: { tools: 6000 }`.
+
+## What one captured turn carries
+
+A snapshot alone cannot answer everything. The binding captures three things at the same terminal flush, so all three describe one turn: the **snapshot**, the run's **narrative** (what `read_narrative` pages through), and a bounded **tail of the run's typed events** (the only clock a run has — what `inspect_tool_call` reads durations from). Both optional parts default **on**:
+
+```ts
+.selfExplain({
+  include: { narrative: true, events: true },  // SelfExplainInclude — both default true
+  maxEvents: 2000,                             // per-turn tail cap (SELF_EXPLAIN_MAX_EVENTS)
+})
+```
+
+`maxEvents` caps the retained tail per turn; its default is exported as `SELF_EXPLAIN_MAX_EVENTS` (2,000 — enough for a long tool-using turn, small enough that a server holding one binding per agent does not grow without limit), and a tail that dropped events says so rather than letting a reader mistake the remainder for the whole turn. `include` takes a `SelfExplainInclude` — two booleans, both defaulting to `true`, because the tools that read these parts are on the catalog either way and a tool that answers "⚠ no evidence" by default is a tool that teaches the model not to call it. Turn one off when the cost matters more than the answer. `events: false` makes **no** wildcard event subscription at all, rather than one that is ignored; a tool whose evidence is missing then says which switch turns it back on instead of answering emptily. (`SelfExplainSource` is the shape the builder hands the binding — all three sources in one call, so no wiring can be half-done.)
 
 ## Delegate mode — answer on a cheaper model
 
@@ -59,7 +78,20 @@ Mental model: **Causal memory pulls the right *run*; `.selfExplain()` drills the
 ## Gotchas
 
 - **Needs `reactMode: 'dynamic'`** (the default) or `'dynamic-grouped'`. `'classic'` caches the tools slot on turn 1, so a mid-turn skill activation could never surface the trace tools — `.selfExplain()` **fails loud at build** rather than silently never answering. (Need it on a classic-mode agent? Run `traceDebugAgent()` as a separate session instead.)
-- **Reserved tool names.** Inline mode reserves `run_overview` / `trace_node` / `trace_slice` / `who_wrote` / `get_value`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it.
+- **Reserved tool names.** Inline mode reserves all nine names the pack can mount — `run_overview` / `find_in_trace` / `trace_node` / `trace_slice` / `backtrack` / `who_wrote` / `get_value` / `inspect_tool_call` / `read_narrative`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The list is read from `TRACE_TOOL_NAMES` (the pack's own export) rather than retyped beside it, so it cannot fall behind the pack.
+
+## Explaining a run that already finished
+
+`.selfExplain()` answers about the agent's *previous* turn, in memory. For a run recorded weeks ago, `openRecording` reopens a saved `recordRun` bundle — `{ snapshot, events, structure }`, live or parsed back from JSON — as the same artifacts the trace tools navigate:
+
+```ts
+import { recordRun, openRecording, traceToolpack, callTraceTool } from 'agentfootprint/observe';
+
+const tools = traceToolpack(openRecording(JSON.parse(fs.readFileSync('run.json', 'utf8'))));
+await callTraceTool(tools, 'find_in_trace', { query: 'order 7712' });
+```
+
+It is pure — no engine, no agent, no I/O — and takes an `OpenableRecording` (any bundle structurally matching a `Recording`). It is honest about the two things a serialized run cannot carry back: `controlDeps` is a lookup *function* and does not serialize, so slices carry the existing `⚠ control edges unavailable` marker; and the narrative survives only if a narrative recorder was attached at record time, since `recordRun` deliberately attaches none. A bundle with no snapshot, or a snapshot missing `commitLog` / `executionTree`, is refused with a message naming `recordRun` as the producer.
 
 ## See also
 

@@ -10,6 +10,8 @@
 import type { RuntimeSnapshot } from 'footprintjs';
 import type { ControlDepLookup } from 'footprintjs/trace';
 
+import type { AgentfootprintEvent } from '../../events/registry.js';
+
 /**
  * The frozen evidence of one completed run.
  *
@@ -23,11 +25,17 @@ import type { ControlDepLookup } from 'footprintjs/trace';
  * - `narrative` — OPTIONAL narrative lines (e.g. rendered from
  *   `executor.getNarrativeEntries()`). When present, a `read_narrative` tool
  *   is added for bounded, paginated access to the human-readable story.
+ * - `events` — OPTIONAL tail of the run's typed agentfootprint events. The
+ *   commit log records what each step WROTE; it has no clock and no notion
+ *   of a tool call as a thing with a duration. `inspect_tool_call` reads
+ *   timings and outcomes from here, and says ⚠ when the tail is absent
+ *   rather than inventing them.
  */
 export interface TraceToolpackArtifacts {
   readonly snapshot: RuntimeSnapshot;
   readonly controlDeps?: ControlDepLookup;
   readonly narrative?: readonly string[];
+  readonly events?: readonly AgentfootprintEvent[];
 }
 
 /**
@@ -60,6 +68,8 @@ export const TOOLPACK_HARD_CAPS = {
   sliceMaxNodes: 100,
   valueMaxChars: 8000,
   narrativeMaxLines: 200,
+  /** `find_in_trace` hits per call — a search is a pointer list, not a dump. */
+  findMaxHits: 25,
 } as const;
 
 export function resolveToolpackOptions(options?: TraceToolpackOptions): ResolvedToolpackOptions {

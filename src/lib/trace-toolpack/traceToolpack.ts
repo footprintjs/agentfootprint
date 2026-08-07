@@ -69,6 +69,21 @@ const NODE_READ_CAP = 30;
 const NARRATIVE_LINE_CHAR_CAP = 400;
 const UNKNOWN_ID_SUGGESTION_CAP = 8;
 const KEY_SUGGESTION_CAP = 12;
+/** `find_in_trace` — default hits, query bounds, and per-hit context window. */
+const FIND_HITS_DEFAULT = 10;
+const FIND_QUERY_MIN_CHARS = 2;
+const FIND_QUERY_MAX_CHARS = 200;
+const FIND_CONTEXT_RADIUS = 55;
+/**
+ * How many committed writes one search may open before it stops. A search
+ * is a pointer list, not a scan of the whole run — and a search that ran
+ * out of budget SAYS so rather than reporting "no match".
+ */
+const FIND_SCAN_BUDGET = 1500;
+/** `inspect_tool_call` — how many real ids an unknown-id correction names. */
+const TOOL_CALL_SUGGESTION_CAP = 12;
+/** Result preview for `inspect_tool_call` (its own dial: results are the answer). */
+const TOOL_RESULT_PREVIEW_CHARS = 400;
 /** Schemas embed an `enum` of valid ids/keys only when the set is small —
  *  free #9 validation without bloating the tools block on long runs. */
 const SCHEMA_ENUM_CAP = 48;
@@ -263,6 +278,34 @@ function truncateText(text: string, cap: number): string {
   return text.length > cap ? `${text.slice(0, cap)}…` : text;
 }
 
+/**
+ * The final COMMITTED view of a key — reconstructed from the commit log,
+ * never read off `snapshot.sharedState`.
+ *
+ * That distinction is the whole redaction contract: `sharedState` is the
+ * run's LIVE state (unredacted by construction), while the commit log
+ * carries what footprintjs scrubbed at commit time. Everything in this
+ * file that serves a VALUE goes through here or through `commitValueAt`
+ * directly; `sharedState` is read for key NAMES only.
+ */
+function committedFinal(index: ToolpackIndex, path: string): unknown {
+  if (index.commitLog.length === 0) return undefined;
+  return commitValueAt(index.commitLog, index.commitLog.length - 1, path);
+}
+
+/** A bounded window of `text` around the first case-insensitive match. */
+function matchWindow(text: string, needleLower: string, radius: number): string | undefined {
+  const at = text.toLowerCase().indexOf(needleLower);
+  if (at < 0) return undefined;
+  const start = Math.max(0, at - radius);
+  const end = Math.min(text.length, at + needleLower.length + radius);
+  return (
+    (start > 0 ? '…' : '') +
+    text.slice(start, end).replace(/\s+/g, ' ') +
+    (end < text.length ? '…' : '')
+  );
+}
+
 // ── The factory ────────────────────────────────────────────────────────────
 
 /**
@@ -270,15 +313,17 @@ function truncateText(text: string, cap: number): string {
  *
  * Returns plain `Tool[]`:
  *
- * | Tool             | Question it answers                                       |
- * |------------------|-----------------------------------------------------------|
- * | `run_overview`   | What happened, broadly? (the entry point)                 |
- * | `trace_node`     | What did step X read/write, and where did its inputs come from? |
- * | `trace_slice`    | Which chain of steps produced the data at X? (causal slice) |
- * | `backtrack`      | Why is VARIABLE K what it is? (+ `element`: who made K[i]?) — variable-first |
- * | `who_wrote`      | Which step last wrote key K?                              |
- * | `get_value`      | The full value of K as of step X (capped, truncation-marked) |
- * | `read_narrative` | The human-readable story, paginated (only when narrative provided) |
+ * | Tool                | Question it answers                                    |
+ * |---------------------|--------------------------------------------------------|
+ * | `run_overview`      | What happened, broadly? (the entry point)              |
+ * | `find_in_trace`     | WHERE in this run does "…" appear? (free text → ids)   |
+ * | `trace_node`        | What did step X read/write, and where did its inputs come from? |
+ * | `trace_slice`       | Which chain of steps produced the data at X? (causal slice) |
+ * | `backtrack`         | Why is VARIABLE K what it is? (+ `element`: who made K[i]?) — variable-first |
+ * | `who_wrote`         | Which step last wrote key K?                           |
+ * | `get_value`         | The full value of K as of step X (capped, truncation-marked) |
+ * | `inspect_tool_call` | One tool call end to end: proposed args → ran-with args → result → outcome |
+ * | `read_narrative`    | The human-readable story, paginated (only when narrative provided) |
  *
  * Mount on an Agent (`Agent.create({...}).tool(...tools)`) or drive scripted
  * via {@link callTraceTool}. The tools NEVER throw on bad ids/keys — they
@@ -299,17 +344,39 @@ export function traceToolpack(
 
   const tools: Tool[] = [
     buildRunOverview(artifacts, index),
+    buildFindInTrace(artifacts, index),
     buildTraceNode(artifacts, index, opts),
     buildTraceSlice(artifacts, index, opts),
     buildBacktrack(artifacts, index, opts),
     buildWhoWrote(index, opts),
     buildGetValue(index, opts),
+    buildInspectToolCall(artifacts, index),
   ];
   if (artifacts.narrative !== undefined) {
     tools.push(buildReadNarrative(artifacts.narrative));
   }
   return tools;
 }
+
+/**
+ * The tool names this pack can mount. The Agent builder reserves these at
+ * `.selfExplain()` build time — the tools slot dedupes by name with
+ * first-occurrence-wins, so a consumer tool sharing a name would silently
+ * shadow the trace tool AND the skill body would instruct the model into
+ * the wrong one. Exported so the reservation list is DERIVED from the pack
+ * rather than typed out beside it (a second list is a list that drifts).
+ */
+export const TRACE_TOOL_NAMES = [
+  'run_overview',
+  'find_in_trace',
+  'trace_node',
+  'trace_slice',
+  'backtrack',
+  'who_wrote',
+  'get_value',
+  'inspect_tool_call',
+  'read_narrative',
+] as const;
 
 // ── Schema fragments ───────────────────────────────────────────────────────
 
@@ -429,12 +496,220 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
           ' — values via who_wrote / get_value.',
       );
 
+      // COST — only when the run actually priced itself. `cumEstimatedUsd`
+      // is seeded to 0 on every agent run and only ever moves under a
+      // configured `pricingTable`, so a zero here means "this run was not
+      // priced", and printing "$0.00" for it would be a number that lies.
+      const spend = committedFinal(index, 'cumEstimatedUsd');
+      if (typeof spend === 'number' && spend > 0) {
+        const tokensIn = committedFinal(index, 'cumTokensInput');
+        const tokensOut = committedFinal(index, 'cumTokensOutput');
+        const writer = findLastWriter(index.commitLog, 'cumEstimatedUsd');
+        lines.push(
+          '',
+          `COST: ~$${spend.toFixed(6)} (in ${typeof tokensIn === 'number' ? tokensIn : '?'} / out ${
+            typeof tokensOut === 'number' ? tokensOut : '?'
+          } tokens) — estimated by the ` +
+            `run's pricing table, not a bill` +
+            (writer ? ` — via get_value('${writer.runtimeStageId}', 'cumEstimatedUsd').` : '.'),
+        );
+      }
+
       if (artifacts.narrative !== undefined) {
         lines.push(
           `NARRATIVE: ${artifacts.narrative.length} line(s) available via read_narrative.`,
         );
       }
+      lines.push(
+        `SEARCH: find_in_trace('<text>') locates any phrase in this record and hands back ids.`,
+      );
 
+      return lines.join('\n');
+    },
+  });
+}
+
+// ── find_in_trace ──────────────────────────────────────────────────────────
+
+/**
+ * The missing FIRST move.
+ *
+ * Every other tool needs a name you already have: a step id, a state key,
+ * a variable. But a follow-up question arrives in the user's words — "why
+ * did you say order 7712 was out of warranty?" — and the model's only
+ * options were to guess a key or read the whole narrative. This is the
+ * bridge from free text to ids: search the record, hand back POINTERS.
+ *
+ * Three properties make it a search rather than a dump:
+ *
+ *   - it serves a bounded WINDOW around each match, never the value;
+ *   - every hit line ends with the exact next call to make, so a search
+ *     result is a menu of drills rather than an answer to be believed;
+ *   - it searches the REDACTED commit log, because that is the only copy
+ *     that exists — a redacted value reads as its placeholder here for
+ *     the same reason it does everywhere else.
+ *
+ * The zero-hit answer is the honest one: it names what never enters the
+ * record at all, so "not found" cannot be read as "did not happen".
+ */
+function buildFindInTrace(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
+  return defineTool<{ query: string; maxHits?: number }, string>({
+    name: 'find_in_trace',
+    description:
+      'Search this run\'s record for free text — "7712", "out of stock", a phrase from the ' +
+      'answer — and get back the step ids and keys where it appears. Searches stage names and ' +
+      'descriptions, state keys, every committed value, and the narrative. Case-insensitive ' +
+      `substring; returns up to maxHits pointers (default ${FIND_HITS_DEFAULT}, hard cap ` +
+      `${TOOLPACK_HARD_CAPS.findMaxHits}), each with the exact follow-up call to make. Use it ` +
+      'FIRST when the question names something the run mentioned but you have no id for.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'The text to look for (case-insensitive substring), e.g. an order id, a phrase ' +
+            'from the answer, or a tool name.',
+        },
+        maxHits: {
+          type: 'integer',
+          description: `Pointers to return (default ${FIND_HITS_DEFAULT}, hard cap ${TOOLPACK_HARD_CAPS.findMaxHits}).`,
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    execute: ({ query, maxHits }) => {
+      const trimmed = query.trim();
+      if (trimmed.length < FIND_QUERY_MIN_CHARS) {
+        return (
+          `find_in_trace: '${trimmed}' is too short to search (minimum ${FIND_QUERY_MIN_CHARS} ` +
+          `characters) — a one-character query matches nearly every step, which is the same as ` +
+          `no answer. Search for an id, a value, a key, or a phrase from the answer.`
+        );
+      }
+      const needle = trimmed.slice(0, FIND_QUERY_MAX_CHARS).toLowerCase();
+      const cap = clampParam(maxHits, FIND_HITS_DEFAULT, 1, TOOLPACK_HARD_CAPS.findMaxHits);
+
+      const hits: string[] = [];
+      let scans = 0;
+      let budgetHit = false;
+      /** Record a hit; true once the cap is reached and scanning should stop. */
+      const add = (line: string): boolean => {
+        hits.push(line);
+        return hits.length >= cap;
+      };
+
+      // 1. STAGES — what the run's steps are called and what they claim to do.
+      let full = false;
+      for (const group of index.groups) {
+        const haystack = `${group.stagePart} ${group.name ?? ''} ${group.description ?? ''}`;
+        const window = matchWindow(haystack, needle, FIND_CONTEXT_RADIUS);
+        if (window === undefined) continue;
+        if (add(`- stage: ${window} → trace_node('${group.ids[0]}')`)) {
+          full = true;
+          break;
+        }
+      }
+
+      // 2. STATE KEYS — the names, not the values (those are step 3).
+      if (!full) {
+        for (const path of index.knownPaths) {
+          const dotted = displayKey(path);
+          if (!dotted.toLowerCase().includes(needle)) continue;
+          if (add(`- state key '${dotted}' → who_wrote('${dotted}')`)) {
+            full = true;
+            break;
+          }
+        }
+      }
+
+      // 3. COMMITTED VALUES — what each step actually wrote. Serialized ONE
+      //    (step, key) payload at a time and discarded: a search must never
+      //    build a serialization of the whole log to look through.
+      if (!full) {
+        outer: for (const bundle of index.commitLog) {
+          const overwrite = bundle.overwrite as Record<string, unknown> | undefined;
+          const updates = bundle.updates as Record<string, unknown> | undefined;
+          for (const entry of bundle.trace) {
+            if (scans >= FIND_SCAN_BUDGET) {
+              budgetHit = true;
+              break outer;
+            }
+            scans++;
+            const payload = overwrite?.[entry.path] ?? updates?.[entry.path];
+            if (payload === undefined) continue;
+            const window = matchWindow(safeStringify(payload), needle, FIND_CONTEXT_RADIUS);
+            if (window === undefined) continue;
+            const dotted = displayKey(entry.path);
+            if (
+              add(
+                `- ${bundle.runtimeStageId} wrote '${dotted}' (${entry.verb}): ${displayText(
+                  window,
+                )}${redactionNote([bundle], entry.path)} → get_value('${
+                  bundle.runtimeStageId
+                }', '${dotted}')`,
+              )
+            ) {
+              full = true;
+              break outer;
+            }
+          }
+        }
+      }
+
+      // 4. NARRATIVE — the story, when the artifacts carry one.
+      const narrative = artifacts.narrative;
+      if (!full && narrative !== undefined) {
+        for (let i = 0; i < narrative.length; i++) {
+          const window = matchWindow(narrative[i], needle, FIND_CONTEXT_RADIUS);
+          if (window === undefined) continue;
+          if (
+            add(`- narrative line ${i}: ${displayText(window)} → read_narrative({ offset: ${i} })`)
+          ) {
+            full = true;
+            break;
+          }
+        }
+      }
+
+      const scope =
+        `${index.groups.length} stage(s), ${index.knownPaths.size} state key(s), ` +
+        `${index.commitLog.length} committed step(s)` +
+        (narrative !== undefined ? `, ${narrative.length} narrative line(s)` : '');
+
+      if (hits.length === 0) {
+        return (
+          `find_in_trace: no match for '${trimmed}' — searched ${scope}.\n` +
+          (budgetHit
+            ? `⚠ the value scan stopped after ${FIND_SCAN_BUDGET} writes, so this is "not found ` +
+              `so far", not "not present" — narrow the query or drill with run_overview.\n`
+            : '') +
+          `⚠ some things NEVER enter the record and cannot be found here: run input (args), env, ` +
+          `state seeded before the run, values carried in closures, and anything redaction removed ` +
+          `(those read as their placeholder). Tool internals are not traced either — only the ` +
+          `arguments in and the result out.\n` +
+          `Try a shorter phrase, a key from run_overview, or read_narrative for the story.`
+        );
+      }
+
+      const lines = [
+        `FOUND ${hits.length}${hits.length >= cap ? '+' : ''} match(es) for '${trimmed}' ` +
+          `in ${scope} — each line ends with the call that opens it:`,
+        ...hits,
+      ];
+      if (hits.length >= cap) {
+        lines.push(
+          `⚠ stopped at maxHits ${cap} — more matches may exist. Narrow the query, or raise ` +
+            `maxHits (hard cap ${TOOLPACK_HARD_CAPS.findMaxHits}).`,
+        );
+      }
+      if (budgetHit) {
+        lines.push(
+          `⚠ the value scan stopped after ${FIND_SCAN_BUDGET} writes — later steps were not ` +
+            `searched. Narrow the query or drill from run_overview.`,
+        );
+      }
       return lines.join('\n');
     },
   });
@@ -989,6 +1264,323 @@ function buildGetValue(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
         `⚠ truncated: served ${cap} of ${serialized.length} chars — raise maxChars ` +
         `(hard cap ${TOOLPACK_HARD_CAPS.valueMaxChars}) or fetch a narrower nested key.`
       );
+    },
+  });
+}
+
+// ── inspect_tool_call ──────────────────────────────────────────────────────
+
+/** One conversation turn as it lands in the committed `history` array. */
+interface HistoryTurn {
+  readonly role?: string;
+  readonly content?: unknown;
+  readonly toolCallId?: string;
+  readonly toolName?: string;
+  readonly toolCalls?: readonly {
+    readonly id?: string;
+    readonly name?: string;
+    readonly args?: Record<string, unknown>;
+  }[];
+}
+
+/** One committed middleware-ledger row (the 8.13.0 ran-with-args evidence). */
+interface LedgerRow {
+  readonly middleware?: string;
+  readonly moment?: string;
+  readonly at?: string;
+  readonly toolCallId?: string;
+  readonly outcome?: string;
+  readonly changed?: boolean;
+  readonly why?: string;
+  readonly before?: unknown;
+  readonly after?: unknown;
+}
+
+/** What one tool call looks like once the four sources are joined. */
+interface ToolCallFacts {
+  readonly toolName?: string;
+  readonly proposedArgs?: Record<string, unknown>;
+  readonly result?: unknown;
+  readonly runtimeStageId?: string;
+}
+
+/**
+ * Resolve ONE tool call across the four places its evidence lives.
+ *
+ * A tool call is the most-asked-about thing in an agent run and the most
+ * scattered: the model's PROPOSED args are on an assistant turn, the args
+ * it actually RAN with are in the middleware ledger (and only when a rule
+ * changed them), the result is a `role:'tool'` turn, and the timing exists
+ * only in the event stream. Four lookups, one id — so this tool does the
+ * join rather than making the model do it in four calls.
+ *
+ * The proposed/ran-with split is the point. A governance rule that
+ * rewrites args is invisible in the conversation: the model reads its own
+ * proposal in history and the tool ran on something else. That difference
+ * is exactly what "why did it do that?" is often asking about.
+ *
+ * The `toolCallId` param deliberately carries NO schema enum (unlike step
+ * ids): building one would mean reconstructing the whole committed history
+ * at factory time for every toolpack, including the runs that never open
+ * this tool. The corrective message does the same job, on demand.
+ */
+function buildInspectToolCall(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
+  // All four readers are lazy + memoized: a toolpack that never inspects a
+  // tool call pays nothing, and one that inspects five pays once.
+  let historyMemo: readonly HistoryTurn[] | undefined;
+  const history = (): readonly HistoryTurn[] => {
+    if (historyMemo === undefined) {
+      const value = committedFinal(index, 'history');
+      historyMemo = Array.isArray(value) ? (value as readonly HistoryTurn[]) : [];
+    }
+    return historyMemo;
+  };
+
+  let ledgerMemo: readonly LedgerRow[] | undefined;
+  const ledger = (): readonly LedgerRow[] => {
+    if (ledgerMemo === undefined) {
+      const value = committedFinal(index, 'middlewareDecisions');
+      ledgerMemo = Array.isArray(value) ? (value as readonly LedgerRow[]) : [];
+    }
+    return ledgerMemo;
+  };
+
+  const eventsOf = (
+    type: string,
+  ): { payload: Record<string, unknown>; meta: Record<string, unknown> }[] =>
+    (artifacts.events ?? [])
+      .filter((event) => event.type === type)
+      .map((event) => ({
+        payload: (event.payload ?? {}) as unknown as Record<string, unknown>,
+        meta: (event.meta ?? {}) as unknown as Record<string, unknown>,
+      }));
+
+  /** Every tool call id this run recorded, in call order, with its name. */
+  let idsMemo: { id: string; name: string }[] | undefined;
+  const knownCalls = (): { id: string; name: string }[] => {
+    if (idsMemo !== undefined) return idsMemo;
+    const byId = new Map<string, string>();
+    for (const start of eventsOf('agentfootprint.stream.tool_start')) {
+      const id = start.payload.toolCallId;
+      if (typeof id === 'string') byId.set(id, String(start.payload.toolName ?? '?'));
+    }
+    for (const turn of history()) {
+      for (const call of turn.toolCalls ?? []) {
+        if (typeof call.id === 'string' && !byId.has(call.id)) {
+          byId.set(call.id, call.name ?? '?');
+        }
+      }
+      if (typeof turn.toolCallId === 'string' && !byId.has(turn.toolCallId)) {
+        byId.set(turn.toolCallId, turn.toolName ?? '?');
+      }
+    }
+    idsMemo = [...byId].map(([id, name]) => ({ id, name }));
+    return idsMemo;
+  };
+
+  /**
+   * Which STEP ran this call. The event tail knows exactly (every event is
+   * stamped with its `runtimeStageId`); without it, fall back to the first
+   * committed step whose `history` carries the call's result — that is the
+   * tool-execution step by construction.
+   */
+  const stepFor = (toolCallId: string): { id?: string; inferred: boolean } => {
+    for (const start of eventsOf('agentfootprint.stream.tool_start')) {
+      if (start.payload.toolCallId === toolCallId) {
+        const id = start.meta.runtimeStageId;
+        if (typeof id === 'string') return { id, inferred: false };
+      }
+    }
+    for (let i = 0; i < index.commitLog.length; i++) {
+      const bundle = index.commitLog[i];
+      if (!bundle.trace.some((entry) => entry.path === 'history')) continue;
+      const value = commitValueAt(index.commitLog, i, 'history');
+      if (!Array.isArray(value)) continue;
+      const landed = (value as readonly HistoryTurn[]).some(
+        (turn) => turn.role === 'tool' && turn.toolCallId === toolCallId,
+      );
+      if (landed) return { id: bundle.runtimeStageId, inferred: true };
+    }
+    return { inferred: true };
+  };
+
+  const factsFor = (toolCallId: string): ToolCallFacts => {
+    let toolName: string | undefined;
+    let proposedArgs: Record<string, unknown> | undefined;
+    let result: unknown;
+    for (const turn of history()) {
+      for (const call of turn.toolCalls ?? []) {
+        if (call.id === toolCallId) {
+          toolName = call.name ?? toolName;
+          proposedArgs = call.args;
+        }
+      }
+      if (turn.role === 'tool' && turn.toolCallId === toolCallId) {
+        toolName = turn.toolName ?? toolName;
+        result = turn.content;
+      }
+    }
+    if (toolName === undefined) {
+      toolName = knownCalls().find((call) => call.id === toolCallId)?.name;
+    }
+    const step = stepFor(toolCallId);
+    return {
+      ...(toolName !== undefined && { toolName }),
+      ...(proposedArgs !== undefined && { proposedArgs }),
+      ...(result !== undefined && { result }),
+      ...(step.id !== undefined && { runtimeStageId: step.id }),
+    };
+  };
+
+  return defineTool<{ toolCallId: string }, string>({
+    name: 'inspect_tool_call',
+    description:
+      'Resolve ONE tool call end to end: which tool, the arguments the model proposed, the ' +
+      'arguments it actually ran with (they differ when a governance rule rewrote them), the ' +
+      'bounded result, the outcome (ok / error / denied / paused), how long it took, and the ' +
+      'step id that ran it. Use it whenever the question is about something a tool did — it ' +
+      'joins four records that otherwise take four calls to read.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolCallId: {
+          type: 'string',
+          description:
+            "The tool call's id, e.g. 'call_01'. Ids appear in trace_node on the tool step, " +
+            'in the narrative, and in find_in_trace hits.',
+        },
+      },
+      required: ['toolCallId'],
+      additionalProperties: false,
+    },
+    execute: ({ toolCallId }) => {
+      const calls = knownCalls();
+      if (!calls.some((call) => call.id === toolCallId)) {
+        if (calls.length === 0) {
+          return (
+            `unknown toolCallId '${toolCallId}' — this run recorded NO tool calls at all. ` +
+            (artifacts.events === undefined && history().length === 0
+              ? '⚠ it also carries no committed conversation history and no event tail, so a ' +
+                'tool call could not be seen even if one happened. '
+              : '') +
+            'Call run_overview to see what the run did do.'
+          );
+        }
+        const sample = calls
+          .slice(0, TOOL_CALL_SUGGESTION_CAP)
+          .map((call) => `${call.id} (${call.name})`)
+          .join(', ');
+        return (
+          `unknown toolCallId '${toolCallId}'. This run recorded ${calls.length} tool call(s): ` +
+          `${sample}${calls.length > TOOL_CALL_SUGGESTION_CAP ? ', …' : ''}. Retry with one of ` +
+          `those ids.`
+        );
+      }
+
+      const facts = factsFor(toolCallId);
+      const lines: string[] = [`TOOL CALL ${toolCallId} — ${facts.toolName ?? '(unnamed tool)'}`];
+
+      lines.push(
+        facts.runtimeStageId !== undefined
+          ? `step: ${facts.runtimeStageId} — drill with trace_node('${facts.runtimeStageId}')`
+          : `step: ⚠ not resolvable — no event tail, and no committed step carries this call's ` +
+              `result (the turn may have ended before it landed).`,
+      );
+
+      lines.push(
+        facts.proposedArgs !== undefined
+          ? `proposed by the model: ${displayText(
+              renderPreview(boundedPreview(facts.proposedArgs, TOOL_RESULT_PREVIEW_CHARS)),
+            )}`
+          : `proposed by the model: ⚠ not recorded — the assistant turn carrying this call is ` +
+              `not in the committed history (a window strategy may have folded it away).`,
+      );
+
+      // Ran-with args: the ledger is the ONLY record of a rule rewriting
+      // them. No ledger row means no rule changed anything — say that
+      // plainly rather than leaving the reader to assume it.
+      const rows = ledger().filter((row) => row.toolCallId === toolCallId);
+      const rewrite = [...rows]
+        .reverse()
+        .find((row) => row.changed === true && row.moment === 'before-tool');
+      if (rewrite) {
+        lines.push(
+          `ran with: ${displayText(
+            renderPreview(boundedPreview(rewrite.after, TOOL_RESULT_PREVIEW_CHARS)),
+          )} — CHANGED at before-tool by '${rewrite.middleware ?? '?'}'` +
+            (rewrite.why ? `: "${rewrite.why}"` : '') +
+            '. The model proposed the line above; the tool ran on this one.',
+        );
+      } else if (rows.length > 0) {
+        lines.push('ran with: the proposed arguments, unchanged (rules looked and allowed them).');
+      } else {
+        lines.push(
+          'ran with: the proposed arguments — no governance rule filed a row for this call.',
+        );
+      }
+
+      lines.push(
+        facts.result !== undefined
+          ? `result: ${displayText(
+              renderPreview(
+                boundedPreview(facts.result, TOOL_RESULT_PREVIEW_CHARS),
+                `get_value('${facts.runtimeStageId ?? '<step>'}', 'history') for the full turn`,
+              ),
+            )}`
+          : `result: ⚠ no result recorded for this call in the committed history — it may have ` +
+              `been denied before it ran, or the turn ended (paused/failed) before it landed.`,
+      );
+
+      // Outcome + duration: the event tail is the only clock a run has.
+      const denial = rows.find((row) => row.outcome === 'deny');
+      const end = eventsOf('agentfootprint.stream.tool_end').find(
+        (event) => event.payload.toolCallId === toolCallId,
+      );
+      const checkIn = eventsOf('agentfootprint.checkin.request').some(
+        (event) => event.payload.toolCallId === toolCallId,
+      );
+      const invalid = eventsOf('agentfootprint.validation.args_invalid').some(
+        (event) => event.payload.toolCallId === toolCallId,
+      );
+      let outcome: string;
+      if (denial) {
+        outcome = `denied by '${denial.middleware ?? '?'}'${denial.why ? `: "${denial.why}"` : ''}`;
+      } else if (end?.payload.error === true) {
+        outcome = 'error — the tool threw or returned a failure';
+      } else if (checkIn && end === undefined) {
+        outcome = 'paused — a check-in asked a human and this call has no recorded end';
+      } else if (facts.result !== undefined) {
+        outcome = 'ok';
+      } else {
+        outcome = '⚠ unknown — no ledger row, no result, no end event';
+      }
+      lines.push(`outcome: ${outcome}`);
+      if (invalid) {
+        lines.push(
+          `⚠ the arguments failed schema validation on this call — see the validation event / ` +
+            `the tool result, which carries the correction the model was given.`,
+        );
+      }
+
+      if (artifacts.events === undefined) {
+        lines.push(
+          `duration: ⚠ unavailable — these artifacts carry no event tail. The commit log records ` +
+            `what each step WROTE and has no clock; timings live only in the event stream.`,
+        );
+      } else if (end !== undefined && typeof end.payload.durationMs === 'number') {
+        lines.push(`duration: ${end.payload.durationMs}ms`);
+      } else {
+        lines.push(
+          `duration: ⚠ no tool_end event for this call in the retained tail (it may have been ` +
+            `dropped by the tail cap, or the call never finished).`,
+        );
+      }
+
+      lines.push(
+        '⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope ' +
+          '(arguments in, result out) plus what the run itself decided about it.',
+      );
+      return lines.join('\n');
     },
   });
 }

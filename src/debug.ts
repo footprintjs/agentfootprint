@@ -98,10 +98,17 @@ export {
   lazyTraceToolpack,
   NO_COMPLETED_RUN_MESSAGE,
   TOOLPACK_HARD_CAPS,
+  TRACE_TOOL_NAMES,
   traceToolpack,
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
 } from './lib/trace-toolpack/index.js';
+// `openRecording` — a saved run (`recordRun(...).toRecording()`, live or
+// parsed back from JSON) reopened as toolpack artifacts. The one adapter
+// between the recording shape the viewers read and the artifact bag the
+// trace tools read; pure, and honest about the two things a serialized
+// run cannot carry back (control edges, and a narrative nobody recorded).
+export { openRecording, type OpenableRecording } from './lib/trace-toolpack/index.js';
 // The two conversational doors over the toolpack: a DEDICATED debugger
 // agent (separate session, any provider — cheap models welcome), and the
 // in-conversation `.selfExplain()` builder option's types. Same evidence,
@@ -109,9 +116,12 @@ export {
 export {
   buildSelfExplainSkill,
   buildSelfExplainToolProvider,
+  SELF_EXPLAIN_MAX_EVENTS,
   SelfExplainBinding,
   traceDebugAgent,
+  type SelfExplainInclude,
   type SelfExplainOptions,
+  type SelfExplainSource,
   type TraceDebugAgentOptions,
 } from './lib/trace-toolpack/index.js';
 // Contextual-bug localizer (RFC-003 Part B, D7–D9) — "git bisect for
