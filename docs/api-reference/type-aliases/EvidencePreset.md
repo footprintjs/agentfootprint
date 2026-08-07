@@ -8,6 +8,6 @@
 
 > **EvidencePreset** = `"minimal"` \| `"standard"`
 
-Defined in: [src/core/checkin.ts:326](https://github.com/footprintjs/agentfootprint/blob/be13dd062db4fa626d4af30277e77e87f7844ab6/src/core/checkin.ts#L326)
+Defined in: [src/core/checkin.ts:326](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/checkin.ts#L326)
 
 Which built-in assembler to use, by name.
