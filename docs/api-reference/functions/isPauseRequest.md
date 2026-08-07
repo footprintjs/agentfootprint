@@ -8,7 +8,7 @@
 
 > **isPauseRequest**(`err`): `err is PauseRequest`
 
-Defined in: [src/core/pause.ts:278](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/pause.ts#L278)
+Defined in: [src/core/pause.ts:278](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/pause.ts#L278)
 
 Type guard for a thrown `PauseRequest`.
 

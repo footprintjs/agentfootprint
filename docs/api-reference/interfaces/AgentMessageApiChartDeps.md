@@ -6,7 +6,7 @@
 
 # Interface: AgentMessageApiChartDeps
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:61](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L61)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:61](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L61)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:61](https://github.com/
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L66)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L66)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:66](https://github.com/
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L63)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L63)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:63](https://github.com/
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:62](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L62)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:62](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L62)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:62](https://github.com/
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:67](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L67)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:67](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L67)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:67](https://github.com/
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L64)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L64)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:64](https://github.com/
 
 > `readonly` **tools**: readonly [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/agent/buildAgentMessageApiChart.ts#L65)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/agent/buildAgentMessageApiChart.ts#L65)

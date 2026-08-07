@@ -8,7 +8,7 @@
 
 > **isEngineeredSource**(`source`): `boolean`
 
-Defined in: [src/recorders/core/contextEngineering.ts:97](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/contextEngineering.ts#L97)
+Defined in: [src/recorders/core/contextEngineering.ts:97](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/contextEngineering.ts#L97)
 
 Pure classifier: given a `ContextSource`, is it engineered?
 

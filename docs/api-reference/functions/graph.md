@@ -8,7 +8,7 @@
 
 > **graph**(`opts`): [`Graph`](/agentfootprint/api/generated/classes/Graph.md)
 
-Defined in: [src/core-flow/Graph.ts:758](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core-flow/Graph.ts#L758)
+Defined in: [src/core-flow/Graph.ts:758](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core-flow/Graph.ts#L758)
 
 Build a fixed DAG of runners. Independent nodes run concurrently; the
 result is every node's output, keyed by node id.

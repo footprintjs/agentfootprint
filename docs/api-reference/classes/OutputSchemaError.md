@@ -6,7 +6,7 @@
 
 # Class: OutputSchemaError
 
-Defined in: [src/core/outputSchema.ts:155](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/outputSchema.ts#L155)
+Defined in: [src/core/outputSchema.ts:155](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/outputSchema.ts#L155)
 
 Thrown by `agent.parseOutput(...)` / `agent.runTyped(...)` when the
 agent's final answer fails JSON parsing OR schema validation.
@@ -25,7 +25,7 @@ can log / persist the failed response for triage.
 
 > **new OutputSchemaError**(`message`, `opts`): `OutputSchemaError`
 
-Defined in: [src/core/outputSchema.ts:160](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/outputSchema.ts#L160)
+Defined in: [src/core/outputSchema.ts:160](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/outputSchema.ts#L160)
 
 #### Parameters
 
@@ -61,7 +61,7 @@ Defined in: [src/core/outputSchema.ts:160](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **cause?**: `unknown`
 
-Defined in: [src/core/outputSchema.ts:158](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/outputSchema.ts#L158)
+Defined in: [src/core/outputSchema.ts:158](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/outputSchema.ts#L158)
 
 #### Overrides
 
@@ -97,7 +97,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **rawOutput**: `string`
 
-Defined in: [src/core/outputSchema.ts:156](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/outputSchema.ts#L156)
+Defined in: [src/core/outputSchema.ts:156](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/outputSchema.ts#L156)
 
 ***
 
@@ -139,7 +139,7 @@ not capture any frames.
 
 > `readonly` **stage**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: [src/core/outputSchema.ts:157](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/core/outputSchema.ts#L157)
+Defined in: [src/core/outputSchema.ts:157](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/core/outputSchema.ts#L157)
 
 ## Methods
 

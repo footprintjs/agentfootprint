@@ -159,6 +159,7 @@
 - [RunnerPauseOutcome](/agentfootprint/api/generated/interfaces/RunnerPauseOutcome.md)
 - [ScopeRecorder](/agentfootprint/api/generated/interfaces/ScopeRecorder.md)
 - [SelfConsistencyOptions](/agentfootprint/api/generated/interfaces/SelfConsistencyOptions.md)
+- [SelfExplainInclude](/agentfootprint/api/generated/interfaces/SelfExplainInclude.md)
 - [SelfExplainOptions](/agentfootprint/api/generated/interfaces/SelfExplainOptions.md)
 - [SequenceInput](/agentfootprint/api/generated/interfaces/SequenceInput.md)
 - [SequenceOptions](/agentfootprint/api/generated/interfaces/SequenceOptions.md)

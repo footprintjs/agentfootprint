@@ -6,7 +6,7 @@
 
 # Interface: BudgetPressureRecord
 
-Defined in: [src/recorders/core/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L108)
+Defined in: [src/recorders/core/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L108)
 
 Budget-pressure warning — emitted before evictions fire.
 
@@ -32,7 +32,7 @@ the honest reading of a slot that composed over its `budgetCap`.
 
 > `readonly` `optional` **cap?**: `number`
 
-Defined in: [src/recorders/core/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L120)
+Defined in: [src/recorders/core/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L120)
 
 Same value as [capTokens](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#captokens), under a name that asserts no unit.
 
@@ -42,7 +42,7 @@ Same value as [capTokens](/agentfootprint/api/generated/interfaces/BudgetPressur
 
 > `readonly` **capTokens**: `number`
 
-Defined in: [src/recorders/core/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L111)
+Defined in: [src/recorders/core/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L111)
 
 #### Deprecated
 
@@ -54,7 +54,7 @@ Read [cap](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#cap)
 
 > `readonly` **overflowBy**: `number`
 
-Defined in: [src/recorders/core/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L114)
+Defined in: [src/recorders/core/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L114)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/recorders/core/types.ts:114](https://github.com/footprintjs/age
 
 > `readonly` **planAction**: `"abort"` \| `"evict"` \| `"summarize"` \| `"none"`
 
-Defined in: [src/recorders/core/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L115)
+Defined in: [src/recorders/core/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L115)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/recorders/core/types.ts:115](https://github.com/footprintjs/age
 
 > `readonly` `optional` **projected?**: `number`
 
-Defined in: [src/recorders/core/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L122)
+Defined in: [src/recorders/core/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L122)
 
 Same value as [projectedTokens](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.md#projectedtokens), under a name that asserts no unit.
 
@@ -80,7 +80,7 @@ Same value as [projectedTokens](/agentfootprint/api/generated/interfaces/BudgetP
 
 > `readonly` **projectedTokens**: `number`
 
-Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L113)
+Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L113)
 
 #### Deprecated
 
@@ -92,7 +92,7 @@ Read [projected](/agentfootprint/api/generated/interfaces/BudgetPressureRecord.m
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:109](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L109)
+Defined in: [src/recorders/core/types.ts:109](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L109)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: [src/recorders/core/types.ts:109](https://github.com/footprintjs/age
 
 > `readonly` `optional` **unit?**: `"chars"` \| `"tokens"`
 
-Defined in: [src/recorders/core/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/6d36ae240cf24d0dcc1b65e0f65dca700a4a788d/src/recorders/core/types.ts#L118)
+Defined in: [src/recorders/core/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/35335c51cb97cbd7d2d4de6ef3c2bc69a62d68d5/src/recorders/core/types.ts#L118)
 
 What the numbers count. Absent on a record written before 8.14.0 (or by
  a third-party slot builder) — the slot channel is `'chars'`.
