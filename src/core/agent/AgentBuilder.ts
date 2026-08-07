@@ -54,6 +54,7 @@ import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
+import type { LLMProvider } from '../../adapters/types.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';
@@ -494,8 +495,49 @@ export class AgentBuilder {
           `factory, do not pass it.`,
       );
     }
+    this.assertSummarizerIsNotTheAgentItself(strategy.billing, 'AgentBuilder.window');
     this.windowStrategyValue = strategy;
     return this;
+  }
+
+  /**
+   * Refuse a strategy that would bill the agent's OWN provider instance for
+   * the agent's OWN model (8.14.0).
+   *
+   * Not about money — `model` is required now, so nothing is billed quietly.
+   * It is about two calls that are configured identically and provably behave
+   * differently: the agent's call goes through `reliability`, any provider
+   * decorator and the cache subflow; the summarizer's call goes through none
+   * of them (see `runSummarizer`). Same object, same model, two behaviours,
+   * and nobody typed the difference.
+   *
+   * Deliberately narrow. A different INSTANCE of the same vendor with the same
+   * model is allowed — "use the strong model to write the summary, because a
+   * bad summary poisons every turn after it" is a real choice — and a second
+   * instance also ends the shared per-instance state (cursors, rate-limit
+   * buckets, keep-alive pools) that made this pairing bite in the first place.
+   *
+   * Checked at BOTH doors. `.compaction({...})` and `.window(summarizeOldest({...}))`
+   * are the same policy, and a rule that only one of them enforces is advice.
+   */
+  private assertSummarizerIsNotTheAgentItself(
+    billing: { readonly provider: LLMProvider; readonly model: string } | undefined,
+    label: string,
+  ): void {
+    if (billing === undefined) return;
+    if (billing.provider !== this.opts.provider) return;
+    if (billing.model !== this.opts.model) return;
+    throw new Error(
+      `${label}: the summarizer is the agent's own provider INSTANCE and the agent's own model ` +
+        `('${billing.model}'). Those two calls now look identical and are not: the agent's call ` +
+        `runs through reliability retries, any withRetry/withFallback/withCircuitBreaker ` +
+        `decorator and the cache; the summarizer's call runs through none of them — one ` +
+        `attempt, no fallback, no cache. A difference nobody typed is the kind this library ` +
+        `refuses.\n` +
+        `Fix, one word: give the summarizer its OWN instance — \`summarizer: anthropic()\` ` +
+        `rather than the variable you passed to Agent.create. That also stops the two roles ` +
+        `sharing per-instance state. Or name a different (usually cheaper) model.`,
+    );
   }
 
   /**
@@ -545,7 +587,11 @@ export class AgentBuilder {
     // Validated here so the error names the door the caller actually used;
     // `summarizeOldest` re-runs the SAME validator under its own label, so the
     // two doors can never drift into accepting different things.
-    resolveCompactionOptions(options, 'AgentBuilder.compaction');
+    const resolved = resolveCompactionOptions(options, 'AgentBuilder.compaction');
+    this.assertSummarizerIsNotTheAgentItself(
+      { provider: resolved.summarizer, model: resolved.model },
+      'AgentBuilder.compaction',
+    );
     this.windowStrategyValue = summarizeOldest(options);
     return this;
   }

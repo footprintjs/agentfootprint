@@ -114,6 +114,10 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
       tokenBudget({ thresholdTokens: 1000 }),
       summarizeOldest({
         thresholdTokens: 1000,
+        // `model` is REQUIRED since 8.14.0 — omitting it no longer compiles,
+        // which is the point: the old `?? agentModel` default either billed
+        // the main model or shipped an unknown model id to another vendor.
+        model: 'cheap',
         summarizer: {
           name: 'x',
           complete: async () => ({
@@ -230,5 +234,15 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
     const asNew: WindowRefusal = old;
     expect(asFamily).toBe('unresolved-tool-call');
     expect(asNew.turnIndex).toBe(0);
+  });
+
+  it("the 8.13 refusal name 'summary-not-smaller' still NARROWS (8.14.0 rename)", () => {
+    // The string is no longer WRITTEN by any strategy — `drop.ts` and
+    // `summarizeOldest.ts` both emit `'replacement-not-smaller'` — but code
+    // written against 7.17–8.13 that switches on the old member must keep
+    // compiling. The union member is the entire compatibility surface.
+    const old: WindowRefusalReason = 'summary-not-smaller';
+    const renamed: WindowRefusalReason = 'replacement-not-smaller';
+    expect([old, renamed]).toHaveLength(2);
   });
 });

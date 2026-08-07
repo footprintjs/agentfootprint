@@ -199,12 +199,20 @@ describe('.window() — unit', () => {
     expect(() =>
       base()
         .window(slidingWindow({ keepRecentTurns: 4 }))
-        .compaction({ thresholdTokens: 10, summarizer: mock({ reply: 's' }) }),
+        .compaction({
+          thresholdTokens: 10,
+          summarizer: mock({ reply: 's' }),
+          model: 'summarizer-model',
+        }),
     ).toThrow(/AgentBuilder\.compaction: already set/);
 
     expect(() =>
       base()
-        .compaction({ thresholdTokens: 10, summarizer: mock({ reply: 's' }) })
+        .compaction({
+          thresholdTokens: 10,
+          summarizer: mock({ reply: 's' }),
+          model: 'summarizer-model',
+        })
         .window(slidingWindow({ keepRecentTurns: 4 })),
     ).toThrow(/AgentBuilder\.window: already set \('summarize-oldest'\)/);
   });
@@ -243,6 +251,7 @@ describe('.compaction() is sugar over .window(summarizeOldest(...))', () => {
       const opts = {
         thresholdTokens: 250,
         summarizer: sum.provider,
+        model: 'summarizer-model',
         keepRecentTurns: 2,
       } as const;
       const b = Agent.create({ provider: main.provider, model: 'm', maxIterations: 8 }).tool(
@@ -502,6 +511,7 @@ describe('the family shares ONE refusal engine', () => {
         thresholdTokens: 100,
         keepRecentTurns: 2,
         summarizer: summarizerSpy().provider,
+        model: 'summarizer-model',
       }),
     );
 
@@ -572,6 +582,7 @@ describe('the family shares ONE refusal engine', () => {
               thresholdTokens: 100,
               keepRecentTurns: 2,
               summarizer: summarizerSpy().provider,
+              model: 'summarizer-model',
             })
       ).build();
 
@@ -839,7 +850,12 @@ describe('window strategies — ROI', () => {
         });
         return Agent.create({ provider: main.provider, model: 'm', maxIterations: 8 })
           .tool(looker as never)
-          .compaction({ thresholdTokens: 250, summarizer: sum.provider, keepRecentTurns: 2 })
+          .compaction({
+            thresholdTokens: 250,
+            summarizer: sum.provider,
+            keepRecentTurns: 2,
+            model: 'summarizer-model',
+          })
           .build();
       },
     ]) {

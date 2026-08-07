@@ -74,7 +74,7 @@ Pick one per concern:
 
 - **Status line** — `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` (terminal UIs, chat typing indicators)
 - **Structured logs** — `agent.enable.observability({ strategy: consoleObservability() })` (pino, winston, console, vendor backends)
-- **Cost tracking** — pass `pricingTable` + `costBudget` to `Agent.create()`
+- **Cost tracking** — pass `pricingTable` + `costBudget` to `Agent.create()` (add `onExceed: 'halt'` to make the budget stop the run rather than warn)
 - **Custom recorders** — `agent.attach(myRecorder)` for aggregation
 
 See [Observability guide](doc:observability) for the full surface.
@@ -127,7 +127,7 @@ See [Pause/Resume guide](doc:pausable).
 
 The reliability + governance surfaces that were once roadmap items are live:
 
-- **Cost-budget enforcement** — pass `pricingTable` + `costBudget` to `Agent.create()`; the agent emits cost ticks and halts when the per-run USD budget is hit.
+- **Cost-budget enforcement** — pass `pricingTable` + `costBudget` to `Agent.create()`. A bare number emits cost ticks and a one-shot `cost.limit_hit` and keeps going; `costBudget: { usd, onExceed: 'halt' }` (8.14.0) stops the loop at the next iteration boundary. Read `agent.stoppedEarly()` to tell the two apart after the run.
 - **Output fallback** — `OutputFallbackOptions` / `OutputFallbackFn` recover from schema-parse failures (see the [Output Schema guide](doc:output-schema)).
 - **Permission policy** — `PermissionPolicy.fromRoles(...)` (from `agentfootprint/security`) gates tool calls IAM-style; see the [Security guide](doc:security).
 - **Circuit breaker** — `withCircuitBreaker(...)` from `agentfootprint/resilience`.

@@ -21,7 +21,7 @@
  */
 
 import { CompactionUnmeasurableError } from '../errors.js';
-import { summaryFingerprint } from '../folded.js';
+import { spanFingerprint, summaryFingerprint } from '../folded.js';
 import { resolveCompactionOptions } from '../options.js';
 import { indexRange } from '../removal.js';
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '../strategy.js';
@@ -45,16 +45,47 @@ export const SUMMARIZE_OLDEST = 'summarize-oldest';
  * import { Agent, summarizeOldest } from 'agentfootprint';
  *
  * const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' })
- *   .window(summarizeOldest({ thresholdTokens: 120_000, summarizer: anthropic() }))
+ *   .window(summarizeOldest({
+ *     thresholdTokens: 120_000,
+ *     summarizer: anthropic(),
+ *     model: 'claude-haiku-4-5',
+ *   }))
  *   .build();
  * // `.compaction({ ... })` is this exact line, spelled shorter.
  * ```
  */
 export function summarizeOldest(options: CompactionOptions): WindowStrategy {
   const config = resolveCompactionOptions(options, 'summarizeOldest');
+  // Deterministic-refusal latch (8.14.0), keyed by the CONTENT of the span
+  // that was refused. `'replacement-not-smaller'` is not a transient failure
+  // the way `'summarizer-failed'` is: the same span through the same
+  // summarizer produces the same verdict, and re-asking is a paid call whose
+  // answer is already known.
+  //
+  // Content-keyed, and the key is doing two jobs. It survives the index churn
+  // a window change causes — every index moves when messages leave. And it
+  // scopes the latch to the QUESTION rather than to the strategy: a span that
+  // has GROWN is asked about again, on purpose, because the test is
+  // `summaryChars >= windowChars(span)` and a larger span makes that
+  // inequality LESS likely to hold. A fold refused at four turns can genuinely
+  // succeed at six, and a latch that gave up on the strategy rather than on
+  // the span would keep a window over budget for the rest of the run.
+  //
+  // Inside one growing ReAct conversation the span therefore usually differs
+  // each boundary and every call is a fresh question. Where it bites is where
+  // the span REPEATS: a standing agent replaying similar openings, or a window
+  // whose span is capped by an unremovable turn. Both were paying, every
+  // iteration, for an answer they already had.
+  //
+  // Lives on the strategy instance, which is per agent — the same lifetime as
+  // the chart, and the same lifetime the summarizer and its model have. Two
+  // agents never share a verdict.
+  const refusedSpans = new Set<string>();
 
   return {
     name: SUMMARIZE_OLDEST,
+
+    billing: { provider: config.summarizer, model: config.model },
 
     async plan(input: WindowStrategyInput): Promise<WindowStrategyResult | undefined> {
       const { history, turns, iteration, measured } = input;
@@ -67,7 +98,9 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       }
       if (measured.input <= config.thresholdTokens) return undefined;
 
-      const model = config.model ?? input.agentModel;
+      // No `?? input.agentModel` since 8.14.0 — `model` is required at the
+      // door, so there is nothing left to fall back to and nothing to guess.
+      const model = config.model;
       const charsBefore = windowChars(history);
       const base = {
         strategy: SUMMARIZE_OLDEST,
@@ -115,6 +148,21 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       const span = history.slice(spanStart, spanEnd);
       const tail = history.slice(spanEnd);
 
+      // Already asked, already answered. The record is still filed — a call
+      // this strategy DECIDED not to make is evidence, and a silent skip
+      // would look identical to a boundary that never came round.
+      const spanKey = spanFingerprint(span);
+      if (refusedSpans.has(spanKey)) {
+        return unchanged(
+          [
+            { reason: 'replacement-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
+            ...plan.refusals,
+          ],
+          { summarizerSkipped: true },
+        );
+        // Deliberately no `spend`: nothing was billed, because nothing ran.
+      }
+
       // A broken summarizer must not take down the run.
       let summary: { text: string; usage: { input: number; output: number } };
       try {
@@ -150,15 +198,19 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       // grow the window and lose detail at the same time. Both sides are
       // measured in chars — one unit, an exact comparison, not a token guess.
       if (summaryMessage.content.length >= windowChars(span)) {
+        // Latch it. Asking again next iteration would spend another call to
+        // be told the same thing — the inputs have not changed and neither
+        // will the answer.
+        refusedSpans.add(spanKey);
         return {
           ...unchanged(
             [
-              { reason: 'summary-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
+              { reason: 'replacement-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
               ...plan.refusals,
             ],
             { summaryChars: summaryMessage.content.length, summarizerTokens: summary.usage },
           ),
-          spend, // the call still happened, so it still counts
+          spend, // this call DID happen, so it still counts
         };
       }
 

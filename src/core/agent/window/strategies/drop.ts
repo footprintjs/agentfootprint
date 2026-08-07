@@ -103,8 +103,11 @@ export function dropOldestSpan(
       strategy: strategyName,
     });
     if (notice.content.length >= windowChars(span)) {
+      // `'replacement-not-smaller'` since 8.14.0. A drop writes no summary —
+      // it never calls a summarizer at all — and the reason's old spelling
+      // (`'summary-not-smaller'`) named one that does not exist on this path.
       return nothing([
-        { reason: 'summary-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
+        { reason: 'replacement-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
         ...plan.refusals,
       ]);
     }

@@ -65,7 +65,12 @@ import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, PricingTable } from '../adapters/types.js';
-import { assertCostBudgetHasPricing, emitCostTick } from './cost.js';
+import {
+  assertCostBudgetHasPricing,
+  emitCostTick,
+  resolveCostBudget,
+  type ResolvedCostBudget,
+} from './cost.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
@@ -110,8 +115,13 @@ export interface LLMCallOptions {
    * LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
    * the first time cumulative USD crosses the budget. Execution continues
    * — consumers choose whether to abort by listening to the event.
+   *
+   * The object form `{ usd, onExceed }` is accepted for symmetry with `Agent`,
+   * but `onExceed` must be `'warn'` here: halting means "stop at the next
+   * iteration boundary", and one call has no next boundary. `'halt'` is
+   * refused at build rather than silently ignored.
    */
-  readonly costBudget?: number;
+  readonly costBudget?: number | { readonly usd: number; readonly onExceed: 'warn' | 'halt' };
   /**
    * Optional build-time recorders threaded into footprintjs's
    * `flowChart()` factory. Each recorder observes per-node build
@@ -178,7 +188,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly maxTokens?: number;
   private readonly systemPromptValue: string;
   private readonly pricingTable?: PricingTable;
-  private readonly costBudget?: number;
+  /** Normalized at construction: a bare number is `{ usd, onExceed: 'warn' }`. */
+  private readonly costBudget?: ResolvedCostBudget;
   /** Per-slot character budgets (8.11.0). Absent keys keep the slot default. */
   private readonly contextBudget?: LLMCallOptions['contextBudget'];
   private readonly structureRecorders?: readonly StructureRecorder[];
@@ -210,7 +221,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // was the silence.
     assertCostBudgetHasPricing('LLMCall', opts.pricingTable, opts.costBudget);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
-    if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
+    // `onExceed: 'halt'` is refused here — one call has no next boundary to
+    // stop at, so accepting it would be a stop button wired to nothing.
+    const resolvedCostBudget = resolveCostBudget('LLMCall', opts.costBudget);
+    if (resolvedCostBudget !== undefined) this.costBudget = resolvedCostBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;

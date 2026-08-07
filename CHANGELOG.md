@@ -7,6 +7,228 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.14.0] - 2026-08-07
+
+**Budgets tell one truth.** Eight ways this library reported a number, a limit
+or a bill that did not match what it actually did. A budget you cannot read
+correctly is not a budget; a limit that says it stopped the run and did not is
+worse than no limit at all.
+
+Four of these change what a run DOES, three refuse a configuration that used to
+build, and one changes a string on the wire. All eight are below.
+
+### Behaviour change 1 — `.compaction({ summarizer })` now REQUIRES `model`
+
+`model` used to default to the agent's own model, and that default had no
+correct branch:
+
+- **same provider family** — it billed your MAIN model for every fold. The
+  refusal three lines above it in the same file promised *"the library will not
+  quietly bill your main model for compaction"*, and then did.
+- **different provider** — it sent your agent's model id to a vendor that has
+  never heard of it, so the fold died mid-run, on a paid run, in a file whose
+  own header promises "everything fails at `.build()`, never mid-run".
+
+There is no third branch, so the default is gone. `model` is required whenever
+`summarizer` is set, refused at `.build()` through **both** doors
+(`.compaction({...})` and `summarizeOldest({...})`) with a message that names
+both failures and the two-word fix. `ResolvedCompaction.model` is now `string`.
+
+One visible consequence: `FoldedSpan.model` — the summary's recorded author —
+now names the summarizer's model rather than the agent's. It always described
+what was really billed; what was really billed has changed.
+
+### Behaviour change 2 — a stale token count is no longer a token count
+
+`CompactionMeter` returned early on malformed usage **without clearing what it
+was holding**. A provider that reported usage once and then stopped — a proxy
+that drops the field, an OpenAI-compatible endpoint that omits it while
+streaming, a flaky gateway — left that first number standing forever, and every
+later window decision was made on it. In the probe that found this, one count
+taken at iteration 1 drove three separate decisions and evicted six messages at
+iterations 3 and 4.
+
+Readings are now stamped with the iteration whose call produced them and expire
+one boundary later. An expired reading is `undefined`, which every strategy
+already treats as "do not act" — so a window strategy **stands down** instead of
+deciding on a number nobody took, and says so once on the console rather than
+going quiet. "Counted, never guessed" has to mean counted *recently*.
+
+An agent whose provider reports usage reliably is unaffected.
+
+### Behaviour change 3 — `maxIterations` reached with pending tool calls now says so
+
+The loop stopping while the model was still asking for tools produced `""` and
+nothing else: no event, no committed record, and a `route_decided` rationale
+nobody was subscribed to. An empty string reaching a user is indistinguishable
+from a bug.
+
+Now it emits `cost.limit_hit { kind: 'max_iterations', action: 'abort' }` — the
+kind `CostLimitHitPayload` has reserved since it was written, so no new event
+type — commits `AgentState.stoppedEarly`, and warns once on the console **when
+the answer is empty**. Read it with the new `agent.stoppedEarly()`.
+
+It deliberately does **not** throw. 8.6.0 raises for an outstanding credential
+consent because that is a fault: the run hands back a plausible answer for work
+a tool never did. A limit you configured firing is the limit working, and the
+answer is sometimes real — a model can return content alongside its tool calls,
+and that content is a genuine partial answer. Raising would reject good answers
+to fix a bad one.
+
+`stoppedEarly` is absent on every normal finish, including a turn that spent its
+whole iteration budget and then genuinely finished.
+
+### Behaviour change 4 — a `replacement-not-smaller` refusal is paid for once
+
+A fold abandoned because the summary came back no smaller than the span it would
+replace was re-asked every iteration: same span, same summarizer, same verdict,
+a real billed call each time. The refusal is now latched by span CONTENT, and a
+skipped visit files its record with `summarizerSkipped: true`, no call and no
+cost tick — a call the library decided not to make is evidence, not silence.
+
+Two things it deliberately does not latch. A span that has **grown** is asked
+about again: the test is `summaryChars >= windowChars(span)` and a larger span
+makes that less likely to hold, so a fold refused at four turns can genuinely
+succeed at six. And `summarizer-failed` is still retried — an outage may end, a
+comparison of two string lengths will not.
+
+### `context.budget_pressure` now carries its `unit`
+
+Two emitters share this event name, this `slot: 'messages'` value, and — until
+now — one indistinguishable payload:
+
+| emitter | counts | `unit` |
+|---|---|---|
+| the three context slots (`contextBudget`, **on by default**) | `String.length` | `'chars'` |
+| a window strategy (`.window()` / `.compaction()`) | provider-reported input tokens | `'tokens'` |
+
+So one subscriber routinely received both, and `cap 200, projected 258` could
+mean 258 characters or 258 tokens — a roughly 4× difference in the same field,
+with nothing in the payload to tell them apart.
+
+`unit`, `cap` and `projected` are new and **required on the event payload**;
+`capTokens` and `projectedTokens` are deprecated, still written, and carry
+identical values. On `BudgetPressureRecord` — which slot builders, including
+ones you wrote, produce — the three are **optional**; `ContextRecorder` fills
+`unit: 'chars'`, which is a fact about that channel rather than a guess.
+`WindowStrategyResult.budgetPressure` gains an optional `unit` defaulting to
+`'tokens'`, which is what all three shipped strategies already meant.
+
+No OpenTelemetry mapping was added, on purpose: `adapters/observability/otel.ts`
+has never consumed this event and has no catch-all that would turn one into a
+span event, so there was no ambiguity there to fix. Adding a mapping would be
+new surface, not a unit correction. The commentary renderer likewise still
+returns `null` for it (slot mechanics are plumbing, not pedagogy). Neither is an
+oversight — please do not "fix" them.
+
+### `costBudget` can now stop the run
+
+`costBudget` was warn-only, while `commentaryTemplates.ts` narrated
+*"{{appName}} hit a cost limit and stopped."* and `docs/monitor/deployment.mdx`
+claimed the agent *"halts when the per-run USD budget is hit"*. It did neither.
+`docs/monitor/observability.mdx`, on the same site, correctly said the library
+never auto-aborts.
+
+```ts
+costBudget: 0.50                              // warns — unchanged, byte for byte
+costBudget: { usd: 0.50, onExceed: 'halt' }   // stops
+```
+
+`'halt'` ends the loop at the next iteration boundary — the same boundary
+`maxIterations` uses. Never mid-call: the call that crossed the budget
+completes, is billed and is recorded; halting only decides there will not be
+another one. `stoppedEarly()` then reports `reason: 'cost-budget'`.
+
+There is still exactly ONE `cost.limit_hit` per crossing, from the same place
+it has always come — `emitCostTick`, which is the only code that knows the
+budget. It now reports `action: 'abort'` rather than `'warn'` when the budget
+halts. The route decider does not emit a second one; it emits
+`kind: 'max_iterations'` only, for the limit that has no other voice.
+
+The commentary line reads its outcome off the payload, so prose and event can no
+longer disagree. It keeps its single `cost.limit_hit` key — splitting it into
+`.warn` / `.halt` would have read better and silently orphaned every consumer
+who had overridden the base key. Both docs pages are corrected.
+
+`LLMCall` refuses `onExceed: 'halt'` at build: one call has no next boundary to
+stop at, and accepting it would be a stop button wired to nothing.
+
+### A summarizer that is the agent itself is refused
+
+`.compaction({ summarizer: theSameProviderInstance, model: theAgentsModel })`
+now refuses, at both doors.
+
+Not about money — requiring `model` already ended the quiet billing. It is that
+those two calls are configured identically and provably behave differently: the
+agent's call runs through `reliability` retries, any
+`withRetry`/`withFallback`/`withCircuitBreaker` decorator and the cache subflow;
+`runSummarizer` calls `provider.complete()` bare and gets one attempt, no
+fallback, no cache. A difference nobody typed.
+
+The refusal is deliberately narrow. A **different instance** at the same model is
+allowed — "use the strong model to write the summary, because a bad summary
+poisons every turn after it" is a real choice — and passing a second instance
+also ends the shared per-instance state that made this pairing bite. In the
+probe that found it, one `mock()` serving both roles had the summarizer eat the
+reply scripted for the agent: the agent's own final answer became the summary
+text, and the run then crashed on an exhausted script.
+
+`WindowStrategy` gains an optional `billing` descriptor so the builder can make
+this check through `.window(summarizeOldest({...}))` too. Enforcing it at only
+one of two doors onto one policy would make it advice rather than a rule.
+
+Both the option's docstring and the `runSummarizer` call site now state plainly
+that the summarizer call is un-decorated.
+
+### Wire change — `'summary-not-smaller'` → `'replacement-not-smaller'`
+
+`slidingWindow` and `tokenBudget` never call a summarizer — a drop makes no LLM
+call at all — and both reported `summary-not-smaller` when the authored drop
+NOTICE came back no smaller than the turns it would replace. The type's own
+docstring already described the general case; only the name lagged.
+
+**A runtime from 8.14.0 writes only the new string.** The old one survives as a
+deprecated member of `WindowRefusalReason` so code written against 7.17–8.13
+still narrows and compiles, but it is never emitted — two spellings of one fact
+is the disease, not the cure. If you match on the string in a
+`WindowRecord.refusals`, update it.
+
+### A crash checkpoint now names where it crashed
+
+Field report: a WebKit `fetch` failure surfaced as
+`[agent run] failed at iteration 3 (unknown)`. WebKit's entire message for a
+failed fetch is `TypeError: Load failed` — no code, no vendor name, nothing
+`classifyFailurePhase`'s regexes can match — while the run itself knew the LLM
+call was open at the time.
+
+The checkpoint tracker now follows the run's own `stream.*` brackets, so the
+phase is OBSERVED; `classifyFailurePhase` becomes the fallback for failures
+between brackets, where the error's own text really is the best evidence there
+is. `AgentRunCheckpoint.failurePoint` gains an optional `stage`, and the message
+reads `failed at iteration 3 during the LLM call (stage: call-llm)`.
+
+`stage` carries the literal `'call-llm'` or a **declared tool name**, and
+nothing else — never a URL, a header or a request body. A checkpoint is
+persisted to Redis / Postgres / S3 and read by whoever is on call. A test
+asserts no URL reaches it.
+
+Still `version: 1`: an optional field is not a format change, and bumping the
+version would make an older deployment refuse a session it can serve.
+
+### Also
+
+- The `cost.*` bridge is now attached unconditionally. It was gated on
+  `pricingTable`, which was correct while `cost.*` only ever meant money —
+  `emitCostTick` returns on its first line without a table, so the gate could
+  hide nothing. An iteration limit has no price, and behind the old gate
+  `cost.limit_hit { kind: 'max_iterations' }` would have reached the dispatcher
+  only for agents that happened to be costing themselves. The bridge drops
+  events with no listener, so an agent that subscribes to nothing pays nothing.
+- `CompactionMeterHandle.lastCall()` takes the current iteration (internal —
+  not on the public barrel) and gains `unmeteredSinceLastGood()`.
+- `CompactionRecord` gains optional `summarizerSkipped`.
+- `AgentState` gains `stoppedEarly` and `costBudgetOnExceed`.
+
 ## [8.13.0] - 2026-08-07
 
 **Governance never silently drops — and never silently invents.** Eight ways a

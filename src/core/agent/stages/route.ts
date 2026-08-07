@@ -35,19 +35,111 @@ export type RouteBranch = 'tool-calls' | 'final' | 'output-retry';
 function decideBranch(scope: TypedScope<AgentState>): {
   chosen: 'tool-calls' | 'final';
   rationale: string;
+  /** Set when a LIMIT forced `'final'` while tool calls were still pending. */
+  earlyStop?: 'max-iterations' | 'cost-budget';
 } {
   const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
   const iteration = scope.iteration as number;
-  const chosen = toolCalls.length > 0 && iteration < scope.maxIterations ? 'tool-calls' : 'final';
+  // A halting `costBudget` stops the loop HERE, at the same boundary
+  // maxIterations uses (8.14.0). Never mid-call: the call that crossed the
+  // budget has already completed, been billed and been recorded — this only
+  // decides that there will not be another one.
+  const costHalt = scope.costBudgetHit === true && scope.costBudgetOnExceed === 'halt';
+  const outOfIterations = iteration >= scope.maxIterations;
+  const chosen = toolCalls.length > 0 && !outOfIterations && !costHalt ? 'tool-calls' : 'final';
+  // A limit only CUT SHORT a turn if the model still wanted to do something.
+  // A turn that ended because the model was done is not an early stop, however
+  // many iterations it spent getting there.
+  const earlyStop =
+    chosen === 'final' && toolCalls.length > 0
+      ? outOfIterations
+        ? ('max-iterations' as const)
+        : costHalt
+        ? ('cost-budget' as const)
+        : undefined
+      : undefined;
   return {
     chosen,
     rationale:
       chosen === 'tool-calls'
         ? `LLM requested ${toolCalls.length} tool call(s)`
-        : iteration >= scope.maxIterations
+        : outOfIterations
         ? 'maxIterations reached — forcing final'
+        : costHalt
+        ? 'costBudget reached (onExceed: halt) — forcing final'
         : 'LLM produced no tool calls — final answer',
+    ...(earlyStop !== undefined && { earlyStop }),
   };
+}
+
+/**
+ * Record — and announce — a turn that a LIMIT cut short.
+ *
+ * Fires only when the model asked for tools and this decider refused to run
+ * them. A turn that ended because the model was finished is not an early stop,
+ * however many iterations it used.
+ *
+ * Three channels, deliberately, because before 8.14.0 there were none and the
+ * caller received `''`:
+ *
+ *   1. `cost.limit_hit` — the reserved vocabulary (`kind: 'max_iterations'`
+ *      has been in `CostLimitHitPayload` since it was written). **Only for the
+ *      iteration limit.** A cost budget already emitted its own one-shot
+ *      `limit_hit` from `emitCostTick`, at the moment it was crossed, carrying
+ *      the real budget as `limit` — and since 8.14.0 carrying `action: 'abort'`
+ *      when it is set to halt. A second event here would double-count the
+ *      crossing AND report `limit` as the cumulative spend, which is not the
+ *      limit;
+ *   2. `scope.stoppedEarly` — committed, so the fact is provable after the run
+ *      rather than only observable by whoever happened to be subscribed. Both
+ *      reasons write it;
+ *   3. a `console.warn`, once, and ONLY when the answer is empty — an empty
+ *      string reaching a user is indistinguishable from a bug, and the library
+ *      knows exactly why it is empty. Both reasons.
+ *
+ * It does NOT throw. Unlike 8.6.0's outstanding-consent case — a fault, where
+ * the run hands back a plausible answer for work a tool never did — this is a
+ * limit the consumer set doing precisely what it was set to do, and the answer
+ * is sometimes a real one (a model can return content AND tool calls). Raising
+ * would reject good answers to fix a bad one.
+ */
+function recordEarlyStop(
+  scope: TypedScope<AgentState>,
+  reason: 'max-iterations' | 'cost-budget',
+): void {
+  const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
+  const iteration = scope.iteration as number;
+  const answerWasEmpty = ((scope.llmLatestContent as string | undefined) ?? '') === '';
+
+  scope.stoppedEarly = {
+    reason,
+    iteration,
+    pendingToolCalls: toolCalls.length,
+    answerWasEmpty,
+  };
+
+  if (reason === 'max-iterations') {
+    typedEmit(scope, 'agentfootprint.cost.limit_hit', {
+      kind: 'max_iterations',
+      limit: scope.maxIterations as number,
+      actual: iteration,
+      action: 'abort',
+    });
+  }
+
+  if (answerWasEmpty) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[agentfootprint] this turn stopped at iteration ${iteration} because ` +
+        `${
+          reason === 'max-iterations' ? 'maxIterations was reached' : 'costBudget was reached'
+        }, ` +
+        `while the model was still asking for ${toolCalls.length} tool call(s). Those calls did ` +
+        `not run, so the answer handed back is the empty string — not a refusal, and not the ` +
+        `model's conclusion. Raise the limit, or read agent.stoppedEarly() and decide what to ` +
+        `show.`,
+    );
+  }
 }
 
 function emitRouteDecided(
@@ -64,8 +156,9 @@ function emitRouteDecided(
 }
 
 export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch => {
-  const { chosen, rationale } = decideBranch(scope);
+  const { chosen, rationale, earlyStop } = decideBranch(scope);
   emitRouteDecided(scope, chosen, rationale);
+  if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
   return chosen;
 };
 
@@ -119,7 +212,8 @@ export function buildRouteDeciderStage(
   if (chain.length === 0 && enforcement === undefined) return routeDeciderStage;
   if (enforcement !== undefined) return buildEnforcingDecider(chain, enforcement);
   return async (scope) => {
-    const chosen = routeDeciderStage(scope);
+    const { chosen, rationale, earlyStop } = decideBranch(scope);
+    emitRouteDecided(scope, chosen, rationale);
     if (chosen !== 'final') return chosen;
 
     const verdict = await runMessageChain(chain, {
@@ -142,6 +236,9 @@ export function buildRouteDeciderStage(
     // Committed either way: on a refusal this is what was withheld, and the
     // ledger row beside it says who withheld it and why.
     scope.llmLatestContent = verdict.content;
+    // AFTER the chain: `answerWasEmpty` has to be judged on the string the
+    // caller will actually receive, and the chain may have rewritten it.
+    if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
     return chosen;
   };
 }
@@ -187,6 +284,7 @@ function buildEnforcingDecider(
     // of it would be the library routing around that decision.
     if (denied) {
       emitRouteDecided(scope, 'final', base.rationale);
+      if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
       return 'final';
     }
 
@@ -200,6 +298,7 @@ function buildEnforcingDecider(
         outcome: 'passed',
       });
       emitRouteDecided(scope, 'final', base.rationale);
+      if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
       return 'final';
     }
 
@@ -233,6 +332,7 @@ function buildEnforcingDecider(
       `final answer failed the output schema (${failure.stage}) and ` +
         `${enforcement.retries} retry/retries were spent`,
     );
+    if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
     return 'final';
   };
 }

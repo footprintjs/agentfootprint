@@ -32,7 +32,7 @@ import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
-import { emitCostTick } from '../../cost.js';
+import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
@@ -73,7 +73,7 @@ export interface CallLLMStageDeps {
   /** Optional pricing adapter for cost tracking. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
-  readonly costBudget?: number;
+  readonly costBudget?: ResolvedCostBudget;
   /** Hard ReAct iteration cap (used to compute iterationsRemaining for
    *  the cache strategy's prepareRequest hook). */
   readonly maxIterations: number;

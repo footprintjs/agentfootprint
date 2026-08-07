@@ -161,6 +161,7 @@ function foldingAgent(
     .compaction({
       thresholdTokens: overrides.thresholdTokens ?? 250,
       summarizer: overrides.summarizer ?? sum.provider,
+      model: 'summarizer-model',
       keepRecentTurns: overrides.keepRecentTurns ?? 2,
     })
     .build();
@@ -174,15 +175,27 @@ describe('.compaction() — unit', () => {
 
   it('is fluent and returns the builder', () => {
     const builder = base();
-    expect(builder.compaction({ thresholdTokens: 10, summarizer: mock({ reply: 's' }) })).toBe(
-      builder,
-    );
+    expect(
+      builder.compaction({
+        thresholdTokens: 10,
+        summarizer: mock({ reply: 's' }),
+        model: 'summarizer-model',
+      }),
+    ).toBe(builder);
   });
 
   it('throws when set twice — a budget that silently changed cannot be audited', () => {
-    const builder = base().compaction({ thresholdTokens: 10, summarizer: mock({ reply: 's' }) });
+    const builder = base().compaction({
+      thresholdTokens: 10,
+      summarizer: mock({ reply: 's' }),
+      model: 'summarizer-model',
+    });
     expect(() =>
-      builder.compaction({ thresholdTokens: 20, summarizer: mock({ reply: 's' }) }),
+      builder.compaction({
+        thresholdTokens: 20,
+        summarizer: mock({ reply: 's' }),
+        model: 'summarizer-model',
+      }),
     ).toThrow(/already set/);
   });
 
@@ -195,9 +208,13 @@ describe('.compaction() — unit', () => {
   });
 
   it('refuses a summarizer that is not a provider', () => {
-    expect(() => base().compaction({ thresholdTokens: 10, summarizer: 'haiku' as never })).toThrow(
-      /summarizer must be an LLMProvider/,
-    );
+    expect(() =>
+      base().compaction({
+        thresholdTokens: 10,
+        summarizer: 'haiku' as never,
+        model: 'summarizer-model',
+      }),
+    ).toThrow(/summarizer must be an LLMProvider/);
   });
 
   it('refuses keepRecentTurns below 1 — zero would fold the turn in progress', () => {
@@ -205,6 +222,7 @@ describe('.compaction() — unit', () => {
       base().compaction({
         thresholdTokens: 10,
         summarizer: mock({ reply: 's' }),
+        model: 'summarizer-model',
         keepRecentTurns: 0,
       }),
     ).toThrow(/keepRecentTurns must be an integer >= 1/);
@@ -252,7 +270,11 @@ describe('.compaction() — absent option is byte-identical', () => {
       maxIterations: 5,
     })
       .tool(looker as never)
-      .compaction({ thresholdTokens: 1_000_000, summarizer: sum.provider })
+      .compaction({
+        thresholdTokens: 1_000_000,
+        summarizer: sum.provider,
+        model: 'summarizer-model',
+      })
       .build();
     await compactedAgent.run({ message: 'go' });
 
@@ -399,7 +421,12 @@ describe('.compaction() — chart shapes', () => {
       reactMode: 'dynamic-grouped',
     })
       .tool(looker as never)
-      .compaction({ thresholdTokens: 250, summarizer: sum.provider, keepRecentTurns: 2 })
+      .compaction({
+        thresholdTokens: 250,
+        summarizer: sum.provider,
+        keepRecentTurns: 2,
+        model: 'summarizer-model',
+      })
       .build();
 
     const answer = await agent.run({ message: 'go' });
@@ -479,7 +506,12 @@ describe('.compaction() — unresolved things refuse to fold', () => {
     const agent = Agent.create({ provider, model: 'm', maxIterations: 8 })
       .tool(asker as never)
       .tool(looker as never)
-      .compaction({ thresholdTokens: 150, summarizer: sum.provider, keepRecentTurns: 1 })
+      .compaction({
+        thresholdTokens: 150,
+        summarizer: sum.provider,
+        keepRecentTurns: 1,
+        model: 'summarizer-model',
+      })
       .build();
 
     const paused = await agent.run({ message: 'go' });
@@ -530,7 +562,7 @@ describe('.compaction() — counted, not guessed', () => {
     const sum = summarizerSpy();
     const agent = Agent.create({ provider: main.provider, model: 'm', maxIterations: 5 })
       .tool(looker as never)
-      .compaction({ thresholdTokens: 100, summarizer: sum.provider })
+      .compaction({ thresholdTokens: 100, summarizer: sum.provider, model: 'summarizer-model' })
       .build();
 
     await expect(agent.run({ message: 'go' })).rejects.toThrow(CompactionUnmeasurableError);
@@ -546,7 +578,7 @@ describe('.compaction() — counted, not guessed', () => {
     });
     const sum = summarizerSpy();
     const agent = Agent.create({ provider: main.provider, model: 'm', maxIterations: 5 })
-      .compaction({ thresholdTokens: 1, summarizer: sum.provider })
+      .compaction({ thresholdTokens: 1, summarizer: sum.provider, model: 'summarizer-model' })
       .build();
     await agent.run({ message: 'go' });
     // One call, no iteration boundary after it → no measurement, no fold.
@@ -605,13 +637,23 @@ describe('.compaction() — summarizer failure', () => {
     } as never);
     const agent = Agent.create({ provider: main.provider, model: 'm', maxIterations: 6 })
       .tool(tinyTool as never)
-      .compaction({ thresholdTokens: 150, summarizer: verbose.provider, keepRecentTurns: 1 })
+      .compaction({
+        thresholdTokens: 150,
+        summarizer: verbose.provider,
+        keepRecentTurns: 1,
+        model: 'summarizer-model',
+      })
       .build();
     await agent.run({ message: 'go' });
 
     const records = compactionsOf(agent);
+    // Renamed in 8.14.0 — a drop strategy reports the same reason and writes
+    // no summary at all, so the name could not keep claiming one.
+    expect(
+      records.some((r) => r.refusals.some((x) => x.reason === 'replacement-not-smaller')),
+    ).toBe(true);
     expect(records.some((r) => r.refusals.some((x) => x.reason === 'summary-not-smaller'))).toBe(
-      true,
+      false,
     );
     expect(records.every((r) => r.foldedMessageCount === 0)).toBe(true);
   });
@@ -661,7 +703,7 @@ describe('.compaction() — checkpoints carry the summary as an ordinary message
     const sum = summarizerSpy();
     const revived = Agent.create({ provider: next.provider, model: 'm', maxIterations: 5 })
       .tool(looker as never)
-      .compaction({ thresholdTokens: 250, summarizer: sum.provider })
+      .compaction({ thresholdTokens: 250, summarizer: sum.provider, model: 'summarizer-model' })
       .build();
     const answer = await revived.resumeOnError(checkpoint);
     expect(answer).toBe('final answer');

@@ -30,6 +30,14 @@ export interface MeteredCall {
   readonly input: number;
   readonly output: number;
   readonly runtimeStageId: string;
+  /**
+   * The ReAct iteration whose call produced this reading, from the
+   * `stream.llm_end` payload. It is what makes the reading EXPIRE (8.14.0):
+   * before it existed, a provider that reported usage once and then stopped
+   * left this number standing forever, and every later window decision was
+   * made on it. Messages were evicted on a count nobody had taken.
+   */
+  readonly meteredAtIteration: number;
 }
 
 /** Per-message provenance for the CURRENT window. */
@@ -42,8 +50,29 @@ export interface MessageOrigin {
 
 export interface CompactionMeterHandle {
   readonly id: string;
-  /** The last completed LLM call's reported usage; undefined before call #1. */
-  lastCall(): MeteredCall | undefined;
+  /**
+   * The last completed LLM call's reported usage — **only if it is still
+   * current**. `undefined` before call #1, and `undefined` again once the
+   * reading has expired.
+   *
+   * A reading is current for the iteration that follows the call that
+   * produced it, and no longer. The window stage runs at the loop head: at
+   * iteration N the last completed call was made during iteration N−1, so a
+   * reading stamped older than N−1 means the most recent call reported
+   * nothing usable. That is not a smaller number or an older number — it is
+   * an ABSENT number, and this returns `undefined` for it. Every strategy
+   * already treats `undefined` as "do not act", which is the honest response
+   * to a provider that stopped counting.
+   *
+   * @param currentIteration the iteration the caller is deciding for
+   */
+  lastCall(currentIteration: number): MeteredCall | undefined;
+  /**
+   * How many `stream.llm_end` events carried no usable usage since the last
+   * good reading. Non-zero means the provider is answering without counting;
+   * the window stage turns it into one warning per run.
+   */
+  unmeteredSinceLastGood(): number;
   /** Origins aligned index-for-index with the current window. */
   origins(): readonly MessageOrigin[];
   /**
@@ -95,13 +124,19 @@ export function compactionMeter(options: CompactionMeterOptions = {}): Compactio
 
   let origins: MessageOrigin[] = [];
   let last: MeteredCall | undefined;
+  let unmetered = 0;
   /** Set by `rebaseForWindowChange`; consumed by the very next write to `key`. */
   let pendingRebase: { head: number; tail: number; bornAtMs?: number } | undefined;
 
   return {
     id,
 
-    lastCall: () => last,
+    // A reading survives exactly one iteration boundary — the one it was taken
+    // for. Anything older means the newest call did not report, and a number
+    // that is no longer being refreshed is not a measurement any more.
+    lastCall: (currentIteration: number) =>
+      last !== undefined && last.meteredAtIteration >= currentIteration - 1 ? last : undefined,
+    unmeteredSinceLastGood: () => unmetered,
     origins: () => origins,
 
     rebaseForWindowChange(headCount: number, keptTailCount: number, insertedAtMs?: number): void {
@@ -115,6 +150,7 @@ export function compactionMeter(options: CompactionMeterOptions = {}): Compactio
     clear(): void {
       origins = [];
       last = undefined;
+      unmetered = 0;
       pendingRebase = undefined;
     },
 
@@ -154,10 +190,34 @@ export function compactionMeter(options: CompactionMeterOptions = {}): Compactio
 
     onEmit(event: EmitEvent): void {
       if (event.name !== 'agentfootprint.stream.llm_end') return;
-      const payload = event.payload as { usage?: { input?: number; output?: number } } | undefined;
+      const payload = event.payload as
+        | { usage?: { input?: number; output?: number }; iteration?: number }
+        | undefined;
       const usage = payload?.usage;
-      if (typeof usage?.input !== 'number' || typeof usage?.output !== 'number') return;
-      last = { input: usage.input, output: usage.output, runtimeStageId: event.runtimeStageId };
+      if (typeof usage?.input !== 'number' || typeof usage?.output !== 'number') {
+        // A call happened and reported nothing usable. The PREVIOUS reading is
+        // deliberately left in place rather than deleted — `lastCall` decides
+        // whether it is still current, and it will not be for long. What we do
+        // record is that the provider answered without counting, so the stage
+        // can say so once instead of the run going quiet.
+        unmetered += 1;
+        return;
+      }
+      // No iteration on the payload is a shape this build does not produce
+      // (`LLMEndPayload.iteration` is required), but a reading that cannot say
+      // WHEN it was taken can never be checked for staleness — so it is not
+      // taken. Counting it as unmetered is the honest answer.
+      if (typeof payload?.iteration !== 'number') {
+        unmetered += 1;
+        return;
+      }
+      unmetered = 0;
+      last = {
+        input: usage.input,
+        output: usage.output,
+        runtimeStageId: event.runtimeStageId,
+        meteredAtIteration: payload.iteration,
+      };
     },
   };
 }

@@ -80,7 +80,29 @@ export interface AgentOptions {
    * cumulative USD crosses this budget. Execution continues — consumers
    * choose whether to abort by listening to the event.
    */
-  readonly costBudget?: number;
+  /**
+   * Cumulative USD cap for one run. Requires a `pricingTable` — the budget is
+   * money and only a pricing table turns tokens into money (refused at build
+   * otherwise since 8.13.0).
+   *
+   * A bare number WARNS: `agentfootprint.cost.limit_hit` fires once with
+   * `action: 'warn'` and the run carries on. That is what this option has
+   * always done, and it stays exactly that.
+   *
+   * `{ usd, onExceed: 'halt' }` makes it a stop. The loop ends at the next
+   * iteration boundary — the same boundary `maxIterations` uses — so a call
+   * already in flight completes, is billed and is recorded; nothing is
+   * abandoned mid-request. The run returns the answer it has (possibly `''`)
+   * and `agent.stoppedEarly()` says why.
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider, model, pricingTable, costBudget: 0.50 })           // warns
+   * Agent.create({ provider, model, pricingTable,
+   *                costBudget: { usd: 0.50, onExceed: 'halt' } })               // stops
+   * ```
+   */
+  readonly costBudget?: number | { readonly usd: number; readonly onExceed: 'warn' | 'halt' };
   /**
    * Per-slot context budgets, in characters (8.11.0).
    *
@@ -531,6 +553,34 @@ export interface AgentState {
   cumTokensOutput: number;
   cumEstimatedUsd: number;
   costBudgetHit: boolean;
+  /** Resolved from `costBudget`. `'halt'` makes the Route decider stop the
+   *  loop at the next boundary once `costBudgetHit` is set. */
+  costBudgetOnExceed?: 'warn' | 'halt';
+  /**
+   * Why the loop stopped before the model said it was done (8.14.0).
+   *
+   * Written by the Route decider in the ONE case a limit cut the turn short:
+   * the model asked for tools and the run refused to run them, because it had
+   * reached `maxIterations` or crossed a halting `costBudget`. Absent on every
+   * normal finish.
+   *
+   * It is committed state rather than a return value because
+   * {@link AgentOutput} is a bare string with nowhere to carry it — the same
+   * constraint that made 8.6.0 raise for an outstanding consent. Here a throw
+   * would be wrong (a limit YOU set firing is the limit working, and the
+   * answer is sometimes a real one), so the fact goes into the commit log,
+   * where it is provable after the run instead of only observable during it.
+   * Read it with `agent.stoppedEarly()`.
+   */
+  stoppedEarly?: {
+    readonly reason: 'max-iterations' | 'cost-budget';
+    /** The iteration the loop stopped on. */
+    readonly iteration: number;
+    /** How many tool calls the model asked for that will never run. */
+    readonly pendingToolCalls: number;
+    /** True when the answer handed back is `''` — the loudest form of this. */
+    readonly answerWasEmpty: boolean;
+  };
   // Injection Engine state ─────────────────────────────────────
   /** Active set output by InjectionEngine subflow each iteration —
    *  POJO projections (no functions) suitable for scope round-trip. */

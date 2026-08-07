@@ -152,7 +152,23 @@ export class ContextRecorder implements CombinedRecorder {
     const records = this.asPressureArray(event.value);
     if (!records) return;
     for (const rec of records) {
-      this.dispatch('agentfootprint.context.budget_pressure', rec, event);
+      // The payload REQUIRES `unit` / `cap` / `projected` (8.14.0); the record
+      // does not, because slot builders — including any a consumer wrote —
+      // still typecheck without them. Filling `'chars'` here is not a guess:
+      // this handler only ever sees writes to `COMPOSITION_KEYS.BUDGET_PRESSURE`,
+      // which come off a slot composition, and a slot composition counts
+      // `String.length`. A window strategy never travels this path — it emits
+      // the event directly, with `unit: 'tokens'`.
+      this.dispatch(
+        'agentfootprint.context.budget_pressure',
+        {
+          ...rec,
+          unit: rec.unit ?? 'chars',
+          cap: rec.cap ?? rec.capTokens,
+          projected: rec.projected ?? rec.projectedTokens,
+        },
+        event,
+      );
     }
   }
 

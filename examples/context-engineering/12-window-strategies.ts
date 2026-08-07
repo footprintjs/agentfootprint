@@ -165,9 +165,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     console.log('[slidingWindow] this never fires — it has no budget to report');
   });
   capped.on('agentfootprint.context.budget_pressure', (e) => {
+    // `unit` says what the numbers count — 'tokens' from a window strategy,
+    // 'chars' from a context slot. Same event name, same slot, two units.
     console.log(
-      `[tokenBudget] measured ${e.payload.projectedTokens} tokens vs a budget of ` +
-        `${e.payload.capTokens} → ${e.payload.planAction}`,
+      `[tokenBudget] measured ${e.payload.projected} ${e.payload.unit} vs a budget of ` +
+        `${e.payload.cap} ${e.payload.unit} → ${e.payload.planAction}`,
     );
   });
   // #endregion observe

@@ -38,7 +38,7 @@
  * usage at all while `summarizeOldest` and `tokenBudget` refuse by name.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
 import type { Turn, RemovalPlan } from './turns.js';
 import type { FoldedSpan, WindowRecord } from './types.js';
 
@@ -165,11 +165,18 @@ export interface WindowStrategyResult {
    * triggers on turn count, and filling `capTokens` with a number nobody
    * configured would be the invented figure this family refuses. No budget,
    * no budget_pressure event.
+   *
+   * `unit` says what the two numbers count, because the context SLOTS emit
+   * this same event name with the same `slot: 'messages'` and count in CHARS.
+   * It defaults to `'tokens'` — every shipped strategy compares against a
+   * `thresholdTokens`, so that is what all three already mean. Set it to
+   * `'chars'` if yours measures characters, and the event will say so.
    */
   readonly budgetPressure?: {
     readonly capTokens: number;
     readonly projectedTokens: number;
     readonly planAction: 'evict' | 'summarize' | 'none';
+    readonly unit?: 'chars' | 'tokens';
   };
   /** A billed call the strategy made, for the cost channel. */
   readonly spend?: {
@@ -194,6 +201,23 @@ export interface WindowStrategy {
    * window, and it names the strategy on the chart's `compact` stage.
    */
   readonly name: string;
+  /**
+   * What this strategy will BILL, when it bills anything (8.14.0).
+   *
+   * Omit it if your strategy makes no LLM call — the drop strategies do, and
+   * a strategy that spends nothing has no billing to declare.
+   *
+   * It exists so the agent BUILDER can check a strategy's spending against
+   * the agent's own provider and model before the first run. Without it,
+   * `.compaction({...})` could be refused for a configuration that
+   * `.window(summarizeOldest({...}))` — the same strategy through the other
+   * door — accepted silently. Two doors onto one policy must refuse the same
+   * things, or the refusal is advice rather than a rule.
+   */
+  readonly billing?: {
+    readonly provider: LLMProvider;
+    readonly model: string;
+  };
   /**
    * Decide. Called at EVERY ReAct iteration boundary.
    *

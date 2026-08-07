@@ -50,7 +50,7 @@ import type { LLMMessage, PricingTable } from '../../../adapters/types.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
-import { emitCostTick } from '../../cost.js';
+import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
@@ -76,7 +76,7 @@ export interface WindowStageDeps {
   /** Optional pricing adapter, so a summarizer call is costed like any other. */
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
-  readonly costBudget?: number;
+  readonly costBudget?: ResolvedCostBudget;
   /** Injectable clock (tests pin survivalMs). */
   readonly now?: () => number;
 }
@@ -90,6 +90,11 @@ export function buildWindowStage(
   // Dedup latch for a strategy's warning: a summarizer that is down is down
   // for the whole run, and one warning is a warning while ten is noise.
   let warned = false;
+  // The same latch for the meter going dark. A provider that stops reporting
+  // usage stops for the run, and the strategy then declines at every boundary
+  // — which would otherwise be indistinguishable from a window that is simply
+  // under budget.
+  let warnedUnmetered = false;
 
   return async (scope) => {
     // Read the window every iteration. The strategy owns its own trigger, so
@@ -99,7 +104,21 @@ export function buildWindowStage(
     // request bytes are untouched.
     const history = ((scope.history as readonly LLMMessage[] | undefined) ?? []).slice();
     const turns = segmentTurns(history);
-    const metered = meter.lastCall();
+    const iteration = (scope.iteration as number | undefined) ?? 1;
+    // The reading is asked for BY iteration, so an expired one comes back
+    // `undefined` instead of standing in for a count nobody took (8.14.0).
+    const metered = meter.lastCall(iteration);
+    if (metered === undefined && meter.unmeteredSinceLastGood() > 0 && !warnedUnmetered) {
+      warnedUnmetered = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[agentfootprint window:${strategy.name}] the provider stopped reporting token usage ` +
+          `(${meter.unmeteredSinceLastGood()} call(s) with none, most recently before iteration ` +
+          `${iteration}). This strategy is measured, not estimated, so it is standing down ` +
+          `rather than deciding on the last number it happened to see — the window is no longer ` +
+          `being managed. Use a provider that reports usage, or remove the window strategy.`,
+      );
+    }
     const origins = meter.origins();
     const pausedToolCallId = scope.pausedToolCallId as string | undefined;
     const guards: RemovalGuards = {
@@ -113,7 +132,7 @@ export function buildWindowStage(
       turns,
       measured:
         metered === undefined ? undefined : { input: metered.input, output: metered.output },
-      iteration: (scope.iteration as number | undefined) ?? 1,
+      iteration,
       // 'unknown' rather than a fabricated id: a span that cannot name its run
       // should say so, not invent a plausible-looking answer.
       runId: deps.getRunId?.() ?? 'unknown',
@@ -180,6 +199,13 @@ export function buildWindowStage(
     // measures them in the tokens the decision was actually made on. A
     // strategy with no token budget omits this entirely rather than report a
     // cap nobody set.
+    //
+    // Which is exactly why `unit` exists (8.14.0). The messages SLOT emits
+    // this same event, with this same `slot: 'messages'`, counting characters
+    // — and `contextBudget` is on by default, so one subscriber gets both.
+    // Every shipped strategy compares against a `thresholdTokens`, so a
+    // strategy that does not say defaults to tokens; the six fields are
+    // written together so a reader can use either pair.
     if (result.budgetPressure !== undefined) {
       const { capTokens, projectedTokens, planAction } = result.budgetPressure;
       typedEmit(scope, 'agentfootprint.context.budget_pressure', {
@@ -188,6 +214,9 @@ export function buildWindowStage(
         projectedTokens,
         overflowBy: Math.max(0, projectedTokens - capTokens),
         planAction,
+        unit: result.budgetPressure.unit ?? 'tokens',
+        cap: capTokens,
+        projected: projectedTokens,
       });
     }
 

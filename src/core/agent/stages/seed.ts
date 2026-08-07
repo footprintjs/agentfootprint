@@ -32,6 +32,13 @@ export interface SeedStageDeps {
   readonly maxIterations: number;
   /** Resolved cache kill switch from `Agent.create({ caching: 'off' })`. */
   readonly cachingDisabled: boolean;
+  /**
+   * What a crossed `costBudget` does — `'warn'` (keep going) or `'halt'`
+   * (stop the loop at the next Route boundary). Committed by seed so the
+   * decider can read the policy off the run's own state rather than closing
+   * over it, which is how every other run-level fact reaches that stage.
+   */
+  readonly costBudgetOnExceed?: 'warn' | 'halt';
   /** Static tool schemas resolved at chart-build time. The tools slot
    *  subflow can OVERRIDE this per-iteration via `dynamicToolSchemas`,
    *  but seed populates the initial value so iter 1 has it. */
@@ -200,6 +207,7 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   scope.cumTokensOutput = 0;
   scope.cumEstimatedUsd = 0;
   scope.costBudgetHit = false;
+  if (deps.costBudgetOnExceed !== undefined) scope.costBudgetOnExceed = deps.costBudgetOnExceed;
   scope.activeInjections = [];
   scope.activatedInjectionIds = [];
   scope.dynamicToolSchemas = deps.toolSchemas;

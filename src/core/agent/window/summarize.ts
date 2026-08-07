@@ -136,6 +136,28 @@ export interface SummarizeResult {
  * Throws whatever the provider throws — the STAGE decides that a broken
  * summarizer means "no fold this iteration", not "no run". Deciding that
  * here would hide the failure from the record.
+ *
+ * ## This call is UN-DECORATED, and that is on purpose
+ *
+ * `provider.complete(...)` below is the raw provider. None of the machinery
+ * that wraps the agent's own LLM call wraps this one:
+ *
+ *   • no `reliability` retry loop (that lives inside the `call-llm` stage);
+ *   • no `withRetry` / `withFallback` / `withCircuitBreaker` (those decorate
+ *     the provider the AGENT was constructed with, not this argument);
+ *   • no cache subflow (`sf-cache` sits in front of `call-llm` only).
+ *
+ * One attempt, and a failure is recorded as a `'summarizer-failed'` refusal
+ * rather than retried. A fold is optional work — the run is correct without
+ * it — so spending a retry budget on it, or letting a summarizer outage open
+ * a circuit that then blocks the agent's real calls, would trade something
+ * that matters for something that does not.
+ *
+ * The consequence worth knowing: passing the AGENT'S OWN provider instance as
+ * the summarizer gives you one object that behaves two different ways inside
+ * one run — retried and cached on one path, neither on this one. `.compaction()`
+ * refuses that exact pairing when the model matches too; pass a second
+ * instance.
  */
 export async function runSummarizer(
   provider: LLMProvider,

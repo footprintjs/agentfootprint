@@ -64,6 +64,15 @@ export type WindowRefusalReason =
   /** The summarizer threw. No fold this iteration; the window stays big. */
   | 'summarizer-failed'
   /**
+   * @deprecated Renamed to `'replacement-not-smaller'` in 8.14.0. Same
+   * meaning; the old spelling claimed a SUMMARY where the drop strategies
+   * have none — `slidingWindow` and `tokenBudget` never call a summarizer and
+   * reported this reason anyway. A runtime from 8.14.0 on writes only the new
+   * string; this member survives so code written against 7.17–8.13 still
+   * narrows and compiles.
+   */
+  | 'summary-not-smaller'
+  /**
    * The REPLACEMENT came back no smaller than the span it would replace, so
    * the removal was abandoned. Both sides are measured in chars — the same
    * unit, an exact comparison, not a token guess.
@@ -73,8 +82,11 @@ export type WindowRefusalReason =
    * well. For the drop strategies it is the authored drop notice that has to
    * take the window's head position (see `DROP_NOTICE_PREFIX`): dropping two
    * tiny turns to insert a longer notice is pure loss, so it does not happen.
+   *
+   * Named for the REPLACEMENT rather than the summary since 8.14.0 — two of
+   * the three strategies that report it write no summary at all.
    */
-  | 'summary-not-smaller';
+  | 'replacement-not-smaller';
 
 /** One named refusal, positioned so a reader can find the turn. */
 export interface WindowRefusal {
@@ -165,6 +177,17 @@ export interface CompactionRecord extends WindowRecord {
   readonly summaryChars: number;
   /** What the summarizer call itself cost, when it reported usage. */
   readonly summarizerTokens?: { readonly input: number; readonly output: number };
+  /**
+   * Present and `true` when the summarizer was deliberately NOT called this
+   * iteration (8.14.0): this exact span had already come back
+   * `'replacement-not-smaller'`, and the same span through the same summarizer
+   * gives the same answer. No call, so no `summarizerTokens` and no cost tick.
+   *
+   * It is recorded rather than left out because a decision not to spend is
+   * still a decision. A record with this flag and one without are different
+   * facts, and a reader adding up an agent's fold attempts needs to see both.
+   */
+  readonly summarizerSkipped?: boolean;
 }
 
 /** What one visit to `slidingWindow` put in the ledger. */
@@ -289,8 +312,8 @@ export interface FoldedSpan {
  * const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' })
  *   .compaction({
  *     thresholdTokens: 120_000,
- *     summarizer: anthropic(),          // usually the cheap one
- *     model: 'claude-haiku-4-5',
+ *     summarizer: anthropic(),          // a SECOND instance, not the agent's
+ *     model: 'claude-haiku-4-5',        // required — name the cheap model
  *     keepRecentTurns: 6,
  *   })
  *   .build();
@@ -315,13 +338,26 @@ export interface CompactionOptions {
   /**
    * The provider that writes the summary. Explicitly chosen — the library
    * never quietly bills your main model for compaction.
+   *
+   * **This call is not wrapped by anything.** `reliability`, `withRetry`,
+   * `withFallback`, the circuit breaker and the cache subflow all sit around
+   * the agent's own `call-llm` stage; the summarizer is invoked directly
+   * (`runSummarizer`), so it gets one attempt, no fallback, no cache. That is
+   * deliberate — a fold is optional work and a broken summarizer must not
+   * take the run down — but it means passing the agent's OWN provider
+   * instance here gives you the same object behaving two different ways in
+   * one run. Pass a separate instance.
    */
   readonly summarizer: LLMProvider;
   /**
-   * Model id for the summarizer call. Defaults to the agent's own model, so
-   * `summarizer: anthropic()` alone works; name a cheap model to spend less.
+   * Model id for the summarizer call.
+   *
+   * **Required since 8.14.0** whenever `summarizer` is set. It used to default
+   * to the agent's own model, which quietly billed the expensive model on the
+   * same-provider path and sent an unknown model id to the vendor on the
+   * cross-provider one. Name it — usually the cheap one.
    */
-  readonly model?: string;
+  readonly model: string;
   /**
    * What happens to the messages a fold removes. Default `'conversation'` —
    * they ride with the conversation checkpoint and survive the process.
@@ -346,7 +382,8 @@ export interface ResolvedCompaction {
   readonly thresholdTokens: number;
   readonly keepRecentTurns: number;
   readonly summarizer: LLMProvider;
-  readonly model: string | undefined;
+  /** Always a real model id since 8.14.0 — there is no fallback to guess. */
+  readonly model: string;
   readonly retain: CompactionRetention;
 }
 

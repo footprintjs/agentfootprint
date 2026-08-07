@@ -155,6 +155,7 @@ function weekOne(overrides: { retain?: 'conversation' | 'discard' } = {}) {
     .compaction({
       thresholdTokens: 250,
       summarizer: sum.provider,
+      model: 'summarizer-model',
       keepRecentTurns: 2,
       ...(overrides.retain !== undefined && { retain: overrides.retain }),
     })
@@ -187,10 +188,19 @@ describe('durable compaction — unit', () => {
   it('defaults to retaining — keeping the originals is not something you opt into', () => {
     // Both doors, one resolver: the default cannot differ between them.
     for (const build of [
-      () => base().compaction({ thresholdTokens: 100, summarizer: provider }).build(),
       () =>
         base()
-          .window(summarizeOldest({ thresholdTokens: 100, summarizer: provider }))
+          .compaction({ thresholdTokens: 100, summarizer: provider, model: 'summarizer-model' })
+          .build(),
+      () =>
+        base()
+          .window(
+            summarizeOldest({
+              thresholdTokens: 100,
+              summarizer: provider,
+              model: 'summarizer-model',
+            }),
+          )
           .build(),
     ]) {
       expect(() => build()).not.toThrow();
@@ -199,15 +209,26 @@ describe('durable compaction — unit', () => {
 
   it('accepts both policies, and refuses anything else by name', () => {
     expect(() =>
-      base().compaction({ thresholdTokens: 100, summarizer: provider, retain: 'conversation' }),
-    ).not.toThrow();
-    expect(() =>
-      base().compaction({ thresholdTokens: 100, summarizer: provider, retain: 'discard' }),
+      base().compaction({
+        thresholdTokens: 100,
+        summarizer: provider,
+        retain: 'conversation',
+        model: 'summarizer-model',
+      }),
     ).not.toThrow();
     expect(() =>
       base().compaction({
         thresholdTokens: 100,
         summarizer: provider,
+        retain: 'discard',
+        model: 'summarizer-model',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      base().compaction({
+        thresholdTokens: 100,
+        summarizer: provider,
+        model: 'summarizer-model',
         retain: 'forever' as never,
       }),
     ).toThrow(/retain must be 'conversation' or 'discard'/);
@@ -271,7 +292,11 @@ describe('durable compaction — the conversation carries the fold', () => {
     expect(span.messages).toBeDefined();
     expect(span.messages!.length).toBe(span.messageCount);
     expect(span.removedStageIds.length).toBeGreaterThan(0);
-    expect(span.model).toBe('main-model');
+    // The SUMMARIZER's model, not the agent's. Before 8.14.0 `model` defaulted
+    // to the agent's own, so this span truthfully recorded 'main-model' — and
+    // the invoice truthfully showed the expensive model writing every summary.
+    // `model` is required now, and the claim names its real author.
+    expect(span.model).toBe('summarizer-model');
     expect(span.runId.length).toBeGreaterThan(0);
     expect(span.runId).not.toBe('unknown');
 
@@ -440,7 +465,12 @@ describe('durable compaction — LAW: the window change and the span are ONE com
     };
     const agent = Agent.create({ provider: main.provider, model: 'm', maxIterations: 8 })
       .tool(looker as never)
-      .compaction({ thresholdTokens: 250, summarizer: broken, keepRecentTurns: 2 })
+      .compaction({
+        thresholdTokens: 250,
+        summarizer: broken,
+        keepRecentTurns: 2,
+        model: 'summarizer-model',
+      })
       .build();
 
     const answer = await agent.run({ message: `Audit ${ACCOUNT} please` });

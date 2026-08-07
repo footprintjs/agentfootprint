@@ -78,7 +78,7 @@ import {
   type CheckInBuilderOptions,
   type ResolvedCheckInConfig,
 } from './checkin.js';
-import { assertCostBudgetHasPricing } from './cost.js';
+import { assertCostBudgetHasPricing, resolveCostBudget, type ResolvedCostBudget } from './cost.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import {
   causalEvidenceRecorder,
@@ -248,7 +248,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  refusal has to explain that a tree has no cursor to jump (8.5.0). */
   private readonly skillGraphIsTree: boolean;
   private readonly pricingTable?: PricingTable;
-  private readonly costBudget?: number;
+  /** Normalized at construction: a bare number is `{ usd, onExceed: 'warn' }`. */
+  private readonly costBudget?: ResolvedCostBudget;
   /** Per-slot character budgets (8.11.0). Absent keys keep the slot default. */
   private readonly contextBudget?: AgentOptions['contextBudget'];
   private readonly permissionChecker?: PermissionChecker;
@@ -531,7 +532,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // are shared with LLMCall, which takes the identical pair.
     assertCostBudgetHasPricing('Agent', opts.pricingTable, opts.costBudget);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
-    if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
+    // Normalized once, at build: `onExceed` decides whether the Route decider
+    // stops the loop, and a policy resolved per-run could differ per-run.
+    const resolvedCostBudget = resolveCostBudget('Agent', opts.costBudget);
+    if (resolvedCostBudget !== undefined) this.costBudget = resolvedCostBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
@@ -878,11 +882,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // person who has to click it will not look.
           cause instanceof CredentialConsentRequiredError);
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
+        // Observation beats the heuristic: if a bracket was open, it says
+        // exactly what the run was doing. `classifyFailurePhase` only decides
+        // when nothing was — a failure between brackets, where the error's own
+        // text really is the best evidence available (8.14.0).
+        const observed = tracker.inFlightPhase;
         const checkpoint = buildCheckpoint(
           tracker,
           {
             iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
-            phase: classifyFailurePhase(cause),
+            phase: observed?.phase ?? classifyFailurePhase(cause),
+            ...(observed !== undefined && { stage: observed.stage }),
           },
           // Read from the live snapshot rather than the tracker: the tracker
           // follows `history` through iteration_end events, and a fold's spans
@@ -973,6 +983,36 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         if (typeof p?.iterIndex === 'number') tracker.inFlightIteration = p.iterIndex;
       }) as never,
     );
+    // Phase OBSERVATION (8.14.0) — the run's own stream brackets, on the
+    // dispatcher this tracker is already listening to. A crash inside one of
+    // these is attributable without asking the error to describe itself.
+    // `'call-llm'` is a literal and `toolName` is a name the app declared:
+    // no URL, no credential, no payload ever reaches the checkpoint.
+    const offLlmStart = this.dispatcher.on(
+      'agentfootprint.stream.llm_start' as never,
+      (() => {
+        tracker.inFlightPhase = { phase: 'llm', stage: 'call-llm' };
+      }) as never,
+    );
+    const offLlmEnd = this.dispatcher.on(
+      'agentfootprint.stream.llm_end' as never,
+      (() => {
+        tracker.inFlightPhase = undefined;
+      }) as never,
+    );
+    const offToolStart = this.dispatcher.on(
+      'agentfootprint.stream.tool_start' as never,
+      ((event: { payload?: { toolName?: string } }) => {
+        const name = event.payload?.toolName;
+        tracker.inFlightPhase = { phase: 'tool', stage: typeof name === 'string' ? name : 'tool' };
+      }) as never,
+    );
+    const offToolEnd = this.dispatcher.on(
+      'agentfootprint.stream.tool_end' as never,
+      (() => {
+        tracker.inFlightPhase = undefined;
+      }) as never,
+    );
     const offIterEnd = this.dispatcher.on(
       'agentfootprint.agent.iteration_end' as never,
       ((event: { payload?: { iterIndex?: number; history?: ReadonlyArray<unknown> } }) => {
@@ -982,11 +1022,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           tracker.history = p.history as readonly LLMMessage[];
         }
         tracker.inFlightIteration = undefined;
+        tracker.inFlightPhase = undefined;
       }) as never,
     );
     return () => {
       offIterStart();
       offIterEnd();
+      offLlmStart();
+      offLlmEnd();
+      offToolStart();
+      offToolEnd();
     };
   }
 
@@ -1340,9 +1385,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Deferral-safe: the reject-boundary terminal flush delivers error.fatal
     // before the rejection reaches the caller.
     attachObserver(errorBridge({ dispatcher, getRunContext: getRunCtx }));
-    if (this.pricingTable) {
-      attachObserver(costRecorder({ dispatcher, getRunContext: getRunCtx }));
-    }
+    // The cost bridge is ALWAYS attached since 8.14.0. It used to be gated on
+    // `pricingTable`, which was right while `cost.*` only ever meant money:
+    // `emitCostTick` returns on its first line without a table, so the gate
+    // could not hide anything. `cost.limit_hit { kind: 'max_iterations' }`
+    // broke that assumption — an iteration limit has no price and fires on any
+    // agent, and behind the old gate it would have reached the dispatcher only
+    // for agents that happened to be costing themselves. The bridge drops
+    // events with no listener, so an agent that subscribes to nothing pays
+    // nothing for it.
+    attachObserver(costRecorder({ dispatcher, getRunContext: getRunCtx }));
     if (this.permissionChecker) {
       attachObserver(permissionRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
@@ -1425,6 +1477,48 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
     if (!this.lastExecutor) return Promise.resolve({ done: 0, failed: 0, pending: 0 });
     return this.lastExecutor.drainObservers(opts);
+  }
+
+  /**
+   * Did the last turn stop because a LIMIT cut it short — and if so, which?
+   *
+   * `undefined` on every normal finish, including a turn that used its whole
+   * `maxIterations` budget and then genuinely finished. It is set only when
+   * the model was still asking for tools and the run refused to run them:
+   * `maxIterations` was reached, or a `costBudget: { onExceed: 'halt' }` was
+   * crossed.
+   *
+   * ## Why this is a method and not part of the answer
+   *
+   * `run()` resolves to a bare string. There is nowhere in a string to write
+   * "…and three tool calls never ran", which is the same wall 8.6.0 hit with
+   * an outstanding credential consent — and there the turn raises, because
+   * handing back a plausible answer for work a tool never did is a silent
+   * success. This is not that. A limit you configured firing is the limit
+   * working, and the answer is sometimes real (a model can return content AND
+   * tool calls). So it does not raise; it records, in committed state, where
+   * it is provable after the fact — `getLastSnapshot().sharedState.stoppedEarly`
+   * is the same value, and this is the short way to it.
+   *
+   * When the answer came back EMPTY the library also warns once on the
+   * console, because an empty string reaching a user is indistinguishable
+   * from a bug.
+   *
+   * @example
+   * ```ts
+   * const answer = await agent.run({ message: 'audit every log file' });
+   * const cut = agent.stoppedEarly();
+   * if (cut) {
+   *   console.log(`stopped at iteration ${cut.iteration}: ${cut.reason}`);
+   *   console.log(`${cut.pendingToolCalls} tool call(s) never ran`);
+   * }
+   * ```
+   */
+  stoppedEarly(): AgentState['stoppedEarly'] {
+    const state = this.getLastSnapshot()?.sharedState as
+      | Pick<AgentState, 'stoppedEarly'>
+      | undefined;
+    return state?.stoppedEarly;
   }
 
   private finalizeResult(
@@ -1596,6 +1690,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const seed = buildSeedStage({
       maxIterations,
       cachingDisabled,
+      ...(costBudget !== undefined && { costBudgetOnExceed: costBudget.onExceed }),
       get toolSchemas() {
         return toolSchemasResolved;
       },

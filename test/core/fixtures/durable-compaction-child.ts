@@ -58,7 +58,12 @@ async function main(): Promise<void> {
   };
 
   const agent = Agent.create({ provider, model: 'week-two-model', maxIterations: 3 })
-    .compaction({ thresholdTokens: 250, summarizer: provider, keepRecentTurns: 2 })
+    .compaction({
+      thresholdTokens: 250,
+      summarizer: provider,
+      keepRecentTurns: 2,
+      model: 'summarizer-model',
+    })
     .build();
 
   const question = 'Remind me — which account were we working on in week one?';

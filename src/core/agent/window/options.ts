@@ -88,7 +88,19 @@ export function resolveCompactionOptions(
     );
   }
   if (keepRecentTurns !== undefined) requireKeepRecentTurns(keepRecentTurns, label);
-  if (model !== undefined && (typeof model !== 'string' || model.length === 0)) {
+  if (model === undefined) {
+    throw new Error(
+      `${label}: model is required whenever you pass a summarizer. It used to default to the ` +
+        `agent's own model, and that default had no correct case:\n` +
+        `  • same provider family — it quietly billed your MAIN model for every fold, which is ` +
+        `the one thing the summarizer option exists to prevent;\n` +
+        `  • a different provider — it sent your agent's model id to a vendor that has never ` +
+        `heard of it, and the fold died mid-run, on a paid run.\n` +
+        `Name the model: \`model: 'claude-haiku-4-5'\` (or whatever your summarizer's cheap ` +
+        `model is called). Two words, and the invoice stops being a surprise.`,
+    );
+  }
+  if (typeof model !== 'string' || model.length === 0) {
     throw new Error(`${label}: model must be a non-empty model id, got ${String(model)}.`);
   }
   if (retain !== undefined && !RETENTIONS.includes(retain)) {

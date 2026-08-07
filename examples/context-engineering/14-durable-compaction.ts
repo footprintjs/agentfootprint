@@ -131,6 +131,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .compaction({
       thresholdTokens: 1_500,
       summarizer,
+      model: 'mock-cheap',   // required with `summarizer` since 8.14.0
       keepRecentTurns: 2,
       // The default, spelled out. Omit it and you get exactly this: the
       // folded messages ride the conversation and survive the process.
@@ -209,7 +210,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   };
 
   const weekTwo = Agent.create({ provider: weekTwoProvider, model: 'mock', maxIterations: 3 })
-    .compaction({ thresholdTokens: 1_500, summarizer })
+    .compaction({ thresholdTokens: 1_500, summarizer, model: 'mock-cheap' })
     .build();
 
   const question = 'Remind me — which account were we working on?';

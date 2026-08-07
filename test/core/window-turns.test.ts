@@ -349,7 +349,11 @@ describe('summarizeOldest — unit', () => {
   });
 
   it('does not engage before the first call, or under budget', async () => {
-    const strategy = summarizeOldest({ thresholdTokens: 100, summarizer: okSummarizer });
+    const strategy = summarizeOldest({
+      thresholdTokens: 100,
+      summarizer: okSummarizer,
+      model: 'summarizer-model',
+    });
     const history = bigWindow();
     expect(await strategy.plan({ ...inputFor(history), measured: undefined })).toBeUndefined();
     expect(await strategy.plan(inputFor(history, 50))).toBeUndefined();
@@ -367,6 +371,7 @@ describe('summarizeOldest — unit', () => {
       thresholdTokens: 100,
       keepRecentTurns: 1,
       summarizer: broken,
+      model: 'summarizer-model',
     });
     const result = (await strategy.plan(inputFor(history)))!;
 
@@ -383,6 +388,7 @@ describe('summarizeOldest — unit', () => {
       thresholdTokens: 100,
       keepRecentTurns: 99,
       summarizer: okSummarizer,
+      model: 'summarizer-model',
     });
     const result = (await strategy.plan(inputFor(history)))!;
     expect((result.record as CompactionRecord).overBudget).toBe(true);

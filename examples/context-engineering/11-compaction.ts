@@ -112,6 +112,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       // silently by every run.
       thresholdTokens: 1_500,
       summarizer,
+      // REQUIRED alongside `summarizer` since 8.14.0. It used to default to
+      // the agent's own model, which meant compaction quietly billed the
+      // expensive one — the exact thing the summarizer option exists to
+      // avoid. Name the cheap model here.
+      model: 'mock-cheap',
       keepRecentTurns: 2,
     })
     .build();
@@ -125,9 +130,13 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     evictions.push(`${e.payload.contentHash} (lived ${e.payload.survivalMs}ms)`);
   });
   agent.on('agentfootprint.context.budget_pressure', (e) => {
+    // Read `unit` before you read the numbers. The three CONTEXT SLOTS emit
+    // this same event, under this same `slot: 'messages'`, counting CHARS —
+    // and `contextBudget` is on by default, so one subscriber gets both. This
+    // one comes from the window strategy and counts TOKENS.
     console.log(
-      `[pressure] measured ${e.payload.projectedTokens} tokens vs a budget of ` +
-        `${e.payload.capTokens} → ${e.payload.planAction}`,
+      `[pressure] measured ${e.payload.projected} ${e.payload.unit} vs a budget of ` +
+        `${e.payload.cap} ${e.payload.unit} → ${e.payload.planAction}`,
     );
   });
 

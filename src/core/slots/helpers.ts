@@ -88,8 +88,13 @@ export function composeSlot(
  *
  * `planAction: 'none'` is the honest answer: the built-in slots evict and
  * truncate NOTHING, so the full content went to the LLM and this record is
- * the loud signal that the slot's budget is not being respected. Units are
- * CHARS despite the historical `*Tokens` field names.
+ * the loud signal that the slot's budget is not being respected.
+ *
+ * Units are CHARS. The historical `*Tokens` field names say otherwise, which
+ * is why 8.14.0 added `unit` / `cap` / `projected` beside them and this
+ * function writes all six: the two old names for existing readers, and the
+ * three honest ones for everyone else. A window strategy fills the same
+ * fields with `unit: 'tokens'`, and one subscriber gets both.
  */
 export function slotOverflow(composition: SlotComposition): BudgetPressureRecord | null {
   const { cap, used } = composition.budget;
@@ -100,6 +105,9 @@ export function slotOverflow(composition: SlotComposition): BudgetPressureRecord
     projectedTokens: used,
     overflowBy: used - cap,
     planAction: 'none',
+    unit: 'chars',
+    cap,
+    projected: used,
   };
 }
 
@@ -107,6 +115,9 @@ export function slotOverflow(composition: SlotComposition): BudgetPressureRecord
  * Human-facing warning text for a slot overflow. Says what actually
  * happened (nothing was truncated) and what to do about it — the typed
  * `context.budget_pressure` event carries the machine-readable truth.
+ *
+ * The unit is read off the record rather than written into the sentence, so
+ * the words and the event can never disagree about what was counted.
  */
 export function formatOverflowWarning(opts: {
   readonly pressure: BudgetPressureRecord;
@@ -119,9 +130,10 @@ export function formatOverflowWarning(opts: {
   readonly remedy: string;
 }): string {
   const { pressure, itemCount, itemNoun, contentNoun, remedy } = opts;
+  const unit = pressure.unit ?? 'chars';
   return (
     `[agentfootprint] ${pressure.slot} slot over budget: ` +
-    `${pressure.projectedTokens}/${pressure.capTokens} chars (+${pressure.overflowBy}), ` +
+    `${pressure.projectedTokens}/${pressure.capTokens} ${unit} (+${pressure.overflowBy}), ` +
     `${itemCount} ${itemNoun}(s). Nothing was truncated — the full ${contentNoun} were sent ` +
     `to the LLM — but the slot budget signal is unreliable. ${remedy}`
   );

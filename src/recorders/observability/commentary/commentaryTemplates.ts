@@ -140,7 +140,16 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'pause.request': '{{appName}} paused — waiting for input from a human or external system.',
   'pause.resume': '{{appName}} resumed.',
 
-  'cost.limit_hit': '{{appName}} hit a cost limit and stopped.',
+  // ONE key, and an `outcome` clause the extractor pre-renders — because the
+  // sentence has to branch and the key must not. Through 8.13.0 this said
+  // "hit a cost limit and stopped", which was false for every agent that had
+  // one: a `costBudget` warned and the run carried on. Splitting the key into
+  // `.warn` / `.halt` would have read better and silently orphaned every
+  // consumer who had overridden `cost.limit_hit`.
+  'cost.limit_hit':
+    '{{appName}} reached its {{limitNoun}} ({{actual}} of {{limit}}) — {{outcome}}.',
+  'cost.limit_hit.stopped': 'the run stopped there',
+  'cost.limit_hit.continued': 'the run carried on, because this limit only warns',
 };
 
 /** Context the var-extractor reads from. Anything that's NOT in the
@@ -350,6 +359,33 @@ export function extractCommentaryVars(
         ? templates['context.routed.default'] ?? ''
         : '';
       return { ...base, skillId: r.injectionId, toolClause, matchClause };
+    }
+
+    case 'agentfootprint.cost.limit_hit': {
+      const p = event.payload;
+      // The sentence has to say whether the run STOPPED, and only `action`
+      // knows: a `costBudget` may warn or halt, and `max_iterations` always
+      // stops. Pre-rendered here as a clause so the template stays one flat
+      // key that a consumer's existing override still resolves.
+      const outcome =
+        p.action === 'abort'
+          ? templates['cost.limit_hit.stopped'] ?? ''
+          : templates['cost.limit_hit.continued'] ?? '';
+      const limitNoun =
+        p.kind === 'max_iterations'
+          ? 'iteration limit'
+          : p.kind === 'max_cost'
+          ? 'cost limit'
+          : p.kind === 'max_tokens'
+          ? 'token limit'
+          : 'time limit';
+      return {
+        ...base,
+        limitNoun,
+        limit: String(p.limit),
+        actual: String(p.actual),
+        outcome,
+      };
     }
 
     // Most templates only need {{appName}} / {{agentName}} — no token

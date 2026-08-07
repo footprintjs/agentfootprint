@@ -250,10 +250,25 @@ export interface ContextSlotComposedPayload {
 }
 
 /**
- * Fired when a slot composes over its `budgetCap`.
+ * Fired when a budget is exceeded — by a context SLOT composing over its
+ * `budgetCap`, or by a window STRATEGY measuring the window over its
+ * `thresholdTokens`.
  *
- * `capTokens` / `projectedTokens` are historical names: slot budgets are
- * measured in CHARS. Renaming them would be breaking, so they stay.
+ * ## Read `unit` before you read a number (8.14.0)
+ *
+ * Two emitters share this event name and the `slot: 'messages'` value, and
+ * **they do not count in the same unit**:
+ *
+ * | emitter | what it measures | `unit` |
+ * |---|---|---|
+ * | the three context slots (`contextBudget`) | `String.length` of what it composed | `'chars'` |
+ * | a window strategy (`.window()` / `.compaction()`) | the provider's reported input tokens | `'tokens'` |
+ *
+ * Since `contextBudget` is on by default, one subscriber routinely receives
+ * both — and before 8.14.0 nothing in the payload told them apart, so
+ * "cap 200, projected 258" could be 258 characters or 258 tokens. `unit` is
+ * the answer; `cap` and `projected` are the same two numbers under names that
+ * do not assert an untrue one.
  *
  * `planAction: 'none'` means no mitigation was performed — nothing was
  * evicted or truncated and the full content still went to the LLM. That
@@ -262,10 +277,32 @@ export interface ContextSlotComposedPayload {
  */
 export interface ContextBudgetPressurePayload {
   readonly slot: ContextSlot;
+  /**
+   * @deprecated Misnamed since the event shipped: this is CHARS on the slot
+   * channel and TOKENS on the window channel. Read {@link cap} with
+   * {@link unit}. Still written, with the identical value, and not going
+   * away in 8.x.
+   */
   readonly capTokens: number;
+  /**
+   * @deprecated Misnamed — see {@link capTokens}. Read {@link projected} with
+   * {@link unit}. Still written, with the identical value.
+   */
   readonly projectedTokens: number;
+  /** How far over the cap, in {@link unit}. Never carried a unit in its name. */
   readonly overflowBy: number;
   readonly planAction: 'evict' | 'summarize' | 'abort' | 'none';
+  /**
+   * What {@link cap}, {@link projected} and {@link overflowBy} are counted in
+   * (8.14.0). `'chars'` from a context slot, `'tokens'` from a window
+   * strategy. Branch on this before comparing any of the three numbers to
+   * anything.
+   */
+  readonly unit: 'chars' | 'tokens';
+  /** The budget that was exceeded, in {@link unit}. Same value as `capTokens`. */
+  readonly cap: number;
+  /** What was measured, in {@link unit}. Same value as `projectedTokens`. */
+  readonly projected: number;
 }
 
 /**

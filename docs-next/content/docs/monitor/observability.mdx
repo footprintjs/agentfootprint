@@ -161,7 +161,27 @@ All peer deps are declared **optional** — consumers who never call a particula
 
 ## Cost tracking
 
-Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget. The library never auto-aborts — *you* decide what to do (cancel via signal, escalate, log, etc.):
+Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget.
+
+A bare number **warns**: the event fires with `action: 'warn'` and the run carries on, and *you* decide what to do (cancel via signal, escalate, log). Since 8.14.0 you can also ask it to **stop**:
+
+```ts
+Agent.create({ provider, model, pricingTable, costBudget: 0.50 })                      // warns
+Agent.create({ provider, model, pricingTable,
+               costBudget: { usd: 0.50, onExceed: 'halt' } })                          // stops
+```
+
+`'halt'` ends the loop at the next iteration boundary — the same boundary `maxIterations` uses. Never mid-call: the call that crossed the budget completes, is billed and is recorded; halting only decides there will not be another one. The event then reports `action: 'abort'`, and `agent.stoppedEarly()` says what happened:
+
+```ts
+const answer = await agent.run({ message });
+const cut = agent.stoppedEarly();
+if (cut) console.log(`stopped at iteration ${cut.iteration}: ${cut.reason}`);
+```
+
+<CodeFile path="examples/features/02-cost-tracking.ts" region="cost-halt" title="examples/features/02-cost-tracking.ts (region: cost-halt)" />
+
+`stoppedEarly()` also covers `maxIterations`. It is set only when a limit cut the turn short — the model was still asking for tools and the run refused to run them — so a turn that used its whole budget and then genuinely finished reports nothing. When the answer that comes back is the empty string the library warns once on the console too, because an empty string reaching a user is indistinguishable from a bug.
 
 <CodeFile path="examples/features/02-cost-tracking.ts" region="cost-tracking" title="examples/features/02-cost-tracking.ts (region: cost-tracking)" />
 

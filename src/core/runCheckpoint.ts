@@ -117,6 +117,20 @@ export interface AgentRunCheckpoint {
   readonly failurePoint?: {
     readonly iteration: number;
     readonly phase: 'iteration' | 'tool' | 'llm' | 'unknown';
+    /**
+     * What was OPEN when it threw — `'call-llm'` for the model call, or the
+     * declared name of the tool that was running (8.14.0).
+     *
+     * Absent when nothing was open (a failure between brackets), which is the
+     * honest answer rather than a guess.
+     *
+     * **Never a URL, never a credential, never request or response content.**
+     * Only the literal string `'call-llm'` or a tool name the app itself
+     * declared. A checkpoint is persisted to Redis / Postgres / S3 and read by
+     * whoever is on call; nothing that could carry a secret goes in it. Do not
+     * "improve" this field into carrying the endpoint.
+     */
+    readonly stage?: string;
   };
 }
 
@@ -155,9 +169,9 @@ export class RunCheckpointError extends Error {
   readonly checkpoint: AgentRunCheckpoint;
 
   constructor(cause: Error, checkpoint: AgentRunCheckpoint) {
-    const phase = checkpoint.failurePoint?.phase ?? 'unknown';
     super(
-      `[agent run] failed at iteration ${checkpoint.failurePoint?.iteration ?? '?'} (${phase}). ` +
+      `[agent run] failed at iteration ${checkpoint.failurePoint?.iteration ?? '?'} ` +
+        `${describeFailurePoint(checkpoint.failurePoint)}. ` +
         `Last-good checkpoint captured at iteration ${checkpoint.lastCompletedIteration}. ` +
         `Pass to agent.resumeOnError(checkpoint) to continue. ` +
         `Underlying error: ${cause.message}`,
@@ -166,6 +180,28 @@ export class RunCheckpointError extends Error {
     this.cause = cause;
     this.checkpoint = checkpoint;
   }
+}
+
+/**
+ * The human half of `failurePoint`, as one clause.
+ *
+ * `"failed at iteration 3 (unknown)"` was what a real production report came
+ * back with — a WebKit `fetch` failure is `TypeError: Load failed`, which
+ * matches none of {@link classifyFailurePhase}'s patterns, while the run
+ * itself knew perfectly well that the LLM call was open at the time. Naming
+ * the phase and the stage turns that shrug into a starting point.
+ */
+function describeFailurePoint(fp: AgentRunCheckpoint['failurePoint']): string {
+  if (!fp) return '(phase unknown — nothing was open when it threw)';
+  const where =
+    fp.phase === 'llm'
+      ? 'during the LLM call'
+      : fp.phase === 'tool'
+      ? 'during a tool call'
+      : fp.phase === 'iteration'
+      ? 'between iteration boundaries'
+      : 'at an unidentified point';
+  return fp.stage !== undefined ? `${where} (stage: ${fp.stage})` : where;
 }
 
 // ─── Internal — captured per-run state ───────────────────────────────
@@ -187,6 +223,19 @@ export interface RunCheckpointTracker {
   /** Set when an iteration begins (used to attribute the failure
    *  phase if we throw before the next iteration_end). */
   inFlightIteration?: number;
+  /**
+   * What is OPEN right now, from the run's own `stream.*` brackets: set on
+   * `llm_start` / `tool_start`, cleared on `llm_end` / `tool_end` (8.14.0).
+   *
+   * OBSERVATION, which is why it exists. {@link classifyFailurePhase} guesses
+   * from the error's own name and message and is wrong for every failure that
+   * does not describe itself — a browser fetch failure says only
+   * `TypeError: Load failed`. This says what the engine was doing, and only
+   * falls back to the guess when nothing was open.
+   *
+   * `stage` holds `'call-llm'` or a declared tool name. Never a URL.
+   */
+  inFlightPhase?: { readonly phase: 'llm' | 'tool'; readonly stage: string };
 }
 
 /**
@@ -197,14 +246,7 @@ export interface RunCheckpointTracker {
  */
 export function buildCheckpoint(
   tracker: RunCheckpointTracker,
-  failurePoint?: {
-    iteration: number;
-    phase: AgentRunCheckpoint['failurePoint'] extends infer F
-      ? F extends { phase: infer P }
-        ? P
-        : never
-      : never;
-  },
+  failurePoint?: NonNullable<AgentRunCheckpoint['failurePoint']>,
   /**
    * Spans this run folded, read from committed state by the caller. Passed in
    * rather than tracked, because the tracker follows `history` through events
@@ -267,6 +309,13 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
  * Fast path returns 'unknown' so unrecognized errors still produce
  * a checkpoint (the cause itself is preserved in
  * `RunCheckpointError.cause`).
+ *
+ * **The FALLBACK since 8.14.0.** It only runs when the tracker observed no
+ * open bracket, because an error's own text is the weakest available evidence
+ * about where it happened: `TypeError: Load failed` — WebKit's entire message
+ * for a failed `fetch` — matches nothing here and produced `'unknown'` on a
+ * real production report while the run knew the LLM call was open. Observation
+ * first, this second.
  */
 export function classifyFailurePhase(err: Error): 'iteration' | 'tool' | 'llm' | 'unknown' {
   const name = err.name;

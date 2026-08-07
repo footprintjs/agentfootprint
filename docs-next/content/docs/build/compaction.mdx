@@ -31,8 +31,8 @@ A compacted run is still a provable run. The lens draws a fold seam, not a hole.
 | option | meaning |
 | --- | --- |
 | `thresholdTokens` | **Required.** Fold when the last call's adapter-reported input tokens exceed this. There is no default — the right budget depends on your model and your bill, and a number the library invented would be inherited silently by every run. |
-| `summarizer` | **Required.** The `LLMProvider` that writes the summary. Explicit on purpose: the library will not quietly bill your main model for compaction. |
-| `model` | Model id for the summarizer call. Defaults to the agent's own model; name a cheap one to spend less. |
+| `summarizer` | **Required.** The `LLMProvider` that writes the summary. Explicit on purpose: the library will not quietly bill your main model for compaction. This call is **not** wrapped by `reliability`, `withRetry`, `withFallback`, the circuit breaker or the cache — pass a separate instance, not the one you gave `Agent.create()`. |
+| `model` | **Required since 8.14.0.** Model id for the summarizer call — usually the cheap one. It used to default to the agent's own model, which billed the expensive model on the same-provider path and shipped an unknown model id to the vendor on the cross-provider one. |
 | `keepRecentTurns` | How many recent turns are never folded. Default `6`. |
 | `retain` | What happens to the messages a fold removes: `'conversation'` (default — they ride the conversation checkpoint and survive the process) or `'discard'`. See [Durable compaction](#durable-compaction-the-record-travels). |
 
@@ -106,7 +106,7 @@ Folds ride vocabulary you already subscribe to — no new event types were added
 <CodeFile path="examples/context-engineering/11-compaction.ts" region="observe" title="examples/context-engineering/11-compaction.ts (region: observe)" />
 
 - `agentfootprint.context.evicted` — one per folded message, with the **same `contentHash`** the messages slot used when it reported that piece as injected, and a real `survivalMs` (how long it lived in the window);
-- `agentfootprint.context.budget_pressure` — one per over-budget visit, `planAction: 'summarize'` when a fold happened and `'none'` when nothing could be folded.
+- `agentfootprint.context.budget_pressure` — one per over-budget visit, `planAction: 'summarize'` when a fold happened and `'none'` when nothing could be folded. Read **`unit`** before you read `cap` / `projected`: the three context slots emit this same event under the same `slot: 'messages'` counting **chars**, and this one counts **tokens**. (`capTokens` / `projectedTokens` are the historical names, still written with identical values and deprecated since 8.14.0.)
 
 ### The summarizer's call is billed, and counted
 
@@ -142,7 +142,13 @@ The summarizer throwing must not take down the run. It doesn't:
 - the record carries `refusals: [{ reason: 'summarizer-failed' }]`;
 - the window stays big — which is honest, and visible, rather than a silent truncation.
 
-A fold whose summary comes back **no smaller** than the span it would replace is abandoned the same way, under `summary-not-smaller`. Both sides of that comparison are measured in chars, so it is an exact comparison and not a token guess.
+A fold whose summary comes back **no smaller** than the span it would replace is abandoned the same way, under `replacement-not-smaller`. Both sides of that comparison are measured in chars, so it is an exact comparison and not a token guess.
+
+That refusal is **latched** (8.14.0). The same span through the same summarizer gives the same verdict, so it is asked once: later visits to a span that was already refused file their record with `summarizerSkipped: true`, no call and no cost tick. A span that has *grown* is asked about again — a bigger span makes the comparison less likely to fail, so a fold refused at four turns can genuinely succeed at six. A summarizer that *threw* is also asked again: an outage may end, a length comparison will not.
+
+<Callout type="info">
+`replacement-not-smaller` was called `summary-not-smaller` through 8.13.0. The drop strategies report the same reason and write no summary at all — `slidingWindow` and `tokenBudget` never call a summarizer — so the name was claiming one that did not exist. A runtime from 8.14.0 writes only the new string; the old one stays in the `WindowRefusalReason` union so existing narrowing still compiles.
+</Callout>
 
 ## Recovering what was folded
 

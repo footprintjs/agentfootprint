@@ -89,8 +89,17 @@ export interface EvictionRecord {
 /**
  * Budget-pressure warning — emitted before evictions fire.
  *
- * `capTokens` / `projectedTokens` are historical names: slot budgets are
- * measured in CHARS. Renaming them would be breaking, so they stay.
+ * `capTokens` / `projectedTokens` are historical names: on THIS channel the
+ * numbers are CHARS (`composeSlot` measures `String.length`). Renaming them
+ * would be breaking, so they stay and {@link unit} / {@link cap} /
+ * {@link projected} were added beside them in 8.14.0.
+ *
+ * The three new fields are OPTIONAL here, unlike on the event payload, because
+ * this record is written by slot builders — including any a consumer wrote —
+ * and a record from one of those still typechecks. `ContextRecorder` fills a
+ * missing `unit` with `'chars'`, which is not a guess: every write to
+ * `COMPOSITION_KEYS.BUDGET_PRESSURE` comes off a slot composition, and a slot
+ * composition is counted in characters by construction.
  *
  * `planAction: 'none'` means no mitigation was performed — nothing was
  * evicted or truncated and the full content still went to the LLM. It is
@@ -98,10 +107,19 @@ export interface EvictionRecord {
  */
 export interface BudgetPressureRecord {
   readonly slot: ContextSlot;
+  /** @deprecated Read {@link cap} with {@link unit}. Still written. */
   readonly capTokens: number;
+  /** @deprecated Read {@link projected} with {@link unit}. Still written. */
   readonly projectedTokens: number;
   readonly overflowBy: number;
   readonly planAction: 'evict' | 'summarize' | 'abort' | 'none';
+  /** What the numbers count. Absent on a record written before 8.14.0 (or by
+   *  a third-party slot builder) — the slot channel is `'chars'`. */
+  readonly unit?: 'chars' | 'tokens';
+  /** Same value as {@link capTokens}, under a name that asserts no unit. */
+  readonly cap?: number;
+  /** Same value as {@link projectedTokens}, under a name that asserts no unit. */
+  readonly projected?: number;
 }
 
 // Convention scope keys for composition / eviction / pressure signals.

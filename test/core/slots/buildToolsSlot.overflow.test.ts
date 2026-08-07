@@ -138,6 +138,13 @@ describe('buildToolsSlot — overflow loudness', () => {
       projectedTokens: used,
       overflowBy: used - 2000,
       planAction: 'none',
+      // 8.14.0 — the honest trio, written beside the two historical names.
+      // A slot counts CHARACTERS; a window strategy emits this same event
+      // name counting TOKENS, and `unit` is the only thing that tells a
+      // subscriber which one it is holding.
+      unit: 'chars',
+      cap: 2000,
+      projected: used,
     };
     expect(result.pressures).toEqual([expected]);
     expect(result.events).toEqual([expected]);
@@ -235,6 +242,9 @@ describe('slotOverflow', () => {
       projectedTokens: 101,
       overflowBy: 1,
       planAction: 'none',
+      unit: 'chars',
+      cap: 100,
+      projected: 101,
     });
   });
 });
