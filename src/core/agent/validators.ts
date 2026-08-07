@@ -143,14 +143,38 @@ export function validateToolNameUniqueness(
 }
 
 /**
+ * What a tool that returned nothing puts in the conversation.
+ *
+ * Self-describing on purpose: the model reads this string as the tool's
+ * result, and it has to be able to tell "this tool does not report a value"
+ * apart from "this tool returned the word undefined". `''` would say neither.
+ */
+export const NO_TOOL_VALUE = '(this tool returned no value)';
+
+/**
  * JSON.stringify with circular-ref protection. Tool results are untrusted —
  * a hostile/buggy tool returning a cyclic object must not crash the run.
  * Falls back to '[unstringifiable: <reason>]' so the LLM still sees that
  * the tool ran and produced something unusable.
+ *
+ * **Total, since 8.18.0.** `JSON.stringify` returns `undefined` — not a
+ * string — for `undefined`, a function and a symbol, so the old body's
+ * `: string` was a promise it could not keep. An `async execute()` that did
+ * its work and forgot to `return` produced a `role: 'tool'` message with
+ * `content: undefined`, which crashed the next turn's messages slot with an
+ * anonymous `TypeError` five frames inside the engine. A tool is allowed to
+ * do something and report nothing; the conversation just has to say so.
+ *
+ * The truth is unaffected: `agentfootprint.stream.tool_end` still carries
+ * the tool's REAL return value, `undefined` included.
  */
 export function safeStringify(value: unknown): string {
+  if (value === undefined) return NO_TOOL_VALUE;
   try {
-    return JSON.stringify(value);
+    const json = JSON.stringify(value);
+    // `undefined` again for a function or a symbol — describe it rather than
+    // hand the next stage a hole.
+    return json === undefined ? `[unserializable: ${typeof value}]` : json;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     return `[unstringifiable: ${reason}]`;

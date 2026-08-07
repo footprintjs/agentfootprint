@@ -7,6 +7,220 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.18.0] - 2026-08-07
+
+**Output contracts are loud, and a message is always a message.**
+
+Ten findings, one shape between them: this library accepted something it could
+not honour, and said nothing until the failure surfaced somewhere that could
+not explain it. Eight are the "output contracts" batch of the act/window audit.
+Two came out of clean-room probing of the published bytes, and one of those is
+the worst kind — a mistake that LOOKED like it worked.
+
+Six of these change what a run does; four refuse a configuration or an input
+that used to be accepted. All ten are below.
+
+### `agent.run('go')` — a bare string IS the message
+
+`AgentInput` has one required field, so a lone string has exactly one possible
+reading, and every chat SDK takes it. This library took it two different ways:
+
+- **`Agent.run('go')`** reached the messages slot as `content: undefined` and
+  threw `TypeError: Cannot read properties of undefined (reading 'length')`
+  from five frames inside the engine, naming nothing.
+- **`LLMCall.run('go')`** did **not** throw. It called the model with an
+  **empty conversation** and returned the answer, so the mistake was
+  indistinguishable from working code.
+
+A bare string is now adapted — `run('go')` ≡ `run({ message: 'go' })` — on
+`Agent`, `LLMCall`, `Sequence`, `Parallel`, `Conditional`, `Loop` and
+`LlmRouter`, through one shared door (`src/core/runInput.ts`). The `Runner`
+port and `RunnerBase` declare the union, so a custom runner shares it too.
+
+Everything that is **not** a message is refused before the run starts, with a
+typed `InvalidRunInputError` (`ERR_INVALID_RUN_INPUT`) naming the door and the
+shape that arrived — never the value, because a refused input is still the
+caller's data:
+
+```
+Agent.run: `message` must be a string — pass a message: run('your message')
+or run({ message: 'your message' }) (received an object with keys: text,
+whose `message` is undefined).
+```
+
+**Behaviour change:** an empty or whitespace-only message is refused. It is not
+a shorter question — `Agent` used to send a `content: ''` turn (which real
+provider wires reject) while `LLMCall` sent no turn at all, so the two runners
+disagreed about what it meant and neither answer was right. To run on the
+system prompt alone, say so in the message. Nothing is billed and no half-run
+has to be explained: the refusal happens before the executor is created.
+
+### A turn with no text never enters the conversation
+
+The `undefined` content above had six other ways in, all landing on the same
+line — `buildMessagesSlot` composing `truncate(m.content, 80)`. Each source now
+normalizes (one sane reading) or refuses teachingly (more than one). None of
+them was fixed at the crash line, because hiding it there would have hidden
+which source leaked.
+
+- **A tool that returns nothing** — `safeStringify` returned
+  `JSON.stringify(value)`, which is `undefined` for `undefined`, a function and
+  a symbol, while its signature promised `: string`. An `async execute()` that
+  did its work and forgot to `return` killed the run one turn later. It is now
+  total: a value-less return becomes the self-describing
+  `(this tool returned no value)` — not `''`, because the model has to be able
+  to tell "no value" from "the empty answer". `stream.tool_end` still carries
+  the real return value, `undefined` included.
+- **A human-answer pause resumed with nothing** — `agent.resume(checkpoint)`
+  after `askHuman()` / `pauseHere()` now raises `PauseAnswerRequiredError`
+  (`ERR_PAUSE_ANSWER_REQUIRED`), naming the tool and both spellings
+  (`resume(cp, 'the answer')` vs `resume(cp, '(no answer)')`). That pause
+  exists to collect a value and the value becomes the tool's result, so "no
+  answer" and "carry on" are two different conversations. Nothing runs before
+  it raises and the checkpoint is unchanged.
+- **A middleware that rewrites a message to something that is not text** —
+  denied, naming the middleware, per this file's own law that a middleware
+  which throws is a denial and never a pass. It used to be assigned, producing
+  `s.slice is not a function` at the input phase and an unattributed
+  "unexpected result shape" at the output phase.
+- **A declared `slot: 'messages'` injection with missing or empty content** —
+  refused at the declaration funnel, beside the existing role refusal. Two
+  contentless declarations also collided on the delivery ledger's key, so one
+  was silently swallowed.
+- **A restored checkpoint carrying a hole** — `validateCheckpoint` checked
+  `Array.isArray(history)` and never looked inside, one field away from
+  `originalInput.message`, which has been string-checked since it was written.
+  It now checks every turn, at the door a persisted artifact comes in.
+- **The slot itself** is the net, and it does not coerce: a message that gets
+  through anyway is named — position, role, and where it came from (an
+  injection, a tool call, the run input, the history).
+
+### A middleware `ask` at the message boundary was silently an ALLOW
+
+`MessageOutcome` has no `ask` arm, so TypeScript refuses it at the call site.
+A JS consumer, an `as any`, or a link written for the tool chain and reused
+here reached the runtime — where the ask fell straight through the value test
+and filed an **allow** row. A rule that believed it had paused for a person had
+approved the message, and the ledger agreed with the rule.
+
+It is now a denial naming the middleware, which is the answer
+`askPolicy: 'refuse'` already gave the tool chain wherever no pause exists to
+carry an ask. Ask at a tool moment, where a pause exists, or decide with
+`allow()` / `deny()`.
+
+### A malformed provider stream chunk says which provider, and what the contract is
+
+`LLMProvider` is a port anyone can implement. A non-terminal chunk with no
+`content` died on `chunk.content.length` as
+`Cannot read properties of undefined (reading 'length')`, naming neither the
+provider nor the shape it missed. The commonest way to get there is ending the
+stream with a marker of one's own instead of `done: true` — so the refusal says
+what the terminal chunk looks like.
+
+### `.outputSchema(parser)` now JUDGES by default
+
+`retries: 0` — the default, and the whole of what `.outputSchema(parser)` means
+on its own — used to mount nothing in the loop. The chart was byte-identical to
+an agent with no contract at all: no judging, no `outputAttempts` row, no
+event. A `run()` caller received a contract-violating string with nothing
+anywhere saying that a contract had been declared, let alone missed.
+
+`retries: 0` now means **judge, do not re-ask**. No retry branch is mounted, no
+extra turn is spent, no extra token is billed — the request bytes are
+unchanged. What changes is that the run knows, and says.
+
+### The run says when the contract is not met
+
+Three channels, the same three a limit that cuts a turn short uses, because
+before this there were none:
+
+1. **`agent.outputContractUnmet()`** — committed state carrying the stage, the
+   validator's own words, the attempts, the re-asks that were billed, whether a
+   fallback is configured, and `brokenBy`. `undefined` when the answer passed.
+2. **`agentfootprint.agent.output_contract_unmet`** — one new typed event
+   (73 across 20 domains now). A rise in `'json-parse'` is a model that stopped
+   honouring the instruction; a rise in `'schema-validate'` is drift.
+3. **One `console.warn`**, naming what to do next.
+
+`run()` still returns the raw answer and `runTyped()` still throws
+`OutputSchemaError`. Neither changed: a caller who wants a raise asks for one,
+and a caller who does not should still be able to find out.
+
+### An output rule that breaks a good answer is named, and stops the re-asking
+
+**Behaviour change.** An `act({ output })` middleware runs before the schema is
+judged — correctly, because the string it produces is the one the caller
+receives. But a rule that rewrites a valid answer into an invalid one used to
+burn **every** retry chasing its own damage: the model answered correctly, the
+rule broke it, the run paid for another turn, and the model answered correctly
+again. The ledger read `[retried, retried, exhausted]` with the validator
+complaining about text the model never wrote.
+
+The run now judges the pre-chain answer too, but only when a link actually
+changed something. If the model's answer passed and the rewrite is what failed,
+the run stops re-asking and names the rule — in the `outputAttempts` row
+(`brokenBy`), in the event, in `outputContractUnmet()`, and in the warning.
+Re-asking cannot fix a rule: a deterministic one breaks the next answer
+identically, so the retries buy a repeat of the same ending. An answer that was
+*already* bad still spends its retries — the stop applies only when the
+middleware is the cause.
+
+### `.outputFallback()` says which door reaches its tiers
+
+The tiers produce a typed `T`, so `runTyped()` and `parseOutputAsync()` engage
+them and **`run()` cannot** — substituting a fallback into a string return
+would hand a caller a different answer than the model gave, invisibly. An agent
+consumed through `run()` (a server route, a queue worker, `standingAgent`)
+therefore gets no fallback, and nothing used to say so. The unmet-contract
+warning and event now carry `fallbackConfigured`.
+
+With `canned` set, `runTyped()` is **structurally unable to throw** — which is
+the point of a safety net, and also why N billed re-asks ending in a static
+object could not be observed at all.
+`agentfootprint.resilience.output_canned_used` now carries `retriesSpent`, and
+one warning fires when the canned value lands after re-asks that were paid for.
+
+### `.outputFallback()` is checked at `.build()`, in either order
+
+The requirement is set MEMBERSHIP — a fallback is degradation for a contract,
+so an agent with one and not the other is incoherent. Order was never the
+requirement, but the refusal was on order: `.outputFallback().outputSchema()`
+threw while `.outputSchema().outputFallback()` was fine, and both end with the
+same agent. The coherence check and the `canned` validation now run at
+`.build()`, where the parser is guaranteed to exist. Same fail-fast guarantee,
+one moment later, and the two lines can be written in whichever order reads
+better.
+
+### "Already set" names the door that set it
+
+`.window()`, `.compaction()` and `.act({ window })` are three doors into one
+setting, and how much you were told depended on which direction you approached
+from: `.window()` named the strategy and then talked about `.compaction()` even
+when `.act({ window })` had set it, while `.act()` said "set by .window() or
+.compaction()" — an `or` that was sometimes neither. The door is now recorded
+where it becomes true and named in all three refusals, in every direction.
+
+### Compatibility
+
+- **New:** `run(string)` on every runner; `InvalidRunInputError`,
+  `PauseAnswerRequiredError`, `agent.outputContractUnmet()`,
+  `agentfootprint.agent.output_contract_unmet`, `OutputAttempt.brokenBy`,
+  `retriesSpent` on the two fallback events.
+- **Refused where it used to be accepted:** an empty/whitespace-only message; a
+  non-message `run()` input (these crashed or silently mis-ran before); a
+  resume with no answer on a human-answer pause (crashed before); a middleware
+  `ask` or non-text `allow` at the message boundary; a contentless declared
+  message injection; a checkpoint whose history carries a turn without text; a
+  malformed provider stream chunk (crashed before).
+- **Moved, not changed:** `.outputFallback()` coherence and `canned` validation
+  from the call site to `.build()`.
+- **Changed on a working path:** `.outputSchema(parser)` with default options
+  now judges the answer, may warn, and may write `outputAttempts` /
+  `outputContractUnmet`. The answer, the request bytes, the chart shape, the
+  turn count and the bill are unchanged. And an output rule that breaks a
+  passing answer no longer spends the run's retries.
+- No renames, no removals, no signature narrowings.
+
 ## [8.17.0] - 2026-08-07
 
 **The record goes through the tool boundary.**

@@ -72,6 +72,7 @@ import {
   type ResolvedCostBudget,
 } from './cost.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
+import { normalizeRunInput } from './runInput.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
@@ -276,13 +277,18 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   }
 
   async run(
-    input: LLMCallInput,
+    input: LLMCallInput | string,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
+    // Normalize or refuse first. Before 8.18.0 a bare string reached here as
+    // `input.message === undefined`, the messages slot composed ZERO messages
+    // from it, and the model was called with an empty conversation — an
+    // answer to nothing, returned as though the call had worked.
+    const runInput = normalizeRunInput<LLMCallInput>(input, 'LLMCall.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     const result = await executor.run({
-      input: { message: input.message },
+      input: { message: runInput.message },
       ...(options ?? {}),
     });
     return this.finalizeResult(executor, result);

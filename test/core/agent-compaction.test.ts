@@ -190,13 +190,15 @@ describe('.compaction() — unit', () => {
       summarizer: mock({ reply: 's' }),
       model: 'summarizer-model',
     });
-    expect(() =>
-      builder.compaction({
-        thresholdTokens: 20,
-        summarizer: mock({ reply: 's' }),
-        model: 'summarizer-model',
-      }),
-    ).toThrow(/already set/);
+    expect(
+      () =>
+        builder.compaction({
+          thresholdTokens: 20,
+          summarizer: mock({ reply: 's' }),
+          model: 'summarizer-model',
+        }),
+      // 8.18.0: names the door that set it — `.compaction()` here.
+    ).toThrow(/already has a window strategy \('summarize-oldest'\), set by \.compaction\(\)/);
   });
 
   it('refuses a missing or non-positive thresholdTokens, and offers no default', () => {

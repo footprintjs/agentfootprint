@@ -149,35 +149,52 @@ describe('outputFallback — P4 property', () => {
 // ─── P5 Security — builder-time canned validation ────────────────────
 
 describe('outputFallback — P5 security', () => {
-  it('P5 canned that fails schema throws TypeError at builder time (fail-fast)', () => {
+  it('P5 canned that fails schema throws TypeError at build() (fail-fast)', () => {
+    // 8.18.0: the check moved from the `.outputFallback()` call to `.build()`,
+    // because validating `canned` needs the parser and the parser is a fact
+    // about the finished agent, not about where the line was written. Same
+    // error, same fail-fast guarantee — one moment later, and now order-free.
     const builder = Agent.create({
       provider: mock({ replies: [{ content: '' }] }),
       model: 'mock',
     })
       .system('s')
-      .outputSchema(Refund);
-
-    expect(() =>
-      builder.outputFallback({
+      .outputSchema(Refund)
+      .outputFallback({
         fallback: () => ({ amount: 0, reason: 'x' }),
         // Negative amount — violates `nonnegative()`.
         canned: { amount: -1, reason: 'x' } as unknown as Refund,
-      }),
-    ).toThrow(TypeError);
+      });
+
+    expect(() => builder.build()).toThrow(TypeError);
   });
 
-  it('P5 outputFallback() before outputSchema() throws (incoherent config)', () => {
-    const builder = Agent.create({
+  it('P5 outputFallback() with NO outputSchema is refused at build() — but ORDER is free', () => {
+    // The requirement is set membership, not order: an agent with a fallback
+    // and no contract is incoherent, and an agent with both is fine however
+    // the two lines were written. Before 8.18.0 the second one below threw,
+    // which made a builder whose lines could not be reordered.
+    const noSchema = Agent.create({
       provider: mock({ replies: [{ content: '' }] }),
       model: 'mock',
-    }).system('s');
-
-    expect(() =>
-      builder.outputFallback({
+    })
+      .system('s')
+      .outputFallback({
         fallback: () => ({ amount: 0, reason: 'x' }),
         canned: { amount: 0, reason: 'x' },
-      }),
-    ).toThrow(/outputSchema/);
+      });
+    expect(() => noSchema.build()).toThrow(/outputSchema/);
+
+    expect(() =>
+      Agent.create({ provider: mock({ replies: [{ content: '' }] }), model: 'mock' })
+        .system('s')
+        .outputFallback({
+          fallback: () => ({ amount: 0, reason: 'x' }),
+          canned: { amount: 0, reason: 'x' },
+        })
+        .outputSchema(Refund)
+        .build(),
+    ).not.toThrow();
   });
 
   it('P5 calling outputFallback() twice throws (avoid silent override)', () => {

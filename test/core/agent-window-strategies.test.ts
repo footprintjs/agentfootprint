@@ -194,7 +194,7 @@ describe('.window() — unit', () => {
       base()
         .window(slidingWindow({ keepRecentTurns: 4 }))
         .window(tokenBudget({ thresholdTokens: 10 })),
-    ).toThrow(/AgentBuilder\.window: already set \('sliding-window'\)/);
+    ).toThrow(/AgentBuilder\.window: .*\('sliding-window'\), set by \.window\(\)/);
 
     expect(() =>
       base()
@@ -204,7 +204,7 @@ describe('.window() — unit', () => {
           summarizer: mock({ reply: 's' }),
           model: 'summarizer-model',
         }),
-    ).toThrow(/AgentBuilder\.compaction: already set/);
+    ).toThrow(/AgentBuilder\.compaction: .*\('sliding-window'\), set by \.window\(\)/);
 
     expect(() =>
       base()
@@ -214,7 +214,7 @@ describe('.window() — unit', () => {
           model: 'summarizer-model',
         })
         .window(slidingWindow({ keepRecentTurns: 4 })),
-    ).toThrow(/AgentBuilder\.window: already set \('summarize-oldest'\)/);
+    ).toThrow(/AgentBuilder\.window: .*\('summarize-oldest'\), set by \.compaction\(\)/);
   });
 
   it('refuses anything that is not a strategy — including an uncalled factory', () => {

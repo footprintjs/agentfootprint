@@ -542,6 +542,38 @@ export interface AgentState {
     readonly error: string;
     readonly path?: string;
   };
+  /**
+   * The answer this run hands back does NOT satisfy the output contract (8.18.0).
+   *
+   * Written by the Route decider on the one occasion the schema was judged and
+   * the answer failed with no re-ask left — including the `retries: 0` case,
+   * where there was never a re-ask to spend. Absent on every run whose answer
+   * passed, and on every agent with no `.outputSchema()`.
+   *
+   * Committed rather than returned for the reason `stoppedEarly` is: `run()`
+   * returns a bare string and has nowhere to carry the fact, and the fact is
+   * not an error the library gets to raise on its own — `runTyped()` raising is
+   * the caller ASKING to be raised at. So it goes in the commit log, where it
+   * is provable after the run. Read it with `agent.outputContractUnmet()`.
+   */
+  outputContractUnmet?: {
+    /** Which half of validation failed. */
+    readonly stage: 'json-parse' | 'schema-validate';
+    /** The validator's own message, verbatim. DATA, not narrative. */
+    readonly error: string;
+    /** Failing field path when the parser exposes one (Zod-style issues). */
+    readonly path?: string;
+    /** Answers actually judged, first one included. `1` under `retries: 0`. */
+    readonly attempts: number;
+    /** Corrective re-asks the run paid for. `0` under `retries: 0`. */
+    readonly retriesSpent: number;
+    /** True when `.outputFallback()` is configured — in which case a tier
+     *  exists that `run()` never reaches and `runTyped()` does. */
+    readonly fallbackConfigured: boolean;
+    /** Set when an `act({ output })` middleware's own rewrite broke an answer
+     *  that HAD satisfied the schema — the name of that middleware. */
+    readonly brokenBy?: string;
+  };
   /** Set by the seed / prepare-final stage when a `messageMiddleware` returned
    *  `deny`. Read at the API boundary, where it becomes a `MessageDeniedError`.
    *  Never carries the refused content — see MessageDeniedError. */

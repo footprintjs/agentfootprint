@@ -68,7 +68,10 @@ import { pendingDurableWrite } from './durabilityBarrier.js';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
-import { messagesRoleRefusal } from '../lib/injection-engine/messagesSlotRefusal.js';
+import {
+  messagesContentRefusal,
+  messagesRoleRefusal,
+} from '../lib/injection-engine/messagesSlotRefusal.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
@@ -103,6 +106,7 @@ import {
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
+import { normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
@@ -787,8 +791,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.outputFallbackCfg as ResolvedOutputFallback<T>,
         emit,
         err,
+        this.lastRunRetriesSpent(),
       );
     }
+  }
+
+  /**
+   * Corrective re-asks the agent's LAST run paid for, read off its own ledger.
+   *
+   * `undefined` when there is no last run to read — `parseOutputAsync` accepts
+   * any string, including one that never came from this agent, and reporting
+   * `0` for "I do not know" would be an invented fact in an event payload.
+   */
+  private lastRunRetriesSpent(): number | undefined {
+    const state = this.getLastSnapshot()?.sharedState as
+      | Pick<AgentState, 'outputAttempts'>
+      | undefined;
+    if (state === undefined) return undefined;
+    return Math.max(0, (state.outputAttempts?.length ?? 1) - 1);
   }
 
   /**
@@ -802,7 +822,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
    */
-  async runTyped<T = unknown>(input: AgentInput, options?: AgentRunOptions): Promise<T> {
+  async runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
     if (!this.outputSchemaParser) {
       throw new Error(
         `Agent.runTyped: this agent has no outputSchema. Use ` +
@@ -820,9 +840,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   async run(
-    input: AgentInput,
+    input: AgentInput | string,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    // Normalize or refuse BEFORE anything is created. A bare string is the
+    // message; anything that is not a message is named and refused here
+    // rather than becoming `content: undefined` inside the messages slot.
+    const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
     const executor = this.createExecutor(options);
@@ -834,7 +858,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // continue from the last good iteration.
     const tracker: RunCheckpointTracker = {
       runId: this.currentRunContext?.runId ?? 'unknown',
-      originalInput: { message: input.message },
+      originalInput: { message: runInput.message },
       history: [],
       lastCompletedIteration: 0,
     };
@@ -850,8 +874,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     try {
       const result = await executor.run({
         input: {
-          message: input.message,
-          ...(input.identity !== undefined && { identity: input.identity }),
+          message: runInput.message,
+          ...(runInput.identity !== undefined && { identity: runInput.identity }),
         },
         // Co-engineered boundary (#16): the engine's loop-iteration limit
         // (footprintjs 9 default 1000) must never fire BELOW the agent's own
@@ -1272,6 +1296,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             }),
           );
         }
+        // Content, judged at the same funnel as role (8.18.0). The named
+        // factories refuse empty content; a hand-built Injection reached the
+        // delivery stage unchecked and put a contentless turn on the wire.
+        const content = msg.content as unknown;
+        if (typeof content !== 'string' || content.trim() === '') {
+          throw new Error(
+            messagesContentRefusal({
+              site: `Agent injection '${inj.id}'`,
+              role: msg.role,
+              received:
+                typeof content !== 'string'
+                  ? content === undefined
+                    ? 'missing'
+                    : `a ${content === null ? 'null' : typeof content}`
+                  : 'empty',
+            }),
+          );
+        }
       }
     }
   }
@@ -1527,6 +1569,46 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       | Pick<AgentState, 'stoppedEarly'>
       | undefined;
     return state?.stoppedEarly;
+  }
+
+  /**
+   * Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
+   *
+   * `undefined` when the answer satisfied the contract, and on any agent with
+   * no `.outputSchema()`. Set on every run whose final answer was judged and
+   * rejected, including the default `retries: 0` case where the first answer is
+   * the only one there was.
+   *
+   * ## Why a method, when `runTyped()` already throws
+   *
+   * Because `run()` does not, and `run()` is what a server, a queue worker and
+   * `standingAgent` call. Before this existed, that caller received a string
+   * that violated a contract they had declared, with nothing anywhere saying
+   * so: the retries were billed, the ledger row was written under `retries > 0`
+   * and absent under `retries: 0`, and the answer looked exactly like a good
+   * one. `runTyped()` still throws `OutputSchemaError` — that is the caller
+   * ASKING to be raised at, and it is unchanged.
+   *
+   * `brokenBy` is the case worth a dashboard: the model's answer PASSED and one
+   * of your own `act({ output })` rules rewrote it into one that fails. The run
+   * stops re-asking when that happens — a deterministic rule breaks the next
+   * answer identically, so the retries would be bought for nothing.
+   *
+   * @example
+   * ```ts
+   * const answer = await agent.run({ message: 'summarise ticket 91' });
+   * const unmet = agent.outputContractUnmet();
+   * if (unmet) {
+   *   log.warn({ stage: unmet.stage, error: unmet.error, brokenBy: unmet.brokenBy });
+   *   return safeDefault;               // …rather than shipping `answer` as typed data
+   * }
+   * ```
+   */
+  outputContractUnmet(): AgentState['outputContractUnmet'] {
+    const state = this.getLastSnapshot()?.sharedState as
+      | Pick<AgentState, 'outputContractUnmet'>
+      | undefined;
+    return state?.outputContractUnmet;
   }
 
   private finalizeResult(

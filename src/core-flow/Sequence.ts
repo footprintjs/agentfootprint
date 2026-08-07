@@ -23,6 +23,7 @@ import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/transl
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { normalizeRunInput } from '../core/runInput.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -152,13 +153,14 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
   }
 
   async run(
-    input: SequenceInput,
+    input: SequenceInput | string,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
+    const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     const result = await executor.run({
-      input: { message: input.message },
+      input: { message: runInput.message },
       ...(options ?? {}),
     });
     return this.finalizeResult(executor, result);

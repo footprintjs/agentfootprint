@@ -152,11 +152,25 @@ describe('security — Parallel: branch failure', () => {
 });
 
 describe('security — empty / edge input', () => {
-  it('Conditional handles empty message message against predicates gracefully', async () => {
+  it('Conditional refuses an empty message before any predicate is asked (8.18.0)', async () => {
+    // A predicate answering a question nobody asked is not graceful handling —
+    // it is a branch chosen from nothing. The refusal happens at the runner's
+    // door, so no predicate runs and no child is entered.
+    let asked = 0;
     const cond = Conditional.create()
-      .when('never', (i) => i.message.length > 1_000_000, llm('never'))
+      .when(
+        'never',
+        (i) => {
+          asked += 1;
+          return i.message.length > 1_000_000;
+        },
+        llm('never'),
+      )
       .otherwise('ok', llm('ok'))
       .build();
-    expect(await cond.run({ message: '' })).toBe('ok');
+    await expect(cond.run({ message: '' })).rejects.toThrow(/a run needs something to answer/);
+    expect(asked).toBe(0);
+    // A real message still routes exactly as before.
+    expect(await cond.run({ message: 'hello' })).toBe('ok');
   });
 });

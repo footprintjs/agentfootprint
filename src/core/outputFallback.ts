@@ -164,26 +164,32 @@ export async function applyOutputFallback<T>(
   fallbackCfg: ResolvedOutputFallback<T>,
   emit: (eventType: string, payload: Record<string, unknown>) => void,
   primaryError: OutputSchemaError,
+  /** Corrective re-asks the run paid for before the answer reached here — the
+   *  `outputAttempts` ledger, minus the first attempt. `0` when the agent had
+   *  no retries, and `undefined` when the caller parsed a string that did not
+   *  come from this agent's last run. */
+  retriesSpent?: number,
 ): Promise<T> {
   // Tier 2 — fallback function.
   emit('agentfootprint.resilience.output_fallback_triggered', {
     stage: primaryError.stage,
     rawOutputPreview: raw.slice(0, 200),
     primaryErrorMessage: primaryError.message,
+    ...(retriesSpent !== undefined && { retriesSpent }),
   });
 
   let tier2Value: unknown;
   try {
     tier2Value = await fallbackCfg.fallback(primaryError, raw);
   } catch (fallbackError) {
-    return cannedOrRethrow(parser, fallbackCfg, emit, fallbackError, raw);
+    return cannedOrRethrow(parser, fallbackCfg, emit, fallbackError, raw, retriesSpent);
   }
 
   // Validate tier 2's output against the schema.
   try {
     return parser.parse(tier2Value);
   } catch (validationError) {
-    return cannedOrRethrow(parser, fallbackCfg, emit, validationError, raw);
+    return cannedOrRethrow(parser, fallbackCfg, emit, validationError, raw, retriesSpent);
   }
 }
 
@@ -193,6 +199,7 @@ function cannedOrRethrow<T>(
   emit: (eventType: string, payload: Record<string, unknown>) => void,
   failureCause: unknown,
   raw: string,
+  retriesSpent?: number,
 ): T {
   if (!fallbackCfg.hasCanned) {
     // No safety net — propagate. Consumer chose fail-closed by
@@ -204,7 +211,23 @@ function cannedOrRethrow<T>(
     rawOutputPreview: raw.slice(0, 200),
     fallbackErrorMessage:
       failureCause instanceof Error ? failureCause.message : String(failureCause),
+    ...(retriesSpent !== undefined && { retriesSpent }),
   });
+  // The combination that cannot fail and cannot be free (8.18.0): with a
+  // `canned` value present, `runTyped()` is structurally unable to throw — so
+  // the ONLY way to learn that N corrective re-asks were billed and ended in a
+  // static object is to be told. Warned rather than raised, because the whole
+  // point of a safety net is that it holds.
+  if (retriesSpent !== undefined && retriesSpent > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[agentfootprint] the canned outputFallback value was returned after ${retriesSpent} ` +
+        `corrective re-ask(s) that were billed, and the fallback function failed too. ` +
+        `runTyped() cannot throw while \`canned\` is set, so nothing else would have said ` +
+        `so: read agent.outputContractUnmet() for the validator's own words, and treat a ` +
+        `rising rate here as a schema the model has stopped hitting.`,
+    );
+  }
   // Re-validate canned defensively. Builder-time validation already
   // ran, but if a consumer mutates the canned object after build,
   // we'd rather throw than corrupt the contract.

@@ -430,11 +430,14 @@ describe('act — integration', () => {
         .act({ window: slidingWindow({ keepRecentTurns: 8 }) }),
     ).toThrow(/already has a window strategy/);
 
-    expect(() =>
-      Agent.create({ provider: mock({ reply: 'x' }), model: 'm' })
-        .act({ window: slidingWindow({ keepRecentTurns: 8 }) })
-        .compaction({ thresholdTokens: 100, summarizer: mock({ reply: 's' }), model: 'm' }),
-    ).toThrow(/already set/);
+    expect(
+      () =>
+        Agent.create({ provider: mock({ reply: 'x' }), model: 'm' })
+          .act({ window: slidingWindow({ keepRecentTurns: 8 }) })
+          .compaction({ thresholdTokens: 100, summarizer: mock({ reply: 's' }), model: 'm' }),
+      // 8.18.0: the refusal names the DOOR that set it, in every direction —
+      // here `.act({ window })`, which the old message never mentioned.
+    ).toThrow(/already has a window strategy \('sliding-window'\), set by \.act\(\{ window \}\)/);
   });
 });
 

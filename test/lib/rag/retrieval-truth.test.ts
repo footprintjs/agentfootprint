@@ -193,10 +193,32 @@ describe('retrieval — boundary', () => {
     expect(r.evidence?.rejectedCount).toBe(0);
   });
 
-  it('an empty query never searches, and says so without claiming the corpus is empty', async () => {
-    const r = await runAgainstCorpus({ message: '   ' });
-    expect(r.evidence?.consideredCount).toBe(0);
-    expect(r.evidence?.corpusEmpty).toBe(false);
+  it('a blank query never reaches retrieval — the run is refused at the door (8.18.0)', async () => {
+    // Until 8.18.0 a blank message ran, and the pin here was on the guard
+    // INSIDE retrieval: `consideredCount: 0` with `corpusEmpty: false`, because
+    // a corpus that was never asked cannot be reported empty. That guard is
+    // unchanged and still the law for every other query source. What changed is
+    // that this particular route to it no longer exists: a run cannot start
+    // with nothing to answer, so nothing downstream has to decide what a blank
+    // question means.
+    const store = await seededStore();
+    const searches: string[] = [];
+    const spied = new Proxy(store, {
+      get(target, prop, receiver) {
+        if (prop === 'search') {
+          return async (...args: unknown[]) => {
+            searches.push('search');
+            return (target.search as (...a: unknown[]) => unknown)(...args) as never;
+          };
+        }
+        return Reflect.get(target, prop, receiver) as unknown;
+      },
+    }) as InMemoryStore;
+
+    await expect(runAgainstCorpus({ store: spied, message: '   ' })).rejects.toThrow(
+      /a run needs something to answer/,
+    );
+    expect(searches).toEqual([]);
   });
 });
 

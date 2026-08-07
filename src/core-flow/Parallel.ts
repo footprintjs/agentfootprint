@@ -27,6 +27,7 @@ import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { normalizeRunInput } from '../core/runInput.js';
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -318,15 +319,16 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   }
 
   async run(
-    input: ParallelInput,
+    input: ParallelInput | string,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
+    const runInput = normalizeRunInput<ParallelInput>(input, 'Parallel.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     let result: unknown;
     try {
       result = await executor.run({
-        input: { message: input.message },
+        input: { message: runInput.message },
         ...(options ?? {}),
       });
     } catch (err) {

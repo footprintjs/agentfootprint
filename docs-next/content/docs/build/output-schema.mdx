@@ -106,7 +106,9 @@ const refund = await agent.runTyped({ message: '...' });
 
 - The three tiers: **primary** (LLM emitted schema-valid JSON), **fallback** (`fallback(err, raw)` runs, its return re-validated), **canned** (static value, guaranteed valid because it's checked at builder time).
 - `outputFallback` only engages through the ASYNC path — `runTyped()` and `parseOutputAsync()`. The sync `parseOutput()` always throws on failure (back-compat).
-- Calling `.outputFallback()` without `.outputSchema()` first throws — the fallback has nothing to validate.
+- **`run()` does not reach the tiers, and cannot.** They produce a typed `T`; `run()` resolves to the raw answer string, and substituting a fallback there would hand the caller a different answer than the model gave, invisibly. So an agent consumed through `run()` — a server route, a queue worker, `standingAgent` — gets no fallback. Since 8.18.0 it is told: the unmet-contract warning and `agentfootprint.agent.output_contract_unmet` both carry `fallbackConfigured: true`, which reads as "a safety net exists and this caller is not standing under it".
+- With `canned` set, `runTyped()` is **structurally unable to throw**. That is the point of a safety net, and it is also why `agentfootprint.resilience.output_canned_used` carries `retriesSpent` and warns when the canned value lands after re-asks that were billed — otherwise nothing would report that spend.
+- An agent with a fallback and no `.outputSchema()` is refused at `.build()`. The requirement is set membership, not call order: write the two lines in whichever order reads better.
 
 For re-prompting the model on a validation failure *within the same turn* (the Instructor pattern) rather than substituting a fallback value, see the [Strict output guide](doc:strict-output).
 
@@ -175,9 +177,54 @@ Each row is an `OutputAttempt`, exported from the main barrel so a dashboard or 
 
 ### When the cap is spent
 
-Nothing changes. The last answer stands, `runTyped()` throws `OutputSchemaError` exactly as it always did, and `.outputFallback()` still gets its turn on top. `{ retries }` is a chance to fix the answer, never a change to what happens when it cannot be fixed.
+The last answer stands, `runTyped()` throws `OutputSchemaError` exactly as it always did, and `.outputFallback()` still gets its turn on top. `{ retries }` is a chance to fix the answer, never a change to what happens when it cannot be fixed.
 
-The default is `retries: 0`, and an agent that does not ask for retries is byte-identical to one built before the option existed: no branch in the chart, no key in the commit log, no event.
+What DID change in 8.18.0 is that the run says so — see [The run says when the contract is not met](#the-run-says-when-the-contract-is-not-met) below.
+
+The default is `retries: 0`, which means **judge, do not re-ask**: no retry branch in the chart, no extra turn, no extra token. It does not mean "do not judge". Through 8.17.0 it did, and a `.outputSchema(parser)` agent whose answer broke the contract left no trace of it anywhere.
+
+## The run says when the contract is not met
+
+An agent that declares a shape and hands back something else is the failure this feature exists to prevent, so it is reported on three channels — the same three a limit that cuts a turn short uses:
+
+```ts
+const answer = await agent.run({ message: 'summarise ticket 91' });
+
+const unmet = agent.outputContractUnmet();
+if (unmet) {
+  log.warn({
+    stage: unmet.stage,          // 'json-parse' | 'schema-validate'
+    error: unmet.error,          // the validator's own words
+    attempts: unmet.attempts,    // answers judged, first included
+    retriesSpent: unmet.retriesSpent,
+    brokenBy: unmet.brokenBy,    // an output rule of yours, when it was one
+  });
+  return safeDefault;            // …rather than shipping `answer` as typed data
+}
+```
+
+1. **`agent.outputContractUnmet()`** — committed state, so the fact is provable after the run rather than only observable during it. `undefined` when the answer passed, and on any agent with no `.outputSchema()`.
+2. **`agentfootprint.agent.output_contract_unmet`** — one typed event per failing run. Alert on it: a rise in `'json-parse'` is a model that stopped honouring the instruction, a rise in `'schema-validate'` is drift against the shape.
+3. **One `console.warn`**, naming what to do next — the re-ask that was never configured, the re-asks that were billed, or the rule that broke a good answer.
+
+`run()` still returns the raw answer, and `runTyped()` still throws. Neither changed: a caller who wants a raise asks for one, and a caller who does not should still be able to find out.
+
+### When one of YOUR rules breaks the answer
+
+An `act({ output })` middleware runs before the schema is judged — deliberately, because the string it produces is the one the caller receives. That means a rule that rewrites a valid answer into an invalid one used to burn **every** retry chasing its own damage: the model answered correctly, the rule broke it, the loop paid for another turn, and the model answered correctly again.
+
+Since 8.18.0 the run judges the pre-chain answer too when a rule changed something. If the model's answer passed and the rewrite is what failed, the run stops re-asking and names the rule — in the `outputAttempts` row (`brokenBy`), in the event, in `outputContractUnmet()`, and in the warning. Re-asking cannot fix a rule.
+
+## Two ways a run with a contract can end
+
+A `catch` block that only knows `OutputSchemaError` will miss one of them:
+
+| Error | When |
+|---|---|
+| `OutputSchemaError` | the answer failed JSON parsing or schema validation |
+| `MessageDeniedError` | an `act({ output })` rule **denied** the answer — it was withheld on purpose |
+
+A denied answer is never judged and never re-asked. It was withheld by a rule your app wrote, and asking the model for a better-shaped version of a string nobody is allowed to see would be the library routing around that rule.
 
 ## Constraining the shape at the source: `strategy: 'tool-forced'`
 

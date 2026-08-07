@@ -25,13 +25,29 @@ Each iteration: the LLM produces text + optional tool calls. If tools were calle
 
 The framework owns the iteration loop. You declare what tools the agent has; the LLM decides when (and with what args) to call them; the framework dispatches and feeds results back.
 
+## What `run()` takes
+
+A message, in either spelling:
+
+```ts
+await agent.run('what is the weather in Paris?');            // a bare string IS the message
+await agent.run({ message: 'what is the weather in Paris?' }); // identical, byte for byte
+await agent.run({ message: '…', identity: { tenant: 'globex', conversationId: 'c2' } });
+```
+
+Anything that is not a message is refused **before the run starts**, with an `InvalidRunInputError` naming the door and what arrived — `{}`, `{ message: 42 }`, `null`, and an empty or whitespace-only message. Nothing is billed and no half-run has to be explained.
+
+An empty message is refused rather than sent: it is not a shorter question, it reaches a provider as a turn with no content, and real wires reject it. To run on the system prompt alone, say so in the message (`run({ message: 'begin' })`).
+
+The same rule holds for `LLMCall`, `Sequence`, `Parallel`, `Conditional` and `Loop` — one door, one answer.
+
 ## Observe the loop
 
 Because the framework owns the loop, observability is just attaching listeners — no SDK, no agent-instrumentation wrapper:
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-72 typed events fire across 20 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
+73 typed events fire across 20 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
 
 ## maxIterations
 

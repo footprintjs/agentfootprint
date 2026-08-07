@@ -232,6 +232,44 @@ export class DecisionRequiredError extends Error {
   }
 }
 
+/**
+ * Raised when an `askHuman()` / `pauseHere()` pause is resumed with NO answer.
+ *
+ * That pause exists to collect a value, and the value it collects becomes the
+ * paused tool's result — the model reads it as what the tool said. Resuming
+ * with nothing has two live readings, "the person gave no answer" and "just
+ * carry on", and they produce different conversations. So the caller says
+ * which; the library does not choose.
+ *
+ * Until 8.18.0 it chose, and chose invisibly: the missing answer became a
+ * `role: 'tool'` message with `content: undefined`, and the run died on the
+ * next turn inside the messages slot with a `TypeError` that named neither the
+ * tool nor the resume.
+ *
+ * Nothing ran before this raised and the checkpoint is unchanged — answer it
+ * and resume the same checkpoint again.
+ */
+export class PauseAnswerRequiredError extends Error {
+  readonly code = 'ERR_PAUSE_ANSWER_REQUIRED' as const;
+  /** The tool whose `execute()` paused. */
+  readonly toolName: string;
+  /** The tool call id the pause is filed under. */
+  readonly toolCallId: string;
+
+  constructor(ctx: { toolName: string; toolCallId: string }) {
+    super(
+      `[resume] this run paused inside tool '${ctx.toolName}' (askHuman/pauseHere), and that ` +
+        `pause is answered with a VALUE — the answer becomes the tool's result. Got nothing. ` +
+        `Say which you meant: resume(checkpoint, 'the answer') to hand the tool an answer, or ` +
+        `resume(checkpoint, '(no answer)') to tell the model nobody answered. Nothing was ` +
+        `executed and the checkpoint is unchanged.`,
+    );
+    this.name = 'PauseAnswerRequiredError';
+    this.toolName = ctx.toolName;
+    this.toolCallId = ctx.toolCallId;
+  }
+}
+
 /** Name the SHAPE of a resume input for the refusal — never its contents. */
 function describeResumeInput(input: unknown): string {
   if (input === undefined) return 'nothing';

@@ -107,6 +107,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       // one piece of context by one name — which they would not if a
       // delivered message got its own hash scheme.
       const injections: InjectionRecord[] = messages.map((m, i) => {
+        assertComposable(m, i, messages.length);
         const by = m.injectedBy;
         return {
           contentSummary: truncate(m.content, 80),
@@ -157,6 +158,45 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
     'compose',
     { description: 'Compose messages slot' },
   ).build();
+}
+
+/**
+ * The backstop: a turn that cannot be composed is NAMED here (8.18.0).
+ *
+ * Every way a message enters the conversation now normalizes or refuses at
+ * its own source — the run input, a tool's return value, a resumed pause, a
+ * middleware's rewrite, a declared injection, a restored checkpoint. This is
+ * the net under all of them, and it exists because this line is where the
+ * failure used to appear: `truncate(m.content, 80)` on a missing content threw
+ * `TypeError: Cannot read properties of undefined (reading 'length')` from
+ * inside a subflow, naming no message, no role and no origin.
+ *
+ * It does NOT coerce. Substituting `''` here would hand the model a turn
+ * nobody said and hide the source seam that let it through — the next one of
+ * these should be findable in one read, which is what naming the position, the
+ * role and the likely origin is for.
+ */
+function assertComposable(m: InputMessage, index: number, total: number): void {
+  if (typeof (m?.content as unknown) === 'string') return;
+  const role = m?.role ?? 'unknown';
+  const origin =
+    m?.injectedBy !== undefined
+      ? `injection '${m.injectedBy.injectionId}' (${m.injectedBy.flavor})`
+      : m?.toolCallId !== undefined
+      ? `the result of tool call '${m.toolCallId}'${m.toolName ? ` (${m.toolName})` : ''}`
+      : role === 'user' && index === 0
+      ? "the run's input message"
+      : 'the conversation history';
+  throw new TypeError(
+    `[messages slot] message ${index + 1} of ${total} (role '${role}') has no text: ` +
+      `\`content\` is ${
+        m?.content === undefined ? 'missing' : `a ${m.content === null ? 'null' : typeof m.content}`
+      }. It came from ${origin}. A turn with no content cannot be sent or recorded, and it is ` +
+      `not composed as an empty one — that would put words nobody said into the conversation. ` +
+      `Every entry point normalizes or refuses on its own (run input, tool results, resumed ` +
+      `pauses, middleware rewrites, declared injections, restored checkpoints), so a message ` +
+      `arriving here without text means one of them was bypassed.`,
+  );
 }
 
 /**

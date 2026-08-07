@@ -261,6 +261,10 @@ function buildEnforcingDecider(
     }
 
     let denied = false;
+    // Who, if anyone, rewrote the answer on its way out — and whether the
+    // answer they rewrote was already good. See `brokenBy` below.
+    let rewrittenBy: string | undefined;
+    const preChainAnswer = scope.llmLatestContent as string;
     if (chain.length > 0) {
       const verdict = await runMessageChain(chain, {
         phase: 'output',
@@ -276,6 +280,10 @@ function buildEnforcingDecider(
         scope.messageDeniedPhase = 'output';
         scope.messageDeniedBy = verdict.middleware;
       }
+      // The LAST link that changed the content is the one holding the string
+      // about to be judged. Read off the ledger rows the chain just filed, so
+      // the attribution and the record cannot disagree.
+      for (const d of verdict.decisions) if (d.changed === true) rewrittenBy = d.middleware;
       scope.llmLatestContent = verdict.content;
     }
 
@@ -302,7 +310,25 @@ function buildEnforcingDecider(
       return 'final';
     }
 
-    if (attempt <= enforcement.retries) {
+    // Did the OUTPUT CHAIN break an answer the model got right? (8.18.0)
+    //
+    // Judging after the chain is correct — that string is what the caller
+    // receives — but it made the model wear a middleware's mistake. A rule that
+    // rewrites a valid answer into an invalid one will do it again to the next
+    // answer, so re-asking cannot converge: the run pays for every retry and
+    // ends where it started. Before this, the ledger read
+    // `[retried, retried, exhausted]` with the validator's complaint about text
+    // the model never wrote.
+    //
+    // The judgement is on the PRE-chain string, and only when a link actually
+    // changed something — so a chain that merely inspected the answer costs a
+    // second parse of nothing.
+    const brokenByChain =
+      rewrittenBy !== undefined && judgeAnswer(preChainAnswer, enforcement.parser) === undefined
+        ? rewrittenBy
+        : undefined;
+
+    if (attempt <= enforcement.retries && brokenByChain === undefined) {
       // The retry stage writes the correction and files the row, because it
       // is the one that knows what it wrote. This is the hand-off.
       scope.outputSchemaFailure = { attempt, ...failure };
@@ -315,9 +341,10 @@ function buildEnforcingDecider(
       return 'output-retry';
     }
 
-    // Out of retries. The answer stands as the run's answer; `runTyped()`
-    // throws on it at the boundary exactly as it did before any of this
-    // existed, and `.outputFallback()` still gets its turn there.
+    // Out of retries — or holding an answer no retry could fix. The answer
+    // stands as the run's answer; `runTyped()` throws on it at the boundary
+    // exactly as it did before any of this existed, and `.outputFallback()`
+    // still gets its turn there.
     recordOutputAttempt(scope, {
       attempt,
       iteration: scope.iteration as number,
@@ -325,14 +352,90 @@ function buildEnforcingDecider(
       stage: failure.stage,
       error: failure.error,
       ...(failure.path !== undefined && { path: failure.path }),
+      ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
+    });
+    recordContractUnmet(scope, {
+      failure,
+      attempts: attempt,
+      retriesSpent: attempt - 1,
+      fallbackConfigured: enforcement.hasFallback,
+      ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
     });
     emitRouteDecided(
       scope,
       'final',
-      `final answer failed the output schema (${failure.stage}) and ` +
-        `${enforcement.retries} retry/retries were spent`,
+      brokenByChain !== undefined
+        ? `final answer satisfied the output schema until the output rule '${brokenByChain}' ` +
+            `rewrote it (${failure.stage}) — not re-asked, because the model's answer was fine`
+        : `final answer failed the output schema (${failure.stage}) and ` +
+            `${enforcement.retries} retry/retries were spent`,
     );
     if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
     return 'final';
   };
+}
+
+/**
+ * File — and announce — a run whose answer does not satisfy its own contract.
+ *
+ * Three channels, for the reason `recordEarlyStop` has three: before 8.18.0
+ * this moment had ZERO. `run()` returned the contract-violating string, no
+ * event fired, nothing was warned, and under the default `retries: 0` not even
+ * a ledger row existed — the run's own record could not show that a contract
+ * had been declared, let alone missed. `runTyped()` threw, which helps exactly
+ * the callers who were already asking.
+ *
+ * It does NOT throw. `run()` returns a string by contract, and an answer that
+ * failed validation is still what the model said — the caller who wants a
+ * raise has `runTyped()`, and that choice stays theirs.
+ */
+function recordContractUnmet(
+  scope: TypedScope<AgentState>,
+  facts: {
+    readonly failure: { stage: 'json-parse' | 'schema-validate'; error: string; path?: string };
+    readonly attempts: number;
+    readonly retriesSpent: number;
+    readonly fallbackConfigured: boolean;
+    readonly brokenBy?: string;
+  },
+): void {
+  const { failure, attempts, retriesSpent, fallbackConfigured, brokenBy } = facts;
+  scope.outputContractUnmet = {
+    stage: failure.stage,
+    error: failure.error,
+    ...(failure.path !== undefined && { path: failure.path }),
+    attempts,
+    retriesSpent,
+    fallbackConfigured,
+    ...(brokenBy !== undefined && { brokenBy }),
+  };
+
+  typedEmit(scope, 'agentfootprint.agent.output_contract_unmet', {
+    stage: failure.stage,
+    error: failure.error,
+    ...(failure.path !== undefined && { path: failure.path }),
+    attempts,
+    retriesSpent,
+    fallbackConfigured,
+    iteration: scope.iteration as number,
+    ...(brokenBy !== undefined && { brokenBy }),
+  });
+
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[agentfootprint] this run's answer does NOT satisfy the output schema ` +
+      `(${failure.stage}: ${failure.error})` +
+      (brokenBy !== undefined
+        ? `. The model's own answer PASSED — the output rule '${brokenBy}' rewrote it into one ` +
+          `that does not, so it was not re-asked: re-asking cannot fix a rule.`
+        : retriesSpent > 0
+        ? `, after ${retriesSpent} corrective re-ask(s) that were billed.`
+        : `. No re-ask was configured — .outputSchema(parser, { retries: 1 }) buys one.`) +
+      ` run() hands back the raw answer as it always has; runTyped() throws OutputSchemaError ` +
+      `on it` +
+      (fallbackConfigured
+        ? `, and this agent's .outputFallback() tiers run there — run() does not reach them.`
+        : `.`) +
+      ` Read agent.outputContractUnmet() for the same facts after the run.`,
+  );
 }

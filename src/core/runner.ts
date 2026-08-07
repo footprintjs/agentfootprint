@@ -190,8 +190,14 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * If any stage (Agent tool via `pauseHere`, nested runner, or consumer
    * scope code) called `scope.$pause()`, resolves with a `RunnerPauseOutcome`
    * carrying the serializable checkpoint. Discriminate with `isPaused()`.
+   *
+   * **A bare string is accepted wherever `TIn` is the `{ message }` bag**
+   * (8.18.0): `run('go')` means `run({ message: 'go' })`. The port declares
+   * the union so every implementation shares one door — the shipped runners
+   * normalize through `normalizeRunInput`, which also refuses, by name,
+   * anything that is not a message.
    */
-  run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
+  run(input: TIn | string, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
 
   /**
    * Resume a previously-paused execution from its checkpoint. `input` is

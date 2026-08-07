@@ -43,6 +43,19 @@ const finalResult = await agent.resume(checkpoint, humanAnswer);
 
 Build the agent fresh in Process B — same factory function, NOT the same instance. The checkpoint is the only thing that crosses the process boundary.
 
+### The answer is required
+
+The value you pass to `resume()` **becomes the paused tool's result** — it is what the model reads as what the tool said. So resuming with nothing is refused: since 8.18.0, `agent.resume(checkpoint)` on an `askHuman` / `pauseHere` pause raises `PauseAnswerRequiredError`, naming the tool and both meanings you might have had:
+
+```ts
+await agent.resume(checkpoint, 'the second option');  // hand the tool an answer
+await agent.resume(checkpoint, '(no answer)');        // tell the model nobody answered
+```
+
+Those are different conversations, so the caller picks. Before 8.18.0 the library picked silently and the missing answer became a tool message with no content, which killed the run one turn later with a `TypeError` naming neither the tool nor the resume. Nothing executes before the refusal and the checkpoint is unchanged — answer it and resume the same one.
+
+A consent gate is different: a tool's `checkIn` or a middleware's `ask` is answered with a DECISION (`checkInApproved()` / `checkInDeclined()`), and raises `DecisionRequiredError` when it gets a value instead.
+
 ## When to use pause/resume vs error vs callback
 
 | Situation | Use |

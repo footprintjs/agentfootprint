@@ -92,7 +92,9 @@ describe('event registry — names + exhaustiveness', () => {
     //     considered, rejections included; see CHANGELOG 8.8.0.)
     //    (skill.reroute_superseded added with 8.3.0 — a read_skill pick the gate
     //     accepted that a declared edge then outranked; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(72);
+    //    (agent.output_contract_unmet added with 8.18.0 — the answer this run
+    //     hands back does not satisfy its own outputSchema; see CHANGELOG.)
+    expect(ALL_EVENT_TYPES.length).toBe(73);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -276,6 +276,24 @@ export function buildCallLLMStage(
             if (chunk.response) resp = chunk.response;
             break;
           }
+          // A provider is a port anyone can implement, and a non-terminal
+          // chunk that carries no `content` used to die on the next line as
+          // `Cannot read properties of undefined (reading 'length')` —
+          // naming neither the provider nor the contract it missed. The
+          // commonest shape of the mistake is a chunk that ends the stream
+          // with its own marker instead of `done: true`, which is why the
+          // refusal says what the terminal chunk looks like.
+          if (typeof (chunk.content as unknown) !== 'string') {
+            throw new TypeError(
+              `provider '${deps.provider.name}' yielded a stream chunk whose \`content\` is ` +
+                `${chunk.content === undefined ? 'missing' : `a ${typeof chunk.content}`}. ` +
+                `Every chunk from LLMProvider.stream() is ` +
+                `{ tokenIndex: number, content: string, done: boolean }, and the LAST one is ` +
+                `{ content: '', done: true, response } — the response payload rides the ` +
+                `terminal chunk. A chunk that ends the stream any other way is not seen as ` +
+                `terminal, and its missing content stops the run here.`,
+            );
+          }
           if (chunk.content.length > 0) {
             if (!firstChunkFired) {
               firstChunkFired = true;

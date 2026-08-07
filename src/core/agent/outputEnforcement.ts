@@ -70,6 +70,17 @@ export interface OutputAttempt {
    *  only on a `'retried'` row — it is the join back to the message in the
    *  conversation and to the `output_schema_retry` event's payload. */
   readonly correctiveMessageHash?: string;
+  /**
+   * Set on an `'exhausted'` row when the answer the MODEL produced satisfied
+   * the schema and an `act({ output })` middleware's rewrite broke it — the
+   * name of that middleware (8.18.0).
+   *
+   * Its presence is also why the row is `'exhausted'` with retries still on
+   * the clock: a rule that turns a valid answer into an invalid one will do it
+   * to the next answer too, so the run stops paying for re-asks that cannot
+   * converge.
+   */
+  readonly brokenBy?: string;
 }
 
 /** The scope surface this file needs. Structurally a `TypedScope<AgentState>`. */
@@ -254,11 +265,24 @@ export function resolveJsonSchema(
  */
 export interface ResolvedOutputEnforcement {
   readonly parser: OutputSchemaParser<unknown>;
-  /** Corrective re-asks allowed. `> 0` whenever this object exists — an
-   *  agent that did not opt in has no enforcement mounted at all. */
+  /**
+   * Corrective re-asks allowed. **May be `0` since 8.18.0**, which is the
+   * whole of that release's output-contract change: enforcement is mounted
+   * whenever a parser exists, and `0` means "judge the answer, do not re-ask"
+   * rather than "do not judge". Before, `retries: 0` mounted nothing at all —
+   * the chart of an agent with a terminal contract was byte-identical to one
+   * without, and a failed contract left no trace in the run's own record.
+   *
+   * `0` never mounts the retry BRANCH; the chart is unchanged. What changes is
+   * which function the Route decider runs.
+   */
   readonly retries: number;
   /** The synthetic tool, pre-built. Present only under `'tool-forced'`. */
   readonly schemaTool?: LLMToolSchema;
+  /** True when `.outputFallback()` is configured. The decider carries it so
+   *  the unmet-contract signal can say that a tier exists which `run()` does
+   *  not reach — the fallback itself lives at the caller's boundary. */
+  readonly hasFallback: boolean;
 }
 
 /**

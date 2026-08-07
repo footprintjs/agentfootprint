@@ -212,10 +212,16 @@ describe('security — user input boundary', () => {
     await expect(llm.run({ message: huge })).resolves.toBe('ok');
   });
 
-  it('empty user message is accepted (treated as zero-length content)', async () => {
+  it('empty user message is REFUSED, at the door, naming both spellings (8.18.0)', async () => {
+    // It used to be "accepted". What acceptance meant was two different things
+    // in two runners: LLMCall dropped the turn and called the model with an
+    // EMPTY conversation (an answer to nothing, returned as though it worked),
+    // while Agent sent a `content: ''` turn — which a real provider wire
+    // rejects. Neither is a shorter question, so neither is accepted.
     const llm = LLMCall.create({ provider: scripted(resp('ok')), model: 'mock' })
       .system('')
       .build();
-    await expect(llm.run({ message: '' })).resolves.toBe('ok');
+    await expect(llm.run({ message: '' })).rejects.toThrow(/a run needs something to answer/);
+    await expect(llm.run({ message: '   ' })).rejects.toThrow(/whitespace-only/);
   });
 });

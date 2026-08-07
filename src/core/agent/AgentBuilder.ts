@@ -208,6 +208,9 @@ export class AgentBuilder {
    *  Undefined = no window stage exists, the ReAct loop target is unchanged,
    *  and the run is byte-identical to an agent that never heard of them. */
   private windowStrategyValue?: WindowStrategy;
+  /** WHICH door set it (8.18.0). Recorded so every "already set" refusal can
+   *  name the call the caller has to go and look at, in every direction. */
+  private windowStrategyDoor?: '.window()' | '.compaction()' | '.act({ window })';
   /** The tool-dispatch chain, in call order. Empty = no chain, no ledger. */
   private toolMiddlewareList: readonly ToolMiddleware[] = [];
   /** The message chain, in call order. Empty = no chain, no ledger. */
@@ -439,6 +442,10 @@ export class AgentBuilder {
     const resolved = resolveAct(options);
     if (resolved.window !== undefined) {
       this.assertNoWindowStrategy('act');
+      // Noted BEFORE delegating: `.window()` is the setter both doors share,
+      // and the refusal a later call meets should name the door this caller
+      // actually wrote.
+      this.noteWindowStrategyDoor('.act({ window })');
       this.window(resolved.window);
     }
     this.actCalled = true;
@@ -508,6 +515,9 @@ export class AgentBuilder {
     }
     this.assertSummarizerIsNotTheAgentItself(strategy.billing, 'AgentBuilder.window');
     this.windowStrategyValue = strategy;
+    // `.act({ window })` delegates here, and its own door was noted first —
+    // do not overwrite a more specific attribution with this generic one.
+    this.noteWindowStrategyDoor(this.windowStrategyDoor ?? '.window()');
     return this;
   }
 
@@ -604,6 +614,7 @@ export class AgentBuilder {
       'AgentBuilder.compaction',
     );
     this.windowStrategyValue = summarizeOldest(options);
+    this.noteWindowStrategyDoor('.compaction()');
     return this;
   }
 
@@ -611,32 +622,47 @@ export class AgentBuilder {
    * One window strategy per agent, whichever door set it — a second would
    * silently override the first, and a window policy that quietly changed is
    * a policy you cannot audit.
+   *
+   * **Every refusal names the door that set it (8.18.0).** The three doors are
+   * one setting, so a caller who hits this is holding two lines of code and
+   * needs to know which one already won. Before, the direction decided how much
+   * you were told: `.window()` named the strategy and then talked about
+   * `.compaction()` — even when `.act({ window })` was what had set it — while
+   * `.act()` said "set by .window() or .compaction()", an `or` that was
+   * sometimes neither. `windowStrategyDoor` records the fact once, at the
+   * moment it becomes true, and all three sentences read it.
    */
   private assertNoWindowStrategy(door: 'window' | 'compaction' | 'act'): void {
     const existing = this.windowStrategyValue;
     if (existing === undefined) return;
+    const setBy = this.windowStrategyDoor ?? '.window()';
+    const law =
+      'One window strategy per agent, whichever door set it — a second would silently ' +
+      'override the first, and a window policy that quietly changed is a policy you cannot ' +
+      'audit.';
     if (door === 'act') {
       throw new Error(
         `AgentBuilder.act: this agent already has a window strategy ('${existing.name}'), set ` +
-          'by .window() or .compaction(). One window strategy per agent, whichever door set ' +
-          'it — a second would silently override the first, and a window policy that quietly ' +
-          'changed is a policy you cannot audit. Move it into the `window` key, or drop the key.',
+          `by ${setBy}. ${law} Drop the \`window\` key here, or remove the ${setBy} call.`,
       );
     }
     if (door === 'compaction') {
       throw new Error(
-        'AgentBuilder.compaction: already set. One compaction policy per agent — a second ' +
-          'one would silently override the first, and a budget that quietly changed is a ' +
-          `budget you cannot audit. (This agent's window strategy is '${existing.name}'; ` +
-          '`.compaction()` and `.window()` are the same door.)',
+        `AgentBuilder.compaction: this agent already has a window strategy ` +
+          `('${existing.name}'), set by ${setBy}. ${law} \`.compaction()\`, \`.window()\` and ` +
+          '`.act({ window })` are three doors into the same setting.',
       );
     }
     throw new Error(
-      `AgentBuilder.window: already set ('${existing.name}'). One window strategy per agent — ` +
-        'a second one would silently override the first, and a window policy that quietly ' +
-        'changed is a policy you cannot audit. `.compaction()` is the same door with ' +
-        'summarizeOldest already in it.',
+      `AgentBuilder.window: this agent already has a window strategy ('${existing.name}'), set ` +
+        `by ${setBy}. ${law} \`.compaction()\` is this same door with summarizeOldest already ` +
+        'in it, and `.act({ window })` is it again inside the posture block.',
     );
+  }
+
+  /** Record which door set the window strategy, for the refusal above. */
+  private noteWindowStrategyDoor(door: '.window()' | '.compaction()' | '.act({ window })'): void {
+    this.windowStrategyDoor = door;
   }
 
   /**
@@ -984,8 +1010,33 @@ export class AgentBuilder {
    * Throws if called more than once on the same builder (avoids
    * silent override surprises).
    *
+   * ## What the DEFAULT buys you, and what it does not
+   *
+   * `.outputSchema(parser)` on its own means **judge, do not re-ask**: the
+   * prompt gets the instruction, the answer is validated in the loop, and a
+   * failure is recorded (`outputAttempts`), announced
+   * (`agentfootprint.agent.output_contract_unmet`), warned about once, and
+   * readable afterwards through `agent.outputContractUnmet()`. What it does
+   * NOT do is spend a turn fixing the answer — pass `{ retries: 1 }` for the
+   * first real correction. Before 8.18.0 the default judged nothing at all
+   * inside the run, and a `run()` caller could not tell a contract had been
+   * missed.
+   *
+   * ## The two ways a run with a contract can END
+   *
+   * `runTyped()` throws **`OutputSchemaError`** when the answer fails the
+   * schema — and **`MessageDeniedError`** when an `act({ output })` rule
+   * refused to release the answer at all. The second one is not a schema
+   * failure and is never re-asked: the answer was withheld on purpose, and
+   * asking the model for a better-shaped version of a string nobody is allowed
+   * to see would route around the rule. A `catch` block that only knows about
+   * `OutputSchemaError` will miss it.
+   *
+   * `run()` throws neither for a schema failure: it returns the raw answer, as
+   * it always has, and says so through the channels above.
+   *
    * @param parser  Validation strategy that throws on shape failure.
-   * @param opts    Optional `{ name, instruction }` to customize.
+   * @param opts    Optional `{ name, instruction, retries, strategy, jsonSchema }`.
    *
    * @example
    *   import { z } from 'zod';
@@ -995,7 +1046,7 @@ export class AgentBuilder {
    *   }).describe('A status enum + an array of strings.');
    *
    *   const agent = Agent.create({...})
-   *     .outputSchema(Output)
+   *     .outputSchema(Output, { retries: 1 })
    *     .build();
    *
    *   const typed = await agent.runTyped({ message: '...' });
@@ -1027,8 +1078,8 @@ export class AgentBuilder {
 
   /**
    * 3-tier degradation for output-schema validation failures. Pairs
-   * with `.outputSchema()` — calling `.outputFallback()` without an
-   * `outputSchema` first throws (the fallback has nothing to validate).
+   * with `.outputSchema()` — an agent that has one and not the other is
+   * refused at `.build()`, in either call order.
    *
    * Three tiers:
    *
@@ -1037,13 +1088,29 @@ export class AgentBuilder {
    *      `fallback(error, raw)` runs; its return is re-validated.
    *   3. **Canned** — static safety-net value. NEVER throws when set.
    *
-   * `canned` is validated against the schema at builder time —
-   * fail-fast on misconfig (a `canned` that doesn't validate would
-   * defeat the fail-open guarantee).
+   * `canned` is validated against the schema at `.build()` — fail-fast on
+   * misconfig (a `canned` that doesn't validate would defeat the fail-open
+   * guarantee at the exact moment it is needed).
+   *
+   * ## The tiers run at the TYPED boundary — `run()` does not reach them
+   *
+   * `runTyped()` and `parseOutputAsync()` engage the chain. **`run()` does
+   * not**, and cannot: these tiers produce a typed value `T`, and `run()`
+   * resolves to the raw answer string — substituting a fallback there would
+   * hand a caller a different answer than the model gave, invisibly. So an
+   * agent consumed through `run()` (a server route, a queue worker,
+   * `standingAgent`) gets NO fallback, and until 8.18.0 nothing said so. Now
+   * the unmet-contract warning and
+   * `agentfootprint.agent.output_contract_unmet` both carry
+   * `fallbackConfigured: true` — the signal that a safety net exists and this
+   * caller is not standing under it.
    *
    * Two typed events fire on tier transitions for observability:
    *   - `agentfootprint.resilience.output_fallback_triggered`
-   *   - `agentfootprint.resilience.output_canned_used`
+   *   - `agentfootprint.resilience.output_canned_used` — carries
+   *     `retriesSpent`, and warns when the canned value lands after re-asks
+   *     that were billed. With `canned` set, `runTyped()` is structurally
+   *     unable to throw, so nothing else would report that spend.
    *
    * @example
    * ```ts
@@ -1060,27 +1127,58 @@ export class AgentBuilder {
    * ```
    */
   outputFallback<T>(options: OutputFallbackOptions<T>): this {
-    if (!this.outputSchemaParser) {
-      throw new Error(
-        'AgentBuilder.outputFallback: call .outputSchema(parser) FIRST. ' +
-          'outputFallback supplements outputSchema; one without the other is incoherent.',
-      );
-    }
     if (this.outputFallbackCfg) {
       throw new Error(
         'AgentBuilder.outputFallback: already set. Each agent has at most one fallback chain.',
       );
-    }
-    // Build-time validation — canned MUST satisfy the schema.
-    if (options.canned !== undefined) {
-      validateCannedAgainstSchema(options.canned, this.outputSchemaParser as OutputSchemaParser<T>);
     }
     this.outputFallbackCfg = {
       fallback: options.fallback as OutputFallbackFn<unknown>,
       ...(options.canned !== undefined && { canned: options.canned as unknown }),
       hasCanned: options.canned !== undefined,
     };
+    // The coherence check moved to `build()` in 8.18.0 — see
+    // `assertOutputFallbackCoherent`. What it needs (a parser) is a fact about
+    // the FINISHED agent, and the builder is a bag of settings in whatever
+    // order they were written.
     return this;
+  }
+
+  /**
+   * `.outputFallback()` needs `.outputSchema()`, and it needs it by the time
+   * the agent exists — not by the time the call is written (8.18.0).
+   *
+   * The requirement is set MEMBERSHIP: a fallback is degradation for a
+   * contract, so an agent with one and not the other is incoherent. Order is
+   * not the requirement, and refusing on order made a builder whose lines
+   * could not be reordered without reading an error message to find out —
+   * `.outputFallback().outputSchema()` threw while `.outputSchema()
+   * .outputFallback()` was fine, and both end with the same agent.
+   *
+   * The `canned` value is validated here for the same reason: validating it
+   * needs the parser, so it belongs wherever the parser is guaranteed.
+   */
+  private assertOutputFallbackCoherent(): void {
+    const cfg = this.outputFallbackCfg;
+    if (cfg === undefined) return;
+    if (!this.outputSchemaParser) {
+      throw new Error(
+        'AgentBuilder.build: .outputFallback() is configured but .outputSchema(parser) is not. ' +
+          'A fallback is what happens when the terminal contract is not met, so without a ' +
+          'contract there is nothing for it to catch and its tiers can never run. Add ' +
+          '.outputSchema(parser) — in either order, they are one setting made of two calls — ' +
+          'or drop the fallback.',
+      );
+    }
+    // The safety net must always validate; a `canned` value that does not is a
+    // misconfiguration that would only surface AFTER the agent loop had
+    // already failed, which is the one moment it exists to survive.
+    if (cfg.hasCanned) {
+      validateCannedAgainstSchema(
+        cfg.canned,
+        this.outputSchemaParser as OutputSchemaParser<unknown>,
+      );
+    }
   }
 
   /**
@@ -1526,18 +1624,27 @@ export class AgentBuilder {
       schemaTool = buildSchemaTool(jsonSchema, parser.description);
     }
 
-    // No retries and no forced shape → nothing for the loop to do, and no
-    // enforcement is mounted. The chart, the events and the commit log are
-    // the ones this agent had before the option existed.
-    if (this.outputSchemaRetries === 0 && schemaTool === undefined) return undefined;
+    // Mounted whenever a parser exists (8.18.0). Until then, `retries: 0` —
+    // the DEFAULT, and what `.outputSchema(parser)` means on its own — returned
+    // `undefined` here: no judging in the loop, no `outputAttempts` row, no
+    // event, a chart byte-identical to an agent with no contract at all. The
+    // declaration bought a prompt sentence and a `runTyped()` parse, and a
+    // caller on `run()` could not tell from the record that a contract had ever
+    // been declared, let alone missed.
+    //
+    // `0` still mounts no retry BRANCH (see buildAgentChart) and still spends
+    // no extra turn. It means judge, do not re-ask.
     return {
       parser,
       retries: this.outputSchemaRetries,
       ...(schemaTool !== undefined && { schemaTool }),
+      hasFallback: this.outputFallbackCfg !== undefined,
     };
   }
 
   build(): Agent {
+    // Settings that are only coherent (or not) once the whole agent exists.
+    this.assertOutputFallbackCoherent();
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
     // library uses, so a future locale-pack swap is a single import.

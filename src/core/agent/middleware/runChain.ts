@@ -26,6 +26,13 @@
  * governance layer whose failure mode is "allow" is not a governance
  * layer.
  *
+ * **A middleware that malfunctions is a denial too** (8.18.0). Two ways to
+ * malfunction at the message boundary: answer `ask` where no pause exists to
+ * carry it, or `allow` a value that is not text. Both used to fall through to
+ * the allow branch — the ask filed an allow row for a rule that thought it had
+ * paused, and the non-string became `content: undefined` on the wire. Same law,
+ * same row: a link whose answer cannot be honoured has not permitted anything.
+ *
  * **The result comes back through the onion.** `runToolAfterChain` walks the
  * SAME list in reverse, so the first-declared link gets the first word about
  * the call and the last word about the result. An outer rule is the one that
@@ -373,7 +380,46 @@ export async function runMessageChain(
       return { kind: 'deny', reason: outcome.reason, middleware: mw.name, content, decisions };
     }
 
+    // `ask` at a message boundary (8.18.0). `MessageOutcome` has no ask arm, so
+    // TypeScript refuses this at the call site — but a JS consumer, an `as any`,
+    // or a shared link written for the TOOL chain reaches here at runtime, and
+    // an ask used to fall straight through the value test below and file an
+    // ALLOW row. A rule that believed it had paused for a person had in fact
+    // approved the message, and the ledger agreed with the rule. The message
+    // boundary is a plain stage with no pause to carry an ask, so the honest
+    // answer is the one `askPolicy: 'refuse'` already gives the tool chain: a
+    // denial, naming the middleware.
+    if ((outcome as { kind?: string }).kind === 'ask') {
+      const question = (outcome as unknown as { payload?: { question?: string } }).payload
+        ?.question;
+      const reason =
+        `middleware '${mw.name}' asked a person to decide about the ${input.phase} message, ` +
+        `and there is no pause at the message boundary to carry that ask` +
+        `${question ? `: ${question}` : ''}. Ask at a TOOL moment (onToolCall), where a pause ` +
+        `exists, or decide here with allow()/deny().`;
+      decisions.push(row({ outcome: 'deny', why: reason }));
+      return { kind: 'deny', reason, middleware: mw.name, content, decisions };
+    }
+
     if (outcome.value !== undefined) {
+      // A transform must produce a message. A link that returns a non-string
+      // is malfunctioning, not permitting — and this file's law for a
+      // malfunctioning link is already written: a middleware that throws is a
+      // denial, never a pass. Before 8.18.0 the value was assigned anyway and
+      // became `content: undefined`/an object on the wire, surfacing as
+      // `s.slice is not a function` at the input phase and as an unattributed
+      // "unexpected result shape" at the output phase.
+      // Cast through `unknown`: the TYPE says `string`, which is exactly why
+      // the check is here — the values that get this far are the ones the type
+      // could not stop.
+      if (typeof (outcome.value as unknown) !== 'string') {
+        const reason =
+          `middleware '${mw.name}' returned allow(${describeValue(outcome.value)}) at the ` +
+          `${input.phase} message boundary, and a message is text. Return allow(someString, why) ` +
+          `to rewrite it, allow() to pass it through unchanged, or deny(reason) to refuse it.`;
+        decisions.push(row({ outcome: 'deny', why: reason }));
+        return { kind: 'deny', reason, middleware: mw.name, content, decisions };
+      }
       const before = content;
       content = outcome.value;
       decisions.push(
@@ -385,4 +431,11 @@ export async function runMessageChain(
   }
 
   return { kind: 'allow', content, decisions };
+}
+
+/** Name the SHAPE of a middleware's return for a refusal — never its contents. */
+function describeValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'an array';
+  return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
 }

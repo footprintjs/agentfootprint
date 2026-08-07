@@ -26,11 +26,19 @@
  *                 synthetic tool and forces the provider's tool choice, so
  *                 the shape is constrained at generation instead of asked
  *                 for in prose.
+ *   4. SAYS SO  — 8.18.0. The same failure through `run()` instead of
+ *                 `runTyped()`. `run()` returns a string by contract and
+ *                 still does, so it cannot throw — but the run now files the
+ *                 fact, fires `output_contract_unmet`, and warns. The
+ *                 scenario also shows the case where one of YOUR OWN output
+ *                 rules broke an answer the model got right: the run names
+ *                 the rule and stops re-asking, because re-asking cannot fix
+ *                 a rule.
  *
  * Run:  npx tsx examples/features/40-output-schema-retry.ts
  */
 
-import { Agent, OutputSchemaError, SCHEMA_TOOL_NAME } from '../../src/index.js';
+import { Agent, OutputSchemaError, SCHEMA_TOOL_NAME, allow } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import type { LLMProvider } from '../../src/adapters/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
@@ -201,13 +209,66 @@ async function scenarioForced(): Promise<void> {
 }
 // #endregion forced
 
+// ─── 4. SAYS SO — the contract is loud on the run() path too (8.18.0) ──
+
+// #region says-so
+async function scenarioSaysSo(): Promise<void> {
+  console.log('\n4. SAYS SO — the same failure, through run() instead of runTyped()\n');
+
+  // `.outputSchema(parser)` with NO options. Through 8.17.0 this judged
+  // nothing inside the run: the chart was byte-identical to an agent with no
+  // contract, and a `run()` caller received the violating string with no
+  // event, no warning and no ledger row. It now means "judge, do not re-ask".
+  const agent = Agent.create({ provider: mock({ replies: [MALFORMED] }), model: 'mock' })
+    .outputSchema(refundParser)
+    .build();
+
+  agent.on('agentfootprint.agent.output_contract_unmet', (e) => {
+    console.log(
+      `   event: stage=${e.payload.stage} attempts=${e.payload.attempts} ` +
+        `retriesSpent=${e.payload.retriesSpent}`,
+    );
+  });
+
+  const answer = await agent.run({ message: 'refund my order' });
+  console.log(`   run() returned the raw answer, as it always has: ${answer}`);
+
+  const unmet = agent.outputContractUnmet();
+  console.log(`   agent.outputContractUnmet(): ${unmet?.stage} — ${unmet?.error}`);
+  console.log('   …so a server route can decide what to ship instead of shipping this.');
+
+  // The case worth a dashboard: the MODEL was right and a rule broke it.
+  const rewritten = Agent.create({ provider: mock({ replies: [VALID] }), model: 'mock' })
+    .outputSchema(refundParser, { retries: 3 })
+    .act({
+      output: [
+        {
+          name: 'redactor',
+          onMessage: (msg) =>
+            msg.phase === 'output' ? allow('[redacted by policy]', 'PII rule') : allow(),
+        },
+      ],
+    })
+    .maxIterations(9)
+    .build();
+
+  await rewritten.run({ message: 'refund my order' });
+  const broken = rewritten.outputContractUnmet();
+  console.log(`\n   with an output rule that rewrites the answer:`);
+  console.log(`   brokenBy: ${broken?.brokenBy} — retriesSpent: ${broken?.retriesSpent}`);
+  console.log('   the model answered correctly; three billed re-asks would have produced');
+  console.log('   three more correct answers for the same rule to break identically.');
+}
+// #endregion says-so
+
 // ─── Driver ──────────────────────────────────────────────────────
 
 export async function run(_input?: string, provider?: LLMProvider): Promise<void> {
   await scenarioTeaches(provider);
   await scenarioGivesUp();
   await scenarioForced();
-  console.log('\nAll three scenarios complete.');
+  await scenarioSaysSo();
+  console.log('\nAll four scenarios complete.');
 }
 
 // Browser-safe auto-run guard (see helpers/cli.ts).

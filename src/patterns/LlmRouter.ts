@@ -87,6 +87,7 @@ import { LLMCall } from '../core/LLMCall.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { normalizeRunInput } from '../core/runInput.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -375,12 +376,13 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
   }
 
   async run(
-    input: { message: string },
+    input: { message: string } | string,
     options?: RunOptions,
   ): Promise<string | RunnerPauseOutcome> {
+    const runInput = normalizeRunInput<{ message: string }>(input, 'LlmRouter.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({ input: { message: input.message }, ...(options ?? {}) });
+    const result = await executor.run({ input: { message: runInput.message }, ...(options ?? {}) });
     return this.finalizeResult(executor, result);
   }
 

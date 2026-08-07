@@ -149,6 +149,11 @@ export {
   // the silent `by: 'unknown'` decline it filed before.
   pauseDemandsDecision,
   DecisionRequiredError,
+  // 8.18.0 — an askHuman/pauseHere pause resumed with NO value. The answer
+  // becomes the tool's result, so "no answer" and "carry on" are two different
+  // conversations and the caller picks; the library used to pick silently and
+  // crash a turn later.
+  PauseAnswerRequiredError,
   type ConsentGate,
   type ConsentGateKind,
   type MiddlewareAsk,
@@ -390,6 +395,11 @@ export {
   type OutputSchemaOptions,
   type OutputSchemaStrategy,
 } from './core/outputSchema.js';
+// 8.18.0 — the input boundary every runner's `run()` goes through. A bare
+// string IS the message (`run('go')` ≡ `run({ message: 'go' })`); anything
+// that is not a message is refused by name before the run starts, instead of
+// becoming `content: undefined` inside the messages slot.
+export { InvalidRunInputError } from './core/runInput.js';
 // 7.26 — the loop's side of the output contract. `OutputAttempt` is the row
 // shape `snapshot.sharedState.outputAttempts` carries; the frame prefix and
 // the tool name are exported so a reader (or a test) can recognise the two

@@ -53,7 +53,7 @@ import type { Credential, CredentialProvider } from '../../../identity/types.js'
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
 import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
-import { isPauseRequest } from '../../pause.js';
+import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
 import {
   shouldCheckIn,
   isCheckInDecision,
@@ -1496,6 +1496,18 @@ export function buildToolCallsHandler(
       // left the ledger with an opening row and no closing one, and left every
       // `onToolResult` rule — redaction first among them — unapplied to the one
       // value a PERSON typed.
+      // A pause of this kind exists to collect a value, and the value BECOMES
+      // the tool's result. Resuming with nothing has two live readings — "the
+      // person gave no answer" and "just carry on" — and the library does not
+      // get to pick. Before 8.18.0 it picked the worst one silently: the
+      // undefined answer became `content: undefined` on a `role: 'tool'`
+      // message and the next turn died in the messages slot with an anonymous
+      // TypeError. Refused here, at the top of the branch, so no middleware has
+      // been told about a result that does not exist and the checkpoint is
+      // still good — answer it and resume again.
+      if (input === undefined) {
+        throw new PauseAnswerRequiredError({ toolName, toolCallId });
+      }
       const iteration = scope.iteration as number;
       const env = scope.$getEnv();
       const tool = lookupTool(toolName);

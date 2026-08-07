@@ -912,6 +912,41 @@ export interface EvalThresholdCrossedPayload {
  * consumer that reads `snapshot.sharedState.outputAttempts` finds the
  * matching row (joined by `correctiveMessageHash`) already there.
  */
+/**
+ * The run's answer does NOT satisfy its own `outputSchema` (8.18.0).
+ *
+ * Fires once, from the Route decider, on the run that hands back an answer the
+ * contract rejects — including the default `retries: 0` case, where the first
+ * answer is the only one. It is the event that was missing: `run()` returned
+ * the failing string, `runTyped()` threw at a boundary the caller may not have
+ * used, and nothing in between said a contract had been missed.
+ *
+ * Alert on it. A rise in `stage: 'json-parse'` is a model that stopped
+ * honouring the instruction; a rise in `'schema-validate'` is drift against
+ * the shape; any `brokenBy` at all is one of your own output rules.
+ */
+export interface AgentOutputContractUnmetPayload {
+  /** Which half of validation failed. */
+  readonly stage: 'json-parse' | 'schema-validate';
+  /** The validator's own message, verbatim. DATA, not narrative. */
+  readonly error: string;
+  /** Failing field path when the parser exposes one (Zod-style issues). */
+  readonly path?: string;
+  /** Answers judged in this run, the first included. `1` under `retries: 0`. */
+  readonly attempts: number;
+  /** Corrective re-asks the run paid for. `0` under `retries: 0`. */
+  readonly retriesSpent: number;
+  /** True when `.outputFallback()` is configured — a tier `runTyped()` reaches
+   *  and `run()` does not. */
+  readonly fallbackConfigured: boolean;
+  /** The ReAct iteration that produced the answer. */
+  readonly iteration: number;
+  /** Present when an `act({ output })` middleware rewrote an answer that had
+   *  PASSED into one that fails — the name of that middleware. The run stops
+   *  re-asking when this is set: the model's answer was already right. */
+  readonly brokenBy?: string;
+}
+
 export interface AgentOutputSchemaRetryPayload {
   /** 1-based attempt that just failed. `1` is the first answer. */
   readonly attempt: number;

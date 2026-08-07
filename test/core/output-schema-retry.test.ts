@@ -21,7 +21,7 @@
  *   9. `checkpoint()` / `resumeOnError` across a mid-retry conversation.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
@@ -126,14 +126,40 @@ describe('outputSchema retries — unit (law 1: absent option is byte-identical)
     expect(JSON.stringify(b.spy.requests)).toBe(JSON.stringify(a.spy.requests));
   });
 
-  it('writes no output-schema keys when the option is absent, even on a failing answer', async () => {
+  it('JUDGES a failing answer with no options — and records it (8.18.0)', async () => {
+    // The old law here was "absent option writes no output-schema keys". That
+    // made `.outputSchema(parser)` — the default, and the whole of what most
+    // agents declare — judge nothing inside the run: a caller on `run()` got a
+    // contract-violating string and the record could not show that a contract
+    // existed. `retries: 0` now means judge, do not re-ask.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const agent = Agent.create({ provider: mock({ replies: [BAD] }), model: 'mock' })
       .outputSchema(refundParser())
       .build();
+    const answer = await agent.run({ message: 'refund me' });
+    warn.mockRestore();
+
+    // The answer itself is untouched — `run()` still hands back what the model
+    // said, and only `runTyped()` raises.
+    expect(answer).toBe(BAD);
+    expect(attempts(agent).map((a) => a.outcome)).toEqual(['exhausted']);
+    const unmet = agent.outputContractUnmet();
+    expect(unmet?.stage).toBe('schema-validate');
+    expect(unmet?.attempts).toBe(1);
+    expect(unmet?.retriesSpent).toBe(0);
+    expect(unmet?.fallbackConfigured).toBe(false);
+    // The hand-off carrier is still only for the retry branch, which never ran.
+    const state = agent.getLastSnapshot()?.sharedState as Record<string, unknown>;
+    expect('outputSchemaFailure' in state).toBe(false);
+  });
+
+  it('writes NOTHING at all when there is no outputSchema — the real byte-identical law', async () => {
+    const agent = Agent.create({ provider: mock({ replies: [BAD] }), model: 'mock' }).build();
     await agent.run({ message: 'refund me' });
     const state = agent.getLastSnapshot()?.sharedState as Record<string, unknown>;
     expect('outputAttempts' in state).toBe(false);
-    expect('outputSchemaFailure' in state).toBe(false);
+    expect('outputContractUnmet' in state).toBe(false);
+    expect(agent.outputContractUnmet()).toBeUndefined();
   });
 
   it('a failing answer with retries: 0 is still exactly one LLM call', async () => {
@@ -739,10 +765,18 @@ describe('outputSchema retries — layering with .reliability()', () => {
     // The in-stage validator never sees the rewritten string; the decider
     // judges what the CALLER will get, which is the only honest place to
     // judge it.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await expect(agent.runTyped<Refund>({ message: 'refund me' })).rejects.toBeInstanceOf(
       OutputSchemaError,
     );
-    expect(attempts(agent).map((r) => r.outcome)).toEqual(['retried', 'exhausted']);
+    warn.mockRestore();
+    // 8.18.0: the retry is NOT spent. The model's answer satisfied the schema
+    // and the middleware's own rewrite broke it — a deterministic rule breaks
+    // the next answer identically, so re-asking buys a second billed turn and
+    // the same ending. The old ledger read ['retried', 'exhausted'].
+    expect(attempts(agent).map((r) => r.outcome)).toEqual(['exhausted']);
+    expect(attempts(agent)[0]?.brokenBy).toBe('blank-the-amount');
+    expect(agent.outputContractUnmet()?.brokenBy).toBe('blank-the-amount');
   });
 
   it('never judges — or re-asks about — an answer a middleware denied', async () => {

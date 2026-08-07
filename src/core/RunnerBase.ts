@@ -295,7 +295,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * Execute the runner. Subclass may override for specialized input
    * mapping, but default invokes getSpec() + FlowChartExecutor.
    */
-  abstract run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
+  abstract run(input: TIn | string, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
 
   /**
    * Resume a paused run from its checkpoint. Default behavior: rebuild the

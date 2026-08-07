@@ -86,6 +86,31 @@ export function messagesToolRoleRefusal(site: string): string {
   );
 }
 
+/**
+ * The content refusal (8.18.0) — a declared message whose `content` is not text.
+ *
+ * The named factories (`defineFact`, `defineInstruction`, …) have always
+ * refused empty content; a hand-built `Injection` passed straight to
+ * `.injection()` went through unchecked, and the delivery stage put it on the
+ * wire as-is. A message with no content is not a quieter message: it becomes
+ * `content: undefined` in the window, crashes the next composition, and — when
+ * two of them are declared — collides on the delivery ledger's key so one is
+ * silently swallowed. Refused where the declaration is, naming the injection.
+ */
+export function messagesContentRefusal(args: {
+  readonly site: string;
+  readonly role: string;
+  readonly received: string;
+}): string {
+  return (
+    `${args.site}: a \`slot: 'messages'\` declaration must carry text, and this one's ` +
+    `\`content\` is ${args.received} (role \`'${args.role}'\`). A message with no content ` +
+    `reaches the conversation as a turn nobody said: it breaks the next composition, and two ` +
+    `of them are indistinguishable to the delivery ledger, so one would be dropped without a ` +
+    `word. Give it the text to deliver, or drop the message from the declaration.`
+  );
+}
+
 /** Why a delivery was held back this iteration. Recorded, never thrown. */
 export type DeferralReason = 'role-collision' | 'unanswered-tool-call';
 
