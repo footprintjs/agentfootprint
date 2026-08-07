@@ -43,6 +43,7 @@ import type {
   McpTransport,
 } from './types.js';
 import { createVendingFetch } from './gatewayTransport.js';
+import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
 import { lazyRequire } from '../lazyRequire.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
@@ -64,7 +65,9 @@ const DEFAULT_CLIENT_INFO = {
  */
 export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
   const name = opts.name ?? 'mcp';
-  const sdk = opts._client ?? (await resolveClient(opts.transport, opts.clientInfo, opts.signal));
+  const sdk =
+    opts._client ??
+    (await resolveClient(opts.transport, opts.clientInfo, opts.signal, opts.retryOnThrottle));
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
@@ -115,6 +118,7 @@ async function resolveClient(
   transport: McpTransport,
   clientInfo?: { name: string; version: string },
   signal?: AbortSignal,
+  retryOnThrottle?: RetryOnThrottle,
 ): Promise<McpSdkClient> {
   let mod: McpSdkExports;
   try {
@@ -131,14 +135,17 @@ async function resolveClient(
     capabilities: {},
   });
 
-  const transportImpl = await buildTransport(transport);
+  const transportImpl = await buildTransport(transport, retryOnThrottle);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(transportImpl, { signal });
   else await client.connect(transportImpl);
   return client;
 }
 
-async function buildTransport(t: McpTransport): Promise<unknown> {
+async function buildTransport(
+  t: McpTransport,
+  retryOnThrottle?: RetryOnThrottle,
+): Promise<unknown> {
   if (t.transport === 'stdio') {
     let stdioMod: McpStdioExports;
     try {
@@ -169,18 +176,25 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
         'check that @modelcontextprotocol/sdk is installed at the latest version.',
     );
   }
+  // Throttle retry wraps the OUTERMOST fetch, so every attempt is re-signed
+  // and re-vended: signatures expire, and a token that would have died during
+  // the wait is simply never the one reused. `retryingFetch` returns its input
+  // untouched when retry is off — including `undefined`, so a plain `http`
+  // transport with no custom fetch still passes none and behaves exactly as it
+  // did before 8.11.0.
   if (t.transport === 'gateway') {
     return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
-      fetch: createVendingFetch(t),
+      fetch: retryingFetch(createVendingFetch(t), retryOnThrottle),
     });
   }
   // Both options ride the SAME SDK transport, and both are forwarded when both
   // are given. The SDK folds `requestInit.headers` into the `init.headers` it
   // hands the custom fetch, so a signer sees the static headers and has the
   // final word over the bytes — see `McpHttpTransport.fetch`.
+  const httpFetch = retryingFetch(t.fetch, retryOnThrottle);
   return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
     ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
-    ...(t.fetch && { fetch: t.fetch }),
+    ...(httpFetch && { fetch: httpFetch }),
   });
 }
 

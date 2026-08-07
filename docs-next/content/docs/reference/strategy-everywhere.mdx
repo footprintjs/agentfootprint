@@ -120,20 +120,23 @@ Same `BaseStrategy` shape for `CostStrategy` (`recordCost`), `LiveStatusStrategy
 Multi-vendor fan-out comes free:
 
 ```typescript
-import { otelObservability } from 'agentfootprint/observe';
-import { composeObservability, consoleObservability } from 'agentfootprint/observe';
+import { composeObservability, consoleObservability, otelObservability } from 'agentfootprint/observe';
 
-agent.enable.observability({
-  strategy: composeObservability([
-    otelObservability(tracer),  // ship to your OTel collector (Datadog via OTLP, etc.)
-    consoleObservability(),     // local dev visibility
-  ]),
-});
+const telemetry = composeObservability([
+  // every adapter takes ONE options object — `serviceName` is required
+  otelObservability({ serviceName: 'my-agent-prod', tracer }), // your OTel collector (Datadog via OTLP, etc.)
+  consoleObservability(),                                      // local dev visibility
+]);
+
+const stop = agent.enable.observability({ strategy: telemetry });
+
+// The framework does not do this for you:
+process.on('SIGTERM', async () => { await telemetry.flush(); telemetry.stop(); stop(); });
 ```
 
-> **Shipped as of v3.1:** vendor strategies live under the single grouped subpath `agentfootprint/observe` (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`, `otelObservability`) — *not* per-vendor subpaths. The default sinks (`consoleObservability`, `inMemorySinkCost`, `chatBubbleLiveStatus`, `noopLens`) and the per-group combinators (`composeObservability`, `composeCost`, `composeLiveStatus`, `composeLens`) are exported from the same place. There is **no single `compose`** — each group has its own typed combinator. Datadog ships no native adapter; point an OTel SDK at Datadog's OTLP endpoint and use `otelObservability`.
+> **Import paths:** the vendor strategies (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`, `otelObservability`), the default sinks (`consoleObservability`, `inMemorySinkCost`, `chatBubbleLiveStatus`, `noopLens`) and the per-group combinators (`composeObservability`, `composeCost`, `composeLiveStatus`, `composeLens`) are all exported from **`agentfootprint/observe`** — the canonical door, and the one to use. The vendor strategies are *also* reachable at `agentfootprint/observability-providers` and the combinators at `agentfootprint/strategies`; both are the older doors kept alive through 8.x. None of them are on the root `agentfootprint` barrel. There is **no single `compose`** — each group has its own typed combinator. Datadog ships no native adapter; point an OTel SDK at Datadog's OTLP endpoint and use `otelObservability`.
 
-`composeObservability` returns a strategy whose `exportEvent` fans out to every child. Errors per-child isolated; one bad exporter doesn't break others. Same pattern as `withRetry` / `withFallback` in the resilience subsystem.
+`composeObservability(children)` takes **one array argument** — no varargs, no options object — and returns a strategy whose `exportEvent` fans out to every child. Errors are isolated per child; one bad exporter doesn't break others. Same pattern as `withRetry` / `withFallback` in the resilience subsystem. Its `flush()` and `stop()` fan out too, but nothing in the framework calls them — that is the consumer's job on shutdown, as above.
 
 ## Package structure
 

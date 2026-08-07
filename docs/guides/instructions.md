@@ -2,7 +2,7 @@
 
 > **The hook:** some rules should only apply *sometimes*. An instruction lets you say "when X is true, tell the LLM Y." Plain prompts can't do that — they're always on. Instructions are the conditional layer.
 
-An instruction is a rule-based **Injection**: a predicate (`activeWhen`) runs once per ReAct iteration, and when it matches, the instruction's `prompt` text is added to that iteration's context. By default it lands in the **system prompt**; set `slot: 'messages'` (plus a `role` — there is no default) to deliver it into the conversation window itself. Instructions are one flavor of the unified Injection primitive — siblings include `defineSteering` (always-on), `defineSkill` (LLM-activated, can unlock tools), and `defineFact` (developer-supplied data).
+An instruction is a rule-based **Injection**: a predicate (`activeWhen`) runs once per ReAct iteration, and when it matches, the instruction's `prompt` text is added to that iteration's context. By default it lands in the **system prompt**; set `slot: 'messages'` (plus a `role` — there is no default) to deliver it into the conversation window itself. Instructions are one flavor of the unified Injection primitive — siblings include `defineSteering` (always-on), `defineSkill` (LLM-activated, carries tools alongside its body), and `defineFact` (developer-supplied data).
 
 **Background:** the activate-when-condition-holds pattern is essentially **production rules** (forward-chaining rule systems — Newell 1973, OPS5, Rete networks) applied to LLM context. The predicate reads an **`InjectionContext`** — a bounded, read-only snapshot of the iteration state (`iteration`, `userMessage`, `history`, `lastToolResult`, `activatedInjectionIds`) — which is the **belief state** the dialog-state-tracking literature (Williams et al. 2016) uses the same idea for.
 
@@ -46,7 +46,7 @@ const refundInstruction = defineInstruction({
 
 A predicate that **throws is fail-OPEN** — the instruction is skipped (does not fire) and the miss is reported on the `agentfootprint.context.evaluated` event.
 
-> **Instructions inject text only.** To give the model *tools* conditionally, use `defineSkill({ tools })` (LLM-activated) or attach them up front with `agent.tool()`. `defineInstruction` has no `tools` field — keeping the "what fires" (a rule) separate from "what's unlocked" (a capability).
+> **Instructions inject text only.** To give the model *tools* conditionally, use `defineSkill({ tools, autoActivate: 'currentSkill' })` — the `autoActivate` part is what makes it conditional, since a Skill's tools are otherwise registered up front like `agent.tool()` ones. `defineInstruction` has no `tools` field — keeping the "what fires" (a rule) separate from "what it contributes" (a capability).
 
 ## Attaching to an Agent
 
@@ -145,7 +145,7 @@ Keeping one predicate name means the signature is always `(ctx: InjectionContext
 
 ## Key Design Decisions
 
-- **Text injection, two slots** — an instruction lands in the system-prompt slot (default) or is delivered into the window (`slot: 'messages'` + `role`); use `defineSkill` to unlock tools
+- **Text injection, two slots** — an instruction lands in the system-prompt slot (default) or is delivered into the window (`slot: 'messages'` + `role`); use `defineSkill` to bring tools along with the text
 - **Delivery is part of the window, or it is a lie** — a delivered message enters `scope.history`, so the window strategies see it, the trace records who let it in, and the request carries it. It is never a parallel list spliced in at send time
 - **One honest limitation, said out loud** — a delivered message sits at the END of the window and providers reject two same-role turns in a row, so inside a tool-using loop a `role: 'user'` injection will typically never deliver (the window ends on the user's turn, or on tool results, which count as one). Use `'assistant'`, use `'system'` where it is carried, or return the words from the tool. A message that cannot be placed is DEFERRED with a reason on `messagesDelivery.deferred`, never dropped and never reordered
 - **InjectionContext, not full scope** — bounded read-only iteration state for clarity, debug, and eval

@@ -28,6 +28,8 @@ agent.enable.observability({ strategy: otel });
 | X-Ray | `xrayObservability()` | AWS X-Ray traces |
 | Audit bundle | `auditExport()` + `verifyAuditBundle()` | tamper-evident hash-chained file |
 
+> **Which exporter?** If you are on AWS, start with `xrayObservability` — one optional peer dependency, one IAM permission (`xray:PutTraceSegments`), a region, and no collector to run. Reach for `otelObservability` when the destination is *not* AWS (Honeycomb, Grafana, Datadog) or when you already run an OTLP collector — it is backend-agnostic precisely because it exports nothing itself.
+
 All ship from `agentfootprint/observe`. This is the Monitoring-side how-to;
 for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** and the
 [adapter pattern](doc:adapters); for the event taxonomy + recorders see
@@ -73,7 +75,9 @@ const stop = agent.enable.observability({
 The run's events land in the log group; the **CloudWatch GenAI Observability** dashboard
 renders the agent/tool/LLM spans over them. The log group must exist (or the role must allow
 `logs:CreateLogGroup`) — provisioning is control-plane (CDK/SDK), same as the rest of the
-[AgentCore setup](doc:agentcore-setup).
+[AgentCore setup](doc:agentcore-setup). As of 8.11.0 the log **stream** is created for you on
+first delivery (the adapters call `CreateLogStream`, so the role needs `logs:CreateLogStream`);
+only the **group** is the operator's job.
 
 ## Connect OpenTelemetry
 
@@ -126,6 +130,53 @@ agent.enable.observability({ strategy: agentcore, detach: { driver: microtaskBat
 agent.enable.observability({ strategy: otel });
 agent.enable.observability({ strategy: auditExport({ /* … */ }) }); // tamper-evident copy for compliance
 ```
+
+Or fan out from a single subscription with `composeObservability`, which takes **one array**
+(no varargs, no options object) and returns a strategy whose `exportEvent`, `flush` and `stop`
+all fan out to every child:
+
+```ts
+import {
+  composeObservability,
+  xrayObservability,
+  cloudwatchObservability,
+} from 'agentfootprint/observe';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+const telemetry = composeObservability([
+  xrayObservability({ region: 'us-east-1', serviceName: 'workflow-assistant' }),
+  cloudwatchObservability({ region: 'us-east-1', logGroupName: '/agentfootprint/workflow-assistant' }),
+]);
+
+const stop = agent.enable.observability({
+  strategy: telemetry,
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+
+// The framework does not do this for you:
+process.on('SIGTERM', async () => { await telemetry.flush(); telemetry.stop(); stop(); });
+```
+
+Errors are isolated per child — one bad exporter doesn't stop the others. (`composeObservability`
+is also reachable at `agentfootprint/strategies`, and the vendor adapters at
+`agentfootprint/observability-providers`; those are the older doors kept alive through 8.x.
+`agentfootprint/observe` is the one to use.)
+
+## Wrapping or debugging a strategy
+
+The hot path is **`exportEvent`**, not `onEvent` (doc comments through 8.10.0 said `onEvent`, so
+your IDE may still show it on an older install — there has never been a method by that name; the
+code is the truth). If you wrap a strategy, **always spread the original**:
+`{ ...inner, exportEvent: (e) => { log(e); inner.exportEvent(e); } }`. A rewrap that lists only
+`name` and `exportEvent` drops `flush` and `stop`, and the batching exporters (CloudWatch, X-Ray)
+then never drain their last batch and never clear their timer. It also drops
+`relevantEventTypes`, which makes your wrapper receive *every* event the adapter had declared it
+didn't want. Note the empty array is not "no filter": `relevantEventTypes: []` delivers **zero**
+events, silently — omit the field entirely to receive everything. `capabilities` affects nothing
+about delivery; the attach filter never reads it. Delivery errors are surfaced through
+`_onError`, which is a **property you assign after construction** (or, on the AWS adapters since
+8.11.0, an `onError` option in the factory). And the framework does not call `flush()` or
+`stop()` for you — call them yourself on shutdown.
 
 ## Next steps
 

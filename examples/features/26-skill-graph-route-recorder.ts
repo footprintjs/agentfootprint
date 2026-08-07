@@ -38,7 +38,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     inputSchema: { type: 'object', properties: {} },
     execute: async () => ({ array_wwn: 'naa.6000097' }),
   });
-  // esxi-inventory unlocks the storage tool (it's available while that skill is active).
+  // esxi-inventory carries the storage tool. It's a graph ENTRY, not a .tree() leaf, so
+  // nothing stamps autoActivate — the tool is in the agent's list from iteration 1.
   const esxi = defineSkill({ id: 'esxi-inventory', description: 'use esxi-inventory', body: 'esxi', tools: [probe] });
   const volume = sk('volume-lookup', 'VOLUME');
 

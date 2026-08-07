@@ -87,7 +87,14 @@ export interface InjectionContent {
     readonly role: ContextRole;
     readonly content: string;
   }>;
-  /** Tools added to the tools slot when active. */
+  /**
+   * Tools this Injection contributes (Skills are the flavor that carries them).
+   *
+   * By default a Skill's tools go into the agent's tool registry at BUILD time
+   * and are visible to the model from iteration 1 — activation adds the body,
+   * not the tools. Only a Skill with `autoActivate: 'currentSkill'` has its
+   * tools held back and readmitted through the tools slot while it is active.
+   */
   readonly tools?: readonly Tool[];
 }
 
@@ -219,7 +226,9 @@ export interface Injection {
    *
    * Known keys:
    *   - `surfaceMode` (Skill) — `'auto' | 'system-prompt' | 'tool-only' | 'both'`
-   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`
+   *   - `autoActivate` (Skill) — `'currentSkill'`, the tool gate
+   *   - `cache` (any flavor) — the cache directive
+   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`; stored, not yet read
    */
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
@@ -253,21 +262,24 @@ export interface ActiveInjection {
   readonly flavor: import('../../events/types.js').ContextSource;
   readonly description?: string;
   /**
-   * Resolved surfaceMode (Skill flavor only). Drives Block C runtime
-   * dispatch — slot subflows skip system-slot injection when this is
-   * `'tool-only'`; the read_skill tool delivers the body in its
-   * result for `'tool-only'` and `'both'`.
+   * The DECLARED surfaceMode (Skill flavor only), copied through as written.
+   * It drives runtime dispatch — slot subflows skip system-slot injection when
+   * this is `'tool-only'`; the read_skill tool delivers the body in its result
+   * for `'tool-only'` and `'both'`.
    *
-   * `'auto'` and absent both mean "keep v2.4 behavior" (body in
-   * system slot, tool result is confirmation only). The Block A4
-   * cascade resolves 'auto' against provider/model context at a
-   * later layer; this projection stays declarative.
+   * `'auto'` and absent both deliver like `'system-prompt'` (body in system
+   * slot, tool result is confirmation only). Nothing here resolves `'auto'`
+   * against provider/model — `resolveSurfaceMode` is a recommendation callers
+   * ask for, not a step in this projection.
    */
   readonly surfaceMode?: 'auto' | 'system-prompt' | 'tool-only' | 'both';
   /**
-   * Per-skill tool gating intent (Skill flavor only). Reserved for
-   * Block C+ runtime auto-wiring of `skillScopedTools`. Today
-   * consumers wire this manually via `agentfootprint/tool-providers`.
+   * Per-skill tool gating (Skill flavor only). Set, it means this skill's
+   * tools were kept OUT of the static registry, so the tools slot must
+   * readmit them for as long as the skill is active — which is exactly what
+   * `buildToolsSlot` does with `inject.tools` on every active injection.
+   * Compose your own ToolProvider instead with `skillScopedTools` from
+   * `agentfootprint/tool-providers`.
    */
   readonly autoActivate?: 'currentSkill';
   /**
@@ -320,8 +332,10 @@ export interface ActiveInjection {
 /** Project a full Injection (with functions) into a scope-safe POJO. */
 export function projectActiveInjection(inj: Injection): ActiveInjection {
   // Project per-skill metadata that slot subflows need to dispatch on.
-  // `surfaceMode` drives the system-prompt-suppression decision (Block C).
-  // `autoActivate` is reserved for runtime tool gating (forward-compat).
+  // `surfaceMode` drives the system-prompt-suppression decision.
+  // `autoActivate` drives runtime tool gating: it tells the tools slot that
+  // this skill's tools are not in the static registry and must be readmitted
+  // while it is active.
   const meta = inj.metadata as
     | { surfaceMode?: string; autoActivate?: string; cache?: unknown }
     | undefined;

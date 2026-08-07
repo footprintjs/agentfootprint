@@ -173,7 +173,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | # | File | Title | Description |
 |---|---|---|---|
 | 01 | [`01-instruction.ts`](context-engineering/01-instruction.ts) | Instruction — rule-based system-prompt guidance | Predicate-driven instruction. Active when ctx matches; prompt text  |
-| 02 | [`02-skill.ts`](context-engineering/02-skill.ts) | Skill — LLM-activated body + tools | LLM calls read_skill() to load a body of guidance + unlock tools.  |
+| 02 | [`02-skill.ts`](context-engineering/02-skill.ts) | Skill — LLM-activated body + tools | LLM calls read_skill() to load a body of guidance; autoActivate keeps  |
 | 03 | [`03-steering.ts`](context-engineering/03-steering.ts) | Steering — always-on system-prompt rule | Always-on guidance. Use for output format, persona, safety. Every  |
 | 04 | [`04-fact.ts`](context-engineering/04-fact.ts) | Fact — developer-supplied data injection | Inject data (user profile, env info, current time) the LLM should  |
 | 05 | [`05-dynamic-react.ts`](context-engineering/05-dynamic-react.ts) | Dynamic ReAct — context morphs each iteration | Skills activate, instructions fire after specific tools, facts  |

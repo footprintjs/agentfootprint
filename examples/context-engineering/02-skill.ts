@@ -4,8 +4,12 @@
  * `defineSkill` produces an Injection with a `llm-activated` trigger.
  * Behind the scenes the Agent auto-attaches a `read_skill` tool when
  * Skills are registered. When the LLM calls `read_skill('billing')`,
- * the Skill's body lands in the next iteration's system prompt and
- * any `inject.tools` become available in the tools slot.
+ * the Skill's body lands in the next iteration's system prompt.
+ *
+ * A Skill's `tools` are a separate question. By default they are in the
+ * agent's tool registry from the start, activated or not. This example
+ * sets `autoActivate: 'currentSkill'`, which is what actually holds
+ * `process_refund` back until the LLM has read the billing skill.
  *
  * Skills stay active for the rest of the turn (`agent.run()` call).
  * Each new turn starts with no Skills active — the LLM has to read
@@ -22,8 +26,8 @@ export const meta: ExampleMeta = {
   title: 'Skill — LLM-activated body + tools',
   group: 'context-engineering',
   description:
-    'LLM calls read_skill() to load a body of guidance + unlock tools. ' +
-    'Active for the rest of the turn.',
+    'LLM calls read_skill() to load a body of guidance; autoActivate keeps ' +
+    'the skill tools out of the list until then. Active for the rest of the turn.',
   defaultInput: 'I need a refund for order #42',
   providerSlots: ['default'],
   tags: ['context-engineering', 'skill', 'llm-activated'],
@@ -45,9 +49,13 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   // #region define-skill
   const billingSkill = defineSkill({
     id: 'billing',
-    description: 'Read for refund / charge / billing questions. Unlocks process_refund.',
+    description: 'Read for refund / charge / billing questions. Covers process_refund.',
     body: 'When handling billing: confirm the order id, then call process_refund. Always state the amount + payment method in the final reply.',
     tools: [refundTool],
+    // Without this line, process_refund would sit in the agent's tool list from
+    // iteration 1 — activation adds the BODY, not the tools. `currentSkill`
+    // keeps the tool out of the list until the LLM has read the billing skill.
+    autoActivate: 'currentSkill',
   });
   // #endregion define-skill
 

@@ -82,6 +82,34 @@ export interface AgentOptions {
    */
   readonly costBudget?: number;
   /**
+   * Per-slot context budgets, in characters (8.11.0).
+   *
+   * Each of the three context slots warns — and emits
+   * `agentfootprint.context.budget_pressure` — when what it composed for an
+   * iteration exceeds its budget. **Nothing is ever truncated:** the full
+   * content still reaches the LLM. The budget is a signal that the slot is
+   * growing past what you expected, not a limiter.
+   *
+   * Defaults: `systemPrompt` 4000, `messages` 10000, `tools` 2000. The keys
+   * are the three slots the context model already names
+   * (`ContextSlot = 'system-prompt' | 'messages' | 'tools'`), so the option
+   * and the event it produces speak one vocabulary.
+   *
+   * Before 8.11.0 these caps existed but no public door reached them, and the
+   * over-budget warning told you to "raise budgetCap" — a knob nothing could
+   * set. Raising a budget is the right answer when the slot is legitimately
+   * that big (a long conversation easily passes the 10000-character messages
+   * default); trimming is the right answer when it isn't.
+   *
+   * @example Give a long-running support agent more room for history
+   *   Agent.create({ provider, model, contextBudget: { messages: 40_000 } })
+   */
+  readonly contextBudget?: {
+    readonly systemPrompt?: number;
+    readonly messages?: number;
+    readonly tools?: number;
+  };
+  /**
    * Permission adapter. When set, the Agent calls
    * `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
    * `tool.execute()`. Emits `agentfootprint.permission.check` with the

@@ -86,6 +86,20 @@ export interface LLMCallOptions {
   /** Optional max output tokens. */
   readonly maxTokens?: number;
   /**
+   * Per-slot context budgets, in characters (8.11.0). The LLMCall twin of
+   * `AgentOptions.contextBudget` — two slots here, since an LLMCall has no
+   * tools slot.
+   *
+   * Each slot warns (and emits `agentfootprint.context.budget_pressure`) when
+   * it composes over its budget. **Nothing is truncated** — the full content
+   * still reaches the LLM; the budget is a signal, not a limiter. Defaults:
+   * `systemPrompt` 4000, `messages` 10000.
+   */
+  readonly contextBudget?: {
+    readonly systemPrompt?: number;
+    readonly messages?: number;
+  };
+  /**
    * Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
    * after every LLM response with per-call and cumulative USD. Run-scoped
    * — the cumulative resets on each `.run()`.
@@ -165,6 +179,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly systemPromptValue: string;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
+  /** Per-slot character budgets (8.11.0). Absent keys keep the slot default. */
+  private readonly contextBudget?: LLMCallOptions['contextBudget'];
   private readonly structureRecorders?: readonly StructureRecorder[];
   private readonly groupTranslator?: GroupTranslator;
   /** Auto-resolved from provider.name at construction time (same
@@ -191,6 +207,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     this.systemPromptValue = systemPromptValue;
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
+    if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
     // v2.14 alignment — auto-wire ThinkingHandler by provider.name. Same
@@ -382,11 +399,17 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // slot subflow builders. Each emits InjectionRecord[] + SlotComposition
     // through the convention scope keys; ContextRecorder observes and
     // dispatches context.* events. NO tools slot — LLMCall has no tools.
+    // Per-slot budgets (8.11.0) — forwarded only where the consumer set one,
+    // so an unset slot keeps its own default.
+    const budget = this.contextBudget;
     const systemPromptSubflow = buildSystemPromptSlot({
       prompt: systemPromptValue,
       reason: 'LLMCall.system()',
+      ...(budget?.systemPrompt !== undefined && { budgetCap: budget.systemPrompt }),
     });
-    const messagesSubflow = buildMessagesSlot();
+    const messagesSubflow = buildMessagesSlot({
+      ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
+    });
 
     const callLLM = async (scope: TypedScope<LLMCallState>) => {
       const systemPromptInjections = (scope.systemPromptInjections ??

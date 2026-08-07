@@ -62,7 +62,8 @@ export interface InputMessage {
 }
 
 export interface MessagesSlotConfig {
-  /** Budget cap (chars). Default: 10000. */
+  /** Budget cap (chars). Default: 10000. Set from the public door as
+   *  `contextBudget.messages` on `AgentOptions` / `LLMCallOptions`. */
   readonly budgetCap?: number;
 }
 
@@ -146,7 +147,8 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
               itemCount: injections.length,
               itemNoun: 'message',
               contentNoun: 'messages',
-              remedy: 'Raise budgetCap on the slot config or trim the conversation history.',
+              remedy:
+                'Raise contextBudget.messages on the agent, or trim the conversation history.',
             }),
           );
         }

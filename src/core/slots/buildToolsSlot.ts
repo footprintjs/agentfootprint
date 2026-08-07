@@ -68,7 +68,8 @@ export interface ToolsSlotConfig {
    * resolves executables from `registryByName`, never from the schema list.
    */
   readonly readSkillFor?: (currentSkillId?: string) => LLMToolSchema;
-  /** Budget cap (chars). Default: 2000. */
+  /** Budget cap (chars). Default: 2000. Set from the public door as
+   *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
 }
 
@@ -322,7 +323,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             itemCount: injections.length,
             itemNoun: 'tool definition',
             contentNoun: 'definitions',
-            remedy: 'Raise budgetCap on the agent config or trim tool descriptions.',
+            remedy: 'Raise contextBudget.tools on the agent, or trim tool descriptions.',
           }),
         );
       }

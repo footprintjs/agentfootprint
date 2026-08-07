@@ -30,7 +30,9 @@ const triage = defineSkill({
   id: 'triage',
   description: 'Start: triage the request',   // shown to the LLM + used by entryByRelevance
   body: 'Figure out what the user needs and route.',
-  tools: [],                                   // optional: unlocked only while this skill is active
+  tools: [],                                   // optional. Visible to the model from iter 1
+                                               // unless this skill is a `.tree()` leaf (which
+                                               // stamps autoActivate) or sets autoActivate itself
 });
 ```
 

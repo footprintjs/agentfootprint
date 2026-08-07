@@ -183,7 +183,11 @@ describe('buildToolsSlot — overflow loudness', () => {
     expect(message).toContain(`${used}/2000 chars (+${used - 2000})`);
     expect(message).toContain('11 tool definition(s)');
     expect(message).toContain('Nothing was truncated');
-    expect(message).toContain('Raise budgetCap');
+    // 8.11.0: the remedy names a knob a consumer can actually reach.
+    // `budgetCap` was internal to this file — the warning used to point at
+    // something no public door exposed.
+    expect(message).toContain('Raise contextBudget.tools');
+    expect(message).not.toContain('Raise budgetCap');
   });
 
   // ─── Property — no new noise for healthy agents ─────────────────

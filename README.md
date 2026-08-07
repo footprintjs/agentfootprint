@@ -139,11 +139,12 @@ const agent = Agent.create({ provider, model })
     id: 'refund-policy',
     prompt: 'Never promise a refund before checking the policy tool.',
   }))
-  .skill(defineSkill({                  // guidance + tools — unlocks when the LLM asks
+  .skill(defineSkill({                  // guidance the LLM loads when it asks
     id: 'billing',
     description: 'Use for refunds, charges, billing questions.',
     body: 'When handling billing: confirm identity first, then…',
     tools: [refundTool],
+    autoActivate: 'currentSkill',       // ...and scope its tools to that window too
   }))
   .build();
 ```
@@ -368,7 +369,7 @@ That's the whole model: `Injection = slot × trigger × cache`.
 | `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body, viaToolName: 'read_skill' }))` | `system` (body) + `tools` |
 
 > [!NOTE]
-> The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. A `Skill` targets more than one slot at once: `tools` (the schemas it unlocks) and `system` (its body — or, with `surfaceMode: 'tool-only'`, the `read_skill` result instead). The `messages` slot both projects the conversation and accepts delivery: `slot: 'messages'` (with a `role` you name) appends to the window itself, subject to what the attached provider carries inside `messages` and to a sequence rule that defers rather than reorders.
+> The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. A `Skill` targets more than one slot at once: `tools` (the schemas it contributes — registered up front and visible from iteration 1 unless the Skill sets `autoActivate: 'currentSkill'`, which scopes them to the iterations where it is active) and `system` (its body — or, with `surfaceMode: 'tool-only'`, the `read_skill` result instead). The `messages` slot both projects the conversation and accepts delivery: `slot: 'messages'` (with a `role` you name) appends to the window itself, subject to what the attached provider carries inside `messages` and to a sequence rule that defers rather than reorders.
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 

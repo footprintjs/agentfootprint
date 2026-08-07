@@ -70,7 +70,7 @@ These are not equivalent primitives. Skills is a discovery-and-dispatch pattern.
 
 ### What ships today (the runnable surface)
 
-`defineSkill({ id, description, body, tools })`. The library auto-attaches a `read_skill` tool to your agent's tool registry; the LLM activates the skill by calling it. When activated, the skill's body lands in the system slot and the skill's tools become available for the rest of the turn:
+`defineSkill({ id, description, body, tools })`. The library auto-attaches a `read_skill` tool to your agent's tool registry; the LLM activates the skill by calling it. When activated, the skill's body lands in the system slot for the rest of the turn. The skill's `tools` are registered up front and callable from iteration 1 — adding `autoActivate: 'currentSkill'`, as the sample below does, is what makes them appear only for that same window:
 
 <CodeFile path="examples/context-engineering/02-skill.ts" region="define-skill" title="examples/context-engineering/02-skill.ts (region: define-skill)" />
 

@@ -123,6 +123,8 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
+import { rateLimitedConsoleSink } from './deliveryErrors.js';
+
 // ─── Public options ──────────────────────────────────────────────────
 
 export interface OtelObservabilityOptions {
@@ -160,6 +162,19 @@ export interface OtelObservabilityOptions {
    * `gen_ai.*` attributes (e.g., aggressive per-byte vendor billing).
    */
   readonly explainability?: boolean;
+  /**
+   * Where errors go (8.11.0).
+   *
+   * This adapter writes to a tracer you own, so most failures surface in your
+   * OTel pipeline rather than here — but a throwing tracer, a malformed span
+   * or a dispatch-layer error still has to land somewhere. Without this they
+   * reach the default sink (a rate-limited `console.error`), because telemetry
+   * that fails invisibly is indistinguishable from telemetry that works.
+   *
+   * Equivalent to assigning the strategy's `_onError` property after
+   * construction, but visible at the call site.
+   */
+  readonly onError?: (error: Error, event?: AgentfootprintEvent) => void;
 }
 
 // ─── OTel-shaped surfaces (subset we use) ────────────────────────────
@@ -422,7 +437,11 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   const activeTurns = new Map<string, TurnState>();
 
   let stopped = false;
-  let onErrorHook: ((err: Error, event?: AgentfootprintEvent) => void) | undefined;
+  // The fallback when the consumer wires nothing. Rate-limited; a
+  // consumer-supplied sink is not. Armed at CONSTRUCTION — before 8.11.0 it
+  // was installed lazily inside `_onError` itself, which meant any caller
+  // reading the hook rather than calling the method found `undefined`.
+  const consoleSink = rateLimitedConsoleSink('otel');
 
   /**
    * Resolve the run anchor for an event.
@@ -992,14 +1011,12 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
       }
       activeTurns.clear();
     },
+    /**
+     * Where errors go. Overriding it works — assign `_onError`, or pass
+     * `onError` in the factory options.
+     */
     _onError(err: Error, event?: AgentfootprintEvent): void {
-      onErrorHook =
-        onErrorHook ??
-        ((e) => {
-          // eslint-disable-next-line no-console
-          console.error(`[otelObservability] error:`, e.message);
-        });
-      onErrorHook(err, event);
+      (opts.onError ?? consoleSink)(err, event);
     },
 
     decisionEvidenceRecorder(): OtelDecisionEvidenceRecorder {

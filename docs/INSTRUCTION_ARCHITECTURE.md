@@ -90,11 +90,17 @@ const profile = defineFact({
 
 `DefineFactOptions`: `{ id, data, description?, slot?, role?, activeWhen?, cache? }`.
 
-### Tool-unlocking Skills — `defineSkill`
+### Tool-carrying Skills — `defineSkill`
 
-A Skill is the one flavor that spans BOTH system prompt AND tools: when activated, its
-`body` lands in the system slot and its `tools` are added to the tools slot. The LLM
-activates a Skill on demand by calling `read_skill` (the `'llm-activated'` trigger).
+A Skill is the one flavor that spans BOTH system prompt AND tools. The LLM activates a
+Skill on demand by calling `read_skill` (the `'llm-activated'` trigger), and activation
+puts the `body` in the system slot.
+
+Its `tools` are a separate question, and the default surprises people: they are added to
+the agent's tool registry at BUILD time, so the model can see and call them from
+iteration 1 whether or not the Skill is ever activated. `autoActivate: 'currentSkill'`
+is what holds them back and lets the tools slot readmit them only while the Skill is
+active.
 
 ```typescript
 const refundSkill = defineSkill({
@@ -102,11 +108,12 @@ const refundSkill = defineSkill({
   description: 'Process customer refunds per policy.',
   body: 'You are trained in refund processing. Follow company policy.',
   tools: [lookupOrder, processRefund, getTrace],
+  autoActivate: 'currentSkill',   // omit → these three are on the wire from iter 1
 });
 ```
 
-`DefineSkillOptions`: `{ id, description, body, tools?, viaToolName?, surfaceMode?,
-refreshPolicy?, ... }`.
+`DefineSkillOptions`: `{ id, description, body, tools?, surfaceMode?, autoActivate?,
+refreshPolicy?, cache?, ... }`.
 
 ### Registering on an Agent
 
@@ -201,7 +208,8 @@ the narrative trace as injection-engine stages.
 3. **Injections are conditional.** `activeWhen` predicate (or `trigger`) makes them dynamic.
 4. **Injections are observable.** They show up in the narrative trace and emit
    `agentfootprint.context.injected` / `agentfootprint.context.evaluated`.
-5. **Skills unlock tools.** `defineSkill` is the one flavor that spans system prompt
-   AND tools — the LLM activates it on demand via `read_skill`.
+5. **Skills carry tools.** `defineSkill` is the one flavor that spans system prompt
+   AND tools — the LLM activates it on demand via `read_skill`. Activation loads the
+   body; the tools are registered up front unless you add `autoActivate: 'currentSkill'`.
 6. **Choose by intent.** `defineSteering` (always-on), `defineInstruction` (rule-based),
-   `defineFact` (data), `defineSkill` (tool-unlocking). Same primitive, clearer code.
+   `defineFact` (data), `defineSkill` (body + tools). Same primitive, clearer code.

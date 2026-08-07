@@ -64,6 +64,8 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
+import { rateLimitedConsoleSink } from './deliveryErrors.js';
+
 // ─── Public options ──────────────────────────────────────────────────
 
 export interface XrayObservabilityOptions {
@@ -83,6 +85,20 @@ export interface XrayObservabilityOptions {
   /** Forced flush window for low-traffic agents. Default 1000ms.
    *  `0` disables time-based flush. */
   readonly flushIntervalMs?: number;
+  /**
+   * Where delivery failures go (8.11.0).
+   *
+   * `PutTraceSegments` is network I/O and it fails — an IAM denial, a
+   * throttle, a malformed segment. Without this, failures reach the default
+   * sink (a rate-limited `console.error`), because telemetry that fails
+   * invisibly is indistinguishable from telemetry that works. Set this to
+   * route them into your own logger instead; you receive every failure. The
+   * batch that failed is dropped, never requeued.
+   *
+   * Equivalent to assigning the strategy's `_onError` property after
+   * construction, but visible at the call site.
+   */
+  readonly onError?: (error: Error, event?: AgentfootprintEvent) => void;
   /** Test injection — bypasses SDK lazy-require entirely. */
   readonly _client?: XRayLikeClient;
 }
@@ -155,7 +171,9 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   let lastFlushPromise: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
-  let onErrorHook: ((err: Error, event?: AgentfootprintEvent) => void) | undefined;
+  // The fallback when the consumer wires nothing. Rate-limited; a
+  // consumer-supplied sink is not.
+  const consoleSink = rateLimitedConsoleSink('xray');
 
   // Lazy SDK client.
   let client: XRayLikeClient | undefined = opts._client;
@@ -181,7 +199,17 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         TraceSegmentDocuments: batch.map((s) => JSON.stringify(s)),
       });
     } catch (err) {
-      onErrorHook?.(err instanceof Error ? err : new Error(String(err)));
+      // Routed through the strategy's CURRENT `_onError` (not a hook captured
+      // at construction), so a consumer who assigns it — or passes `onError`
+      // — actually receives delivery failures. Before 8.11.0 the hook was
+      // installed lazily inside `_onError` itself and was `undefined` here,
+      // so every failed put was silent.
+      strategy._onError?.(
+        new Error(
+          `${batch.length} segment(s) dropped shipping to X-Ray: ` +
+            (err instanceof Error ? err.message : String(err)),
+        ),
+      );
     }
     // If outbox grew during the put (size > maxBatchSegments emits
     // arrived), chain another flush.
@@ -447,10 +475,17 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     }
   }
 
-  return {
+  const strategy: ObservabilityStrategy = {
     name: 'xray',
     capabilities: { events: true, traces: true },
     exportEvent: handleEvent,
+    /**
+     * Force-close in-flight segments and drain. **The framework does not call
+     * this for you** — wire it into your own shutdown or the last batch (and
+     * every unfinished turn) is lost:
+     *
+     *   process.on('SIGTERM', async () => { await strategy.flush(); strategy.stop(); });
+     */
     async flush(): Promise<void> {
       // Force-close any in-flight turn segments so partial traces
       // make it into X-Ray on shutdown.
@@ -467,6 +502,8 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         if (lastFlushPromise === before && outbox.length === 0) break;
       }
     },
+    /** Stop the flush timer. **The framework does not call this for you** —
+     *  an un-stopped strategy keeps a `setTimeout` alive. */
     stop(): void {
       stopped = true;
       if (timer) {
@@ -474,16 +511,19 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         timer = undefined;
       }
     },
+    /**
+     * Where errors go. Two callers: the dispatch layer (when `exportEvent`
+     * throws) and this adapter's own delivery path. Overriding it works —
+     * assign `_onError`, or pass `onError` in the factory options — because
+     * delivery failures read this method at call time rather than a hook
+     * captured at construction.
+     */
     _onError(err: Error, event?: AgentfootprintEvent): void {
-      onErrorHook =
-        onErrorHook ??
-        ((e) => {
-          // eslint-disable-next-line no-console
-          console.error(`[xrayObservability] flush failed:`, e.message);
-        });
-      onErrorHook(err, event);
+      (opts.onError ?? consoleSink)(err, event);
     },
   };
+
+  return strategy;
 }
 
 // ─── ID + time helpers ───────────────────────────────────────────────

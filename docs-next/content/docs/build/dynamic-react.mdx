@@ -31,7 +31,7 @@ Here is that same agent drawn as **raw footprintjs subflows** — no agent vocab
 
 <SubflowLensTryIt />
 
-> **v2.5 fix note:** v2.4 had a regression where the loop target skipped InjectionEngine on iter 2+, quietly disabling per-iteration re-evaluation. v2.5 (commit pending) restored the v1 behavior. Tests added at `test/core/dynamic-react-loop.test.ts` pin the per-iteration evaluation contract — `on-tool-return` predicates now fire on iter 2+, `autoActivate` per-skill tool gating becomes feasible (lands in v2.5 Block A5), and skill bodies inject on the iteration after `read_skill('X')` activation.
+> **v2.5 fix note:** v2.4 had a regression where the loop target skipped InjectionEngine on iter 2+, quietly disabling per-iteration re-evaluation. v2.5 (commit pending) restored the v1 behavior. Tests added at `test/core/dynamic-react-loop.test.ts` pin the per-iteration evaluation contract — `on-tool-return` predicates now fire on iter 2+, `autoActivate` per-skill tool gating works (it rests on the tool list being recomposed every iteration), and skill bodies inject on the iteration after `read_skill('X')` activation.
 
 ## The pattern
 
@@ -102,7 +102,7 @@ defineInstruction({
 
 ### 2. Adaptive tool exposure (per-skill gating)
 
-The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `defineSkill({ autoActivate: 'currentSkill' })` + `skillScopedTools(id, tools)` from `agentfootprint/providers` (Block A1 + A5 shipped in v2.5; auto-runtime wiring lands Block C).
+The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. This is what `defineSkill({ autoActivate: 'currentSkill' })` buys, and the Agent wires it for you — **without that option a skill's tools are in the tool list from iteration 1 and activation changes nothing about them.** Outside the Agent's own wiring, compose the same gate with `skillScopedTools(id, tools)` from `agentfootprint/providers`.
 
 ### 3. Length guardrails
 
@@ -143,7 +143,7 @@ Iter 1 prompt has an example showing the rare edge case → iter 2 drops it beca
 
 ### 7. Skill body refresh on long-context runs
 
-System-prompt skill body decays past long contexts (~50K tokens on most providers) → re-inject via tool result so the LLM sees it fresh again. Powered by `defineSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } })` (v2.5+).
+System-prompt skill body decays past long contexts (~50K tokens on most providers) → re-inject via tool result so the LLM sees it fresh again. `defineSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } })` is where that intent is declared — but it is **declared only**: nothing in the engine reads `refreshPolicy` yet, so no re-injection happens today. Reach for `surfaceMode: 'both'` if you need the body returned on every `read_skill` call.
 
 ---
 

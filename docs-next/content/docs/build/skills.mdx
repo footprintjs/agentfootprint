@@ -1,16 +1,16 @@
 ---
 title: Skills
-description: defineSkill — LLM-activated body + tools. The LLM calls read_skill('billing') to load a body of guidance plus unlock a set of tools for the rest of the turn. The shipped Skills surface today; full conceptual essay in skills-explained.
+description: defineSkill — LLM-activated body + tools. The LLM calls read_skill('billing') to load a body of guidance for the rest of the turn; autoActivate scopes the skill's tools to that window too. The shipped Skills surface today; full conceptual essay in skills-explained.
 ---
 
-> A support agent handles billing 5% of the time and tech 80% of the time and refunds 15% of the time. **Putting all three playbooks in the system prompt** wastes tokens 95% of the time billing isn't relevant. **Putting them as tools the LLM activates on demand** is what `defineSkill` does — the body + tools land only when the LLM asks for them.
+> A support agent handles billing 5% of the time and tech 80% of the time and refunds 15% of the time. **Putting all three playbooks in the system prompt** wastes tokens 95% of the time billing isn't relevant. **Putting them behind a tool the LLM calls on demand** is what `defineSkill` does — the body lands only when the LLM asks for it, and with `autoActivate` the skill's tools follow the same window.
 
 ## What a Skill is
 
 A `Skill` is the **llm-activated** flavor of the [Injection primitive](doc:key-concepts#context-engineering-cross-cutting). It bundles:
 
 - A `body` — the playbook text the LLM follows when the skill is active
-- A set of `tools` — capabilities the LLM can call only after activating
+- A set of `tools` — the capabilities that go with the playbook. They are registered with the agent up front and callable from iteration 1 unless you add [`autoActivate: 'currentSkill'`](#per-skill-tool-gating--autoactivate), which scopes them to the window where the skill is active
 - A `description` — what the LLM sees BEFORE activating (used to decide whether to read the skill)
 
 The library auto-attaches a `read_skill` tool to the agent. The LLM activates by calling `read_skill('billing')`; the framework looks up the skill, formats the body as the tool result, and lets the LLM use it on the next iteration.
@@ -19,7 +19,7 @@ The library auto-attaches a `read_skill` tool to the agent. The LLM activates by
 
 <CodeFile path="examples/context-engineering/02-skill.ts" region="define-skill" title="examples/context-engineering/02-skill.ts (region: define-skill)" />
 
-The `body` reads the way you'd brief a junior employee. The `tools` array holds capabilities only available once the skill is active — `process_refund` is locked away until the LLM has explicitly chosen to handle billing.
+The `body` reads the way you'd brief a junior employee. The `autoActivate: 'currentSkill'` line is what keeps `process_refund` out of the tool list until the LLM has explicitly chosen to handle billing — **drop that line and `process_refund` is offered from iteration 1**, activated or not, because activation adds the body and the tools were registered at build time. Gating tools is opt-in, not the default.
 
 ## Why progressive disclosure matters
 
@@ -27,7 +27,7 @@ Three reasons:
 
 1. **Token cost** — skill bodies are LARGE (200–2000 tokens of playbook text). Loading all of them on every turn is wasteful. Loading on demand is amortized.
 2. **Context discipline** — the LLM sees ONLY the playbook for what it's currently doing. No cross-domain confusion.
-3. **Capability scoping** — `process_refund` exists in the agent's tool registry only when billing is active. The LLM literally cannot call it during an unrelated turn — defense-in-depth against tool-call mistakes.
+3. **Capability scoping** — with `autoActivate: 'currentSkill'`, `process_refund` is offered to the LLM only while billing is active, so it isn't sitting in the tool list tempting a mistaken call during an unrelated turn. This is a noise-reduction measure, not a security boundary: it decides what the model is *shown*, while the tool stays resolvable by name in the dispatch registry. Enforce real permissions with `gatedTools`.
 
 This is the pattern Anthropic shipped as "Agent SDK Skills" — agentfootprint reimplements it with cross-provider correctness via the [Injection primitive](doc:key-concepts) so it works on `mock()`, OpenAI, Bedrock, Ollama identically.
 
@@ -37,7 +37,7 @@ The LLM's tool-call to `read_skill({ id: 'billing' })` is the activation event. 
 
 1. Looks up `billing` in the agent's registered skills
 2. Formats the body as a tool result the LLM sees on the next iteration
-3. Adds `billing.tools` to the agent's tool registry for the rest of the turn
+3. Starts offering `billing.tools` in the tool list for the rest of the turn — but only if `billing` set `autoActivate: 'currentSkill'`. Without it those tools were already in the registry before the LLM asked, and this step changes nothing
 4. Emits `agentfootprint.skill.activated` for observability
 
 The skill stays active until the agent run ends. The next `agent.run()` starts fresh.
@@ -308,7 +308,7 @@ Two reasons to choose `toTools()` over the auto-attach:
 
 ## Per-skill tool gating — `autoActivate`
 
-By default, a Skill's `tools` array is ADDED to the agent's tool registry on activation. With ~3 skills and ~5 tools each, that's fine. With 20 skills and 100+ tools, the LLM's choice space gets noisy — every iteration's tool list pays the cost.
+By default, a Skill's `tools` array is ADDED to the agent's tool registry at BUILD time — the LLM sees those tools from iteration 1, activated or not. With ~3 skills and ~5 tools each, that's fine. With 20 skills and 100+ tools, the LLM's choice space gets noisy — every iteration's tool list pays the cost.
 
 `autoActivate: 'currentSkill'` narrows the choice space: when you set it, the skill's tools are EXCLUDED from the static tool list and surface to the LLM ONLY on iterations after the skill is activated by `read_skill('id')`. Skills WITHOUT `autoActivate` keep the additive behavior (their tools are always visible).
 

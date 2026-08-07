@@ -341,8 +341,10 @@ slot, composes content, writes an `InjectionRecord[]` (observed by ContextRecord
 skills' tools are hidden from the static LLM list until activated (but kept in `registryByName` for
 dispatch). LLM calls `read_skill(id)` → toolCalls handler appends `id` to `activatedInjectionIds`
 (turn-scoped, never deactivates mid-turn) → next InjectionEngine pass the `llm-activated` trigger
-fires → body+tools flow into slots. `surfaceMode` (auto/system-prompt/tool-only/both) resolved by a
-3-level cascade (skill → registry → provider/model heuristic: Claude≥3.5 → `both`, else `tool-only`).
+fires → body (plus tools, for an `autoActivate` skill) flows into slots. `surfaceMode`
+(auto/system-prompt/tool-only/both) is honored as DECLARED by the slots; the 3-level cascade
+(skill → registry → provider/model heuristic: Claude≥3.5 → `both`, else `tool-only`) lives in
+`SkillRegistry.resolveForSkill`, which callers ask — delivery never resolves `'auto'` itself.
 
 ---
 

@@ -42,7 +42,8 @@ export interface SystemPromptSlotArgs {
 export interface SystemPromptSlotConfig {
   /** Static string OR a function. Empty string → no injection, empty slot. */
   readonly prompt: string | SystemPromptFn;
-  /** Budget cap (chars). Default: 4000. */
+  /** Budget cap (chars). Default: 4000. Set from the public door as
+   *  `contextBudget.systemPrompt` on `AgentOptions` / `LLMCallOptions`. */
   readonly budgetCap?: number;
   /**
    * Where this prompt originated, recorded on the base InjectionRecord
@@ -161,7 +162,8 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
               itemCount: injections.length,
               itemNoun: 'prompt fragment',
               contentNoun: 'fragments',
-              remedy: 'Raise budgetCap on the slot config or shorten the system prompt.',
+              remedy:
+                'Raise contextBudget.systemPrompt on the agent, or shorten the system prompt.',
             }),
           );
         }

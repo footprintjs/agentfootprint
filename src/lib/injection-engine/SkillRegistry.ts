@@ -205,9 +205,11 @@ export class SkillRegistry {
    *      omitted). Falls back to `'tool-only'` when no provider is
    *      known.
    *
-   * Forward-compat for Block C / v2.5 per-mode runtime routing: the
-   * runtime calls this with the agent's provider + model to decide
-   * how to materialize the skill's body into slots.
+   * Callers pass the agent's provider + model to get the RECOMMENDED
+   * surface mode for a skill. Note this is a recommendation, not the
+   * delivery decision: body delivery compares the DECLARED
+   * `metadata.surfaceMode` string, so a skill left on `'auto'` is
+   * delivered as `'system-prompt'` regardless of what this returns.
    *
    * Throws if the skill is not registered (catches typos at the
    * caller site rather than silently resolving against a stranger).

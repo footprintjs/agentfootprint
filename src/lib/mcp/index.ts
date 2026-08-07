@@ -12,6 +12,7 @@ export {
   GatewayAuthorizationRequiredError,
   type GatewayTransportOptions,
 } from './gatewayTransport.js';
+export type { RetryOnThrottle, ThrottleRetryInfo, ThrottleRetryOptions } from './throttleRetry.js';
 export type {
   McpCallToolResult,
   McpClient,

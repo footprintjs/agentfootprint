@@ -2,9 +2,13 @@
  * defineSkill — sugar for LLM-activated Injections that target both
  * system-prompt + tools.
  *
- * A Skill is a bundle of (1) a body of guidance and (2) optionally
- * unlocked tools. The LLM decides when a Skill is needed by calling
- * a designated activation tool — by default `read_skill(<id>)`.
+ * A Skill is a bundle of (1) a body of guidance and (2) optionally some
+ * tools. The LLM decides when a Skill is needed by calling a designated
+ * activation tool — by default `read_skill(<id>)`.
+ *
+ * Activation is about the BODY. A Skill's tools are registered up front
+ * and callable from iteration 1 unless the Skill sets
+ * `autoActivate: 'currentSkill'` — see that option.
  *
  * Produces an `Injection` with:
  *   - flavor: `'skill'`
@@ -15,8 +19,9 @@
  * or more Skills are present. When the LLM calls
  * `read_skill('billing')`, the engine adds `'billing'` to
  * `ctx.activatedInjectionIds`; the next iteration's evaluator
- * matches this Skill's `id`, activates it, and the body + tools land
- * in the slot subflows.
+ * matches this Skill's `id`, activates it, and the body lands in the
+ * slot subflows (plus the tools, for an `autoActivate` Skill — every
+ * other Skill's tools were already there).
  *
  * @example
  *   const billingSkill = defineSkill({
@@ -35,25 +40,31 @@ import type { CachePolicy } from '../../../cache/types.js';
 /**
  * Where the Skill's body lands when activated.
  *
- * - `'system-prompt'` — body appended to the system slot on the
- *   iteration after activation. Best on Claude ≥ 3.5 (training-time
- *   adherence to system-prompt instructions is strong).
- * - `'tool-only'` — body delivered ONLY via the `read_skill` tool's
- *   result. Recency-first by protocol; doesn't rely on the model's
- *   training to honor system-prompt anchoring. Default for every
- *   non-Claude provider.
- * - `'both'` — body lands in both the system slot AND the tool result.
- *   Belt-and-suspenders for high-stakes Skills on long-context runs.
- * - `'auto'` — the library picks per provider via `resolveSurfaceMode`.
- *   `'both'` on Claude ≥ 3.5; `'tool-only'` everywhere else.
+ * Delivery reads the mode you DECLARED, literally — `buildSystemPromptSlot`
+ * decides the system slot, the `read_skill` tool decides its own result:
  *
- * **v2.5 runtime dispatch (Block C):** modes now route differently:
- *   - `'system-prompt'` → body in system slot, tool result is confirmation
- *   - `'tool-only'`     → body SUPPRESSED from system slot, tool result IS the body
- *   - `'both'`          → body in system slot AND in tool result
- *   - `'auto'`          → keeps v2.4 behavior (body in system slot, tool result is confirmation)
- *     The Block A4 cascade resolves `'auto'` against provider/model context
- *     at a future runtime layer (Claude ≥ 3.5 → `'both'`; else `'tool-only'`).
+ * - `'system-prompt'` — body appended to the system slot on the
+ *   iteration after activation; the `read_skill` result is a one-line
+ *   confirmation. Best on Claude ≥ 3.5 (training-time adherence to
+ *   system-prompt instructions is strong).
+ * - `'tool-only'` — body SUPPRESSED from the system slot and returned as
+ *   the `read_skill` tool result instead. Recency-first by protocol;
+ *   doesn't rely on the model's training to honor system-prompt
+ *   anchoring. Legal only on a Skill that `read_skill` really activates —
+ *   a Skill a skill graph routes to is refused at build time, because the
+ *   tool call that would carry the body never happens (`skillBodyDelivery.ts`).
+ * - `'both'` — body lands in the system slot AND in the tool result.
+ *   Belt-and-suspenders for high-stakes Skills on long-context runs.
+ * - `'auto'` (the default) — delivered exactly like `'system-prompt'`:
+ *   body in the system slot, tool result is a confirmation. It is NOT
+ *   resolved per provider on the delivery path.
+ *
+ * `resolveSurfaceMode(provider, model)` — Claude ≥ 3.5 → `'both'`, else
+ * `'tool-only'` — is the per-provider RECOMMENDATION, and it runs only where
+ * something asks for it: `SkillRegistry.resolveForSkill(...)` (the skill →
+ * registry → provider cascade) and `resolvedSurfaceModeOf(skill, provider,
+ * model)`. Nothing on the delivery path calls it, so feed its answer back in
+ * as an explicit `surfaceMode` if you want it honored.
  */
 export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
 
@@ -65,10 +76,13 @@ export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
  * the body via tool result past a token threshold so the LLM sees it
  * fresh again.
  *
- * **v2.4 status:** the field is reserved + typed; the runtime hook
- * lands in v2.5 as part of the long-context attention work. Specifying
- * `refreshPolicy` today is non-breaking — the engine ignores it until
- * the hook is implemented.
+ * **Status: declared, not yet wired.** `defineSkill` stores what you pass
+ * on `skill.metadata.refreshPolicy`, and nothing in the engine reads it —
+ * no re-injection happens today, on any version. The field is typed and
+ * non-breaking so a Skill can record the intent, but do not count on the
+ * behavior until this note says the hook shipped. If you need a body
+ * re-surfaced in a long run, deliver it yourself (e.g. `surfaceMode:
+ * 'both'`, so every `read_skill` call returns the body afresh).
  */
 export interface RefreshPolicy {
   /**
@@ -90,7 +104,13 @@ export interface DefineSkillOptions {
   readonly description: string;
   /** Body appended to the system-prompt slot once activated. */
   readonly body: string;
-  /** Optional unlocked tools, added to the tools slot once activated. */
+  /** Tools this Skill contributes. **By default they are added to the agent's tool
+   *  registry at build time and are visible to the model from the first iteration,
+   *  whether or not the Skill is ever activated** — activation adds the Skill's
+   *  body, not its tools. To make the tools appear only while the Skill is active,
+   *  set `autoActivate: 'currentSkill'`; `skillGraph().tree()` sets it for you on
+   *  every leaf. If a tool must never be offered before activation, that is not a
+   *  default — say so with `autoActivate`. */
   readonly tools?: readonly Tool[];
   /**
    * Override the activation tool name. Defaults to `'read_skill'`.
@@ -109,31 +129,36 @@ export interface DefineSkillOptions {
   readonly viaToolName?: string;
   /**
    * Where the body lands when activated. See `SurfaceMode`. Default
-   * `'auto'` — the library resolves per provider via `resolveSurfaceMode`.
+   * `'auto'`, which delivers like `'system-prompt'`; name a mode
+   * explicitly to get the other channels.
    */
   readonly surfaceMode?: SurfaceMode;
   /**
-   * Re-deliver the body past a token threshold to defend against
-   * long-context attention decay. Default: undefined (no refresh).
+   * Intent to re-deliver the body past a token threshold, to defend
+   * against long-context attention decay. Default: undefined.
+   *
+   * Recorded on the Skill's metadata and NOT yet acted on by the engine —
+   * see `RefreshPolicy` before you rely on it.
    */
   readonly refreshPolicy?: RefreshPolicy;
   /**
-   * Per-skill tool gating intent. Block A5 / v2.5.
+   * Per-skill tool gating — the field that makes this Skill's `tools`
+   * appear only while the Skill is active.
    *
-   * - `'currentSkill'` — when this Skill is the only active one, the
-   *   agent's tool list should narrow to this Skill's `tools` (plus
-   *   the consumer-composed baseline). Used with
-   *   `skillScopedTools(id, tools)` from `agentfootprint/tool-providers`
-   *   to materialize the gate. Block C wires this into the runtime
-   *   automatically.
-   * - `undefined` (default) — current additive behavior: this Skill's
-   *   tools are added to the agent's registry on activation, alongside
-   *   every other tool already registered.
+   * - `'currentSkill'` — this Skill's `tools` are held out of the agent's
+   *   static tool list and offered to the model only on iterations where
+   *   the Skill is active. Outside the Agent's own wiring, materialize the
+   *   same gate with `skillScopedTools(id, tools)` from
+   *   `agentfootprint/tool-providers`.
+   * - `undefined` (default) — additive: this Skill's tools go into the
+   *   agent's registry at BUILD time and the model can see and call them
+   *   from iteration 1, activated or not.
    *
-   * The field is a forward-compat marker today: the metadata stores
-   * it; consumers can read `skill.metadata.autoActivate` to drive
-   * their own ToolProvider composition. v2.5 runtime wiring builds
-   * on this contract without API change.
+   * Wired at runtime since v2.5: `buildToolRegistry` holds these tools out of the
+   * static registry and `buildToolsSlot` readmits them per-iteration from the
+   * active injections. Dispatch is unaffected either way — an autoActivate tool
+   * stays callable by name once activated. Read `skill.metadata.autoActivate` if
+   * you compose your own ToolProvider.
    */
   readonly autoActivate?: AutoActivateMode;
   /**
@@ -212,12 +237,12 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
       ...(opts.tools && opts.tools.length > 0 && { tools: opts.tools }),
     },
     // Skill-specific options live in metadata. The engine reads them
-    // when present; absent metadata = current behavior. Forward-compat:
-    // when v2.5 implements per-mode routing diversity, this field is
-    // already where the runtime looks.
+    // when present; absent metadata = current behavior. `surfaceMode` and
+    // `autoActivate` are read at runtime; `refreshPolicy` is recorded here
+    // and not yet acted on by anything (see its docstring — it is stored,
+    // not honoured).
     //
-    // `cache` joins the metadata bag in v2.6 — CacheDecision subflow
-    // reads `metadata.cache` to know how to treat this skill's body.
+    // `cache` also rides this bag when a caller sets it.
     metadata: Object.freeze({
       surfaceMode: opts.surfaceMode ?? 'auto',
       ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),

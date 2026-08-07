@@ -7,6 +7,212 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.11.0] - 2026-08-07
+
+**Telemetry that fails invisibly is indistinguishable from telemetry that
+works.** That sentence is the whole release. Three of the things fixed here
+were not bugs in the ordinary sense — nothing threw, nothing crashed, every
+test passed. They were promises the documentation made that the code did not
+keep, in the one layer whose entire job is to tell you the truth about what
+happened.
+
+Found by a production AgentCore integration, the way these things are always
+found: on real infrastructure, at the last hop.
+
+### ⚠️ Behavior change: a throttled MCP tool call now retries
+
+`mcpClient` retries an HTTP **429** up to 3 times, honouring the server's
+`Retry-After` header, capped at 10 seconds of waiting in total. It was on
+nothing before. Opt out with `retryOnThrottle: false`.
+
+**No call that succeeds today behaves differently** — this changes only calls
+that currently fail. But a throttled call that used to fail in milliseconds can
+now take seconds before it fails, so it is a behavior change and it leads this
+entry rather than hiding in a bullet.
+
+### The log stream that was never created
+
+`agentcoreObservability` and `cloudwatchObservability` called `PutLogEvents`
+directly. CloudWatch rejects a put into a log stream that does not exist, so
+**any stream name that had not been created by hand dropped every event,
+forever, in silence.** The failure had no error, no warning and no partial
+delivery — just an empty log group.
+
+The docstring for `logStreamName` had been promising `"Created on first put if
+it doesn't exist"` since the adapter shipped. It was never true. Worse, the
+convention the docs themselves recommended — `` `${HOSTNAME}/${Date.now()}` ``
+— produces a name that *cannot* pre-exist, so following the documentation
+guaranteed the bug on every deploy. The only configuration that worked was the
+undocumented one.
+
+The stream is now created on first delivery, tolerating the
+`ResourceAlreadyExistsException` of two processes racing, and the failed batch
+is re-sent once. **The log group is still yours to provision** — a group
+carries retention and encryption decisions that belong to whoever owns the
+account (a group created with default retention never expires, which is an
+unbounded bill created by a telemetry library), and the docstrings now say so
+instead of implying otherwise.
+
+### The silence underneath it
+
+The missing stream was one delivery failure. It turned out **every** delivery
+failure was silent: an IAM denial, a throttle, a rejected batch. Each adapter
+installed its console fallback lazily *inside* its own `_onError` method — so
+the delivery path, which read the hook rather than calling the method, found
+`undefined` and dropped the error on the floor. `cloudwatch`, `xray` and `otel`
+all had it.
+
+Three changes, one shape: the fallback is armed at construction; delivery
+failures route through whatever `_onError` **is at call time**, so assigning it
+actually works; and there is now a real front door —
+
+```ts
+cloudwatchObservability({
+  logGroupName: '/myapp/agent-prod',
+  onError: (err) => log.warn({ err }, 'telemetry export failed'),
+});
+```
+
+The default sink is loud on the first failure and then logarithmically quieter
+(failures 1, 2, 4, 8 … carrying the running count), because an hour-long
+CloudWatch outage must not become a second outage in your logs. A sink you
+supply is never rate-limited — you asked for every failure.
+
+**The test that let this ship** reassigned `strategy._onError`, the very code
+under test, and then wrapped its only assertion in `if (captured)`. It could not
+fail. It is replaced by six that assert unconditionally.
+
+### A knob the warning told you to turn, that did not exist
+
+An over-budget context slot warned: *"Raise `budgetCap` on the slot config."*
+`budgetCap` was reachable from no public door. `buildMessagesSlot()` was called
+with no arguments at all four of its call sites, so its 10000-character cap was
+unreachable by construction. A warning you cannot act on is worse than no
+warning — it teaches people to ignore the channel.
+
+```ts
+Agent.create({ provider, model, contextBudget: { messages: 40_000 } });
+```
+
+Characters, per slot, named for the three slots the context model already has.
+Defaults unchanged (`systemPrompt` 4000, `messages` 10000, `tools` 2000), and
+**nothing is ever truncated** — the full content still reaches the LLM. The
+budget is a signal, not a limiter. `LLMCallOptions` takes the same option
+(two slots; an LLMCall has no tools).
+
+### Why retrying a 429 is safe, and why it will never widen
+
+A 429 is a **pre-execution rejection**: the rate limiter refused the request at
+the edge and the server never ran the tool, so a retry cannot double-execute
+anything. That is exactly what is *not* true of a 500 or a timeout, where the
+call may have half-run and a retry could charge a card twice.
+
+That asymmetry is the entire license for this feature, so the policy is 429 and
+nothing else — pinned by a property test that walks twelve other statuses and a
+thrown transport error and asserts a single attempt for each. Managed gateways
+rate-limit per principal by design; without this, a designed and self-clearing
+condition reached the model as a thrown tool error it reads as *"this tool is
+broken"*, whereupon it apologises, picks another tool, or invents an answer.
+
+It lives at the `fetch` seam because that is the only place `Retry-After` still
+exists — the MCP SDK reads the response, throws `StreamableHTTPError(status,
+text)` and drops the `Response`, so by the time a throttle reaches
+`Tool.execute` the header is gone and the status survives only as `err.code`.
+The retry wraps the **outermost** fetch, so every attempt is re-signed and
+re-vended: a token that would have expired during the wait is simply never the
+one reused. The gateway secrecy invariant is untouched, and a test asserts no
+token appears in any retry report.
+
+Per-attempt visibility is the `onRetry` callback — the contract `withRetry` and
+`withCredentialRetry` already use. No new event types.
+
+### Documentation that was describing a different library
+
+- **`ObservabilityStrategy`'s hot path is `exportEvent`.** Six doc lines in
+  `strategies/types.ts` called it `onEvent`, including one two lines above the
+  interface that declares `exportEvent`. That text shipped in the `.d.ts`, so it
+  is what an IDE showed.
+- **Nothing calls `flush()` or `stop()` for you.** The docstrings promised
+  `"Called before agent.run() resolves"`; across the whole library the only
+  caller is `composeObservability` fanning out to its own children. The
+  `Unsubscribe` from `enable.observability()` only detaches the dispatcher. They
+  are consumer-called, the docs now say so, and a batching exporter loses its
+  final batch and leaks its timer if you skip them:
+  ```ts
+  process.on('SIGTERM', async () => { await telemetry.flush(); telemetry.stop(); stop(); });
+  ```
+  Wiring them into the framework lifecycle would change `run()` timing and
+  misbehave for a strategy shared across two `enable` calls, so it is a design
+  question on the ledger rather than a silent default.
+- **A Skill's tools are visible from iteration 1.** `DefineSkillOptions.tools`
+  said they were *"added to the tools slot once activated"*. They are added to
+  the registry at build time; activation adds the Skill's **body**, not its
+  tools. Gating is opt-in via `autoActivate: 'currentSkill'` (which
+  `skillGraph().tree()` sets for you on every leaf) — and the docs said
+  otherwise in twelve places, including a `process_refund` example claiming a
+  tool was *"locked away"*. That example now sets `autoActivate` and the prose
+  no longer implies a security boundary the default does not provide.
+- **`autoActivate` stopped calling itself a forward-compat marker** awaiting
+  "v2.5 runtime wiring" — that wiring shipped in 2.5.0, six majors ago.
+  `refreshPolicy`, by contrast, is still genuinely unwired, and now says so
+  without promising a version.
+- **The observability `tier` is not a privacy control.** No tier redacts
+  anything, and a lower tier is not a safer one: `'minimal'` still ships
+  `agent.turn_start` (`userPrompt`), `agent.turn_end` (`finalContent`) and
+  `agent.iteration_end` (the whole conversation `history[]`) — measured, it
+  carries user content in a *higher* share of its events than `'standard'` does.
+  The docstring says this plainly now, points at `auditExport()` (bounded by
+  default) and `otelObservability()` (omits `userPrompt`), and warns that
+  `redactContent` does **not** apply to this channel — it operates on the
+  offline `serializeTrace` universe, and wiring it here is a silent no-op.
+- **In AWS, start with `xrayObservability`** — one optional peer, one IAM
+  permission (`xray:PutTraceSegments`, previously undocumented), no collector to
+  run. Reach for `otelObservability` when the destination is not AWS.
+
+### Four defects that shipped because nothing checked
+
+`npm run docs:truth` gained a doc-text rule class — a gate, never ratcheted,
+because the steady state of each rule is zero: `onEvent` under `src/strategies/`,
+activation claims on `DefineSkillOptions.tools`, and stale version promises
+(the general shape — a docstring promising a version that is now in the past,
+not the literal string `v2.5`).
+
+### Added
+
+- **`CloudwatchObservabilityOptions.onError`** / **`XrayObservabilityOptions.onError`**
+  / **`OtelObservabilityOptions.onError`** — a constructor door for delivery
+  failures. Equivalent to assigning `_onError`, but visible at the call site.
+- **`CloudWatchLikeClient.createLogStream`** — optional, so an existing
+  `_client` test double that only implements `putLogEvents` still type-checks.
+- **`McpClientOptions.retryOnThrottle`** — `boolean | { maxAttempts?, maxWaitMs?, onRetry? }`.
+  Default on. Ignored for `stdio`, which has no HTTP status to read.
+- **`AgentOptions.contextBudget`** / **`LLMCallOptions.contextBudget`** —
+  `{ systemPrompt?, messages?, tools? }`, in characters.
+
+### Fixed
+
+- CloudWatch/AgentCore observability delivered **zero events** to any log stream
+  that did not already exist, silently. The stream is now created on first
+  delivery.
+- Delivery failures in `cloudwatch`, `xray` and `otel` reached nobody unless
+  something had already called `_onError` for an unrelated reason.
+- A failed CloudWatch batch now reports how many events were dropped, and names
+  the likely cause (missing group vs missing `logs:CreateLogStream`) when a
+  stream cannot be created. A create that fails for a non-recoverable reason is
+  attempted once and latched off, so it can never loop — while every dropped
+  batch is still reported.
+- MCP `tools/call` turned a designed rate limit into a tool error the model
+  reads as a broken tool.
+- The slot over-budget warnings named `budgetCap`, which no public door reached,
+  and disagreed with each other about where it lived.
+
+### Compatibility
+
+Minor. Every new option is optional and every default is unchanged. The one
+behavior change is the 429 retry described above; the CloudWatch fix changes
+only a path that delivered nothing. New IAM requirement — `logs:CreateLogStream`
+— applies only where delivery is currently failing.
+
 ## [8.10.0] - 2026-08-06
 
 **A folder of documents becomes an answering agent.** 8.8.0 made retrieval tell

@@ -23,6 +23,7 @@
 
 import type { Tool } from '../../core/tools.js';
 import type { CredentialProvider } from '../../identity/types.js';
+import type { RetryOnThrottle } from './throttleRetry.js';
 
 // ─── Transport options ─────────────────────────────────────────────
 
@@ -165,6 +166,40 @@ export interface McpClientOptions {
 
   /** Abort the connection / list / call paths. Honored by the SDK. */
   readonly signal?: AbortSignal;
+
+  /**
+   * What happens when the server says "too many requests" (HTTP 429). New in
+   * 8.11.0, and **on by default**.
+   *
+   * Default: retry up to 3 times, waiting as long as the server's
+   * `Retry-After` header asks (and, when it sends none, a jittered backoff),
+   * never longer than 10 seconds of waiting in total across one call. Set
+   * `false` to let a throttled call fail immediately, or pass an object to
+   * tune the ceilings and to learn when it happens:
+   *
+   * ```ts
+   * const gateway = await mcpClient({
+   *   name: 'gateway',
+   *   transport: gatewayTransport({ url, credentials }),
+   *   retryOnThrottle: {
+   *     maxAttempts: 5,
+   *     onRetry: ({ attempt, waitMs, retryAfterMs }) =>
+   *       log.warn({ attempt, waitMs, retryAfterMs }, 'gateway throttled'),
+   *   },
+   * });
+   * ```
+   *
+   * **Why this is on by default.** A 429 is a *pre-execution rejection* — the
+   * rate limiter refused the request at the edge and the server never ran the
+   * tool, so a retry cannot double-execute anything. That is not true of a
+   * 5xx or a timeout, where the call may have half-run, which is why this
+   * retries 429 and nothing else. Managed gateways rate-limit per principal
+   * by design, and without this a designed, self-clearing condition reached
+   * the model as a thrown tool error it reads as "this tool is broken".
+   *
+   * Ignored for `stdio`, which has no HTTP status to read.
+   */
+  readonly retryOnThrottle?: RetryOnThrottle;
 
   /**
    * @internal Pre-built SDK client for tests. Skips SDK import +

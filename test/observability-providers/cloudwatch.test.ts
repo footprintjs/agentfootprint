@@ -10,7 +10,7 @@
  *   P7 ROI          — capabilities + parity guarantee with agentcoreObservability
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cloudwatchObservability,
   type CloudWatchLikeClient,
@@ -38,6 +38,51 @@ function makeMockClient(): {
     client: {
       async putLogEvents(input) {
         batches.push(input as CapturedBatch);
+      },
+    },
+  };
+}
+
+/** AWS's shape for "that stream isn't there" — what a real put rejects with. */
+function missingStreamError(): Error {
+  return Object.assign(new Error('The specified log stream does not exist.'), {
+    name: 'ResourceNotFoundException',
+  });
+}
+
+/** Lost a create race with another process. */
+function alreadyExistsError(): Error {
+  return Object.assign(new Error('The specified log stream already exists'), {
+    name: 'ResourceAlreadyExistsException',
+  });
+}
+
+/**
+ * A client that enforces CloudWatch's REAL precondition: a put into a stream
+ * that does not exist is rejected. The pre-8.11.0 mock accepted every put,
+ * which is exactly why the defect passed its tests.
+ */
+function makeStreamAwareClient(existing: Set<string>): {
+  client: CloudwatchObservabilityOptions['_client'];
+  batches: CapturedBatch[];
+  createCalls(): ReadonlyArray<{ logGroupName: string; logStreamName: string }>;
+} {
+  const batches: CapturedBatch[] = [];
+  const creates: Array<{ logGroupName: string; logStreamName: string }> = [];
+  return {
+    batches,
+    createCalls: () => creates,
+    client: {
+      putLogEvents(input) {
+        const key = `${input.logGroupName}::${input.logStreamName}`;
+        if (!existing.has(key)) return Promise.reject(missingStreamError());
+        batches.push(input as CapturedBatch);
+        return Promise.resolve();
+      },
+      createLogStream(input) {
+        creates.push({ ...input });
+        existing.add(`${input.logGroupName}::${input.logStreamName}`);
+        return Promise.resolve();
       },
     },
   };
@@ -83,6 +128,66 @@ describe('cloudwatchObservability — P2 boundary', () => {
     expect(batches[0]?.logGroupName).toBe('/cw/group');
     expect(batches[0]?.logStreamName).toBe('cw-stream');
     expect(batches[0]?.logEvents).toHaveLength(2);
+  });
+
+  // ── 8.11.0: create the log stream on first delivery ────────────────
+  //
+  // Before 8.11.0 this adapter called PutLogEvents directly. CloudWatch
+  // rejects a put into a stream that does not exist, so ANY stream name that
+  // was not pre-created dropped every event, forever, in silence — and the
+  // convention the docs themselves recommended (`<host>/<Date.now()>`) can
+  // never pre-exist, so following the documentation guaranteed the bug.
+
+  it('P2 a missing stream is created once, then the SAME batch is delivered', async () => {
+    const { client, batches, createCalls } = makeStreamAwareClient(new Set());
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      logStreamName: 'host-a/1754500000000',
+      flushIntervalMs: 0,
+      _client: client,
+    });
+    strat.exportEvent(fakeEvent);
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(createCalls()).toEqual([{ logGroupName: '/g', logStreamName: 'host-a/1754500000000' }]);
+    expect(batches).toHaveLength(1);
+    // No event is lost to the failed first put — the batch is re-sent whole.
+    expect(batches[0]?.logEvents).toHaveLength(2);
+  });
+
+  it('P2 a stream the operator already made costs no CreateLogStream call', async () => {
+    const { client, batches, createCalls } = makeStreamAwareClient(new Set(['/g::pre-made']));
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      logStreamName: 'pre-made',
+      flushIntervalMs: 0,
+      _client: client,
+    });
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(createCalls()).toHaveLength(0);
+    expect(batches).toHaveLength(1);
+  });
+
+  it('P2 an injected client without createLogStream reports instead of crashing', async () => {
+    // Back-compat: `_client` doubles written before 8.11.0 only implement
+    // putLogEvents. They must still type-check and must fail loudly, not hard.
+    const errors: string[] = [];
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      onError: (e) => errors.push(e.message),
+      _client: {
+        putLogEvents: () => Promise.reject(missingStreamError()),
+      },
+    });
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/has no `createLogStream`/);
   });
 });
 
@@ -140,26 +245,182 @@ describe('cloudwatchObservability — P5 security', () => {
     ).toThrow(TypeError);
   });
 
-  it('P5 missing SDK + no _client → flush() routes through _onError with install hint', async () => {
+  // ── 8.11.0: a delivery failure must reach SOMEBODY ─────────────────
+  //
+  // The test this replaces reassigned `strat._onError` — the very code under
+  // test — and then guarded its only assertion with `if (captured)`. It could
+  // not fail, which is how a silent-delivery defect shipped. These four assert
+  // unconditionally, and each covers a different door.
+
+  it('P5 with nothing wired, a delivery failure still reaches the console', async () => {
+    const said: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+      said.push(a.map(String).join(' '));
+    });
+    try {
+      const strat = cloudwatchObservability({
+        logGroupName: '/g',
+        flushIntervalMs: 0,
+        _client: { putLogEvents: () => Promise.reject(new Error('AccessDeniedException')) },
+      });
+      strat.exportEvent(fakeEvent);
+      await strat.flush?.();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/cloudwatchObservability/);
+    expect(said[0]).toMatch(/AccessDeniedException/);
+    // Says how much was lost, not just that something went wrong.
+    expect(said[0]).toMatch(/1 event\(s\) dropped/);
+  });
+
+  it('P5 the `onError` option receives delivery failures', async () => {
+    const errors: Error[] = [];
     const strat = cloudwatchObservability({
       logGroupName: '/g',
       flushIntervalMs: 0,
+      onError: (e) => errors.push(e),
+      _client: { putLogEvents: () => Promise.reject(new Error('ThrottlingException')) },
     });
-    let captured = '';
-    strat._onError = (e) => {
-      captured = e.message;
-    };
     strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toMatch(/ThrottlingException/);
+  });
+
+  it('P5 an assigned `_onError` receives delivery failures too', async () => {
+    // The regression guard for the original defect: the hook used to be
+    // captured at construction, so assigning `_onError` had no effect on the
+    // delivery path and every failed put vanished.
+    const errors: Error[] = [];
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      _client: { putLogEvents: () => Promise.reject(new Error('ServiceUnavailable')) },
+    });
+    strat._onError = (e) => errors.push(e);
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toMatch(/ServiceUnavailable/);
+  });
+
+  it('P5 repeated failures are rate-limited and carry the running count', async () => {
+    // An outage must not become a second outage. 20 failures, logarithmic
+    // lines — and the count is in the text so the log says it is ongoing.
+    const said: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+      said.push(a.map(String).join(' '));
+    });
     try {
+      const strat = cloudwatchObservability({
+        logGroupName: '/g',
+        flushIntervalMs: 0,
+        _client: { putLogEvents: () => Promise.reject(new Error('down')) },
+      });
+      for (let i = 0; i < 20; i++) {
+        strat.exportEvent(fakeEvent);
+        await strat.flush?.();
+      }
+    } finally {
+      spy.mockRestore();
+    }
+    expect(said.length).toBeGreaterThan(0);
+    expect(said.length).toBeLessThan(10);
+    expect(said[said.length - 1]).toMatch(/delivery failure #\d+/);
+  });
+
+  it('P5 a consumer sink is NOT rate-limited — they asked for every failure', async () => {
+    const errors: Error[] = [];
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      onError: (e) => errors.push(e),
+      _client: { putLogEvents: () => Promise.reject(new Error('down')) },
+    });
+    for (let i = 0; i < 20; i++) {
+      strat.exportEvent(fakeEvent);
       await strat.flush?.();
-    } catch {
-      // SDK lazy-require failure may surface via throw OR onError —
-      // both are acceptable. The test verifies the error contains
-      // a useful install hint when it surfaces.
     }
-    if (captured) {
-      expect(captured).toMatch(/aws-sdk|cloudwatch|peer dependency/i);
+    expect(errors).toHaveLength(20);
+  });
+
+  it('P5 missing SDK + no _client → flush() routes through _onError with install hint', async () => {
+    const errors: Error[] = [];
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      onError: (e) => errors.push(e),
+    });
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+    // Unconditional now: the peer-dep failure is a delivery failure like any
+    // other and MUST surface through the same door.
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toMatch(/aws-sdk|cloudwatch|peer dependency/i);
+  });
+});
+
+// ─── P5b Security — the create path cannot loop or hide ──────────────
+
+describe('cloudwatchObservability — P5 security (stream creation)', () => {
+  it('P5 a create race with another process is swallowed — the stream exists', async () => {
+    const batches: CapturedBatch[] = [];
+    let putAttempts = 0;
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      _client: {
+        putLogEvents(input) {
+          putAttempts++;
+          if (putAttempts === 1) return Promise.reject(missingStreamError());
+          batches.push(input as CapturedBatch);
+          return Promise.resolve();
+        },
+        // Somebody else won the race between our put and our create.
+        createLogStream: () => Promise.reject(alreadyExistsError()),
+      },
+    });
+    strat.exportEvent(fakeEvent);
+    await strat.flush?.();
+
+    expect(batches).toHaveLength(1);
+  });
+
+  it('P5 a create denied by IAM is attempted ONCE and never loops', async () => {
+    const errors: string[] = [];
+    let createAttempts = 0;
+    const strat = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 0,
+      onError: (e) => errors.push(e.message),
+      _client: {
+        putLogEvents: () => Promise.reject(missingStreamError()),
+        createLogStream: () => {
+          createAttempts++;
+          return Promise.reject(
+            Object.assign(new Error('not authorized: logs:CreateLogStream'), {
+              name: 'AccessDeniedException',
+            }),
+          );
+        },
+      },
+    });
+    for (let i = 0; i < 5; i++) {
+      strat.exportEvent(fakeEvent);
+      await strat.flush?.();
     }
+
+    // Latched off after the first non-recoverable failure.
+    expect(createAttempts).toBe(1);
+    // But every dropped batch is still reported — the latch silences the
+    // retrying, never the reporting.
+    expect(errors).toHaveLength(5);
+    expect(errors[0]).toMatch(/log GROUP exists/);
+    expect(errors[0]).toMatch(/logs:CreateLogStream/);
   });
 });
 

@@ -461,6 +461,377 @@ function readExercised() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// 3c. DOC-TEXT RULES — prose that contradicts the code it sits next to
+// ─────────────────────────────────────────────────────────────────────
+/**
+ * Everything above this line reasons about NAMES: is the symbol exported, is
+ * its name mentioned in prose, was it seen firing. Nothing above reads a
+ * SENTENCE. Three defects shipped in 8.10.0 that were nothing BUT sentences —
+ * every symbol involved existed, was exported, and was documented, so every
+ * check in this file passed while the words were wrong:
+ *
+ *   1. six doc lines in `src/strategies/types.ts` called the observability
+ *      hot path `onEvent`; it is `exportEvent`, and the wrong name SHIPS —
+ *      doc comments are copied verbatim into the emitted `.d.ts`, so it is
+ *      what a consumer's editor shows on hover.
+ *   2. `DefineSkillOptions.tools` said its tools are "added to the tools slot
+ *      once activated". They are not: they go into the registry at BUILD time
+ *      and are callable from iteration 1 unless `autoActivate` is set. A
+ *      reader who believed it shipped tools they thought were hidden.
+ *   3. `autoActivate` called itself "a forward-compat marker" awaiting "v2.5
+ *      runtime wiring" — six majors after that wiring shipped.
+ *
+ * Nothing mechanical could have caught any of them. TypeDoc renders a comment,
+ * it never disagrees with one; twoslash compiles fenced code, and a comment is
+ * not code. So this section is a small set of TARGETED greps — one per known
+ * defect, each naming an exact file, an exact wrong phrase and the exact fix.
+ *
+ * POLICY: GATE, not ratchet. Unlike the undocumented-symbol counts, whose
+ * steady state is "hundreds of known gaps", the steady state of each rule here
+ * is ZERO by construction: a rule is only added once the sentence it describes
+ * has been established as false. There is nothing to ratchet, and baselining a
+ * known-false sentence would mean shipping it deliberately. These findings
+ * therefore fail the build like the phantom class, baseline or not, and they
+ * are NOT recorded in baseline.json.
+ *
+ * Being greps, they are literal-minded, and that is deliberate — the moment a
+ * rule needs a semantic model of the sentence it stops being trustworthy. When
+ * a rule is genuinely wrong, EDIT THE RULE (they are one array, below) rather
+ * than adding a suppression marker to the source: a marker in a doc comment
+ * would ship inside the published `.d.ts`, which is the very surface defect 1
+ * was about.
+ */
+
+/** Generated or vendored trees. Nothing here is hand-written prose. */
+const SCAN_SKIP = [
+  join(ROOT, 'node_modules'),
+  join(ROOT, 'dist'),
+  join(ROOT, '.git'),
+  join(ROOT, 'coverage'),
+  join(ROOT, 'docs-next', 'node_modules'),
+  join(ROOT, 'docs-next', '.next'),
+  GENERATED_IN_SITE, // docs-next/content/docs/api  (TypeDoc)
+  GENERATED_LEGACY, // docs/api-reference           (TypeDoc)
+  DATA_DIR, // docs/docs-truth              (this check's own data)
+  REPORT_PATH, // docs/DOCS_TRUTH_REPORT.md    (this check's own output)
+];
+
+const PKG_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+
+function scanFiles(relDir, exts) {
+  return walkFiles(join(ROOT, relDir), exts, SCAN_SKIP);
+}
+
+function readLines(relPath) {
+  const abs = join(ROOT, relPath);
+  if (!existsSync(abs)) return null;
+  return readFileSync(abs, 'utf8').split('\n');
+}
+
+/**
+ * A mention the sentence itself denies — "the hot path is `exportEvent`; there
+ * is no `onEvent`" — is the CORRECTION, not the defect, and flagging it would
+ * push an author into deleting a genuinely useful line.
+ *
+ * Deliberately narrow: the denial must be ADJACENT to the name — only quoting,
+ * an article or a determiner may sit between. Measured against the six real
+ * defect lines this matters: "the dispatcher never awaits a strategy's
+ * `onEvent`" is a genuine wrong-name claim that a looser "negation anywhere
+ * nearby" test would have excused, and did, until this was tightened.
+ *
+ * Used ONLY by the identifier rule, where "X is not the name" is a natural
+ * thing to write. It is NOT applied to the semantic phrase rules, where the
+ * negation attaches to some other word in the sentence and the exemption would
+ * hide exactly the class of lie being hunted.
+ */
+function isDeniedMention(line, index) {
+  return /\b(?:no|not|never|no longer|instead of|rather than|nothing (?:named|called))\s+(?:an?|the|any|its|his|her|their)?\s*[`'"([]*$/i.test(
+    line.slice(0, index),
+  );
+}
+
+/** 1-based line numbers whose text sits inside a `//` or `/* … *​/` comment. */
+function commentLineNumbers(text) {
+  const set = new Set();
+  let inBlock = false;
+  text.split('\n').forEach((line, i) => {
+    const n = i + 1;
+    const t = line.trim();
+    if (inBlock) {
+      set.add(n);
+      if (t.includes('*/')) inBlock = false;
+      return;
+    }
+    if (t.startsWith('//')) return void set.add(n);
+    const open = line.indexOf('/*');
+    if (open !== -1) {
+      set.add(n);
+      if (line.indexOf('*/', open + 2) === -1) inBlock = true;
+      return;
+    }
+    if (line.includes('//')) set.add(n);
+  });
+  return set;
+}
+
+/**
+ * "Near the `tools` field" means the doc comment ATTACHED to it — the block a
+ * reader sees on hover and the block TypeDoc renders under that field. A plain
+ * ±N-line window is wrong here: `body`'s docstring sits nine lines above
+ * `tools`, and "the body is appended once activated" is TRUE, so a window
+ * would fire on a correct sentence about a different field.
+ */
+function attachedDocLines(lines, declRe) {
+  const out = new Set();
+  lines.forEach((line, i) => {
+    if (!declRe.test(line)) return;
+    out.add(i + 1);
+    for (let j = i - 1; j >= 0; j--) {
+      const t = lines[j].trim();
+      if (t === '') break;
+      const isComment =
+        t.startsWith('*') || t.startsWith('//') || t.startsWith('/*') || t.endsWith('*/');
+      if (!isComment) break;
+      out.add(j + 1);
+      if (t.startsWith('/*')) break; // reached the top of the block
+    }
+  });
+  return out;
+}
+
+const cmpVersion = (a, b) => {
+  const p = (v) => v.split('.').map((n) => parseInt(n, 10) || 0);
+  const [x, y] = [p(a), p(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+};
+
+/** A bare `onEvent`, not the tail of `FlowDecisionEvent`/`AgentCoreSessionEvent`. */
+const BARE_ON_EVENT = /(?<![A-Za-z0-9_$])onEvent(?![A-Za-z0-9_$])/g;
+
+/** A version a docstring points AT: `v2.5`, `v2.5.1`. The `v` is required —
+ *  bare `3.5` is a model number ("Claude ≥ 3.5") far more often than a release. */
+const VERSION_REF = /\bv(\d+)\.(\d+)(?:\.(\d+))?\b/g;
+/** Language that puts the version in the FUTURE — the thing that goes stale. */
+const PROMISE_CUE =
+  /\b(?:will|would|lands?|landing|arrives?|ships?|shipping|awaits?|awaiting|pending|planned|slated|upcoming|coming|scheduled|future|when|once|until|reserved|forward[- ]compat\w*|todo|joins?|implements?|wiring|not yet|yet to)\b/i;
+/** Language that puts it in the PAST — a historical note, which never rots. */
+const HISTORY_CUE =
+  /\b(?:since|as of|released|shipped in|added in|introduced|removed|deprecated|renamed|fixed in|changed in|behaviou?r)\b/i;
+
+/**
+ * The rules. Each `find()` returns findings:
+ *   { file, line, text, detail }        — `text` is the offending line, trimmed.
+ * `precondition(surface)` may DISARM a rule against the real export map, so a
+ * rule cannot outlive the fact it encodes.
+ */
+const DOC_TEXT_RULES = [
+  {
+    id: 'strategy-hot-path-name',
+    headline: 'a strategy doc comment calls the hot path `onEvent`',
+    why:
+      'The ObservabilityStrategy hot path is `exportEvent`. `onEvent` is not a method on any ' +
+      'strategy interface, and doc comments are copied verbatim into the emitted .d.ts — so the ' +
+      'wrong name ships and is what a consumer sees on hover.',
+    fix: 'Rename the mention to `exportEvent` (or the right per-group name: `recordCost`, `renderStatus`, `renderGraph`).',
+    // AUDIT (8.11.0): `grep -REn '\bonEvent\b' src/` finds no declaration,
+    // no call site and no string literal — every hit was doc prose. So the
+    // bare identifier is flagged ANYWHERE under src/strategies/, not just in
+    // comments. If a legitimately-named `onEvent` member is ever introduced,
+    // narrow this to comment lines with `commentLineNumbers()` rather than
+    // deleting the rule.
+    find() {
+      const out = [];
+      for (const abs of scanFiles('src/strategies', ['.ts'])) {
+        const file = relative(ROOT, abs);
+        readFileSync(abs, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            BARE_ON_EVENT.lastIndex = 0;
+            for (const m of line.matchAll(BARE_ON_EVENT)) {
+              if (isDeniedMention(line, m.index)) continue; // "…there is no `onEvent`"
+              out.push({
+                file,
+                line: i + 1,
+                text: line.trim(),
+                detail: 'names the observability hot path `onEvent`; it is `exportEvent`',
+              });
+            }
+          });
+      }
+      return out;
+    },
+  },
+
+  {
+    id: 'skill-tools-activation-claim',
+    headline: '`DefineSkillOptions.tools` claims its tools are gated on activation',
+    why:
+      "A Skill's tools go into the agent's tool registry at BUILD time and the model can call " +
+      'them from iteration 1. Activation adds the BODY. Tools are held back only when ' +
+      '`autoActivate: \'currentSkill\'` is set, so "once activated" describes the exception as ' +
+      'if it were the default — and a reader who believes it ships tools they think are hidden.',
+    fix:
+      'Say when the tools are really visible (build time, iteration 1) and point at `autoActivate` ' +
+      'for the gated behaviour. Note the rule does NOT exempt a negated sentence: write "activation ' +
+      'adds the body, not the tools" rather than "tools are not added once activated".',
+    find() {
+      const file = 'src/lib/injection-engine/factories/defineSkill.ts';
+      const lines = readLines(file);
+      if (!lines) {
+        return [
+          {
+            file,
+            line: 0,
+            text: '(file not found)',
+            detail:
+              'this rule is pinned to a path that no longer exists — re-point it at the new home of `DefineSkillOptions` instead of letting it silently pass',
+          },
+        ];
+      }
+      const out = [];
+      // (a) activation-gating language inside the doc block attached to `tools`.
+      //     Scoped, because "once activated" is TRUE of `body` two fields up.
+      const toolsDoc = attachedDocLines(lines, /^\s*readonly\s+tools\s*\?:/);
+      const GATED = /\bonce activated\b|\buntil activated\b|\bonly (?:when|while) activated\b/i;
+      for (const n of [...toolsDoc].sort((a, b) => a - b)) {
+        const line = lines[n - 1];
+        if (!GATED.test(line)) continue;
+        out.push({
+          file,
+          line: n,
+          text: line.trim(),
+          detail:
+            'the doc comment attached to `tools` ties tool visibility to activation; tools are registered at build time unless `autoActivate` is set',
+        });
+      }
+      // (b) "unlocked tools" anywhere in the file — activation unlocks nothing,
+      //     so the metaphor is false wherever it appears, not just on `tools`.
+      const UNLOCK =
+        /\bunlock(?:s|ed|ing)?\b[^.\n]{0,30}\btools?\b|\btools?\b[^.\n]{0,30}\bunlock(?:s|ed|ing)?\b/i;
+      lines.forEach((line, i) => {
+        if (!UNLOCK.test(line)) return;
+        out.push({
+          file,
+          line: i + 1,
+          text: line.trim(),
+          detail:
+            'describes a Skill\'s tools as "unlocked" by activation; activation unlocks no tools',
+        });
+      });
+      return out.sort((a, b) => a.line - b.line);
+    },
+  },
+
+  {
+    id: 'stale-version-promise',
+    headline: 'a docstring still promises a version that has already shipped',
+    why:
+      `The package is at ${PKG_VERSION}. A comment saying a field "lands in v2.5" or is "a ` +
+      'forward-compat marker" awaiting "v2.5 runtime wiring" tells a reader the feature does not ' +
+      'work yet, six majors after it started working — so they build the workaround instead of ' +
+      'using it. Only versions AT OR BELOW the current one are flagged: a note about a genuinely ' +
+      'future release is a roadmap, not a lie.',
+    fix: 'Describe what the code does TODAY. If the history matters, write it in the past tense ("wired at runtime since v2.5") — past-tense notes are not flagged.',
+    find() {
+      const out = [];
+      // (a) The self-description that was wrong: "forward-compat marker".
+      //     Scanned across all of src/. Note this is NOT the same string as the
+      //     common, legitimate "forward-compat with graphs built before X" —
+      //     `marker` is the word that claims the field does nothing yet.
+      const MARKER = /forward[- ]compat(?:ibility)?\s+marker/i;
+      for (const abs of scanFiles('src', ['.ts'])) {
+        const file = relative(ROOT, abs);
+        readFileSync(abs, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (!MARKER.test(line)) return;
+            out.push({
+              file,
+              line: i + 1,
+              text: line.trim(),
+              detail:
+                'calls the field a forward-compat marker — i.e. claims nothing reads it yet; verify against the runtime and describe what it does today',
+            });
+          });
+      }
+      // (b) Future-tense version promises in the injection engine, where the
+      //     defect lived. General rather than a literal "v2.5" match: a
+      //     PROMISE CUE near a version reference that is already at or below
+      //     the shipped version. History cues ("since v2.5") never fire.
+      for (const abs of scanFiles('src/lib/injection-engine', ['.ts'])) {
+        const file = relative(ROOT, abs);
+        const text = readFileSync(abs, 'utf8');
+        const comments = commentLineNumbers(text);
+        text.split('\n').forEach((line, i) => {
+          if (!comments.has(i + 1)) return; // prose only; code is not a promise
+          VERSION_REF.lastIndex = 0;
+          for (const m of line.matchAll(VERSION_REF)) {
+            const promised = `${m[1]}.${m[2]}.${m[3] ?? 0}`;
+            if (cmpVersion(promised, PKG_VERSION) > 0) continue; // still in the future — fine
+            const near = line.slice(Math.max(0, m.index - 70), m.index + m[0].length + 70);
+            if (!PROMISE_CUE.test(near) || HISTORY_CUE.test(near)) continue;
+            out.push({
+              file,
+              line: i + 1,
+              text: line.trim(),
+              detail: `promises something for v${m[1]}.${m[2]} in the future tense, but the package is at ${PKG_VERSION} — that version is the past`,
+            });
+            break; // one finding per line is enough to act on
+          }
+        });
+      }
+      return out;
+    },
+  },
+
+  // ── DELIBERATELY ABSENT: "`composeObservability` near `agentfootprint/observe`" ──
+  //
+  // A fourth rule was drafted for it and rejected, because the premise was
+  // false: `agentfootprint/observe` resolves to `dist/doors/observe.js`
+  // (package.json "exports"), and `src/doors/observe.ts` does
+  // `export * from '../strategies/index.js'` — so it really does export
+  // `composeObservability`, alongside `agentfootprint/strategies`. The doc
+  // sites are correct and the rule would have flagged correct documentation
+  // forever. The mistake came from probing `dist/observe.js`, a build artifact
+  // that is NOT the published entry point.
+  //
+  // The lesson is the one this whole script is built on: the EXPORT MAP is the
+  // authority on what is importable, never the file tree. `buildSurface()`
+  // resolves every subpath through package.json for exactly this reason, and
+  // any future rule about where a symbol lives must call `precondition(surface)`
+  // and read `surface.perSubpath` rather than assume.
+];
+
+function runDocTextRules(surface) {
+  // One line can break the same rule twice ("Optional unlocked tools, added to
+  // the tools slot once activated" is two separate false claims). That is ONE
+  // line to edit, so it is one finding carrying both reasons.
+  const byLine = new Map();
+  for (const rule of DOC_TEXT_RULES) {
+    if (rule.precondition && !rule.precondition(surface)) continue;
+    for (const f of rule.find()) {
+      const key = `${rule.id}|${f.file}|${f.line}`;
+      const existing = byLine.get(key);
+      if (existing) {
+        if (!existing.detail.includes(f.detail)) existing.detail += `; also ${f.detail}`;
+        continue;
+      }
+      byLine.set(key, {
+        rule: rule.id,
+        headline: rule.headline,
+        fix: rule.fix,
+        why: rule.why,
+        ...f,
+      });
+    }
+  }
+  return [...byLine.values()].sort(
+    (a, b) => a.rule.localeCompare(b.rule) || a.file.localeCompare(b.file) || a.line - b.line,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // 4. Classify
 // ─────────────────────────────────────────────────────────────────────
 
@@ -679,6 +1050,9 @@ function classify(surface, docs, exercised, events) {
     phantoms: dedupe(phantoms),
     unregisteredEvents: dedupe(unregisteredEvents),
     advisories: dedupe(advisories),
+    // Sentence-level, not name-level: prose in the code (and on the pages that
+    // quote it) that contradicts the code. Gated, never baselined — see 3c.
+    docText: runDocTextRules(surface),
     haveEvidence,
   };
 }
@@ -696,6 +1070,7 @@ function summarise(result) {
     phantoms: result.phantoms.length,
     unregisteredEvents: result.unregisteredEvents.length,
     advisories: result.advisories.length,
+    docTextViolations: result.docText.length,
   };
 }
 
@@ -1125,6 +1500,26 @@ function buildReport(result, surface, events, exercised, docs, baseline) {
   }
   L.push('');
 
+  L.push('### 9. Doc text that contradicts the code');
+  L.push('');
+  L.push(
+    'Every other section reasons about **names**: is the symbol exported, is the name mentioned, was it seen firing. This one reads **sentences**. Three defects shipped in 8.10.0 that were nothing but sentences — the symbols all existed, were exported and were documented, so every other check passed while the words were wrong. Doc comments are copied verbatim into the emitted `.d.ts`, which makes a wrong sentence part of the published surface: it is what a consumer sees on hover.',
+  );
+  L.push('');
+  L.push(
+    'These are **targeted greps, one per established defect**, listed in `DOC_TEXT_RULES` (`scripts/docs-truth-check.mjs`). They are a **gate, not a ratchet**: unlike the undocumented-symbol counts, whose steady state is hundreds of known gaps, the steady state of each rule here is zero by construction — a rule is only added once the sentence it describes has been established as false, so there is nothing to ratchet and baselining one would mean shipping a known-false sentence deliberately.',
+  );
+  L.push('');
+  if (result.docText.length === 0) L.push('**None. ✅**');
+  else {
+    L.push('| Rule | Where | What is wrong |');
+    L.push('|---|---|---|');
+    for (const f of result.docText) {
+      L.push(`| \`${f.rule}\` | \`${f.file}:${f.line}\` | ${f.detail} |`);
+    }
+  }
+  L.push('');
+
   // ── per-subpath ──
   L.push('## Per-subpath surface');
   L.push('');
@@ -1169,6 +1564,7 @@ function buildReport(result, surface, events, exercised, docs, baseline) {
       '- a new export not described in site prose → **fail**',
       '- a new typed event not described in site prose → **fail**',
       '- the published docs promising something that does not exist → **fail, always, baseline or not**',
+      '- a doc-text rule firing (section 9: prose that contradicts the code) → **fail, always, baseline or not**',
       `- the ${
         baseline?.undocumentedSymbols?.length ?? 0
       } pre-existing undocumented exports recorded in the baseline → **pass**. They are known debt, not a surprise. Failing on them would turn the check red on day one and get it deleted in a week, which is worse than no check.`,
@@ -1273,6 +1669,13 @@ console.log(
     counts.advisories,
   )}   needs human triage — never fails`,
 );
+console.log(
+  `doc text that contradicts the code ............... ${pad(counts.docTextViolations)}${
+    counts.docTextViolations === 0
+      ? '   ✅ zero-tolerance class'
+      : '   ❌ must be 0 — targeted rules, see below'
+  }`,
+);
 console.log('');
 
 if (JSON_OUT) {
@@ -1286,6 +1689,7 @@ if (JSON_OUT) {
         phantoms: result.phantoms,
         unregisteredEvents: result.unregisteredEvents,
         advisories: result.advisories,
+        docTextViolations: result.docText,
       },
       null,
       2,
@@ -1311,10 +1715,11 @@ if (UPDATE_BASELINE) {
       }`,
     );
   }
-  if (counts.phantoms > 0) {
+  if (counts.phantoms > 0 || counts.docTextViolations > 0) {
     console.log('');
     console.log('NOTE: re-baselining does NOT excuse the "docs promise something that does not');
-    console.log('exist" class. It is never baselined and still fails. Fix those first.');
+    console.log('exist" class, nor the "doc text contradicts the code" rules. Neither is ever');
+    console.log('baselined and both still fail. Fix those first.');
     process.exit(1);
   }
   process.exit(0);
@@ -1352,6 +1757,33 @@ if (result.phantoms.length > 0) {
     console.log(`   • [${p.kind}] ${p.detail}`);
     console.log(`     ${p.page}`);
   }
+  console.log('');
+}
+
+if (result.docText.length > 0) {
+  failed = true;
+  console.log(`❌ ${result.docText.length} DOC-TEXT LINE(S) THAT CONTRADICT THE CODE`);
+  console.log('');
+  console.log('   Sentence-level, not name-level: the symbol exists and is documented, but the');
+  console.log('   words about it are wrong. Doc comments ship inside the emitted .d.ts, so a');
+  console.log('   wrong sentence is what a consumer reads on hover. Never baselined — the');
+  console.log('   steady state of every rule here is zero by construction.');
+  console.log('');
+  let lastRule = null;
+  for (const f of result.docText) {
+    if (f.rule !== lastRule) {
+      lastRule = f.rule;
+      console.log(`   [${f.rule}] ${f.headline}`);
+      console.log(`     why: ${f.why}`);
+      console.log(`     fix: ${f.fix}`);
+    }
+    console.log(`   • ${f.file}:${f.line} — ${f.detail}`);
+    console.log(`     ${f.text.length > 100 ? f.text.slice(0, 100) + '…' : f.text}`);
+  }
+  console.log('');
+  console.log('   A rule that is genuinely wrong should be EDITED (DOC_TEXT_RULES in');
+  console.log('   scripts/docs-truth-check.mjs), not suppressed from the source: a suppression');
+  console.log('   marker inside a doc comment would ship in the published .d.ts.');
   console.log('');
 }
 
@@ -1414,7 +1846,9 @@ if (failed) {
   console.log('');
   console.log('  1. "docs promise something that does not exist" → always fix the docs. This');
   console.log('     class is never baselined; there is no way to accept it.');
-  console.log('  2. "new undocumented export/event" → EITHER describe it in prose on a page');
+  console.log('  2. "doc text contradicts the code" → fix the sentence (each finding names the');
+  console.log('     file, the line and the correct wording). Also never baselined.');
+  console.log('  3. "new undocumented export/event" → EITHER describe it in prose on a page');
   console.log('     under docs-next/content/docs (one sentence naming it satisfies this check;');
   console.log('     a real write-up is better), OR, if it is deliberately undocumented for now,');
   console.log('     accept it consciously:');

@@ -82,7 +82,7 @@ import {
   causalEvidenceRecorder,
   type CausalEvidenceRecorderHandle,
 } from '../memory/causal/evidenceRecorder.js';
-import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
+import { buildSystemPromptSlot, type SystemPromptSlotArgs } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { isDevMode } from 'footprintjs';
@@ -247,6 +247,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly skillGraphIsTree: boolean;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
+  /** Per-slot character budgets (8.11.0). Absent keys keep the slot default. */
+  private readonly contextBudget?: AgentOptions['contextBudget'];
   private readonly permissionChecker?: PermissionChecker;
   private readonly toolArgValidation?: ToolArgValidationMode;
   /** Resolved check-in config (evidence-carrying human consent). Always
@@ -524,6 +526,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
+    if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     // Resolve check-in config once. Always present (default: standard evidence
@@ -1619,19 +1622,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // slot reads the instructions seed committed, falling back to `.system()`
     // when the resolver left it alone. `reason` follows the same fork so the
     // context record names whichever one actually supplied the text.
-    const systemPromptSubflow = buildSystemPromptSlot(
-      this.runConfigFn
+    // Per-slot budgets (8.11.0). Each key is forwarded only when the consumer
+    // set it, so an unset slot keeps its own default rather than being pinned
+    // to `undefined` at the call site.
+    const budget = this.contextBudget;
+    const systemPromptSubflow = buildSystemPromptSlot({
+      ...(this.runConfigFn
         ? {
-            prompt: (args) => args.instructions ?? systemPromptValue,
-            reason: (args) =>
+            prompt: (args: SystemPromptSlotArgs) => args.instructions ?? systemPromptValue,
+            reason: (args: SystemPromptSlotArgs) =>
               args.instructions !== undefined ? 'Agent.configure()' : 'Agent.system()',
           }
         : {
             prompt: systemPromptValue,
             reason: 'Agent.system()',
-          },
-    );
-    const messagesSubflow = buildMessagesSlot();
+          }),
+      ...(budget?.systemPrompt !== undefined && { budgetCap: budget.systemPrompt }),
+    });
+    const messagesSubflow = buildMessagesSlot({
+      ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
+    });
     // Per-run cache shared between buildToolsSlot (writer, each
     // iteration) and buildToolCallsHandler (reader, same iteration).
     // Holds the resolved Tool[] from `provider.list(ctx)` so dispatch
@@ -1645,6 +1655,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(readSkillFor && { readSkillFor }),
+      ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
     });
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same

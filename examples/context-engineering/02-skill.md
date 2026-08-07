@@ -10,7 +10,14 @@ defaultInput: I need a refund for order #42
 A Skill is the **`llm-activated`** flavor of Injection — the LLM itself
 decides when to load the Skill's content. Once it calls
 `read_skill('billing')`, the Skill's body appends to the next iteration's
-system prompt AND its declared tools become available in the tools slot.
+system prompt.
+
+Its **tools are a separate question**. By default a Skill's `tools` are
+registered with the agent at build time and the model can see and call them
+from the first iteration, whether or not the Skill is ever activated —
+activation adds the body, not the tools. This example sets
+`autoActivate: 'currentSkill'`, which is what keeps `process_refund` out of
+the tool list until the Skill has been read.
 
 This is the *Anthropic Skills / OpenAI Plugin* pattern, made first-class
 in agentfootprint and uniform with every other context-engineering
@@ -20,9 +27,10 @@ flavor.
 
 - **Domain expertise that's expensive to always include** — billing
   rules, legal compliance text, troubleshooting playbooks
-- **Tool gating** — sensitive tools (refund, delete-account) only
-  activate when the LLM has explicitly asked for the Skill that
-  supplies them
+- **Tool gating** — sensitive tools (refund, delete-account) appear only
+  after the LLM has explicitly asked for the Skill that supplies them.
+  This needs `autoActivate: 'currentSkill'` on that Skill; without it the
+  tools are on the wire from iteration 1
 - **Disambiguation** — multi-domain agents where different problems
   need different bodies of knowledge
 
@@ -35,6 +43,8 @@ Iteration 1
   ┌─ InjectionEngine evaluates triggers:
   │   - billingSkill (llm-activated): id NOT in activatedInjectionIds → silent
   ├─ tools slot exposes read_skill (auto-attached) + any registered tools
+  │   (process_refund is NOT here — billingSkill is autoActivate; drop that
+  │    option and it would be)
   └─ LLM sees billingSkill in the read_skill catalog (description), decides
      to call read_skill('billing')
 
@@ -71,6 +81,7 @@ const billingSkill = defineSkill({
   description: 'Use for refunds / charges. The LLM reads this when deciding.',
   body: 'When handling billing: confirm the order id first, then process.',
   tools: [refundTool],
+  autoActivate: 'currentSkill',   // hold refundTool back until 'billing' is read
 });
 
 const agent = Agent.create({ provider, model: 'mock' })

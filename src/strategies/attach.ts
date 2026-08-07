@@ -181,9 +181,24 @@ function buildEventHandler(
 // ─── Observability ───────────────────────────────────────────────────
 
 export interface ObservabilityEnableOptions extends CommonStrategyOptions {
-  /** Cost-of-on knob. `'minimal'` → only error + lifecycle events.
-   *  `'standard'` → most domains. `'firehose'` → every event including
-   *  per-token streams. Default `'standard'`. */
+  /** Cost-of-on knob: how many events reach the sink. `'minimal'` -> agent
+   *  lifecycle + errors. `'standard'` -> everything except per-token streams.
+   *  `'firehose'` -> every event. Default `'standard'`.
+   *
+   *  **This is not a privacy control.** No tier redacts anything, and a lower
+   *  tier is not a safer one: `'minimal'` still ships `agent.turn_start`
+   *  (`userPrompt`), `agent.turn_end` (`finalContent`) and `agent.iteration_end`
+   *  (the full conversation `history[]`), so it delivers fewer events but a
+   *  higher share of content-bearing ones. `'standard'` adds raw tool arguments
+   *  and results (`stream.tool_start` / `tool_end`), retrieved text
+   *  (`context.injected.rawContent`) and raw reasoning
+   *  (`stream.thinking_delta`).
+   *
+   *  If prompts or documents must not leave the process, choose a strategy that
+   *  bounds payloads — `auditExport()` bounds by default, `otelObservability()`
+   *  omits `userPrompt` — or bound them yourself in your own `exportEvent`.
+   *  `redactContent` does NOT apply here: it operates on the offline
+   *  `serializeTrace` / `localObservability` channel, not on this one. */
   readonly tier?: ObservabilityTier;
   readonly strategy?: ObservabilityStrategy;
 }

@@ -9,17 +9,20 @@
  *
  *   1. `name: string`            — registry key for auto-registration
  *   2. `capabilities: {...}`     — what this strategy supports
- *   3. `onEvent(...)`            — hot path; sync, side-effect-only
- *   4. `flush?(): Promise<void>` — optional batch flushing
- *   5. `stop?(): void`           — optional teardown
+ *   3. the hot-path method       — sync, side-effect-only. Named per
+ *                                  group: `exportEvent` (observability),
+ *                                  `recordCost`, `renderStatus`,
+ *                                  `renderGraph`. There is no `onEvent`.
+ *   4. `flush?(): Promise<void>` — optional batch flushing (CONSUMER-called)
+ *   5. `stop?(): void`           — optional teardown (CONSUMER-called)
  *
  * Design constraints (from the panel review):
  *   - **PASSIVE / non-blocking by construction.** Strategies are
  *     observers — they NEVER block the agent loop. Async work
  *     (HTTP shipment, disk I/O, batching) is the STRATEGY's internal
- *     concern: buffer in `onEvent` (sync), drain in `flush()` (async
- *     OK). The dispatcher never awaits a strategy's `onEvent`.
- *   - `onEvent` MUST be sync `void`. MUST NOT throw. Errors caught +
+ *     concern: buffer in `exportEvent` (sync), drain in `flush()`
+ *     (async OK). The dispatcher never awaits the hot-path call.
+ *   - `exportEvent` MUST be sync `void`. MUST NOT throw. Errors caught +
  *     routed to `_onError` at the dispatch layer; one bad strategy
  *     never breaks the agent loop.
  *   - Idempotent registration — registering the same `name` twice
@@ -27,10 +30,12 @@
  *   - `stop()` is idempotent — halts everything that strategy enabled,
  *     nothing else, calling twice is a no-op.
  *   - `flush()` is optional, may be sync OR async — strategies that
- *     don't batch can omit it. Consumer's `agent.run()` lifecycle
- *     calls flush at boundary points (turn end, run end) so batched
- *     strategies don't lose tail events. Flush is the ONLY async
- *     path; the hot path is always sync.
+ *     don't batch can omit it. Flush is the ONLY async path; the hot
+ *     path is always sync. **The framework never calls it.** Nothing
+ *     in agentfootprint invokes `flush()` or `stop()` on your strategy
+ *     — not `agent.run()`, not the `stop()` returned by `enable.X`.
+ *     Calling them on shutdown is the consumer's job; see the notes on
+ *     `BaseStrategy.flush` / `BaseStrategy.stop` below.
  */
 
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
@@ -41,7 +46,8 @@ import type { StatusState } from '../recorders/observability/status/statusTempla
 
 /**
  * Common base every strategy carries. Per-group strategies extend this
- * with their typed `onEvent` signature + capability shape.
+ * with their own typed hot-path method (`exportEvent`, `recordCost`,
+ * `renderStatus`, `renderGraph`) + capability shape.
  */
 export interface BaseStrategy {
   /** Registry key. Conventionally lowercase-kebab: `'datadog'`,
@@ -49,15 +55,47 @@ export interface BaseStrategy {
    *  config + de-dupe registrations. */
   readonly name: string;
 
-  /** Optional batch flush. Returns `void` for sync sinks (Pino-style)
-   *  OR `Promise<void>` for async sinks (Datadog HTTP batch, OTel
-   *  BatchSpanProcessor). Called before `agent.run()` resolves so
-   *  batched exporters don't lose tail events. */
+  /** Optional batch flush — drain whatever the hot path buffered.
+   *  Returns `void` for sync sinks (Pino-style) OR `Promise<void>` for
+   *  async sinks (Datadog HTTP batch, OTel BatchSpanProcessor).
+   *
+   *  **CONSUMER-CALLED. The framework never calls this.** No code path
+   *  in agentfootprint invokes `flush()` — not `agent.run()`, not the
+   *  `Unsubscribe` returned by `enable.observability()` (that only
+   *  detaches the dispatcher listener). The one caller inside the
+   *  library is `composeObservability`, and only to fan out to its own
+   *  children.
+   *
+   *  If you never call it, a batching exporter (CloudWatch, X-Ray)
+   *  silently drops its final batch and leaks its flush timer, keeping
+   *  the process alive. Wire it into your own shutdown:
+   *
+   *  ```ts
+   *  process.on('SIGTERM', async () => {
+   *    await strategy.flush();
+   *    strategy.stop();
+   *    stop();
+   *  });
+   *  ```
+   *
+   *  Whether the framework SHOULD call these is an open design
+   *  question, not an oversight: awaiting a flush inside `run()` would
+   *  change run timing, and a strategy shared across two `enable.*`
+   *  calls would be flushed and stopped twice (or stopped while the
+   *  other subscription is still live). Until that is resolved it is
+   *  explicitly the consumer's job. */
   flush?(): void | Promise<void>;
 
-  /** Optional teardown. Called on `stop()` returned by `enable.X`.
-   *  Idempotent — calling twice is a no-op. Strategies that open no
-   *  external resources can omit this. */
+  /** Optional teardown — close clients, clear timers, release handles.
+   *  Idempotent: calling twice is a no-op. Strategies that open no
+   *  external resources can omit this.
+   *
+   *  **CONSUMER-CALLED. The framework never calls this.** In
+   *  particular, the `Unsubscribe` returned by `enable.observability()`
+   *  is NOT this: it removes the dispatcher subscription (see
+   *  `attachObservabilityStrategy`) and never touches the strategy. A
+   *  strategy with an open timer keeps running after you call it.
+   *  Flush first, then stop — see the example on `flush` above. */
   stop?(): void;
 
   /**
@@ -87,6 +125,22 @@ export interface BaseStrategy {
    * dispatcher behavior is to swallow + log to console (so one bad
    * exporter doesn't kill the agent loop). Consumers wire this when
    * they want to surface vendor errors in their own tooling.
+   *
+   * **This is a property you ASSIGN AFTER CONSTRUCTION, not a
+   * constructor option**, because it lives on the strategy object
+   * rather than in any factory's options:
+   *
+   * ```ts
+   * const strategy = cloudwatchObservability({ logGroupName: '/agent' });
+   * strategy._onError = (err, event) => myLogger.warn(err, event?.type);
+   * ```
+   *
+   * Since 8.11.0 the AWS adapters (`cloudwatchObservability`,
+   * `agentcoreObservability`, `xrayObservability`, `otelObservability`)
+   * also accept an `onError` option in their factory options — that is
+   * the preferred door, since it is wired before the first delivery can
+   * fail. `_onError` stays for strategies you write yourself and for
+   * adapters that take no options.
    *
    * Per New Relic panel review.
    */
@@ -124,8 +178,8 @@ export interface ObservabilityCapabilities {
  * Receives every typed agent event. MUST be sync + side-effect-only +
  * non-throwing.
  *
- * Strategies that batch should buffer in `onEvent` and drain in
- * `flush()`.
+ * Strategies that batch should buffer in `exportEvent` and drain in
+ * `flush()` — which the consumer, not the framework, must call.
  */
 export interface ObservabilityStrategy extends BaseStrategy {
   readonly capabilities: ObservabilityCapabilities;
