@@ -23,7 +23,7 @@ returns immediately, exports flush on the driver's schedule.
 - You're shipping high-volume events (per-token streams) where inline
   cost compounds.
 - You want a **graceful shutdown** that drains pending exports before
-  exiting (`flushAllDetached()`).
+  exiting (`await telemetry.flush()`, or `await agent.shutdown()`).
 
 ## When NOT to use
 
@@ -36,20 +36,24 @@ returns immediately, exports flush on the driver's schedule.
 ## The pattern
 
 ```ts
-import { microtaskBatchDriver, flushAllDetached } from 'footprintjs/detach';
+import { microtaskBatchDriver } from 'footprintjs/detach';
 
-const stop = agent.enable.observability({
+const telemetry = agent.enable.observability({
   strategy: datadogExporter(...),
   detach: { driver: microtaskBatchDriver, mode: 'forget' },
 });
 
-// Later, in your shutdown handler:
+// Later, in your shutdown handler (8.12.0):
 process.on('SIGTERM', async () => {
-  const stats = await flushAllDetached({ timeoutMs: 10_000 });
-  console.log(`drained: ${stats.done} / failed: ${stats.failed} / pending: ${stats.pending}`);
-  process.exit(stats.pending === 0 ? 0 : 1);
+  await agent.shutdown();   // drains + releases everything enabled on the agent
 });
 ```
+
+`telemetry` is the same unsubscribe function it always was — calling it detaches
+and, as always, does not stop your strategy. What it now also carries is
+`telemetry.flush()` (drain the driver queue, then the strategy's buffer — in that
+order, which is the part you could not write from outside) and `telemetry.stop()`
+(release the strategy, once nothing else is still subscribed to it).
 
 ## Three modes
 

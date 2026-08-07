@@ -43,6 +43,7 @@ import type {
   CostEnableOptions,
   LiveStatusEnableOptions,
 } from '../strategies/attach.js';
+import type { ObservabilityHandle, StrategyHandle } from '../strategies/types.js';
 
 /**
  * High-level feature-enable methods. Each attaches a pre-built observability
@@ -83,20 +84,20 @@ export interface EnableNamespace {
    * CloudWatch, …) or the default `consoleObservability()`. See
    * `agentfootprint/strategies` + `docs/inspiration/strategy-everywhere.md`.
    */
-  observability(opts?: ObservabilityEnableOptions): Unsubscribe;
+  observability(opts?: ObservabilityEnableOptions): ObservabilityHandle;
   /**
    * v2.8+ — grouped strategy enabler for cost. Subscribes the strategy
    * to `cost.tick` events; defaults to `inMemorySinkCost()` for
    * read-back / test inspection.
    */
-  cost(opts?: CostEnableOptions): Unsubscribe;
+  cost(opts?: CostEnableOptions): StrategyHandle;
   /**
    * v2.8+ — grouped strategy enabler for chat-bubble live status.
    * Maintains the thinking-state machine; calls strategy.renderStatus
    * each time the rendered line changes (deduped — not on every token).
    * Strategy is required (consumer must wire UI).
    */
-  liveStatus(opts: LiveStatusEnableOptions): Unsubscribe;
+  liveStatus(opts: LiveStatusEnableOptions): StrategyHandle;
 }
 
 /**
@@ -272,6 +273,21 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * instead of N `.on()` subscriptions.
    */
   readonly enable: EnableNamespace;
+
+  /**
+   * Drain and release what was enabled on this runner (8.12.0).
+   *
+   * **The agent itself remains usable afterwards; `shutdown()` drains and
+   * releases what was enabled on it.** Call it when a process is stopping, a
+   * script is ending, or a test is tearing down — a batching exporter
+   * (CloudWatch, X-Ray) otherwise loses whatever it had buffered when the
+   * process exits.
+   *
+   * Optional on this INTERFACE so an outside implementation of `Runner` is
+   * not broken by its arrival; every runner this package ships implements it.
+   * See `RunnerBase.shutdown` for the ordering and the refcount rules.
+   */
+  shutdown?(options?: { readonly stop?: boolean }): Promise<void>;
 
   /**
    * Emit a consumer-defined custom event through the same dispatcher.

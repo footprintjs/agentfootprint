@@ -319,19 +319,63 @@ export async function standingAgent<TH extends HostHandle>(
   }
 
   const handle = await host.serve(handler);
+
+  // ── Shutdown ────────────────────────────────────────────────────────
+  //
+  // Telemetry drains on close, because a batching exporter that loses its
+  // last batch when the server stops is the most common way a shutdown lies
+  // about what happened. Draining is safe on an agent this composer only
+  // borrowed; RELEASING it is not, so that is opt-in.
+  const shutdownMode = options.shutdown ?? 'flush';
+  const installedSignals: Array<{ signal: NodeJS.Signals; listener: () => void }> = [];
+
+  function removeSignalListeners(): void {
+    for (const { signal, listener } of installedSignals) process.removeListener(signal, listener);
+    installedSignals.length = 0;
+  }
+
+  // Idempotent: the first call owns the shutdown, later ones await it — the
+  // same rule `httpHost.close()` follows, and what lets a signal handler and
+  // an explicit close coexist.
+  let closing: Promise<void> | undefined;
+  function closeOnce(): Promise<void> {
+    closing ??= (async () => {
+      await handle.close();
+      offTurnStart();
+      offToken();
+      uninstallBarrier?.();
+      detachWriter?.();
+      if (shutdownMode !== 'none') {
+        // `stop: false` under 'flush' — drain without releasing what the
+        // caller still owns.
+        await agent.shutdown({ stop: shutdownMode === 'flush-and-stop' });
+      }
+      removeSignalListeners();
+    })();
+    return closing;
+  }
+
+  for (const signal of options.shutdownOn ?? []) {
+    const listener = (): void => {
+      void closeOnce().finally(() => {
+        // Our listeners are gone by now (closeOnce removes them), so
+        // re-raising lands on the DEFAULT disposition: the process ends the
+        // way the platform meant it to, not by an exit code we invented.
+        removeSignalListeners();
+        process.kill(process.pid, signal);
+      });
+    };
+    process.on(signal, listener);
+    installedSignals.push({ signal, listener });
+  }
+
   // Keep whatever the adapter put on its own handle (nodeHost's bound `url`,
   // say) and replace only `close`, which now also detaches this composer's
   // listeners. The cast is the one place TypeScript cannot see that a spread
   // plus one override is still the adapter's handle type.
   return {
     ...handle,
-    async close(): Promise<void> {
-      await handle.close();
-      offTurnStart();
-      offToken();
-      uninstallBarrier?.();
-      detachWriter?.();
-    },
+    close: closeOnce,
   } as TH;
 }
 

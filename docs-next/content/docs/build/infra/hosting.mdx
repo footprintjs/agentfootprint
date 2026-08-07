@@ -19,8 +19,19 @@ const handle = await standingAgent({
   agent,
   sessions: memorySessions(),
   host: nodeHost({ port: 8080 }),
+  shutdownOn: ['SIGTERM'],   // 8.12.0 — optional; see below
 });
+```
 
+`shutdownOn` is opt-in on purpose. Adding a `SIGTERM` listener is not observation: Node's
+default action for that signal is to terminate, and *any* listener suppresses it — so a library
+that installs one behind your back can turn a container's graceful stop into a wait for SIGKILL.
+A composition root may ask; it must not assume. When you do pass it, this composer closes the
+host, drains the agent's telemetry, removes its own listeners and re-raises the signal, so the
+process ends the way the platform meant it to. Prefer to keep the wiring yourself? Leave it out
+and write the line you always wrote:
+
+```ts
 process.on('SIGTERM', () => void handle.close());
 ```
 

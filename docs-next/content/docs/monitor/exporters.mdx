@@ -38,7 +38,8 @@ for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:bedrock-agentco
 <Callout type="info" title="Keep the loop unblocked">
 Exporters that do network I/O (CloudWatch, OTLP) should be **detached** so a slow backend
 never stalls the agent: pass `detach: { driver: microtaskBatchDriver, mode: 'forget' }`, and
-drain on shutdown with `flushAllDetached()`.
+drain on shutdown with `await handle.flush()` — or `await agent.shutdown()`, which drains and
+releases everything enabled on the agent (8.12.0).
 </Callout>
 
 ## Connect AWS AgentCore Observability
@@ -148,13 +149,14 @@ const telemetry = composeObservability([
   cloudwatchObservability({ region: 'us-east-1', logGroupName: '/agentfootprint/workflow-assistant' }),
 ]);
 
-const stop = agent.enable.observability({
+const handle = agent.enable.observability({
   strategy: telemetry,
   detach: { driver: microtaskBatchDriver, mode: 'forget' },
 });
 
-// The framework does not do this for you:
-process.on('SIGTERM', async () => { await telemetry.flush(); telemetry.stop(); stop(); });
+// 8.12.0 — the handle IS the unsubscribe, and it drains in the right order:
+// detached queue, then every composed child's buffer, then release.
+process.on('SIGTERM', async () => { await agent.shutdown(); });
 ```
 
 Errors are isolated per child — one bad exporter doesn't stop the others. (`composeObservability`
@@ -175,8 +177,10 @@ didn't want. Note the empty array is not "no filter": `relevantEventTypes: []` d
 events, silently — omit the field entirely to receive everything. `capabilities` affects nothing
 about delivery; the attach filter never reads it. Delivery errors are surfaced through
 `_onError`, which is a **property you assign after construction** (or, on the AWS adapters since
-8.11.0, an `onError` option in the factory). And the framework does not call `flush()` or
-`stop()` for you — call them yourself on shutdown.
+8.11.0, an `onError` option in the factory). Since 8.12.0 the framework DOES call `flush()` and
+`stop()` — through the handle, `agent.shutdown()`, and a closing `standingAgent` — which is
+another reason a rewrap must spread the original: a wrapper that drops `flush` makes every one of
+those doors a no-op.
 
 ## Next steps
 

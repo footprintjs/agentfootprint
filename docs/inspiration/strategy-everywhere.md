@@ -103,6 +103,11 @@ Three properties enforced at the interface level:
 2. **Side-effect-free `onEvent`** — must not throw, must not block. Errors logged + swallowed (otherwise one bad exporter kills the agent loop)
 3. **Optional `stop` / `flush`** — strategies that batch can flush on stop; strategies that don't need it don't implement
 
+> **Two corrections from the shipped code** (this memo predates it, and the code is the truth):
+> the hot path is `exportEvent`, never `onEvent`; and since 8.12.0 the framework DOES call
+> `flush()` / `stop()` — through the handle `enable.*` returns, `agent.shutdown()`, and a
+> closing `standingAgent`. Releasing a subscription still never stops a strategy.
+
 Same shape for `CostStrategy`, `LiveStatusStrategy`, `LensStrategy`. Symmetry is the point.
 
 ## The composite combinator

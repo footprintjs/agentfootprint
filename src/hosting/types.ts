@@ -619,4 +619,50 @@ export interface StandingAgentOptions<TH extends HostHandle = HostHandle> {
    * exactly as it did in 7.18.
    */
   readonly durability?: DurabilityMode;
+  /**
+   * What `close()` does to the telemetry enabled on the agent (8.12.0).
+   * Default `'flush'`.
+   *
+   *  - `'flush'` — drain every strategy the agent has enabled, and leave them
+   *    running. This is the default because it is what everyone already
+   *    believed happened: an exporter that batches otherwise loses whatever it
+   *    had buffered when the server stops. Draining is safe on an agent this
+   *    composer only BORROWED — it ships data and disables nothing.
+   *  - `'flush-and-stop'` — drain, then release: timers cleared, clients
+   *    closed, further events dropped. Say this only when the agent's life
+   *    ends with the host, because stopping is terminal.
+   *  - `'none'` — touch nothing, exactly as releases before 8.12.0 did.
+   */
+  readonly shutdown?: 'flush' | 'flush-and-stop' | 'none';
+  /**
+   * Signals whose arrival should close this host (8.12.0). Off by default,
+   * and that is a deliberate refusal rather than an omission.
+   *
+   * **A library must not grab signals.** `process.on('SIGTERM', …)` is not
+   * observation: Node's default action for SIGTERM is to terminate, and
+   * ADDING any listener suppresses that default. A library that installs one
+   * behind your back can turn a container's graceful stop into a thirty-second
+   * wait for SIGKILL in an application that never asked for it. Handlers are
+   * process-global and cannot be arbitrated between libraries, ten runners
+   * would mean ten handlers and a `MaxListenersExceededWarning`, only Node has
+   * signals at all, and no library can know your exit policy.
+   *
+   * A composition root may, because it already owns the shape of the process
+   * — and this one asks first. When you pass signals here, this composer:
+   *
+   *   1. installs one listener per signal;
+   *   2. on arrival, runs the same `close()` you would have called — the host
+   *      stops taking requests, in-flight runs finish, telemetry drains per
+   *      {@link StandingAgentOptions.shutdown};
+   *   3. removes its own listeners and RE-RAISES the signal, so the process
+   *      dies exactly the way the platform expects rather than by an exit code
+   *      this library invented.
+   *
+   * `close()` removes the listeners too, so a handle you close yourself leaves
+   * nothing installed.
+   *
+   * @example
+   *   await standingAgent({ agent, sessions, host, shutdownOn: ['SIGTERM', 'SIGINT'] });
+   */
+  readonly shutdownOn?: readonly NodeJS.Signals[];
 }

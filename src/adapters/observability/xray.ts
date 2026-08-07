@@ -486,14 +486,18 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     capabilities: { events: true, traces: true },
     exportEvent: handleEvent,
     /**
-     * Force-close in-flight segments and drain. **The framework does not call
-     * this for you** — wire it into your own shutdown or the last batch (and
-     * every unfinished turn) is lost:
+     * Force-close in-flight segments and drain, so a turn cut short by a
+     * shutdown still reaches X-Ray as a partial trace.
      *
-     *   process.on('SIGTERM', async () => { await strategy.flush(); strategy.stop(); });
+     * Called for you on shutdown since 8.12.0 — by the handle
+     * `enable.observability()` returns, by `agent.shutdown()`, and by a
+     * `standingAgent` closing:
      *
-     * Safe in any order relative to `stop()` since 8.11.1: a flush after a
-     * stop still ships the segments already closed.
+     *   process.on('SIGTERM', async () => { await agent.shutdown(); });
+     *
+     * Calling it yourself is still fine. Safe in any order relative to
+     * `stop()` since 8.11.1: a flush after a stop still ships the segments
+     * already closed.
      */
     async flush(): Promise<void> {
       // Force-close any in-flight turn segments so partial traces

@@ -61,7 +61,7 @@ For shipping events to a vendor backend (CloudWatch, X-Ray, OTel, AgentCore), `.
 import { agentcoreObservability } from 'agentfootprint/observe';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 
-const stop = agent.enable.observability({
+const telemetry = agent.enable.observability({
   strategy: agentcoreObservability({
     region: 'us-east-1',
     logGroupName: '/agentfootprint/my-agent',
@@ -72,6 +72,29 @@ const stop = agent.enable.observability({
   detach: { driver: microtaskBatchDriver, mode: 'forget' },
 });
 ```
+
+### What comes back — `ObservabilityHandle`
+
+`telemetry` is an **`ObservabilityHandle`** (`StrategyHandle` is the same type
+under its group-neutral name — `enable.cost()` and `enable.liveStatus()` return
+it too). It is still the unsubscribe function it has always been, so every call
+site written before 8.12.0 keeps working:
+
+| call | what it does |
+|---|---|
+| `telemetry()` | detach the subscription. **Never** stops your strategy — that is what lets one instance be enabled, released and enabled again. |
+| `await telemetry.flush()` | drain: the events still queued on the `detach` driver first, then the strategy's own buffer. That order is the whole point — the reverse ships nothing. |
+| `telemetry.stop()` | release the strategy — but only once nothing else is still subscribed to it, and at most once ever. |
+| `await agent.shutdown()` | do all of the above for everything enabled on the agent. The agent stays usable afterwards. |
+
+Where your runtime has `Symbol.asyncDispose`, the handle is an `AsyncDisposable`,
+so `await using telemetry = agent.enable.observability({ strategy })` flushes and
+releases at the end of the scope.
+
+`agent.run()` never flushes — telemetry must not become a term in run latency.
+For scripts and short-lived processes, opt into a per-run drain with
+`flushOn: 'run-end'`, which FIRES a flush when a run ends without gating `run()`
+on it.
 
 ### Detach modes
 
@@ -97,17 +120,28 @@ Pick by environment — see [`footprintjs/detach`](https://footprintjs.github.io
 
 ### Graceful shutdown
 
-`flushAllDetached()` (from `'footprintjs/detach'`) drains every in-flight handle process-wide:
+Since **8.12.0** the handle `enable.observability()` returns drains itself — and it is the only
+thing that can, because a detached event is sitting on the driver, not in your strategy's buffer:
 
 ```ts
-import { flushAllDetached } from 'footprintjs/detach';
-
-process.on('SIGTERM', async () => {
-  const stats = await flushAllDetached({ timeoutMs: 10_000 });
-  console.log(`Drained ${stats.done}, failed ${stats.failed}, pending ${stats.pending}`);
-  process.exit(stats.pending === 0 ? 0 : 1);
+const telemetry = agent.enable.observability({
+  strategy,
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
 });
+
+await telemetry.flush();   // driver queue first, then the strategy's buffer
+await agent.shutdown();    // …or drain and release everything in one call
 ```
+
+`handle.flush()` waits for the events THIS subscription scheduled. `flushAllDetached()` (from
+`'footprintjs/detach'`) remains the process-wide hammer for detached work agentfootprint did not
+schedule.
+
+<Callout type="warn" title="Before 8.11.1, this recipe lied">
+`flushAllDetached()` used to return `{ done: 0, failed: 0, pending: 0 }` — a clean bill of health —
+while events were still in flight, because scheduling was deferred by one microtask and the
+registry was empty when it looked. Upgrade; then prefer `handle.flush()`.
+</Callout>
 
 ### Vendor adapters — `agentfootprint/observe`
 

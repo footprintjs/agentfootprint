@@ -9,8 +9,13 @@
  * immediately, exports run on the next microtask (or whichever
  * driver semantics you pick).
  *
- * Plus graceful shutdown: `flushAllDetached()` from
- * `'footprintjs/detach'` drains every in-flight handle process-wide.
+ * Plus graceful shutdown (8.12.0): the handle `enable.observability()`
+ * returns drains ITSELF — `await telemetry.flush()` waits for the events
+ * this subscription put on the driver and then flushes the strategy, in
+ * that order. Before 8.12.0 that was impossible from outside: the events
+ * were on the driver, not in the strategy, and `flushAllDetached()` (the
+ * process-wide hammer, still available) could not see them until they had
+ * already arrived.
  *
  * Run: npx tsx examples/features/06-detached-observability.ts
  */
@@ -28,7 +33,7 @@ export const meta: ExampleMeta = {
   title: 'Detached observability — non-blocking telemetry export',
   group: 'features',
   description:
-    'Wire the new `detach` option on `enable.observability` so slow exporters never block the agent loop. Drain via `flushAllDetached` on shutdown.',
+    'Wire the `detach` option on `enable.observability` so slow exporters never block the agent loop. Drain with one line on shutdown: `await telemetry.flush()`.',
   defaultInput: 'What is 2 + 2?',
   providerSlots: ['feature'],
   tags: ['observability', 'detach', 'fire-and-forget'],
@@ -68,7 +73,7 @@ export async function run(input: string): Promise<unknown> {
   // driver. Pre-v2.8 default (no `detach`) ran exports inline — slow
   // exporters blocked the agent loop. With `detach`, the loop returns
   // immediately; exports flush on the driver's schedule.
-  const stopObs = a.enable.observability({
+  const telemetry = a.enable.observability({
     strategy: makeSlowExporter(),
     detach: { driver: microtaskBatchDriver, mode: 'forget' },
   });
@@ -78,21 +83,34 @@ export async function run(input: string): Promise<unknown> {
   const agentRunWall = Math.round(performance.now() - t0);
 
   console.log(`\nAgent run wall-clock: ${agentRunWall}ms`);
-  console.log(`Events exported so far (likely 0 — they're still queued): ${exportLog.length}`);
+  // How many have landed by now depends entirely on the driver: the
+  // microtask driver gets its turn at every await inside the run, a
+  // setTimeout driver would still be holding all of them. Either way the
+  // run never WAITED for one — that is what detach buys.
+  console.log(`Events exported by the time the run returned: ${exportLog.length}`);
 
-  // ─── GRACEFUL SHUTDOWN ───────────────────────────────────────────────
+  // ─── GRACEFUL SHUTDOWN (8.12.0) ──────────────────────────────────────
   //
-  // Drain every in-flight detached export before exit. Returns
-  // { done, failed, pending } — `pending === 0` means complete drain.
-  // Use this in your SIGTERM handler / test cleanup / batch finalizer.
-  const stats = await flushAllDetached({ timeoutMs: 5000 });
-  console.log(`After flush: drained=${exportLog.length}, stats=${JSON.stringify(stats)}`);
+  // ONE line. The handle knows both halves of what it owns: the events
+  // still queued on the driver, and the strategy's own buffer. It drains
+  // them in that order — the reverse ships nothing.
+  await telemetry.flush();
+  console.log(`After telemetry.flush(): drained=${exportLog.length}`);
 
-  stopObs();
+  // The process-wide hammer is still there for detached work this library
+  // did not schedule. After the line above it has nothing left to do,
+  // which is exactly what a correct drain looks like.
+  const stats = await flushAllDetached({ timeoutMs: 5000 });
+  console.log(`flushAllDetached afterwards: ${JSON.stringify(stats)}`);
+
+  // `agent.shutdown()` is the same drain for EVERYTHING enabled on the
+  // agent, plus the release: timers cleared, clients closed. The agent
+  // itself stays usable afterwards.
+  await a.shutdown();
 
   // ── Regression guards ──
   if (exportLog.length === 0) {
-    console.error('REGRESSION: flush should have drained at least 1 export.');
+    console.error('REGRESSION: telemetry.flush() should have drained at least 1 export.');
     process.exit(1);
   }
   if (stats.pending !== 0) {

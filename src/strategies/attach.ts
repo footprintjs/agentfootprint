@@ -23,15 +23,24 @@ import type { FlowChart } from 'footprintjs';
 import type { EventDispatcher, Unsubscribe } from '../events/dispatcher.js';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
 import type {
+  BaseStrategy,
   ObservabilityStrategy,
   CostStrategy,
   CostTick,
   LiveStatusStrategy,
   StatusUpdate,
   CommonStrategyOptions,
+  ObservabilityHandle,
   ObservabilityTier,
+  StrategyHandle,
   DetachOptions,
 } from './types.js';
+import {
+  ASYNC_DISPOSE,
+  releaseStrategy,
+  retainStrategy,
+  stopStrategyIfUnused,
+} from './lifecycle.js';
 import {
   selectStatus,
   renderStatusLine,
@@ -44,21 +53,82 @@ import {
 // current attach() implementations, which take `opts.strategy` directly.
 
 /**
+ * Build the handle `enable.*` returns: the `Unsubscribe` it always was, plus
+ * `flush()` / `stop()` / `await using` support.
+ *
+ * THE ORDER LAW lives here, in the one object that knows both halves of what
+ * this subscription owns:
+ *
+ *   1. drain the detach hop — events scheduled on a `detach` driver have not
+ *      reached the strategy yet, so flushing the strategy first ships nothing
+ *   2. flush the strategy's own buffer
+ *   3. only then may `stop()` cancel timers and release clients
+ *
+ * The reverse order is not a style preference: until 8.11.1 a `stop()` before
+ * a `flush()` spun the event loop of the process trying to shut down. Putting
+ * the order inside the handle is what makes it impossible to get wrong from
+ * outside.
+ */
+function makeStrategyHandle(args: {
+  readonly strategy: BaseStrategy;
+  readonly unsubscribe: Unsubscribe;
+  readonly drainDetached: () => Promise<void>;
+}): StrategyHandle {
+  let released = false;
+  const flush = async (): Promise<void> => {
+    await args.drainDetached();
+    try {
+      await args.strategy.flush?.();
+    } catch {
+      // Passive-recorder rule: a failing exporter reports through its own
+      // `_onError`; a shutdown must not inherit its exception.
+    }
+  };
+  const handle = Object.assign(
+    (): void => {
+      // Detach only. Releasing a subscription NEVER stops a strategy — see
+      // strategies/lifecycle.ts, law 1.
+      if (released) return;
+      released = true;
+      args.unsubscribe();
+      releaseStrategy(args.strategy);
+    },
+    {
+      flush,
+      stop: (): void => {
+        // Releasing THIS subscription is part of stopping: "I am done with
+        // it". Whether the STRATEGY stops then depends on whether anyone
+        // else still holds it.
+        handle();
+        stopStrategyIfUnused(args.strategy);
+      },
+      [ASYNC_DISPOSE]: async (): Promise<void> => {
+        await flush();
+        handle();
+        stopStrategyIfUnused(args.strategy);
+      },
+    },
+  );
+  // The computed `ASYNC_DISPOSE` key gives TypeScript a symbol INDEX
+  // signature rather than the one well-known member `AsyncDisposable` names,
+  // so the cast goes through `unknown`. At runtime the key IS
+  // `Symbol.asyncDispose` on every engine this package supports.
+  return handle as unknown as StrategyHandle;
+}
+
+/**
  * Sentinel returned when consumer calls `enable.X()` without supplying
  * a strategy or vendor. We DON'T auto-default — that would be an
  * unwelcome opinion. Consumer chose to call `enable.X` but didn't hand
- * us anywhere to ship; just no-op silently and return a stoppable
- * unsubscribe so the call site stays composable.
+ * us anywhere to ship; just no-op silently and return a handle so the
+ * call site stays composable and `handle.flush()` is never the one path
+ * that throws.
  */
-const NOOP_UNSUBSCRIBE: Unsubscribe = Object.assign((): void => undefined, {
-  // Carries no-op `flush` / `stop` alongside the unsubscribe (8.11.1). The
-  // declared return type is still `Unsubscribe`, so this changes nothing you
-  // can reach today; it exists so that when the return type widens into a
-  // handle, the no-subscription case answers that handle's methods instead of
-  // being the one path that throws on `handle.flush()`.
+const NOOP_HANDLE: StrategyHandle = Object.assign((): void => undefined, {
   flush: (): Promise<void> => Promise.resolve(),
   stop: (): void => undefined,
-});
+  [ASYNC_DISPOSE]: (): Promise<void> => Promise.resolve(),
+}) as unknown as StrategyHandle;
 
 // ─── Detach plumbing ─────────────────────────────────────────────────
 //
@@ -144,18 +214,34 @@ function getDetachExecutor(): FlowChartExecutor {
  * detach handle is registered in the same tick as the event, which is what
  * makes `flushAllDetached()` able to see it (see `getDetachExecutor`).
  */
+interface EventHandler {
+  /** Deliver one event — inline, or scheduled on the detach driver. */
+  readonly deliver: (event: unknown) => void;
+  /** Wait for every event this handler scheduled to reach the strategy.
+   *  Resolves immediately when `detach` is not in use. */
+  readonly drainDetached: () => Promise<void>;
+}
+
+/** Max passes `drainDetached` will make. Bounded by construction: work
+ *  scheduled BY the drained work is picked up by the next pass, and a drain
+ *  that will not settle must end rather than retry forever. */
+const DETACH_DRAIN_PASSES = 8;
+
 function buildEventHandler(
   detach: DetachOptions | undefined,
   args: DetachRouterArgs,
-): (event: unknown) => void {
+): EventHandler {
   if (!detach) {
     // Sync path — current behavior.
-    return (event) => {
-      try {
-        args.work(event);
-      } catch (err) {
-        args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
-      }
+    return {
+      deliver: (event) => {
+        try {
+          args.work(event);
+        } catch (err) {
+          args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
+        }
+      },
+      drainDetached: () => Promise.resolve(),
     };
   }
 
@@ -174,26 +260,88 @@ function buildEventHandler(
     );
   }
 
-  return (event) => {
-    // Schedules in THIS tick and returns immediately — the driver owns when
-    // the work runs, we only hand it over. Handing over synchronously is what
-    // puts the handle in the detach registry before the caller's next line,
-    // so a shutdown that calls `flushAllDetached()` actually drains this
-    // event instead of finding an empty registry (8.11.1).
-    try {
-      if (mode === 'forget') {
-        getDetachExecutor().detachAndForget(detach.driver, wrapperChart, event);
-      } else {
+  // Every event scheduled but not yet delivered to the strategy. This is the
+  // queue `handle.flush()` drains first, and it is the reason a detached
+  // export can be drained AT ALL: the events are here, not in the strategy's
+  // buffer, so flushing the strategy alone would ship nothing.
+  //
+  // `mode: 'forget'` keeps its meaning — the consumer never sees these
+  // handles. We hold them ourselves, and drop each one the moment it settles,
+  // so the set is bounded by what is genuinely in flight. (`detachAndForget`
+  // in footprintjs IS `detachAndJoinLater` with the handle discarded, so this
+  // is the same scheduling path, not a second one.)
+  const inFlight = new Set<import('footprintjs/detach').DetachHandle>();
+  const track = (handle: import('footprintjs/detach').DetachHandle): void => {
+    inFlight.add(handle);
+    const forget = (): void => {
+      inFlight.delete(handle);
+    };
+    void handle.wait().then(forget, forget);
+  };
+
+  return {
+    deliver: (event) => {
+      // Schedules in THIS tick and returns immediately — the driver owns when
+      // the work runs, we only hand it over. Handing over synchronously is what
+      // puts the handle in the detach registry before the caller's next line,
+      // so a shutdown that calls `flushAllDetached()` actually drains this
+      // event instead of finding an empty registry (8.11.1).
+      try {
         const handle = getDetachExecutor().detachAndJoinLater(detach.driver, wrapperChart, event);
+        track(handle);
         // Caller validates onHandle is set when mode !== 'forget' (see
         // mode-discrimination above; the mode='joinLater' branch requires it).
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        onHandle!(handle);
+        if (mode !== 'forget') onHandle!(handle);
+      } catch (err) {
+        args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
       }
-    } catch (err) {
-      args.onError?.(err instanceof Error ? err : new Error(String(err)), event);
-    }
+    },
+    drainDetached: async (): Promise<void> => {
+      for (let pass = 0; pass < DETACH_DRAIN_PASSES && inFlight.size > 0; pass++) {
+        await Promise.allSettled([...inFlight].map((handle) => handle.wait()));
+        // Let the `forget` continuations above run, so `inFlight.size` tells
+        // the truth before the next pass reads it.
+        await Promise.resolve();
+      }
+    },
   };
+}
+
+/**
+ * The events that mean "a run just ended", for `flushOn: 'run-end'`.
+ *
+ * Named explicitly rather than pattern-matched, because a flush is a network
+ * round trip and guessing which events are terminal would fire it in the
+ * middle of runs. An Agent ends a turn; a composition (Sequence, Parallel,
+ * Conditional, Loop) exits. A runner that emits neither simply never
+ * auto-flushes — `flushOn` promises nothing it cannot see.
+ */
+const RUN_END_EVENTS = [
+  'agentfootprint.agent.turn_end',
+  'agentfootprint.composition.exit',
+] as unknown as readonly AgentfootprintEventType[];
+
+/**
+ * Wire `flushOn: 'run-end'`. Returns the subscriptions to release when the
+ * handle is unsubscribed (empty for the default `'manual'`).
+ *
+ * The flush is FIRED, never awaited: `run()` resolves when the run is done,
+ * and nothing here may add exporter latency to it. Failures are already
+ * swallowed inside `handle.flush()` and reported through the strategy's own
+ * `_onError`.
+ */
+function subscribeRunEndFlush(
+  dispatcher: EventDispatcher,
+  flushOn: 'manual' | 'run-end' | undefined,
+  handle: StrategyHandle,
+): Unsubscribe[] {
+  if (flushOn !== 'run-end') return [];
+  return RUN_END_EVENTS.map((type) =>
+    dispatcher.on(type, () => {
+      void handle.flush();
+    }),
+  );
 }
 
 // `resolveStrategy` (vendor-registry lookup helper) is reserved for
@@ -236,12 +384,12 @@ const TIER_FILTER: Record<ObservabilityTier, (type: string) => boolean> = {
 export function attachObservabilityStrategy(
   dispatcher: EventDispatcher,
   opts: ObservabilityEnableOptions = {},
-): Unsubscribe {
+): ObservabilityHandle {
   const strategy = opts.strategy;
   // Consumer chose to call enable.observability() but didn't supply
   // a strategy. Don't auto-default — that imposes an opinion. Just
   // no-op so the call site stays composable.
-  if (!strategy) return NOOP_UNSUBSCRIBE;
+  if (!strategy) return NOOP_HANDLE;
   strategy.validate?.();
   const tierFilter = TIER_FILTER[opts.tier ?? 'standard'];
   const sampleRate = opts.sampleRate ?? 1;
@@ -252,17 +400,30 @@ export function attachObservabilityStrategy(
   // Build the event handler ONCE per attach call. Sync if no
   // `opts.detach`; otherwise schedules on the driver so the agent
   // loop never blocks on slow exporters.
-  const handle = buildEventHandler(opts.detach, {
+  const events = buildEventHandler(opts.detach, {
     work: (event) => strategy.exportEvent(event as AgentfootprintEvent),
     onError: (err, event) => strategy._onError?.(err, event as AgentfootprintEvent),
   });
 
-  return dispatcher.on('*', (event: AgentfootprintEvent) => {
-    if (!tierFilter(event.type)) return;
-    if (relevant && !relevant.has(event.type)) return;
-    if (sampleRate < 1 && Math.random() > sampleRate) return;
-    handle(event);
+  retainStrategy(strategy);
+  const subscriptions: Unsubscribe[] = [];
+  const handle = makeStrategyHandle({
+    strategy,
+    unsubscribe: () => {
+      for (const off of subscriptions) off();
+    },
+    drainDetached: events.drainDetached,
   });
+  subscriptions.push(
+    dispatcher.on('*', (event: AgentfootprintEvent) => {
+      if (!tierFilter(event.type)) return;
+      if (relevant && !relevant.has(event.type)) return;
+      if (sampleRate < 1 && Math.random() > sampleRate) return;
+      events.deliver(event);
+    }),
+    ...subscribeRunEndFlush(dispatcher, opts.flushOn, handle),
+  );
+  return handle;
 }
 
 // ─── Cost ────────────────────────────────────────────────────────────
@@ -278,39 +439,52 @@ export interface CostEnableOptions extends CommonStrategyOptions {
 export function attachCostStrategy(
   dispatcher: EventDispatcher,
   opts: CostEnableOptions = {},
-): Unsubscribe {
+): StrategyHandle {
   const strategy = opts.strategy;
-  if (!strategy) return NOOP_UNSUBSCRIBE;
+  if (!strategy) return NOOP_HANDLE;
   strategy.validate?.();
 
   // Cost strategy detach mirrors observability — sync by default,
   // schedules on the driver when `opts.detach` is set. Useful when
   // `recordCost` does heavy work (per-tick DB write, vendor budget
   // API, etc.).
-  const handle = buildEventHandler(opts.detach, {
+  const events = buildEventHandler(opts.detach, {
     work: (tickInput) => strategy.recordCost(tickInput as CostTick),
     onError: (err, tickInput) =>
       strategy._onError?.(err, tickInput as unknown as AgentfootprintEvent),
   });
 
-  return dispatcher.on(
-    'agentfootprint.cost.tick' as AgentfootprintEventType,
-    (event: AgentfootprintEvent) => {
-      const p = event.payload as unknown as Record<string, unknown>;
-      const tick: CostTick = {
-        cumulativeInputTokens: Number(p.cumulativeInputTokens ?? 0),
-        cumulativeOutputTokens: Number(p.cumulativeOutputTokens ?? 0),
-        cumulativeCostUsd: Number(p.cumulativeCostUsd ?? 0),
-        recentInputTokens: Number(p.recentInputTokens ?? 0),
-        recentOutputTokens: Number(p.recentOutputTokens ?? 0),
-        recentCostUsd: Number(p.recentCostUsd ?? 0),
-        model: String(p.model ?? 'unknown'),
-        ...(typeof p.iteration === 'number' ? { iteration: p.iteration } : {}),
-        ...(typeof p.runtimeStageId === 'string' ? { runtimeStageId: p.runtimeStageId } : {}),
-      };
-      handle(tick);
+  retainStrategy(strategy);
+  const subscriptions: Unsubscribe[] = [];
+  const handle = makeStrategyHandle({
+    strategy,
+    unsubscribe: () => {
+      for (const off of subscriptions) off();
     },
+    drainDetached: events.drainDetached,
+  });
+  subscriptions.push(
+    dispatcher.on(
+      'agentfootprint.cost.tick' as AgentfootprintEventType,
+      (event: AgentfootprintEvent) => {
+        const p = event.payload as unknown as Record<string, unknown>;
+        const tick: CostTick = {
+          cumulativeInputTokens: Number(p.cumulativeInputTokens ?? 0),
+          cumulativeOutputTokens: Number(p.cumulativeOutputTokens ?? 0),
+          cumulativeCostUsd: Number(p.cumulativeCostUsd ?? 0),
+          recentInputTokens: Number(p.recentInputTokens ?? 0),
+          recentOutputTokens: Number(p.recentOutputTokens ?? 0),
+          recentCostUsd: Number(p.recentCostUsd ?? 0),
+          model: String(p.model ?? 'unknown'),
+          ...(typeof p.iteration === 'number' ? { iteration: p.iteration } : {}),
+          ...(typeof p.runtimeStageId === 'string' ? { runtimeStageId: p.runtimeStageId } : {}),
+        };
+        events.deliver(tick);
+      },
+    ),
+    ...subscribeRunEndFlush(dispatcher, opts.flushOn, handle),
   );
+  return handle;
 }
 
 // ─── Live status ─────────────────────────────────────────────────────
@@ -342,30 +516,44 @@ const LIVE_STATUS_LOG_CAP = 1000;
 export function attachLiveStatusStrategy(
   dispatcher: EventDispatcher,
   opts: LiveStatusEnableOptions,
-): Unsubscribe {
+): StrategyHandle {
   opts.strategy.validate?.();
   const templates = { ...defaultStatusTemplates, ...(opts.templates ?? {}) };
   const ctx = { appName: opts.appName ?? 'Agent' };
   const eventLog: AgentfootprintEvent[] = [];
   let lastLine: string | null = null;
 
-  return dispatcher.on('*', (event: AgentfootprintEvent) => {
-    eventLog.push(event);
-    // Sliding-window — drop oldest when over cap. O(1) amortized
-    // because shift() runs only once per overflow.
-    while (eventLog.length > LIVE_STATUS_LOG_CAP) eventLog.shift();
-    const state = selectStatus(eventLog);
-    if (!state) {
-      lastLine = null;
-      return;
-    }
-    const line = renderStatusLine(state, ctx, templates);
-    if (line === null || line === lastLine) return;
-    lastLine = line;
-    try {
-      opts.strategy.renderStatus({ line, state } as StatusUpdate);
-    } catch (err) {
-      opts.strategy._onError?.(err instanceof Error ? err : new Error(String(err)), event);
-    }
+  retainStrategy(opts.strategy);
+  const subscriptions: Unsubscribe[] = [];
+  const handle = makeStrategyHandle({
+    strategy: opts.strategy,
+    unsubscribe: () => {
+      for (const off of subscriptions) off();
+    },
+    // Live status renders inline (a UI callback); there is no detach hop.
+    drainDetached: () => Promise.resolve(),
   });
+  subscriptions.push(
+    dispatcher.on('*', (event: AgentfootprintEvent) => {
+      eventLog.push(event);
+      // Sliding-window — drop oldest when over cap. O(1) amortized
+      // because shift() runs only once per overflow.
+      while (eventLog.length > LIVE_STATUS_LOG_CAP) eventLog.shift();
+      const state = selectStatus(eventLog);
+      if (!state) {
+        lastLine = null;
+        return;
+      }
+      const line = renderStatusLine(state, ctx, templates);
+      if (line === null || line === lastLine) return;
+      lastLine = line;
+      try {
+        opts.strategy.renderStatus({ line, state } as StatusUpdate);
+      } catch (err) {
+        opts.strategy._onError?.(err instanceof Error ? err : new Error(String(err)), event);
+      }
+    }),
+    ...subscribeRunEndFlush(dispatcher, opts.flushOn, handle),
+  );
+  return handle;
 }

@@ -305,13 +305,19 @@ export function _buildCloudWatchObservability(
     capabilities: { events: true, logs: true },
     exportEvent: enqueue,
     /**
-     * Drain the buffer. **The framework does not call this for you** — wire it
-     * into your own shutdown or the last batch is lost:
+     * Drain the buffer.
      *
-     *   process.on('SIGTERM', async () => { await strategy.flush(); strategy.stop(); });
+     * Called for you on shutdown since 8.12.0 — by the handle
+     * `enable.observability()` returns, by `agent.shutdown()`, and by a
+     * `standingAgent` closing:
      *
-     * Safe in any order relative to `stop()` since 8.11.1: a flush after a
-     * stop still ships what was already accepted.
+     *   const telemetry = agent.enable.observability({ strategy });
+     *   process.on('SIGTERM', async () => { await agent.shutdown(); });
+     *
+     * Calling it yourself is still fine and still the right thing at any point
+     * you want the buffer on the wire. Safe in any order relative to `stop()`
+     * since 8.11.1: a flush after a stop still ships what was already
+     * accepted.
      */
     async flush(): Promise<void> {
       // BOUNDED BY CONSTRUCTION. Every pass must remove at least one buffered

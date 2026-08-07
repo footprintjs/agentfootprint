@@ -7,6 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.12.0] - 2026-08-07
+
+**Somebody has to flush the exporter, and until now nobody did.** 8.11.0
+documented that honestly; 8.11.1 fixed the two bugs underneath it. This release
+finishes the job: the framework calls `flush()` and `stop()` for you, in the one
+correct order, without ever stopping a strategy somebody else is still using.
+
+### The handle that comes back from `enable.*`
+
+`agent.enable.observability({ strategy })` still returns the `Unsubscribe`
+function it always returned — calling it still detaches, and detaching still
+never stops your strategy. It now also carries two methods:
+
+```ts
+const telemetry = agent.enable.observability({ strategy: cloudwatch });
+
+await telemetry.flush();   // drain: driver queue first, then the buffer
+telemetry();               // detach (unchanged)
+telemetry.stop();          // release — timers, clients, buffers
+```
+
+`flush()` enforces the ORDER, which is the part no consumer could write from
+outside: an event scheduled on a `detach` driver has not reached your strategy
+yet, so flushing the strategy alone ships nothing. The handle knows both halves
+because it owns both.
+
+`await using` works too, where your runtime has `Symbol.asyncDispose`:
+
+```ts
+await using telemetry = agent.enable.observability({ strategy });
+```
+
+Existing code is unaffected: the return type widened, and a function that
+carries extra properties is still that function.
+
+### `agent.shutdown()`
+
+```ts
+await agent.shutdown();
+```
+
+Drains and releases everything enabled on that runner. **The agent itself
+remains usable afterwards; `shutdown()` drains and releases what was enabled on
+it.** Every strategy flushes before anything stops, so a strategy two handles
+share is never stopped with data still in it. Pass `{ stop: false }` to drain
+without releasing.
+
+### `standingAgent` flushes when it closes — the one behaviour change
+
+`close()` now drains the agent's telemetry by default (`shutdown: 'flush'`).
+Nothing about the API changed and no call site needs editing; what changes is
+that a batch which used to be dropped when the server stopped now arrives. It
+does not RELEASE the strategies, because this composer only borrowed the agent
+— say `shutdown: 'flush-and-stop'` when the agent's life ends with the host, or
+`shutdown: 'none'` for exactly what 8.11.x did.
+
+### `shutdownOn` — signals, asked for rather than assumed
+
+```ts
+await standingAgent({ agent, sessions, host, shutdownOn: ['SIGTERM', 'SIGINT'] });
+```
+
+Closes the host, drains telemetry, removes its own listeners, then **re-raises
+the signal** so the process dies the way the platform meant it to.
+
+Off by default, and that is a refusal rather than an omission. `process.on('SIGTERM', …)`
+is not observation: Node's default action for that signal is to terminate, and
+adding any listener suppresses it — a library that installs one behind your back
+can turn a container's graceful stop into a wait for SIGKILL in an application
+that never asked. Handlers are process-global, only Node has signals at all, and
+no library can know your exit policy. A composition root may ask; it must not
+assume.
+
+### `flushOn: 'run-end'`
+
+```ts
+agent.enable.observability({ strategy, flushOn: 'run-end' });
+```
+
+Fires a flush when a run ends — for scripts, cron jobs and functions that may
+vanish right after answering. **It fires the flush; it does not gate `run()`.**
+A process that exits in the same breath can still outrun it; the honest closer
+is `await agent.shutdown()`. Nothing was made awaitable inside `run()` because
+telemetry must never become a term in run latency. Default `'manual'`.
+
+### Who may stop a strategy
+
+One `WeakMap`, three laws. An `Unsubscribe` never stops a strategy — that is
+what lets one instance be enabled, released and enabled again (the audit-export
+pattern; `examples/features/19-audit-export.ts` is unchanged, byte for byte, and
+is the compatibility proof). A strategy is stopped only once the last
+subscription pointing at it is released, so one runner's shutdown cannot blind
+another runner that shares it. And `stop()` reaches a strategy **at most once,
+ever**, whoever asks.
+
+### Also
+
+- `docs:truth` gained a rule (`strategy-lifecycle-consumer-only`) that fails the
+  build if any doc line goes back to saying the framework never calls these.
+  Seven sites were rewritten; the rule is what keeps them rewritten.
+- New example: `examples/features/48-graceful-shutdown.ts` runs all three doors
+  and asserts the laws, including that `run()` still does not flush.
+- `ESNext.Disposable` added to the TypeScript `lib` (whole repo typechecks clean).
+
 ## [8.11.1] - 2026-08-07
 
 **Two bugs in the shutdown path — one hangs the process, one loses the

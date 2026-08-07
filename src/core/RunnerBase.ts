@@ -37,6 +37,8 @@ import {
   attachCostStrategy,
   attachLiveStatusStrategy,
 } from '../strategies/attach.js';
+import type { StrategyHandle } from '../strategies/types.js';
+import { ASYNC_DISPOSE } from '../strategies/lifecycle.js';
 import {
   attachFlowchart,
   type FlowchartHandle,
@@ -542,6 +544,100 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   // ─── Enable namespace (Tier 3 observability features) ─────────
 
+  /**
+   * Every live `enable.*` strategy handle on this runner — what
+   * `shutdown()` drains. A handle leaves the set as soon as it is
+   * unsubscribed or stopped, so a server that enables per request and
+   * unsubscribes per request does not grow one.
+   */
+  private readonly liveStrategyHandles = new Set<StrategyHandle>();
+
+  /** In-flight `shutdown()`, so concurrent callers share one drain. Cleared
+   *  when it settles — the runner stays usable, so a later shutdown runs
+   *  again rather than resolving against a stale promise. */
+  private shutdownInFlight: Promise<void> | undefined;
+
+  /**
+   * Track a strategy handle for `shutdown()` and hand back a handle that
+   * forgets itself once the consumer releases it.
+   */
+  private trackStrategyHandle(handle: StrategyHandle): StrategyHandle {
+    const live = this.liveStrategyHandles;
+    live.add(handle);
+    const tracked = Object.assign(
+      (): void => {
+        handle();
+        live.delete(handle);
+      },
+      {
+        flush: (): Promise<void> => handle.flush(),
+        stop: (): void => {
+          handle.stop();
+          live.delete(handle);
+        },
+        [ASYNC_DISPOSE]: async (): Promise<void> => {
+          // Read the method back through the SAME key it was stored under.
+          // `Symbol.asyncDispose` literally would miss it on an engine old
+          // enough to need the fallback key — the one place these two
+          // spellings could drift apart.
+          const dispose = (handle as unknown as Record<symbol, (() => Promise<void>) | undefined>)[
+            ASYNC_DISPOSE
+          ];
+          await dispose?.();
+          live.delete(handle);
+        },
+      },
+    );
+    // Same cast as `makeStrategyHandle`: a computed symbol key reads as an
+    // index signature, not the well-known member `AsyncDisposable` names.
+    return tracked as unknown as StrategyHandle;
+  }
+
+  /**
+   * Drain and release what was enabled on this runner.
+   *
+   * **The agent itself remains usable afterwards; `shutdown()` drains and
+   * releases what was enabled on it.** Nothing about the runner is destroyed:
+   * `run()` still works, listeners still fire, and enabling telemetry again
+   * gives you a fresh, live handle.
+   *
+   * The order is the part worth having in one place:
+   *
+   *   1. every handle FLUSHES first — including the events still queued on a
+   *      `detach` driver, which have not reached the strategy yet;
+   *   2. only then does anything stop, so a strategy shared by two handles is
+   *      fully drained before either releases it;
+   *   3. a strategy is stopped only once nothing is still subscribed to it,
+   *      and at most once ever (see `strategies/lifecycle.ts`).
+   *
+   * @param options.stop - Default `true`. Pass `false` to drain WITHOUT
+   *   releasing — what a host does when it is shutting down but does not own
+   *   the agent it was handed (`standingAgent`'s default `shutdown: 'flush'`).
+   *
+   * @example Graceful exit for a script
+   *   const telemetry = agent.enable.observability({ strategy: cloudwatch });
+   *   const answer = await agent.run({ message: 'hi' });
+   *   await agent.shutdown();
+   */
+  async shutdown(options: { readonly stop?: boolean } = {}): Promise<void> {
+    if (this.shutdownInFlight) return this.shutdownInFlight;
+    const shouldStop = options.stop ?? true;
+    const handles = [...this.liveStrategyHandles];
+    this.shutdownInFlight = (async () => {
+      // Flush everything before stopping anything — a strategy two handles
+      // share must not be stopped while the other still has data to ship.
+      await Promise.allSettled(handles.map((handle) => handle.flush()));
+      if (!shouldStop) return;
+      for (const handle of handles) {
+        handle.stop();
+        this.liveStrategyHandles.delete(handle);
+      }
+    })().finally(() => {
+      this.shutdownInFlight = undefined;
+    });
+    return this.shutdownInFlight;
+  }
+
   readonly enable: EnableNamespace = {
     flowchart: (opts?: FlowchartOptions): FlowchartHandle =>
       // Hand the recorder's attach(), the dispatcher AND the commit
@@ -571,9 +667,13 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.
-    observability: (opts) => attachObservabilityStrategy(this.dispatcher, opts),
-    cost: (opts) => attachCostStrategy(this.dispatcher, opts),
-    liveStatus: (opts) => attachLiveStatusStrategy(this.dispatcher, opts),
+    // Each returns a handle: the same `Unsubscribe` function as before, now
+    // carrying `flush()` / `stop()` (and `await using`). The runner keeps a
+    // reference so `shutdown()` can drain them all in one call.
+    observability: (opts) =>
+      this.trackStrategyHandle(attachObservabilityStrategy(this.dispatcher, opts)),
+    cost: (opts) => this.trackStrategyHandle(attachCostStrategy(this.dispatcher, opts)),
+    liveStatus: (opts) => this.trackStrategyHandle(attachLiveStatusStrategy(this.dispatcher, opts)),
   };
 
   // ─── Consumer custom emit ──────────────────────────────────────

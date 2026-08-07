@@ -785,6 +785,55 @@ const DOC_TEXT_RULES = [
     },
   },
 
+  {
+    id: 'strategy-lifecycle-consumer-only',
+    headline: 'prose says the framework never calls `flush()` / `stop()`',
+    why:
+      'It did not, through 8.11.x, and the docs said so loudly. Since 8.12.0 three doors call ' +
+      'them: the handle `enable.*` returns (`handle.flush()` / `handle.stop()`), ' +
+      '`agent.shutdown()`, and a `standingAgent` closing with the default `shutdown: \'flush\'`. ' +
+      'A reader who believes the old sentence writes a SIGTERM handler that duplicates work the ' +
+      'library now does — or, worse, concludes the tail batch is still being dropped and builds ' +
+      'a workaround around a bug that is fixed.',
+    fix:
+      'Say who calls it now: the handle, `agent.shutdown()`, a closing `standingAgent`. The one ' +
+      'thing that is still true and worth keeping: `agent.run()` never flushes, and an ' +
+      'Unsubscribe never stops a strategy.',
+    // Scoped to the lifecycle prose — `src/strategies`, the AWS exporter
+    // adapters, and the docs that describe them. The phrasing list is
+    // deliberately literal: these are the exact sentences 8.11.0 shipped.
+    find() {
+      const NEVER_CALLS =
+        /(framework|library|agentfootprint)\s+(never|does not|doesn't)\s+(call|invoke)s?\b|\bCONSUMER-CALLED\b|does not call (this|it|them) for you|nothing in the framework calls them/i;
+      const files = [
+        ...scanFiles('src/strategies', ['.ts']),
+        ...scanFiles('src/adapters/observability', ['.ts']),
+        ...scanFiles('docs-next/content/docs/monitor', ['.mdx']),
+        ...scanFiles('docs-next/content/docs/reference', ['.mdx']),
+      ];
+      const out = [];
+      for (const abs of files) {
+        const file = relative(ROOT, abs);
+        readFileSync(abs, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (!NEVER_CALLS.test(line)) return;
+            // The one true remaining negative: `run()` really does not flush.
+            if (/\brun\(\)/.test(line)) return;
+            out.push({
+              file,
+              line: i + 1,
+              text: line.trim(),
+              detail:
+                'says the framework never calls flush()/stop(); since 8.12.0 the enable.* handle, ' +
+                'agent.shutdown() and a closing standingAgent all do',
+            });
+          });
+      }
+      return out;
+    },
+  },
+
   // ── DELIBERATELY ABSENT: "`composeObservability` near `agentfootprint/observe`" ──
   //
   // A fourth rule was drafted for it and rejected, because the premise was

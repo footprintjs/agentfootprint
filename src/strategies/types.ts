@@ -13,8 +13,8 @@
  *                                  group: `exportEvent` (observability),
  *                                  `recordCost`, `renderStatus`,
  *                                  `renderGraph`. There is no `onEvent`.
- *   4. `flush?(): Promise<void>` — optional batch flushing (CONSUMER-called)
- *   5. `stop?(): void`           — optional teardown (CONSUMER-called)
+ *   4. `flush?(): Promise<void>` — optional batch flushing
+ *   5. `stop?(): void`           — optional teardown
  *
  * Design constraints (from the panel review):
  *   - **PASSIVE / non-blocking by construction.** Strategies are
@@ -28,19 +28,91 @@
  *   - Idempotent registration — registering the same `name` twice
  *     replaces, doesn't double-fire.
  *   - `stop()` is idempotent — halts everything that strategy enabled,
- *     nothing else, calling twice is a no-op.
+ *     nothing else, calling twice is a no-op. Since 8.12.0 the framework
+ *     also guarantees it is DELIVERED at most once, however many places
+ *     share the strategy.
  *   - `flush()` is optional, may be sync OR async — strategies that
  *     don't batch can omit it. Flush is the ONLY async path; the hot
- *     path is always sync. **The framework never calls it.** Nothing
- *     in agentfootprint invokes `flush()` or `stop()` on your strategy
- *     — not `agent.run()`, not the `stop()` returned by `enable.X`.
- *     Calling them on shutdown is the consumer's job; see the notes on
- *     `BaseStrategy.flush` / `BaseStrategy.stop` below.
+ *     path is always sync.
+ *
+ * **Who calls `flush()` / `stop()` (8.12.0).** Three doors, and no
+ * hidden fourth:
+ *
+ *   - `const telemetry = agent.enable.observability({...})` returns a
+ *     handle. It is still the `Unsubscribe` function it always was —
+ *     `telemetry()` detaches, and detaching still never stops your
+ *     strategy — and it now also carries `telemetry.flush()` and
+ *     `telemetry.stop()`.
+ *   - `await agent.shutdown()` drains and releases everything enabled
+ *     on that agent, in the one correct order.
+ *   - `standingAgent({...})`'s `handle.close()` flushes by default
+ *     (`shutdown: 'flush'`), because the last batch reaching the sink
+ *     when a server stops is what everyone already assumed happened.
+ *
+ * `agent.run()` still never flushes: telemetry timing is not the agent
+ * loop's business. Opt into a per-run drain with
+ * `enable.observability({ flushOn: 'run-end' })`, which fires a flush
+ * when a run ends but never gates the run on it.
  */
 
+import type { Unsubscribe } from '../events/dispatcher.js';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
 import type { StepGraph } from '../recorders/observability/FlowchartRecorder.js';
 import type { StatusState } from '../recorders/observability/status/statusTemplates.js';
+
+// ─── What `enable.*` hands back ──────────────────────────────────────
+
+/**
+ * What every `enable.*` strategy call returns (8.12.0).
+ *
+ * **It is still the `Unsubscribe` function.** `telemetry()` detaches the
+ * subscription and nothing else, exactly as before — every call site written
+ * against the old return type keeps compiling and keeps behaving identically.
+ * What is new is that the function also carries two methods, so the object
+ * that knows which strategy is attached is the object you can drain:
+ *
+ * ```ts
+ * const telemetry = agent.enable.observability({ strategy: cloudwatch });
+ *
+ * await telemetry.flush();   // ship what is buffered; keep exporting
+ * telemetry();               // detach; strategy keeps running (unchanged law)
+ * telemetry.stop();          // release the strategy — timers, clients, buffers
+ * ```
+ *
+ * Or let the scope do it, which cannot be got wrong:
+ *
+ * ```ts
+ * await using telemetry = agent.enable.observability({ strategy: cloudwatch });
+ * ```
+ *
+ * `flush()` enforces the shutdown ORDER internally, which is the part no
+ * consumer could do from outside: it drains the detach hop first (events
+ * scheduled on a `detach` driver have not reached your strategy yet), then the
+ * strategy's own buffer. `stop()` is refcounted — see `BaseStrategy.stop`.
+ */
+export type StrategyHandle = Unsubscribe &
+  AsyncDisposable & {
+    /**
+     * Ship everything this subscription has produced: first the events still
+     * queued on a `detach` driver, then the strategy's own buffer. Safe to
+     * call repeatedly and concurrently; never throws at you (a failing
+     * exporter reports through its own `_onError`).
+     */
+    flush(): Promise<void>;
+    /**
+     * Release this subscription AND, if it was the last one pointing at the
+     * strategy, the strategy itself — timers cleared, clients closed. A
+     * strategy another runner still shares is left running; stopping is
+     * delivered at most once, ever.
+     *
+     * Does not flush first: call `flush()` before it, or use
+     * `agent.shutdown()` / `await using`, which do.
+     */
+    stop(): void;
+  };
+
+/** `StrategyHandle` under the name the observability door returns it. */
+export type ObservabilityHandle = StrategyHandle;
 
 // ─── Shared shape every strategy implements ──────────────────────────
 
@@ -59,43 +131,51 @@ export interface BaseStrategy {
    *  Returns `void` for sync sinks (Pino-style) OR `Promise<void>` for
    *  async sinks (Datadog HTTP batch, OTel BatchSpanProcessor).
    *
-   *  **CONSUMER-CALLED. The framework never calls this.** No code path
-   *  in agentfootprint invokes `flush()` — not `agent.run()`, not the
-   *  `Unsubscribe` returned by `enable.observability()` (that only
-   *  detaches the dispatcher listener). The one caller inside the
-   *  library is `composeObservability`, and only to fan out to its own
-   *  children.
+   *  **Called for you on shutdown (8.12.0), never during a run.** The
+   *  handle returned by `enable.observability()` carries `.flush()`,
+   *  `await agent.shutdown()` calls it for everything enabled on that
+   *  agent, and a `standingAgent` flushes on `close()` by default.
+   *  Before 8.12.0 nothing called it, and a batching exporter
+   *  (CloudWatch, X-Ray) dropped its final batch whenever the process
+   *  exited inside its flush window.
    *
-   *  If you never call it, a batching exporter (CloudWatch, X-Ray)
-   *  silently drops its final batch and leaks its flush timer, keeping
-   *  the process alive. Wire it into your own shutdown:
+   *  Write it to be safe to call at any time, including twice
+   *  concurrently and after your own `stop()` — the shipped AWS
+   *  adapters are (a stop cancels the timer and stops accepting; it
+   *  does not discard what was already accepted).
    *
    *  ```ts
-   *  process.on('SIGTERM', async () => {
-   *    await strategy.flush();
-   *    strategy.stop();
-   *    stop();
-   *  });
+   *  const telemetry = agent.enable.observability({ strategy });
+   *  // …
+   *  await telemetry.flush();   // ship what is buffered, keep running
+   *  await agent.shutdown();    // drain + release everything enabled
    *  ```
    *
-   *  Whether the framework SHOULD call these is an open design
-   *  question, not an oversight: awaiting a flush inside `run()` would
-   *  change run timing, and a strategy shared across two `enable.*`
-   *  calls would be flushed and stopped twice (or stopped while the
-   *  other subscription is still live). Until that is resolved it is
-   *  explicitly the consumer's job. */
+   *  What still does NOT call it: `agent.run()`. Awaiting an exporter
+   *  inside a run would make telemetry a run-latency term. Opt into a
+   *  per-run drain with `enable.observability({ flushOn: 'run-end' })`
+   *  — it fires when a run ends, and does not gate the run. */
   flush?(): void | Promise<void>;
 
   /** Optional teardown — close clients, clear timers, release handles.
    *  Idempotent: calling twice is a no-op. Strategies that open no
    *  external resources can omit this.
    *
-   *  **CONSUMER-CALLED. The framework never calls this.** In
-   *  particular, the `Unsubscribe` returned by `enable.observability()`
-   *  is NOT this: it removes the dispatcher subscription (see
-   *  `attachObservabilityStrategy`) and never touches the strategy. A
-   *  strategy with an open timer keeps running after you call it.
-   *  Flush first, then stop — see the example on `flush` above. */
+   *  **Terminal**: after it, events are dropped and there is no
+   *  restart. So the framework is careful about who may call it:
+   *
+   *   - The `Unsubscribe` — `telemetry()` — NEVER stops your strategy.
+   *     It releases one subscription, exactly as it always did. This is
+   *     what lets one strategy instance be enabled, unsubscribed and
+   *     enabled again (the audit-export pattern) without losing the
+   *     second half of its record.
+   *   - `telemetry.stop()` and `agent.shutdown()` DO stop it — but only
+   *     once the last subscription pointing at it has been released,
+   *     so one runner's shutdown can never blind another runner that
+   *     still shares the strategy.
+   *   - Delivered AT MOST ONCE per strategy instance, whoever asks.
+   *
+   *  Flush first, then stop — both doors above already do. */
   stop?(): void;
 
   /**
@@ -343,9 +423,13 @@ export type ObservabilityTier = 'minimal' | 'standard' | 'firehose';
  *   - omitted (default sync) — strategy hot-path runs inline, same as
  *                              every release before v2.8.
  *
- * For graceful shutdown — call `flushAllDetached()` (from
- * `'footprintjs/detach'`) in your SIGTERM handler. Drains every
- * in-flight detached handle process-wide.
+ * For graceful shutdown — `await handle.flush()` (or `agent.shutdown()`).
+ * Since 8.12.0 that drains the events this subscription scheduled on the
+ * driver BEFORE flushing the strategy, which is the order that matters and
+ * the one you could not write yourself: a detached event has not reached your
+ * strategy's buffer yet, so flushing the strategy alone ships nothing.
+ * `flushAllDetached()` (from `'footprintjs/detach'`) remains the
+ * process-wide hammer for detached work this library did not schedule.
  */
 export interface DetachOptions {
   /** The driver to schedule on. Required — there is no library
@@ -389,4 +473,23 @@ export interface CommonStrategyOptions {
    *  running inline — agent loop never blocks on slow exporters.
    *  See `DetachOptions` for the three semantics. */
   readonly detach?: DetachOptions;
+  /**
+   * When to flush automatically (8.12.0). Default `'manual'` — the framework
+   * flushes on shutdown (`handle.flush()`, `agent.shutdown()`, a
+   * `standingAgent` closing) and at no other time.
+   *
+   * `'run-end'` additionally fires a flush when a run finishes: an Agent's
+   * `agent.turn_end`, a composition's `composition.exit`. Use it for scripts
+   * and short-lived processes (a Lambda, a cron job) where "the process may
+   * vanish right after the answer" is the normal case.
+   *
+   * **It fires the flush; it does not gate the run.** `run()` resolves when
+   * the run is done, exactly as it does today — the drain happens alongside,
+   * and a process that exits in the same breath can still outrun it. The
+   * honest one-liner for that case is `await handle.flush()` (or
+   * `await agent.shutdown()`) after the run; this option shrinks the window,
+   * it does not close it. Nothing was made to await inside `run()` because
+   * telemetry must never become a term in run latency.
+   */
+  readonly flushOn?: 'manual' | 'run-end';
 }
