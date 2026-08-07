@@ -50,6 +50,7 @@ const overview = await callTraceTool(tools, 'run_overview');
 | `who_wrote(key, beforeStageId?)` | Which step last wrote key K (optionally before step Y)? |
 | `get_value(runtimeStageId, key, maxChars?)` | The full value of K as of step X — the explicit on-demand fetch, capped + truncation-marked. |
 | `inspect_tool_call(toolCallId)` | **One tool call, end to end**: which tool, the args the model *proposed*, the args it actually *ran with*, the result, the outcome, the duration, the step that ran it. |
+| `inspect_tool_run(toolCallId, …)` | **Inside** one tool call — the run the tool itself recorded, when it kept one (`flowchartAsTool({ keepRecord: true })`). |
 | `read_narrative(offset?, maxLines?)` | The human-readable story, paginated (only when `narrative` was provided). |
 
 ### `find_in_trace` — the first move when you have words, not ids
@@ -96,9 +97,67 @@ proposal in history and the tool ran on something else. Timings need
 `artifacts.events`; without them the line reads `duration: ⚠ unavailable` and
 explains that the commit log has no clock, rather than inventing a number.
 
+### `inspect_tool_run` — through the boundary, not around it
+
+The line above ends at a wall: *"⚠ boundary: what happened INSIDE the tool is
+not traced."* True for a tool that calls someone else's payments API.
+Needlessly true for a tool that **is** a footprintjs flowchart — that tool
+recorded every stage it ran, and then threw the recording away, because
+nobody was holding it.
+
+`flowchartAsTool({ keepRecord: true })` holds it, keyed by the same
+`toolCallId`, so the wall becomes a rung:
+
+```
+inside: this tool kept its own record of the run — 4 step(s), ok.
+        Descend with inspect_tool_run({ toolCallId: 'c1' }).
+```
+
+`inspect_tool_run` opens it with the same drill vocabulary, one level down —
+overview by default, then `find` (free text → inner ids), `variable` (why is
+an inner value what it is), `runtimeStageId` (one inner step), and
+`runtimeStageId` + `key` (the field in full):
+
+```
+INSIDE TOOL CALL c1 — 'weather_advice' ran a recorded flowchart (4 committed step(s), ok).
+SLICE for 'advice' — reads via: custom-fn
+Advise transit (rain#3) [wrote: advice, because]
+  Validate the forecast (validate-forecast#1) ← via rainChancePct [wrote: checks, usable, rainChancePct]
+    Fetch the forecast (fetch-forecast#0) ← via forecast [wrote: forecast]
+  Weigh the rain (weigh-the-rain#2) ← [control: Rain chance at or above the 60% bike threshold]
+⚠ the ids above are INNER ids — they name steps of weather_advice's own chart, not of the
+  run that called it. trace_node / get_value / trace_slice do not accept them.
+```
+
+The inner views ARE the pack's own tools, built over the inner artifact bag
+through `openRecording` — one vocabulary, one implementation, nothing to
+drift. Three contracts carry over unchanged and one is new:
+
+- **Bounded** — the inner overview, slices and values are capped by the same dials.
+- **Honest** — no record kept? The answer names `keepRecord` and points back
+  at the envelope. Dropped by the retention cap? It says how many and names
+  `keepRecordLimit`. Capture itself failed? The record is filed carrying the
+  reason, because a missing row is indistinguishable from a call never made.
+- **Redaction-respecting** — `flowchartAsTool`'s `redact` policy scrubs at
+  INNER commit time, so a covered key never enters the inner commit log and
+  no inner view (including `find`) can route around it.
+- **New: control edges survive.** A serialized recording can never carry a
+  `controlDeps` lookup back (a function does not serialize). An inner record
+  is live in process, so the wrapping tool attaches a fresh
+  `controlDepRecorder()` per invocation and the inner slice shows the
+  decision RULE that routed execution.
+
+Retention is bounded and LRU: the last `keepRecordLimit` invocations
+(default 20), least-recently-USED dropped first, and reading refreshes
+recency so a record under investigation is not evicted by a turn happening
+beside it. `.build()` collects the store off every statically registered and
+skill-declared chart tool; a tool arriving from a `.toolProvider()` is
+resolved per iteration and so is not collected at build time.
+
 Step ids are `runtimeStageId`s (`stageId#executionIndex`, e.g. `normalize#1`) — the universal
 key linking the commit log, the execution tree, and recorder events. The `#index` is **global
-across the run**, not per-stage.
+across the run**, not per-stage. Inner step ids look identical and are a **different
+namespace**: they address the tool's chart, and only `inspect_tool_run` accepts them.
 
 ## The contracts
 
@@ -222,15 +281,16 @@ and after a resume, the explainable run covers the post-resume portion only
 (footprintjs Convention-4: control chains don't survive a pause/resume).
 Tool names `run_overview` · `find_in_trace` · `trace_node` · `trace_slice` ·
 `backtrack` · `who_wrote` · `get_value` · `inspect_tool_call` ·
-`read_narrative` (inline) and `explain_run` (delegate) are reserved at build
-time; a composed ToolProvider emitting those names would win the slot's
-first-occurrence dedup and shadow the trace tools — don't. The reservation is
-read from the pack itself (`TRACE_TOOL_NAMES`), so it cannot fall behind it.
+`inspect_tool_run` · `read_narrative` (inline) and `explain_run` (delegate) are
+reserved at build time; a composed ToolProvider emitting those names would win
+the slot's first-occurrence dedup and shadow the trace tools — don't. The
+reservation is read from the pack itself (`TRACE_TOOL_NAMES`), so it cannot
+fall behind it.
 
-Nine tool definitions land on the tools slot for the one activated iteration.
+Ten tool definitions land on the tools slot for the one activated iteration.
 That is a real bulge past the 2000-char `contextBudget.tools` default — which is
 a **signal, not a limiter** (nothing is ever truncated). An agent that opted into
-`.selfExplain()` should raise it: `contextBudget: { tools: 6000 }`.
+`.selfExplain()` should raise it: `contextBudget: { tools: 7000 }`.
 
 ## Reopening a saved run — `openRecording`
 
@@ -274,4 +334,6 @@ hand-assembled bundle, a UI view model, or an older format).
 the trace records what went INTO a tool and what came BACK; what happened
 inside the consumer's system is not traced — unless the tool returns its own
 diagnostic refs (a request id, a log link), which flow through the trace like
-any other result data.
+any other result data, **or** the tool kept its own record
+(`flowchartAsTool({ keepRecord: true })`), in which case `inspect_tool_call`
+prints the descent and `inspect_tool_run` opens it.

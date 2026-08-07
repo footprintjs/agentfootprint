@@ -309,6 +309,10 @@ describe('the exception lists are pinned', () => {
 
 describe.skipIf(!built)('alias values are the SAME objects as the door values', () => {
   for (const [alias, door] of Object.entries(ALIAS_TO_DOOR)) {
+    // Cold-imports two whole built barrels from dist. That is disk + module
+    // graph work whose cost belongs to the machine, not to the library, so
+    // the assertion carries its own budget rather than inheriting the 5s
+    // default and going red on a busy box.
     it(`${alias} values === ${door} values`, async () => {
       const aliasMod = (await import(esmPathFor(alias))) as Record<string, unknown>;
       const doorMod = (await import(esmPathFor(door))) as Record<string, unknown>;
@@ -327,7 +331,7 @@ describe.skipIf(!built)('alias values are the SAME objects as the door values', 
       }
       expect(mismatched).toEqual([]);
       expect(compared, `${alias} exported no runtime values to compare`).toBeGreaterThan(0);
-    });
+    }, 30_000);
   }
 });
 

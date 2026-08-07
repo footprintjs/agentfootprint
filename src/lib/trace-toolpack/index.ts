@@ -24,6 +24,23 @@ export { callTraceTool, traceToolpack, TRACE_TOOL_NAMES } from './traceToolpack.
 // consumer has no call to construct one.
 export { lazyTraceToolpack, NO_COMPLETED_RUN_MESSAGE } from './lazyToolpack.js';
 export { openRecording, type OpenableRecording } from './openRecording.js';
+// The record a TOOL keeps of its own run — what `inspect_tool_run` opens.
+// `INNER_RUN_RECORDS` / `innerRunsOf` are the join key between a Tool and
+// its store; `innerRunStore` / `mergeInnerRuns` exist for consumers wiring
+// a chart tool into artifacts by hand (the Agent builder does it for you).
+export {
+  DEFAULT_INNER_RUN_LIMIT,
+  INNER_RUN_RECORDS,
+  innerRunStore,
+  innerRunsOf,
+  mergeInnerRuns,
+  type InnerRunLookup,
+  type InnerRunOutcome,
+  type InnerRunRecord,
+  type InnerRunStore,
+  type InnerRunSummary,
+  type KeepsInnerRuns,
+} from './innerRunRecords.js';
 export { traceDebugAgent, type TraceDebugAgentOptions } from './traceDebugAgent.js';
 export {
   buildSelfExplainSkill,

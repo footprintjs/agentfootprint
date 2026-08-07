@@ -5,18 +5,18 @@
   "recordedAt": "2026-08-07",
   "surface": {
     "subpaths": 28,
-    "declaredSymbols": 1313,
+    "declaredSymbols": 1336,
     "declaredEvents": 72,
     "eventSource": "src/events/registry.ts:536"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 432,
-      "exercised-undocumented": 36,
-      "undocumented-unexercised": 596,
-      "site-code-sample-only": 18,
-      "written-but-not-published": 134,
+      "documented-never-exercised": 456,
+      "exercised-undocumented": 35,
+      "undocumented-unexercised": 595,
+      "site-code-sample-only": 20,
+      "written-but-not-published": 133,
       "ok": 97
     },
     "events": {
@@ -30,7 +30,8 @@
     },
     "phantoms": 0,
     "unregisteredEvents": 2,
-    "advisories": 5
+    "advisories": 1,
+    "docTextViolations": 0
   },
   "exercisedEvidence": {
     "recordedAt": "2026-07-28",
@@ -617,7 +618,6 @@
     "TraceDebugAgentOptions",
     "TraceRedaction",
     "TraceSummary",
-    "TraceToolpackArtifacts",
     "TraceToolpackOptions",
     "Trajectory",
     "TraversalContext",

@@ -7,6 +7,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.17.0] - 2026-08-07
+
+**The record goes through the tool boundary.**
+
+8.16.0 let an agent answer "why did you do that?" from its own recorded turn.
+`inspect_tool_call` resolved a tool call end to end and then stopped at a wall:
+
+```
+⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope
+  (arguments in, result out) plus what the run itself decided about it.
+```
+
+That is the true answer for a tool that reaches into a payments API. It was
+needlessly true for a tool that IS a footprintjs flowchart: that tool recorded
+every stage it ran, and then threw the recording away, because nobody was
+holding it.
+
+### `flowchartAsTool({ keepRecord: true })` — the tool keeps its own record
+
+Each invocation's inner record is now filed under the `toolCallId` the outer run
+already uses to name that call. One id, two levels — which is what makes the
+descent a lookup rather than a correlation puzzle.
+
+```ts
+flowchartAsTool({
+  name: 'weather_advice',
+  description: 'Decide whether to bike tomorrow.',
+  flowchart: adviceChart,
+  keepRecord: true,        // ← off by default
+  keepRecordLimit: 20,     // ← bounded LRU window (this is the default)
+  redact: { keys: ['apiKey'] },
+});
+```
+
+- **Off by default, and zero-cost off.** No store, no extra recorder, no
+  capture — the byte-identical path the tool had before the option existed.
+- **Bounded.** The last `keepRecordLimit` invocations (default 20), least
+  recently USED dropped first; reading refreshes recency so a record under
+  investigation is not evicted by a turn happening beside it. Records dropped
+  to stay under the cap are COUNTED, and the session is told.
+- **All three exits are recorded.** A run that threw and a run that paused are
+  complete records of what happened, and "why did it fail?" is the question
+  most likely to come next.
+- **Capture failure is filed, not swallowed.** If the record cannot be taken,
+  a row is kept carrying the reason — a missing row is indistinguishable from
+  a call that was never made.
+
+`redact` is new on the same options object: a `RedactionPolicy` applied to the
+inner executor before every invocation. footprintjs scrubs at commit time, so a
+covered key never enters the inner commit log at all — which is what makes a
+kept record safe to serve back to a model.
+
+### `inspect_tool_run` — the descent rung
+
+`inspect_tool_call` now ends with the call that opens the inside, in place of
+the boundary marker, whenever a record exists:
+
+```
+inside: this tool kept its own record of the run — 4 step(s), ok.
+        Descend with inspect_tool_run({ toolCallId: 'c1' }).
+```
+
+The new tool serves the inner run with the SAME drill vocabulary, one level
+down — overview by default, plus `find` (free text → inner ids), `variable`
+(why is an inner value what it is), `runtimeStageId` (one inner step), and
+`runtimeStageId` + `key` (that field in full). The inner views are the pack's
+own tools built over the inner artifact bag through `openRecording`, so there
+is no second implementation of "what did this step write" to drift.
+
+```
+INSIDE TOOL CALL c1 — 'weather_advice' ran a recorded flowchart (4 committed step(s), ok).
+SLICE for 'advice' — reads via: custom-fn
+Advise transit (rain#3) [wrote: advice, because]
+  Validate the forecast (validate-forecast#1) ← via rainChancePct [wrote: checks, usable, rainChancePct]
+    Fetch the forecast (fetch-forecast#0) ← via forecast [wrote: forecast]
+  Weigh the rain (weigh-the-rain#2) ← [control: Rain chance at or above the 60% bike threshold]
+⚠ the ids above are INNER ids — they name steps of weather_advice's own chart, not of the
+  run that called it. trace_node / get_value / trace_slice do not accept them.
+```
+
+Two id namespaces, said out loud on every answer: a model that pastes an inner
+id into `trace_node` should meet a boundary, not a mystery.
+
+An inner record carries one thing a saved recording never can — **control
+edges**. `openRecording` has to say "⚠ control edges unavailable" because a
+lookup function does not serialize; an inner record is live in process, so the
+wrapping tool attaches a fresh `controlDepRecorder()` per invocation and the
+inner slice shows the decision RULE that routed execution.
+
+`inspect_tool_run` mounts **unconditionally**, like `inspect_tool_call`, and
+answers honestly when there is nothing to open — naming `keepRecord` (nothing
+keeps records), listing the calls that CAN be opened (wrong id), or naming
+`keepRecordLimit` and the drop count (evicted). A tool that vanishes when the
+answer is "none" cannot say which switch turns it on.
+
+`TRACE_TOOL_NAMES` gains `inspect_tool_run` — the builder's `.selfExplain()`
+name reservation is read from that one list, so the new name is reserved the
+day it ships. Ten tool definitions now land on the tools slot for the one
+activated iteration; an agent that opts into `.selfExplain()` should raise
+`contextBudget: { tools: 7000 }`.
+
+### Wiring is the builder's job
+
+`.build()` collects the inner-record store off every statically registered
+(`.tool()` / `.tools()`) and skill-declared chart tool, and hands one merged
+lookup to the trace artifacts. Mounting the tool and calling `.selfExplain()`
+is the whole configuration. A chart tool delivered through a `.toolProvider()`
+is resolved per iteration against a live context, so there is no build-time
+moment at which the list exists — register it statically as well if you want
+the descent, and `inspect_tool_run` says so meanwhile.
+
+New exports on `agentfootprint/observe` (and `/debug`) for consumers assembling
+artifacts by hand: `innerRunStore`, `innerRunsOf`, `mergeInnerRuns`,
+`INNER_RUN_RECORDS`, `DEFAULT_INNER_RUN_LIMIT`, and the `InnerRunRecord` /
+`InnerRunLookup` / `InnerRunStore` / `InnerRunSummary` / `InnerRunOutcome` /
+`KeepsInnerRuns` types. `TraceToolpackArtifacts` gains an optional `innerRuns`.
+
+### The demo
+
+`examples/features/50-through-the-tool-boundary.ts` — a weather-advice agent
+whose ONE tool is a 4-stage footprintjs chart. Turn 1: *"Should I bike to work
+in Chicago tomorrow?"* Turn 2: *"Why did you say it'll rain?"* — answered
+through visible `find_in_trace` → `inspect_tool_call` → `inspect_tool_run`
+calls that cite the inner stage (`validate-forecast#1`), the exact field
+(`rainChancePct = 82`) and the rule that consumed it. The chart's own stage
+counters are printed either side and are unchanged: explaining the decision did
+not re-make it. Fixture data and a scripted model by default ($0, no network);
+`AGENTFOOTPRINT_DEMO_LIVE_DATA=1` fetches a real forecast from Open-Meteo (a
+keyless public API), `ANTHROPIC_API_KEY` switches on a live model
+(`claude-haiku-4-5` by default).
+
 ## [8.16.0] - 2026-08-07
 
 **The agent can now answer "why did you do that?" without re-doing it.**

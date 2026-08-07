@@ -50,6 +50,8 @@ import {
   renderPreview,
   safeStringify,
 } from './bounded.js';
+import type { InnerRunRecord } from './innerRunRecords.js';
+import { openRecording } from './openRecording.js';
 import {
   resolveToolpackOptions,
   TOOLPACK_HARD_CAPS,
@@ -82,6 +84,8 @@ const FIND_CONTEXT_RADIUS = 55;
 const FIND_SCAN_BUDGET = 1500;
 /** `inspect_tool_call` — how many real ids an unknown-id correction names. */
 const TOOL_CALL_SUGGESTION_CAP = 12;
+/** `inspect_tool_run` — how many RETAINED inner runs a correction names. */
+const INNER_RUN_SUGGESTION_CAP = 12;
 /** Result preview for `inspect_tool_call` (its own dial: results are the answer). */
 const TOOL_RESULT_PREVIEW_CHARS = 400;
 /** Schemas embed an `enum` of valid ids/keys only when the set is small —
@@ -323,6 +327,7 @@ function matchWindow(text: string, needleLower: string, radius: number): string 
  * | `who_wrote`         | Which step last wrote key K?                           |
  * | `get_value`         | The full value of K as of step X (capped, truncation-marked) |
  * | `inspect_tool_call` | One tool call end to end: proposed args → ran-with args → result → outcome |
+ * | `inspect_tool_run`  | INSIDE one tool call — the chart it ran, when that tool kept its record |
  * | `read_narrative`    | The human-readable story, paginated (only when narrative provided) |
  *
  * Mount on an Agent (`Agent.create({...}).tool(...tools)`) or drive scripted
@@ -341,6 +346,12 @@ export function traceToolpack(
 ): Tool[] {
   const opts = resolveToolpackOptions(options);
   const index = buildIndex(artifacts);
+  // ONE reader over the scattered tool-call evidence, shared by the two
+  // tools that need it: the join at the boundary (`inspect_tool_call`) and
+  // the descent through it (`inspect_tool_run`). Its lookups are lazy and
+  // memoized, so a pack that opens neither pays nothing and a pack that
+  // opens both pays once.
+  const calls = buildToolCallReader(artifacts, index);
 
   const tools: Tool[] = [
     buildRunOverview(artifacts, index),
@@ -350,7 +361,8 @@ export function traceToolpack(
     buildBacktrack(artifacts, index, opts),
     buildWhoWrote(index, opts),
     buildGetValue(index, opts),
-    buildInspectToolCall(artifacts, index),
+    buildInspectToolCall(artifacts, calls),
+    buildInspectToolRun(artifacts, calls, options),
   ];
   if (artifacts.narrative !== undefined) {
     tools.push(buildReadNarrative(artifacts.narrative));
@@ -375,6 +387,7 @@ export const TRACE_TOOL_NAMES = [
   'who_wrote',
   'get_value',
   'inspect_tool_call',
+  'inspect_tool_run',
   'read_narrative',
 ] as const;
 
@@ -1304,6 +1317,20 @@ interface ToolCallFacts {
   readonly runtimeStageId?: string;
 }
 
+/** The joined view of a run's tool calls, shared by the two tools that read it. */
+interface ToolCallReader {
+  /** Every tool call id this run recorded, in call order, with its name. */
+  knownCalls(): { id: string; name: string }[];
+  /** The four-source join for one call. */
+  factsFor(toolCallId: string): ToolCallFacts;
+  /** Committed conversation history, lazily materialised. */
+  history(): readonly HistoryTurn[];
+  /** The middleware ledger rows for one call (the ran-with-args evidence). */
+  rowsFor(toolCallId: string): LedgerRow[];
+  /** Typed events of one kind, with their payload + meta lifted. */
+  eventsOf(type: string): { payload: Record<string, unknown>; meta: Record<string, unknown> }[];
+}
+
 /**
  * Resolve ONE tool call across the four places its evidence lives.
  *
@@ -1311,20 +1338,18 @@ interface ToolCallFacts {
  * scattered: the model's PROPOSED args are on an assistant turn, the args
  * it actually RAN with are in the middleware ledger (and only when a rule
  * changed them), the result is a `role:'tool'` turn, and the timing exists
- * only in the event stream. Four lookups, one id — so this tool does the
+ * only in the event stream. Four lookups, one id — so this reader does the
  * join rather than making the model do it in four calls.
  *
  * The proposed/ran-with split is the point. A governance rule that
  * rewrites args is invisible in the conversation: the model reads its own
  * proposal in history and the tool ran on something else. That difference
  * is exactly what "why did it do that?" is often asking about.
- *
- * The `toolCallId` param deliberately carries NO schema enum (unlike step
- * ids): building one would mean reconstructing the whole committed history
- * at factory time for every toolpack, including the runs that never open
- * this tool. The corrective message does the same job, on demand.
  */
-function buildInspectToolCall(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
+function buildToolCallReader(
+  artifacts: TraceToolpackArtifacts,
+  index: ToolpackIndex,
+): ToolCallReader {
   // All four readers are lazy + memoized: a toolpack that never inspects a
   // tool call pays nothing, and one that inspects five pays once.
   let historyMemo: readonly HistoryTurn[] | undefined;
@@ -1432,6 +1457,25 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, index: Toolpack
     };
   };
 
+  return {
+    knownCalls,
+    factsFor,
+    history,
+    rowsFor: (toolCallId) => ledger().filter((row) => row.toolCallId === toolCallId),
+    eventsOf,
+  };
+}
+
+/**
+ * The tool over {@link buildToolCallReader}'s join.
+ *
+ * The `toolCallId` param deliberately carries NO schema enum (unlike step
+ * ids): building one would mean reconstructing the whole committed history
+ * at factory time for every toolpack, including the runs that never open
+ * this tool. The corrective message does the same job, on demand.
+ */
+function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCallReader): Tool {
+  const { knownCalls, factsFor, history, rowsFor, eventsOf } = reader;
   return defineTool<{ toolCallId: string }, string>({
     name: 'inspect_tool_call',
     description:
@@ -1499,7 +1543,7 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, index: Toolpack
       // Ran-with args: the ledger is the ONLY record of a rule rewriting
       // them. No ledger row means no rule changed anything — say that
       // plainly rather than leaving the reader to assume it.
-      const rows = ledger().filter((row) => row.toolCallId === toolCallId);
+      const rows = rowsFor(toolCallId);
       const rewrite = [...rows]
         .reverse()
         .find((row) => row.changed === true && row.moment === 'before-tool');
@@ -1576,13 +1620,256 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, index: Toolpack
         );
       }
 
+      // THE DESCENT RUNG. The boundary marker below is honest for a tool
+      // that called someone else's system, and needlessly honest for one
+      // that kept its own record — so when a record exists the line that
+      // says "not traced" is replaced by the call that opens it. One line,
+      // and it teaches the id it takes: the SAME toolCallId, one level down.
+      const inner = artifacts.innerRuns?.get(toolCallId);
       lines.push(
-        '⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope ' +
-          '(arguments in, result out) plus what the run itself decided about it.',
+        inner !== undefined
+          ? `inside: this tool kept its own record of the run — ${inner.steps} step(s), ` +
+              `${inner.outcome}. Descend with inspect_tool_run({ toolCallId: '${toolCallId}' }).`
+          : '⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope ' +
+              '(arguments in, result out) plus what the run itself decided about it.',
       );
       return lines.join('\n');
     },
   });
+}
+
+// ── inspect_tool_run ───────────────────────────────────────────────────────
+
+/**
+ * THROUGH the boundary — the tool call's own run, opened.
+ *
+ * `inspect_tool_call` answers everything about a call except the question
+ * that usually follows it: *and then what did it DO?* For a tool that
+ * reaches into a payments API, "not traced" is the true answer. For a tool
+ * that is itself a footprintjs chart, the true answer was thrown away —
+ * the chart recorded every stage and nobody held the record.
+ *
+ * `flowchartAsTool({ keepRecord: true })` holds it. This tool opens it, and
+ * three properties keep the descent from becoming a second, worse trace API:
+ *
+ *   - ONE VOCABULARY. The inner views are the pack's own tools, run over
+ *     the inner artifact bag through `openRecording` — the same adapter a
+ *     saved recording uses. There is no second implementation of "what did
+ *     this step write", so there is no second implementation to drift.
+ *   - TWO ID NAMESPACES, SAID OUT LOUD. Inner `runtimeStageId`s belong to
+ *     the tool's chart, not the outer run. Every output says so, because a
+ *     model that pastes an inner id into `trace_node` gets a correction
+ *     that reads like a bug rather than like a boundary.
+ *   - HONEST ABSENCE THAT NAMES THE SWITCH. `keepRecord` is off by default
+ *     (retaining a snapshot per invocation is memory the caller has to
+ *     agree to), so "nothing to open" is the COMMON case — and an answer
+ *     that just says "nothing" teaches the model the tool is broken.
+ */
+function buildInspectToolRun(
+  artifacts: TraceToolpackArtifacts,
+  reader: ToolCallReader,
+  options: TraceToolpackOptions | undefined,
+): Tool {
+  // One inner pack at a time, memoized by call id: three drills into one
+  // inner run build one index, and the memo pins at most ONE inner run's
+  // index beyond the record the store is already holding.
+  let memoId: string | undefined;
+  let memoTools: Tool[] | undefined;
+
+  const innerToolsFor = (record: InnerRunRecord): Tool[] | string => {
+    if (memoTools !== undefined && memoId === record.toolCallId) return memoTools;
+    if (record.recording === undefined) {
+      return (
+        `tool call '${record.toolCallId}' ran '${record.toolName}', which keeps records — but ` +
+        `THIS one could not be captured: ${record.problem ?? 'reason not recorded'}. The call ` +
+        `itself was unaffected; inspect_tool_call('${record.toolCallId}') still has the ` +
+        `envelope (arguments in, result out).`
+      );
+    }
+    let inner: TraceToolpackArtifacts;
+    try {
+      inner = {
+        // `openRecording` is the adapter, not a copy of it: same lift, same
+        // two teaching refusals if the bag is malformed. The two fields it
+        // cannot lift from JSON — control edges, and a narrative nobody
+        // attached — are added here because this record is LIVE in process.
+        ...openRecording(record.recording),
+        ...(record.controlDeps !== undefined && { controlDeps: record.controlDeps }),
+        ...(record.narrative !== undefined && { narrative: record.narrative }),
+      };
+    } catch (e) {
+      return (
+        `the retained record for '${record.toolCallId}' could not be opened: ` +
+        `${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+    memoId = record.toolCallId;
+    memoTools = traceToolpack(inner, options);
+    return memoTools;
+  };
+
+  return defineTool<
+    {
+      toolCallId: string;
+      runtimeStageId?: string;
+      key?: string;
+      variable?: string;
+      find?: string;
+    },
+    string
+  >({
+    name: 'inspect_tool_run',
+    description:
+      'Go INSIDE one tool call. Some tools are themselves recorded flowcharts and keep the ' +
+      'record of what they ran; this opens it. Called with just a toolCallId it returns a ' +
+      'bounded overview of the inner run (its stages, its errors, its state keys). Add ' +
+      "'find' to search that inner run in free text, 'variable' to ask why an inner value is " +
+      "what it is, 'runtimeStageId' to open one inner step, or both 'runtimeStageId' and " +
+      "'key' for an inner value in full. The ids it returns are the INNER chart's — the " +
+      'outer trace tools do not accept them. Reach for it when inspect_tool_call says a ' +
+      'record was kept and the question is about what the tool DID, not what it returned.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolCallId: {
+          type: 'string',
+          description:
+            "The tool call to descend into — the same id inspect_tool_call takes, e.g. 'c1'.",
+        },
+        runtimeStageId: {
+          type: 'string',
+          description:
+            "Optional: open ONE step of the inner run (an inner id, from this tool's own " +
+            'overview — not an outer step id).',
+        },
+        key: {
+          type: 'string',
+          description:
+            "Optional, with runtimeStageId: the inner state key to fetch in full, e.g. 'forecast'.",
+        },
+        variable: {
+          type: 'string',
+          description:
+            'Optional: an inner state key to explain — anchors at its last writer inside the ' +
+            'chart and walks back.',
+        },
+        find: {
+          type: 'string',
+          description: 'Optional: free text to locate inside the inner run (returns inner ids).',
+        },
+      },
+      required: ['toolCallId'],
+      additionalProperties: false,
+    },
+    execute: async ({ toolCallId, runtimeStageId, key, variable, find }) => {
+      const lookup = artifacts.innerRuns;
+      if (lookup === undefined) return noInnerRecordsMessage(toolCallId);
+
+      const record = lookup.get(toolCallId);
+      if (record === undefined) return unknownInnerRunMessage(toolCallId, lookup, reader);
+
+      const inner = innerToolsFor(record);
+      if (typeof inner === 'string') return inner;
+
+      // Param-shaped dispatch (the `backtrack({ element })` precedent): the
+      // narrowest question the caller asked wins, and the default — no
+      // extra params at all — is the entry point, exactly as run_overview
+      // is the entry point one level up.
+      let body: string;
+      if (find !== undefined) {
+        body = await callTraceTool(inner, 'find_in_trace', { query: find });
+      } else if (variable !== undefined) {
+        body = await callTraceTool(inner, 'backtrack', { variable });
+      } else if (runtimeStageId !== undefined && key !== undefined) {
+        body = await callTraceTool(inner, 'get_value', { runtimeStageId, key });
+      } else if (runtimeStageId !== undefined) {
+        body = await callTraceTool(inner, 'trace_node', { runtimeStageId });
+      } else if (key !== undefined) {
+        body =
+          `'key' names a value AS OF a step, so it needs a step: pass runtimeStageId too, or ` +
+          `use 'variable' to ask why '${displayKey(key)}' is what it is across the whole inner ` +
+          `run.`;
+      } else {
+        body = await callTraceTool(inner, 'run_overview', {});
+      }
+
+      return [
+        `INSIDE TOOL CALL ${toolCallId} — '${record.toolName}' ran a recorded flowchart ` +
+          `(${record.steps} committed step(s), ${record.outcome}).`,
+        body,
+        `next inside this call: inspect_tool_run({ toolCallId: '${toolCallId}', ` +
+          `runtimeStageId: '<inner id>' }) opens a step · add 'key' for a value in full · ` +
+          `'variable' asks why an inner value is what it is · 'find' searches this inner run.`,
+        `⚠ the ids above are INNER ids — they name steps of ${record.toolName}'s own chart, not ` +
+          `of the run that called it. trace_node / get_value / trace_slice do not accept them; ` +
+          `come back through inspect_tool_run.`,
+      ].join('\n');
+    },
+  });
+}
+
+/** No tool in this run keeps a record — name the switch, not the emptiness. */
+function noInnerRecordsMessage(toolCallId: string): string {
+  return (
+    `inspect_tool_run: nothing in this run kept a record below the tool boundary, so there is ` +
+    `no inner run for '${toolCallId}' — or for any other call. A tool keeps one only when it ` +
+    `was built to: flowchartAsTool({ name, flowchart, keepRecord: true }). That switch is OFF ` +
+    `by default because retaining a run's snapshot per invocation is memory the caller has to ` +
+    `agree to. Without it the trace holds the envelope — arguments in, result out — which is ` +
+    `what inspect_tool_call('${toolCallId}') serves.`
+  );
+}
+
+/** A record was expected and is not here: evicted, or never kept for THIS tool. */
+function unknownInnerRunMessage(
+  toolCallId: string,
+  lookup: NonNullable<TraceToolpackArtifacts['innerRuns']>,
+  reader: ToolCallReader,
+): string {
+  const kept = lookup.list();
+  const lines: string[] = [
+    `inspect_tool_run: no retained inner run for tool call '${toolCallId}'.`,
+  ];
+
+  // Did the OUTER run make this call at all? Three different situations
+  // wear the same "not found", and only one of them is the consumer's to fix.
+  const outer = reader.knownCalls().find((call) => call.id === toolCallId);
+  if (outer === undefined) {
+    lines.push(
+      `⚠ the outer run does not record a call with that id either — check ` +
+        `inspect_tool_call('${toolCallId}') first; it names every id this run made.`,
+    );
+  } else {
+    lines.push(
+      `That call ran '${outer.name}', which either does not keep records (only ` +
+        `flowchartAsTool({ keepRecord: true }) does) or had this one dropped.`,
+    );
+  }
+
+  if (kept.length === 0) {
+    lines.push(
+      `No inner runs are held right now. A tool that keeps records has simply not been called ` +
+        `yet in the turn this trace covers.`,
+    );
+  } else {
+    const sample = kept
+      .slice(0, INNER_RUN_SUGGESTION_CAP)
+      .map((row) => `${row.toolCallId} (${row.toolName}, ${row.steps} step(s), ${row.outcome})`)
+      .join(', ');
+    lines.push(
+      `Inner runs you CAN open (${kept.length}): ${sample}` +
+        (kept.length > INNER_RUN_SUGGESTION_CAP ? ', …' : '') +
+        '.',
+    );
+  }
+  if (lookup.dropped > 0) {
+    lines.push(
+      `⚠ ${lookup.dropped} older record(s) were dropped to stay under the retention cap of ` +
+        `${lookup.limit} — this call may be one of them. Raise it with keepRecordLimit, or ask ` +
+        `sooner after the call.`,
+    );
+  }
+  return lines.join('\n');
 }
 
 // ── read_narrative ─────────────────────────────────────────────────────────

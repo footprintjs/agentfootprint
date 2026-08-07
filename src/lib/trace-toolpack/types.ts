@@ -11,6 +11,7 @@ import type { RuntimeSnapshot } from 'footprintjs';
 import type { ControlDepLookup } from 'footprintjs/trace';
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
+import type { InnerRunLookup } from './innerRunRecords.js';
 
 /**
  * The frozen evidence of one completed run.
@@ -30,12 +31,18 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
  *   of a tool call as a thing with a duration. `inspect_tool_call` reads
  *   timings and outcomes from here, and says ⚠ when the tail is absent
  *   rather than inventing them.
+ * - `innerRuns` — OPTIONAL lookup of the records TOOLS kept of their own
+ *   runs, keyed by `toolCallId`. Present when the agent mounts a
+ *   `flowchartAsTool({ keepRecord: true })`. With it, `inspect_tool_run`
+ *   descends THROUGH the tool boundary into the chart that ran; without it,
+ *   that tool names the switch instead of answering emptily.
  */
 export interface TraceToolpackArtifacts {
   readonly snapshot: RuntimeSnapshot;
   readonly controlDeps?: ControlDepLookup;
   readonly narrative?: readonly string[];
   readonly events?: readonly AgentfootprintEvent[];
+  readonly innerRuns?: InnerRunLookup;
 }
 
 /**

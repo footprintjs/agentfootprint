@@ -122,6 +122,7 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
       'who_wrote',
       'get_value',
       'inspect_tool_call',
+      'inspect_tool_run',
       'read_narrative',
     ]);
     for (const tool of tools) {
@@ -139,7 +140,7 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
           ? { variable: 'x' }
           : tool.schema.name === 'find_in_trace'
           ? { query: 'anything' }
-          : tool.schema.name === 'inspect_tool_call'
+          : tool.schema.name.startsWith('inspect_tool_')
           ? { toolCallId: 'c1' }
           : { runtimeStageId: 'a#0' };
       expect(await callTraceTool([tool], tool.schema.name, args)).toBe(NO_COMPLETED_RUN_MESSAGE);
@@ -334,10 +335,10 @@ describe('.selfExplain() — inline mode', () => {
   });
 
   it('EVERY name the pack can mount is reserved — count-asserted, so a new tool cannot be forgotten', () => {
-    // 9 tools; the count is pinned deliberately. Adding one to the pack
+    // 10 tools; the count is pinned deliberately. Adding one to the pack
     // without adding it here fails HERE, which is the reminder that a new
     // toolpack tool also needs a CHANGELOG line and a CLAUDE.md update.
-    expect(TRACE_TOOL_NAMES).toHaveLength(9);
+    expect(TRACE_TOOL_NAMES).toHaveLength(10);
     for (const reserved of TRACE_TOOL_NAMES) {
       const shadow = defineTool<{ x: string }, string>({
         name: reserved,

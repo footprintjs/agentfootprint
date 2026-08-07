@@ -23,11 +23,71 @@ That's it. Day to day nothing changes — the agent runs with its production too
 - `trace_slice` — the backward causal slice around a node
 - `backtrack` — variable-first: why is `K` what it is, and (with `element`) which step produced `K[i]`
 - `inspect_tool_call` — **one tool call end to end**: the args the model *proposed*, the args it actually *ran with* (they differ when a governance rule rewrote them), the result, the outcome, the duration, and the step that ran it
+- `inspect_tool_run` — **inside** one tool call, when that tool kept its own record (see [Through the tool boundary](#through-the-tool-boundary) below)
 - `read_narrative` — the run's plain-English story, paginated
 
 So the cost model is honest: the production catalog stays clean, and the trace tools appear **exactly once**, on the iteration where the question was asked. The example prints the per-call catalog to prove it.
 
-Nine definitions is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should raise it: `contextBudget: { tools: 6000 }`.
+Ten definitions is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should raise it: `contextBudget: { tools: 7000 }`.
+
+## Through the tool boundary
+
+`inspect_tool_call` used to end at a wall:
+
+```
+⚠ boundary: what happened INSIDE the tool is not traced — this is the envelope
+  (arguments in, result out) plus what the run itself decided about it.
+```
+
+That is the true answer for a tool that reaches into someone else's system. It was needlessly true for a tool that **is** a footprintjs flowchart: that tool recorded every stage it ran, and then threw the recording away, because nobody was holding it.
+
+`flowchartAsTool({ keepRecord: true })` holds it. Each invocation's inner record is filed under the `toolCallId` the outer run already uses to name that call, so the wall becomes a rung:
+
+```
+inside: this tool kept its own record of the run — 4 step(s), ok.
+        Descend with inspect_tool_run({ toolCallId: 'c1' }).
+```
+
+`inspect_tool_run` then opens that inner run with the **same drill vocabulary**, one level down — the inner views are the pack's own tools run over the inner artifacts through `openRecording`, so there is no second implementation to drift:
+
+```ts
+inspect_tool_run({ toolCallId: 'c1' })                                  // the inner run's overview
+inspect_tool_run({ toolCallId: 'c1', find: 'rain' })                    // free text → INNER ids
+inspect_tool_run({ toolCallId: 'c1', variable: 'advice' })              // why is this inner value what it is
+inspect_tool_run({ toolCallId: 'c1', runtimeStageId: 'validate#1' })    // one inner step
+inspect_tool_run({ toolCallId: 'c1', runtimeStageId: 'validate#1', key: 'rainChancePct' })  // the field, in full
+```
+
+Four things keep it honest:
+
+- **Off by default.** A retained record is retained memory. `keepRecord` is the caller agreeing to it; `keepRecordLimit` (default 20) bounds it as an LRU window, and a session that dropped older records **says so** rather than answering "not found".
+- **Two id namespaces, said out loud.** Inner `runtimeStageId`s name steps of the *tool's* chart, not of the run that called it. Every answer repeats that, and the outer `trace_node` / `get_value` do not accept them.
+- **Honest absence names the switch.** With no record kept, `inspect_tool_run` names `keepRecord` and points back at the envelope — it never answers emptily.
+- **Redaction still governs.** footprintjs scrubs at commit time, so a key covered by `flowchartAsTool`'s `redact` policy never enters the inner commit log at all — a kept record cannot serve what the policy removed, and the `(redacted by policy)` flag reads the same inside a tool as outside one.
+
+One thing an inner record carries that a saved recording never can: **control edges**. The record is live in process, so the wrapping tool attaches a fresh `controlDepRecorder()` per invocation and inner slices show the decision rule that routed execution — `← [control: Rain chance at or above the 60% bike threshold]`.
+
+The builder does the wiring: `.build()` collects the store off every statically registered (and skill-declared) chart tool and hands one merged lookup to the trace artifacts. A chart tool delivered through a `.toolProvider()` is resolved per iteration and therefore not collected at build time — register it statically as well if you want the descent.
+
+### Wiring it by hand
+
+Assembling artifacts yourself (a scripted auditor, a custom debugger, a chart tool mounted outside an Agent)? The store is a small, exported piece of machinery, and `TraceToolpackArtifacts` takes it as an optional `innerRuns`:
+
+```ts
+import {
+  innerRunsOf, innerRunStore, mergeInnerRuns, traceToolpack,
+} from 'agentfootprint/observe';
+
+const records = innerRunsOf(adviceTool)!;               // the store the tool is holding
+const tools = traceToolpack({ snapshot, innerRuns: records });
+```
+
+- `innerRunsOf(tool)` reads a tool's store, or `undefined` when it keeps none. It is **total** — a plain tool, a string, `null` all answer "no records" rather than throwing. It finds the store under `INNER_RUN_RECORDS`, a registry symbol rather than a named property, so a consumer's own tool cannot collide with it.
+- `innerRunStore(limit?)` builds one directly (an `InnerRunStore`: the read side plus `keep`). `DEFAULT_INNER_RUN_LIMIT` is that default of 20; a limit below 1 is clamped, because a store that keeps nothing is `keepRecord: false` said with a number that lies.
+- `mergeInnerRuns(lookups)` composes several stores into one `InnerRunLookup` — an agent may mount more than one chart tool, and the model asking to descend into a call should not have to know which tool produced it. An empty list gives `undefined`, not an empty lookup that would answer "nothing was kept" when the truth is "nothing keeps anything".
+- An `InnerRunRecord` carries the `toolCallId`, the `toolName`, an `InnerRunOutcome` (`'ok' | 'error' | 'paused'` — a failed inner run is still a complete record), the step count, the `{ snapshot, structure }` recording, the live control-dependence lookup, and — if capture itself failed — the `problem` that explains why there is no recording. `InnerRunSummary` is that row without the recording, which is what the unknown-id correction lists. `KeepsInnerRuns` is the structural type of a tool carrying a store.
+
+Worked end to end in [`examples/features/50-through-the-tool-boundary.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/50-through-the-tool-boundary.ts): a weather-advice agent answers "why did you say it'll rain?" by descending into its own tool and citing the inner stage plus the exact field — with the chart's stage counters printed either side to prove nothing re-executed.
 
 ## What one captured turn carries
 
@@ -78,7 +138,7 @@ Mental model: **Causal memory pulls the right *run*; `.selfExplain()` drills the
 ## Gotchas
 
 - **Needs `reactMode: 'dynamic'`** (the default) or `'dynamic-grouped'`. `'classic'` caches the tools slot on turn 1, so a mid-turn skill activation could never surface the trace tools — `.selfExplain()` **fails loud at build** rather than silently never answering. (Need it on a classic-mode agent? Run `traceDebugAgent()` as a separate session instead.)
-- **Reserved tool names.** Inline mode reserves all nine names the pack can mount — `run_overview` / `find_in_trace` / `trace_node` / `trace_slice` / `backtrack` / `who_wrote` / `get_value` / `inspect_tool_call` / `read_narrative`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The list is read from `TRACE_TOOL_NAMES` (the pack's own export) rather than retyped beside it, so it cannot fall behind the pack.
+- **Reserved tool names.** Inline mode reserves all ten names the pack can mount — `run_overview` / `find_in_trace` / `trace_node` / `trace_slice` / `backtrack` / `who_wrote` / `get_value` / `inspect_tool_call` / `inspect_tool_run` / `read_narrative`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The list is read from `TRACE_TOOL_NAMES` (the pack's own export) rather than retyped beside it, so it cannot fall behind the pack.
 
 ## Explaining a run that already finished
 

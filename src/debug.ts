@@ -109,6 +109,23 @@ export {
 // trace tools read; pure, and honest about the two things a serialized
 // run cannot carry back (control edges, and a narrative nobody recorded).
 export { openRecording, type OpenableRecording } from './lib/trace-toolpack/index.js';
+// The record a TOOL keeps of its OWN run — `flowchartAsTool({ keepRecord:
+// true })` files one per invocation under the outer `toolCallId`, and
+// `inspect_tool_run` opens it. The Agent builder collects the stores at
+// `.build()`, so these are for consumers assembling artifacts by hand.
+export {
+  DEFAULT_INNER_RUN_LIMIT,
+  INNER_RUN_RECORDS,
+  innerRunStore,
+  innerRunsOf,
+  mergeInnerRuns,
+  type InnerRunLookup,
+  type InnerRunOutcome,
+  type InnerRunRecord,
+  type InnerRunStore,
+  type InnerRunSummary,
+  type KeepsInnerRuns,
+} from './lib/trace-toolpack/index.js';
 // The two conversational doors over the toolpack: a DEDICATED debugger
 // agent (separate session, any provider — cheap models welcome), and the
 // in-conversation `.selfExplain()` builder option's types. Same evidence,

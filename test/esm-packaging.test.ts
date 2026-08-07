@@ -48,6 +48,11 @@ describe.skipIf(!built)('ESM packaging', () => {
     expect(pkg.type).toBe('module');
   });
 
+  // Spawns one real `node` per subpath (28 and counting), so its cost is
+  // process startup on whatever machine is running it — not a claim about
+  // this library's speed. The default 5s budget is a wall-clock number that
+  // goes red on a busy box and teaches the reader to distrust the suite, so
+  // this assertion carries its own, generous one.
   it('main barrel + every subpath export load as TRUE ESM', () => {
     const targets = esmTargets();
     expect(targets.length).toBeGreaterThan(5);
@@ -60,7 +65,7 @@ describe.skipIf(!built)('ESM packaging', () => {
       );
       expect(r.status, `subpath "${name}" (${rel}) failed to load as ESM:\n${r.stderr}`).toBe(0);
     }
-  });
+  }, 60_000);
 
   it('lazyRequire works in Node ESM AND is safe to load in the browser', () => {
     const lazy = resolve(esmDir, 'lib/lazyRequire.js');

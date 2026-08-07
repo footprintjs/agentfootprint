@@ -50,6 +50,11 @@ import {
   SelfExplainBinding,
   type SelfExplainOptions,
 } from '../../lib/trace-toolpack/selfExplain.js';
+import {
+  innerRunsOf,
+  mergeInnerRuns,
+  type InnerRunLookup,
+} from '../../lib/trace-toolpack/innerRunRecords.js';
 import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolpack.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
@@ -1655,10 +1660,18 @@ export class AgentBuilder {
       // things that a snapshot alone does not carry: what happened
       // (snapshot), how it read in English (narrative), and when each tool
       // call started and ended (events — the commit log has no clock).
+      //
+      // …plus a FOURTH when any mounted tool keeps a record of its own run
+      // (`flowchartAsTool({ keepRecord: true })`). Collected here rather
+      // than resolved per call because the store is a LIVE object owned by
+      // the tool: the binding holds the lookup, and every record the tool
+      // files after this point is visible through it.
+      const innerRuns = collectInnerRuns(this.registry, injections);
       selfExplainBinding.bindTo({
         getSnapshot: () => agent.getLastSnapshot(),
         getNarrative: () => agent.getLastNarrativeEntries(),
         on: (type, listener) => agent.on(type, listener),
+        ...(innerRuns !== undefined && { getInnerRuns: () => innerRuns }),
       });
       agent.attach(selfExplainBinding.recorder());
     }
@@ -1742,6 +1755,39 @@ function assertCheckInHasADeclaringTool(
       "`checkIn: 'always'` (or a predicate) is what MAKES the ask. Add it to the tool that " +
       "needs consent — defineTool({ …, checkIn: 'always' }) — or drop `.checkIn()`.",
   );
+}
+
+/**
+ * Gather the inner-run stores of every tool that keeps one (8.17.0).
+ *
+ * A `flowchartAsTool({ keepRecord: true })` carries its store on the tool
+ * object under a registry symbol. This finds them so `.selfExplain()` can
+ * hand one merged lookup to the trace artifacts — the consumer wires
+ * nothing; mounting the tool and calling `.selfExplain()` is the whole
+ * configuration.
+ *
+ * Two sources, both known at build time: the static registry (`.tool()` /
+ * `.tools()`) and skill-declared tools. A tool arriving from a
+ * `.toolProvider()` is deliberately NOT collected — provider tools are
+ * resolved per iteration against a live context, so there is no build-time
+ * moment at which the list exists. `inspect_tool_run` then answers with the
+ * honest-absence arm, which names `keepRecord`; a consumer in that position
+ * should register the chart tool statically as well.
+ */
+function collectInnerRuns(
+  registry: readonly ToolRegistryEntry[],
+  injections: readonly Injection[],
+): InnerRunLookup | undefined {
+  const found: InnerRunLookup[] = [];
+  const take = (candidate: unknown): void => {
+    const store = innerRunsOf(candidate);
+    if (store !== undefined && !found.includes(store)) found.push(store);
+  };
+  for (const entry of registry) take(entry.tool);
+  for (const injection of injections) {
+    for (const tool of injection.inject?.tools ?? []) take(tool);
+  }
+  return mergeInnerRuns(found);
 }
 
 /**

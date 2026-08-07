@@ -55,6 +55,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
+import type { InnerRunLookup } from './innerRunRecords.js';
 import { lazyTraceToolpack, NO_COMPLETED_RUN_MESSAGE } from './lazyToolpack.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
@@ -129,6 +130,16 @@ export interface SelfExplainSource {
   getNarrative?(): readonly { readonly text: string }[];
   /** The typed event stream — `agent.on('*', …)`. */
   on?(type: '*', listener: (event: AgentfootprintEvent) => void): Unsubscribe;
+  /**
+   * The records TOOLS kept of their own runs — present when the agent
+   * mounts a `flowchartAsTool({ keepRecord: true })`. Unlike the other
+   * three, this is NOT captured at the terminal flush: the store is a live,
+   * bounded object owned by the tool, and the binding holds the lookup so
+   * `inspect_tool_run` reads whatever the tool has filed. Rotating it per
+   * turn would throw away the previous turn's inner runs at exactly the
+   * moment the follow-up question arrives.
+   */
+  getInnerRuns?(): InnerRunLookup | undefined;
 }
 
 /**
@@ -182,11 +193,13 @@ export class SelfExplainBinding {
   /** Evidence of the previous completed run, or undefined before the first. */
   get artifacts(): TraceToolpackArtifacts | undefined {
     if (!this.captured) return undefined;
+    const innerRuns = this.source?.getInnerRuns?.();
     return {
       snapshot: this.captured.snapshot,
       controlDeps: this.captured.ctrl.asLookup(),
       ...(this.captured.narrative !== undefined && { narrative: this.captured.narrative }),
       ...(this.captured.events !== undefined && { events: this.captured.events }),
+      ...(innerRuns !== undefined && { innerRuns }),
     };
   }
 
