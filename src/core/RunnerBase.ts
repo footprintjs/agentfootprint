@@ -17,6 +17,7 @@ import type {
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
+import { pauseDemandsDecision } from './pause.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
 import type {
@@ -336,29 +337,20 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
     this.emitPauseRequest(checkpoint, pauseData);
 
-    // A check-in pause carries its typed request under `pauseData.checkIn`
-    // (the tool-dispatch handler tags it there before pausing). Surface it as
-    // a first-class field so consumers can `isCheckInPause(outcome)` and read
-    // the evidence pack without reaching into the raw pause payload. Plain
-    // `askHuman` pauses have no `checkIn` key → the field stays absent.
+    // A check-in pause carries its typed request under `pauseData.checkIn` and a
+    // middleware ask carries its question under `pauseData.ask` (the dispatch
+    // handler tags them there before pausing). Surface both as first-class
+    // fields so consumers can `isCheckInPause(outcome)` / `isAskPause(outcome)`
+    // and read the evidence pack or the question without reaching into the raw
+    // payload. A plain `askHuman` pause has neither key → both stay absent.
+    //
+    // 8.13.0 — WHICH key is present is read by `pauseDemandsDecision`, the one
+    // reader of that shape, shared with `Agent.resume`'s refusal. The surface a
+    // consumer is told about and the surface the library enforces cannot drift.
+    const gate = pauseDemandsDecision(pauseData);
     const checkIn =
-      typeof pauseData === 'object' &&
-      pauseData !== null &&
-      typeof (pauseData as { checkIn?: unknown }).checkIn === 'object' &&
-      (pauseData as { checkIn?: unknown }).checkIn !== null
-        ? (pauseData as { checkIn?: CheckInRequest }).checkIn
-        : undefined;
-
-    // Same unwrap for a middleware `ask` — the dispatch handler tags it under
-    // `pauseData.ask` before pausing, so `isAskPause(outcome)` can read the
-    // question and the middleware that asked without digging into the payload.
-    const ask =
-      typeof pauseData === 'object' &&
-      pauseData !== null &&
-      typeof (pauseData as { ask?: unknown }).ask === 'object' &&
-      (pauseData as { ask?: unknown }).ask !== null
-        ? (pauseData as { ask?: MiddlewareAsk }).ask
-        : undefined;
+      gate?.kind === 'checkIn' ? (pauseData as { checkIn?: CheckInRequest }).checkIn : undefined;
+    const ask = gate?.kind === 'ask' ? (pauseData as { ask?: MiddlewareAsk }).ask : undefined;
 
     return {
       paused: true,

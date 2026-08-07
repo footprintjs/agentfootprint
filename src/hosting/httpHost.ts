@@ -343,10 +343,15 @@ export interface HttpHost extends AgentHost, ConversationHost {
  * Status codes mapped by refusal code. Anything else is a 500.
  *
  * Not one of them is a 5xx: none of them is the agent breaking. A closed host is
- * shutting down (503); the other four are conflicts with the state the session
- * is already in (409) — a run already going, a question already outstanding, a
- * decision with nothing to decide, a pause this reply cannot describe. A 500
- * would tell every dashboard that ever sees it something untrue.
+ * shutting down (503); four are conflicts with the state the session is already
+ * in (409) — a run already going, a question already outstanding, a decision
+ * with nothing to decide, a pause this reply cannot describe. A 500 would tell
+ * every dashboard that ever sees it something untrue.
+ *
+ * `ERR_DECISION_REQUIRED` is the one 400 (8.13.0): the session is in a perfectly
+ * consistent state and it is the REQUEST that is wrong — it answered a consent
+ * gate with a value instead of a decision. Nothing ran and the pause is still
+ * there, so the same caller can send the right shape and continue.
  */
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_HOST_CLOSED: 503,
@@ -354,6 +359,7 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_PAUSE_NOT_CARRIED: 409,
   ERR_AWAITING_DECISION: 409,
   ERR_NO_PENDING_ASK: 409,
+  ERR_DECISION_REQUIRED: 400,
 };
 
 /**

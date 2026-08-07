@@ -110,6 +110,8 @@ It takes the same context the call moment gets — including [`toolSource`](doc:
 
 **`onToolResult` never runs for a call that never executed.** Denied before dispatch, waiting on a person, rejected by arg validation, blocked on a credential, or naming a tool that does not exist — none of those have a result to decide about, and asking a rule about a result that does not exist is the fabrication the outcome union removes.
 
+**It DOES run for a call a person finished.** A tool that called [`askHuman()` / `pauseHere()`](doc:pausable) has run — it started, it may have done half its work, and the value you hand `agent.resume()` becomes that tool's result: it lands in the history under the same `toolCallId`, `stream.tool_end` reports it, and it fires `on-tool-return` triggers. So the after-tool moment runs there too, with the args the tool was actually running with. Before 8.13.0 it did not, which left every `onToolResult` rule — redaction first among them — unapplied to the one channel where a *person* can paste a secret. Rules that only govern calls are unaffected; an agent with no `onToolResult` anywhere behaves exactly as before.
+
 **There is no `ask` at the after-tool moment, and that is a refusal rather than an omission.** The machinery is right there — the dispatch loop pauses perfectly well — but the tool has already run, so a person woken to answer cannot prevent anything. The honest verbs at that moment are "let it through" and "the model does not read this", and both ship. The business cases this was measured against (authorize before · hide from the model · annotate the result · attach a fact through a trigger) needed none of them. Bring one that genuinely needs a person there and the arm can be added on the pause machinery that already exists.
 
 **A rule with only `onToolResult` takes no part in dispatch** — no walk, no ledger row at the call moment. It did not decide anything there, and a row saying it allowed would be inventing a decision.
@@ -215,6 +217,8 @@ There is deliberately **no** `WATCH_MOMENTS` to match `LOOP_MOMENTS`. `.act()`'s
 </Callout>
 
 `.recorder()` is the same door under its older, internals-flavoured name. It still works, takes one observer instead of many, and is deprecated as of 8.0.0.
+
+**Two different observers may not share one `id`.** footprintjs de-duplicates attached recorders by id, so of two objects carrying one name only the last would ever fire and the first would report nothing — which reads exactly like an observer whose events never happened. `build()` refuses it, naming the id. Handing the *same* object to `.watch()` twice is fine and stays one attachment: it is identity, not the id, that decides.
 
 ## Related
 

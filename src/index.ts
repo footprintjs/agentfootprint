@@ -142,6 +142,15 @@ export {
   isPaused,
   isCheckInPause,
   isAskPause,
+  // 8.13.0 — a consent gate (a tool's `checkIn`, a middleware's `ask`) is
+  // answered with a decision, never a value. `pauseDemandsDecision` is how a
+  // consumer asks which kind of pause it is holding; `DecisionRequiredError` is
+  // what `agent.resume()` raises when the answer is the wrong shape, instead of
+  // the silent `by: 'unknown'` decline it filed before.
+  pauseDemandsDecision,
+  DecisionRequiredError,
+  type ConsentGate,
+  type ConsentGateKind,
   type MiddlewareAsk,
   type RunnerPauseOutcome,
 } from './core/pause.js';

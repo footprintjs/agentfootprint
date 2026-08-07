@@ -18,8 +18,11 @@ import { defineTool } from '../../../src/core/tools.js';
 import {
   checkInApproved,
   checkInDeclined,
+  DecisionRequiredError,
   isPaused,
   isCheckInPause,
+  pauseDemandsDecision,
+  pauseHere,
   CheckInRecorder,
   lexicalDriverScorer,
   type RunnerPauseOutcome,
@@ -546,5 +549,132 @@ describe('check-in — events + recorder', () => {
     expect(isPaused(out)).toBe(false);
     expect(events).toHaveLength(0);
     expect(rec.getStats()).toEqual({ requested: 0, approved: 0, declined: 0, pending: 0 });
+  });
+});
+
+// ── 8. A consent gate is answered with a DECISION, never a value (8.13.0) ──
+
+describe('check-in — a mis-shaped resume REFUSES instead of inventing a decline', () => {
+  /** Pause on a check-in and hand back the outcome. */
+  async function pauseOnCheckIn() {
+    const exec = vi.fn(({ amount }: { amount: number }) => `refunded ${amount}`);
+    const agent = Agent.create({ provider: refundThenFinal('done'), model: 'mock' })
+      .system('')
+      .tool(refundTool('always', exec))
+      .build();
+    const paused = await agent.run({ message: 'refund me' });
+    if (!isCheckInPause(paused)) throw new Error('expected a check-in pause');
+    return { agent, paused, exec };
+  }
+
+  it('unit — a bare string is refused, naming the gate and the two helpers', async () => {
+    const { agent, paused, exec } = await pauseOnCheckIn();
+
+    const err = await agent
+      .resume(paused.checkpoint, 'yes go ahead')
+      .then(() => undefined)
+      .catch((e: unknown) => e as DecisionRequiredError);
+
+    expect(err).toBeInstanceOf(DecisionRequiredError);
+    expect(err?.code).toBe('ERR_DECISION_REQUIRED');
+    expect(err?.gate).toBe('checkIn');
+    expect(err?.toolName).toBe('issue_refund');
+    expect(err?.received).toBe('a string');
+    expect(err?.message).toContain('checkInApproved');
+    expect(err?.message).toContain('checkInDeclined');
+    // The consequential tool did NOT run — that law is unchanged.
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('regression — the silent `by: unknown` decline is gone from the record', async () => {
+    const { agent, paused } = await pauseOnCheckIn();
+    const decisions: unknown[] = [];
+    agent.on('*', (e) => {
+      if (e.type === 'agentfootprint.checkin.decision') decisions.push(e.payload);
+    });
+
+    await expect(agent.resume(paused.checkpoint, 'yes go ahead')).rejects.toThrow(
+      DecisionRequiredError,
+    );
+
+    // Before 8.13.0 this filed a decision attributed to a person who was never
+    // asked. Governance never silently invents a decision.
+    expect(decisions).toHaveLength(0);
+    const history = (agent.getLastSnapshot()?.sharedState as { history?: readonly unknown[] })
+      ?.history;
+    expect(JSON.stringify(history ?? [])).not.toContain('resume input was not a CheckInDecision');
+  });
+
+  it('edge — resume() with NO input at all is refused too', async () => {
+    const { agent, paused } = await pauseOnCheckIn();
+
+    const err = await agent
+      .resume(paused.checkpoint)
+      .then(() => undefined)
+      .catch((e: unknown) => e as DecisionRequiredError);
+
+    expect(err).toBeInstanceOf(DecisionRequiredError);
+    expect(err?.received).toBe('nothing');
+  });
+
+  it('security — the refusal reports the SHAPE that arrived, never its contents', async () => {
+    const { agent, paused } = await pauseOnCheckIn();
+
+    const err = await agent
+      .resume(paused.checkpoint, { approvedBy: 'alice', token: 'sk-live-SECRET' })
+      .then(() => undefined)
+      .catch((e: unknown) => e as DecisionRequiredError);
+
+    expect(err?.received).toBe('an object that is not a CheckInDecision');
+    expect(err?.message).not.toContain('sk-live-SECRET');
+  });
+
+  it('scenario — the checkpoint survives; a real decision resumes it', async () => {
+    const { agent, paused, exec } = await pauseOnCheckIn();
+
+    await expect(agent.resume(paused.checkpoint, 'yes')).rejects.toThrow(DecisionRequiredError);
+    const final = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    expect(final).toBe('done');
+    expect(exec).toHaveBeenCalledOnce();
+  });
+
+  it('property — a plain askHuman pause is NOT a consent gate and takes any value', async () => {
+    const agent = Agent.create({
+      provider: refundThenFinal('done'),
+      model: 'mock',
+    })
+      .system('')
+      .tool(
+        defineTool<{ amount: number }, string>({
+          name: 'issue_refund',
+          description: 'Issue a refund',
+          inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+          execute: () => {
+            pauseHere({ question: 'how much?' });
+            return '';
+          },
+        }),
+      )
+      .build();
+
+    const paused = await agent.run({ message: 'refund me' });
+    if (!isPaused(paused)) throw new Error('expected a pause');
+    expect(pauseDemandsDecision(paused.pauseData)).toBeUndefined();
+    // The human's answer IS the tool's result here — any value is accepted.
+    await expect(agent.resume(paused.checkpoint, 'five hundred')).resolves.toBe('done');
+  });
+
+  it('unit — pauseDemandsDecision names the gate for each pause kind', () => {
+    expect(pauseDemandsDecision({ toolName: 't', checkIn: { tool: 't' } })).toEqual({
+      kind: 'checkIn',
+      toolName: 't',
+    });
+    expect(
+      pauseDemandsDecision({ toolName: 't', ask: { question: 'q?', middleware: 'gate' } }),
+    ).toEqual({ kind: 'ask', toolName: 't', middleware: 'gate' });
+    expect(pauseDemandsDecision({ toolName: 't', question: 'anything?' })).toBeUndefined();
+    expect(pauseDemandsDecision(undefined)).toBeUndefined();
+    expect(pauseDemandsDecision('a string')).toBeUndefined();
   });
 });

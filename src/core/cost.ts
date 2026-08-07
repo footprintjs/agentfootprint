@@ -21,6 +21,37 @@ export interface CostAccountingScope {
   costBudgetHit: boolean;
 }
 
+/**
+ * Refuse a `costBudget` with no `pricingTable` to measure it against (8.13.0).
+ *
+ * The budget is denominated in USD and {@link emitCostTick} returns on its first
+ * line when there is no pricing table, so before this refusal the pair emitted
+ * NOTHING — no `cost.tick`, and no `cost.limit_hit` however much a run spent. A
+ * budget that cannot be crossed is not a lenient budget; it is a guard rail that
+ * was never installed, and it looks identical from the outside to one that
+ * simply has not been hit yet.
+ *
+ * Shared by BOTH runners that take the pair. Leaving the sibling class with the
+ * same silent no-op would be a governance fix that itself drops half the cases.
+ *
+ * @param runner the class name for the message — `'Agent'` or `'LLMCall'`.
+ */
+export function assertCostBudgetHasPricing(
+  runner: 'Agent' | 'LLMCall',
+  pricingTable: PricingTable | undefined,
+  costBudget: number | undefined,
+): void {
+  if (costBudget === undefined || pricingTable !== undefined) return;
+  throw new Error(
+    `${runner}: costBudget was set without a pricingTable, so it can never be reached — the ` +
+      `budget is USD, and only a pricingTable turns tokens into USD. Nothing is emitted: no ` +
+      `cost.tick, and no cost.limit_hit however much the run spends. Pass \`pricingTable\` too ` +
+      `— any object with { name, pricePerToken(model, kind) } where kind is 'input' | 'output' ` +
+      `| 'cacheRead' | 'cacheWrite' and the number is USD for ONE token. The library ships no ` +
+      `table because prices are yours to keep current. Or drop \`costBudget\`.`,
+  );
+}
+
 type Usage = {
   readonly input: number;
   readonly output: number;

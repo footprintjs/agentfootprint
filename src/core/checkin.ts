@@ -472,6 +472,22 @@ export interface ResolvedCheckInConfig {
  * `checkIn` work even when the builder never called `.checkIn()`.
  */
 export function resolveCheckInConfig(opts?: CheckInBuilderOptions): ResolvedCheckInConfig {
+  // 8.13.0 — a scorer that will never be called is refused, not resolved.
+  // `minimalEvidenceAssembler` builds only `willDo`; the scorer's whole job is
+  // ranking `drivers`, which the minimal pack does not have. Configured and
+  // inert looks exactly like configured and working.
+  //
+  // Only the literal `'minimal'` PRESET is refused. A custom assembler is handed
+  // the scorer in its input and may legitimately call it, so the library cannot
+  // judge that pairing — and refusing what it cannot judge would be a guess.
+  if (opts?.scorer !== undefined && opts.evidence === 'minimal') {
+    throw new Error(
+      "AgentBuilder.checkIn: `scorer` has no effect with `evidence: 'minimal'`. The scorer " +
+        'ranks the `drivers` field — which context drove this tool choice — and the minimal ' +
+        'assembler builds only `willDo`, so the scorer is resolved and then never called. Use ' +
+        "`evidence: 'standard'` to get the drivers, or drop the `scorer`.",
+    );
+  }
   const scorer = opts?.scorer ?? lexicalDriverScorer;
   const evidence = opts?.evidence ?? 'standard';
   const assembler: CheckInAssembler =

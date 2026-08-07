@@ -35,7 +35,7 @@ import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
 import { SUBFLOW_IDS } from '../conventions.js';
-import { type RunnerPauseOutcome } from './pause.js';
+import { DecisionRequiredError, pauseDemandsDecision, type RunnerPauseOutcome } from './pause.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -73,10 +73,12 @@ import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import {
+  isCheckInDecision,
   resolveCheckInConfig,
   type CheckInBuilderOptions,
   type ResolvedCheckInConfig,
 } from './checkin.js';
+import { assertCostBudgetHasPricing } from './cost.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import {
   causalEvidenceRecorder,
@@ -524,6 +526,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (memories.some((m) => m.type === 'causal')) {
       this.causalEvidence = causalEvidenceRecorder();
     }
+    // A dial without its switch — refused rather than run as a no-op (8.13.0).
+    // Same policy as `observerDeliveryOptions` below; the message and the check
+    // are shared with LLMCall, which takes the identical pair.
+    assertCostBudgetHasPricing('Agent', opts.pricingTable, opts.costBudget);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
@@ -571,6 +577,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     this.observerDeliveryOptions = opts.observerDeliveryOptions;
     if (opts.credentials) this.credentialProvider = opts.credentials;
+    // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
+    // read at exactly one place — the tool-dispatch loop, AFTER
+    // `credentials.getCredential` came back `authorization-required`. With no
+    // provider that call never returns at all: the fail-closed stand-in
+    // (`unconfiguredCredentialProvider`) rejects, so the branch this option
+    // governs is unreachable and the setting decides nothing.
+    if (opts.onAuthorizationRequired !== undefined && opts.credentials === undefined) {
+      throw new Error(
+        'Agent: onAuthorizationRequired was set without a `credentials` provider, so it can ' +
+          'never be reached — it decides what happens when a DECLARED credential comes back ' +
+          "'authorization-required', and with no provider no credential is ever requested (the " +
+          'fail-closed stand-in throws instead). Pass `credentials` — agentCoreIdentity({ ' +
+          'region }), staticTokens({ … }), or any CredentialProvider from ' +
+          "'agentfootprint/identity' — or drop `onAuthorizationRequired`.",
+      );
+    }
     // 8.6.0 — default `'pause'`: consent is work waiting on a person, and the
     // model is the one party that cannot click a link.
     this.onAuthorizationRequired = opts.onAuthorizationRequired ?? 'pause';
@@ -973,6 +995,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
+    // Refused HERE, before the engine is handed the checkpoint, so nothing
+    // executes and the checkpoint is unchanged — the caller can answer the same
+    // one and resume again. Before this, a mis-shaped resume silently DECLINED
+    // and filed `by: 'unknown'`: a consent record naming a person who was never
+    // asked. Governance never silently invents a decision, for the same reason
+    // it never silently drops one.
+    //
+    // Discriminated by the PAUSE, never by the input: a plain askHuman/pauseHere
+    // answer is a value (often a string) and must stay accepted, so the only
+    // sound question is "what was asked?".
+    const gate = pauseDemandsDecision(checkpoint.pauseData);
+    if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically

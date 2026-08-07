@@ -12,6 +12,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
+import { allow, deny } from '../../../src/core/agent/middleware/outcomes.js';
+import type { MiddlewareDecision } from '../../../src/core/agent/middleware/types.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
@@ -190,6 +192,192 @@ describe('scenario — pause via tool + resume round trip', () => {
 
     const final = await agent.resume(paused.checkpoint, 'custom-human-answer');
     expect(final).toBe('LLM saw tool result: custom-human-answer');
+  });
+});
+
+/**
+ * 8.13.0 — the after-tool moment on the RESUME side of a `pauseHere` pause.
+ *
+ * The tool ran (`pauseHere` throws from inside `execute`), its before-tool chain
+ * already walked in the loop, and the value the consumer supplies IS that tool's
+ * result — it lands as `role: 'tool'` under the same id and drives
+ * `on-tool-return` triggers. Before this release the chain's second half was
+ * skipped on that one path, so every `onToolResult` rule — redaction first among
+ * them — sat unapplied on the one value a PERSON typed.
+ *
+ * 7-pattern coverage: integration (the hook fires, once) · security (a redaction
+ * rule scrubs a pasted secret) · unit (`deny` withholds it) · property (the
+ * ledger row matches the loop path's shape) · edge (no hook anywhere → byte-
+ * identical) · regression (a checkpoint with no `pausedToolArgs`).
+ */
+describe('scenario — the after-tool moment runs on a pauseHere resume (8.13.0)', () => {
+  /** An agent whose only tool pauses, plus whatever after-tool rules are given. */
+  function pausingAgent(
+    afterTool: readonly {
+      name: string;
+      onToolResult: (call: {
+        result: unknown;
+        args: Readonly<Record<string, unknown>>;
+        toolName: string;
+        toolCallId: string;
+      }) => unknown;
+    }[],
+  ) {
+    const builder = Agent.create({
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'ask_person', args: { topic: 'refund', amount: 500 } }]),
+        resp('all done'),
+      ),
+      model: 'mock',
+    })
+      .system('')
+      .tool({
+        schema: { name: 'ask_person', description: '', inputSchema: { type: 'object' } },
+        execute: () => {
+          pauseHere({ question: 'what should I tell them?' });
+          return '';
+        },
+      });
+    return afterTool.length > 0
+      ? builder.act({ afterTool: afterTool as never }).build()
+      : builder.build();
+  }
+
+  it('integration — onToolResult fires exactly once, with the human answer as the result', async () => {
+    const calls: { result: unknown; args: unknown; toolName: string; toolCallId: string }[] = [];
+    const agent = pausingAgent([
+      {
+        name: 'watchful',
+        onToolResult: (call) => {
+          calls.push({
+            result: call.result,
+            args: call.args,
+            toolName: call.toolName,
+            toolCallId: call.toolCallId,
+          });
+          return allow();
+        },
+      },
+    ]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    await agent.resume(paused.checkpoint, 'tell them three business days');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.result).toBe('tell them three business days');
+    expect(calls[0]?.toolName).toBe('ask_person');
+    expect(calls[0]?.toolCallId).toBe('t1');
+    // The args the tool was RUNNING with, carried across the checkpoint.
+    expect(calls[0]?.args).toEqual({ topic: 'refund', amount: 500 });
+  });
+
+  it('security — a redaction rule scrubs a secret a PERSON pasted into the answer', async () => {
+    const agent = pausingAgent([
+      {
+        name: 'scrub-ssn',
+        onToolResult: (call) => {
+          const clean = String(call.result).replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[ssn]');
+          return clean === call.result ? allow() : allow(clean, 'masked a US SSN');
+        },
+      },
+    ]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    await agent.resume(paused.checkpoint, 'their ssn is 123-45-6789');
+
+    const state = agent.getLastSnapshot()?.sharedState as {
+      history: readonly { role: string; content: string }[];
+    };
+    const toolMsg = state.history.find((m) => m.role === 'tool');
+    expect(toolMsg?.content).toBe('their ssn is [ssn]');
+    expect(JSON.stringify(state.history)).not.toContain('123-45-6789');
+  });
+
+  it('unit — deny() withholds the human answer from the model and says so', async () => {
+    const agent = pausingAgent([
+      {
+        name: 'no-raw-notes',
+        onToolResult: () => deny('the operator note is not for the model'),
+      },
+    ]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    await agent.resume(paused.checkpoint, 'internal: customer is a known fraudster');
+
+    const state = agent.getLastSnapshot()?.sharedState as {
+      history: readonly { role: string; content: string }[];
+    };
+    const toolMsg = state.history.find((m) => m.role === 'tool');
+    expect(toolMsg?.content).toBe('the operator note is not for the model');
+    expect(JSON.stringify(state.history)).not.toContain('known fraudster');
+  });
+
+  it('property — the ledger row has the same shape the loop path files', async () => {
+    const agent = pausingAgent([
+      { name: 'tagger', onToolResult: (call) => allow(`${String(call.result)} [seen]`, 'tagged') },
+    ]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    await agent.resume(paused.checkpoint, 'ok');
+
+    const state = agent.getLastSnapshot()?.sharedState as {
+      middlewareDecisions?: readonly MiddlewareDecision[];
+    };
+    const row = state.middlewareDecisions?.find((d) => d.middleware === 'tagger');
+    expect(row).toBeDefined();
+    expect(row?.moment).toBe('after-tool');
+    expect(row?.at).toBe('tool');
+    expect(row?.toolName).toBe('ask_person');
+    expect(row?.toolCallId).toBe('t1');
+    expect(row?.outcome).toBe('allow');
+    expect(row?.changed).toBe(true);
+    expect(row?.before).toBe('ok');
+    expect(row?.after).toBe('ok [seen]');
+  });
+
+  it('edge — no onToolResult anywhere: the resume is byte-identical to before', async () => {
+    const agent = pausingAgent([]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    await agent.resume(paused.checkpoint, 'the plain answer');
+
+    const state = agent.getLastSnapshot()?.sharedState as {
+      history: readonly { role: string; content: string }[];
+      middlewareDecisions?: readonly MiddlewareDecision[];
+    };
+    expect(state.history.find((m) => m.role === 'tool')?.content).toBe('the plain answer');
+    expect(state.middlewareDecisions).toBeUndefined();
+  });
+
+  it('regression — a pre-8.13.0 checkpoint has no pausedToolArgs; args come from history', async () => {
+    const calls: Readonly<Record<string, unknown>>[] = [];
+    const agent = pausingAgent([
+      {
+        name: 'reader',
+        onToolResult: (call) => {
+          calls.push(call.args);
+          return allow();
+        },
+      },
+    ]);
+
+    const paused = await agent.run({ message: 'hi' });
+    if (!isPaused(paused)) return expect.fail('expected paused');
+    // Simulate a checkpoint written by 8.12.0: the key did not exist then.
+    const legacy = JSON.parse(JSON.stringify(paused.checkpoint)) as {
+      sharedState: Record<string, unknown>;
+    };
+    delete legacy.sharedState.pausedToolArgs;
+    await agent.resume(legacy as never, 'answered');
+
+    // Recovered from the assistant turn — real values the model proposed, never
+    // an invented empty object.
+    expect(calls).toEqual([{ topic: 'refund', amount: 500 }]);
   });
 });
 

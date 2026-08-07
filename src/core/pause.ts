@@ -112,6 +112,135 @@ export function isAskPause(
   return isPaused(result) && (result as RunnerPauseOutcome).ask !== undefined;
 }
 
+// ─── Which pauses demand a decision (8.13.0) ───────────────────────────
+
+/**
+ * The two pause kinds whose answer is a DECISION rather than a value.
+ *
+ * A **`'checkIn'`** pause is the tool's own consent demand, and its identity is
+ * the evidence pack. A **`'ask'`** pause is a `toolMiddleware`'s own question.
+ * Both are answered with `checkInApproved()` / `checkInDeclined()`.
+ *
+ * Everything else — `pauseHere()` / `askHuman()`, and the 3LO credential-consent
+ * pause — is NOT a consent gate in this sense: there the human's answer either
+ * IS the tool's result or is ignored entirely, and any value is accepted.
+ */
+export type ConsentGateKind = 'checkIn' | 'ask';
+
+/** What {@link pauseDemandsDecision} reports about a pause that is a consent gate. */
+export interface ConsentGate {
+  readonly kind: ConsentGateKind;
+  /** The tool the gate is about, when the pause payload named one. */
+  readonly toolName?: string;
+  /** `'ask'` only — the `name` of the middleware that asked. */
+  readonly middleware?: string;
+}
+
+/**
+ * Read a pause payload and say whether answering it requires a
+ * `CheckInDecision` — and if so, which gate is outstanding.
+ *
+ * THE ONE reader of that shape. `RunnerBase.detectPause` builds
+ * `outcome.checkIn` / `outcome.ask` from this, and `Agent.resume` refuses a
+ * mis-shaped answer from this, so the surface a consumer is told about and the
+ * surface the library enforces cannot drift apart.
+ *
+ * Keyed on the PAUSE, never on the input: a plain `askHuman` answer is a string
+ * and must stay one, so "is this the right answer?" can only be decided by
+ * knowing what was asked.
+ *
+ * @returns the gate, or `undefined` when this pause takes any value.
+ */
+export function pauseDemandsDecision(pauseData: unknown): ConsentGate | undefined {
+  if (typeof pauseData !== 'object' || pauseData === null) return undefined;
+  const bag = pauseData as {
+    checkIn?: unknown;
+    ask?: unknown;
+    toolName?: unknown;
+  };
+  const toolName = typeof bag.toolName === 'string' ? bag.toolName : undefined;
+  if (typeof bag.checkIn === 'object' && bag.checkIn !== null) {
+    return { kind: 'checkIn', ...(toolName !== undefined && { toolName }) };
+  }
+  if (typeof bag.ask === 'object' && bag.ask !== null) {
+    const middleware = (bag.ask as { middleware?: unknown }).middleware;
+    return {
+      kind: 'ask',
+      ...(toolName !== undefined && { toolName }),
+      ...(typeof middleware === 'string' && { middleware }),
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Raised by `agent.resume()` when a run paused on a CONSENT GATE and the resume
+ * input is not a `CheckInDecision`.
+ *
+ * Before 8.13.0 that resume silently DECLINED, attributed to `by: 'unknown'` —
+ * a `checkin.decision` record naming a person who was never asked. A governance
+ * layer that invents a decision is worse than one that drops it: the run reads
+ * as consented-and-refused when nobody consented to anything.
+ *
+ * **Nothing was executed and the checkpoint is unchanged** — this refuses at the
+ * API boundary, before the engine is handed the checkpoint. Answer the gate and
+ * resume the same checkpoint again.
+ *
+ * A plain `askHuman()` / `pauseHere()` pause never raises this: there the
+ * human's answer IS the tool's result, so any value is accepted. The 3LO
+ * credential-consent pause never raises it either — it re-asks the provider and
+ * ignores the input by design.
+ */
+export class DecisionRequiredError extends Error {
+  readonly code = 'ERR_DECISION_REQUIRED' as const;
+  /** Which gate is outstanding. */
+  readonly gate: ConsentGateKind;
+  /** The tool the gate is about, when the pause named one. */
+  readonly toolName?: string;
+  /** `'ask'` only — the middleware that asked. */
+  readonly middleware?: string;
+  /**
+   * What arrived instead, as a TYPE NAME only (`'a string'`, `'nothing'`, …).
+   *
+   * Never the value. A resume payload is caller data that may carry anything a
+   * person typed, and an error message is copied into logs, tickets and crash
+   * reporters by default.
+   */
+  readonly received: string;
+
+  constructor(gate: ConsentGate, input: unknown) {
+    const who =
+      gate.kind === 'checkIn'
+        ? "a tool's checkIn"
+        : `a toolMiddleware's ask${gate.middleware ? ` (asked by '${gate.middleware}')` : ''}`;
+    const received = describeResumeInput(input);
+    super(
+      `[resume] this run paused on a consent gate — ${who}${
+        gate.toolName ? ` on tool '${gate.toolName}'` : ''
+      } — and a consent gate is answered with a DECISION, not a value. Got ${received}. ` +
+        `Resume with checkInApproved({ by }) or checkInDeclined({ by, note }) from ` +
+        `'agentfootprint'; \`by\` is who decided, and it is what the record says. Nothing was ` +
+        `executed and the checkpoint is unchanged — answer it and resume again. (An askHuman() ` +
+        `/ pauseHere() pause is different: there the human's answer IS the tool's result, and ` +
+        `any value is accepted.)`,
+    );
+    this.name = 'DecisionRequiredError';
+    this.gate = gate.kind;
+    if (gate.toolName !== undefined) this.toolName = gate.toolName;
+    if (gate.middleware !== undefined) this.middleware = gate.middleware;
+    this.received = received;
+  }
+}
+
+/** Name the SHAPE of a resume input for the refusal — never its contents. */
+function describeResumeInput(input: unknown): string {
+  if (input === undefined) return 'nothing';
+  if (input === null) return 'null';
+  if (Array.isArray(input)) return 'an array';
+  const t = typeof input;
+  return t === 'object' ? 'an object that is not a CheckInDecision' : `a ${t}`;
+}
+
 /**
  * Control-flow error raised by `pauseHere()` inside a tool's `execute()`.
  * Caught by the Agent's tool-call stage, which forwards to `scope.$pause()`.

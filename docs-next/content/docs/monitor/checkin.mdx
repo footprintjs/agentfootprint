@@ -48,6 +48,16 @@ The human answers with `checkInApproved({ by, note? })` or `checkInDeclined({ by
 
 Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`).
 
+### A consent gate takes a decision, not a value
+
+Resuming a check-in with anything that is not a `CheckInDecision` — a bare string, an object of your own shape, nothing at all — raises `DecisionRequiredError` (`code: 'ERR_DECISION_REQUIRED'`). **Nothing executes and the checkpoint is unchanged**, so you answer the same one properly and resume again. Over `standingAgent` it is a **400**: the session is fine, the request was not.
+
+The error names which gate is outstanding (`gate: 'checkIn' | 'ask'`), the tool, the middleware that asked when it was an `ask`, and `received` — the *shape* that arrived, never its contents, because a resume payload is caller data and an error message ends up in logs.
+
+Ask which kind of pause you are holding with `pauseDemandsDecision(outcome.pauseData)`: it returns a `ConsentGate` (`{ kind, toolName?, middleware? }`) for a check-in or a middleware `ask`, and `undefined` for a plain [`askHuman` / `pauseHere`](doc:pausable) pause — where the human's answer *is* the tool's result and any value is accepted. `ConsentGateKind` is the closed two-arm union that `kind` narrows to; a third consent gate would be a deliberate edit, never an arm that appears by surprise.
+
+Before 8.13.0 a mis-shaped resume declined silently and filed the decision against `by: 'unknown'` — a consent record naming a person who was never asked. Governance never silently invents a decision, for the same reason it never silently drops one.
+
 ## Process A → checkpoint → Process B
 
 Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausable): the ask happens in one process, the human decides hours later, and a fresh agent resumes from the stored checkpoint. Build the agent fresh in Process B — only the checkpoint (and the decision) cross the boundary.
@@ -56,7 +66,10 @@ Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausab
 
 - Don't reach into `outcome.pauseData` for a check-in — use `outcome.checkIn` (typed) and `isCheckInPause(outcome)`.
 - Don't use `checkIn` as a policy engine. Policy is `permissionChecker` (deny/halt, no human); check-in is consent (a person decides). They compose — permission runs first.
-- Don't resume a check-in pause with a bare string — pass a `CheckInDecision` (`checkInApproved` / `checkInDeclined`). A malformed resume declines by default, so a consequential tool never runs by accident.
+- Don't resume a check-in pause with a bare string — pass a `CheckInDecision` (`checkInApproved` / `checkInDeclined`). Since 8.13.0 a malformed resume is refused with `DecisionRequiredError` rather than silently declined, so a consequential tool never runs by accident *and* you find out.
+- Don't configure `.checkIn()` on an agent where no tool declares `checkIn` — that gate can never be consulted, and `build()` refuses it. `.checkIn()` decides HOW the ask is assembled; a tool's `checkIn: 'always'` (or a predicate) is what MAKES the ask.
+- Don't pair `evidence: 'minimal'` with a `scorer`. The scorer ranks `drivers`, which the minimal pack does not build — `build()` refuses the pairing rather than resolving a scorer nothing will call.
+- Don't put a `toolMiddleware` `ask` and a tool's own `checkIn` on the same call. They ask *different* questions — the rule's, and the tool's with the evidence pack attached — so approving one is not answering the other, and a resumed dispatch has no second checkpoint to ask on. Keep one gate per tool. (A *selective* `checkIn` whose predicate does not trip for those arguments is fine: since 8.13.0 the demand is evaluated, not merely noticed.)
 
 ## Run the demo
 

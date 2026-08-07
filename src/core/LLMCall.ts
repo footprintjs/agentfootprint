@@ -65,7 +65,7 @@ import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, PricingTable } from '../adapters/types.js';
-import { emitCostTick } from './cost.js';
+import { assertCostBudgetHasPricing, emitCostTick } from './cost.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
@@ -205,6 +205,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     this.temperature = opts.temperature;
     this.maxTokens = opts.maxTokens;
     this.systemPromptValue = systemPromptValue;
+    // A dial without its switch — refused rather than run as a no-op (8.13.0).
+    // Same check and same message as Agent: the pair is identical here, and so
+    // was the silence.
+    assertCostBudgetHasPricing('LLMCall', opts.pricingTable, opts.costBudget);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;

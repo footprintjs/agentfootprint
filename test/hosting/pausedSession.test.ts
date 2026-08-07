@@ -68,6 +68,38 @@ function pausingAgent(ran: string[] = []): Agent {
     .build();
 }
 
+/** An agent whose tool declares its OWN consent gate — a check-in pause. */
+function consentGateAgent(ran: string[] = []): Agent {
+  return Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 10 } }] },
+        { content: 'refund issued' },
+      ],
+    }),
+    model: 'test-model',
+    maxIterations: 3,
+  })
+    .system('terse')
+    .tool(
+      defineTool<{ amount: number }, string>({
+        name: 'issue_refund',
+        description: 'refund a customer',
+        inputSchema: {
+          type: 'object',
+          properties: { amount: { type: 'number' } },
+          required: ['amount'],
+        },
+        checkIn: 'always',
+        execute: ({ amount }) => {
+          ran.push(`refund:${amount}`);
+          return `refunded ${amount}`;
+        },
+      }),
+    )
+    .build();
+}
+
 /** The reader agentfootprint 7.18 shipped, reproduced exactly. */
 function readEnvelope718(envelope: unknown): unknown {
   const KNOWN: readonly string[] = ['conversation-v1'];
@@ -601,3 +633,76 @@ function valueAt(root: unknown, path: string): unknown {
     .split('.')
     .reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], root);
 }
+
+// ─── 8.13.0: a consent gate answered with a value is a CLIENT error ───
+
+describe('a consent gate over the wire — the wrong shape is a 400, not a 500', () => {
+  it('a string `decision` on a check-in pause is refused by name, and nothing runs', async () => {
+    const ran: string[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: consentGateAgent(ran), sessions, host });
+    try {
+      const asked = await host.deliver({ input: 'refund me $10', sessionId: 'gate-1' });
+      expect(asked.awaiting).toBeDefined();
+
+      // A caller who typed "yes" instead of sending a decision. Before 8.13.0
+      // this silently DECLINED and reported a clean 200.
+      const wrong = await host.deliver({
+        input: '',
+        sessionId: 'gate-1',
+        decision: 'yes go ahead',
+      });
+
+      expect(wrong.code).toBe('ERR_DECISION_REQUIRED');
+      expect(wrong.output).toBeUndefined();
+      expect(wrong.error).toContain('checkInApproved');
+      expect(ran).toEqual([]);
+
+      // The session is untouched — the same gate, answered right, completes.
+      const done = await host.deliver({
+        input: '',
+        sessionId: 'gate-1',
+        decision: checkInApproved({ by: 'alice@ops' }),
+      });
+      expect(done.output).toBe('refund issued');
+      expect(ran).toEqual(['refund:10']);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('over a real socket it is a 400 — the request is wrong, not the session', async () => {
+    const { nodeHost } = await import('../../src/hosting/index.js');
+    const handle = await standingAgent({
+      agent: consentGateAgent(),
+      sessions: memorySessions(),
+      host: nodeHost({ port: 0, hostname: '127.0.0.1' }),
+    });
+    try {
+      const post = (body: unknown): Promise<Response> =>
+        fetch(`${handle.url}/invoke`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+      expect((await post({ input: 'refund me', sessionId: 'h-gate' })).status).toBe(202);
+
+      const wrong = await post({ input: '', sessionId: 'h-gate', decision: 'yes' });
+      expect(wrong.status).toBe(400);
+      expect((await wrong.json()) as { code: string }).toMatchObject({
+        code: 'ERR_DECISION_REQUIRED',
+      });
+
+      const done = await post({
+        input: '',
+        sessionId: 'h-gate',
+        decision: checkInApproved({ by: 'alice' }),
+      });
+      expect(done.status).toBe(200);
+    } finally {
+      await handle.close();
+    }
+  });
+});

@@ -25,6 +25,7 @@ import {
   ask,
   checkInApproved,
   checkInDeclined,
+  DecisionRequiredError,
   deny,
   isAskPause,
   isPaused,
@@ -343,7 +344,10 @@ describe('middleware — integration', () => {
     expect(toolResult?.content).toBe('declined by human: not this one');
   });
 
-  it('a malformed resume DECLINES — a governed call never runs off a bad message', async () => {
+  // 8.13.0 — this used to DECLINE silently, filing a `checkin.decision` with
+  // `by: 'unknown'`: a consent record naming a person who was never asked. It now
+  // refuses at the API boundary, before the engine sees the checkpoint.
+  it('a malformed resume REFUSES — a consent gate is answered with a decision, not a value', async () => {
     const { seen, tool } = recordingTool();
     const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
       .tools([tool])
@@ -352,9 +356,54 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, 'yes please');
+    await expect(agent.resume(paused.checkpoint, 'yes please')).rejects.toThrow(
+      DecisionRequiredError,
+    );
 
+    // The governed call still never ran — that law is unchanged; what changed is
+    // that the caller is told, instead of reading a decline nobody made.
     expect(seen).toEqual([]);
+  });
+
+  it('the refusal names the gate, the middleware and the SHAPE that arrived — never the value', async () => {
+    const { tool } = recordingTool();
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([tool])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    const err = await agent
+      .resume(paused.checkpoint, 'my password is hunter2')
+      .then(() => undefined)
+      .catch((e: unknown) => e as DecisionRequiredError);
+
+    expect(err).toBeInstanceOf(DecisionRequiredError);
+    expect(err?.code).toBe('ERR_DECISION_REQUIRED');
+    expect(err?.gate).toBe('ask');
+    expect(err?.middleware).toBe('gate');
+    expect(err?.toolName).toBe('act');
+    expect(err?.received).toBe('a string');
+    expect(err?.message).toContain('checkInApproved');
+    expect(err?.message).not.toContain('hunter2');
+  });
+
+  it('the checkpoint survives the refusal — answer it properly and the run continues', async () => {
+    const { seen, tool } = recordingTool();
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([tool])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await expect(agent.resume(paused.checkpoint, undefined)).rejects.toThrow(DecisionRequiredError);
+    // The SAME checkpoint, answered right.
+    const answer = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    expect(answer).toBe('done');
+    expect(seen).toHaveLength(1);
   });
 
   it('the transformed args — not the model’s originals — are what a person approved', async () => {
@@ -431,7 +480,48 @@ describe('middleware — integration', () => {
     expect(toolResult?.content).toContain("middleware 'second-gate' asked a person to decide");
   });
 
-  it('an approved ask on a tool that ALSO declares checkIn refuses rather than skipping consent', async () => {
+  // ── The two gates: whose question was answered? (8.13.0) ─────────────
+  // A middleware `ask` carries the RULE's question; a tool's `checkIn` carries
+  // the TOOL's, with the evidence pack attached. Approving one is not answering
+  // the other — so an approved ask cannot stand in for a check-in that would
+  // really have fired. But it must also not stand in for one that would NOT
+  // have: the refusal now evaluates the demand instead of noticing it exists.
+
+  /** A tool whose consent demand is SELECTIVE — only large amounts need a person. */
+  function selectiveCheckInTool(seen: unknown[]) {
+    return defineTool<Record<string, unknown>, string>({
+      name: 'act',
+      description: 'x',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: (args) => Number(args.amount) > 1000,
+      execute: (args) => {
+        seen.push(args);
+        return 'ran';
+      },
+    });
+  }
+
+  it('an approved ask on a tool whose checkIn demand TRIPS refuses rather than skipping consent', async () => {
+    const seen: unknown[] = [];
+    const spy = spyProvider(callThen('act', { amount: 5000 }));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([selectiveCheckInTool(seen)])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    expect(seen).toEqual([]);
+    const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content).toContain('declares its own checkIn consent gate');
+    expect(toolResult?.content).toContain('trips for these arguments');
+    // The refusal names the middleware, so the author knows which gate to drop.
+    expect(toolResult?.content).toContain("'gate'");
+  });
+
+  it("checkIn: 'always' + an approved ask still refuses — the demand trips on every call", async () => {
     const seen: unknown[] = [];
     const tool = defineTool<Record<string, unknown>, string>({
       name: 'act',
@@ -455,7 +545,53 @@ describe('middleware — integration', () => {
 
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
-    expect(toolResult?.content).toContain('also declares checkIn');
+    expect(toolResult?.content).toContain('declares its own checkIn consent gate');
+  });
+
+  it('an approved ask on a tool whose checkIn demand does NOT trip EXECUTES the tool', async () => {
+    const seen: unknown[] = [];
+    const spy = spyProvider(callThen('act', { amount: 5 }));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([selectiveCheckInTool(seen)])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    // The gate was never going to fire for £5. Before 8.13.0 the tool was
+    // refused anyway, and the refusal claimed a consent gate would have run.
+    expect(seen).toEqual([{ amount: 5 }]);
+    const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content).toBe('ran');
+  });
+
+  it('a THROWING checkIn predicate still refuses — a buggy gate fails toward asking', async () => {
+    const seen: unknown[] = [];
+    const tool = defineTool<Record<string, unknown>, string>({
+      name: 'act',
+      description: 'x',
+      inputSchema: { type: 'object', properties: {} },
+      checkIn: () => {
+        throw new Error('predicate is broken');
+      },
+      execute: (args) => {
+        seen.push(args);
+        return 'ran';
+      },
+    });
+    const spy = spyProvider(callThen('act'));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([tool])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) })
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    expect(seen).toEqual([]);
   });
 
   it('LAW 8: an input transform is what the model, the history and the ledger all see', async () => {

@@ -439,6 +439,22 @@ export interface AgentState {
   pausedToolCallId: string;
   pausedToolName: string;
   pausedToolStartMs: number;
+  /**
+   * The args the paused tool was ACTUALLY RUNNING WITH — every before-tool
+   * transform applied — carried across a `pauseHere()` / `askHuman()` pause
+   * (8.13.0).
+   *
+   * Written for the same reason the three sibling pauses write
+   * `pausedAskArgs` / `pausedCheckInArgs` / `pausedCredentialArgs`: on resume the
+   * after-tool moment runs, and `ToolResultContext.args` promises the args the
+   * tool ran with, not the ones the model proposed. Scope is the only carrier
+   * across a checkpoint.
+   *
+   * Optional because a checkpoint written before 8.13.0 does not have it; the
+   * resume path recovers those args from the assistant turn in `history` (see
+   * `argsForPausedCall` in `stages/toolCalls.ts`).
+   */
+  pausedToolArgs?: Readonly<Record<string, unknown>>;
   // Check-in checkpoint — set when a tool's `checkIn` demand trips and the
   // run pauses BEFORE execute. `pausedCheckIn` discriminates a check-in pause
   // from a plain `askHuman` pause on resume; `pausedCheckInArgs` carries the

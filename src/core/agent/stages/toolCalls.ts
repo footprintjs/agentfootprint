@@ -241,6 +241,38 @@ function skillRefusal(requestedId: string, allowed: readonly string[], isTree: b
 }
 
 /**
+ * The args a `pauseHere` / `askHuman` call was running with, read back on the
+ * far side of the pause (8.13.0).
+ *
+ * Normally `scope.pausedToolArgs`: written at pause time from `callArgs`, so it
+ * is the post-transform args `ToolResultContext.args` promises.
+ *
+ * A checkpoint written BEFORE 8.13.0 does not carry the field — a real case
+ * during a rolling deploy. Those args are recovered from the assistant turn in
+ * `history` by `toolCallId`: real values the model proposed, identical to the
+ * running args unless a before-tool middleware transformed them, and that one
+ * difference is not recoverable from a checkpoint that never recorded it.
+ *
+ * `{}` is the last resort and only when the turn is gone (a window strategy
+ * folded it away). It is returned rather than skipping the after-tool moment,
+ * because a rule that never runs is the bug this release is fixing — but it is
+ * genuinely "we do not know", never a claim that the tool ran with none.
+ */
+function argsForPausedCall(
+  scope: TypedScope<AgentState>,
+  toolCallId: string,
+): Readonly<Record<string, unknown>> {
+  const carried = scope.pausedToolArgs as Readonly<Record<string, unknown>> | undefined;
+  if (carried !== undefined) return { ...carried };
+  for (const message of scope.history as readonly LLMMessage[]) {
+    for (const call of message.toolCalls ?? []) {
+      if (call.id === toolCallId) return { ...call.args };
+    }
+  }
+  return {};
+}
+
+/**
  * Build the pausable tool-call handler for the agent's chart.
  */
 export function buildToolCallsHandler(
@@ -256,6 +288,35 @@ export function buildToolCallsHandler(
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
   const hasCredentials = deps.credentialProvider !== undefined;
+
+  /**
+   * The conversation the check-in gate judges — the run history with a synthetic
+   * `system` frame in front of it.
+   *
+   * The system prompt is not in `scope.history` (the slots assemble it
+   * separately), so without this the evidence's `read` and the `drivers` ranking
+   * could cite the conversation but never a system RULE, and a `CheckInDemand`
+   * predicate reading `ctx.history` would be judging a different conversation
+   * than the one the run actually had.
+   *
+   * Hoisted to the handler closure because BOTH gate sites need the SAME shape:
+   * the loop's gate (which decides whether to pause) and the ask-resume gate
+   * (which decides whether that pause was owed). A predicate that answered
+   * differently on the two sides would make the refusal depend on which door the
+   * call came through, and that is not a property of the tool.
+   */
+  const historyForCheckIn = (
+    scope: TypedScope<AgentState>,
+    history: readonly LLMMessage[],
+  ): LLMMessage[] => {
+    const systemPrompt = (
+      (scope.systemPromptInjections as readonly InjectionRecord[] | undefined) ?? []
+    )
+      .map((r) => r.rawContent ?? '')
+      .filter((s) => s.length > 0)
+      .join('\n\n');
+    return systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : [...history];
+  };
 
   // Resolve a tool by name. Hoisted to the handler closure so BOTH `execute`
   // (the ReAct loop) and `resume` (an approved check-in re-executes here) share
@@ -273,13 +334,22 @@ export function buildToolCallsHandler(
   /**
    * The after-tool moment: the chain's last word, on a call that RAN.
    *
-   * Called from all three dispatch sites (the loop, an approved ask, an
-   * approved check-in) and from nowhere else — every one of them has just
-   * executed a tool, which is the entire precondition. A call the chain
-   * denied, a call whose args were rejected, a call whose credential never
-   * issued and a call still waiting on a person have no result, and asking a
-   * rule about a result that does not exist would be the same fabrication the
-   * outcome union removes.
+   * Called from all FIVE dispatch sites and from nowhere else — the loop, an
+   * approved ask, an approved check-in, a granted credential consent, and (since
+   * 8.13.0) a resumed `pauseHere` / `askHuman`. Every one of them has just
+   * produced the result of a call that ran, which is the entire precondition. A
+   * call the chain denied, a call whose args were rejected, a call whose
+   * credential never issued and a call still waiting on a person have no result,
+   * and asking a rule about a result that does not exist would be the same
+   * fabrication the outcome union removes.
+   *
+   * On the `pauseHere` path the value is the one a PERSON supplied, and that is
+   * still this moment's business: the handler's contract is that the human's
+   * answer IS the paused tool's result — it lands as `role: 'tool'` under the
+   * same `toolCallId`, `stream.tool_end` reports it, and `lastToolResult` fires
+   * `on-tool-return` triggers off it. A redaction rule that runs on every other
+   * tool result and not on that one is a redaction rule with a hole in it, in
+   * the one channel where a person can paste a secret.
    *
    * Returns what the MODEL reads. The real result stays with the caller for
    * `stream.tool_end`, so an event stream keeps reporting what the tool
@@ -686,20 +756,9 @@ export function buildToolCallsHandler(
         // pause). Rides the EXISTING pause machinery: returning a defined value
         // triggers the footprintjs checkpoint, exactly like `pauseHere`.
         if (!denied && !argsRejected && tool && tool.checkIn !== undefined && deps.checkIn) {
-          // The system prompt isn't in `scope.history` (the slots assemble it
-          // separately) — reconstruct it from `systemPromptInjections` and
-          // prepend a synthetic system frame so the evidence's `read` + the
-          // `drivers` ranking can cite system RULES, not just the conversation.
           // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
-          const systemPrompt = (
-            (scope.systemPromptInjections as readonly InjectionRecord[] | undefined) ?? []
-          )
-            .map((r) => r.rawContent ?? '')
-            .filter((s) => s.length > 0)
-            .join('\n\n');
-          const historyForEvidence: LLMMessage[] = systemPrompt
-            ? [{ role: 'system', content: systemPrompt }, ...newHistory]
-            : newHistory;
+          // Shape shared with the ask-resume gate; see `historyForCheckIn`.
+          const historyForEvidence = historyForCheckIn(scope, newHistory);
           if (
             !shouldCheckIn(tool.checkIn, callArgs, {
               iteration,
@@ -868,6 +927,10 @@ export function buildToolCallsHandler(
                 scope.pausedToolCallId = tc.id;
                 scope.pausedToolName = tc.name;
                 scope.pausedToolStartMs = startMs;
+                // The args the tool WAS RUNNING WITH (post-transform), for the
+                // after-tool moment on the far side of the pause (8.13.0) —
+                // the same reason the three sibling pauses carry theirs.
+                scope.pausedToolArgs = callArgs;
                 // Returning a defined value triggers footprintjs pause —
                 // the returned object becomes the checkpoint's pauseData.
                 return {
@@ -1137,18 +1200,50 @@ export function buildToolCallsHandler(
             askPolicy: 'refuse',
           });
           recordDecisions(scope, rest.decisions);
+          // Would this tool's OWN consent gate have fired for this call? Asked by
+          // EVALUATING the demand, not by noticing that one was declared (8.13.0).
+          // Before that, any tool carrying a `checkIn` field was refused here even
+          // when its predicate said no — a selective gate (`amount > 1000`) blocked
+          // the £5 refunds it was written to let through, and the refusal claimed a
+          // consent gate would have run when it provably would not have.
+          //
+          // Judged on `rest.args` (what the tool would actually run with) and on
+          // the same history shape the loop's gate uses, so the answer cannot
+          // depend on which door the call arrived through.
+          const demandTrips =
+            rest.kind !== 'deny' &&
+            tool?.checkIn !== undefined &&
+            shouldCheckIn(tool.checkIn, rest.args, {
+              iteration,
+              toolCallId,
+              history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
+            });
           if (rest.kind === 'deny') {
             result = rest.reason;
-          } else if (tool?.checkIn !== undefined) {
-            // Same one-question rule, from the other direction: this tool also
-            // demands consent, and there is no checkpoint left to ask with.
-            // Refusing loudly beats executing a tool whose consent gate we
-            // silently skipped.
+          } else if (demandTrips) {
+            // The one-question rule, from the other direction: this tool's own
+            // consent gate really does demand a person for THESE arguments, and
+            // there is no checkpoint left to ask with.
+            //
+            // The two gates ask DIFFERENT questions, which is why an approval of
+            // one is not an answer to the other. A middleware `ask` carries the
+            // rule's own free-text question; a check-in carries the TOOL's demand
+            // with the evidence pack attached — `willDo`, what the run read, what
+            // drove the choice, the trail — none of which the person who approved
+            // the ask ever saw. Letting the approval satisfy both would file a
+            // `checkin.decision` for a question nobody was asked. Governance never
+            // silently invents a decision, for the same reason it never silently
+            // drops one.
             error = true;
             result =
-              `tool '${toolName}' also declares checkIn, and a resumed dispatch cannot pause ` +
-              `again to ask a second time. The call was not executed — approve it through one ` +
-              `gate, not both.`;
+              `tool '${toolName}' was not executed and cannot be retried this turn: it declares ` +
+              `its own checkIn consent gate, that gate trips for these arguments, and a resumed ` +
+              `dispatch has no second checkpoint to ask on. Answer without it, or finish. (To ` +
+              `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
+              `different questions — one is the rule's, one is the tool's with the evidence ` +
+              `pack attached — so approving one is not answering the other. Keep one gate for ` +
+              `this tool: drop the tool's \`checkIn\`, or let \`onToolCall\` return allow() for ` +
+              `tools that declare their own.)`;
           } else {
             const env = scope.$getEnv();
             const dispatched = await resolveCredentialAndExecute(
@@ -1388,7 +1483,42 @@ export function buildToolCallsHandler(
         return;
       }
 
-      const resultStr = typeof input === 'string' ? input : safeStringify(input);
+      // ── The `pauseHere` / `askHuman` path ────────────────────────────
+      // Reached when none of the three decision pauses above claimed this
+      // resume: a tool called `pauseHere()` / `askHuman()` from inside its own
+      // `execute`, and the value the consumer supplies IS that tool's result —
+      // this handler's contract since it was written.
+      //
+      // Which is why the after-tool moment runs here too (8.13.0). The tool RAN:
+      // `pauseHere` throws from inside `execute`, so it started and may have done
+      // half its work — the case `ToolResultContext.error` was written for. Its
+      // before-tool chain already walked in the loop, so skipping the after half
+      // left the ledger with an opening row and no closing one, and left every
+      // `onToolResult` rule — redaction first among them — unapplied to the one
+      // value a PERSON typed.
+      const iteration = scope.iteration as number;
+      const env = scope.$getEnv();
+      const tool = lookupTool(toolName);
+      const args = argsForPausedCall(scope, toolCallId);
+      // No `error` flag: a human's answer is not a tool failure.
+      const modelResult = await afterMoment(scope, {
+        ...(tool && { tool }),
+        toolName,
+        toolCallId,
+        iteration,
+        args,
+        result: input,
+        history: [...(scope.history as readonly LLMMessage[])],
+        ...(scope.runIdentity && {
+          identity: scope.runIdentity as {
+            tenant?: string;
+            principal?: string;
+            conversationId: string;
+          },
+        }),
+        ...(env.signal && { signal: env.signal }),
+      });
+      const resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const newHistory: LLMMessage[] = [
         ...(scope.history as readonly LLMMessage[]),
         {
@@ -1399,13 +1529,16 @@ export function buildToolCallsHandler(
         },
       ];
       scope.history = newHistory;
+      // Drives `on-tool-return` triggers, same as every other dispatch path.
+      scope.lastToolResult = { toolName, result: resultStr };
 
       typedEmit(scope, 'agentfootprint.stream.tool_end', {
         toolCallId,
+        // The REAL value the pause returned, not what a rule let the model read
+        // — the same split the other four paths keep.
         result: input,
         durationMs: Date.now() - startMs,
       });
-      const iteration = scope.iteration as number;
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
         turnIndex: 0,
         iterIndex: iteration,
@@ -1418,6 +1551,7 @@ export function buildToolCallsHandler(
       scope.pausedToolCallId = '';
       scope.pausedToolName = '';
       scope.pausedToolStartMs = 0;
+      scope.pausedToolArgs = undefined;
     },
   };
 }

@@ -7,6 +7,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.13.0] - 2026-08-07
+
+**Governance never silently drops — and never silently invents.** Eight ways a
+rule you configured could decide nothing, and you could only find out by reading
+a quiet run. Seven are now refused at build time with a message that names the
+fix; one was a rule that ran everywhere except the one path where a *person* had
+just typed the value.
+
+Two of these change what a run DOES. Both are called out below.
+
+### Behaviour change 1 — redaction now runs on a resumed `askHuman` / `pauseHere`
+
+`onToolResult` now fires when a run resumes from `askHuman()` / `pauseHere()`.
+It already fired on the other four dispatch paths; that one was skipped.
+
+The tool ran — `pauseHere` throws from inside `execute`, so it started and may
+have done half its work — and the value you hand `agent.resume()` **is** that
+tool's result everywhere else in the run: it lands in the history under the same
+`toolCallId`, `stream.tool_end` reports it, `on-tool-return` triggers fire off
+it. Its before-tool chain had already walked. So the ledger carried an opening
+row and no closing one, and every `onToolResult` rule sat unapplied on the one
+channel where a person can paste a secret.
+
+What changes for an agent that has `onToolResult` rules:
+
+- a redaction rule now scrubs the human's answer before the model reads it;
+- `deny(reason)` now replaces it with the reason;
+- an `after-tool` ledger row now appears for that call;
+- `stream.tool_end` still reports the raw value — unchanged, and the same split
+  the other four paths keep.
+
+An agent with **no** `onToolResult` anywhere is byte-identical: the chain
+early-returns when nothing in it governs results.
+
+`AgentState` gains one optional field, `pausedToolArgs`, so the rule receives the
+args the tool was actually running with rather than the model's proposal. A
+checkpoint written by 8.12.0 does not carry it; those args are recovered from the
+assistant turn in the history — real values, identical to the running args unless
+a before-tool middleware transformed them, and that one difference is not
+recoverable from a checkpoint that never recorded it.
+
+### Behaviour change 2 — a selective `checkIn` no longer blocks the calls it was written to let through
+
+When a `toolMiddleware` answered `ask`, the tool was approved, and the tool ALSO
+declared `checkIn`, the resumed dispatch refused the call — by noticing that a
+`checkIn` field existed, without ever evaluating it. A tool written
+`checkIn: (args) => args.amount > 1000` refused the £5 refunds too, and the
+refusal claimed a consent gate would have run when it provably would not have.
+
+The guard now evaluates the demand, against the args the tool would run with and
+the same conversation shape the loop's own gate uses. **A tool whose predicate
+does not trip now executes** where it was previously refused.
+
+When the predicate DOES trip, the refusal stands, and it stands on purpose. The
+two gates ask different questions: a middleware `ask` carries the rule's own
+free-text question; a `checkIn` carries the tool's demand with the evidence pack
+attached — `willDo`, what the run read, what drove the choice, the trail — none
+of which the person who approved the ask ever saw. Letting one approval satisfy
+both would file a `checkin.decision` for a question nobody was asked.
+`checkIn: 'always'` is unaffected in both directions.
+
+The refusal text is rewritten: model-actionable first ("was not executed and
+cannot be retried this turn… answer without it, or finish"), then the author's
+fix, naming the middleware.
+
+### `agent.resume()` refuses a consent gate answered with a value
+
+Resuming a check-in or a middleware-`ask` pause with anything that is not a
+`CheckInDecision` used to DECLINE, silently, and file the decision against
+`by: 'unknown'` — a consent record naming a person who was never asked. That is
+worse than dropping one: the run reads as consented-and-refused when nobody
+consented to anything.
+
+It now raises `DecisionRequiredError` (`code: 'ERR_DECISION_REQUIRED'`) at the
+API boundary. **Nothing executes and the checkpoint is unchanged**, so the same
+one can be answered properly and resumed again. The error names the gate
+(`gate: 'checkIn' | 'ask'`), the tool, the middleware that asked, and `received`
+— the *shape* that arrived, never its contents, because a resume payload is
+caller data and an error message ends up in logs.
+
+Discriminated by the **pause**, never by the input, via the new
+`pauseDemandsDecision(pauseData)` — the one reader of that shape, shared with the
+code that builds `outcome.checkIn` / `outcome.ask`, so what a consumer is told
+and what the library enforces cannot drift. A plain `askHuman()` / `pauseHere()`
+pause is untouched: there the human's answer IS the tool's result, and any value
+is accepted. The 3LO credential-consent pause is untouched too — it re-asks the
+provider and ignores its input by design.
+
+Over `standingAgent` it is a **400**: `ERR_DECISION_REQUIRED` joins
+`STATUS_BY_CODE`, because the session is in a perfectly consistent state and it
+is the request that is wrong.
+
+New on the main barrel: `DecisionRequiredError`, `pauseDemandsDecision`,
+`ConsentGate`, `ConsentGateKind`.
+
+### Five refusals for configuration that decided nothing
+
+Each of these refuses code that was **already a total no-op** — no working
+program changes behaviour, which is why they ship in a minor, on the same
+precedent as 8.5.0's delivery refusal and 8.7.0's `viaToolName`.
+
+- **Two different observers with one `id`** — `build()` refuses, naming the id.
+  footprintjs de-duplicates attached recorders by id, so of two objects carrying
+  one name only the LAST ever fired and the first reported nothing, which reads
+  exactly like an observer whose events never happened. Keyed on object
+  identity: handing the SAME object to `.watch()` twice (or to `.watch()` and
+  the deprecated `.recorder()`) is fine and stays one attachment. The
+  `agentfootprint.` id namespace is deliberately NOT reserved — the factories on
+  `agentfootprint/observe` live there and are meant to be watched.
+
+- **`costBudget` without `pricingTable`** — `Agent` and `LLMCall` both refuse.
+  The budget is USD and only a pricing table turns tokens into USD, so the pair
+  emitted nothing at all: no `cost.tick`, and no `cost.limit_hit` however much a
+  run spent. The message says what a `pricingTable` is
+  (`{ name, pricePerToken(model, kind) }`, USD for one token) and why the
+  library ships none. Both runners take the identical pair and had the identical
+  silence, so both are fixed by one shared check.
+
+- **`onAuthorizationRequired` without `credentials`** — `Agent` refuses. The
+  mode is read at exactly one place, after a declared credential comes back
+  `authorization-required`; with no provider that call never returns at all (the
+  fail-closed stand-in throws), so the branch it governs is unreachable.
+
+- **`.checkIn()` with no tool declaring `checkIn`** — `build()` refuses. The gate
+  is never consulted, the agent never pauses for consent, and the evidence
+  settings decide nothing. Scans the `.tool()` registry AND every skill's own
+  `inject.tools`, since a skill tool's demand is a real gate. NOT refused when a
+  `.toolProvider()` is wired: its tools arrive per iteration and may declare it,
+  and refusing what build time cannot know would break a correct agent.
+
+- **`.checkIn({ evidence: 'minimal', scorer })`** — refused. The scorer ranks
+  `drivers`; the minimal pack builds only `willDo`, so the scorer was resolved
+  and then never called. Only the literal `'minimal'` preset is refused — a
+  custom assembler is handed the scorer and may legitimately call it.
+
+### Also
+
+- `historyForCheckIn` is now one helper shared by both check-in gate sites, so a
+  `CheckInDemand` predicate reading `ctx.history` cannot be judged against a
+  different conversation depending on which door the call arrived through.
+- Fixed a stale comment: the after-tool moment's header said it was called from
+  "all three dispatch sites"; it has been four since 8.6.0 and is five now.
+
 ## [8.12.0] - 2026-08-07
 
 **Somebody has to flush the exporter, and until now nobody did.** 8.11.0
