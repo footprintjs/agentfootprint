@@ -56,6 +56,25 @@ export {
   type AgentCoreMemoryRecord,
 } from './adapters/memory/agentcore.js';
 
+// A durable vector index in one SQLite file — zero dependencies (node:sqlite is
+// inside Node), exact search, and the corpus embedded once rather than on every
+// restart. Lazy-loads `node:sqlite` at construction, so importing this barrel
+// costs nothing for consumers who never build one.
+export {
+  sqliteVectorStore,
+  UnreadableIndexFileError,
+  EmbedderMismatchError,
+  type SqliteVectorStore,
+  type SqliteVectorStoreOptions,
+  type SqliteVectorDatabaseLike,
+  type SqliteVectorStatementLike,
+  type SqliteVectorModuleLike,
+} from './adapters/memory/sqliteVector.js';
+
+// The SAME refusal `sqliteSessions` raises for the same missing module — one
+// class, so catching it does not require knowing which store was being built.
+export { SqliteUnavailableError } from './lib/sqliteUnavailable.js';
+
 // Read-only reader for the legacy Bedrock Agents auto session-summary memory.
 // NOT a MemoryStore (Bedrock owns the writes) — see the class docstring.
 export {

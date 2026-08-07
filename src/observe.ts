@@ -22,6 +22,7 @@
  *     • CostRecorder         — token/USD spend
  *     • EvalRecorder         — eval scores from `runner.emit('eval.*', ...)`
  *     • MemoryRecorder       — memory injections + writes
+ *     • EmbeddingRecorder    — embedding cost, index-time vs query-time
  *     • PermissionRecorder   — permission decisions + denials
  *     • SkillRecorder        — skill activations
  *     • LoggingRecorder      — structured log lines per event
@@ -141,6 +142,10 @@ export {
 } from './recorders/core/ContextEvaluatedRecorder.js';
 export { evalRecorder, type EvalRecorderOptions } from './recorders/core/EvalRecorder.js';
 export { memoryRecorder, type MemoryRecorderOptions } from './recorders/core/MemoryRecorder.js';
+export {
+  embeddingRecorder,
+  type EmbeddingRecorderOptions,
+} from './recorders/core/EmbeddingRecorder.js';
 export {
   permissionRecorder,
   type PermissionRecorderOptions,

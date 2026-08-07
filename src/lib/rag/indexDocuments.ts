@@ -64,10 +64,15 @@ export interface IndexDocumentsOptions {
   readonly identity?: MemoryIdentity;
 
   /**
-   * Stable id of the embedder. Stored on each entry so a future
-   * embedder swap doesn't silently mix similarity scores. Default:
-   * `'default-embedder'` — pass an explicit id when you may rotate
-   * embedders.
+   * Stable id of the embedder. Stored on each entry so a future embedder swap
+   * doesn't silently mix similarity scores.
+   *
+   * Defaults to the embedder's own `id` (8.9.0 — every shipped embedder sets
+   * one), and to `'default-embedder'` for a hand-written `Embedder` that has
+   * none. That default matters more with a durable store: it is half of the
+   * `'<id>@<dims>'` fingerprint `sqliteVectorStore` records per vector and
+   * refuses on, so an index built by `staticEmbedder()` will not silently
+   * accept vectors from `openaiEmbedder()`.
    */
   readonly embedderId?: string;
 
@@ -89,6 +94,26 @@ export interface IndexDocumentsOptions {
    * this through to abort batch indexing on shutdown / timeout.
    */
   readonly signal?: AbortSignal;
+
+  /**
+   * Called once with the cost of the embedding work this call did (8.9.0).
+   *
+   * `indexDocuments` runs at STARTUP, outside any agent run, so it has no
+   * emit channel to ride — there is no scope, no dispatcher and no
+   * `runtimeStageId` to correlate against. Rather than pretend otherwise, it
+   * hands the same payload the in-run stages emit as
+   * `agentfootprint.embedding.generated` straight to you, so the index-time
+   * half of the cost model is reportable from a boot script:
+   *
+   * ```ts
+   * await indexDocuments(store, embedder, docs, {
+   *   onEmbedding: (e) => console.log(`embedded ${e.count} documents in ${e.durationMs}ms`),
+   * });
+   * ```
+   */
+  readonly onEmbedding?: (
+    payload: import('../../events/payloads.js').EmbeddingGeneratedPayload,
+  ) => void;
 
   /**
    * Max number of concurrent embed calls when the embedder doesn't
@@ -126,8 +151,11 @@ export async function indexDocuments(
   if (!Array.isArray(documents) || documents.length === 0) return 0;
 
   const identity = options.identity ?? DEFAULT_IDENTITY;
-  const embedderId = options.embedderId ?? 'default-embedder';
+  // The embedder's own name first: it is what a durable store fingerprints
+  // the namespace with, and an anonymous index cannot refuse a later swap.
+  const embedderId = options.embedderId ?? embedder.id ?? 'default-embedder';
   const now = Date.now();
+  const embedStartedAt = Date.now();
   const ttl = options.ttlMs ? now + options.ttlMs : undefined;
 
   // Embed in batch when supported, else fall back to capped-concurrency
@@ -144,6 +172,15 @@ export async function indexDocuments(
     const limit = Math.max(1, options.maxConcurrency ?? 8);
     vectors = await embedWithConcurrency(embedder, texts, limit, options.signal);
   }
+
+  options.onEmbedding?.({
+    model: embedderId,
+    provider: 'custom',
+    inputKind: 'document',
+    dimension: embedder.dimensions,
+    count: vectors.length,
+    durationMs: Date.now() - embedStartedAt,
+  });
 
   const entries: MemoryEntry<RagDocument>[] = documents.map((doc, i) => {
     const vec = vectors[i];

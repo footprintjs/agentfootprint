@@ -1,6 +1,6 @@
 ---
 title: Memory store adapters
-description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreStore production-ready; DynamoDB / Postgres / Pinecone planned.
+description: Where memory lives. InMemoryStore for dev; sqliteVectorStore for a durable corpus in one file; RedisStore + AgentCoreStore for production conversation state.
 ---
 
 > Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
@@ -10,6 +10,7 @@ description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreSt
 | Store | Subpath | Peer-dep | Vector search | When to use |
 |---|---|---|---|---|
 | `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
+| `sqliteVectorStore` | `agentfootprint/memory` | **none** (`node:sqlite`) | ✅ exact | **A document corpus that must survive a restart** |
 | `RedisStore` | `agentfootprint/memory` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
 | `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
 
@@ -27,6 +28,113 @@ const store = new InMemoryStore();
 ```
 
 Resets on process restart. Per-process — multi-instance deploys lose state.
+
+For a RAG corpus that restart is not a small thing: it means **re-embedding every document on every boot**. That is what `sqliteVectorStore` exists to remove.
+
+## sqliteVectorStore — a corpus in a file
+
+Zero dependencies: SQLite is inside Node. One file, exact cosine search, and the vectors still there on the next boot.
+
+```ts
+import { sqliteVectorStore } from 'agentfootprint/memory';
+import { staticEmbedder } from 'agentfootprint/providers';
+import { indexDocuments, defineRAG } from 'agentfootprint';
+
+const store = sqliteVectorStore({ file: './corpus.db' });
+const embedder = staticEmbedder();
+
+// First boot indexes. Every boot after this finds the vectors already there.
+await indexDocuments(store, embedder, docs, { embedderId: embedder.id });
+
+// Optional: pay the hydration cost at boot instead of on the first question.
+const { count, durationMs } = await store.warm({ conversationId: '_global' });
+
+const agent = Agent.create({ provider })
+  .rag(defineRAG({ id: 'docs', store, embedder, embedderId: embedder.id }))
+  .build();
+```
+
+### The two-phase cost model
+
+Embedding cost is not one number, and the split is the whole argument for a file:
+
+- **Index time** embeds the corpus. Once. Cost scales with how much you store.
+- **Query time** embeds the user's question. Per retrieval. Cost scales with traffic.
+
+A 10,000-chunk corpus is 10,000 embeddings *once* and one per question thereafter. With a `Map` it is 10,000 embeddings *per restart*. Both halves are reportable — `agentfootprint.embedding.generated` carries `inputKind: 'document' | 'query'`:
+
+```ts
+agent.on('agentfootprint.embedding.generated', (e) => {
+  console.log(e.payload.inputKind, e.payload.count, e.payload.durationMs);
+});
+```
+
+`indexDocuments` runs at startup, outside any run, so it has no emit channel to ride. It hands you the same payload through `onEmbedding` instead.
+
+### Exact search, and the ceiling said out loud
+
+Vectors are hydrated into one resident `Float32Array` matrix on the first search of a namespace, normalised, and every later query is an exact dot product. **No approximate index and no pretence of one** — it returns the true top-K or it does not answer.
+
+Measured on Node 22.16, Apple silicon, median of five queries:
+
+| corpus | query | resident matrix | file | first search (hydration) |
+|---|---|---|---|---|
+| 10,000 × 384-d | 6 ms | 15 MB | 21 MB | 45 ms |
+| 50,000 × 384-d | 31 ms | 77 MB | 105 MB | 251 ms |
+| 100,000 × 384-d | 65 ms | 154 MB | 211 MB | 939 ms |
+| 10,000 × 1536-d | 16 ms | 61 MB | 83 MB | 122 ms |
+| 50,000 × 1536-d | 89 ms | 307 MB | 413 MB | **5.7 s** |
+
+**The documented ceiling is 50,000 chunks.** Below it every query is under 100 ms at every shipped embedder and the matrix is under ~300 MB. It degrades linearly to about 100,000. Above that, move to a managed vector database — `MemoryStore` is the seam and nothing else in your code changes. For scale intuition: 50,000 chunks at ~1,000 characters is roughly 50 MB of text, on the order of 25,000 pages.
+
+<Callout>
+**Hydration is the number to plan around, not the query.** Steady-state search is fast everywhere in that table; reading the vectors off disk the FIRST time is what costs. Left lazy, that bill lands on whoever asks the first question after a deploy. `store.warm(identity)` moves it somewhere you chose. Smaller vectors are dramatically cheaper here — 384 dimensions hydrates 100,000 chunks in under a second — which is one more reason a 384-dimension embedder is the better default for a corpus this size.
+</Callout>
+
+### One embedder per namespace, refused both ways
+
+The store records a fingerprint — `'<id>@<dims>'` — for each namespace, from the first vector written to it. A vector from a different embedding space is refused at **write** and a query from one is refused at **search**, with `EmbedderMismatchError`.
+
+This is not caution. Cosine similarity between two embedding spaces is not a weak signal — it is not a signal, and it comes back as a confident number in the same range as a real one, which no threshold separates and nothing downstream can detect.
+
+```ts
+store.fingerprintOf({ conversationId: '_global' });  // 'static:@yarflam/potion-base-8m@256'
+```
+
+The named fix is an explicit re-index: `await store.forget(identity)` and build it again with one embedder, or point the retriever at a different file. It is never a fallback — silently mixing corrupts every ranking it touches, and silently re-embedding your corpus is a bill you did not agree to.
+
+Dimensions always decide; model ids decide only when both sides named themselves, so a caller who never passes an `embedderId` is not blocked by a name nobody supplied.
+
+### What it refuses, and why it never falls back
+
+| Situation | What happens |
+|---|---|
+| Node has no `node:sqlite` (Node 20) | `SqliteUnavailableError`, naming your version, the 22.5 floor, the `--experimental-sqlite` flag, and `InMemoryStore` |
+| `file: ':memory:'` | `TypeError` pointing at `InMemoryStore` — it says so in its name |
+| The file is not a database | `UnreadableIndexFileError` (`problem: 'cannot-open'`) |
+| Someone else's `af_vectors` table | `UnreadableIndexFileError` (`problem: 'not-our-schema'`) |
+| Written by a newer agentfootprint | `UnreadableIndexFileError` (`problem: 'newer-schema'`) |
+| A second embedder | `EmbedderMismatchError` |
+
+None of these fall back to an empty index, because **an unreadable index and an empty one are different facts, and only one of them is safe to answer with "no matches"**. A store that opened a corrupt file as empty would answer every question from the model's own weights and log nothing.
+
+### Reference
+
+| Name | What it is |
+|---|---|
+| `sqliteVectorStore(options)` | The factory. Returns a `SqliteVectorStore`. |
+| `SqliteVectorStore` | The store: every `MemoryStore` method, plus `journalMode`, `file`, `fingerprintOf(identity)`, `warm(identity)` and `close()`. |
+| `SqliteVectorStoreOptions` | `{ file, busyTimeoutMs? }`. |
+| `UnreadableIndexFileError` | The file exists but cannot be used — `problem` is `'cannot-open'` / `'not-our-schema'` / `'newer-schema'`. |
+| `EmbedderMismatchError` | A second embedding space met this namespace — `indexed`, `incoming`, and `problem` (`'dimensions'` / `'model'`). |
+| `SqliteUnavailableError` | This Node has no `node:sqlite`. The same class `sqliteSessions` raises. |
+| `SqliteVectorDatabaseLike` · `SqliteVectorStatementLike` · `SqliteVectorModuleLike` | The slice of `node:sqlite` the adapter calls, declared locally so nothing takes a hard import on a module that is missing on Node 20. |
+
+### The ceiling on concurrency
+
+One process on one machine, writing one file. It survives a restart, a crash, a deploy. It is **not** distributed: WAL gives one writer and many readers at once, and a second writer waits up to `busyTimeoutMs` before failing loudly. `store.journalMode` reports what the file actually got — a network filesystem can silently downgrade it, and that is only ever discovered under load.
+
+`putMany` is one transaction. The port does not require that, but a half-indexed corpus is a specific kind of bad: retrieval keeps working and quietly cannot see what did not land, which reads as "the model does not know that" rather than as a failure.
 
 ## RedisStore
 

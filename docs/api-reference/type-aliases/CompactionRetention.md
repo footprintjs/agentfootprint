@@ -8,7 +8,7 @@
 
 > **CompactionRetention** = `"conversation"` \| `"discard"`
 
-Defined in: [src/core/agent/window/types.ts:211](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core/agent/window/types.ts#L211)
+Defined in: [src/core/agent/window/types.ts:211](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L211)
 
 What becomes of the messages a fold removes from the window.
 

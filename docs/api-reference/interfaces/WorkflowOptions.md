@@ -6,7 +6,7 @@
 
 # Interface: WorkflowOptions
 
-Defined in: [src/core-flow/Workflow.ts:101](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core-flow/Workflow.ts#L101)
+Defined in: [src/core-flow/Workflow.ts:101](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core-flow/Workflow.ts#L101)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core-flow/Workflow.ts:101](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Workflow.ts:105](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core-flow/Workflow.ts#L105)
+Defined in: [src/core-flow/Workflow.ts:105](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core-flow/Workflow.ts#L105)
 
 Stable id used for topology + events. Default `'workflow'`.
 
@@ -24,7 +24,7 @@ Stable id used for topology + events. Default `'workflow'`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Workflow.ts:103](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core-flow/Workflow.ts#L103)
+Defined in: [src/core-flow/Workflow.ts:103](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core-flow/Workflow.ts#L103)
 
 Human-friendly name for events + topology. Default `'Workflow'`.
 
@@ -34,7 +34,7 @@ Human-friendly name for events + topology. Default `'Workflow'`.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Workflow.ts:112](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core-flow/Workflow.ts#L112)
+Defined in: [src/core-flow/Workflow.ts:112](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core-flow/Workflow.ts#L112)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory — they observe this workflow's own nodes (Seed +

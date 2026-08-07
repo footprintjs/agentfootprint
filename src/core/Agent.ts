@@ -56,6 +56,7 @@ import { costRecorder } from '../recorders/core/CostRecorder.js';
 import { permissionRecorder } from '../recorders/core/PermissionRecorder.js';
 import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
+import { embeddingRecorder } from '../recorders/core/EmbeddingRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
@@ -1310,6 +1311,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Always-on bridges for consumer-emitted domain events.
     attachObserver(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
     attachObserver(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Embedding cost telemetry (8.9.0). The domain had a payload, a registry
+    // entry and a DomainWildcard arm since 2.x and NO bridge, so the event
+    // could not have arrived however correctly it was fired. Zero-cost when
+    // the agent embeds nothing.
+    attachObserver(embeddingRecorder({ dispatcher, getRunContext: getRunCtx }));
     attachObserver(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
     attachObserver(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Tool-args validation events (#9) — always-on; zero-cost when no

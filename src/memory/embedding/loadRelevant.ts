@@ -60,6 +60,7 @@ import type {
   RetrievedCandidate,
 } from '../retrieval/types.js';
 import type { Embedder } from './types.js';
+import { emitEmbedding } from './emitEmbedding.js';
 
 export interface LoadRelevantConfig {
   /** The vector-capable store. Must implement `search()`. */
@@ -181,10 +182,24 @@ export function loadRelevant(config: LoadRelevantConfig) {
     }
 
     const signal = scope.$getEnv?.()?.signal;
+    const embedStartedAt = Date.now();
     const queryVec = (await embedder.embed({
       text,
       ...(signal ? { signal } : {}),
     })) as number[];
+
+    // The QUERY-time half of the two-phase cost model (8.9.0): one embedding
+    // per retrieval, scaling with traffic rather than with corpus size. Paired
+    // with the `'document'` side in `embedMessages`, this is what makes the
+    // cost of a corpus a number you can read rather than one you estimate.
+    emitEmbedding(scope, {
+      model: config.embedderId ?? embedder.id ?? 'unknown',
+      provider: 'custom',
+      inputKind: 'query',
+      dimension: queryVec.length,
+      count: 1,
+      durationMs: Date.now() - embedStartedAt,
+    });
 
     // store.search optional on MemoryStore but required when an embedder
     // is configured (validated upstream by defineMemory).

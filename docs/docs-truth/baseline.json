@@ -5,14 +5,14 @@
   "recordedAt": "2026-08-07",
   "surface": {
     "subpaths": 27,
-    "declaredSymbols": 1262,
+    "declaredSymbols": 1272,
     "declaredEvents": 72,
     "eventSource": "src/events/registry.ts:536"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 381,
+      "documented-never-exercised": 391,
       "exercised-undocumented": 36,
       "undocumented-unexercised": 596,
       "site-code-sample-only": 18,
@@ -21,9 +21,9 @@
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 8,
+      "documented-never-exercised": 9,
       "exercised-undocumented": 9,
-      "undocumented-unexercised": 18,
+      "undocumented-unexercised": 17,
       "site-code-sample-only": 5,
       "written-but-not-published": 12,
       "ok": 20
@@ -844,7 +844,6 @@
     "agentfootprint.credential.authorization_required",
     "agentfootprint.credential.failed",
     "agentfootprint.credential.requested",
-    "agentfootprint.embedding.generated",
     "agentfootprint.error.fatal",
     "agentfootprint.eval.score",
     "agentfootprint.eval.threshold_crossed",

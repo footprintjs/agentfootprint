@@ -8,4 +8,4 @@
 
 > **ConditionalOutput** = `string`
 
-Defined in: [src/core-flow/Conditional.ts:61](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/core-flow/Conditional.ts#L61)
+Defined in: [src/core-flow/Conditional.ts:61](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core-flow/Conditional.ts#L61)

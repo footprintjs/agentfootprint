@@ -200,6 +200,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 07 | [`07-hybrid-auto.ts`](memory/07-hybrid-auto.ts) | Hybrid — compose recent + facts + causal snapshots | Stack multiple memory types on one agent: short-term window,  |
 | 08 | [`08-redis-store.ts`](memory/08-redis-store.ts) | RedisStore — persistent MemoryStore via Redis | Drop-in replacement for InMemoryStore that persists entries in Redis.  |
 | 09 | [`09-agentcore-store.ts`](memory/09-agentcore-store.ts) | AgentCoreStore — AWS Bedrock AgentCore Memory adapter | Persist conversation memory in AWS Bedrock AgentCore. Mock-injected  |
+| 10 | [`10-durable-vector-index.ts`](memory/10-durable-vector-index.ts) | Durable vector index — embed the corpus once, ever | sqliteVectorStore keeps the corpus in one file, so a restart re-embeds  |
 
 ### [`features/`](features/) — runtime features
 

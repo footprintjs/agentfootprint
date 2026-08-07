@@ -39,6 +39,10 @@ export function mockEmbedder(options: MockEmbedderOptions = {}): Embedder {
 
   return {
     dimensions,
+    // Named like the others so a store can refuse the swap between a mock
+    // index and a real one — which is a swap worth refusing, since a corpus
+    // indexed by letter frequency and queried by meaning scores nothing.
+    id: 'mock',
     async embed({ text }: EmbedArgs): Promise<number[]> {
       return charFrequency(text, dimensions);
     },

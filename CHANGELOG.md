@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.9.0] - 2026-08-06
+
+**The durable index.** 8.8.0 made retrieval tell the truth about what it read.
+This one is about what it costs to have anything to read at all: `InMemoryStore`
+is a `Map`, and its price is the one nobody notices until the bill arrives —
+**restart the process and the whole corpus is re-embedded.** Fine for three
+documents, absurd for ten thousand, and until now the only step up was "bring a
+vector database".
+
+`sqliteVectorStore` is the step between. One file, zero dependencies (SQLite is
+inside Node), exact cosine search, and the vectors still there on the next boot.
+
+```ts
+import { sqliteVectorStore } from 'agentfootprint/memory';
+
+const store = sqliteVectorStore({ file: './corpus.db' });
+await indexDocuments(store, embedder, docs, { embedderId: embedder.id });
+// …a restart later, in a new process: the vectors are already there.
+```
+
+### The two-phase cost model, now a number you can read
+
+Embedding cost is not one number, and the split is the whole argument for a
+file. **Index time** embeds the corpus: once, scaling with how much you store.
+**Query time** embeds the user's question: per retrieval, scaling with traffic.
+A 10,000-chunk corpus is 10,000 embeddings *once* and one per question
+thereafter — with a `Map` it is 10,000 embeddings *per restart*.
+
+`agentfootprint.embedding.generated` has carried an `inputKind: 'document' |
+'query'` field since 2.x and nothing ever emitted it, so any dashboard built
+against it has been reading a flat line that meant "not wired", not "no cost".
+Both halves fire now. The domain also had a payload type, a registry entry and a
+`DomainWildcard` arm and **no bridge recorder**, so the event could not have
+arrived however correctly it was fired; `embeddingRecorder` is that bridge, and
+it is attached on every run.
+
+`indexDocuments` runs at startup, outside any run, so it has no emit channel to
+ride — no scope, no dispatcher, no `runtimeStageId` to correlate against. Rather
+than pretend otherwise it hands the same payload to an `onEmbedding` callback.
+
+### Exact search, and the ceiling said out loud
+
+Vectors are hydrated into one resident `Float32Array` matrix on the first search
+of a namespace, normalised, and every later query is an exact dot product.
+**There is no approximate index and no pretence of one**: it returns the true
+top-K or it does not answer.
+
+Measured against this implementation on Node 22.16, Apple silicon:
+
+| corpus | query | resident matrix | file | first search (hydration) |
+|---|---|---|---|---|
+| 10,000 × 384-d | 6 ms | 15 MB | 21 MB | 45 ms |
+| 50,000 × 384-d | 31 ms | 77 MB | 105 MB | 251 ms |
+| 100,000 × 384-d | 65 ms | 154 MB | 211 MB | 939 ms |
+| 10,000 × 1536-d | 16 ms | 61 MB | 83 MB | 122 ms |
+| 50,000 × 1536-d | 89 ms | 307 MB | 413 MB | **5.7 s** |
+
+**The documented ceiling is 50,000 chunks** — under 100 ms per query at every
+embedder this library ships, under ~300 MB resident. It degrades linearly to
+about 100,000; above that, `MemoryStore` is the seam to a managed vector
+database and nothing else in your code changes.
+
+Measuring it turned up something worth naming rather than burying: **hydration,
+not the query, is what you plan around.** At 50,000 × 1536 the first search
+costs 5.7 seconds, and left lazy that lands on whoever asks the first question
+after a deploy. `store.warm(identity)` moves the cost somewhere you chose; it is
+optional, idempotent, and changes no result.
+
+A loadable extension (sqlite-vec) was measured and deliberately not taken: ~2×
+faster at these sizes, at the price of a native binary on a five-platform matrix
+(no musl, no Windows/arm64) and a pre-1.0 dependency. Two times, where we are
+already under 100 ms, does not buy that.
+
+### One embedder per namespace — the refusal that keeps it honest
+
+`Embedder` gains an optional `id`, and every shipped embedder sets one. Together
+with `dimensions` it forms the fingerprint the store records per namespace —
+`'<id>@<dims>'` — and refuses on when it changes, **at write and at query
+both**.
+
+This is the behaviour-adjacent part of an otherwise additive release, so it is
+worth being plain about why it is a refusal and not a warning. Cosine similarity
+between two embedding spaces is not a weak signal — it is not a signal, and it
+comes back as a confident number in the same range as a real one. No threshold
+separates them and nothing downstream can tell them apart. A store that let the
+mix through would corrupt every ranking it touched and log nothing.
+
+```text
+[memory] cannot write to the namespace '_/_/_global': it was indexed by
+'static:@yarflam/potion-base-8m@256' and this vector is from
+'openai:text-embedding-3-small@1536'. Vectors of different lengths cannot be
+compared at all. Re-index this namespace with one embedder (delete it and build
+it again), or point this store at a different file. This refuses rather than
+re-embedding your corpus on your behalf — that is a bill you did not agree to…
+```
+
+The named fix is an explicit re-index (`store.forget(identity)`, then index
+again), and it is never a fallback. Dimensions always decide; model ids decide
+only when **both** sides named themselves, so the majority of callers who never
+pass an `embedderId` are not blocked by a name nobody supplied.
+
+`indexDocuments` now defaults `embedderId` to the embedder's own `id`, so a
+namespace is fingerprinted even when the caller passes nothing.
+
+### What it refuses, and why it never falls back
+
+The law `sqliteSessions` states for a session file, one domain over: **an
+unreadable index and an empty one are different facts, and only one of them is
+safe to answer with "no matches".**
+
+- **Node 20** has no `node:sqlite`. `SqliteUnavailableError` names your version,
+  the 22.5 floor, the `--experimental-sqlite` flag for 22.5–22.12, and
+  `InMemoryStore` — and refuses rather than falling back, because an index that
+  silently forgot every document on restart looks, from the outside, exactly
+  like a corpus that was never built. It is now ONE class shared with
+  `sqliteSessions`: catching it should not require knowing which store was being
+  constructed.
+- **`':memory:'`** is refused, pointing at `InMemoryStore` — which says so in
+  its name.
+- **A file that is not a database**, **someone else's `af_vectors` table**, and
+  **an index written by a newer agentfootprint** each raise
+  `UnreadableIndexFileError` with a distinct `problem` to branch on.
+
+### Also
+
+- `putMany` is ONE transaction. The port does not require it, and most callers
+  are append-idempotent — but a half-indexed corpus is a specific kind of bad:
+  retrieval keeps working and quietly cannot see what did not land, which reads
+  as "the model does not know that" rather than as a failure. A file can offer
+  all-or-nothing cheaply, so it does. `putIfVersion` reads and writes inside one
+  `BEGIN IMMEDIATE`, which is the entire point of a compare-and-set.
+- Tables are `STRICT`; `journal_mode = WAL` is executed first and **read back**,
+  so `store.journalMode` reports what the file actually got rather than what was
+  asked for. A network filesystem can silently downgrade it, and that is only
+  ever discovered under load.
+- The BLOB on disk keeps the **original** vector, so `get`/`list` round-trip
+  exactly what was written; normalisation happens once, into the resident
+  matrix, so search is a dot product without changing what is stored.
+- Found while writing the schema-identity check: it originally ran *after* the
+  indexes were created, so a foreign `af_vectors` table failed on a missing
+  column and was reported as `'cannot-open'` — the right refusal for the wrong
+  reason, telling the reader to check file permissions when the real problem was
+  that the file belonged to something else. It runs before them now.
+
+
 ## [8.8.0] - 2026-08-06
 
 **Retrieval tells the truth.** A retrieval computed a cosine score for every candidate

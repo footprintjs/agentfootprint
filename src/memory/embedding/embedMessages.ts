@@ -22,6 +22,7 @@ import type { TypedScope } from 'footprintjs';
 import type { Embedder } from './types.js';
 import type { LLMMessage as Message } from '../../adapters/types.js';
 import type { MemoryState } from '../stages/index.js';
+import { emitEmbedding } from './emitEmbedding.js';
 
 /** Extend MemoryState to carry per-message embeddings for writeMessages. */
 export interface EmbedMessagesState extends MemoryState {
@@ -80,6 +81,7 @@ export function embedMessages(config: EmbedMessagesConfig) {
     const texts = messages.map(textFrom);
     const signal = scope.$getEnv?.()?.signal;
 
+    const startedAt = Date.now();
     let vectors: number[][];
     if (embedder.embedBatch) {
       vectors = (await embedder.embedBatch({
@@ -93,6 +95,21 @@ export function embedMessages(config: EmbedMessagesConfig) {
         ),
       );
     }
+
+    // The INDEX-time half of the two-phase cost model (8.9.0). Embedding cost
+    // splits in two — this side scales with the size of what you store, and
+    // the query side scales with traffic — and telling them apart is the whole
+    // reason for a durable index. `agentfootprint.embedding.generated` has been
+    // declared since 2.x with an `inputKind` field and no emitter; this is one
+    // of its two.
+    emitEmbedding(scope, {
+      model: config.embedderId ?? embedder.id ?? 'unknown',
+      provider: 'custom',
+      inputKind: 'document',
+      dimension: embedder.dimensions,
+      count: vectors.length,
+      durationMs: Date.now() - startedAt,
+    });
 
     scope.newMessageEmbeddings = vectors;
     if (config.embedderId !== undefined) {

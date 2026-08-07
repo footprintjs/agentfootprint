@@ -8,7 +8,7 @@
 
 > **WireRole** = `"system"` \| `"user"` \| `"assistant"`
 
-Defined in: [src/adapters/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/adapters/types.ts#L123)
+Defined in: [src/adapters/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/adapters/types.ts#L123)
 
 The roles a provider can carry INSIDE the `messages` array.
 

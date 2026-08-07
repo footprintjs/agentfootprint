@@ -56,6 +56,7 @@
 import { checkEnvelope } from './envelope.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
+import { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
 import type { CheckpointEnvelope, SessionLifecycle } from './types.js';
 
 // ─── The little bit of `node:sqlite` this adapter uses ───────────────
@@ -151,35 +152,14 @@ export interface SqliteSessions extends SessionLifecycle {
 /**
  * Raised when `node:sqlite` is not available in the running Node.
  *
- * Node 20 does not have the module at all; Node 22.5 through 22.12 have it
- * behind `--experimental-sqlite`; Node 22.13+ and 23.4+ have it as-is (still
- * marked experimental by Node, which is why it prints a warning on first use).
- *
- * The refusal names the version you are on and the three ways out, because
- * "cannot find module 'node:sqlite'" out of a library's guts tells you what
- * broke and nothing about what to do.
+ * The class moved to `lib/sqliteUnavailable.ts` in 8.9.0 so the SQLite vector
+ * store raises the SAME error for the same missing module — a consumer
+ * catching it should not have to know which of our stores was being built.
+ * Constructed with no third argument it produces exactly the message it always
+ * did, and it is re-exported here under its own name, so nothing that imports
+ * it from this module changes.
  */
-export class SqliteUnavailableError extends Error {
-  readonly code = 'ERR_SQLITE_UNAVAILABLE' as const;
-  /** The Node version this process is running. */
-  readonly nodeVersion: string;
-
-  constructor(nodeVersion: string, reason: string) {
-    super(
-      `[hosting] sqliteSessions() needs Node's built-in 'node:sqlite' module, and this ` +
-        `process (Node ${nodeVersion}) does not have it (${reason}). ` +
-        `That module ships with Node 22.5 and newer: on Node 22.13+ (and 23.4+) it is ` +
-        `available as-is, and on Node 22.5–22.12 it is behind --experimental-sqlite. ` +
-        `So: upgrade Node, add that flag, or use memorySessions() — which keeps ` +
-        `conversations in a Map and loses them on restart, and says so in its name. ` +
-        `This refuses rather than falling back to memory on your behalf: a store that ` +
-        `silently forgot every conversation on restart looks, from the outside, exactly ` +
-        `like a brand-new user.`,
-    );
-    this.name = 'SqliteUnavailableError';
-    this.nodeVersion = nodeVersion;
-  }
-}
+export { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
 
 /**
  * Raised when the file exists but this runtime cannot use it as a session

@@ -238,3 +238,15 @@ End-to-end compliance lighthouse — spans + tamper-evident audit export + causa
 - [Causal memory deep dive](doc:causal-deep-dive) — the trace as the agent's working memory
 - [Reliability gate](doc:reliability-gate) — `agentfootprint.reliability.fail_fast` event semantics
 - [Streaming guide](doc:streaming) — token-by-token rendering via `provider.stream()`
+
+## Embedding cost — `embeddingRecorder`
+
+`embeddingRecorder` (with `EmbeddingRecorderOptions`) is the always-on bridge that forwards `agentfootprint.embedding.generated` to the typed stream. It is attached on every run, so you only construct one yourself when wiring a recorder outside `Agent`.
+
+The event separates the two halves of embedding cost through `inputKind`: `'document'` is index time (once, scaling with corpus size) and `'query'` is retrieval time (per turn, scaling with traffic).
+
+```ts
+agent.on('agentfootprint.embedding.generated', (e) => {
+  console.log(e.payload.inputKind, e.payload.count, e.payload.durationMs);
+});
+```

@@ -6,7 +6,7 @@
 
 # Class: RoutingDecisionError
 
-Defined in: [src/patterns/LlmRouter.ts:202](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/patterns/LlmRouter.ts#L202)
+Defined in: [src/patterns/LlmRouter.ts:202](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/patterns/LlmRouter.ts#L202)
 
 Thrown when the router's LLM answer is not a usable routing decision.
 `rawOutput` carries the model's exact text so the failure is triageable
@@ -22,7 +22,7 @@ offline. Mirrors `OutputSchemaError`'s two-stage split.
 
 > **new RoutingDecisionError**(`message`, `opts`): `RoutingDecisionError`
 
-Defined in: [src/patterns/LlmRouter.ts:206](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/patterns/LlmRouter.ts#L206)
+Defined in: [src/patterns/LlmRouter.ts:206](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/patterns/LlmRouter.ts#L206)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **rawOutput**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:203](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/patterns/LlmRouter.ts#L203)
+Defined in: [src/patterns/LlmRouter.ts:203](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/patterns/LlmRouter.ts#L203)
 
 ***
 
@@ -132,7 +132,7 @@ not capture any frames.
 
 > `readonly` **stage**: `"json-parse"` \| `"shape"`
 
-Defined in: [src/patterns/LlmRouter.ts:204](https://github.com/footprintjs/agentfootprint/blob/748af7710d9294f3d459d9a2d042f65ccd396a5a/src/patterns/LlmRouter.ts#L204)
+Defined in: [src/patterns/LlmRouter.ts:204](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/patterns/LlmRouter.ts#L204)
 
 ## Methods
 

@@ -134,6 +134,12 @@ export function openaiEmbedder(options: OpenAIEmbedderOptions = {}): Embedder {
 
   return {
     dimensions,
+    // The embedding SPACE, not the instance: two `openaiEmbedder()` calls with
+    // the same model produce interchangeable vectors, and a store must treat
+    // them as one index. The SIZE is deliberately not in here — a store's
+    // fingerprint is `'<id>@<dims>'`, so it appends the dimensions itself and
+    // a truncated vector is already a different fingerprint from a native one.
+    id: `openai:${model}`,
     async embed({ text, signal }) {
       return (await call([text], signal))[0];
     },
@@ -215,6 +221,10 @@ export function localEmbedder(options: LocalEmbedderOptions = {}): Embedder {
 
   return {
     dimensions,
+    // `dtype` is part of the name because a q8 and an fp32 build of one model
+    // are close but not identical spaces, and "close" is exactly the kind of
+    // difference that shows up as a mysteriously worse ranking.
+    id: `local:${model}:${dtype}`,
     async embed({ text }) {
       const p = await getPipe();
       const out = await p(text, { pooling: 'mean', normalize: true });
@@ -319,6 +329,7 @@ export function staticEmbedder(options: StaticEmbedderOptions = {}): Embedder {
 
   return {
     dimensions,
+    id: `static:${spec}`,
     async embed({ text }) {
       const fn = await getEmbed();
       const rows = toRows(await fn([text]));
