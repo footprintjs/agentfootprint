@@ -82,6 +82,7 @@ const DOORS = [
   '.',
   './providers',
   './memory',
+  './rag',
   './cache',
   './observe',
   './events',

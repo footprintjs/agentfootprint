@@ -6,7 +6,7 @@
 
 # Interface: FlowSelectedEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:198
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:209
 
 Event passed to FlowRecorder.onSelected.
 
@@ -16,7 +16,7 @@ Event passed to FlowRecorder.onSelected.
 
 > `optional` **evidence?**: `SelectionEvidence`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:204
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:215
 
 Structured selection evidence from select() helper.
 
@@ -26,7 +26,7 @@ Structured selection evidence from select() helper.
 
 > **parent**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:199
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:210
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **selected**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:200
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:211
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **total**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:201
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:212
 
 ***
 
@@ -50,4 +50,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:202
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:213

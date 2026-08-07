@@ -167,6 +167,7 @@ describe('8.0.0 door map — every path a consumer can type still resolves', () 
     '.',
     './providers',
     './memory',
+    './rag',
     './cache',
     './observe',
     './events',
@@ -219,10 +220,13 @@ describe('8.0.0 door map — every path a consumer can type still resolves', () 
     for (const door of DOORS) expect(exp[door], `door ${door} missing`).toBeDefined();
   });
 
-  it('the two doors added in 8.0.0 are exactly ./providers and ./context', () => {
+  it('the doors added since 7.x are ./providers, ./context (8.0.0) and ./rag (8.10.0)', () => {
+    // A door is a promise, so this list only ever grows on purpose. `./rag`
+    // joined in 8.10.0: index time is a different process from run time, it
+    // touches the filesystem, and a browser bundle must never resolve it.
     const exp = loadPkg().exports;
     const added = Object.keys(exp).filter((k) => !SEVEN_X_PATHS.includes(k));
-    expect(added.sort()).toEqual(['./context', './providers']);
+    expect(added.sort()).toEqual(['./context', './providers', './rag']);
   });
 
   it('typesVersions covers every non-root export path (TS < 4.7 fallback)', () => {

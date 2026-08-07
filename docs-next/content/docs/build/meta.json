@@ -35,6 +35,7 @@
     "semantic-retrieval",
     "embedders",
     "rag",
+    "indexing",
     "---[Plug]Providers---",
     "anthropic",
     "openai",

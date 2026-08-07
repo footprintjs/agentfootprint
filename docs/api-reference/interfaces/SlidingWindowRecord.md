@@ -6,7 +6,7 @@
 
 # Interface: SlidingWindowRecord
 
-Defined in: [src/core/agent/window/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L171)
+Defined in: [src/core/agent/window/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L171)
 
 What one visit to `slidingWindow` put in the ledger.
 
@@ -20,7 +20,7 @@ What one visit to `slidingWindow` put in the ledger.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/window/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L131)
+Defined in: [src/core/agent/window/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L131)
 
 ReAct iteration this visit belongs to.
 
@@ -34,7 +34,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` **keepRecentTurns**: `number`
 
-Defined in: [src/core/agent/window/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L174)
+Defined in: [src/core/agent/window/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L174)
 
 The configured keep depth this visit measured against.
 
@@ -44,7 +44,7 @@ The configured keep depth this visit measured against.
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/agentfootprint/api/generated/interfaces/WindowRefusal.md)[]
 
-Defined in: [src/core/agent/window/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L140)
+Defined in: [src/core/agent/window/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L140)
 
 Every turn that refused to leave, named.
 
@@ -58,7 +58,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L135)
+Defined in: [src/core/agent/window/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L135)
 
 How many messages left the window.
 
@@ -72,7 +72,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L133)
+Defined in: [src/core/agent/window/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L133)
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -86,7 +86,7 @@ Defined in: [src/core/agent/window/types.ts:133](https://github.com/footprintjs/
 
 > `readonly` **strategy**: `"sliding-window"`
 
-Defined in: [src/core/agent/window/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L172)
+Defined in: [src/core/agent/window/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L172)
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -101,7 +101,7 @@ Defined in: [src/core/agent/window/types.ts:172](https://github.com/footprintjs/
 
 > `readonly` **turnsAfter**: `number`
 
-Defined in: [src/core/agent/window/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L177)
+Defined in: [src/core/agent/window/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L177)
 
 ***
 
@@ -109,7 +109,7 @@ Defined in: [src/core/agent/window/types.ts:177](https://github.com/footprintjs/
 
 > `readonly` **turnsBefore**: `number`
 
-Defined in: [src/core/agent/window/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L176)
+Defined in: [src/core/agent/window/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L176)
 
 Turns in the window before / after this visit. Counted, not estimated.
 
@@ -119,7 +119,7 @@ Turns in the window before / after this visit. Counted, not estimated.
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: [src/core/agent/window/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L138)
+Defined in: [src/core/agent/window/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L138)
 
 #### Inherited from
 
@@ -131,7 +131,7 @@ Defined in: [src/core/agent/window/types.ts:138](https://github.com/footprintjs/
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: [src/core/agent/window/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L137)
+Defined in: [src/core/agent/window/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L137)
 
 Window size in chars before / after this visit. Exact, and not tokens.
 

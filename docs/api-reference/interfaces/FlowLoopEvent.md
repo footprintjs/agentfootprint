@@ -6,7 +6,7 @@
 
 # Interface: FlowLoopEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:232
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
 
 Event passed to FlowRecorder.onLoop.
 
@@ -16,7 +16,7 @@ Event passed to FlowRecorder.onLoop.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:235
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **iteration**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:234
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **target**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:233
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:236
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247

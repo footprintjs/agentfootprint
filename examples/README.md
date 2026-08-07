@@ -309,4 +309,10 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 20 | [`20-record-and-render.ts`](observability/20-record-and-render.ts) | Record a run, save it, render it in both UIs | recordRun() saves a run as the three fields a viewer needs — snapshot, events, structure —  |
 | 21 | [`21-variable-recall.ts`](observability/21-variable-recall.ts) | Variable recall — a variable’s recorded life, and a walk that stops guessing | traceVariable joins footprintjs keyTimeline/forwardSliceForKey to agent vocabulary (loops,  |
 
+### [`rag/`](rag/) — examples
+
+| # | File | Title | Description |
+|---|---|---|---|
+| 01 | [`01-folder-to-agent.ts`](rag/01-folder-to-agent.ts) | A folder of documents becomes an answering agent | indexFolder over three real documents (two Markdown, one 2-page PDF),  |
+
 <!-- AUTO-GENERATED:examples:end -->

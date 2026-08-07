@@ -6,15 +6,15 @@ _Recorded 2026-08-07._
 
 ## In plain words
 
-The package publishes **27 import paths** carrying **1272 distinct named exports**, plus **72 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **28 import paths** carrying **1313 distinct named exports**, plus **72 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**488 of 1272 exports (38%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**529 of 1313 exports (40%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **36 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **134 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **596 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **391 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **432 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **20** of the 72 typed events are both described on the site and were seen firing in a real run. **9** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **43** are not described in prose on the site at all.
 
@@ -48,7 +48,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 
 | Location | Files | Counts as documentation? |
 |---|---|---|
-| `docs-next/content/docs/**.mdx` (hand-written) | 77 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
+| `docs-next/content/docs/**.mdx` (hand-written) | 78 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 298 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 310 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 51 | **No** — but tracked as its own state, "written but not published". |
@@ -59,7 +59,7 @@ Neither generated tree is trustworthy as documentation for a second reason: **no
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **16 of the 294 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **187 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **16 of the 299 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **191 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -151,7 +151,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.middleware.decision` | `docs-next/content/docs/build/middleware.mdx` |
 | `agentfootprint.embedding.generated` | `docs-next/content/docs/build/memory-stores.mdx`, `docs-next/content/docs/monitor/observability.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (145).** The other 246 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (162).** The other 270 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -201,6 +201,9 @@ The site describes it and it really is exported, but no reference run touches it
 | `boundaryRecorder` | function | `agentfootprint/observe` |
 | `browserAnthropic` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `browserOpenai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
+| `buildIndexChart` | function | `agentfootprint/rag` |
+| `byHeading` | function | `agentfootprint/rag` |
+| `byParagraph` | function | `agentfootprint/rag` |
 | `checkEnvelope` | function | `agentfootprint/hosting` |
 | `checkSkillContracts` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `chunkProvenance` | function | `agentfootprint/memory` |
@@ -222,21 +225,28 @@ The site describes it and it really is exported, but no reference run touches it
 | `extractInlineThinking` | function | `agentfootprint/providers` `agentfootprint/thinking` |
 | `extractSequence` | function | `agentfootprint/security` |
 | `fallbackProvider` | function | `agentfootprint/resilience` |
+| `fixedWithOverlap` | function | `agentfootprint/rag` |
 | `formatCheckup` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `formatDefault` | function | `agentfootprint/memory` |
 | `gatewayTransport` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `headers` | function | `agentfootprint/identity` `agentfootprint/security` |
 | `headerValue` | function | `agentfootprint/hosting` |
+| `htmlLoader` | function | `agentfootprint/rag` |
 | `httpHost` | function | `agentfootprint/hosting` |
+| `indexCorpus` | function | `agentfootprint/rag` |
+| `indexFolder` | function | `agentfootprint/rag` |
 | `initialBreakerState` | function | `agentfootprint/reliability` `agentfootprint/resilience` |
 | `inMemorySinkCost` | function | `agentfootprint/observe` `agentfootprint/strategies` |
 | `isRetrievalEvidenceKey` | function | `agentfootprint/memory` |
 | `joinVariableSlice` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `lastNValidationErrorsMatch` | function | `agentfootprint/reliability` `agentfootprint/resilience` |
+| `loadDocuments` | function | `agentfootprint/rag` |
 | `loadRecent` | function | `agentfootprint/memory` |
 | `localEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
+| `markdownLoader` | function | `agentfootprint/rag` |
 | `mcpServe` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `memorySessions` | function | `agentfootprint/hosting` |
+| `mockLoader` | function | `agentfootprint/rag` |
 | `mockMcpClient` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `mountMemoryPipeline` | function | `agentfootprint/memory` |
 | `mountMemoryRead` | function | `agentfootprint/memory` |
@@ -245,6 +255,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `ollama` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `openai` | function | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `openaiEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
+| `pdfLoader` | function | `agentfootprint/rag` |
 | `persistence` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `pickByBudget` | function | `agentfootprint/memory` |
 | `readAgentCoreConversation` | function | `agentfootprint/hosting` `agentfootprint/hosting-providers` |
@@ -255,15 +266,19 @@ The site describes it and it really is exported, but no reference run touches it
 | `resilienceRecorder` | function | `agentfootprint/observe` |
 | `resolveSurfaceMode` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
 | `retrievalEvidenceKey` | function | `agentfootprint/memory` |
+| `sha256` | function | `agentfootprint/rag` |
 | `skillScopedTools` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `skillScopedToolsTarget` | function | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `skillsFromDir` | function | `agentfootprint/context` `agentfootprint/injection-engine` |
+| `splitDocuments` | function | `agentfootprint/rag` |
 | `sqliteSessions` | function | `agentfootprint/hosting` |
 | `sqliteVectorStore` | function | `agentfootprint/memory` `agentfootprint/memory-providers` |
 | `standingAgent` | function | `agentfootprint/hosting` |
 | `staticEmbedder` | function | `agentfootprint/embedders` `agentfootprint/providers` |
 | `streamRecorder` | function | `agentfootprint/observe` |
+| `stripTags` | function | `agentfootprint/rag` |
 | `summarize` | function | `agentfootprint/memory` |
+| `textLoader` | function | `agentfootprint/rag` |
 | `toEnvelope` | function | `agentfootprint/hosting` |
 | `toPausedEnvelope` | function | `agentfootprint/hosting` |
 | `toSSE` | function | `agentfootprint/observe` `agentfootprint/stream` |
@@ -272,6 +287,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `variableToBacktrackTrace` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `verdictFor` | function | `agentfootprint/debug` `agentfootprint/observe` |
 | `walkToRoot` | function | `agentfootprint/debug` `agentfootprint/observe` |
+| `wholeDocument` | function | `agentfootprint/rag` |
 | `xrayObservability` | function | `agentfootprint/observability-providers` `agentfootprint/observe` |
 | `AwaitingDecisionError` | class | `agentfootprint/hosting` |
 | `BedrockAgentMemory` | class | `agentfootprint/memory` `agentfootprint/memory-providers` |
@@ -286,6 +302,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `FrameTooLargeError` | class | `agentfootprint/hosting` |
 | `GatewayAuthorizationRequiredError` | class | `agentfootprint/providers` `agentfootprint/tool-providers` |
 | `HostClosedError` | class | `agentfootprint/hosting` |
+| `MissingPdfSupportError` | class | `agentfootprint/rag` |
 | `NoPendingAskError` | class | `agentfootprint/hosting` |
 | `OllamaProvider` | class | `agentfootprint/llm-providers` `agentfootprint/providers` |
 | `OllamaUnavailableError` | class | `agentfootprint/llm-providers` `agentfootprint/providers` |
@@ -616,6 +633,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint` | 309 | 157 | 51% |
 | `agentfootprint/providers` | 92 | 57 | 62% |
 | `agentfootprint/memory` | 181 | 66 | 36% |
+| `agentfootprint/rag` | 41 | 41 | 100% |
 | `agentfootprint/cache` | 17 | 2 | 12% |
 | `agentfootprint/observe` | 461 | 86 | 19% |
 | `agentfootprint/events` | 24 | 7 | 29% |

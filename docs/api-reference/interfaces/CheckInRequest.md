@@ -6,7 +6,7 @@
 
 # Interface: CheckInRequest
 
-Defined in: [src/core/checkin.ts:39](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L39)
+Defined in: [src/core/checkin.ts:39](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L39)
 
 The typed pause payload for one check-in. Rides the existing pause
 machinery: it becomes the checkpoint's `pauseData` and is surfaced on
@@ -18,7 +18,7 @@ surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:43](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L43)
+Defined in: [src/core/checkin.ts:43](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L43)
 
 The arguments the model proposed for this call.
 
@@ -28,7 +28,7 @@ The arguments the model proposed for this call.
 
 > `readonly` **evidence**: [`CheckInEvidence`](/agentfootprint/api/generated/interfaces/CheckInEvidence.md)
 
-Defined in: [src/core/checkin.ts:51](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L51)
+Defined in: [src/core/checkin.ts:51](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L51)
 
 The receipts riding the ask.
 
@@ -38,7 +38,7 @@ The receipts riding the ask.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:49](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L49)
+Defined in: [src/core/checkin.ts:49](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L49)
 
 The model's stated reasoning for THIS call, when the assistant turn
 carried text alongside the tool call. Omitted when the turn was a bare
@@ -50,6 +50,6 @@ tool call with no content.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/checkin.ts:41](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L41)
+Defined in: [src/core/checkin.ts:41](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L41)
 
 The tool the agent wants to run (its name).

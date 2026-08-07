@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "8.9.0",
+  "version": "8.10.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -93,7 +93,8 @@
   ],
   "bin": {
     "agentfootprint-setup": "ai-instructions/setup.sh",
-    "agentfootprint-lint-tools": "bin/agentfootprint-lint-tools.mjs"
+    "agentfootprint-lint-tools": "bin/agentfootprint-lint-tools.mjs",
+    "agentfootprint-index": "bin/agentfootprint-index.mjs"
   },
   "main": "dist/index.js",
   "module": "dist/esm/index.js",
@@ -127,6 +128,16 @@
       "require": {
         "types": "./dist/types/doors/memory.d.ts",
         "default": "./dist/doors/memory.js"
+      }
+    },
+    "./rag": {
+      "import": {
+        "types": "./dist/esm/doors/rag.d.ts",
+        "default": "./dist/esm/doors/rag.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/rag.d.ts",
+        "default": "./dist/doors/rag.js"
       }
     },
     "./cache": {
@@ -379,6 +390,9 @@
       "memory": [
         "./dist/types/doors/memory.d.ts"
       ],
+      "rag": [
+        "./dist/types/doors/rag.d.ts"
+      ],
       "cache": [
         "./dist/types/cache/index.d.ts"
       ],
@@ -468,9 +482,10 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^9.13.0",
+    "footprintjs": "^9.15.0",
     "ioredis": "*",
     "openai": "*",
+    "unpdf": "*",
     "zod": "*"
   },
   "peerDependenciesMeta": {
@@ -512,6 +527,9 @@
     },
     "@yarflam/potion-base-8m": {
       "optional": true
+    },
+    "unpdf": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -525,12 +543,13 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "^9.13.0",
+    "footprintjs": "^9.15.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "~5.4.5",
+    "unpdf": "^1.8.0",
     "vitest": "^4.1.5",
     "zod": "^3.25.76"
   }

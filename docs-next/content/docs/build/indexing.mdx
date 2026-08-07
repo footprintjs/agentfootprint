@@ -1,0 +1,188 @@
+---
+title: Indexing a corpus
+description: agentfootprint/rag — loaders, splitters and the indexing chart. A folder of documents becomes a searchable index, and the run explains itself.
+---
+
+> You have a folder of documents and you want an agent to answer from it. Before 8.10.0 the library gave you the second half of that — `defineRAG` retrieves, `sqliteVectorStore` keeps — and left you to write the loaders, the splitters and the re-index logic yourself. This is the first half.
+
+## The three steps, and the one call over them
+
+```ts
+import { indexFolder } from 'agentfootprint/rag';
+import { sqliteVectorStore } from 'agentfootprint/memory';
+import { staticEmbedder } from 'agentfootprint/providers';
+
+const report = await indexFolder('./docs', {
+  to: sqliteVectorStore({ file: './corpus.db' }),
+  embedder: staticEmbedder(),
+});
+// { discovered: 3, loaded: 3, chunks: 14, embedded: 14, skipped: 0, removed: 0, … }
+```
+
+`indexFolder` is sugar. The pieces are public and compose in the obvious order:
+
+```ts
+import { loadDocuments, splitDocuments, byHeading, indexCorpus } from 'agentfootprint/rag';
+
+const { documents, failed } = await loadDocuments({ dir: './docs' });
+const chunks = splitDocuments(documents, byHeading());
+// …or hand the whole thing to the chart, which does both and records what it did:
+const report = await indexCorpus({ source: { dir: './docs' }, store, embedder });
+```
+
+<Callout>
+**`defineRAG` is not on this door, deliberately.** The retriever is run-time wiring — registered on an agent, running every turn — so it stays on the main barrel beside `defineTool`. This door is the other half: the part that runs once, before any agent exists. Index time touches the filesystem and reaches for a PDF dependency; run time must never resolve either.
+</Callout>
+
+## Loaders
+
+| loader | extensions | dependency |
+|---|---|---|
+| `textLoader` | `.txt` `.log` `.csv` `.json` `.yaml` … | none |
+| `markdownLoader` | `.md` `.markdown` `.mdx` | none |
+| `htmlLoader` | `.html` `.htm` | none |
+| `pdfLoader` | `.pdf` | `unpdf`, lazily loaded |
+| `mockLoader` | whatever you say | none |
+
+`loadDocuments` routes by extension. A loader you pass is consulted **before** the built-ins, so overriding one is putting yours in front rather than editing a registry:
+
+```ts
+await loadDocuments({ dir: './docs' }, { loaders: [myConfluenceLoader()] });
+```
+
+**Markdown keeps its markup.** Stripping `#` would throw away the one splitting signal that is not a heuristic — the author already told us where the sections are — and rewriting text would break the offsets every citation depends on.
+
+**HTML is a tag stripper, not a parser.** Good enough for documentation pages and exported articles; not good enough for a single-page app, where you will get navigation labels. Run a real extractor and feed the result in through `{ text, uri }`.
+
+**PDF needs one optional peer.** `unpdf` was picked by measurement — 2.5 MB and zero transitive dependencies, against 86 MB and a native binary for the nearest alternative. It returns text **per page**, which is why a PDF citation can name a page you can turn to. Missing, it refuses with an install line rather than skipping the file.
+
+## Splitters
+
+| splitter | cuts on | use when |
+|---|---|---|
+| `byHeading()` | Markdown `#` lines | the document declares its own sections — **not a heuristic** |
+| `byParagraph()` | blank lines | prose with no headings |
+| `fixedWithOverlap()` | character count | no structure at all (transcripts, OCR) |
+| `wholeDocument()` | nothing | documents that are already one idea |
+
+Defaults are **1000 characters with 150 of overlap**, and they are chosen by constraint rather than taste. `localEmbedder`'s default model silently truncates at 512 wordpiece tokens — measured directly: at 508 tokens an appended tail still moves the vector, at 596 it does not, and nothing says so. 1,000 characters is about 250 tokens, comfortably inside that cliff and inside the length the model was trained at.
+
+Chunks that exceed the ceiling anyway are **recorded**, not silently clipped:
+
+```ts
+report.truncated; // [{ id: 'handbook.pdf#3', chars: 4200 }]
+```
+
+### The invariant every splitter holds
+
+```ts
+doc.text.slice(chunk.charStart, chunk.charEnd) === chunk.text
+```
+
+`splitDocuments` checks it rather than trusting it, and refuses a splitter that breaks it. A chunk that cannot be located in its own document produces citations that point at the wrong words — and a citation nobody can check is worse than no citation, because it looks checked.
+
+## `indexCorpus` — the chart
+
+Indexing is a footprintjs chart, not a loop:
+
+```
+discover → load → split → plan (DECIDER)
+         → take-window → embed (FAN-OUT + retry) → tally → more? ⟲
+         → remove → report
+```
+
+**The commit log IS the indexing report.** A `for` loop answers no questions after it finishes; the chart answers "why is this chunk here, why was that one skipped, what did this run cost, which document went missing" months later, from its own log, without the caller having saved anything.
+
+- **plan** is a real decider because "skip this chunk" is a decision with evidence: same content hash *and* same embedder fingerprint. Its branches — `full-index`, `incremental`, `nothing-to-do` — are named in the trace.
+- **embed** fans out one branch per batch with a declarative `retry`, so a rate-limited attempt appears in the record instead of vanishing inside a hand-rolled loop. It runs a **window** at a time and loops: the fan-out ceiling truncates rather than queues, so a single fan-out over 200 batches with a ceiling of 4 would embed 4 and report success.
+- **`embedded`** is counted from what the batches actually wrote, never from what the plan intended.
+
+A failing batch **fails the run**. A half-indexed corpus keeps answering and quietly cannot see what did not land, which reads as "the model does not know that" rather than as a failure.
+
+## Incremental re-index
+
+Run it again and nothing happens, which is the point:
+
+```
+run 1  (first index)   discovered 3 · loaded 3 · chunks 8 · embedded 8 · skipped 0 · removed 0
+run 2  (no changes)    discovered 3 · loaded 3 · chunks 8 · embedded 0 · skipped 8 · removed 0
+run 3  (edit + delete) discovered 2 · loaded 2 · chunks 5 · embedded 1 · skipped 4 · removed 3
+```
+
+A chunk is reused when its **content hash** and the **embedder fingerprint** both match. Change the text and only that chunk is re-embedded; change the embedder and everything is, because the two vector spaces are not comparable. Delete a document and its chunks are removed — an index that still answers from a file you deleted is worse than one that cannot answer.
+
+An **empty walk never prunes**. A typo in a path must not delete a corpus.
+
+## From the command line
+
+```bash
+npx agentfootprint-index ./docs --to ./corpus.db
+npx agentfootprint-index ./docs --to ./corpus.db --embedder local --split paragraph --chars 800
+npx agentfootprint-index ./docs --to ./corpus.db --dry-run --json
+```
+
+`--embedder` is `static` (default, no key, no network), `local`, `openai`, or `mock`. `--dry-run` reports against a throwaway in-memory index without touching the file.
+
+## The worked example
+
+<CodeFile path="examples/rag/01-folder-to-agent.ts" region="index" title="examples/rag/01-folder-to-agent.ts (region: index)" />
+
+Three real documents ship with it — two Markdown and a two-page PDF — and the agent's answer comes back with the passage, the document, the page and the score:
+
+```
+why this passage
+  ✓ refund-policy.md#1           0.87  refund-policy.md, Refund timing
+  ✓ refund-policy.md#3           0.86  refund-policy.md, Partial refunds
+  ✗ security-overview.pdf#0      0.82  security-overview.pdf, p1  over-max-entries
+```
+
+## Reference
+
+Everything on `agentfootprint/rag`.
+
+### Pipeline
+
+| Name | What it is |
+|---|---|
+| `loadDocuments(source, options?)` | Read a `DocumentSource` into documents. Returns `LoadDocumentsResult` — `{ documents, failed, discovered }`. `LoadDocumentsOptions` carries `loaders` and `maxBytes`. |
+| `splitDocuments(docs, splitter, options?)` | Cut documents into `Chunk`s and verify each one's offsets. `SplitDocumentsOptions` has `verifyOffsets`. |
+| `indexCorpus(config)` | Run the indexing chart. `IndexCorpusConfig` takes `source`, `store`, `embedder`, and the optional `corpus`, `splitter`, `loaders`, `embedderId`, `batchSize`, `maxConcurrentBatches`, `attempts`, `removeMissing`, `maxChunkChars`. |
+| `buildIndexChart(config)` | The same chart, unrun — mount it, attach recorders, or run it under your own executor. |
+| `indexFolder(dir, options)` | Sugar over `indexCorpus`. `IndexFolderOptions` renames `store` to `to` and adds `include` / `recursive`. |
+| `sha256(input)` | The content hash the incremental skip compares. Distinct from the trace's FNV-1a: this one decides whether something is re-embedded. |
+
+### Value objects
+
+| Name | What it is |
+|---|---|
+| `DocumentSource` | The union: `{ dir, include?, recursive? }` · `{ files }` · `{ text, uri }`. The modes exclude. |
+| `DocumentInput` | What a loader receives — `{ uri, bytes, mtimeMs? }`. |
+| `LoadedDocument` | One document read — `{ uri, text, pages?, contentHash, bytes, mtimeMs?, loader }`. |
+| `LoadedDocumentDraft` | What a loader returns — `{ text, pages? }`. The bookkeeping is added around it. |
+| `Chunk` | `{ id, docUri, index, text, charStart, charEnd, page?, heading?, contentHash }`. |
+| `SplitPiece` | One cut, before it is given an id and a hash. |
+| `IndexReport` | `{ discovered, loaded, chunks, embedded, skipped, removed, failed, truncated, embedderFingerprint, splitter, elapsedMs }`. |
+| `FailedDocument` / `TruncatedChunk` | A document that could not be read; a chunk past the embedder's ceiling. |
+
+### Ports and adapters
+
+| Name | What it is |
+|---|---|
+| `DocumentLoader` | The port — `{ name, extensions, load(input) }`. |
+| `DEFAULT_LOADERS` | The routing table used when you pass none. |
+| `textLoader()` · `markdownLoader()` · `htmlLoader()` · `pdfLoader(options?)` · `mockLoader(options?)` | The shipped adapters. `PdfLoaderOptions` takes a pre-imported `backend` for bundled apps; `MockLoaderOptions` takes `extensions` / `textFor` / `pagesFor`. |
+| `MissingPdfSupportError` | Raised when a PDF is met and `unpdf` is not installed. |
+| `stripTags(html)` | The HTML loader's own pass, exported because a custom markup loader may want it. |
+| `Splitter` | The strategy — `{ name, split(doc) }`. |
+| `byHeading(options?)` · `byParagraph(options?)` · `fixedWithOverlap(options?)` · `wholeDocument()` | The shipped strategies, with `ByHeadingOptions` / `ByParagraphOptions` / `FixedWithOverlapOptions`. |
+| `DEFAULT_MAX_CHARS` · `DEFAULT_OVERLAP_CHARS` | `1000` and `150` — the measured defaults. |
+
+## Deliberately not here
+
+- **Re-ranking and MMR** are retrieval-side. They belong behind `RetrievalStrategy` on `agentfootprint/memory` — a re-ranker is a different rule for choosing among candidates, not a different way of building an index.
+- **File watching.** `indexCorpus` is an explicit call: run it at boot, from a cron, or from the CLI. Magic that re-indexes behind you is magic that re-bills you.
+
+## Next steps
+
+- [RAG](doc:rag) — `defineRAG`, and reading back why a passage was retrieved
+- [Memory store adapters](doc:memory-stores) — `sqliteVectorStore` and the durable index

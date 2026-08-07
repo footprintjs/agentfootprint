@@ -152,6 +152,8 @@ agent.rag(docs);
 await agent.run({ message: 'How long do refunds take?' });
 ```
 
+**Building the index** (8.10.0) is `agentfootprint/rag`: `indexFolder('./docs', { to: store, embedder })`, or the `loadDocuments` → `splitDocuments` → `indexCorpus` pieces, or `npx agentfootprint-index ./docs --to ./corpus.db`. Loaders for text/Markdown/HTML (zero-dep) and PDF (lazy `unpdf`, per-page text so citations can name a page). Re-running embeds only what changed. `defineRAG` stays on the MAIN barrel — it is run-time wiring; that door is index time.
+
 `defineRAG` runs on `defineMemory({ type: SEMANTIC, strategy: TOP_K })`. Same machinery, three deliberate differences: a corpus is **read-only** (it never stores the conversation), it reads under its **own namespace** rather than the run's identity, and its chunks render as **citable `<source>` blocks**. For conversation memory alongside a corpus, register both — `.rag(defineRAG(...))` and `.memory(defineMemory(...))`, each with its own store.
 
 **Why did the agent read this passage?** `agentfootprint.memory.retrieved` carries every candidate with its score — including the ones that were rejected and why. `agentfootprint.memory.attached` fires per chunk that reached the prompt. `agentfootprint.context.injected` reports `source: 'rag'` with that chunk's `retrievalScore` / `rankPosition` / `threshold`. The whole record is on root state as `retrievalEvidence_<id>`, where a backward slice can reach it.

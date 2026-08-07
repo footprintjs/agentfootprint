@@ -6,7 +6,7 @@
 
 # Interface: CheckInDecisionInput
 
-Defined in: [src/core/checkin.ts:124](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L124)
+Defined in: [src/core/checkin.ts:124](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L124)
 
 Options for [checkInApproved](/agentfootprint/api/generated/functions/checkInApproved.md) / [checkInDeclined](/agentfootprint/api/generated/functions/checkInDeclined.md).
 
@@ -16,7 +16,7 @@ Options for [checkInApproved](/agentfootprint/api/generated/functions/checkInApp
 
 > `readonly` **by**: `string`
 
-Defined in: [src/core/checkin.ts:126](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L126)
+Defined in: [src/core/checkin.ts:126](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L126)
 
 Who decided.
 
@@ -26,6 +26,6 @@ Who decided.
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/core/checkin.ts:128](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/checkin.ts#L128)
+Defined in: [src/core/checkin.ts:128](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/checkin.ts#L128)
 
 Optional free-text note.

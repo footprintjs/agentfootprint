@@ -6,7 +6,7 @@
 
 # Interface: MiddlewareAsk
 
-Defined in: [src/core/pause.ts:61](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/pause.ts#L61)
+Defined in: [src/core/pause.ts:61](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/pause.ts#L61)
 
 The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
@@ -16,7 +16,7 @@ The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: [src/core/pause.ts:65](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/pause.ts#L65)
+Defined in: [src/core/pause.ts:65](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/pause.ts#L65)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -26,7 +26,7 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **middleware**: `string`
 
-Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/pause.ts#L67)
+Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/pause.ts#L67)
 
 `name` of the middleware that asked.
 
@@ -36,6 +36,6 @@ Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/pause.ts:63](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/pause.ts#L63)
+Defined in: [src/core/pause.ts:63](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/pause.ts#L63)
 
 The question, in the middleware author's own words.

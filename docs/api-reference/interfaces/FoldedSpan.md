@@ -6,7 +6,7 @@
 
 # Interface: FoldedSpan
 
-Defined in: [src/core/agent/window/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L241)
+Defined in: [src/core/agent/window/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L241)
 
 One fold, as it survives the process: the summary's fingerprint, what it
 stands for, and — under `retain: 'conversation'` — the messages themselves.
@@ -26,7 +26,7 @@ summary, and every index in the window moves when it does. [foldedSpanFor](/agen
 
 > `readonly` **foldedAtMs**: `number`
 
-Defined in: [src/core/agent/window/types.ts:261](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L261)
+Defined in: [src/core/agent/window/types.ts:261](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L261)
 
 Wall clock of the fold.
 
@@ -36,7 +36,7 @@ Wall clock of the fold.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/window/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L259)
+Defined in: [src/core/agent/window/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L259)
 
 ReAct iteration the fold happened at, in that run.
 
@@ -46,7 +46,7 @@ ReAct iteration the fold happened at, in that run.
 
 > `readonly` **messageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L265)
+Defined in: [src/core/agent/window/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L265)
 
 How many messages the summary stands for. Always recorded, both policies.
 
@@ -56,7 +56,7 @@ How many messages the summary stands for. Always recorded, both policies.
 
 > `readonly` `optional` **messages?**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/core/agent/window/types.ts:277](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L277)
+Defined in: [src/core/agent/window/types.ts:277](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L277)
 
 The folded messages, verbatim and in order. Present exactly when
 `retained` is `'conversation'`.
@@ -70,7 +70,7 @@ than an empty array that reads like "there were none".
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/window/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L263)
+Defined in: [src/core/agent/window/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L263)
 
 The model that wrote the summary — a claim's author is part of the claim.
 
@@ -80,7 +80,7 @@ The model that wrote the summary — a claim's author is part of the claim.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:267](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L267)
+Defined in: [src/core/agent/window/types.ts:267](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L267)
 
 `runtimeStageId`s of the stages that appended those messages.
 
@@ -90,7 +90,7 @@ Defined in: [src/core/agent/window/types.ts:267](https://github.com/footprintjs/
 
 > `readonly` **retained**: [`CompactionRetention`](/agentfootprint/api/generated/type-aliases/CompactionRetention.md)
 
-Defined in: [src/core/agent/window/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L269)
+Defined in: [src/core/agent/window/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L269)
 
 Which policy this fold ran under.
 
@@ -100,7 +100,7 @@ Which policy this fold ran under.
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/agent/window/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L257)
+Defined in: [src/core/agent/window/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L257)
 
 The run whose commit log held these messages. Diagnostic, and the honest
 answer to "where else could I have found this?" — that log is gone with
@@ -112,7 +112,7 @@ the process, which is why the messages are here.
 
 > `readonly` **summaryFingerprint**: `string`
 
-Defined in: [src/core/agent/window/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L251)
+Defined in: [src/core/agent/window/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L251)
 
 Fingerprint of the summary message this span was folded into — the join
 key back to the message sitting in `history`.

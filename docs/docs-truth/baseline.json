@@ -4,15 +4,15 @@
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
   "recordedAt": "2026-08-07",
   "surface": {
-    "subpaths": 27,
-    "declaredSymbols": 1272,
+    "subpaths": 28,
+    "declaredSymbols": 1313,
     "declaredEvents": 72,
     "eventSource": "src/events/registry.ts:536"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 391,
+      "documented-never-exercised": 432,
       "exercised-undocumented": 36,
       "undocumented-unexercised": 596,
       "site-code-sample-only": 18,

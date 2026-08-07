@@ -7,6 +7,157 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.10.0] - 2026-08-06
+
+**A folder of documents becomes an answering agent.** 8.8.0 made retrieval tell
+the truth about what it read; 8.9.0 made the index survive a restart. Both
+assumed you had already turned your documents into chunks — which meant writing
+loaders, splitters and re-index logic yourself, and which is the actual reason
+"add RAG to my app" was a week rather than an afternoon.
+
+`agentfootprint/rag` is that missing half.
+
+```ts
+import { indexFolder } from 'agentfootprint/rag';
+import { sqliteVectorStore } from 'agentfootprint/memory';
+import { staticEmbedder } from 'agentfootprint/providers';
+
+const report = await indexFolder('./docs', {
+  to: sqliteVectorStore({ file: './corpus.db' }),
+  embedder: staticEmbedder(),
+});
+// { discovered: 3, loaded: 3, chunks: 14, embedded: 14, skipped: 0, removed: 0, … }
+```
+
+### A new door, and why it earns one
+
+`agentfootprint/rag` is the eleventh door. Index time is a different PROCESS
+from run time: it happens at boot or on a cron, it touches the filesystem, and
+for PDFs it reaches for an optional peer. None of that belongs in the bundle of
+an agent that only answers questions — a browser or edge runtime importing
+`agentfootprint` should never resolve `node:fs`. A door is the unit at which a
+bundler can cut.
+
+**`defineRAG` deliberately stays on the main barrel.** The retriever is
+run-time wiring — registered on an agent, running every turn — so it belongs
+beside `defineTool`. This door is the half that runs once, before any agent
+exists.
+
+### Loaders
+
+`textLoader`, `markdownLoader` and `htmlLoader` need no dependency. `pdfLoader`
+needs one, and it was picked by measuring rather than by reputation:
+
+| package | installed | packages | verdict |
+|---|---|---|---|
+| **`unpdf`** | **2.5 MB** | **1** | chosen — zero transitive deps, per-page text |
+| `pdf-parse@2` | 86 MB | 3 | a native binary (`@napi-rs/canvas`), to read text |
+| `pdf-parse@1` | 34 MB | 4 | unmaintained since 2018 |
+| `pdfjs-dist@6` | 62 MB | 2 | 25× the size for the same engine |
+
+It is an optional peer, lazily loaded, refusing with an install line when a PDF
+is actually met. Per-page text is why a PDF citation can name a page you can
+turn to rather than saying "somewhere in this file".
+
+Markdown keeps its markup: stripping `#` throws away the one splitting signal
+that is not a heuristic, and rewriting text breaks the offsets every citation
+depends on. The HTML loader is a tag stripper and says so — for a
+single-page app you will get navigation labels, and the honest fix is a real
+extractor feeding `{ text, uri }`.
+
+### Splitters, and the measurement behind the defaults
+
+`byHeading()` · `byParagraph()` · `fixedWithOverlap()` · `wholeDocument()`, as
+factory functions in the same shape as the window and retrieval families.
+
+Defaults are **1000 characters with 150 of overlap**, chosen by constraint.
+`localEmbedder`'s default model silently truncates at 512 wordpiece tokens —
+measured directly: at 508 base tokens an appended tail still moves the vector
+(cosine 0.9965); at 596 it does not (0.999999). The tail was discarded and
+nothing said so. 1,000 characters is ~250 tokens, comfortably inside that cliff
+and inside the length the model was trained at. Chunks that exceed a stated
+ceiling anyway are RECORDED in `report.truncated`, not silently clipped.
+
+**The invariant every splitter holds:** `doc.text.slice(charStart, charEnd) ===
+chunk.text`. `splitDocuments` checks it rather than trusting it, because a
+custom splitter is a supported thing to write and a chunk that cannot be located
+in its own document produces citations pointing at the wrong words — worse than
+no citation, because it looks checked.
+
+### `indexCorpus` is a chart, and the commit log IS the report
+
+```
+discover → load → split → plan (DECIDER)
+         → take-window → embed (FAN-OUT + retry) → tally → more? ⟲
+         → remove → report
+```
+
+A `for` loop answers nothing once it has finished. This answers "why is this
+chunk here, why was that one skipped, what did this run cost, which document
+went missing" months later from its own log, without the caller having saved
+anything.
+
+`plan` is a real decider because "skip this chunk" is a decision with evidence —
+same content hash AND same embedder fingerprint — and its branches
+(`full-index` / `incremental` / `nothing-to-do`) are named in the trace. The
+embed stage fans out with `addParallelForEach` and a declarative `retry`, so a
+rate-limited attempt is in the record instead of vanishing inside a hand-rolled
+loop.
+
+### Incremental re-index
+
+```text
+run 1  (first index)   discovered 3 · loaded 3 · chunks 8 · embedded 8 · skipped 0 · removed 0
+run 2  (no changes)    discovered 3 · loaded 3 · chunks 8 · embedded 0 · skipped 8 · removed 0
+run 3  (edit + delete) discovered 2 · loaded 2 · chunks 5 · embedded 1 · skipped 4 · removed 3
+```
+
+A chunk is reused when its content hash and the embedder fingerprint both
+match. Delete a document and its chunks go — an index that still answers from a
+file you deleted is worse than one that cannot answer. An **empty walk never
+prunes**: a typo in a path must not delete a corpus.
+
+### The CLI
+
+`agentfootprint-index` is the third bin, after `agentfootprint-setup` and
+`agentfootprint-lint-tools`:
+
+```bash
+npx agentfootprint-index ./docs --to ./corpus.db
+npx agentfootprint-index ./docs --to ./corpus.db --embedder local --split paragraph
+npx agentfootprint-index ./docs --to ./corpus.db --dry-run --json
+```
+
+### Two bugs the tests found, worth naming
+
+- **The fan-out was silently dropping work.** `maxBranches` TRUNCATES extra
+  items rather than queueing them, so a single fan-out over every batch would
+  have embedded only the first `maxConcurrentBatches` of them and reported
+  success — an index quietly holding a fraction of the corpus, which is the
+  worst thing this release could have shipped. The fan-out now runs over a
+  WINDOW that can never exceed the ceiling and loops for the rest, and a test
+  pins that 12 batches through a window of 2 index all twelve.
+- **The report counted intent, not outcome.** `embedded` came from the plan's
+  queue, so an embedder that failed every attempt still reported `embedded: 3`.
+  It is counted from what the batches actually wrote, and a failing batch now
+  fails the run (`failFast`) rather than leaving a half-indexed corpus that
+  keeps answering and quietly cannot see what did not land.
+
+Also found while writing the splitter tests: runt-folding merged short chunks
+**across heading boundaries**, producing a chunk labelled with one section's
+heading and containing the next section's text — a citation that names the
+wrong section. Folding now only merges within a section. And page attribution
+read the overlapped start rather than the chunk's own, so a chunk could cite
+the page its 150-character run-up borrowed from.
+
+### Requirements
+
+- **footprintjs `^9.15.0`** (was `^9.13.0`): the indexing chart uses
+  `addParallelForEach` (9.14.0) and per-stage declarative `retry` (9.15.0).
+- **`unpdf`** as a new optional peer. Only `pdfLoader` touches it, only when a
+  PDF is actually read.
+
+
 ## [8.9.0] - 2026-08-06
 
 **The durable index.** 8.8.0 made retrieval tell the truth about what it read.

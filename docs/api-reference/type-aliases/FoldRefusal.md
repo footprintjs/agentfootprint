@@ -8,7 +8,7 @@
 
 > **FoldRefusal** = [`WindowRefusal`](/agentfootprint/api/generated/interfaces/WindowRefusal.md)
 
-Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/b7f4615ff6ee62d30980a77f38c0bd850f4995af/src/core/agent/window/types.ts#L93)
+Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/455f6597240fc141458c0e86e6b1fbf49ea37d98/src/core/agent/window/types.ts#L93)
 
 ## Deprecated
 
