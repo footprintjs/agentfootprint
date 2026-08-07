@@ -75,11 +75,7 @@ const handoffGraph = () => {
     .build();
 };
 
-const fire = (
-  g: ReturnType<typeof handoffGraph>,
-  id: string,
-  c: InjectionContext,
-): boolean =>
+const fire = (g: ReturnType<typeof handoffGraph>, id: string, c: InjectionContext): boolean =>
   (
     g.skills.find((s) => s.id === id)!.trigger as {
       activeWhen: (c: InjectionContext) => boolean;
@@ -145,7 +141,11 @@ describe('route handoff — trigger compilation', () => {
     });
     // The cursor moves — the graph agrees the turn is refund's now.
     expect(g.nextSkill(handoff)).toBe('refund');
-    expect(g.explainNextSkill(handoff)).toMatchObject({ from: 'triage', to: 'refund', by: 'route' });
+    expect(g.explainNextSkill(handoff)).toMatchObject({
+      from: 'triage',
+      to: 'refund',
+      by: 'route',
+    });
     // The target activates …
     expect(fire(g, 'refund', handoff)).toBe(true);
     // … and the source it just handed off from does not (pre-8.15.0: `true` — its

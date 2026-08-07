@@ -249,9 +249,9 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
           unconditional.length === 1 ? 'that one loads its' : 'those load their'
         } body and tools without routing anything. Give ${quoteList(unconditional)} a ` +
         `\`when\` (a conditional entry is active only while the cursor is on it), make ` +
-        `${
-          unconditional.length === 1 ? 'it a route target' : 'them route targets'
-        } instead of ${unconditional.length === 1 ? 'an entry' : 'entries'}, rank the menu ` +
+        `${unconditional.length === 1 ? 'it a route target' : 'them route targets'} instead of ${
+          unconditional.length === 1 ? 'an entry' : 'entries'
+        }, rank the menu ` +
         `with .entryBy(keywordScorer()), or let the model choose with .entryByRead(). If ` +
         `${
           unconditional.length === 1 ? 'it is' : 'they are'
