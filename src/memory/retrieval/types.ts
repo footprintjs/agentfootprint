@@ -33,7 +33,18 @@ export type RetrievalRejectReason =
   /** Cleared the threshold, but the context-token budget had no room left. */
   | 'over-budget'
   /** Cleared the threshold and the budget, but the picker's `maxEntries` cap was full. */
-  | 'over-max-entries';
+  | 'over-max-entries'
+  /**
+   * Cleared the threshold and the count rule, but the retriever's `maxChars`
+   * budget was already spent by better-ranked passages (8.19.0).
+   *
+   * A COUNT bound is not a SIZE bound: `topK: 10` over ordinary headings can
+   * be eleven thousand characters, which over-runs the system-prompt slot's
+   * 4000-char default with nothing but defaults. `maxChars` is the size
+   * bound, and this reason is what makes spending it visible — the tail is
+   * dropped, and the record says which chunks and why.
+   */
+  | 'over-char-budget';
 
 /**
  * One candidate the retrieval considered — admitted or not.
@@ -104,6 +115,23 @@ export interface RetrievalEvidence {
   readonly k: number;
   /** The quality floor. Absent when the retriever set none. */
   readonly threshold?: number;
+  /**
+   * The character budget the admitted passages were spent against (8.19.0).
+   * Absent when the retriever set none — which is the default, and means
+   * `k` was the only bound on how much text reached the prompt.
+   */
+  readonly maxChars?: number;
+  /**
+   * How many characters of PASSAGE the admitted set spends. Present exactly
+   * when {@link maxChars} is, and re-stated by the budget picker so it can
+   * never disagree with {@link admittedCount}.
+   *
+   * Passage characters, not prompt bytes: the `<source …>` wrapper and the
+   * block header are added later by the formatter and are not counted here.
+   * The exact bytes are on each candidate's `promptFragment` once the
+   * formatter has run.
+   */
+  readonly charsUsed?: number;
   /** The embedder id the query was produced with, when the caller declared one. */
   readonly embedderId?: string;
   /** Length of the query vector. Mixing two lengths in one store is a config bug. */

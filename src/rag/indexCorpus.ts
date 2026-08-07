@@ -56,6 +56,7 @@ import { decide } from 'footprintjs';
 
 import type { Embedder } from '../memory/embedding/index.js';
 import type { MemoryStore } from '../memory/store/index.js';
+import { assertServesVectors } from '../memory/store/capability.js';
 import type { MemoryIdentity } from '../memory/identity/index.js';
 import type { MemoryEntry } from '../memory/entry/index.js';
 import { emitEmbedding } from '../memory/embedding/emitEmbedding.js';
@@ -187,6 +188,12 @@ export function buildIndexChart(config: IndexCorpusConfig): ReturnType<typeof co
 }
 
 function compile(config: IndexCorpusConfig) {
+  // Before the chart exists, before a byte is embedded: a store that has
+  // declared it cannot serve vectors back would make this whole run a
+  // successful report about an unreachable corpus. Refused at BUILD, so
+  // `buildIndexChart` refuses it too rather than handing back a chart that
+  // is guaranteed to lie.
+  assertServesVectors(config.store, 'indexCorpus');
   const corpus = config.corpus ?? DEFAULT_CORPUS_IDENTITY;
   const splitter = config.splitter ?? byHeading();
   const embedderId = config.embedderId ?? config.embedder.id ?? 'default-embedder';

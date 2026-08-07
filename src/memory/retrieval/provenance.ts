@@ -61,15 +61,33 @@ export function chunkProvenance(value: unknown): ChunkProvenance {
 /**
  * The text a stored value carries.
  *
- * Two shapes reach the formatter through the same pipeline: a chat
- * `Message` (`{ role, content }`) from conversation memory, and a
- * document (`{ id, content, metadata }`) from `indexDocuments`. Both
- * keep their text on `content`, which is why one accessor serves both —
- * but only the message shape has a meaningful `role`, which is why the
- * corpus formatter does not print one.
+ * THREE shapes reach the formatter through the same pipeline, and they do
+ * not agree on the key:
+ *
+ *   • a chat `Message` (`{ role, content }`) from conversation memory;
+ *   • a document (`{ id, content, metadata }`) from `indexDocuments`;
+ *   • a `Chunk` (`{ id, docUri, text, charStart, … }`) from `indexCorpus`
+ *     / `indexFolder`, which keeps its passage on **`text`**.
+ *
+ * Until 8.19.0 this read `content` only, and returned `''` for everything
+ * else. That is how a chunk indexed by this library's own `rag` door
+ * rendered a perfectly-formed citation — right document, right heading,
+ * right score — around an EMPTY BODY. The model was handed the coordinates
+ * of a passage and not the passage; a retrieval that looks like it worked
+ * is the most expensive way for this to fail, because nothing in the run
+ * says anything is wrong.
+ *
+ * So the accessor reads both keys. `content` wins when both are present:
+ * it is the older meaning, and no shape this library writes carries the two
+ * with different text. A value carrying NEITHER has no passage at all —
+ * that is a different fact from "an unrenderable one", and it is refused at
+ * WRITE time by `indexDocuments` rather than discovered as a blank citation
+ * at read time.
  */
 export function chunkText(value: unknown): string {
   const root = asRecord(value);
   const content = root?.['content'];
-  return typeof content === 'string' ? content : '';
+  if (typeof content === 'string') return content;
+  const text = root?.['text'];
+  return typeof text === 'string' ? text : '';
 }

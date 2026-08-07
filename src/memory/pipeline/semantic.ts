@@ -77,6 +77,12 @@ export interface SemanticPipelineConfig {
   /** Cosine threshold below which matches are dropped. Default none. */
   readonly minScore?: number;
 
+  /**
+   * Character budget for the admitted passages, spent in rank order
+   * (8.19.0). Default none — `k` stays the only bound, as before.
+   */
+  readonly maxChars?: number;
+
   /** Tier filter for retrieval. */
   readonly tiers?: ReadonlyArray<'hot' | 'warm' | 'cold'>;
 
@@ -129,6 +135,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
     ...(config.k !== undefined && { k: config.k }),
     ...(config.minScore !== undefined && { minScore: config.minScore }),
+    ...(config.maxChars !== undefined && { maxChars: config.maxChars }),
     ...(config.tiers && { tiers: config.tiers }),
     ...(config.retrieval !== undefined && { retrieval: config.retrieval }),
   };

@@ -95,6 +95,14 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       )
       .build();
 
+    // What the model actually READ, not only which passage was cited. The
+    // citation and the passage are two different claims, and until 8.19.0 a
+    // chunk indexed by `indexFolder` produced a perfect citation around an
+    // empty body — so the passage is printed here, where a wrong one shows.
+    agent.on('agentfootprint.memory.attached', (e) => {
+      lines.push(`  → ${shortName(e.payload.memoryId)}: "${e.payload.contentSummary}"`);
+    });
+
     agent.on('agentfootprint.memory.retrieved', (e) => {
       lines.push('\nwhy this passage');
       for (const c of e.payload.candidates ?? []) {

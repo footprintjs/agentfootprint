@@ -107,6 +107,19 @@ export interface RedisStoreOptions {
  * @throws when `ioredis` is not installed and no `_client` is supplied.
  */
 export class RedisStore implements MemoryStore {
+  /**
+   * **No.** This adapter implements no `search()` at all — vector search over
+   * Redis is RedisSearch, a separate module with its own API, and a
+   * `RedisSearchStore` may ship later.
+   *
+   * Declared (8.19.0) rather than left to the absent method, so the corpus
+   * builders refuse it at the CALL, before a corpus is embedded and paid for.
+   * Without the declaration the same mistake still failed — one layer later,
+   * when `defineRAG` refused the store for having no `search()`, after the
+   * whole index had been built and billed.
+   */
+  readonly supportsVectorSearch = false;
+
   private readonly client: RedisLikeClient;
   private readonly prefix: string;
   private readonly scanCount: number;

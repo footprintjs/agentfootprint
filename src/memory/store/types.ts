@@ -128,6 +128,35 @@ export interface ScoredEntry<T = unknown> {
  */
 export interface MemoryStore {
   /**
+   * Does this store rank the VECTORS it was given? (8.19.0)
+   *
+   * `search` being optional answers a different question — whether the
+   * method exists — and some stores implement it while ranking on their own
+   * side, over a population they derived themselves. `AgentCoreStore` is
+   * the shipped example: its `search()` takes the query as {@link
+   * SearchOptions.text} and returns AgentCore's extracted memory RECORDS,
+   * never the embeddings written into it. Handed one of those,
+   * `indexCorpus` embedded a whole corpus, reported success, and retrieved
+   * nothing — every number in the report true, the corpus unreachable.
+   *
+   * So corpus-building calls (`indexCorpus`, `indexFolder`,
+   * `indexDocuments`) read this bit and refuse a store that declares
+   * `false`, naming it and what to use instead.
+   *
+   * **Three values, and the third one is why this is optional.**
+   *   - `true`  — vectors in, ranked vectors out. Say this if you rank
+   *               locally over the `embedding` you were handed.
+   *   - `false` — this store cannot serve those vectors back. Say this and
+   *               the corpus builders refuse you loudly at the call rather
+   *               than silently at the first empty answer.
+   *   - absent  — undeclared. Treated exactly as before this existed:
+   *               nothing refuses, nothing changes. Every adapter written
+   *               against an earlier release is in this case, which is why
+   *               absence can never mean `false`.
+   */
+  readonly supportsVectorSearch?: boolean;
+
+  /**
    * Fetch one entry by id within the given identity's namespace.
    * Returns `null` when the entry doesn't exist OR has expired (TTL).
    * Callers should not distinguish — both mean "no data."

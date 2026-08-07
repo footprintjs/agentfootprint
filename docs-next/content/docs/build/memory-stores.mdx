@@ -18,6 +18,39 @@ Both store adapters live on the canonical `agentfootprint/memory` subpath. Per-a
 
 All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
 
+### "Vector search" is two different questions
+
+`search()` is optional on the port, so "can this store do vector search?" used to
+be answered by whether the method exists. That answers the wrong question.
+`AgentCoreStore` **has** a `search()` — it ranks server-side, over the records
+AgentCore's own extraction strategies derived, and never over the embeddings you
+wrote into it. Handed one, `indexCorpus` embedded an entire corpus, billed you
+for it, and reported `embedded: 214` — over an index nothing could ever read.
+
+So the port carries one declared bit, `supportsVectorSearch`, and the
+corpus-building calls (`indexCorpus`, `indexFolder`, `indexDocuments`) refuse a
+store that declares `false`, naming it and what to use instead:
+
+```text
+indexCorpus: `AgentCoreStore` cannot serve vectors back, so indexing a corpus
+into it would report success and retrieve nothing.
+  Fix: index into a vector-capable store — InMemoryStore (dev/tests) or
+  sqliteVectorStore (durable, one file), …
+```
+
+`InMemoryStore` and `sqliteVectorStore` declare `true`. `AgentCoreStore` and
+`RedisStore` declare `false` — the ❌ in the table above is now a fact the code
+states, not only prose. For `RedisStore` that moves an existing failure earlier:
+it has no `search()`, so `defineRAG` always refused it, but only *after* the
+corpus had been embedded and billed.
+
+Three values, and the third is the compatibility clause: `true` means vectors
+in, ranked vectors out; `false` means refuse me for a corpus; **absent means
+undeclared**, and behaves exactly as it did before this existed. Every adapter
+written against an earlier release — and any you have written yourself — is in
+that third case and is unaffected. Declare `true` on your own adapter if it
+ranks the vectors it is given.
+
 ## InMemoryStore
 
 The default for dev / tests. O(n) linear scan for `search()`; fine for thousands of entries; bounded by process memory:

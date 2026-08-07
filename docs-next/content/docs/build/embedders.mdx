@@ -1,25 +1,25 @@
 ---
 title: Embedders
-description: openaiEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
+description: openaiEmbedder, bedrockEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
 ---
 
-> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/providers` is where the three real ones live.
+> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/providers` is where the four real ones live.
 
-## The three
+## The four
 
-All three satisfy the same `Embedder` contract, so they are interchangeable at
+All four satisfy the same `Embedder` contract, so they are interchangeable at
 the call site. What differs is what they need from you, where they can run, and
 what they cost.
 
 | | needs | extra install | runs in a browser | cost |
 |---|---|---|---|---|
 | `openaiEmbedder()` | an OpenAI API key | none (plain `fetch`) | **yes** | per token, billed by OpenAI; every text you embed leaves your machine |
+| `bedrockEmbedder()` | AWS credentials (the normal chain) | `@aws-sdk/client-bedrock-runtime` | **no** — Node only | per token, billed by AWS; stays inside your AWS account and region |
 | `localEmbedder()` | nothing | `@huggingface/transformers` | **yes**, with `backend` (see below) | free; ~27 MiB downloaded on first use, then cached |
 | `staticEmbedder()` | nothing | `@yarflam/potion-base-8m` | **no** — Node only | free; ~30 MB on disk after install, no network at all |
 
-Both peer deps are **optional**: installing agentfootprint does not install
-either one, and neither is loaded unless you actually call the factory that
-needs it.
+Every peer dep is **optional**: installing agentfootprint installs none of them,
+and none is loaded unless you actually call the factory that needs it.
 
 The type they all return is exported from the same subpath:
 
@@ -85,6 +85,54 @@ const local = openaiEmbedder({
 
 A vector store that trusts `.dimensions` and gets a different length back
 corrupts silently, which is why this is an error and not a warning.
+
+## `bedrockEmbedder()` — hosted on AWS
+
+Amazon Titan Text Embeddings V2 through Bedrock's `InvokeModel`. There is no
+`apiKey` option, deliberately: Bedrock authenticates through the normal AWS
+credential chain (environment, profile, instance role, SSO), and a second way
+to configure the same thing is a second way to get it wrong.
+
+```bash
+npm install @aws-sdk/client-bedrock-runtime
+```
+
+```ts
+import { bedrockEmbedder } from 'agentfootprint/providers';
+
+const embedder = bedrockEmbedder({ region: 'us-east-1' }); // 1024 dimensions
+```
+
+`BedrockEmbedderOptions` is `{ model?, dimensions?, region?, client? }`. Titan
+V2 returns **1024** dimensions by default and also supports **512** and **256**;
+the value you pass is sent to the model *and* reported as `.dimensions`, so the
+two can never disagree, and a size Titan does not produce is refused rather than
+stored. A model this library does not know the size of has to say its own, the
+same rule `openaiEmbedder` applies:
+
+```ts
+bedrockEmbedder({ dimensions: 512 });                        // smaller vectors, cheaper storage
+bedrockEmbedder({ model: 'amazon.titan-embed-text-v1' });     // known: 1536
+bedrockEmbedder({ model: 'cohere.embed-english-v3', dimensions: 1024 }); // unknown: state it
+```
+
+Pass `client` to share one SDK configuration with the rest of your app — the
+type is exported as `BedrockRuntimeLikeClient` (a single `send`), with
+`BedrockRuntimeSdkModule` for the module shape. Both are structural, so a test
+double satisfies them without the SDK being installed at all.
+
+**Its `id` carries the dimension count**, and that is deliberate. Titan V2 at
+512 and Titan V2 at 1024 are different embedding spaces produced by one model
+id; the size alone cannot separate them either, because V1 and V2 both answer at
+1024. Entries store the id alone in `embeddingModel`, and that is the only thing
+the read-side `embedderId` filter compares — so the id is
+`bedrock:amazon.titan-embed-text-v2:0:512`, and every combination of model and
+size is a distinct index.
+
+Titan has no batch-embed operation, so `embedBatch` is honestly N sequential
+calls rather than a batch discount that does not exist. `indexCorpus` already
+fans out over batches with bounded parallelism and retry, so a corpus index is
+still parallel where it counts.
 
 ## `localEmbedder()` — on your device
 
@@ -154,6 +202,8 @@ Static vectors are weaker than a real transformer on paraphrases. Use them where
 
 `openaiEmbedder()` works in a browser as-is: it is a `fetch`, nothing to bundle.
 (Your key would be in the page, so this belongs in a prototype, not production.)
+`bedrockEmbedder()` does not: it needs the AWS SDK and AWS credentials, neither
+of which belongs in a page.
 
 `localEmbedder()` needs one extra step. To keep `@huggingface/transformers`
 optional, agentfootprint imports it through a **variable specifier** — and a

@@ -264,6 +264,9 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
         embedder: t.embedder,
         ...(t.topK !== undefined && { k: t.topK }),
         ...(t.threshold !== undefined && { minScore: t.threshold }),
+        // Composes with either spelling — a size bound, not a second
+        // spelling of the count rule. See TopKRetrievalStrategy.maxChars.
+        ...(t.maxChars !== undefined && { maxChars: t.maxChars }),
         ...(t.embedderId !== undefined && { embedderId: t.embedderId }),
         ...(t.retrieval !== undefined && { retrieval: t.retrieval }),
         ...(options.flavor !== undefined && { flavor: options.flavor }),
@@ -395,6 +398,16 @@ function buildCausalPipeline(options: DefineCausalOptions): MemoryPipeline {
     throw new Error(
       `defineMemory[${options.id}]: CAUSAL type does not read \`retrieval\` — snapshot recall ` +
         'matches a stored query vector, not a document pool. Use `topK` + `threshold`.',
+    );
+  }
+
+  // Same law, same reason (8.19.0): the snapshot pipeline has no character
+  // budget, so accepting one here would be an option the run does not read.
+  if (s.maxChars !== undefined) {
+    throw new Error(
+      `defineMemory[${options.id}]: CAUSAL type does not read \`maxChars\` — it recalls whole ` +
+        'past-run snapshots, not a pool of passages to spend a character budget across. ' +
+        'Bound it with `topK` (snapshots recalled) or `projection` (how much of each one).',
     );
   }
 

@@ -44,6 +44,17 @@
  *
  * `rejectWindow` therefore only controls how many near-misses we can SHOW.
  * It cannot change what the model sees.
+ *
+ * ─── The size bound (8.19.0) ───────────────────────────────────────────
+ *
+ * `k` is a COUNT bound. It says how many passages may reach the prompt and
+ * nothing about how much text that is — which is how ten ordinary headings
+ * became eleven thousand characters against a 4000-character slot budget,
+ * with nothing but defaults on either side. `maxChars` is the bound on the
+ * other axis: a character budget spent across the admitted passages in rank
+ * order, tail dropped, every drop named `'over-char-budget'` in the record.
+ * Unset by default, so a retriever that does not ask for it behaves exactly
+ * as it did before.
  */
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage as Message } from '../../adapters/types.js';
@@ -51,7 +62,7 @@ import type { MemoryStore, ScoredEntry } from '../store/index.js';
 import type { MemoryState } from '../stages/index.js';
 import { identityNamespace } from '../identity/index.js';
 import { fnv1a } from '../../lib/fnv1a.js';
-import { chunkProvenance } from '../retrieval/provenance.js';
+import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import { topK } from '../retrieval/topK.js';
 import type {
   RetrievalEvidence,
@@ -81,6 +92,15 @@ export interface LoadRelevantConfig {
 
   /** Minimum cosine score [-1, 1] to consider a match. Default: none. */
   readonly minScore?: number;
+
+  /**
+   * A character budget for the admitted passages, spent in RANK order
+   * (8.19.0). Default: none — `k` is the only bound, exactly as before.
+   *
+   * Counts passage characters, not rendered prompt bytes. See
+   * {@link RetrievalEvidence.maxChars}.
+   */
+  readonly maxChars?: number;
 
   /** Filter results by tier. */
   readonly tiers?: ReadonlyArray<'hot' | 'warm' | 'cold'>;
@@ -225,19 +245,59 @@ export function loadRelevant(config: LoadRelevantConfig) {
         // that we could not see the candidates ourselves.
         results.map((_, i): RetrievalVerdict => ({ admitted: i < strategy.k }));
 
+    // ── The SIZE bound, spent in rank order (8.19.0) ──────────────────
+    // `k` bounds how MANY passages reach the prompt and says nothing about
+    // how much text that is. Ten ordinary headings is eleven thousand
+    // characters, which over-runs the system-prompt slot's 4000-char
+    // default with nothing but defaults on either side. `maxChars` is the
+    // bound on the other axis.
+    //
+    // Rank order, and the TAIL goes: the first passage that does not fit
+    // ends the spend, and it and everything after it are refused with
+    // `over-char-budget`. Not "skip it and try the next smaller one" —
+    // that would silently reorder relevance by length, and a reader of the
+    // record could not tell a budget drop from a bad score. A budget
+    // smaller than the best-scoring passage therefore admits NOTHING, and
+    // says so per candidate rather than half-injecting.
+    const maxChars = config.maxChars;
+    const droppedForChars = new Set<number>();
+    let charsUsed = 0;
+    if (maxChars !== undefined) {
+      let budgetSpent = false;
+      verdicts.forEach((verdict, i) => {
+        if (!verdict.admitted) return;
+        if (budgetSpent) {
+          droppedForChars.add(i);
+          return;
+        }
+        // `verdicts` is built from `results`, one per element.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const cost = chunkText(results[i]!.entry.value).length;
+        if (charsUsed + cost > maxChars) {
+          budgetSpent = true;
+          droppedForChars.add(i);
+          return;
+        }
+        charsUsed += cost;
+      });
+    }
+
     const admitted: ScoredEntry<unknown>[] = [];
     const candidates: RetrievedCandidate[] = [];
     results.forEach((result, i) => {
       // `verdicts` is built from `results` above, one per element.
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const verdict = verdicts[i]!;
-      if (verdict.admitted) admitted.push(result);
+      const overChars = droppedForChars.has(i);
+      const isAdmitted = verdict.admitted && !overChars;
+      if (isAdmitted) admitted.push(result);
+      const reason = overChars ? ('over-char-budget' as const) : verdict.reason;
       candidates.push({
         id: result.entry.id,
         score: result.score,
         rank: i + 1,
-        admitted: verdict.admitted,
-        ...(verdict.reason !== undefined && { reason: verdict.reason }),
+        admitted: isAdmitted,
+        ...(reason !== undefined && { reason }),
         ...chunkProvenance(result.entry.value),
       });
     });
@@ -245,6 +305,7 @@ export function loadRelevant(config: LoadRelevantConfig) {
     const evidence: RetrievalEvidence = {
       ...baseEvidence,
       ...(queryVec.length > 0 && { dimensions: queryVec.length }),
+      ...(maxChars !== undefined && { maxChars, charsUsed }),
       consideredCount: results.length,
       admittedCount: admitted.length,
       rejectedCount: results.length - admitted.length,
@@ -273,6 +334,10 @@ export function loadRelevant(config: LoadRelevantConfig) {
       queryHash: evidence.queryHash,
       k: evidence.k,
       ...(evidence.threshold !== undefined && { threshold: evidence.threshold }),
+      ...(evidence.maxChars !== undefined && {
+        maxChars: evidence.maxChars,
+        charsUsed: evidence.charsUsed,
+      }),
       ...(evidence.embedderId !== undefined && { embedderId: evidence.embedderId }),
       ...(evidence.dimensions !== undefined && { dimensions: evidence.dimensions }),
       consideredCount: evidence.consideredCount,

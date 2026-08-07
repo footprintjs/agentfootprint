@@ -37,6 +37,14 @@ const MAX_LIST_LIMIT = 1000;
 
 export class InMemoryStore implements MemoryStore {
   /**
+   * Vectors in, ranked vectors out — the linear cosine scan below ranks the
+   * embeddings it was handed. Declared (8.19.0) so a corpus builder can tell
+   * this apart from a store whose `search()` ranks server-side over a
+   * population it derived itself.
+   */
+  readonly supportsVectorSearch = true;
+
+  /**
    * Top-level namespace → slot. Using `Map` rather than a plain object
    * avoids prototype-pollution surface AND preserves insertion order
    * (needed for deterministic list pagination).

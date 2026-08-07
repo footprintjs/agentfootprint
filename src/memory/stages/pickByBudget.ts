@@ -48,6 +48,7 @@ import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message } from '../../adapters/types.js';
 import type { MemoryState } from './types.js';
 import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize.js';
+import { chunkText } from '../retrieval/provenance.js';
 
 /**
  * Reusable shape for a **composable pipeline segment** — a function that
@@ -144,7 +145,7 @@ function buildPickDecider(config: PickByBudgetConfig) {
  */
 const skipStage = (scope: TypedScope<MemoryState>): void => {
   scope.selected = [];
-  reviseAdmitted(scope, () => false);
+  reviseAdmitted(scope, () => false, undefined, 0);
 };
 
 /**
@@ -152,11 +153,19 @@ const skipStage = (scope: TypedScope<MemoryState>): void => {
  * kept. `keptIds` is consulted only for candidates the strategy already
  * admitted — a below-threshold candidate keeps its own reason, because
  * the budget never got the chance to reject it.
+ *
+ * `charsKept` re-states the retriever's `maxChars` spend against what
+ * survived here (8.19.0). The retrieval recorded what IT spent; if this
+ * picker then drops an entry for tokens, a `charsUsed` still counting that
+ * entry's passage would be a record disagreeing with its own
+ * `admittedCount`. It is written only when the retriever set a budget —
+ * nothing new appears on a record that never had one.
  */
 function reviseAdmitted(
   scope: TypedScope<MemoryState>,
   wasKept: (id: string) => boolean,
-  overCap?: (id: string) => boolean,
+  overCap: ((id: string) => boolean) | undefined,
+  charsKept: number,
 ): void {
   const evidence = scope.retrieved;
   if (!evidence?.candidates) return;
@@ -177,6 +186,7 @@ function reviseAdmitted(
     candidates,
     admittedCount,
     rejectedCount: candidates.length - admittedCount,
+    ...(evidence.maxChars !== undefined && { charsUsed: charsKept }),
   };
 }
 
@@ -227,10 +237,14 @@ function buildPickStage(config: PickByBudgetConfig) {
     scope.selected = picked.reverse();
 
     const kept = new Set(picked.map((e) => e.id));
+    // Measured through the SAME accessor the retriever spent its character
+    // budget with, so the two numbers are the same kind of number.
+    const charsKept = picked.reduce((total, entry) => total + chunkText(entry.value).length, 0);
     reviseAdmitted(
       scope,
       (id) => kept.has(id),
       (id) => overCap.has(id),
+      charsKept,
     );
   };
 }

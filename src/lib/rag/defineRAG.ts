@@ -211,6 +211,50 @@ export interface DefineRAGOptions {
   readonly threshold?: number;
 
   /**
+   * A character budget for the retrieved passages, spent across them in
+   * RANK order (8.19.0). Default: none — `topK` stays the only bound, so
+   * nothing changes for a retriever that does not ask for this.
+   *
+   * **A count bound is not a size bound.** `topK` says how many passages
+   * may reach the prompt and nothing about how long they are: ten chunks
+   * cut by `byHeading()` off ordinary documentation measured 11,153
+   * characters in the field, against a `systemPrompt` slot whose default
+   * budget is 4,000 — an overflow produced entirely by defaults on both
+   * sides. Nothing truncates (the slot warns and emits
+   * `agentfootprint.context.budget_pressure`), so the run was honest about
+   * the over-run and had no way to BOUND it. This is that bound.
+   *
+   * The two numbers, side by side, because they are the ones that meet:
+   *
+   * | knob | default | what it bounds |
+   * |---|---|---|
+   * | `defineRAG({ topK })` | 3 | how MANY passages |
+   * | `defineRAG({ maxChars })` | none | how much TEXT they may be |
+   * | `Agent.create({ contextBudget: { systemPrompt } })` | 4000 chars | the whole slot they land in |
+   *
+   * Retrieved passages share that slot with the system prompt, steering,
+   * facts and skill bodies, so a budget of roughly half the slot is a
+   * sane starting point: `maxChars: 2000` with the 4,000-char default.
+   *
+   * The spend is RECORDED, never silent: passages past the budget are
+   * refused with `reason: 'over-char-budget'` on
+   * `agentfootprint.memory.retrieved`, and the record carries `maxChars`
+   * and `charsUsed`. Rank order, tail dropped — so a budget smaller than
+   * the best-scoring passage admits nothing and says so per candidate,
+   * rather than quietly injecting half a passage.
+   *
+   * NOT the splitters' `maxChars`: `byHeading({ maxChars })` bounds ONE
+   * chunk at index time (default 1000), this bounds the WHOLE retrieved set
+   * at query time. The first is why the arithmetic above lands where it
+   * does — ten chunks off a 1000-char splitter is ten thousand characters
+   * before a single tag is added.
+   *
+   * Composes with `retrieval` (unlike `topK`/`threshold`, which exclude
+   * it): the strategy picks the candidates, this bounds their size.
+   */
+  readonly maxChars?: number;
+
+  /**
    * The retrieval rule, spelled out. Replaces `topK` + `threshold`
    * entirely — passing both is refused, because they could disagree
    * and the recording would then name a `k` the run did not use.
@@ -265,6 +309,13 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
         'Pass a vector-capable adapter (InMemoryStore, pgvector, Pinecone, ...).',
     );
   }
+  if (opts.maxChars !== undefined && (!Number.isFinite(opts.maxChars) || opts.maxChars < 1)) {
+    throw new Error(
+      `defineRAG[${opts.id}]: \`maxChars\` must be a positive number of characters — received ` +
+        `${String(opts.maxChars)}. A budget of zero admits no passage at all, which is what ` +
+        'leaving `maxChars` unset already means (no size bound); say what you want spent.',
+    );
+  }
   if (opts.retrieval !== undefined) {
     const shorthand: string[] = [];
     if (opts.topK !== undefined) shorthand.push('`topK`');
@@ -289,6 +340,9 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
             embedder: opts.embedder,
             retrieval: opts.retrieval,
             ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
+            // Rides BOTH arms: the rule chooses the passages, this bounds
+            // how much text the chosen ones are allowed to be.
+            ...(opts.maxChars !== undefined && { maxChars: opts.maxChars }),
           }
         : {
             kind: MEMORY_STRATEGIES.TOP_K,
@@ -296,6 +350,7 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
             threshold: opts.threshold ?? 0.7,
             embedder: opts.embedder,
             ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
+            ...(opts.maxChars !== undefined && { maxChars: opts.maxChars }),
           },
     store: opts.store,
     // A corpus is not a conversation log — see the header.

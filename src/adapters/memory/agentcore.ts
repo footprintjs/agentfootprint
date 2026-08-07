@@ -247,6 +247,22 @@ function safeId(prefix: string, raw: string): string {
  *         is supplied.
  */
 export class AgentCoreStore implements MemoryStore {
+  /**
+   * **No.** `search()` below exists, but it is `RetrieveMemoryRecords`:
+   * AgentCore embeds and ranks on its own side, over the records its
+   * extraction strategies derived, and never over the vectors written
+   * through `put`/`putMany`. Embeddings handed to this store are stored
+   * inside the event blob and are never ranked by anything.
+   *
+   * Declared (8.19.0) because a method's presence could not say that.
+   * `indexCorpus` used to accept this store, embed a whole corpus, pay for
+   * it and report success — and the chunks were unreachable forever. The
+   * corpus builders read this bit and refuse, naming this store and what to
+   * use instead; nothing else changes, and `defineMemory` over AgentCore's
+   * own retrieval is untouched.
+   */
+  readonly supportsVectorSearch = false;
+
   private readonly client: AgentCoreLikeClient;
   private readonly memoryId: string;
   private readonly pageSize: number;

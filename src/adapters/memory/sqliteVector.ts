@@ -565,6 +565,11 @@ export function sqliteVectorStore(options: SqliteVectorStoreOptions): SqliteVect
     journalMode,
     file,
 
+    // Vectors in, ranked vectors out — exact cosine over the embeddings this
+    // store was handed. Declared so the corpus builders can tell this apart
+    // from a store whose search() ranks on someone else's side.
+    supportsVectorSearch: true,
+
     fingerprintOf(identity: MemoryIdentity): string | undefined {
       open('report a fingerprint');
       return readFingerprint(identityNamespace(identity));

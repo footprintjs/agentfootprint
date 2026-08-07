@@ -152,8 +152,11 @@ function ragRenderEntry(entry: MemoryEntry<Message>, candidate?: RetrievedCandid
   if (heading !== undefined) parts.push(`heading="${attr(heading)}"`);
   if (candidate?.score !== undefined) parts.push(`score="${candidate.score.toFixed(2)}"`);
 
-  // `chunkText` reads `.content`, which both shapes carry — a document
-  // from `indexDocuments` and a chat message keep their text there.
+  // `chunkText` reads `.content` OR `.text` (8.19.0): a document from
+  // `indexDocuments` and a chat message keep their text on `content`, a
+  // `Chunk` from `indexCorpus` keeps it on `text`. Reading only the first
+  // rendered this whole block around an empty body for every corpus the
+  // `rag` door built.
   const text = chunkText(entry.value);
   return `<source ${parts.join(' ')}>\n${escapeCloseTag(text, 'source')}\n</source>`;
 }

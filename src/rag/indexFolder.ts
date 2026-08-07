@@ -23,6 +23,7 @@
  * ```
  */
 import { indexCorpus, type IndexCorpusConfig } from './indexCorpus.js';
+import { assertServesVectors } from '../memory/store/capability.js';
 import { byHeading } from './splitters/byHeading.js';
 import { byParagraph } from './splitters/byParagraph.js';
 import type { IndexReport } from './types.js';
@@ -44,6 +45,9 @@ export interface IndexFolderOptions
 
 export async function indexFolder(dir: string, options: IndexFolderOptions): Promise<IndexReport> {
   const { to, include, recursive, splitter, ...rest } = options;
+  // `indexCorpus` refuses this too — repeated here only so the message names
+  // the call the reader actually wrote.
+  assertServesVectors(to, 'indexFolder');
   const looksLikeMarkdown =
     include === undefined || include.some((e) => e === '.md' || e === '.markdown');
 

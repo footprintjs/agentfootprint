@@ -28,7 +28,7 @@ In agentfootprint, RAG runs on **the same machinery as `defineMemory({ type: SEM
 
 ## Define a retriever, attach to an agent
 
-`defineRAG({ id, store, embedder, description?, embedderId?, corpus?, topK?, threshold?, retrieval? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
+`defineRAG({ id, store, embedder, description?, embedderId?, corpus?, topK?, threshold?, maxChars?, retrieval? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
@@ -63,9 +63,78 @@ agent.on('agentfootprint.memory.retrieved', (e) => {
 
 Sentence-transformer-class embedders (`all-MiniLM-L6-v2` and relatives) often score genuinely relevant chunks at 0.4–0.6, so 0.7 is a high bar for them; OpenAI `text-embedding-3-*` sits comfortably at 0.7.
 
+## How much text, not just how many chunks — `maxChars`
+
+`topK` bounds how MANY passages reach the prompt and says nothing about how long
+they are. **A count bound is not a size bound**, and the gap between them is
+where a corpus over-runs its slot with nothing but defaults on either side. Ten
+chunks cut by `byHeading()` off ordinary documentation measured 11,153
+characters in a production deployment, against a `systemPrompt` slot whose
+default budget is 4,000.
+
+Nothing truncates when that happens — the slot warns once and emits
+`agentfootprint.context.budget_pressure`, so the run is honest about the
+over-run. What it had no way to do was **bound** it. `maxChars` is that bound:
+
+```ts
+defineRAG({ id: 'docs', store, embedder, topK: 5, maxChars: 2000 });
+```
+
+The two numbers that meet, side by side — they live on different objects, which
+is exactly why the arithmetic between them is easy to miss:
+
+| knob | default | bounds |
+|---|---|---|
+| `defineRAG({ topK })` | **3** | how MANY passages |
+| `defineRAG({ maxChars })` | **none** | how much TEXT they may add up to |
+| `Agent.create({ contextBudget: { systemPrompt } })` | **4000 chars** | the whole slot they land in |
+
+Retrieved passages share that slot with the system prompt, steering, facts and
+skill bodies, so roughly half the slot is a sane starting budget:
+`maxChars: 2000` against the 4,000-char default.
+
+`maxChars` has **no default**, deliberately. Defaulting it would mean this
+release silently stops injecting passages that the last one injected — a
+retrieval regression that reads to a user as "the model doesn't know that",
+which is the failure class this library exists to make loud. And nothing here
+can know your slot budget: you may have raised `contextBudget.systemPrompt`.
+So the bound is yours to state, and the table above is the arithmetic.
+
+**The spend is recorded, never silent.** The budget is spent in rank order and
+the tail is dropped — passages past it are refused with
+`reason: 'over-char-budget'`, and the record carries `maxChars` and `charsUsed`:
+
+```ts
+agent.on('agentfootprint.memory.retrieved', (e) => {
+  console.log(`${e.payload.charsUsed}/${e.payload.maxChars} chars`);
+  for (const c of e.payload.candidates ?? []) {
+    if (c.reason === 'over-char-budget') console.log('dropped for size:', c.id);
+  }
+});
+```
+
+Rank order and drop, never "skip the big one and take the next": skipping would
+silently reorder relevance by length, and a reader of the record could not tell
+a budget drop from a bad score. A budget smaller than the best-scoring passage
+therefore admits nothing — and says so, per candidate, instead of injecting half
+a passage.
+
+`maxChars` composes with `retrieval` (unlike `topK`/`threshold`, which exclude
+it): the strategy picks the candidates, this bounds their size. It counts
+passage characters, not rendered prompt bytes — the `<source …>` wrapper and the
+block header are added afterwards by the formatter.
+
+<Callout type="info">
+**Not the same `maxChars` as the splitters'.** `byHeading({ maxChars })` and
+`byParagraph({ maxChars })` bound ONE chunk at index time (default **1000**);
+`defineRAG({ maxChars })` bounds the WHOLE retrieved set at query time. The
+first is why the arithmetic above lands where it does: ten chunks off a
+1000-char splitter is ten thousand characters before a single tag is added.
+</Callout>
+
 ## Indexing — `indexDocuments`
 
-Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs, options?)` is the seeding helper — embeds each doc (via `embedder.embedBatch` when available, else capped-concurrency single calls), then batches into `store.putMany()`. Returns the number of docs indexed. Each `RagDocument` is `{ id, content, metadata? }`:
+Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs, options?)` is the seeding helper — embeds each doc (via `embedder.embedBatch` when available, else capped-concurrency single calls), then batches into `store.putMany()`. Returns the number of docs indexed. Each `RagDocument` is `{ id, content, metadata? }` — or `{ id, text, metadata? }`, since 8.19.0, because that is how a chunk from the [`rag` door](doc:indexing) spells its passage and both are now read. A document carrying **neither** is refused before anything is embedded: an unrenderable passage and an absent one are different facts, and a citation wrapped around an empty body is the one that costs you a customer.
 
 ```ts
 import { indexDocuments } from 'agentfootprint';
@@ -92,13 +161,14 @@ Identity defaults to `{ conversationId: '_global' }` — matching `defineRAG`'s 
 
 `mockEmbedder()` is deterministic and free, and it is **plumbing-only**: it is a 32-dimension character-frequency hash, so it will happily rank an off-topic sentence above the right one. Use it to prove the pipeline runs; never to judge whether retrieval is any good.
 
-Three real embedders ship, all from `agentfootprint/providers`:
+Four real embedders ship, all from `agentfootprint/providers`:
 
 | | key needed | network | notes |
 |---|---|---|---|
 | `staticEmbedder()` | no | no | bundled Model2Vec weights, 256-d. The first rung where ranking is real. |
 | `localEmbedder()` | no | one-time model fetch | on-device sentence-transformer, 384-d. **Truncates input at 512 tokens** (~1,800 characters) — chunk below that or the tail is silently dropped. |
 | `openaiEmbedder()` | yes | yes | hosted, 1536-d by default. |
+| `bedrockEmbedder()` | AWS credentials | yes | hosted on AWS, Titan V2 at 1024-d (512 / 256 on request). See [embedders](doc:embedders). |
 
 Never mix two in one store: dimensions differ, and cross-model similarity scores are not comparable. Tag both sides with the same `embedderId` and the mismatch is filtered instead of silently scored.
 
@@ -162,9 +232,9 @@ Types for reading a retrieval back. The record types are on the main barrel (a c
 
 | Name | What it is |
 |---|---|
-| `RetrievalEvidence` | The whole record for one retrieval: `queryHash`, `k`, `threshold`, `embedderId`, `dimensions`, `selectionOrder`, the counts, `candidates`, `candidatesComplete`, `corpusEmpty`, `namespace`. |
+| `RetrievalEvidence` | The whole record for one retrieval: `queryHash`, `k`, `threshold`, `maxChars` / `charsUsed` (when a size budget was set), `embedderId`, `dimensions`, `selectionOrder`, the counts, `candidates`, `candidatesComplete`, `corpusEmpty`, `namespace`. |
 | `RetrievedCandidate` | One candidate: `id`, `score`, `rank`, `admitted`, `reason`, `docUri`, `page`, `heading`, plus `promptFragment` / `promptPosition` for admitted ones. |
-| `RetrievalRejectReason` | Why a candidate was refused: `'below-threshold'` · `'over-budget'` · `'over-max-entries'`. |
+| `RetrievalRejectReason` | Why a candidate was refused: `'below-threshold'` · `'over-budget'` · `'over-max-entries'` · `'over-char-budget'` (the `maxChars` size budget was already spent by better-ranked passages). |
 | `RetrievalStrategy` | The seam: `{ name, k, threshold?, rejectWindow, select(pool) }`. Given a score-descending pool it returns one `RetrievalVerdict` per candidate, in the same order. It never touches the store and never embeds. |
 | `ScoredCandidate` / `RetrievalVerdict` | A strategy's input row and its ruling. |
 | `topK(options)` / `TopKOptions` | The shipped strategy — `{ k?, threshold?, rejectWindow? }`. `threshold: null` means no floor. |
@@ -172,7 +242,7 @@ Types for reading a retrieval back. The record types are on the main barrel (a c
 | `DEFAULT_CORPUS_IDENTITY` | `{ conversationId: '_global' }` — the namespace both `defineRAG` and `indexDocuments` default to. |
 | `MemoryFlavor` | `'memory' | 'rag'` — which claim an injected block makes, and which `ContextSource` it composes as. |
 | `retrievalEvidenceKey(id)` / `isRetrievalEvidenceKey(key)` / `RETRIEVAL_EVIDENCE_KEY_PREFIX` | The root-state key convention (`retrievalEvidence_<id>`) a slice or a recorder reads the record from. |
-| `chunkProvenance(value)` / `chunkText(value)` / `ChunkProvenance` | Read a stored entry's coordinates (`docUri`, `page`, `heading`) and its text back out. The one place that knows which metadata keys mean what, so the record and the citation cannot disagree. |
+| `chunkProvenance(value)` / `chunkText(value)` / `ChunkProvenance` | Read a stored entry's coordinates (`docUri`, `page`, `heading`) and its passage back out. The one place that knows which keys mean what, so the record and the citation cannot disagree. `chunkText` reads `content` **or** `text` (8.19.0) — a chat message and an indexed document use the first, a `Chunk` from `indexCorpus` uses the second, and reading only one rendered a perfect citation around an empty body. |
 
 ## Anti-patterns
 

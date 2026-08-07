@@ -195,6 +195,8 @@ export interface TopKShorthandStrategy {
    * never forwarded it — an option the run did not read.
    */
   readonly embedderId?: string;
+  /** See {@link TopKRetrievalStrategy.maxChars}. */
+  readonly maxChars?: number;
   readonly retrieval?: never;
 }
 
@@ -205,6 +207,18 @@ export interface TopKRetrievalStrategy {
   readonly retrieval: RetrievalStrategy;
   /** See {@link TopKShorthandStrategy.embedderId}. */
   readonly embedderId?: string;
+  /**
+   * A character budget for the admitted passages, spent in rank order
+   * (8.19.0). Default none.
+   *
+   * It lives on BOTH arms, unlike `topK`/`threshold`, because it is not a
+   * second spelling of the retrieval rule: the rule decides WHICH
+   * candidates and how many, this bounds how much TEXT the winners are
+   * allowed to be. A count bound is not a size bound, so the two compose
+   * rather than exclude — `retrieval: topK({ k: 10 })` with
+   * `maxChars: 3000` is a coherent request and is honoured as written.
+   */
+  readonly maxChars?: number;
   readonly topK?: never;
   readonly threshold?: never;
 }

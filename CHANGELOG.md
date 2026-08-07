@@ -7,6 +7,169 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.19.0] - 2026-08-07
+
+**The corpus says what it retrieved.**
+
+Four findings from a production RAG deployment — a first-contact report, from
+someone building against the published package on a cloud runtime. Three of
+them are the same shape: a call that accepted something it could not honour and
+reported success anyway. The first is the worst kind of bug this library can
+ship, because the run looked like it worked.
+
+### A retrieved passage reaches the prompt with its text in it
+
+The formatter read a chunk's passage from `value.content`. A `Chunk` from this
+library's own `agentfootprint/rag` door — `indexCorpus`, `indexFolder`, the
+`agentfootprint-index` CLI — keeps its passage on **`text`**. So every corpus
+built with the indexing door rendered like this:
+
+```
+<source id="refunds.md#3" doc="refunds.md" heading="Refund timing" score="0.87">
+
+</source>
+```
+
+Right document, right heading, right score, **no passage**. The model was handed
+the coordinates of an answer and not the answer, and nothing in the run said so:
+the report said `embedded: 8`, the retrieval record listed the right chunks with
+the right provenance, and the agent answered from its own weights while looking
+grounded. It was reported from production as "the citation is perfect and the
+body is empty", and it was never a corner case — it was every corpus the `rag`
+door built.
+
+`chunkText` now reads `content` **or** `text`, so both shapes render (`content`
+wins if a value somehow carries both). `indexDocuments` accepts `text` as well
+for the same reason, and the repo's own RAG example now prints the passages
+alongside the citations, because the two are different claims and only one of
+them was being checked.
+
+**Behaviour change:** a document passed to `indexDocuments` carrying **neither**
+key is now refused, before anything is embedded:
+
+```
+indexDocuments: 1 document(s) carry no passage — neither `content` nor `text`
+holds a non-empty string: notes.md#4.
+  Indexing them would embed the empty string and store a citable id with
+  nothing to cite …
+```
+
+An unrenderable passage and an absent one are different facts. The first is now
+rendered; the second is refused where it can still be fixed, rather than
+discovered months later as a blank citation.
+
+### `maxChars` — a count bound is not a size bound
+
+`topK` says how MANY passages reach the prompt and nothing about how much text
+that is. In the field, ten chunks cut by `byHeading()` off ordinary
+documentation measured **11,153 characters** against a `systemPrompt` slot whose
+default budget is 4,000 — an overflow produced entirely by defaults on both
+sides.
+
+`defineRAG({ maxChars })` is the missing bound: a character budget spent across
+the retrieved passages in rank order, tail dropped.
+
+```ts
+defineRAG({ id: 'docs', store, embedder, topK: 5, maxChars: 2000 });
+```
+
+The spend is **recorded, never silent**. Passages past the budget are refused
+with the new `reason: 'over-char-budget'` on
+`agentfootprint.memory.retrieved`, and the record carries `maxChars` and
+`charsUsed` beside the counts it already carried.
+
+`maxChars` has **no default**, and that is a decision rather than an omission.
+Defaulting it would mean this release quietly stops injecting passages that
+8.18.0 injected — a retrieval regression that reads to a user as "the model
+doesn't know that", which is the failure class this library exists to make
+loud. Nothing truncates today either: the slot warns once and emits
+`agentfootprint.context.budget_pressure`, so a run is already honest about an
+over-run. What it lacked was a way to bound one. The two numbers now sit side by
+side in the RAG guide, because they live on different objects and the
+arithmetic between them is easy to miss: `topK` defaults to **3**,
+`contextBudget.systemPrompt` defaults to **4000 characters**, and retrieved
+passages share that slot with the system prompt, steering, facts and skill
+bodies.
+
+It composes with `retrieval` rather than excluding it (unlike
+`topK`/`threshold`): the strategy picks the candidates, `maxChars` bounds their
+size. `defineMemory` refuses it on the CAUSAL type, which has no passage pool to
+spend a budget across.
+
+It is **not** the splitters' `maxChars`, which bounds one chunk at index time
+and defaults to 1000 — that one is why the arithmetic lands where it does. Ten
+chunks off a 1000-character splitter is ten thousand characters before a single
+`<source>` tag is added, which is the 11,153 above almost exactly.
+
+### A store now declares whether it can serve vectors back
+
+`search()` is optional on `MemoryStore`, so "can this store do vector search?"
+was answered by asking whether the method exists. That answers the wrong
+question. `AgentCoreStore` **has** a `search()` — it ranks server-side, over the
+records the backend's own extraction strategies derived, and never over the
+embeddings written into it. Handed one, `indexCorpus` type-checked, ran, embedded
+the whole corpus, billed for it, and reported `embedded: 214` over an index
+nothing could ever read.
+
+`MemoryStore` gained one declared bit, `supportsVectorSearch`, and the
+corpus-building calls read it:
+
+```
+indexCorpus: `AgentCoreStore` cannot serve vectors back, so indexing a corpus
+into it would report success and retrieve nothing.
+  It declares `supportsVectorSearch: false`: its search() ranks on the SERVER's
+  side, over a population the backend derived itself …
+  Fix:  index into a vector-capable store — InMemoryStore (dev/tests) or
+  sqliteVectorStore (durable, one file), …
+  Keep `AgentCoreStore` for what it is good at: conversation memory through
+  `defineMemory`, where the backend's own retrieval is the point.
+```
+
+`indexCorpus`, `buildIndexChart`, `indexFolder` and `indexDocuments` all refuse
+it, before a byte is embedded. `InMemoryStore` and `sqliteVectorStore` declare
+`true`; `AgentCoreStore` and `RedisStore` declare `false`.
+
+**Behaviour change:** building a corpus into `AgentCoreStore` or `RedisStore` is
+refused where it used to run. Neither could ever serve those vectors back —
+`RedisStore` has no `search()` at all, so the same mistake already failed one
+layer later, when `defineRAG` refused the store *after* the whole index had been
+embedded and billed. The refusal moved to the call that starts the spending.
+
+**Absence is not a `false`.** A store that declares nothing behaves exactly as it
+did before this existed — which is every adapter written against an earlier
+release, including yours. Reading it is opt-in on the adapter's side, and the
+refusal only ever fires on a store that asked for it.
+
+### `bedrockEmbedder()` — Titan Text Embeddings V2
+
+A fourth shipped embedder, on `agentfootprint/providers`, next to
+`openaiEmbedder` / `localEmbedder` / `staticEmbedder`. Lazy-requires
+`@aws-sdk/client-bedrock-runtime` (an optional peer dep, like every other AWS
+adapter here), and takes no `apiKey` — Bedrock authenticates through the normal
+AWS credential chain, and a second way to configure that is a second way to get
+it wrong.
+
+```ts
+import { bedrockEmbedder } from 'agentfootprint/providers';
+
+const embedder = bedrockEmbedder({ region: 'us-east-1' });            // 1024-d
+const small = bedrockEmbedder({ region: 'us-east-1', dimensions: 512 });
+```
+
+Titan V2 returns 1024 dimensions by default and supports 512 and 256. The size
+you ask for is sent to the model **and** reported as `.dimensions`, so the two
+cannot disagree; a size Titan does not produce is refused, and a model this
+library does not know the size of has to state its own.
+
+**Its `id` carries the dimension count** — `bedrock:amazon.titan-embed-text-v2:0:512`
+— and that is deliberate, against the usual rule that an embedder id leaves the
+size to the store's `<id>@<dims>` fingerprint. Titan V2 at 512 and Titan V2 at
+1024 are different embedding spaces from one model id, and the size alone
+cannot separate them either, because V1 and V2 both answer at 1024. Entries
+store the id **alone** in `embeddingModel`, and that is the only thing the
+read-side `embedderId` filter compares — so the size belongs in the id, and a
+fingerprint that restates it once is the cheaper mistake.
+
 ## [8.18.0] - 2026-08-07
 
 **Output contracts are loud, and a message is always a message.**

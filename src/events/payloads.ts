@@ -514,7 +514,12 @@ export interface RetrievedCandidatePayload {
   readonly score: number;
   readonly rank: number;
   readonly admitted: boolean;
-  readonly reason?: 'below-threshold' | 'over-budget' | 'over-max-entries';
+  /**
+   * Why it did not reach the prompt. `'over-char-budget'` (8.19.0) means it
+   * cleared the score floor and the count rule, and the retriever's
+   * `maxChars` budget was already spent by better-ranked passages.
+   */
+  readonly reason?: 'below-threshold' | 'over-budget' | 'over-max-entries' | 'over-char-budget';
   readonly docUri?: string;
   readonly page?: number;
   readonly heading?: string;
@@ -539,6 +544,19 @@ export interface MemoryRetrievedPayload {
   readonly k: number;
   /** The quality floor, when the retriever set one. */
   readonly threshold?: number;
+  /**
+   * The character budget the admitted passages were spent against (8.19.0),
+   * when the retriever set one. A count bound (`k`) is not a size bound;
+   * this is the size bound, and the candidates it dropped carry
+   * `reason: 'over-char-budget'`.
+   */
+  readonly maxChars?: number;
+  /**
+   * Passage characters the admitted set spends. Present exactly when
+   * `maxChars` is. Passage text only — the `<source …>` wrapper and the
+   * block header are added later by the formatter.
+   */
+  readonly charsUsed?: number;
   readonly embedderId?: string;
   /** Length of the query vector. */
   readonly dimensions?: number;

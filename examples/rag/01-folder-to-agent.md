@@ -35,6 +35,9 @@ why this passage
   ✓ refund-policy.md#2           0.86  refund-policy.md, Eligibility
   ✗ refund-policy.md#0           0.86  refund-policy.md, Refund policy  over-max-entries
   ✗ security-overview.pdf#0      0.82  security-overview.pdf, p1  over-max-entries
+  → refund-policy.md#3: "the original purchase date. Digital goods that have…"
+  → refund-policy.md#2: "may take a further 2-5 business days to show it, wh…"
+  → refund-policy.md#1: "# Refund policy…"
 
 answer: Refunds are processed within 5 business days.
 ```
@@ -43,6 +46,13 @@ Every line is a fact the run recorded, not a reconstruction: the chunk id, the
 document it came from, the heading (Markdown) or page (PDF) it sits under, the
 similarity score, and — for the ones that did not make it — which rule refused
 them.
+
+The `→` lines are the **passages themselves**, and they are printed because the
+citation and the passage are two different claims. Before 8.19.0 a chunk from
+`indexFolder` produced every line above — right document, right heading, right
+score — around an empty body, because the formatter read a key an indexed chunk
+does not use. A citation with nothing behind it is the most expensive kind of
+wrong: the run looks like it worked.
 
 Note `security-overview.pdf#0  p1`. The page number is real, because the PDF
 loader keeps text per page rather than flattening the document first. A
@@ -55,6 +65,11 @@ citation you can check by opening page 1.
   no network) use `0.5` and the rejections become meaningful.
 - **`to: new InMemoryStore()`** → `sqliteVectorStore({ file: './corpus.db' })`
   and run 2's "embedded 0" survives a restart.
+- **`maxChars`** on `defineRAG` once the passages are real ones. `topK: 3` says
+  how many, not how long: three `byHeading()` chunks off real documentation can
+  be several thousand characters against a 4,000-char system-prompt budget.
+  `maxChars: 2000` bounds it, and the passages it drops say
+  `over-char-budget` in the block above instead of disappearing.
 
 ## From the command line
 
