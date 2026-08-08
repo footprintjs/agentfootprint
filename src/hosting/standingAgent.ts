@@ -31,8 +31,12 @@
  * involved while a user's conversation quietly stops existing.
  *
  * ── Resuming a CONVERSATION is a REPLAY, and that has a cost ─────────────────
- * A stored conversation is restored through `agent.resumeOnError(...)`, and this
- * is its caveat, stated here in the words the Agent states it in, because a
+ * A stored conversation is restored through `agent.run({ message, continueFrom })`
+ * — the public conversation door since 9.2.0. This composer used to assemble the
+ * continuation by hand (append the turn, rewrite `originalInput`, hand the result
+ * to `resumeOnError`); that hand-assembly IS the door now, so a server and a
+ * script continue a conversation the same way and the identity travels with it.
+ * The caveat below is stated here in the words the Agent states it in, because a
  * composition that hides the caveat of the thing it composes is worse than no
  * composition at all:
  *
@@ -256,7 +260,7 @@ export async function standingAgent<TH extends HostHandle>(
       }
 
       const output = prior
-        ? await runner.resumeOnError(continueConversation(prior, request.input), runOptions)
+        ? await runner.run({ message: request.input, continueFrom: prior }, runOptions)
         : await runner.run({ message: request.input }, runOptions);
       await deliver(output, runner, store, reply, sessionId);
     } catch (err) {
@@ -292,20 +296,39 @@ export async function standingAgent<TH extends HostHandle>(
     if (isPaused(output)) {
       const pending = describePause(output, sessionId);
       const conversation = sessionId === undefined ? undefined : runner.checkpoint();
-      if (sessionId !== undefined && conversation) {
-        await store.persist(
-          sessionId,
-          toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
-        );
-        if (reply.awaiting) {
-          reply.awaiting(pending);
-          return;
+      try {
+        if (sessionId !== undefined && conversation) {
+          await store.persist(
+            sessionId,
+            toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
+          );
+          if (reply.awaiting) {
+            reply.awaiting(pending);
+            return;
+          }
         }
+        // Either there was nowhere to store it, or the host cannot describe a
+        // question. Both are refusals about THIS reply, not about the run.
+        reply.fail(new PauseNotCarriedError(pending.tool, sessionId, conversation !== undefined));
+        return;
+      } finally {
+        // ── OWNERSHIP MOVES HERE ────────────────────────────────────────
+        // A pause belongs to a SESSION, and this composer shares ONE Agent
+        // across every session. The Agent's own pending-question guard
+        // (9.2.0) is right for a script driving one instance and wrong here:
+        // the instance would go on holding session A's question, and session
+        // B's next message — a different conversation, a different person —
+        // would be refused on behalf of an answer B was never asked for.
+        //
+        // Once the pause is in the STORE, the store owns it: a later request
+        // for that session carrying `decision` continues it from exactly
+        // where it stopped, and nothing about that consults the instance. So
+        // the instance is released, here, at the moment ownership transfers.
+        // On the failure path above it is released for the opposite reason —
+        // the question could not be carried at all, and blocking every other
+        // session on one nobody can ever answer is strictly worse.
+        runner.abandonPause();
       }
-      // Either there was nowhere to store it, or the host cannot describe a
-      // question. Both are refusals about THIS reply, not about the run.
-      reply.fail(new PauseNotCarriedError(pending.tool, sessionId, conversation !== undefined));
-      return;
     }
 
     if (sessionId !== undefined) {
@@ -377,22 +400,6 @@ export async function standingAgent<TH extends HostHandle>(
     ...handle,
     close: closeOnce,
   } as TH;
-}
-
-/**
- * The stored conversation plus this turn's message.
- *
- * The new message has to be appended by hand: `resumeOnError` restores the
- * history it is given and the LLM stage reads that history directly, so a
- * message left out here is a message the model never sees.
- */
-function continueConversation(prior: AgentRunCheckpoint, input: string): AgentRunCheckpoint {
-  return {
-    ...prior,
-    history: [...prior.history, { role: 'user', content: input }],
-    originalInput: { message: input },
-    checkpointedAt: Date.now(),
-  };
 }
 
 /**

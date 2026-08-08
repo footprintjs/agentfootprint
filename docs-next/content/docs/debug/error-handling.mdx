@@ -169,6 +169,10 @@ The breaker is per-instance, in-process (no Redis dependency). See [the resilien
 
 `agent.run()` rejects with `RunCheckpointError` when a fault occurs mid-run, carrying both the `.cause` (the underlying error) and a JSON-serializable `.checkpoint` (the last-known-good conversation history). Persist it and call `agent.resumeOnError(checkpoint)` to replay the run with that history restored — the next iteration retries the call that originally failed:
 
+<Callout type="info">
+  `resumeOnError` is the **error** door: it retries the turn that failed, appending nothing. To continue a conversation with a NEW message — turn two of a chat — reach for `agent.followUp(message)` or `run({ message, continueFrom })` instead. See [Conversations](doc:conversations).
+</Callout>
+
 ```ts
 import { Agent, RunCheckpointError } from 'agentfootprint';
 

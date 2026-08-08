@@ -1,0 +1,164 @@
+---
+title: Conversations
+description: agent.run() is one turn and starts a new conversation every time. agent.followUp(message) continues this agent's; run({ message, continueFrom }) continues one you are holding. Plus the three things that look like conversation memory and are not.
+---
+
+> You ship a support agent. Turn one works beautifully. The user types *"and what about the other order?"* — and the agent replies that this is the first it has heard from them.
+>
+> Nothing threw. The trace is perfect. The model was simply never shown the earlier turn, because `run()` had started a new conversation and nobody said so.
+
+## The law
+
+**`run()` is ONE turn.**
+
+It seeds the conversation from the message you pass and nothing else. Call it twice and you have two conversations — which is right for one-shot work, and a trap for chat.
+
+That is deliberate. A primitive that quietly accumulated state across calls could never be used for one-shot work, and a hidden transcript is the most expensive thing an agent can carry: it grows every turn, it is billed every turn, and nobody chose it. So continuing is something you **name**.
+
+<Callout type="warn">
+  Passing the same `identity.conversationId` to two `run()` calls does **not** join them. `identity` is a namespace key — see [what is not a conversation](#three-things-that-are-not-a-conversation).
+</Callout>
+
+## The two doors
+
+`examples/features/51-conversations.ts` runs everything on this page and prints
+the messages the provider actually received for each — the only convincing
+evidence here is the wire.
+
+```ts
+// One turn. No history. This is what run() is for.
+await agent.run({ message: 'Book me a table for two on Friday.' });
+
+// The next turn, on this same agent.
+await agent.followUp('Make it three.');
+
+// The next turn, from a conversation you are holding — a store, another
+// process, a different machine.
+const conversation = agent.checkpoint();          // plain JSON, persist anywhere
+await agent.run({ message: 'Make it three.', continueFrom: conversation });
+```
+
+| door | continues | reach for it when |
+| --- | --- | --- |
+| `agent.run({ message })` | nothing — a new conversation | one-shot work; the first turn of anything |
+| `agent.followUp(message)` | this instance's last completed run | turn two and after, in one process |
+| `agent.run({ message, continueFrom })` | any conversation you hand it | a server, a queue worker, anything that restarts |
+| `standingAgent({ agent, sessions, host })` | one conversation **per session**, stored | you want the whole thing served for you |
+
+`followUp(message)` is sugar for `run({ message, continueFrom: this.checkpoint() })` and nothing else — one restoration path, so the convenience cannot drift from the mechanism. It refuses with `NoConversationError` when there is nothing to follow up on: before the first run, a "follow-up" that quietly became a first turn would be exactly the confusion this door exists to remove.
+
+### What travels with a conversation
+
+`checkpoint()` returns an `AgentRunCheckpoint`: JSON-serializable, no live references, safe to put in Redis / Postgres / S3 / a file.
+
+| field | why it is there |
+| --- | --- |
+| `history` | the turns themselves, including the final assistant answer (which nothing writes back into state, so it is appended here) |
+| `folded` | every span `.compaction()` folded, so a compacted conversation is still a provable one |
+| `identity` | **the namespace the conversation belongs to.** A continued turn runs under it unless you override it — without this, every continued turn re-namespaced its own memory and wrote turn two where turn three could not read it |
+| `agent` | the id of the agent that recorded it, **only when that agent chose one** |
+
+Nothing here trims the history. Bounding what the model is shown is [`.window()` / `.compaction()`](doc:window-strategies) or [memory](doc:memory) — never a silent cap applied on the way to storage.
+
+### Whose conversation is this?
+
+A transcript can be replayed on any agent, and usually that is the point: a deploy that adds a tool, edits a prompt or moves model must still be able to continue yesterday's conversations. So the runtime does **not** refuse on "the agent changed".
+
+What it does refuse — with `ConversationMismatchError` — is one agent answering a different agent's conversation, under the same rule the embedder fingerprint uses: **ids decide only when both sides named themselves.**
+
+```ts
+const billing = Agent.create({ provider, model, id: 'billing' })./* … */build();
+const support = Agent.create({ provider, model, id: 'support' })./* … */build();
+
+await support.run({ message: '…', continueFrom: billingConversation });
+// ConversationMismatchError: recorded by agent 'billing', handed to agent 'support'
+```
+
+A default id (`'agent'`) is not naming yourself, so callers who never pass one are never refused.
+
+## Three things that are not a conversation
+
+All three are real and useful. None of them is the conversation, and confusing them for it is how the trap at the top of this page gets built.
+
+### `identity` is a namespace, not a session
+
+`identity: { conversationId, tenant?, principal? }` scopes **memory and RAG reads/writes**, and reaches `PermissionChecker.check`, the middleware chains, `ToolProvider.list(ctx)` and the credential provider. It looks exactly like a session handle and is not one: two `run()` calls with the same `conversationId` are still two conversations.
+
+(It does not reach `tool.execute` — `ToolExecutionContext` carries no identity field.)
+
+### Memory is recall, not replay
+
+Register `.memory(defineMemory({ type: MEMORY_TYPES.EPISODIC, … }))` with an identity and prior turns *do* come back — as a **`<memory role=…>` block in the system prompt**, framed as context, not as message turns in the window:
+
+```text
+system:  You take restaurant bookings. Be brief.
+
+         Relevant context from prior conversations. Use when it helps answer
+         the current turn.
+
+         <memory role="user" turn="1" updated="…">Book me a table for two</memory>
+user:    Make it three.
+```
+
+That is a different, deliberately different, thing: recall is selected, budgeted and citable; a conversation is verbatim. Use both — most production agents do.
+
+### `.selfExplain()` reads the trace, not the transcript
+
+The conversation carries what was **said**. The trace carries what was **done** — which tool ran, with what arguments, and which branch the router took. `.selfExplain()` answers "why did you…" from the second. See [Self-explain](doc:self-explain) and example 49, which uses `followUp()` and the trace together: the question only makes sense because of the conversation, and the answer only exists because of the trace.
+
+## Two refusals
+
+Both replace behavior that used to **succeed** while being wrong.
+
+### A second run while one is in flight
+
+`RunInFlightError`:
+
+```text
+Agent.run: this agent is already running (run 'run-…-3').
+One instance answers one turn at a time — …
+```
+
+An `Agent` keeps its last executor, run context, answer and pause on itself; that is what makes `checkpoint()`, `getLastSnapshot()` and `followUp()` possible. Two overlapping runs both used to finish, both returning plausible answers, and the state afterwards belonged to whichever finished last — so `checkpoint()` could hand you the *other* run's conversation. That is corruption, not concurrency.
+
+Two turns at once: build two agents (a chart is built per instance, and instances are cheap), or serve them through `standingAgent({ onConcurrentInvoke: 'enqueue' })`.
+
+### A message while a person still owes an answer
+
+`PendingQuestionError`:
+
+```text
+Agent.run: this agent's last run paused to ask a person something and is still
+waiting. 'issue_refund' (call c2) raised the question…
+```
+
+A paused run is unfinished work with a person on the other end. Answer it with `resume(checkpoint, decision)`. If the question really is being dropped, say so — `abandonPause()` returns what it dropped, so the abandonment can be logged rather than performed blind:
+
+```ts
+const dropped = agent.abandonPause();   // { toolName, toolCallId, question }
+await agent.run({ message: 'never mind, different question' });
+```
+
+A pending question that a later message silently discards is a consent gate anyone can walk around.
+
+## Asking whether there is anything to explain
+
+```ts
+if (agent.canExplain()) { /* route the why-question to the agent */ }
+```
+
+`false` for two honest reasons: the agent was not built with `.selfExplain()`, or it was and no turn has completed yet (evidence binds at the **end** of a run, never to the one in flight). The model is told the same thing by the same fact — the trace tools answer *"No completed run is available yet"* rather than improvising.
+
+## Serving conversations
+
+For a server, do not hand-roll the store-and-continue dance:
+
+```ts
+await standingAgent({
+  agent,
+  sessions: sqliteSessions({ file: './sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+});
+```
+
+It hydrates the session, continues it through this page's `continueFrom` door, persists what the run left behind *before* answering, and serves paused runs as a question a later request can answer. See [Hosting](doc:hosting).

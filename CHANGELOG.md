@@ -7,6 +7,207 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.2.0] - 2026-08-08
+
+**The agent stops forgetting the conversation it is in and calling it success.**
+
+9.1.0 fixed one call that was accepted and quietly did something else — an
+indexer that half-read a chunk. This release went looking for its siblings
+across the whole `Agent` / `LLMCall` surface, and the seed was a field find:
+
+```ts
+await agent.run({ message: 'Book me a table for two.' });
+await agent.run({ message: 'Make it three.' });
+// → "I don't have any earlier booking from you — this is your first message."
+```
+
+`run()` is one turn. It seeds history from the message you pass and nothing
+else, so the second call started a **new conversation**. Nothing threw, the
+trace was perfect, and the model was honest about what it had been shown. The
+door that really continued a conversation was `checkpoint()` + `resumeOnError()`
+— a conversation primitive wearing an **error** name, which is exactly why a
+competent implementer missed it.
+
+Thirteen shapes were probed on the shipped build. Four were already right and
+are now pinned; the rest are below.
+
+### The conversation has a door with its own name
+
+```ts
+await agent.run({ message: 'Book me a table for two.' });   // one turn
+await agent.followUp('Make it three.');                     // the next one
+
+// …or hand the conversation around — plain JSON, any store, any machine:
+const conversation = agent.checkpoint();
+await agent.run({ message: 'Make it three.', continueFrom: conversation });
+```
+
+`followUp(message)` is sugar for `run({ message, continueFrom: this.checkpoint() })`
+and nothing else — one restoration path, so the convenience cannot drift from
+the mechanism. `standingAgent` used to assemble that continuation by hand
+(append the turn, rewrite `originalInput`, hand the result to `resumeOnError`);
+that hand-assembly **is** the door now, so a server and a script continue a
+conversation the same way.
+
+`run()` itself is unchanged and stays single-turn. What changed is that it says
+so, in the first paragraph of its own docstring, and names both doors.
+
+### A continued turn no longer re-namespaces its own memory
+
+The quietest bug in the batch, and the one most likely to be live in somebody's
+product right now. `resumeOnError` called `this.run({ message })` with **no
+identity**, and `AgentRunCheckpoint` had nowhere to keep one. So every continued
+turn ran under a fresh `conversationId` derived from its own runId: turn two
+wrote its memory somewhere turn three could not read it. Nothing threw. The only
+symptom was an agent that kept forgetting — which reads exactly like a model
+being flaky.
+
+`AgentRunCheckpoint` now carries `identity`, `AgentRunOptions` accepts one, and
+a continued turn runs under the conversation's own namespace unless the call
+names another. Version stays **1**: an optional field is not a format change,
+and a runtime that has never heard of it continues the conversation correctly
+(the same reasoning `folded` shipped under in 8.2).
+
+### One agent no longer answers another agent's conversation
+
+A transcript can be replayed on any agent, and usually that is the point — a
+deploy that adds a tool or edits a prompt must still continue yesterday's
+conversations. Replaying the **billing** agent's conversation on the **support**
+agent is a different mistake, and it used to be accepted in silence.
+
+The rule is the one the embedder fingerprint already uses: **ids decide only
+when both sides named themselves.** A checkpoint records `agent: { id }` only
+when that agent was given an explicit `Agent.create({ id })`; a default
+(`'agent'`) is not naming yourself, so the majority of callers are never
+refused. Two sides that both chose a name and chose different ones get
+`ConversationMismatchError`, by name.
+
+### Two behavior changes — refusals replacing silent corruption
+
+Both of these used to **succeed**. They are refused in a minor, not held for a
+major, on the same reasoning 8.13.0 and 8.14.0 used: the refused path was
+already broken in effect, so the throw is a fix, not a new restriction.
+
+**`RunInFlightError` — two overlapping `run()` calls on one instance.** An
+`Agent` keeps its last executor, run context, answer and pause on itself; that
+is what makes `checkpoint()`, `getLastSnapshot()` and `followUp()` possible.
+Two overlapping runs both finished, both returning plausible answers, and the
+state afterwards belonged to whichever finished last — so `checkpoint()` could
+hand back the *other* run's conversation, with nothing in either recording
+saying so. That is corruption, not concurrency. `standingAgent` has serialized
+runs since it existed and calls it "a correctness requirement rather than a
+tuning choice"; the guarantee now lives in the primitive. Two turns at once:
+build two agents (charts are per instance, instances are cheap), or
+`standingAgent({ onConcurrentInvoke: 'enqueue' })`.
+
+**`PendingQuestionError` — a new message while a person still owes an answer.**
+A paused run is unfinished work with a person on the other end. Sending a
+different message used to start a fresh run and orphan the pending question —
+a consent gate any later message could walk around. Answer it with
+`resume(checkpoint, decision)`, or say plainly that it is being dropped:
+
+```ts
+const dropped = agent.abandonPause();   // { toolName, toolCallId, question }
+await agent.run({ message: 'never mind, different question' });
+```
+
+`abandonPause()` *returns* what it dropped, so the abandonment can be logged
+rather than performed blind.
+
+**A pause belongs to a session, not to the instance.** `standingAgent` shares
+one `Agent` across every session, so the instance guard alone would have let
+session A's unanswered question refuse session B's *first* message — a
+different conversation, a different person, an answer they were never asked
+for. The composer now releases the instance at the moment ownership moves: once
+the pause is in the store, the store owns it, and a later request carrying a
+decision continues it without consulting the instance at all. On the
+cannot-be-carried path it releases for the opposite reason — blocking every
+other session on a question nobody can ever answer is strictly worse. Pinned by
+`test/hosting/pausedSession.test.ts`.
+
+**`.system()` twice now refuses**, on both `Agent` and `LLMCall`. It was the
+last silent last-wins setter among the policy doors — eight siblings
+(`.toolProvider()`, `.configure()`, `.act()`, `.window()`, `.outputSchema()`,
+`.reliability()`, `.thinking()`, `.thinkingHandler()`) already refused. The
+first prompt was never sent and nothing said so. The refusal names the three
+things a caller might have meant: `.steering(...)` for a second always-on
+block, `.configure(...)` for a per-run prompt, or joining the strings yourself.
+No shipped example, test or doc called it twice.
+
+### `agent.canExplain()`
+
+`.selfExplain()` was already honest to the **model** with no record bound — the
+trace tools answer *"No completed run is available yet"* and the skill body says
+to say so plainly. It had no answer for the **program**. `canExplain()` returns
+`false` for two honest reasons — not built with `.selfExplain()`, or built with
+it and no turn completed — so a caller can route a why-question before spending
+one.
+
+### Docstrings that were not true
+
+- `getLastSnapshot()` said "undefined before the first run completes". It is
+  **live during a run**: the executor is assigned at run start, so reading it
+  from a listener or a tool returns the in-flight run, partially filled. That is
+  deliberate (Lens scrubs a running agent through it) and is why `.selfExplain()`
+  captures at the terminal flush instead. Fixed on `Agent` and `RunnerBase`.
+- `attach()` now says **when** it starts observing: the next run. A recorder
+  attached mid-run is not dropped, it is early.
+- `AgentInput.identity` said "multi-tenant memory scope". It names all five
+  consumers now, says it does **not** reach `tool.execute`, and states plainly
+  that `conversationId` is a namespace key rather than a session handle.
+
+### The seal — `test/api-conformance/silent-success.test.ts`
+
+34 tests, one per audited shape, so no future release can reintroduce a member
+of this class quietly. Three kinds of pin:
+
+1. **Refused** — pinned by message substring, so a refusal cannot decay into a
+   bare `throw`.
+2. **Adapted** — pinned by what reaches the model / the store / the caller,
+   observed on the wire, never by mocking internals.
+3. **Stated** — pinned **twice**: the behavior, *and* the sentence in the source
+   that states it. A stated behavior whose statement was deleted is back to
+   being a silent success, and only the second assertion catches that.
+
+Plus a **doctrine sweep**: every public `AgentBuilder` method is classified as
+refuses-a-second-call (14), repeatable-by-design (14), a named last-wins
+exception (4: `appName`, `commentaryTemplates`, `maxIterations`,
+`thinkingTemplates` — scalars and display strings that decide nothing about
+what is sent), or not-a-setter (2). A method that is none of the four fails the
+suite, so a setter added in a later release cannot join `.system()`'s old club
+unnoticed. The exception list is pinned by exact content: growing it is a
+decision somebody makes in a diff.
+
+### Also
+
+- `examples/features/51-conversations.ts` — runs the trap and both doors and
+  prints the messages the provider actually received for each. The model's own
+  "this is your first message" reply is the evidence.
+- `examples/features/49-self-explain-live.ts` — turn 2 now goes through
+  `followUp()`. It was a second `run()`, and the scripted mock read the *first*
+  user message, so the demo's own scripting was masking the restart. Live, the
+  why-question used to arrive with no subject.
+- `docs-next/content/docs/build/conversations.mdx` — the conversation, the two
+  doors, what travels on a checkpoint, and the three things that look like
+  conversation memory and are not (`identity`, memory recall, the trace).
+
+### Migration
+
+Additive except for the three refusals, and all three fire on code that was
+already wrong:
+
+| if you… | you now get | do this |
+| --- | --- | --- |
+| call `run()` twice expecting continuity | the same behavior as before (a new conversation) | `followUp(message)` or `run({ message, continueFrom })` |
+| overlap two `run()` calls on one agent | `RunInFlightError` | await the first, or build a second agent |
+| send a message while a pause is open | `PendingQuestionError` | `resume(checkpoint, decision)`, or `abandonPause()` first |
+| call `.system()` twice | build-time throw | join the strings, or `.steering()` / `.configure()` |
+| continue a stored conversation on a differently-**named** agent | `ConversationMismatchError` | continue it on the agent whose id recorded it |
+
+`checkpoint()` payloads written by 9.1.0 and earlier continue to work; they
+simply carry no `identity` or `agent`, which is the honest answer for a
+conversation stored before either existed.
+
 ## [9.1.0] - 2026-08-08
 
 **The index stops half-reading a chunk and calling it success.**

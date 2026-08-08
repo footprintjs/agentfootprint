@@ -216,6 +216,59 @@ describe('a paused session — the whole round trip', () => {
 
 // ─── unit: the resume-invoke contract ────────────────────────────────
 
+// ─── security: one session's question must not gag every other session ───────
+
+describe('a paused session — a pause belongs to a session, not to the agent', () => {
+  it('session A waiting on a person does not block session B (9.2.0)', async () => {
+    // 9.2.0 gave `Agent` an instance-level guard: a new message while the last
+    // run paused is refused, because silently abandoning a person's question
+    // makes a consent gate anyone can walk around. That guard is right for a
+    // script driving one instance and WRONG for this composer, which shares one
+    // Agent across every session — so `standingAgent` releases the instance the
+    // moment the pause is in the STORE, which is the moment ownership moves.
+    //
+    // Without that release, session A's unanswered question refuses session B's
+    // first message: a different conversation, a different person, an answer
+    // they were never asked for.
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 't1', name: 'approve_refund', args: { amount: 10 } }] },
+          { content: 'answered B' },
+          { content: 'refund issued' },
+        ],
+      }),
+      model: 'test-model',
+      maxIterations: 3,
+    })
+      .system('terse')
+      .tool(refundTool([]))
+      .build();
+
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent, sessions, host });
+    try {
+      const a = await host.deliver({ input: 'refund me', sessionId: 'A' });
+      expect(a.awaiting?.tool).toBe('approve_refund');
+
+      // B is a different conversation and is answered normally.
+      const b = await host.deliver({ input: 'hello from B', sessionId: 'B' });
+      expect(b.error).toBeUndefined();
+      expect(b.output).toBe('answered B');
+
+      // …and A's question is still exactly where it belongs: in the store,
+      // answerable by a later request carrying a decision.
+      const stored = await sessions.hydrate('A');
+      expect(stored?.format).toBe('flowchart-v1');
+      const stillWaiting = await host.deliver({ input: 'anything', sessionId: 'A' });
+      expect(stillWaiting.code).toBe('ERR_AWAITING_DECISION');
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
 describe('a paused session — what makes a request a resume', () => {
   it('a plain message is refused, naming the pending ask, and nothing is lost', async () => {
     let calls = 0;

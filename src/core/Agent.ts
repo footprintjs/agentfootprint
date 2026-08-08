@@ -83,6 +83,8 @@ import {
 } from './checkin.js';
 import { assertCostBudgetHasPricing, resolveCostBudget, type ResolvedCostBudget } from './cost.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
+import type { SelfExplainBinding } from '../lib/trace-toolpack/selfExplain.js';
 import {
   causalEvidenceRecorder,
   type CausalEvidenceRecorderHandle,
@@ -98,6 +100,7 @@ import type { CursorMove, EntryScoring } from '../lib/injection-engine/skillGrap
 import { makePickEntryStage } from './agent/stages/pickEntry.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
 import {
+  assertContinuable,
   buildCheckpoint,
   classifyFailurePhase,
   RunCheckpointError,
@@ -105,6 +108,7 @@ import {
   type AgentRunCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
+import { NoConversationError, PendingQuestionError, RunInFlightError } from './conversation.js';
 import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
 import { normalizeRunInput } from './runInput.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
@@ -179,6 +183,19 @@ export interface AgentRunOptions extends RunOptions {
   correlationId?: string;
   /** OTEL-style trace id — forwarded onto every emitted event's `EventMeta.traceId`. Falls back to `options.env?.traceId` when unset. */
   traceId?: string;
+  /**
+   * Who this run is for — the same tuple as `run({ identity })`, reachable
+   * from the doors whose input is a stored conversation rather than a
+   * message bag: `resumeOnError(checkpoint, { identity })` and
+   * `followUp(message, { identity })` (9.2.0).
+   *
+   * Before this existed, `resumeOnError` could not carry an identity at all,
+   * so every continued turn silently re-namespaced its memory under a fresh
+   * runId. Omitted, the conversation's own stored `identity` is used; given,
+   * it wins. On `run()` this is a second spelling of `run({ identity })` and
+   * the one on the input wins, since that is where the caller looked first.
+   */
+  identity?: MemoryIdentity;
 }
 
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
@@ -412,6 +429,37 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  that failed or paused. */
   private lastRunAnswer?: string;
 
+  /** The id the CONSUMER chose, or undefined when they took the default.
+   *  `this.id` cannot answer that question — it is `'agent'` either way — and
+   *  the stored-conversation fingerprint refuses only on ids somebody picked
+   *  (see `AgentRunCheckpoint.agent`). */
+  private readonly explicitId?: string;
+
+  /** The identity the caller gave the last run, or undefined when they gave
+   *  none. Only an EXPLICIT identity is carried onto `checkpoint()`: the
+   *  default is derived from a runId, and storing that would pin a whole
+   *  conversation to the id of the one run that started it. */
+  private lastRunIdentity?: MemoryIdentity;
+
+  /** The run in flight, by id — the whole of the one-turn-at-a-time guard.
+   *  Set before the executor is built and cleared in `finally`, so a run that
+   *  throws does not leave the agent permanently refusing. */
+  private inFlightRunId?: string;
+
+  /** The question a person still owes this agent an answer to. Set when a run
+   *  ends paused, cleared by `resume()`, `abandonPause()`, or a run that
+   *  completes. Read by the `run()` guard — see `PendingQuestionError`. */
+  private pendingQuestion?: {
+    readonly toolName?: string;
+    readonly toolCallId?: string;
+    readonly question?: string;
+  };
+
+  /** The `.selfExplain()` binding, when the builder mounted one. Held so
+   *  `canExplain()` can answer the same question the trace tools answer, from
+   *  the same fact. Undefined on every agent that never called `.selfExplain()`. */
+  private selfExplainBinding?: SelfExplainBinding;
+
   /**
    * Optional `ToolProvider` set via the builder's `.toolProvider()`.
    * When present, the Tools slot subflow consults it per iteration
@@ -498,6 +546,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.provider = opts.provider;
     this.name = opts.name ?? 'Agent';
     this.id = opts.id ?? 'agent';
+    if (opts.id !== undefined) this.explicitId = opts.id;
     this.model = opts.model;
     this.temperature = opts.temperature;
     this.maxTokens = opts.maxTokens;
@@ -669,9 +718,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * prop) so consumers can scrub the execution timeline post-run without
    * threading a recorder through the call site.
    *
-   * Returns `undefined` before the first run completes. Returns the
-   * snapshot of the most recent run on every call after — including
-   * across multiple turns of the same Agent instance.
+   * `undefined` until a run has STARTED. After that it is the most recent
+   * run's snapshot — including across multiple turns of the same instance.
+   *
+   * **It is LIVE during a run, not a completed-runs-only view.** The executor
+   * is assigned at run start, so calling this from an event listener, a tool,
+   * or any other mid-run vantage point returns the IN-FLIGHT run, partially
+   * filled. That is deliberate (Lens scrubs a running agent through it), and
+   * it is why `.selfExplain()` captures at the terminal flush instead of
+   * resolving through this: evidence that is supposed to describe a FINISHED
+   * turn cannot be read from a getter that also answers about an unfinished
+   * one.
    */
   getLastSnapshot(): RuntimeSnapshot | undefined {
     return this.lastExecutor?.getSnapshot();
@@ -839,6 +896,43 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return this.parseOutputAsync<T>(out);
   }
 
+  /**
+   * Answer one turn.
+   *
+   * **`run()` is ONE turn, and it starts a new conversation every time.** The
+   * chart seeds its history from this call's `message` alone, so a second
+   * `run()` on the same agent does not continue the first: the model is shown
+   * one user message and will honestly tell your user it has not spoken to
+   * them before. That is deliberate — a primitive that quietly accumulated
+   * state across calls could never be used for one-shot work, and a hidden
+   * transcript is the most expensive thing an agent can carry.
+   *
+   * To continue a conversation, name it:
+   *
+   *   - `agent.followUp(message)` — continue THIS agent's own last completed
+   *     run. The one-liner, and what most callers want.
+   *   - `run({ message, continueFrom })` — continue a conversation you are
+   *     holding: `agent.checkpoint()` from an earlier turn, persisted anywhere
+   *     and handed back. Works across a restart, a deploy, or a different
+   *     machine, and is what `standingAgent` uses per session.
+   *
+   * Passing the same `identity.conversationId` to two `run()` calls does NOT
+   * continue anything — see {@link AgentInput.identity}. What a registered
+   * memory adds is *recall* of prior turns into the system-prompt slot, which
+   * is a different thing from the conversation itself.
+   *
+   * Two refusals guard the per-instance state this agent keeps; both replace
+   * behavior that used to succeed while quietly being wrong (9.2.0):
+   * {@link RunInFlightError} when a run is already in flight, and
+   * {@link PendingQuestionError} when the last run paused to ask a person
+   * something that nobody has answered.
+   *
+   * @example  One turn, then a follow-up
+   * ```ts
+   * await agent.run({ message: 'Book me a table for two.' });
+   * await agent.followUp('Make it three.');       // remembers the table
+   * ```
+   */
   async run(
     input: AgentInput | string,
     options?: AgentRunOptions,
@@ -847,9 +941,31 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // message; anything that is not a message is named and refused here
     // rather than becoming `content: undefined` inside the messages slot.
     const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+    // Timing next, and before the executor exists: both of these refuse a call
+    // that would have SUCCEEDED into corrupted per-instance state or an
+    // orphaned human question. See ./conversation.ts for why they are throws.
+    this.assertNotRunning('Agent.run');
+    this.assertNoPendingQuestion('Agent.run');
+    // A conversation handed in continues through the same side channel
+    // `resumeOnError` uses — one restoration path, so the two doors cannot
+    // drift about what "continue" means. This turn's message IS appended:
+    // continuing a conversation adds a turn to it.
+    let continued: AgentRunCheckpoint | undefined;
+    if (runInput.continueFrom !== undefined) {
+      continued = validateCheckpoint(runInput.continueFrom);
+      this.applyContinuation(continued, 'Agent.run({ continueFrom })', runInput.message);
+    }
+    // Only an EXPLICIT identity is remembered for `checkpoint()`; see the
+    // field's note. `input.identity` wins over `options.identity` because the
+    // input bag is where a caller looks first, and both win over the stored
+    // conversation's — but the conversation's is used when neither was given,
+    // so a continued turn stays in the namespace it started in.
+    this.lastRunIdentity =
+      runInput.identity ?? options?.identity ?? (continued ? continued.identity : undefined);
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
     const executor = this.createExecutor(options);
+    this.inFlightRunId = this.currentRunContext.runId;
 
     // Auto-checkpoint at iteration boundaries — captures the latest
     // conversation history into a per-run tracker. On error, we
@@ -875,7 +991,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const result = await executor.run({
         input: {
           message: runInput.message,
-          ...(runInput.identity !== undefined && { identity: runInput.identity }),
+          ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
         },
         // Co-engineered boundary (#16): the engine's loop-iteration limit
         // (footprintjs 9 default 1000) must never fire BELOW the agent's own
@@ -886,6 +1002,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
+      this.recordPendingQuestion(finalized);
       return finalized;
     } catch (cause) {
       // Wrap recoverable errors with the last-known-good checkpoint.
@@ -932,13 +1049,116 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // in its history but not the span behind it would resume into a
           // conversation whose evidence the crash had quietly eaten.
           this.foldedSpansOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          // A crash checkpoint is the same conversation carrier as
+          // `checkpoint()`, so it carries the same two owner facts — otherwise
+          // resuming after a crash would be the one path that still lost the
+          // identity, and the memory written after the recovery would land
+          // where nothing could read it.
+          this.conversationOwner(),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
       throw cause;
     } finally {
       stopTracking();
+      this.inFlightRunId = undefined;
+      // `seed` consumes the restored conversation on its way past. A run that
+      // died BEFORE seed never did, and a history left armed here would be
+      // picked up by the next run — which would then continue a conversation
+      // nobody asked it to. One run, one continuation.
+      this.pendingResumeHistory = undefined;
+      this.pendingResumeFolded = undefined;
     }
+  }
+
+  /**
+   * Continue this agent's own last completed conversation.
+   *
+   * The one-liner for turn two and after. `run()` is one turn and starts a new
+   * conversation each time (see {@link Agent.run}); this reads the
+   * conversation off the last completed run, appends `message` as the next
+   * user turn, and runs from there — so the model sees what was actually said.
+   *
+   * Sugar over `run({ message, continueFrom: this.checkpoint() })` and nothing
+   * more: one restoration path, so the convenience cannot drift from the
+   * mechanism. Reach for `run({ continueFrom })` directly when the
+   * conversation comes from somewhere other than this instance's last run — a
+   * store, another process, a different machine.
+   *
+   * Refuses rather than guessing: {@link NoConversationError} when this agent
+   * has no completed run to continue (a "follow-up" that quietly became a
+   * first turn would be exactly the confusion this door exists to remove),
+   * and — through `run()` — {@link PendingQuestionError} when the last run
+   * paused to ask a person something, because a pause has its own door:
+   * `resume(checkpoint, decision)`.
+   *
+   * The conversation grows every turn and nothing here trims it; bounding what
+   * the model is shown is `.window()` / `.compaction()` / `.memory()`, not a
+   * silent cap on the way through.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message: 'Book me a table for two.' });
+   * await agent.followUp('Make it three.');
+   * await agent.followUp('And move it to 8pm.');
+   * ```
+   */
+  async followUp(
+    message: string,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
+    // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
+    // is never reported as "a run is in flight" for an agent that has simply
+    // not run yet.
+    if (this.getLastSnapshot() === undefined) {
+      throw new NoConversationError('Agent.followUp', 'never-run');
+    }
+    const conversation = this.checkpoint();
+    if (conversation === undefined || conversation.history.length === 0) {
+      throw new NoConversationError('Agent.followUp', 'last-run-unfinished');
+    }
+    return this.run({ message, continueFrom: conversation }, options);
+  }
+
+  /**
+   * Drop the question this agent's last run paused to ask, on the record.
+   *
+   * A paused run is waiting on a person. Sending a different message while one
+   * is outstanding is refused ({@link PendingQuestionError}) because silently
+   * discarding a pending question makes a consent gate something any later
+   * message can walk around. When the question really is being dropped —
+   * the user changed the subject, the session timed out, the approval is no
+   * longer wanted — say so with this, and the next `run()` proceeds.
+   *
+   * Returns what was dropped (`undefined` when nothing was pending), so a
+   * caller can log or audit the abandonment rather than perform it blind. It
+   * does not touch the paused run's checkpoint: if you still hold that, it
+   * remains resumable.
+   */
+  abandonPause():
+    | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
+    | undefined {
+    const dropped = this.pendingQuestion;
+    this.pendingQuestion = undefined;
+    return dropped;
+  }
+
+  /**
+   * Whether {@link Agent.selfExplain}'s why-questions have a run to answer
+   * from right now.
+   *
+   * `false` for two different reasons, both honest: this agent was not built
+   * with `.selfExplain()`, or it was and no turn has completed yet (evidence
+   * binds at the END of a run, never to the one in flight). Either way there
+   * is nothing to explain, which is what a caller routing a why-question needs
+   * to know before it routes.
+   *
+   * The model is told the same thing by the same fact — the trace tools answer
+   * "No completed run is available yet" and the skill body says to say so
+   * plainly. This is that answer, for the program.
+   */
+  canExplain(): boolean {
+    return this.selfExplainBinding?.artifacts !== undefined;
   }
 
   /**
@@ -990,14 +1210,43 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     const cp = validateCheckpoint(checkpoint);
-    // Stash the checkpointed history on the side channel; the seed
-    // function reads + clears it before scope.history initializes.
-    this.pendingResumeHistory = cp.history as readonly LLMMessage[];
-    // And the folded spans beside it. A conversation stored before 8.2 has
-    // none, and `undefined` is the right answer there — it means "this
-    // conversation recorded no folds", which is exactly true.
-    this.pendingResumeFolded = cp.folded;
-    return this.run({ message: cp.originalInput.message }, options);
+    // The timing guards run HERE, not only inside `run()`, because the line
+    // below writes the side channel: a refusal after that write would leave a
+    // restored history armed and the NEXT run would silently continue somebody
+    // else's conversation.
+    this.assertNotRunning('Agent.resumeOnError');
+    this.assertNoPendingQuestion('Agent.resumeOnError');
+    // Stash the checkpointed history on the side channel; the seed function
+    // reads + clears it before scope.history initializes. No message is
+    // appended — the failing run's message is already the last user turn in
+    // that history, and adding it again would ask twice.
+    this.applyContinuation(cp, 'Agent.resumeOnError');
+    return this.run(
+      {
+        message: cp.originalInput.message,
+        // The conversation's own identity, unless this call named one. Until
+        // 9.2.0 there was no way to pass either, so a recovered run silently
+        // re-namespaced its memory under a fresh runId and wrote turn two
+        // where turn three could not read it.
+        ...(this.identityFor(options, cp) !== undefined && {
+          identity: this.identityFor(options, cp),
+        }),
+      },
+      options,
+    );
+  }
+
+  /**
+   * Which identity a continued turn runs under: the caller's if they named
+   * one, otherwise the conversation's own.
+   *
+   * @internal
+   */
+  private identityFor(
+    options: AgentRunOptions | undefined,
+    cp: AgentRunCheckpoint,
+  ): MemoryIdentity | undefined {
+    return options?.identity ?? cp.identity;
   }
 
   /**
@@ -1085,19 +1334,35 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    // The same one-turn-at-a-time guard `run()` carries: a resume writes the
+    // same per-instance state a run does. Answering the question is what this
+    // door is FOR, so it never checks `pendingQuestion` — it clears it.
+    this.assertNotRunning('Agent.resume');
+    // Settled the moment the answer is handed over, not when the resumed run
+    // finishes: a resume that then FAILS must not leave the agent refusing
+    // every later message on behalf of a question that has been answered.
+    this.pendingQuestion = undefined;
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
     // on a fresh executor's `resume()`. No need to retain a paused
     // executor between run/resume.
     const executor = this.createExecutor(options);
+    this.inFlightRunId = this.currentRunContext.runId;
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
-    const result = await executor.resume(checkpoint, input, options);
-    const finalized = this.finalizeResult(executor, result);
-    if (typeof finalized === 'string') this.lastRunAnswer = finalized;
-    return finalized;
+    try {
+      const result = await executor.resume(checkpoint, input, options);
+      const finalized = this.finalizeResult(executor, result);
+      if (typeof finalized === 'string') this.lastRunAnswer = finalized;
+      // The question this resume answered is settled; a resume that paused
+      // AGAIN has asked a new one, and that one is outstanding from here.
+      this.recordPendingQuestion(finalized);
+      return finalized;
+    } finally {
+      this.inFlightRunId = undefined;
+    }
   }
 
   /**
@@ -1152,6 +1417,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       history.push({ role: 'assistant', content: this.lastRunAnswer });
     }
     const folded = this.foldedSpansOf(state);
+    const owner = this.conversationOwner();
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -1163,6 +1429,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // usually empty reads like "no folds were retained", which is a
       // different claim from "there were no folds".
       ...(folded !== undefined && { folded }),
+      // Who it was for and who ran it (9.2.0) — both absent unless chosen.
+      ...(owner.identity !== undefined && { identity: owner.identity }),
+      ...(owner.agentId !== undefined && { agent: { id: owner.agentId } }),
     };
   }
 
@@ -1181,6 +1450,109 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const spans = state?.foldedSpans;
     if (spans === undefined || spans.length === 0) return undefined;
     return structuredClone(spans) as readonly FoldedSpan[];
+  }
+
+  /**
+   * The two owner facts every conversation carrier stamps — who the run was
+   * for, and which agent ran it (9.2.0).
+   *
+   * One reader for `checkpoint()` and the crash checkpoint, the same rule
+   * `foldedSpansOf` follows: a fact kept on one carrier and lost on the other
+   * is worse than a fact kept on neither. Both are absent unless the caller
+   * chose them, which is what keeps the fingerprint refusal narrow and the
+   * default `conversationId` out of storage.
+   *
+   * @internal
+   */
+  private conversationOwner(): { identity?: MemoryIdentity; agentId?: string } {
+    return {
+      ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
+      ...(this.explicitId !== undefined && { agentId: this.explicitId }),
+    };
+  }
+
+  /**
+   * Restore a stored conversation onto the side channel `seed` reads.
+   *
+   * THE one restoration path — `run({ continueFrom })` and `resumeOnError()`
+   * both come through here, so the conversation door and the error door cannot
+   * disagree about what continuing means. It checks the agent fingerprint,
+   * restores history + folded spans, and adopts the conversation's identity so
+   * the continued turn writes its memory where the earlier turns are.
+   *
+   * `appendMessage` is the difference between the two callers, and it is the
+   * whole difference. Continuing a conversation ADDS this turn's user message
+   * to the stored history; resuming after an error does NOT, because there the
+   * message is already the last user turn in that history and appending it
+   * would ask the same question twice.
+   *
+   * @internal
+   */
+  private applyContinuation(cp: AgentRunCheckpoint, door: string, appendMessage?: string): void {
+    assertContinuable(cp, this.explicitId, door);
+    const history = cp.history as readonly LLMMessage[];
+    this.pendingResumeHistory =
+      appendMessage === undefined
+        ? history
+        : [...history, { role: 'user', content: appendMessage }];
+    // The folded spans beside it. A conversation stored before 8.2 has none,
+    // and `undefined` is the right answer there — it means "this conversation
+    // recorded no folds", which is exactly true.
+    this.pendingResumeFolded = cp.folded;
+  }
+
+  /** One turn at a time — see `RunInFlightError`. @internal */
+  private assertNotRunning(door: string): void {
+    if (this.inFlightRunId !== undefined) {
+      throw new RunInFlightError(door, this.id, this.inFlightRunId);
+    }
+  }
+
+  /** A person's unanswered question outranks a new message — see
+   *  `PendingQuestionError`. @internal */
+  private assertNoPendingQuestion(door: string): void {
+    if (this.pendingQuestion !== undefined) {
+      throw new PendingQuestionError(door, this.pendingQuestion);
+    }
+  }
+
+  /**
+   * Remember (or forget) the question this run ended on.
+   *
+   * A paused outcome sets it; anything else clears it, because a run that
+   * reached an answer has no outstanding question by definition. Reads the
+   * same `pauseData` fields `standingAgent.describePause` reads — the tool
+   * name and question the dispatch loop stamped — and invents nothing.
+   *
+   * @internal
+   */
+  private recordPendingQuestion(outcome: AgentOutput | RunnerPauseOutcome): void {
+    if (typeof outcome === 'string') {
+      this.pendingQuestion = undefined;
+      return;
+    }
+    const data = outcome.pauseData as
+      | { toolName?: unknown; toolCallId?: unknown; question?: unknown }
+      | undefined;
+    this.pendingQuestion = {
+      ...(typeof data?.toolName === 'string' && { toolName: data.toolName }),
+      ...(typeof data?.toolCallId === 'string' && { toolCallId: data.toolCallId }),
+      ...(typeof data?.question === 'string' && { question: data.question }),
+    };
+  }
+
+  /**
+   * Hand the `.selfExplain()` binding to the agent that owns it.
+   *
+   * Called once by `AgentBuilder.build()`, immediately after `bindTo`. The
+   * binding stays the tool provider's to read; the Agent holds it only so
+   * `canExplain()` answers from the same fact the trace tools answer from,
+   * rather than from a second guess about whether a run has completed.
+   *
+   * @internal
+   */
+  bindSelfExplain(binding: SelfExplainBinding): void {
+    this.selfExplainBinding = binding;
   }
 
   /**

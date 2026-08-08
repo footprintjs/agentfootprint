@@ -149,8 +149,19 @@ interface Req {
 }
 
 const catalogOf = (req: Req): string[] => (req.tools ?? []).map((t) => t.name);
-const userText = (req: Req): string =>
-  String(req.messages.find((m) => m.role === 'user')?.content ?? '');
+/**
+ * The message this turn is about — the LAST user turn, not the first.
+ *
+ * Turn 2 is a `followUp`, so the request carries the whole conversation: turn
+ * 1's question, turn 1's answer, then the why-question. Reading the FIRST user
+ * message would have this mock answering turn 2 as though it were turn 1 —
+ * and, worse, it would still have "worked" while the example demonstrated
+ * something it was not demonstrating.
+ */
+const userText = (req: Req): string => {
+  const last = [...req.messages].reverse().find((m) => m.role === 'user');
+  return String(last?.content ?? '');
+};
 const lastToolResult = (req: Req): string => {
   const message = [...req.messages].reverse().find((m) => m.role === 'tool');
   return message ? String(message.content ?? '') : '';
@@ -313,11 +324,23 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   console.log(`tool executions after turn 1: ${format(afterTurn1)}`);
 
   // ── TURN 2 — the why-question, answered from turn 1's record ────────
+  //
+  // `followUp`, not a second `run()`. `run()` is one turn: a second one would
+  // start a NEW conversation, and the model would be asked "why did you skip
+  // the refund?" having been shown no refund, no order and no earlier answer.
+  // It would still reach for the trace — that is what `.selfExplain()` is for
+  // — but the question would arrive without its subject, which is a different
+  // demo from the one this file claims to be.
+  //
+  // The two doors do different jobs and BOTH are load-bearing here: the
+  // conversation carries what was said, and the trace carries what was DONE.
+  // The answer below cites the second, in a turn that only makes sense because
+  // of the first.
   turn = 2;
   const whyQuestion = 'Why did you skip the refund?';
   console.log('\n── turn 2 ──────────────────────────────────────────────');
   console.log(`user: ${whyQuestion}`);
-  const second = await agent.run({ message: whyQuestion });
+  const second = await agent.followUp(whyQuestion);
   const answer2 = typeof second === 'string' ? second : '(paused — unexpected here)';
   console.log(`\nagent: ${answer2}\n`);
 

@@ -4,6 +4,7 @@
   "pages": [
     "---[Boxes]Primitives---",
     "agent",
+    "conversations",
     "dynamic-react",
     "swarm",
     "llm-router",

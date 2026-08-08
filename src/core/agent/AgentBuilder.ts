@@ -73,6 +73,11 @@ import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 export class AgentBuilder {
   private readonly opts: AgentOptions;
   private systemPromptValue = '';
+  /** Whether `.system()` has been called. Separate from the VALUE, because
+   *  `.system('')` is a legitimate call (an agent with no instructions) and
+   *  `''` is also the default — only a flag can tell the two apart, and the
+   *  refusal has to fire on the second call regardless of what was passed. */
+  private systemPromptSet = false;
   /**
    * Cache policy for the base system prompt. Set via the optional
    * 2nd argument to `.system(text, { cache })`. Default `'always'` —
@@ -242,6 +247,19 @@ export class AgentBuilder {
    *   - `{ until }` — conditional invalidation (e.g., flush after iter 5).
    */
   system(prompt: string, options?: { readonly cache?: CachePolicy }): this {
+    if (this.systemPromptSet) {
+      throw new Error(
+        'AgentBuilder.system: already set. Each agent has one base system prompt — a second ' +
+          'call used to REPLACE the first silently, so the instructions you wrote first were ' +
+          'never sent and nothing said so. For a second block of always-on system content, ' +
+          'add it as an injection: .steering(defineSteering({ id, content })) composes into ' +
+          'the same slot, is visible in the trace as its own entry, and can be cached ' +
+          'separately. To decide the prompt PER RUN, use .configure(({ defaults }) => ' +
+          '({ instructions: … })). To build one string from parts, join them yourself and ' +
+          'pass the result once.',
+      );
+    }
+    this.systemPromptSet = true;
     this.systemPromptValue = prompt;
     if (options?.cache !== undefined) {
       this.systemPromptCachePolicy = options.cache;
@@ -1789,6 +1807,10 @@ export class AgentBuilder {
         ...(innerRuns !== undefined && { getInnerRuns: () => innerRuns }),
       });
       agent.attach(selfExplainBinding.recorder());
+      // …and the agent holds the binding, so `agent.canExplain()` answers
+      // from the SAME fact the trace tools answer from rather than from a
+      // second guess about whether a turn has completed.
+      agent.bindSelfExplain(selfExplainBinding);
     }
     return agent;
   }

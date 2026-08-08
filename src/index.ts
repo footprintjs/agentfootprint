@@ -409,7 +409,19 @@ export {
   type OutputAttempt,
 } from './core/agent/outputEnforcement.js';
 export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
-export { RunCheckpointError, type AgentRunCheckpoint } from './core/runCheckpoint.js';
+export {
+  ConversationMismatchError,
+  RunCheckpointError,
+  type AgentRunCheckpoint,
+} from './core/runCheckpoint.js';
+// The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
+// "you are already running" from "somebody is still waiting on an answer" from
+// "there is nothing to follow up on".
+export {
+  NoConversationError,
+  PendingQuestionError,
+  RunInFlightError,
+} from './core/conversation.js';
 export {
   flowchartAsTool,
   type FlowchartAsToolOptions,

@@ -152,6 +152,21 @@ const agent = Agent.create({ provider, model })
 
 Same shape for `.instruction()` / `.memory()` / `.rag()` / raw `.injection()` — they're all the one primitive, `Injection = slot × trigger × cache`. [The full model ↓](#the-model--what-we-abstract)
 
+### Then keep the conversation
+
+`run()` is **one turn**. It seeds the conversation from the message you pass and nothing else, so calling it twice gives you two conversations — right for one-shot work, and not what a chat wants. Continuing is something you name:
+
+```typescript
+await agent.run({ message: 'Book me a table for two on Friday.' });
+await agent.followUp('Make it three.');            // same conversation
+
+// …or hand the conversation around: plain JSON, any store, any machine.
+const conversation = agent.checkpoint();
+await agent.run({ message: 'Make it three.', continueFrom: conversation });
+```
+
+The conversation carries its own `identity`, so a continued turn writes its memory where the earlier turns can read it. Two things that *look* like this and are not: `identity.conversationId` is a namespace key (it scopes memory, RAG and permissions — it does not join two runs), and `.memory()` gives you **recall** in the system prompt rather than the verbatim window. `standingAgent({ agent, sessions, host })` does the whole store-and-continue dance per session for you. [Worked example, printing the wire each way →](examples/features/51-conversations.ts)
+
 ### Then compose control flow
 
 One agent is a `Runner`. So is every composition of agents — four control-flow primitives, and anything that runs composes into anything else:

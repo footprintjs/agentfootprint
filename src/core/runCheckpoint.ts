@@ -55,6 +55,7 @@
  */
 
 import type { LLMMessage } from '../adapters/types.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 
 // ─── Public types ────────────────────────────────────────────────────
@@ -111,6 +112,48 @@ export interface AgentRunCheckpoint {
    * the opposite of what the version field is for.
    */
   readonly folded?: readonly FoldedSpan[];
+  /**
+   * WHO this conversation belongs to — the `identity` the stored run was
+   * given, carried so that continuing it lands in the same namespace it
+   * started in (9.2.0).
+   *
+   * Before this field, continuing a conversation re-seeded identity from the
+   * resuming run's own id: every continued turn wrote its memory under a
+   * FRESH `conversationId`, so turn two's facts were stored somewhere turn
+   * three could not read them. Nothing threw, and the only symptom was an
+   * agent that kept forgetting — the same class of failure as a store that
+   * silently forgot everything looking exactly like a new user.
+   *
+   * Absent on a conversation stored before 9.2.0, and absent when the run
+   * never got an explicit identity (the default is derived from a runId, and
+   * carrying THAT forward would pin a whole conversation to one run's id).
+   * An explicit `identity` on the continuing call always wins.
+   *
+   * **Version 1 still**, on the same reasoning as {@link folded}: an optional
+   * field is not a format change, and a runtime that has never heard of it
+   * continues the conversation correctly.
+   */
+  readonly identity?: MemoryIdentity;
+  /**
+   * WHICH agent recorded this conversation — present only when that agent was
+   * given an explicit `Agent.create({ id })` (9.2.0).
+   *
+   * A conversation is a transcript, and a transcript can be replayed on any
+   * agent. Usually that is the point: a deploy that adds a tool or edits a
+   * prompt must still be able to continue yesterday's conversations, so the
+   * runtime cannot refuse on "the agent changed". But replaying the BILLING
+   * agent's conversation on the SUPPORT agent is a different mistake, and it
+   * used to be accepted in silence.
+   *
+   * The rule is the one the embedder fingerprint already uses: **ids decide
+   * only when BOTH sides named themselves.** A default id (`'agent'`) is not
+   * naming yourself, so the majority of callers — who never pass one — are
+   * never refused. Two sides that both chose a name and chose different ones
+   * are refused, by name.
+   *
+   * Version 1 still, for the same reason as the two fields above.
+   */
+  readonly agent?: { readonly id: string };
   /** Where the failure happened. Diagnostic — surfaces in oncall
    *  triage so you can tell "LLM 500 mid-iteration" from "tool
    *  threw" from "validation kept failing". */
@@ -180,6 +223,60 @@ export class RunCheckpointError extends Error {
     this.cause = cause;
     this.checkpoint = checkpoint;
   }
+}
+
+/**
+ * Thrown when a stored conversation is handed to an agent that is provably
+ * not the one that recorded it (9.2.0).
+ *
+ * Raised only when BOTH sides named themselves with an explicit
+ * `Agent.create({ id })` and the two names differ — see
+ * {@link AgentRunCheckpoint.agent} for why that is the whole of the rule.
+ * An agent that gained a tool, changed its prompt or moved to a new model
+ * since the conversation was stored is NOT this error; continuing across a
+ * deploy is the ordinary case and must keep working.
+ */
+export class ConversationMismatchError extends Error {
+  readonly code = 'ERR_CONVERSATION_MISMATCH' as const;
+  /** The id stamped on the stored conversation. */
+  readonly storedAgentId: string;
+  /** The id of the agent it was handed to. */
+  readonly agentId: string;
+
+  constructor(door: string, storedAgentId: string, agentId: string) {
+    super(
+      `${door}: this conversation was recorded by agent '${storedAgentId}' and was handed to ` +
+        `agent '${agentId}'. Both agents named themselves with Agent.create({ id }), and the ` +
+        `names differ — so this is one agent answering another one's conversation, not a ` +
+        `deploy that changed. Continue it on the agent whose id is '${storedAgentId}', or, if ` +
+        `handing conversations between these two really is intended, give them the same id. ` +
+        `(An agent that merely gained a tool, changed its prompt or moved model since the ` +
+        `conversation was stored keeps the same id and is never refused here.)`,
+    );
+    this.name = 'ConversationMismatchError';
+    this.storedAgentId = storedAgentId;
+    this.agentId = agentId;
+  }
+}
+
+/**
+ * Refuse a stored conversation that provably belongs to a different agent.
+ *
+ * Both-sides-named-themselves, or nothing happens. `storedId` is absent on
+ * every conversation written before 9.2.0 and on every agent that never chose
+ * an id; `agentId` is undefined for the same reason on the reading side.
+ *
+ * @internal
+ */
+export function assertContinuable(
+  checkpoint: AgentRunCheckpoint,
+  agentId: string | undefined,
+  door: string,
+): void {
+  const storedId = checkpoint.agent?.id;
+  if (storedId === undefined || agentId === undefined) return;
+  if (storedId === agentId) return;
+  throw new ConversationMismatchError(door, storedId, agentId);
 }
 
 /**
@@ -254,6 +351,13 @@ export function buildCheckpoint(
    * serves both checkpoint carriers, so neither can lose what the other keeps.
    */
   folded?: readonly FoldedSpan[],
+  /**
+   * Who the run was for and which agent ran it — the two fields that make a
+   * stored conversation continuable rather than merely readable (9.2.0).
+   * Both are absent unless the caller chose them explicitly; see
+   * {@link AgentRunCheckpoint.identity} and {@link AgentRunCheckpoint.agent}.
+   */
+  owner?: { readonly identity?: MemoryIdentity; readonly agentId?: string },
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -264,6 +368,8 @@ export function buildCheckpoint(
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
+    ...(owner?.identity !== undefined && { identity: owner.identity }),
+    ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
   };
 }
 

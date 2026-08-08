@@ -97,18 +97,25 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   private chart: FlowChart | undefined;
 
   /**
-   * Returns the footprintjs snapshot from the most recent run (or
-   * undefined if no run has completed). The snapshot is the CANONICAL
-   * STRUCTURE: nodes, edges, executionTree, runtimeStageId, commitLog.
+   * Returns the footprintjs snapshot from the most recent run. The snapshot is
+   * the CANONICAL STRUCTURE: nodes, edges, executionTree, runtimeStageId,
+   * commitLog.
    *
    * Domain consumers (Lens, Trace, dashboards) read this for shape
    * and join their own per-stage payload by `runtimeStageId`. They
    * MUST NOT re-derive structure from typed events — that's the
    * design footprintjs's CLAUDE.md Convention 1 explicitly forbids.
    *
-   * Returns `undefined` before the first `run()` completes. After,
-   * always returns the snapshot of the most recent run (including
-   * across multi-turn reuse of the same runner instance).
+   * `undefined` before the first `run()` has STARTED. After that it is the
+   * most recent run's snapshot, including across multi-turn reuse of the same
+   * runner instance.
+   *
+   * **Live during a run.** The executor is assigned at run start, so a caller
+   * reading this from inside a run — an event listener, a tool, a recorder —
+   * gets the IN-FLIGHT snapshot, partially filled, not the last completed one.
+   * {@link RunnerBase.getSnapshot} is the same value under the name that says
+   * so. Anything that must describe a FINISHED run has to capture at the
+   * terminal flush instead of polling this.
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.lastExecutor?.getSnapshot();
@@ -525,6 +532,15 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * duplicates won't double-fire — but the runner-side array still
    * grows.) Attaching in a per-run loop without detaching is the classic
    * server leak; attach once, or detach per-run.
+   *
+   * WHEN it starts observing: the NEXT run. Recorders are handed to the
+   * executor when the executor is built, at run start, so one attached WHILE
+   * a run is in flight sees nothing of that run and everything of the one
+   * after — it is not dropped, it is early. Between runs (or before the
+   * first) is the ordinary case and works exactly as it reads. Event
+   * listeners are the opposite: `on()` takes effect immediately, but only for
+   * events emitted after it, so a listener added mid-run sees the rest of
+   * that run and none of its beginning.
    */
   attach(recorder: CombinedRecorder): Unsubscribe {
     this.attachedRecorders.push(recorder);

@@ -697,9 +697,13 @@ session before you serve it.
 
 ### Resuming is a REPLAY, and that has a cost
 
-A stored conversation is restored through `agent.resumeOnError(...)`, and this
-is its caveat, restated here in the Agent's own words, because a composition
-that hides the caveat of the thing it composes is worse than no composition:
+A stored conversation is restored through `agent.run({ message, continueFrom })`
+— the public conversation door since 9.2.0, and the same one a script uses (see
+[Conversations](doc:conversations)). This composer used to assemble that
+continuation by hand and hand the result to `resumeOnError`; the hand-assembly
+is the door now, and the identity travels with it. Its caveat is restated here
+in the Agent's own words, because a composition that hides the caveat of the
+thing it composes is worse than no composition:
 
 > **Tool re-execution / idempotency**: tool side effects from the FAILED
 > iteration are not in the checkpoint. The model re-decides from the restored
@@ -875,13 +879,21 @@ exactly enough, because it is what the next turn resumes from.
 
 ## `agent.checkpoint()`
 
-New on `Agent`: the conversation the last completed run leaves behind, as the
-same `AgentRunCheckpoint` that `resumeOnError` accepts.
+The conversation the last completed run leaves behind, as the same
+`AgentRunCheckpoint` that `run({ continueFrom })` and `resumeOnError` accept.
 
 ```ts
 await agent.run({ message: 'Book me a table for two.' });
 const conversation = agent.checkpoint();   // persist anywhere
+
+// …later, anywhere:
+await agent.run({ message: 'Make it three.', continueFrom: conversation });
 ```
+
+Since 9.2.0 it also carries the run's `identity`, so a continued turn writes its
+memory in the namespace the conversation started in rather than under a fresh
+run id — and, for agents that named themselves with `Agent.create({ id })`, the
+id that recorded it. See [Conversations](doc:conversations).
 
 It is read from the run's **own recording** — the committed history — cloned on
 the way out so a persistence layer can never mutate live state, with the final
