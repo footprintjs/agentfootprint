@@ -2,7 +2,7 @@
  * BedrockAgentMemory — read the **auto-generated session-summary memory** of a
  * (legacy) Amazon **Bedrock Agents** agent (peer-dep `@aws-sdk/client-bedrock-agent-runtime`).
  *
- *   import { BedrockAgentMemory } from 'agentfootprint/memory-providers';
+ *   import { BedrockAgentMemory } from 'agentfootprint/memory';
  *
  *   const mem = new BedrockAgentMemory({ agentId, agentAliasId, region: 'us-west-2' });
  *   const summaries = await mem.readSummaries(userMemoryId);   // string summaries Bedrock wrote

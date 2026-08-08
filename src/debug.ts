@@ -1,5 +1,5 @@
 /**
- * agentfootprint/debug — diagnosis tools for a BROKEN run.
+ * debug — diagnosis tools for a BROKEN run.
  *
  * Where `agentfootprint/observe` watches a HEALTHY run (recorders), this
  * subpath is the autopsy kit for a wrong answer. Split out of `observe` in
@@ -17,9 +17,9 @@
  * For backward compatibility these are ALSO re-exported (deprecated) from
  * `agentfootprint/observe` for one transition version.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/observe`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 // influence-core — the ONE embedding-based scoring engine (RFC-002/003

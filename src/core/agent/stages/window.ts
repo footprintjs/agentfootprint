@@ -194,24 +194,22 @@ export function buildWindowStage(
       });
     }
 
-    // `capTokens` / `projectedTokens` are the historical names on
-    // `BudgetPressureRecord`; the slots measure them in chars, and this
-    // measures them in the tokens the decision was actually made on. A
-    // strategy with no token budget omits this entirely rather than report a
-    // cap nobody set.
+    // A strategy with no token budget omits `budgetPressure` entirely rather
+    // than report a cap nobody set.
     //
-    // Which is exactly why `unit` exists (8.14.0). The messages SLOT emits
-    // this same event, with this same `slot: 'messages'`, counting characters
-    // — and `contextBudget` is on by default, so one subscriber gets both.
-    // Every shipped strategy compares against a `thresholdTokens`, so a
-    // strategy that does not say defaults to tokens; the six fields are
-    // written together so a reader can use either pair.
+    // `unit` is why the payload's numbers are named `cap` / `projected` and
+    // not `capTokens` / `projectedTokens` (renamed 8.14.0, old names removed
+    // 9.0.0): the messages SLOT emits this same event, with this same
+    // `slot: 'messages'`, counting CHARACTERS — and `contextBudget` is on by
+    // default, so one subscriber gets both. Every shipped strategy compares
+    // against a `thresholdTokens`, so a strategy that does not say defaults
+    // to tokens. The strategy-facing seam (`WindowStrategyResult`) keeps its
+    // own `capTokens` spelling: there it is honest, because a strategy that
+    // measures chars declares `unit: 'chars'` for itself.
     if (result.budgetPressure !== undefined) {
       const { capTokens, projectedTokens, planAction } = result.budgetPressure;
       typedEmit(scope, 'agentfootprint.context.budget_pressure', {
         slot: 'messages',
-        capTokens,
-        projectedTokens,
         overflowBy: Math.max(0, projectedTokens - capTokens),
         planAction,
         unit: result.budgetPressure.unit ?? 'tokens',

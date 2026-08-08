@@ -18,20 +18,26 @@
  * compiler checks the assignments, while its name still matches
  * `test/**\/*.test.ts` so `npm test` also runs the assertions.
  *
- * ── 8.14.0: the two replicas are deliberately NO LONGER identical ──────────
+ * ── 8.14.0 → 9.0.0: what the two replicas carry now ───────────────────────
  *
- * `unit` / `cap` / `projected` are REQUIRED on the payload and OPTIONAL on the
- * record, and that asymmetry is the design rather than drift:
+ * 8.14.0 added `unit` / `cap` / `projected` beside `capTokens` /
+ * `projectedTokens`, which asserted a unit the slot channel does not use: a
+ * slot counts CHARS, a window strategy fills the same event with TOKENS.
+ * Through 8.x both pairs were written with identical values so nothing broke
+ * mid-major. **9.0.0 removed the `*Tokens` pair from BOTH replicas.**
  *
- *   • a consumer only ever READS a payload, so requiring the fields there
- *     costs them nothing and guarantees the unit is always answerable;
- *   • a slot builder WRITES a record — including one a consumer wrote — so
- *     requiring them there would break code that compiled in 8.13.
+ * One asymmetry survives on purpose, and it is design rather than drift:
+ * `unit` is REQUIRED on the payload and OPTIONAL on the record.
  *
- * `ContextRecorder` closes the gap by filling `unit: 'chars'` on the way past.
- * The tests below pin BOTH halves: the record must still compile without the
- * new fields, and the normalization must produce a payload that satisfies the
- * required ones.
+ *   • a consumer only ever READS a payload, so requiring it there costs them
+ *     nothing and guarantees the unit is always answerable;
+ *   • a slot builder WRITES a record — including one a consumer wrote — and a
+ *     slot composition is counted in characters by construction, so an absent
+ *     `unit` reads as `'chars'` without guessing.
+ *
+ * `ContextRecorder` closes that gap by filling `unit: 'chars'` on the way
+ * past. `cap` / `projected` are required on both: a record carrying neither
+ * pair would be a record with no numbers on it.
  */
 import { describe, expect, it } from 'vitest';
 import type { BudgetPressureRecord } from '../../src/index';
@@ -47,8 +53,8 @@ describe("planAction 'none' — stays assignable across both union replicas (7.6
     // is dropped from src/recorders/core/types.ts.
     const record: BudgetPressureRecord = {
       slot: 'tools',
-      capTokens: 2000,
-      projectedTokens: 2447,
+      cap: 2000,
+      projected: 2447,
       overflowBy: 447,
       planAction: 'none',
     };
@@ -58,8 +64,6 @@ describe("planAction 'none' — stays assignable across both union replicas (7.6
   it('assigns to ContextBudgetPressurePayload — what consumers receive', () => {
     const payload: BudgetPressurePayload = {
       slot: 'tools',
-      capTokens: 2000,
-      projectedTokens: 2447,
       overflowBy: 447,
       planAction: 'none',
       unit: 'chars',
@@ -75,36 +79,36 @@ describe("planAction 'none' — stays assignable across both union replicas (7.6
   });
 });
 
-describe('unit / cap / projected — the asymmetry is deliberate (8.14.0)', () => {
-  it('a record written WITHOUT the new fields still compiles', () => {
-    // Exactly the object a 8.13-era slot builder produced. If this stops
-    // compiling, the additive path was not additive.
-    const legacy: BudgetPressureRecord = {
+describe('unit is optional on the record, required on the payload (8.14.0 → 9.0.0)', () => {
+  it('a record written WITHOUT `unit` still compiles — third-party slot builders', () => {
+    // The one field a slot builder may leave off. If this stops compiling,
+    // every consumer-written slot builder breaks on upgrade.
+    const noUnit: BudgetPressureRecord = {
       slot: 'system-prompt',
-      capTokens: 4000,
-      projectedTokens: 4100,
+      cap: 4000,
+      projected: 4100,
       overflowBy: 100,
       planAction: 'none',
     };
-    expect(legacy.unit).toBeUndefined();
+    expect(noUnit.unit).toBeUndefined();
   });
 
   it('a record NORMALIZED the way ContextRecorder does satisfies the payload', () => {
     const record: BudgetPressureRecord = {
       slot: 'system-prompt',
-      capTokens: 4000,
-      projectedTokens: 4100,
+      cap: 4000,
+      projected: 4100,
       overflowBy: 100,
       planAction: 'none',
     };
     // This is `ContextRecorder.handleBudgetPressureWrite`, spelled out. The
-    // annotation is the assertion: drop any of the three and it stops
-    // compiling, which is the whole point of requiring them on the payload.
+    // annotation is the assertion: drop `unit` and it stops compiling, which
+    // is the whole point of requiring it on the payload. `cap` / `projected`
+    // need no `??` fallback since 9.0.0 — they are required on the record too,
+    // so the normalization is one field wide.
     const dispatched: DispatchedPayload = {
       ...record,
       unit: record.unit ?? 'chars',
-      cap: record.cap ?? record.capTokens,
-      projected: record.projected ?? record.projectedTokens,
     };
     expect(dispatched.planAction).toBe('none');
     expect(dispatched.unit).toBe('chars');
@@ -118,21 +122,39 @@ describe('unit / cap / projected — the asymmetry is deliberate (8.14.0)', () =
     expect(units).toEqual(payloadUnits);
   });
 
-  it('the deprecated names still carry the SAME numbers as the honest ones', () => {
-    // Both pairs are written, always. A consumer mid-migration reads either
-    // and gets the same answer — that is what makes the old names safe to
-    // keep rather than a second source of truth.
+  it('9.0.0 — the token-named pair is gone from BOTH replicas', () => {
+    // The removal has to land in lockstep, same as the `planAction` widening
+    // above: `BudgetPressureRecord` and `ContextBudgetPressurePayload` are two
+    // declarations of one fact, and a field kept on one of them is a field a
+    // consumer will find on exactly half their code paths.
     const payload: BudgetPressurePayload = {
       slot: 'messages',
-      capTokens: 120_000,
-      projectedTokens: 131_000,
       overflowBy: 11_000,
       planAction: 'summarize',
       unit: 'tokens',
       cap: 120_000,
       projected: 131_000,
     };
-    expect(payload.cap).toBe(payload.capTokens);
-    expect(payload.projected).toBe(payload.projectedTokens);
+    expect(payload.cap).toBe(120_000);
+    expect(payload.projected).toBe(131_000);
+
+    // Excess-property checking is what pins the removal at COMPILE time: an
+    // object literal carrying `capTokens` is refused by both annotations, so
+    // resurrecting either field fails `npm run test:types`. Spelled as a type
+    // query rather than a literal so this file itself still compiles.
+    type RecordKeys = keyof BudgetPressureRecord;
+    type PayloadKeys = keyof BudgetPressurePayload;
+    const removedOnRecord: Exclude<'capTokens' | 'projectedTokens', RecordKeys>[] = [
+      'capTokens',
+      'projectedTokens',
+    ];
+    const removedOnPayload: Exclude<'capTokens' | 'projectedTokens', PayloadKeys>[] = [
+      'capTokens',
+      'projectedTokens',
+    ];
+    // If either name came back, its `Exclude<>` collapses to `never` and the
+    // array literal above stops compiling.
+    expect(removedOnRecord).toEqual(['capTokens', 'projectedTokens']);
+    expect(removedOnPayload).toEqual(['capTokens', 'projectedTokens']);
   });
 });

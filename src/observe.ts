@@ -207,12 +207,12 @@ export {
 // Emit primitive — used by every Tier-3 source-domain.
 export { typedEmit } from './recorders/core/typedEmit.js';
 
-// ── DEPRECATED (moved to agentfootprint/debug) ─────────────────
-// The diagnosis tools (influence-core, trace-toolpack, context-bisect,
-// tool-lint) moved to `agentfootprint/debug` in the surface cleanup, so the
-// import path matches the Debug docs category. They are re-exported here for
-// ONE transition version — import them from `agentfootprint/debug` instead.
-// They will be removed from `agentfootprint/observe` in the next major.
+// ── Diagnosis tools ────────────────────────────────────────────
+// influence-core, trace-toolpack, context-bisect and tool-lint live in
+// `src/debug.ts`. 8.0.0 folded their import path INTO this one, and 9.0.0
+// removed the separate `agentfootprint/debug` subpath, so this re-export is
+// how they reach the door. Watching a healthy run and performing the autopsy
+// on a broken one come through the same door on purpose.
 export * from './debug.js';
 // Tool-choice margin recorder (RFC-002 tier 2, C4–C6) — per LLM call,
 // ranks the OFFERED catalog against the choice context (user message +

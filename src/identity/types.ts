@@ -1,5 +1,5 @@
 /**
- * agentfootprint/identity — the CredentialProvider port.
+ * identity — the CredentialProvider port.
  *
  * OUTBOUND auth: vend a credential/token so a tool can call a downstream service
  * (GitHub, Slack, Google…) on behalf of the agent or the end user. This is

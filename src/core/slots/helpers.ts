@@ -90,10 +90,9 @@ export function composeSlot(
  * truncate NOTHING, so the full content went to the LLM and this record is
  * the loud signal that the slot's budget is not being respected.
  *
- * Units are CHARS. The historical `*Tokens` field names say otherwise, which
- * is why 8.14.0 added `unit` / `cap` / `projected` beside them and this
- * function writes all six: the two old names for existing readers, and the
- * three honest ones for everyone else. A window strategy fills the same
+ * Units are CHARS, and the record says so: `unit` / `cap` / `projected`, added
+ * in 8.14.0 and the only spelling since 9.0.0 removed the `*Tokens` names that
+ * asserted a unit this channel does not use. A window strategy fills the same
  * fields with `unit: 'tokens'`, and one subscriber gets both.
  */
 export function slotOverflow(composition: SlotComposition): BudgetPressureRecord | null {
@@ -101,8 +100,6 @@ export function slotOverflow(composition: SlotComposition): BudgetPressureRecord
   if (cap <= 0 || used <= cap) return null;
   return {
     slot: composition.slot,
-    capTokens: cap,
-    projectedTokens: used,
     overflowBy: used - cap,
     planAction: 'none',
     unit: 'chars',
@@ -133,7 +130,7 @@ export function formatOverflowWarning(opts: {
   const unit = pressure.unit ?? 'chars';
   return (
     `[agentfootprint] ${pressure.slot} slot over budget: ` +
-    `${pressure.projectedTokens}/${pressure.capTokens} ${unit} (+${pressure.overflowBy}), ` +
+    `${pressure.projected}/${pressure.cap} ${unit} (+${pressure.overflowBy}), ` +
     `${itemCount} ${itemNoun}(s). Nothing was truncated — the full ${contentNoun} were sent ` +
     `to the LLM — but the slot budget signal is unreliable. ${remedy}`
   );

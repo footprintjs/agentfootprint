@@ -1,5 +1,5 @@
 /**
- * AgentBuilder ergonomics — .maxIterations() + .recorder() + .instructions()
+ * AgentBuilder ergonomics — .maxIterations() + .watch() + .instructions()
  *
  * Block-B-tail / Neo follow-up. These three small builder methods round
  * out the v2.5 fluent API so consumers don't have to mix
@@ -49,7 +49,7 @@ describe('AgentBuilder.maxIterations', () => {
   });
 });
 
-// ─── 2. .recorder() ──────────────────────────────────────────────
+// ─── 2. .watch() ──────────────────────────────────────────────
 
 describe('AgentBuilder.recorder', () => {
   it('attaches at build time so the recorder sees the first run', async () => {
@@ -61,7 +61,7 @@ describe('AgentBuilder.recorder', () => {
       },
     };
     const provider = mock({ respond: () => ({ content: 'final', toolCalls: [] }) });
-    const agent = Agent.create({ provider, model: 'mock' }).system('s').recorder(recorder).build();
+    const agent = Agent.create({ provider, model: 'mock' }).system('s').watch(recorder).build();
     await agent.run({ message: 'go' });
     expect(events.length).toBeGreaterThan(0);
   });
@@ -83,8 +83,8 @@ describe('AgentBuilder.recorder', () => {
     const provider = mock({ respond: () => ({ content: 'final', toolCalls: [] }) });
     const agent = Agent.create({ provider, model: 'mock' })
       .system('s')
-      .recorder(recA)
-      .recorder(recB)
+      .watch(recA)
+      .watch(recB)
       .build();
     await agent.run({ message: 'go' });
     expect(counters.a).toBeGreaterThan(0);

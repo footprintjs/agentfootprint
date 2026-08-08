@@ -1,19 +1,19 @@
 /**
- * agentfootprint/hosting-providers — adapters for the two hosting ports.
+ * hosting-providers — adapters for the two hosting ports.
  *
- *   agentfootprint/hosting            ← the PORTS (`AgentHost`, `SessionLifecycle`),
- *                                       the composer, and the local adapters
- *   agentfootprint/hosting-providers  ← adapters for somewhere you deploy (this file)
+ *   src/hosting/            ← the PORTS (`AgentHost`, `SessionLifecycle`), the
+ *                             composer, and the local adapters
+ *   src/hosting-providers.ts ← adapters for somewhere you deploy (this file)
  *
- * Same split as `agentfootprint/memory` ↔ `agentfootprint/memory-providers`, and
- * for the same reason. `agentfootprint/hosting` promises that not one field,
- * name or assumption in it comes from any cloud, and a test greps its sources
- * for vendor names to keep that honest — including the barrel. So the cloud
- * adapters get their own subpath, and the port subpath stays a file you can
- * read without learning anybody's product names.
+ * The split is a source-tree split, not an import split: both halves come out
+ * of the one `agentfootprint/hosting` door. It exists because the PORT files
+ * promise that not one field, name or assumption in them comes from any cloud,
+ * and a test greps those sources for vendor names to keep that honest. So the
+ * cloud adapters live in this file, and the port files stay readable without
+ * learning anybody's product names.
  *
- * One subpath that grows: an adapter for the next runtime lands here beside
- * this one rather than minting `agentfootprint/hosting-<vendor>`.
+ * One file that grows: an adapter for the next runtime lands here beside this
+ * one.
  *
  * ── What ships here ──────────────────────────────────────────────────────────
  *   • `agentCoreRuntimeHost({ port?, hostname?, busy? })` — an `AgentHost` for
@@ -42,7 +42,7 @@
  *
  * @example  An agent in an AgentCore Runtime container
  *   import { standingAgent } from 'agentfootprint/hosting';
- *   import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+ *   import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting';
  *
  *   const handle = await standingAgent({
  *     agent,
@@ -51,9 +51,9 @@
  *   });
  *   process.on('SIGTERM', () => void handle.close());
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/hosting` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/hosting`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export {

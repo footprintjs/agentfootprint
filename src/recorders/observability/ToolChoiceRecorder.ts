@@ -60,7 +60,7 @@
  *          by the LLM call's `runtimeStageId`. Convention 4: resets on a
  *          new `runId` via `FlowRecorder.onRunStart`.
  * Role:    Tier-3 /observe recorder. Attach via `Agent.create(...)
- *          .recorder(handle)` or `executor.attachCombinedRecorder`.
+ *          .watch(handle)` or `executor.attachCombinedRecorder`.
  *
  * Honest claim (RFC-002 §2): margins are embedding geometry between the
  * context and tool descriptions — a deterministic PROXY for the model's

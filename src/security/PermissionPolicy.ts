@@ -14,7 +14,7 @@
  *      - `PermissionChecker` interface (async check; consumed by Agent
  *        constructor's `permissionChecker` field)
  *      - sync `isAllowed(toolId)` method (consumed by `gatedTools(...)`
- *        from `agentfootprint/tool-providers`)
+ *        from `agentfootprint/providers`)
  *
  * Pattern: Strategy (GoF) for the role-allowlist policy + Adapter
  *          (matches `PermissionChecker` interface so it composes with
@@ -81,7 +81,7 @@ export interface PermissionPolicyOptions {
 /**
  * Data-driven role-based permission policy. Satisfies the v2.4
  * `PermissionChecker` interface AND exposes a sync `isAllowed` method
- * for use with `gatedTools` from `agentfootprint/tool-providers`.
+ * for use with `gatedTools` from `agentfootprint/providers`.
  */
 export class PermissionPolicy implements PermissionChecker {
   readonly name = 'PermissionPolicy';

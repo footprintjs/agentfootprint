@@ -2,7 +2,7 @@
  * AgentCoreStore — AWS Bedrock **AgentCore Memory** adapter
  * (peer-dep `@aws-sdk/client-bedrock-agentcore`).
  *
- *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
+ *   import { AgentCoreStore } from 'agentfootprint/memory';
  *
  *   const store = new AgentCoreStore({
  *     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',

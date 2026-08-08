@@ -122,22 +122,39 @@ describe('skillsFromDir — unit', () => {
     expect((billing?.metadata as { surfaceMode?: string }).surfaceMode).toBe('both');
   });
 
-  it('a custom viaToolName still loads here — and is refused when the agent mounts it (8.7.0)', async () => {
-    // The loader is a thin wrapper over `defineSkill`, so it forwards the option as
-    // it always did. What changed is that the option is no longer allowed to be a
-    // silent no-op: nothing has ever read `viaToolName`, and a directory loaded with
-    // one produced skills that activated through `read_skill` like every other skill
-    // while the declaration said otherwise. The refusal is at the mount, which is the
-    // one funnel every flavor and every loader passes through.
+  it('viaToolName is REFUSED at load (9.0.0) — it was never a per-directory tool', async () => {
+    // 8.7.0 let the loader forward the option and refused it at the mount.
+    // 9.0.0 removes the option itself, and the loader refuses it here, at the
+    // call: nothing has ever read `viaToolName`, 'read_skill' is the only
+    // activation tool the library builds, and a directory loaded with one
+    // produced skills that activated through `read_skill` like every other
+    // skill while the declaration said otherwise. Silently ignoring it now
+    // would be a DOWNGRADE — the caller would keep believing a per-directory
+    // activation tool exists.
     const dir = makeDir();
     writeSkill(dir, 'billing', skillFile('billing', 'Refunds.', 'Body.'));
 
-    const [billing] = await skillsFromDir(dir, { viaToolName: 'open_playbook' });
-    expect(billing?.trigger).toEqual({ kind: 'llm-activated', viaToolName: 'open_playbook' });
+    await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
+      /`viaToolName` was removed in 9\.0\.0/,
+    );
+    // The message carries the value, the deprecation history, and the fix.
+    await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
+      /open_playbook/,
+    );
+    await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
+      /read_skill/,
+    );
+  });
 
+  it('a directory loaded WITHOUT the option carries the one activation tool there is', async () => {
+    const dir = makeDir();
+    writeSkill(dir, 'billing', skillFile('billing', 'Refunds.', 'Body.'));
+
+    const [billing] = await skillsFromDir(dir);
+    expect(billing?.trigger).toEqual({ kind: 'llm-activated', viaToolName: 'read_skill' });
     expect(() =>
       Agent.create({ provider: mock({ reply: 'done' }), model: 'mock' }).skill(billing!),
-    ).toThrow(/viaToolName is 'open_playbook'/);
+    ).not.toThrow();
   });
 
   it('ignores subdirectories that hold no SKILL.md', async () => {

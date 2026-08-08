@@ -1,5 +1,5 @@
 /**
- * agentfootprint/embedders — ready-made {@link Embedder} implementations for the
+ * embedders — ready-made {@link Embedder} implementations for the
  * embedding-backed scorers (memory retrieval, toolChoiceRecorder / scoreMargin).
  *
  * The core deliberately ships only `mockEmbedder` (bring-your-own). These are
@@ -36,9 +36,9 @@
  * AgentCoreStore): the library states the surface it needs, the host owns the
  * construction. Nothing changes for Node callers who pass nothing.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/providers` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/providers`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 export type { Embedder } from '../memory/embedding/types.js';
 import type { Embedder } from '../memory/embedding/types.js';

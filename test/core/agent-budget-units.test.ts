@@ -12,6 +12,19 @@
  * number, with nothing in the payload to tell them apart. `unit` answers it;
  * `cap` / `projected` restate the two numbers under names that assert nothing.
  *
+ * ## 9.0.0 — one spelling
+ *
+ * 8.14.0 was additive: `capTokens` / `projectedTokens` kept being written with
+ * identical values so nothing broke mid-major. 9.0.0 REMOVED them, from both
+ * the event payload (`ContextBudgetPressurePayload`) and the slot record
+ * (`BudgetPressureRecord`). The reason is the finding above: a field whose
+ * NAME asserts tokens, on a channel that is chars half the time, is a lie the
+ * payload tells for free. `unit` + `cap` + `projected` is the only spelling.
+ *
+ * The strategy-facing seam (`WindowStrategyResult.budgetPressure`) keeps
+ * `capTokens` / `projectedTokens` on purpose — a strategy declares its own
+ * `unit`, so there the name is honest about what that strategy measured.
+ *
  * The regression seed is the audit probe that found it: ONE agent, ONE
  * subscriber, both budgets configured, and the assertion that every event can
  * now say what it counted.
@@ -94,16 +107,25 @@ describe('context.budget_pressure — unit (8.14.0)', () => {
     }
   });
 
-  it('the deprecated names still carry the identical numbers', async () => {
+  it('9.0.0 — the token-named pair is GONE from the payload, and cap/projected stand alone', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const seen = await collectPressure();
 
-    // Additive, not a migration: a consumer reading `capTokens` in 8.13 reads
-    // the same value in 8.14. Both pairs are written on every event.
     expect(seen.length).toBeGreaterThan(0);
     for (const p of seen) {
-      expect(p.cap).toBe(p.capTokens);
-      expect(p.projected).toBe(p.projectedTokens);
+      const raw = p as unknown as Record<string, unknown>;
+      // Not merely "undefined" — the KEY is absent. A payload that still
+      // carried the key with an undefined value would serialize a `null` into
+      // every consumer's warehouse and re-open the ambiguity 8.14.0 closed.
+      expect(Object.hasOwn(raw, 'capTokens'), 'capTokens was removed in 9.0.0').toBe(false);
+      expect(Object.hasOwn(raw, 'projectedTokens'), 'projectedTokens was removed in 9.0.0').toBe(
+        false,
+      );
+
+      // The surviving names carry the numbers, and the arithmetic between
+      // them still holds — the removal changed spelling, not measurement.
+      expect(typeof p.cap).toBe('number');
+      expect(typeof p.projected).toBe('number');
       expect(p.overflowBy).toBe(Math.max(0, p.projected - p.cap));
     }
   });
@@ -130,13 +152,17 @@ describe('slotOverflow — the chars half, at its source', () => {
       droppedSummaries: [],
     } as never);
 
-  it("stamps unit: 'chars' and mirrors the two numbers", () => {
+  it("stamps unit: 'chars' and writes the numbers under cap / projected only", () => {
     const rec = slotOverflow(composition(100, 140));
     expect(rec).not.toBeNull();
     expect(rec!.unit).toBe('chars');
-    expect(rec!.cap).toBe(rec!.capTokens);
-    expect(rec!.projected).toBe(rec!.projectedTokens);
+    expect(rec!.cap).toBe(100);
     expect(rec!.projected).toBe(140);
+    // This is the record that made the old names indefensible: the slot
+    // channel counts CHARACTERS, and 9.0.0 removed the pair that said tokens.
+    const raw = rec as unknown as Record<string, unknown>;
+    expect(Object.hasOwn(raw, 'capTokens')).toBe(false);
+    expect(Object.hasOwn(raw, 'projectedTokens')).toBe(false);
   });
 
   it('still returns null under the cap — the unit work changed no threshold', () => {

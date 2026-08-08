@@ -28,8 +28,6 @@ export type {
   CompactionRecord,
   CompactionRetention,
   FoldedSpan,
-  FoldRefusal,
-  FoldRefusalReason,
   ResolvedCompaction,
   SlidingWindowOptions,
   SlidingWindowRecord,

@@ -7,6 +7,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.0.0] - 2026-08-08
+
+**The 8.x deprecation ledger, executed. Nothing new; nothing behaves
+differently. Names that had a replacement now have only the replacement.**
+
+8.0.0 consolidated 26 export subpaths into 10 doors and promised every old path
+would keep working for all of 8.x. It did. This release collects on the other
+half of that promise: sixteen alias subpaths leave `package.json`, and every
+option, string, method and field that shipped an 8.x deprecation notice is
+removed with it.
+
+There is no new capability here and no changed behaviour. **If your code has no
+deprecation warnings on 8.20.0, it compiles and runs unchanged on 9.0.0.**
+
+### Removed — the sixteen door aliases
+
+Each removed path re-exported the *same symbols* the door carries, never copies,
+so this is a find-and-replace on import lines. No name moved; no name was lost.
+
+| you were importing from | import from |
+|---|---|
+| `agentfootprint/llm-providers` | `agentfootprint/providers` |
+| `agentfootprint/embedders` | `agentfootprint/providers` |
+| `agentfootprint/tool-providers` | `agentfootprint/providers` |
+| `agentfootprint/thinking` | `agentfootprint/providers` |
+| `agentfootprint/memory-providers` | `agentfootprint/memory` |
+| `agentfootprint/observability-providers` | `agentfootprint/observe` |
+| `agentfootprint/strategies` | `agentfootprint/observe` |
+| `agentfootprint/stream` | `agentfootprint/observe` |
+| `agentfootprint/status` | `agentfootprint/observe` |
+| `agentfootprint/locales` | `agentfootprint/observe` |
+| `agentfootprint/debug` | `agentfootprint/observe` |
+| `agentfootprint/debug/finders` | `agentfootprint/observe` |
+| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe` |
+| `agentfootprint/hosting-providers` | `agentfootprint/hosting` |
+| `agentfootprint/injection-engine` | `agentfootprint/context` |
+| `agentfootprint/identity` | `agentfootprint/security` |
+
+What ships now is exactly: the root barrel, the ten doors (`/providers`,
+`/memory`, `/rag`, `/cache`, `/observe`, `/events`, `/context`, `/resilience`,
+`/hosting`, `/security`), one retained alias (`/reliability`, below), and
+`./package.json`. `typesVersions` was trimmed in lockstep — a stale row there is
+the quiet failure mode where the editor types a path Node refuses.
+
+`test/api-conformance/door-aliases.test.ts` pins the absence of all sixteen and
+drives the TypeScript checker over the shipped `.d.ts` files to prove each door
+still carries every name it absorbed; `test/api-conformance/subpath-exports.test.ts`
+pins the two manifest tables and proves, by object identity, that each absorbed
+implementation barrel is served by its door as the same object.
+
+### Removed — options, strings, methods, fields
+
+| removed | replacement | since |
+|---|---|---|
+| `AgentBuilder.recorder(rec)` | `AgentBuilder.watch(rec)` — same list, same order, same attachment, and variadic | deprecated 8.0.0 |
+| `defineSkill({ viaToolName })` | drop it — `'read_skill'` is the only activation tool the library builds; gate on a `rule` trigger or a `skillGraph()` edge | deprecated 8.7.0 |
+| `skillsFromDir(dir, { viaToolName })` | drop it — same reason | deprecated 8.7.0 |
+| `WindowRefusalReason` member `'summary-not-smaller'` | `'replacement-not-smaller'` | renamed 8.14.0 |
+| type `FoldRefusal` | `WindowRefusal` | renamed 7.17 |
+| type `FoldRefusalReason` | `WindowRefusalReason` | renamed 7.17 |
+| `WindowStrategy` exported from `agentfootprint/memory` | `MemoryWindowStrategy` | renamed 7.27.1 |
+| `CompactionRecord.foldedStageIds` | `WindowRecord.removedStageIds` | family name published 7.17 |
+| `CompactionRecord.foldedMessageCount` | `WindowRecord.removedMessageCount` | family name published 7.17 |
+| `ContextBudgetPressurePayload.capTokens` | `cap`, read with `unit` | renamed 8.14.0 |
+| `ContextBudgetPressurePayload.projectedTokens` | `projected`, read with `unit` | renamed 8.14.0 |
+| `BudgetPressureRecord.capTokens` | `cap`, read with `unit` | renamed 8.14.0 |
+| `BudgetPressureRecord.projectedTokens` | `projected`, read with `unit` | renamed 8.14.0 |
+
+Three of those are worth a sentence each, because the *reason* is the migration:
+
+- **`viaToolName` named a door that was never built.** The evaluator activates
+  an `llm-activated` skill by matching `ctx.activatedInjectionIds`, only
+  `read_skill` writes that array, and nothing ever read the field. 8.7.0 made a
+  non-`'read_skill'` value a mount-time refusal; 9.0.0 deletes the option. Even
+  `viaToolName: 'read_skill'` is refused — the option is gone, not narrowed, and
+  a caller passing the default is still a caller who believes it does something.
+  The **mount** refusal from 8.7.0 stays, because an injection can reach an agent
+  without passing through the factory (a hand-built object, or one deserialized
+  from an 8.x artifact).
+- **`capTokens` / `projectedTokens` asserted a unit the channel does not use.**
+  The three context slots emit `agentfootprint.context.budget_pressure` counting
+  CHARACTERS, a window strategy emits the same event counting TOKENS, and
+  `contextBudget` is on by default — so one subscriber routinely got both, and
+  "cap 200" could mean either. 8.14.0 added `unit` + `cap` + `projected` beside
+  the old pair; 9.0.0 keeps only the honest three. `cap` / `projected` are now
+  **required** on `BudgetPressureRecord` (a record carrying neither pair would be
+  a record with no numbers on it); `unit` stays optional there and required on
+  the payload, so a third-party slot builder still compiles and a consumer can
+  always answer what was counted. The strategy-facing seam
+  (`WindowStrategyResult.budgetPressure`) keeps its own `capTokens` spelling on
+  purpose — a strategy declares its own `unit`, so there the name is honest.
+- **`foldedStageIds` / `foldedMessageCount` were fold-flavoured names on a family
+  field.** They live on `WindowRecord`, which every window strategy writes, and
+  only one of the three shipped strategies folds anything — so the alias made
+  `slidingWindow` and `tokenBudget` read like they were missing a field.
+
+### Three grace errors, deleted in 10.0.0
+
+`AgentBuilder.recorder()`, `defineSkill({ viaToolName })` and
+`skillsFromDir(…, { viaToolName })` keep their NAMES for one major as throwing
+stubs. Each throws at build/definition time — before any run, so the failure is
+deterministic and lands in development — with a message that names the
+replacement and says when the signpost comes down.
+
+Deleting the type member alone would have been a silent DOWNGRADE for the two
+`viaToolName` cases: an object literal gets an excess-property error, but an
+options bag arriving through a variable does not, and the value would then be
+*ignored* where 8.7.0 refused it. So the field is read at run time exactly once
+more, to say it is gone.
+
+### Two things deliberately kept
+
+- **`agentfootprint/reliability` survives.** It is the only home of the
+  reliability GATE's `CircuitOpenError` — a different class from the provider
+  decorator's `CircuitOpenError` that `/resilience` carries, with a different
+  constructor and a different `instanceof` answer. Removing the path would not
+  rename that class; it would make it unreachable, and a consumer could no
+  longer `instanceof`-check the error their own gate throws. The full alias
+  discipline still applies to it, scoped to that one exception plus
+  `CircuitState`, which is declared in both breaker files as
+  `'closed' | 'open' | 'half-open'` — two declarations, one type, pinned as such.
+- **`buildRunSteps(events)` survives, still `@deprecated`.** Its deprecation is
+  a *preference*, not a migration: live consumers should attach
+  `runStepRecorder()` and read `getSteps()` (O(N), the house pattern) instead of
+  re-walking an event log (O(N²) across repeated calls). But the shim is the only
+  way to build steps from a saved event list — replay, post-hoc analysis, tests —
+  and no recorder can do that job, so removing it would delete a capability
+  rather than a spelling. It stays until something replaces the use case.
+
+### Two ledger items that needed no work
+
+Named here so the ledger is closed honestly rather than quietly:
+
+- **Typestate builder one-shots.** No `@deprecated` typestate marker exists in
+  `src/`. The builder's "set twice" guards (`.compaction()`, `.window()`) are
+  live refusals, not deprecations — nothing to remove.
+- **Budget-picker ordering.** No deprecated ordering option exists in `src/`.
+  `RetrievalEvidence.selectionOrder` is a documented current field, not a
+  transitional one — nothing to remove.
+
+### Upgrading
+
+1. Rewrite import lines against the door table above. Nothing else in the file
+   changes — every name is the same symbol on the new door.
+2. `.recorder(` → `.watch(`.
+3. Delete every `viaToolName`.
+4. `capTokens` → `cap`, `projectedTokens` → `projected` (and read `unit`);
+   `foldedStageIds` → `removedStageIds`, `foldedMessageCount` →
+   `removedMessageCount`; `'summary-not-smaller'` → `'replacement-not-smaller'`;
+   `FoldRefusal[Reason]` → `WindowRefusal[Reason]`; `WindowStrategy` from
+   `agentfootprint/memory` → `MemoryWindowStrategy`.
+
 ## [8.20.0] - 2026-08-07
 
 **The corpus stops promising what it does not contain.**

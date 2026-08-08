@@ -118,8 +118,6 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
           ...base,
           removedStageIds: [],
           removedMessageCount: 0,
-          foldedStageIds: [],
-          foldedMessageCount: 0,
           windowCharsAfter: charsBefore,
           summaryChars: 0,
           refusals,
@@ -241,9 +239,6 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         ...base,
         removedStageIds: facts.removedStageIds,
         removedMessageCount: span.length,
-        // The 7.16 names for the two values above, kept and deprecated.
-        foldedStageIds: facts.removedStageIds,
-        foldedMessageCount: span.length,
         windowCharsAfter: windowChars(window),
         summaryChars: summaryMessage.content.length,
         summarizerTokens: summary.usage,

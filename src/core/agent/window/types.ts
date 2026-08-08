@@ -64,15 +64,6 @@ export type WindowRefusalReason =
   /** The summarizer threw. No fold this iteration; the window stays big. */
   | 'summarizer-failed'
   /**
-   * @deprecated Renamed to `'replacement-not-smaller'` in 8.14.0. Same
-   * meaning; the old spelling claimed a SUMMARY where the drop strategies
-   * have none — `slidingWindow` and `tokenBudget` never call a summarizer and
-   * reported this reason anyway. A runtime from 8.14.0 on writes only the new
-   * string; this member survives so code written against 7.17–8.13 still
-   * narrows and compiles.
-   */
-  | 'summary-not-smaller'
-  /**
    * The REPLACEMENT came back no smaller than the span it would replace, so
    * the removal was abandoned. Both sides are measured in chars — the same
    * unit, an exact comparison, not a token guess.
@@ -96,19 +87,6 @@ export interface WindowRefusal {
   /** Index of the turn's first message in the pre-removal window. */
   readonly messageIndex: number;
 }
-
-/**
- * @deprecated Renamed to {@link WindowRefusal} in 7.17 — refusals are shared
- * by every window strategy, and only one of them folds. This alias is the
- * same type and is not going away in 7.x.
- */
-export type FoldRefusal = WindowRefusal;
-
-/**
- * @deprecated Renamed to {@link WindowRefusalReason} in 7.17. Same values,
- * same meanings; kept as an alias for code written against 7.16.
- */
-export type FoldRefusalReason = WindowRefusalReason;
 
 // ─────────────────────────────────────────────────────────────────
 // Records — one per visit that engaged, whatever the strategy
@@ -163,16 +141,6 @@ export interface CompactionRecord extends WindowRecord {
   readonly thresholdTokens: number;
   /** True when the measurement was over budget (a fold was attempted). */
   readonly overBudget: boolean;
-  /**
-   * @deprecated Use {@link WindowRecord.removedStageIds} — the family name for
-   * the same value, published alongside it since 7.17. Both are written.
-   */
-  readonly foldedStageIds: readonly string[];
-  /**
-   * @deprecated Use {@link WindowRecord.removedMessageCount} — the family name
-   * for the same value, published alongside it since 7.17. Both are written.
-   */
-  readonly foldedMessageCount: number;
   /** Length of the summary text the summarizer produced (0 when none). */
   readonly summaryChars: number;
   /** What the summarizer call itself cost, when it reported usage. */

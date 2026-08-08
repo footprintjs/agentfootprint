@@ -177,7 +177,7 @@ const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assista
  *
  * @example
  *   import { Agent } from 'agentfootprint';
- *   import { anthropic } from 'agentfootprint/llm-providers';
+ *   import { anthropic } from 'agentfootprint/providers';
  *
  *   const agent = Agent.create({
  *     provider: anthropic({ defaultModel: 'claude-sonnet-4-5-20250929' }),

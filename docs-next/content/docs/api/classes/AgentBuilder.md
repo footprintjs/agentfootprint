@@ -1211,7 +1211,7 @@ const agent = Agent.create({ provider, model })
 
 Defined in: [src/core/agent/AgentBuilder.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L275)
 
-Wire a chainable `ToolProvider` (from `agentfootprint/tool-providers`)
+Wire a chainable `ToolProvider` (from `agentfootprint/providers`)
 as the agent's per-iteration tool source.
 
 The provider is consulted EVERY iteration via `provider.list(ctx)`
@@ -1239,7 +1239,7 @@ silent override surprises).
 
 ```ts
 Permission-gated baseline
-  import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+  import { gatedTools, staticTools } from 'agentfootprint/providers';
   import { PermissionPolicy } from 'agentfootprint/security';
 
   const policy = PermissionPolicy.fromRoles({

@@ -157,8 +157,7 @@ export class AgentBuilder {
    */
   private maxIterationsOverride?: number;
   /**
-   * Observers collected via `.watch()` (or its deprecated spelling
-   * `.recorder()`). Attached to the built Agent before `build()` returns
+   * Observers collected via `.watch()`. Attached to the built Agent before `build()` returns
    * (each via `agent.attach(rec)`), in call order.
    */
   private readonly recorderList: Watcher[] = [];
@@ -271,7 +270,7 @@ export class AgentBuilder {
   }
 
   /**
-   * Wire a chainable `ToolProvider` (from `agentfootprint/tool-providers`)
+   * Wire a chainable `ToolProvider` (from `agentfootprint/providers`)
    * as the agent's per-iteration tool source.
    *
    * The provider is consulted EVERY iteration via `provider.list(ctx)`
@@ -286,7 +285,7 @@ export class AgentBuilder {
    * silent override surprises).
    *
    * @example  Permission-gated baseline
-   *   import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+   *   import { gatedTools, staticTools } from 'agentfootprint/providers';
    *   import { PermissionPolicy } from 'agentfootprint/security';
    *
    *   const policy = PermissionPolicy.fromRoles({
@@ -713,19 +712,28 @@ export class AgentBuilder {
   }
 
   /**
-   * Attach a footprintjs `CombinedRecorder` to the built Agent. Wired
-   * via `agent.attach(rec)` immediately after construction, so the
-   * recorder sees every event from the very first run.
+   * REMOVED in 9.0.0 — use {@link AgentBuilder.watch} instead.
    *
-   * @deprecated Since 8.0.0 — use {@link AgentBuilder.watch} instead. Same
-   * list, same order, same attachment: `.watch(rec)` is this method under the
-   * name the loop already used for it (see `moments.ts` — "an observer
-   * reports, a rule changes what happens next"), and it takes more than one.
-   * This method keeps working for all of 8.x and is removed in 9.0.0.
+   * This is a one-release grace error, not a method. Deprecated in 8.0.0 in
+   * favour of `.watch(...)` — same list, same order, same attachment, and
+   * `.watch()` takes more than one observer. The body was deleted in 9.0.0;
+   * the NAME is kept for one major so a call site that missed the deprecation
+   * gets a sentence instead of `builder.recorder is not a function`.
+   *
+   * It throws at BUILD time, before any run, so the failure is deterministic
+   * and lands in development rather than in a trace nobody is watching.
+   *
+   * @deprecated Removed in 9.0.0 — call `.watch(rec)`. This throwing stub is
+   * deleted in 10.0.0.
    */
-  recorder(rec: Watcher): this {
-    this.recorderList.push(rec);
-    return this;
+  recorder(_rec: Watcher): this {
+    throw new Error(
+      `AgentBuilder.recorder() was removed in 9.0.0 — call .watch(rec) instead. It is the ` +
+        `same list, the same order and the same attachment (both replay through ` +
+        `agent.attach() at the end of build()), under the name the agent loop already used ` +
+        `for it, and .watch() is variadic: .watch(a, b, c). This name is kept only to say ` +
+        `so, and is deleted in 10.0.0.`,
+    );
   }
 
   /**
@@ -1796,7 +1804,7 @@ export class AgentBuilder {
  * indistinguishable from an observer whose events simply never happened.
  *
  * Keyed on OBJECT IDENTITY, not on the id alone. Handing the same reference to
- * `.watch()` twice (or to `.watch()` and the deprecated `.recorder()`) is
+ * `.watch()` twice is
  * harmless and stays one attachment — the fp dedupe is doing exactly what it is
  * for. It is two DIFFERENT observers under one name that loses a whole observer.
  *
@@ -1818,8 +1826,7 @@ function assertNoCollidingObserverIds(observers: readonly Watcher[]): void {
       `AgentBuilder.watch: two different observers were given the id '${id}'. Only the LAST ` +
         `one ever fires — footprintjs de-duplicates attached recorders by id, so the earlier ` +
         `one is dropped before the first run and reports nothing. Rename one of them; passing ` +
-        `the SAME object twice is fine (it stays one attachment). Both \`.watch()\` and the ` +
-        `deprecated \`.recorder()\` feed this list.`,
+        `the SAME object twice is fine (it stays one attachment).`,
     );
   }
 }
@@ -1910,9 +1917,14 @@ function collectInnerRuns(
  * read is worse than one that is refused, because it looks like it worked.
  *
  * Refused HERE because `injection()` is the one funnel every flavor passes through:
- * `defineSkill`, `skillsFromDir({ viaToolName })`, `.skill()`, `.skills(registry)`,
- * `.skillGraph()` and a hand-built Injection all arrive at this line. The option
- * itself is removed in 9.0.0.
+ * `defineSkill`, `skillsFromDir`, `.skill()`, `.skills(registry)`, `.skillGraph()`
+ * and a hand-built Injection all arrive at this line.
+ *
+ * 9.0.0 removed the `viaToolName` OPTION from `defineSkill` and `skillsFromDir`
+ * (both now refuse it by name at the factory), but the TRIGGER field stays and so
+ * does this check: a hand-built `Injection` literal can still carry an
+ * `llm-activated` trigger with any string in it, and that is the one path with no
+ * factory in front of it.
  */
 function assertReadSkillActivation(injection: Injection): void {
   const trigger = injection.trigger;
@@ -1925,7 +1937,9 @@ function assertReadSkillActivation(injection: Injection): void {
       `have activated through read_skill like every other one, so the name was decoration on a ` +
       `door that does not exist. Drop \`viaToolName\` (skills already share one activation tool ` +
       `and the model picks WHICH skill by id), or gate the skill on something the engine does ` +
-      `read — a \`rule\` trigger, or a skillGraph() edge. The option is removed in 9.0.0.`,
+      `read — a \`rule\` trigger, or a skillGraph() edge. The \`viaToolName\` OPTION on ` +
+      `defineSkill()/skillsFromDir() was removed in 9.0.0; this trigger field is all that ` +
+      `is left, and only a hand-built Injection can still set it.`,
   );
 }
 

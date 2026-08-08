@@ -141,7 +141,7 @@ export async function runPlantedScenario(
   let builder = Agent.create({ provider, model: 'mock-1', maxIterations: 4 })
     .system('You are a refunds assistant. Policy: refunds only within 30 days of purchase.')
     .tools([...tools])
-    .recorder(ctrl);
+    .watch(ctrl);
   for (const injection of injections) builder = builder.fact(injection);
   const agent = builder.build();
   agent.on('*', (event) => events.push(event as CapturedEventLike));

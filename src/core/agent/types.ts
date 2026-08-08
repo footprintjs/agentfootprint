@@ -212,7 +212,7 @@ export interface AgentOptions {
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
    * and injected as `ctx.credential`; tools can also pull via `ctx.credentials`.
-   * From `agentfootprint/identity` (`agentCoreIdentity({ region })`,
+   * From `agentfootprint/security` (`agentCoreIdentity({ region })`,
    * `staticTokens({ ... })`, or any `CredentialProvider`).
    */
   readonly credentials?: CredentialProvider;
@@ -317,7 +317,7 @@ export interface AgentOptions {
   /**
    * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
    * byte-identical to every prior release: the Agent's bridge recorders
-   * (and your `.recorder()` attachments) run synchronously inside the
+   * (and your `.watch()` attachments) run synchronously inside the
    * producing statement, so a slow `agent.on()` listener taxes every
    * stage of every iteration.
    *

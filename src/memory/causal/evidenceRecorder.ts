@@ -91,7 +91,7 @@ function bounded(
   }
 }
 
-/** Build the evidence-harvesting recorder. Attach via `.recorder(rec)` (the
+/** Build the evidence-harvesting recorder. Attach via `.watch(rec)` (the
  *  Agent does this automatically for CAUSAL memories). */
 export function causalEvidenceRecorder(
   options: CausalEvidenceRecorderOptions = {},

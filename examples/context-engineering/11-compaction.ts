@@ -152,8 +152,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       iteration: number;
       measuredTokens: number;
       thresholdTokens: number;
-      foldedStageIds: readonly string[];
-      foldedMessageCount: number;
+      removedStageIds: readonly string[];
+      removedMessageCount: number;
       windowCharsBefore: number;
       windowCharsAfter: number;
       refusals: ReadonlyArray<{ reason: string }>;
@@ -167,10 +167,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       `iteration ${record.iteration}: measured ${record.measuredTokens} tokens ` +
         `(budget ${record.thresholdTokens})`,
     );
-    if (record.foldedMessageCount > 0) {
+    if (record.removedMessageCount > 0) {
       console.log(
-        `  folded ${record.foldedMessageCount} message(s) written by ` +
-          `${record.foldedStageIds.join(', ')}`,
+        `  folded ${record.removedMessageCount} message(s) written by ` +
+          `${record.removedStageIds.join(', ')}`,
       );
       console.log(`  window ${record.windowCharsBefore} → ${record.windowCharsAfter} chars`);
     } else {

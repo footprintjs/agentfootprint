@@ -1,5 +1,5 @@
 /**
- * agentfootprint/tool-providers — chainable tool dispatch + tool sources.
+ * tool-providers — chainable tool dispatch + tool sources.
  *
  * Two layers under one subpath:
  *
@@ -43,9 +43,9 @@
  *   const slackTools = await slack.tools();
  *   const provider = gatedTools(staticTools(slackTools), (name) => allowed(name));
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/providers` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/providers`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export { staticTools } from './staticTools.js';

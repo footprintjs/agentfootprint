@@ -280,8 +280,12 @@ describe('ContextRecorder — budget pressure emit', () => {
     const pressure: BudgetPressureRecord[] = [
       {
         slot: 'tools',
-        capTokens: 2000,
-        projectedTokens: 2500,
+        // `cap` / `projected` + `unit` is the only spelling since 9.0.0 —
+        // the `capTokens` / `projectedTokens` pair left `BudgetPressureRecord`
+        // because the slot channel counts chars, not tokens.
+        unit: 'chars',
+        cap: 2000,
+        projected: 2500,
         overflowBy: 500,
         planAction: 'evict',
       },

@@ -16,6 +16,12 @@
  * over-budget warning told you to "raise budgetCap", a knob nothing could set.
  * A warning you cannot act on is worse than no warning: it trains people to
  * ignore the channel.
+ *
+ * The cap is read here as `cap`. It was also written as `capTokens` through
+ * 8.x; 9.0.0 removed that spelling from `BudgetPressureRecord` because this
+ * channel counts CHARACTERS — a field named for tokens on a char-counting
+ * record is a lie the payload tells for free. Same number, one name, and the
+ * record now carries `unit` to say which. P1 pins the absence directly.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -58,12 +64,17 @@ describe('contextBudget — P1 unit', () => {
     const pressures = await pressuresFrom(buildAgent());
     const systemPrompt = pressures.find((p) => p.slot === 'system-prompt');
     expect(systemPrompt).toBeDefined();
-    expect(systemPrompt?.capTokens).toBe(4000);
+    expect(systemPrompt?.cap).toBe(4000);
+    // 9.0.0 — one spelling. The slot channel counts chars, so the record says
+    // so with `unit` and never with a field named for tokens.
+    expect(systemPrompt?.unit ?? 'chars').toBe('chars');
+    expect(Object.hasOwn(systemPrompt as object, 'capTokens')).toBe(false);
+    expect(Object.hasOwn(systemPrompt as object, 'projectedTokens')).toBe(false);
   });
 
   it('P1 an empty object is the same as absent — no key, no change', async () => {
     const pressures = await pressuresFrom(buildAgent({}));
-    expect(pressures.find((p) => p.slot === 'system-prompt')?.capTokens).toBe(4000);
+    expect(pressures.find((p) => p.slot === 'system-prompt')?.cap).toBe(4000);
   });
 });
 
@@ -85,7 +96,7 @@ describe('contextBudget — P2 boundary', () => {
       .build();
     const pressures = await pressuresFrom(agent);
     const systemPrompt = pressures.find((p) => p.slot === 'system-prompt');
-    expect(systemPrompt?.capTokens).toBe(10);
+    expect(systemPrompt?.cap).toBe(10);
   });
 
   it('P2 `messages` reaches the messages slot — the cap that had NO door before', async () => {
@@ -107,7 +118,7 @@ describe('contextBudget — P2 boundary', () => {
 
     const messages = seen.find((p) => p.slot === 'messages');
     expect(messages).toBeDefined();
-    expect(messages?.capTokens).toBe(5);
+    expect(messages?.cap).toBe(5);
   });
 
   it('P2 `tools` reaches the tools slot', async () => {
@@ -129,7 +140,7 @@ describe('contextBudget — P2 boundary', () => {
     const pressures = await pressuresFrom(agent);
     const tools = pressures.find((p) => p.slot === 'tools');
     expect(tools).toBeDefined();
-    expect(tools?.capTokens).toBe(10);
+    expect(tools?.cap).toBe(10);
   });
 });
 
@@ -185,14 +196,14 @@ describe('contextBudget — P4 property', () => {
 
   it('P4 setting `systemPrompt` leaves the messages slot on its 10000 default', async () => {
     const pressures = await bothSlotsOverflow({ systemPrompt: 1 });
-    expect(pressures.find((p) => p.slot === 'system-prompt')?.capTokens).toBe(1);
-    expect(pressures.find((p) => p.slot === 'messages')?.capTokens).toBe(10_000);
+    expect(pressures.find((p) => p.slot === 'system-prompt')?.cap).toBe(1);
+    expect(pressures.find((p) => p.slot === 'messages')?.cap).toBe(10_000);
   });
 
   it('P4 setting `messages` leaves the system-prompt slot on its 4000 default', async () => {
     const pressures = await bothSlotsOverflow({ messages: 1 });
-    expect(pressures.find((p) => p.slot === 'messages')?.capTokens).toBe(1);
-    expect(pressures.find((p) => p.slot === 'system-prompt')?.capTokens).toBe(4_000);
+    expect(pressures.find((p) => p.slot === 'messages')?.cap).toBe(1);
+    expect(pressures.find((p) => p.slot === 'system-prompt')?.cap).toBe(4_000);
   });
 });
 
@@ -236,6 +247,6 @@ describe('contextBudget — P7 ROI', () => {
     call.on('agentfootprint.context.budget_pressure', (e) => seen.push(e.payload as Pressure));
     await call.run({ message: 'hello' });
 
-    expect(seen.find((p) => p.slot === 'system-prompt')?.capTokens).toBe(10);
+    expect(seen.find((p) => p.slot === 'system-prompt')?.cap).toBe(10);
   });
 });

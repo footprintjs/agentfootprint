@@ -195,8 +195,11 @@ describe('scenario — budget pressure + evictions', () => {
         [
           {
             slot: 'messages',
-            capTokens: 10000,
-            projectedTokens: 12000,
+            // 9.0.0 spelling — see BudgetPressureRecord: `unit` says what the
+            // two numbers count, so neither is named for tokens any more.
+            unit: 'chars',
+            cap: 10000,
+            projected: 12000,
             overflowBy: 2000,
             planAction: 'evict',
           },

@@ -216,7 +216,7 @@ It is **variadic**, because observers come in sets, and it attaches at **build t
 There is deliberately **no** `WATCH_MOMENTS` to match `LOOP_MOMENTS`. `.act()`'s keys are a closed, compiler-pinned list because a rule has to be *told* where it may speak — a rule filed at a moment nobody reads is a governance hole. An observer is the opposite: it attends the entire event stream, and there is no closed set to enumerate. A list we published would be a vocabulary we then had to keep true against every event ever added, so the honest surface for watching is the door and the type.
 </Callout>
 
-`.recorder()` is the same door under its older, internals-flavoured name. It still works, takes one observer instead of many, and is deprecated as of 8.0.0.
+`.recorder()` was the same door under its older, internals-flavoured name, taking one observer instead of many. Deprecated in 8.0.0 and removed in 9.0.0 — the name survives one major as a throwing stub that names `.watch()`.
 
 **Two different observers may not share one `id`.** footprintjs de-duplicates attached recorders by id, so of two objects carrying one name only the last would ever fire and the first would report nothing — which reads exactly like an observer whose events never happened. `build()` refuses it, naming the id. Handing the *same* object to `.watch()` twice is fine and stays one attachment: it is identity, not the id, that decides.
 

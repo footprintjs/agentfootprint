@@ -1,5 +1,5 @@
 /**
- * agentfootprint/thinking — extended-thinking subsystem (v2.14+).
+ * thinking — extended-thinking subsystem (v2.14+).
  *
  * **Two-layer architecture:**
  *
@@ -29,7 +29,7 @@
  * **Custom handlers:**
  *
  *   ```ts
- *   import { type ThinkingHandler } from 'agentfootprint/thinking';
+ *   import { type ThinkingHandler } from 'agentfootprint/providers';
  *
  *   export const geminiThinkingHandler: ThinkingHandler = {
  *     id: 'gemini',
@@ -44,9 +44,9 @@
  * the blocks, continue. Same graceful pattern as v2.11.6
  * `tools.discovery_failed`.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/providers` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/providers`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export type { ThinkingBlock, ThinkingHandler } from './types.js';

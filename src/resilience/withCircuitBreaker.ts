@@ -163,7 +163,7 @@ interface BreakerState {
  *
  * @example
  * ```ts
- * import { anthropic, openai } from 'agentfootprint/llm-providers';
+ * import { anthropic, openai } from 'agentfootprint/providers';
  * import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
  *
  * const provider = withFallback(

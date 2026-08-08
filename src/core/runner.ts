@@ -82,7 +82,7 @@ export interface EnableNamespace {
    * v2.8+ — grouped strategy enabler for observability. Pipes every
    * typed event into a vendor strategy (Datadog, OTel, AgentCore,
    * CloudWatch, …) or the default `consoleObservability()`. See
-   * `agentfootprint/strategies` + `docs/inspiration/strategy-everywhere.md`.
+   * `agentfootprint/observe` + `docs/inspiration/strategy-everywhere.md`.
    */
   observability(opts?: ObservabilityEnableOptions): ObservabilityHandle;
   /**

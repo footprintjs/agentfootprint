@@ -2,7 +2,7 @@
  * adapters/hosting/agentcore — AWS Bedrock **AgentCore Runtime** adapters for
  * the two hosting ports.
  *
- *   import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+ *   import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting';
  *   import { standingAgent } from 'agentfootprint/hosting';
  *
  *   const handle = await standingAgent({

@@ -87,7 +87,7 @@ function buildAgent(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
     .tools([payInvoice])
-    .recorder({
+    .watch({
       id: 'probe',
       onEmit: (e: { name: string; payload: Record<string, unknown> }) =>
         events.push({ name: e.name, payload: e.payload }),

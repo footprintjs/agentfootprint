@@ -107,7 +107,7 @@ There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a wi
 No new event types were added for any of this:
 
 - `agentfootprint.context.evicted` — one per message that left, with a real `survivalMs` and the **same `contentHash`** the messages slot used when it reported that piece as injected;
-- `agentfootprint.context.budget_pressure` — one per over-budget visit, from the strategies that **have** a budget. `slidingWindow` never emits it: it triggers on turn count, and reporting a `capTokens` nobody configured would be an invented number.
+- `agentfootprint.context.budget_pressure` — one per over-budget visit, from the strategies that **have** a budget. `slidingWindow` never emits it: it triggers on turn count, and reporting a `cap` nobody configured would be an invented number.
 
 ## slidingWindow
 
@@ -157,7 +157,7 @@ Unlike the [compaction frame](doc:compaction), **no model wrote a word of it**: 
 
 It appears only when the removal reaches the head. A removal in the middle leaves the original opening turn in place, so there is no wire problem to solve — and splicing a lone `user` message between two assistant turns is its own risk. The record names that removal either way.
 
-It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if the notice would not be *smaller* than the span it replaces — a real case, when the only removable turn is a short one — the whole drop is abandoned under `summary-not-smaller`, because dropping two tiny turns to insert a longer notice is pure loss.
+It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if the notice would not be *smaller* than the span it replaces — a real case, when the only removable turn is a short one — the whole drop is abandoned under `replacement-not-smaller`, because dropping two tiny turns to insert a longer notice is pure loss.
 
 Recognise it without matching on prose:
 
@@ -223,7 +223,7 @@ Everything below comes from the package root, `agentfootprint`:
 | `SlidingWindowRecord` | A `WindowRecord` plus `keepRecentTurns`, `turnsBefore`, `turnsAfter`. |
 | `TokenBudgetRecord` | A `WindowRecord` plus `measuredTokens`, `thresholdTokens`, `overBudget`, `keepRecentTurns`. |
 | `CompactionRecord` | A `WindowRecord` plus the summarizer's facts — see [Compaction](doc:compaction). |
-| `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons. (`FoldRefusal` / `FoldRefusalReason` are the 7.16 names, kept as deprecated aliases.) |
+| `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons. (`FoldRefusal` / `FoldRefusalReason` were the 7.16 names; the aliases were removed in 9.0.0.) |
 | `WindowEviction` | One message leaving the window: its `index` in the pre-change window and its measured `survivalMs`. |
 | `RemovalPlan` | What `planRemoval` answers: the span `{ from, to }` in turn indices, plus every refusal. `from` is `-1` when nothing may be removed. |
 | `RemovalFacts` | What `removalFacts` answers: `removedStageIds` and one `WindowEviction` per message. |

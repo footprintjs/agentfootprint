@@ -24,7 +24,7 @@
  * trace via `AWSTraceHeader` propagation (consumer's responsibility
  * to wire upstream/downstream IDs).
  *
- * Subpath:  `agentfootprint/observability-providers`
+ * Subpath:  `agentfootprint/observe`
  * Peer dep: `@aws-sdk/client-xray` (OPTIONAL — installed only when
  *           this adapter is used).
  *
@@ -36,7 +36,7 @@
  *
  * @example
  * ```ts
- * import { xrayObservability } from 'agentfootprint/observability-providers';
+ * import { xrayObservability } from 'agentfootprint/observe';
  * import { microtaskBatchDriver } from 'footprintjs/detach';
  *
  * agent.enable.observability({

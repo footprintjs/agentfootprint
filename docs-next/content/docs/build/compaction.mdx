@@ -96,7 +96,7 @@ Each over-budget visit appends a `CompactionRecord` to `scope.compactions` — i
 There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a window that has not been sent yet; inventing one would be the exact guess this feature exists to refuse. The honest "after" is the next call's reported usage — which is why the char counts are labelled as chars and the token count is labelled as measured.
 
 <Callout type="warn">
-  `foldedStageIds` / `foldedMessageCount` are still written and still mean exactly what they did, but they are **deprecated** since 7.17 in favour of the family names `removedStageIds` / `removedMessageCount`. Only one of the three strategies folds; all three remove. Both pairs are on every compaction record and neither is going away in 7.x.
+  **9.0.0 removed `foldedStageIds` / `foldedMessageCount`.** Read `removedStageIds` / `removedMessageCount` — the family names on `WindowRecord`, published beside the old pair since 7.17 with identical values. Only one of the three strategies folds; all three remove, so a fold-flavoured name made `slidingWindow` and `tokenBudget` read like they were missing a field.
 </Callout>
 
 ### On the event stream
@@ -106,7 +106,7 @@ Folds ride vocabulary you already subscribe to — no new event types were added
 <CodeFile path="examples/context-engineering/11-compaction.ts" region="observe" title="examples/context-engineering/11-compaction.ts (region: observe)" />
 
 - `agentfootprint.context.evicted` — one per folded message, with the **same `contentHash`** the messages slot used when it reported that piece as injected, and a real `survivalMs` (how long it lived in the window);
-- `agentfootprint.context.budget_pressure` — one per over-budget visit, `planAction: 'summarize'` when a fold happened and `'none'` when nothing could be folded. Read **`unit`** before you read `cap` / `projected`: the three context slots emit this same event under the same `slot: 'messages'` counting **chars**, and this one counts **tokens**. (`capTokens` / `projectedTokens` are the historical names, still written with identical values and deprecated since 8.14.0.)
+- `agentfootprint.context.budget_pressure` — one per over-budget visit, `planAction: 'summarize'` when a fold happened and `'none'` when nothing could be folded. Read **`unit`** before you read `cap` / `projected`: the three context slots emit this same event under the same `slot: 'messages'` counting **chars**, and this one counts **tokens**. (`capTokens` / `projectedTokens` were the historical names, written with identical values through 8.x and **removed in 9.0.0** — a name that asserted tokens on a channel that is chars half the time.)
 
 ### The summarizer's call is billed, and counted
 
@@ -147,7 +147,7 @@ A fold whose summary comes back **no smaller** than the span it would replace is
 That refusal is **latched** (8.14.0). The same span through the same summarizer gives the same verdict, so it is asked once: later visits to a span that was already refused file their record with `summarizerSkipped: true`, no call and no cost tick. A span that has *grown* is asked about again — a bigger span makes the comparison less likely to fail, so a fold refused at four turns can genuinely succeed at six. A summarizer that *threw* is also asked again: an outage may end, a length comparison will not.
 
 <Callout type="info">
-`replacement-not-smaller` was called `summary-not-smaller` through 8.13.0. The drop strategies report the same reason and write no summary at all — `slidingWindow` and `tokenBudget` never call a summarizer — so the name was claiming one that did not exist. A runtime from 8.14.0 writes only the new string; the old one stays in the `WindowRefusalReason` union so existing narrowing still compiles.
+`replacement-not-smaller` was called `summary-not-smaller` through 8.13.0. The drop strategies report the same reason and write no summary at all — `slidingWindow` and `tokenBudget` never call a summarizer — so the name was claiming one that did not exist. A runtime from 8.14.0 writes only the new string, and **9.0.0 removed the old member from the `WindowRefusalReason` union** — a union shared by all three strategies could not keep a member that claims a summary two of them never produce.
 </Callout>
 
 ## Recovering what was folded
@@ -266,8 +266,8 @@ Everything below comes from the package root, `agentfootprint`:
 | `foldedSpanFor(conversation, message)` | The span behind one summary message, joined by fingerprint. `undefined` when no fold was recorded for it. |
 | `foldedMessages(conversation)` | Every retained message from every span, oldest fold first — the transcript-shaped door onto the same fact. |
 | `FoldedConversation` | What both readers actually need: `{ folded?: FoldedSpan[] }`. Structural on purpose, so they also read a paused run's `conversation`, a fixture, or anything you pulled out of your own store — not just an `AgentRunCheckpoint`. |
-| `WindowRefusal` | One named refusal: `{ reason, turnIndex, messageIndex }`. Positioned so a reader can find the turn it is talking about. (`FoldRefusal` is the 7.16 name, kept as a deprecated alias.) |
-| `WindowRefusalReason` | The closed set of reasons a turn did not fold: `system-envelope`, `unresolved-tool-call`, `paused-tool`, `pending-check-in`, `inside-keep-window`, `only-existing-summary`, `summarizer-failed`, `summary-not-smaller`. Branch on it; it will not grow silently. (`FoldRefusalReason` is the 7.16 name, kept as a deprecated alias.) |
+| `WindowRefusal` | One named refusal: `{ reason, turnIndex, messageIndex }`. Positioned so a reader can find the turn it is talking about. (`FoldRefusal` was the 7.16 name; the alias was removed in 9.0.0.) |
+| `WindowRefusalReason` | The closed set of reasons a turn did not fold: `system-envelope`, `unresolved-tool-call`, `paused-tool`, `pending-check-in`, `inside-keep-window`, `only-existing-summary`, `summarizer-failed`, `replacement-not-smaller`. Branch on it; it will not grow silently. (`FoldRefusalReason` was the 7.16 name; the alias was removed in 9.0.0, along with the member `summary-not-smaller`.) |
 | `CompactionUnmeasurableError` | Thrown when the provider reports no usage, carrying `.provider`. Terminal. |
 | `COMPACTED_FRAME_PREFIX` | The opening of the authored label, exported so your own code can recognise a compacted message without matching on prose. |
 | `isCompactedSummary(msg)` | The same recognition as a predicate, for filtering a history you are rendering or persisting. |

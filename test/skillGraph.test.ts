@@ -367,7 +367,7 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
         .system('')
         .tool(probe)
         .skillGraph(graph)
-        .recorder(recorder)
+        .watch(recorder)
         .build();
 
       await agent.run({ message: 'go' });
@@ -394,7 +394,7 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
         .system('')
         .tool(probe)
         .skillGraph(graph)
-        .recorder(recorder)
+        .watch(recorder)
         .build();
 
       await agent.run({ message: 'go' });
@@ -1049,7 +1049,7 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
       })
         .system('')
         .skillGraph(graph)
-        .recorder(recorder)
+        .watch(recorder)
         .build();
       await agent.run({ message: 'i need a refund for my payment' });
 
@@ -1199,7 +1199,7 @@ describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => 
       const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 4, reactMode })
         .system('')
         .skillGraph(graph)
-        .recorder(recorder)
+        .watch(recorder)
         .build();
       await agent.run({ message: 'the database is down' });
 
@@ -1440,7 +1440,7 @@ describe('defineRelevanceHint — advisory note on an ambiguous entry', () => {
       .system('')
       .skillGraph(graph)
       .instruction(defineRelevanceHint())
-      .recorder(recorder)
+      .watch(recorder)
       .build();
     await agent.run({ message: 'something genuinely ambiguous' });
 
@@ -1512,7 +1512,7 @@ describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 6 })
       .system('')
       .skillGraph(graph)
-      .recorder(recorder)
+      .watch(recorder)
       .build();
     await agent.run({ message: 'go' });
 
@@ -1546,7 +1546,7 @@ describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .skills({ list: () => [billing] }) // skills but NO skillGraph → gate off
-      .recorder(recorder)
+      .watch(recorder)
       .build();
     await agent.run({ message: 'go' });
 

@@ -57,15 +57,11 @@ export {
   type DefineCausalOptions,
   type MemoryRedactionPolicy,
 } from './define.types.js';
-/**
- * @deprecated Since 7.27.1 — use `MemoryWindowStrategy`.
- *
- * `WindowStrategy` is the name of the CONVERSATION-window seam exported from
- * the package root (`{ name, plan(input) }`). This one is the memory
- * subsystem's window CONFIG (`{ kind: 'window', size }`). Same name, two
- * entry points, incompatible shapes — so the memory one was renamed and this
- * alias kept so that nothing importing it breaks.
- */
-export type { MemoryWindowStrategy as WindowStrategy } from './define.types.js';
+// `WindowStrategy` was this module's 7.27.0 name for `MemoryWindowStrategy`.
+// It collided with the CONVERSATION-window seam of the same name on the
+// package root (`{ name, plan(input) }`) — same name, two entry points,
+// incompatible shapes — so the memory one was renamed in 7.27.1 and the old
+// spelling kept as a deprecated alias. 9.0.0 removed the alias:
+// `MemoryWindowStrategy` is the only name for `{ kind: 'window', size }`.
 
 export { defineMemory } from './define.js';

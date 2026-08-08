@@ -37,7 +37,7 @@
  *     No new event types.
  *
  * @example
- *   import { agentCoreIdentity, withCredentialRetry } from 'agentfootprint/identity';
+ *   import { agentCoreIdentity, withCredentialRetry } from 'agentfootprint/security';
  *
  *   const credentials = withCredentialRetry(agentCoreIdentity({ region: 'us-east-1' }), {
  *     maxAttempts: 3,

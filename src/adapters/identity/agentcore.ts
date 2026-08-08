@@ -2,7 +2,7 @@
  * agentCoreIdentity — AWS Bedrock AgentCore Identity adapter (peer-dep
  * `@aws-sdk/client-bedrock-agentcore`).
  *
- *   import { agentCoreIdentity } from 'agentfootprint/identity';
+ *   import { agentCoreIdentity } from 'agentfootprint/security';
  *   const credentials = agentCoreIdentity({ region: 'us-east-1' });
  *
  * Maps the {@link CredentialProvider} port onto AgentCore Identity's

@@ -516,7 +516,7 @@ describe('toolChoiceRecorder — functional (real Agent, mock provider)', () => 
       .system('You are a SAN triage agent.')
       .tool(fcnsLive)
       .tool(fcnsHistory)
-      .recorder(choices)
+      .watch(choices)
       .build();
 
     await agent.run({ message: 'is wwpn 21:00 still registered?' });
@@ -589,7 +589,7 @@ describe('toolChoiceRecorder — survives Agent pause/resume (regression)', () =
       .system('You are a SAN triage agent.')
       .tool(lookup)
       .tool(approve)
-      .recorder(choices)
+      .watch(choices)
       .build();
 
     const paused = await agent.run({ message: 'is wwpn 21:00 still registered?' });

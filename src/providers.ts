@@ -1,11 +1,11 @@
 /**
- * LLM provider adapters — implementation behind the `agentfootprint/llm-providers`
+ * LLM provider adapters — implementation behind the `agentfootprint/providers`
  * subpath (which re-exports this file).
  *
  * The standalone `agentfootprint/providers` subpath alias was removed in 4.0.0.
  * Import from the canonical subpath:
  *
- *   import { mock, anthropic, openai } from 'agentfootprint/llm-providers';
+ *   import { mock, anthropic, openai } from 'agentfootprint/providers';
  *
  * Pattern: Adapter (GoF) — concrete `LLMProvider` implementations that
  *          translate the agentfootprint port to a specific vendor SDK.

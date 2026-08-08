@@ -113,21 +113,6 @@ export interface DefineSkillOptions {
    *  default — say so with `autoActivate`. */
   readonly tools?: readonly Tool[];
   /**
-   * Override the activation tool name. Defaults to `'read_skill'`.
-   * Multiple Skills sharing one activation tool is the common pattern;
-   * the LLM picks WHICH skill via the tool's argument.
-   *
-   * @deprecated Since 8.7.0 — `'read_skill'` is the only value that has ever worked,
-   * and anything else is now REFUSED when the skill is mounted on an agent. No tool is
-   * built from this name: the evaluator activates an `llm-activated` skill by matching
-   * `ctx.activatedInjectionIds`, which only `read_skill` writes, and it never reads
-   * this field. A skill declaring another name activated through `read_skill` exactly
-   * like every other skill, so the declaration described a door that does not exist.
-   * Drop it — skills already share ONE activation tool and the model picks which skill
-   * by id. Removed in 9.0.0.
-   */
-  readonly viaToolName?: string;
-  /**
    * Where the body lands when activated. See `SurfaceMode`. Default
    * `'auto'`, which delivers like `'system-prompt'`; name a mode
    * explicitly to get the other channels.
@@ -149,7 +134,7 @@ export interface DefineSkillOptions {
    *   static tool list and offered to the model only on iterations where
    *   the Skill is active. Outside the Agent's own wiring, materialize the
    *   same gate with `skillScopedTools(id, tools)` from
-   *   `agentfootprint/tool-providers`.
+   *   `agentfootprint/providers`.
    * - `undefined` (default) — additive: this Skill's tools go into the
    *   agent's registry at BUILD time and the model can see and call them
    *   from iteration 1, activated or not.
@@ -212,6 +197,35 @@ export function resolveSurfaceMode(provider: string, model?: string): SurfaceMod
   return 'tool-only';
 }
 
+/**
+ * Refuse a `viaToolName` option that no longer exists (9.0.0 grace error).
+ *
+ * The option was deprecated in 8.7.0 and removed here. `'read_skill'` is the
+ * only activation tool this library has ever built: the evaluator activates an
+ * `llm-activated` skill by matching `ctx.activatedInjectionIds`, only
+ * `read_skill` writes that array, and nothing ever read the field. 8.7.0 made
+ * a non-`read_skill` value a mount-time refusal; 9.0.0 deletes the option.
+ *
+ * Deleting a type member alone would have been a silent DOWNGRADE: an object
+ * literal gets an excess-property error, but an options bag arriving through a
+ * variable does not — and the value would then be ignored where 8.7.0 refused
+ * it. So the field is read at run time exactly once more, to say it is gone.
+ *
+ * Deleted in 10.0.0.
+ */
+function assertNoViaToolName(where: string, opts: object): void {
+  const legacy = (opts as { readonly viaToolName?: unknown }).viaToolName;
+  if (legacy === undefined) return;
+  throw new Error(
+    `${where}: \`viaToolName\` was removed in 9.0.0 (deprecated since 8.7.0), and this call ` +
+      `passes '${String(legacy)}'. It never did anything: 'read_skill' is the only activation ` +
+      `tool this library builds, the evaluator matches on ctx.activatedInjectionIds — which ` +
+      `only read_skill writes — and no tool was ever created from this name. Drop the option: ` +
+      `skills already share ONE activation tool and the model picks WHICH skill by id. If you ` +
+      `need the skill gated on something else, use a \`rule\` trigger or a skillGraph() edge.`,
+  );
+}
+
 export function defineSkill(opts: DefineSkillOptions): Injection {
   if (!opts.id || opts.id.trim().length === 0) {
     throw new Error('defineSkill: `id` is required and must be non-empty.');
@@ -224,13 +238,14 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
   if (!opts.body || opts.body.length === 0) {
     throw new Error(`defineSkill(${opts.id}): \`body\` is required.`);
   }
+  assertNoViaToolName(`defineSkill(${opts.id})`, opts);
   return Object.freeze({
     id: opts.id,
     description: opts.description,
     flavor: 'skill' as const,
     trigger: {
       kind: 'llm-activated' as const,
-      viaToolName: opts.viaToolName ?? 'read_skill',
+      viaToolName: 'read_skill',
     },
     inject: {
       systemPrompt: opts.body,

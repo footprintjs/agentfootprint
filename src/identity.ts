@@ -1,5 +1,5 @@
 /**
- * agentfootprint/identity — outbound credential vending for agent tools.
+ * identity — outbound credential vending for agent tools.
  *
  * The {@link CredentialProvider} port + adapters. A tool calls
  * `provider.getCredential({ service })` to get a token for a downstream service;
@@ -12,7 +12,7 @@
  *
  * @example
  * ```ts
- * import { agentCoreIdentity } from 'agentfootprint/identity';
+ * import { agentCoreIdentity } from 'agentfootprint/security';
  *
  * const credentials = agentCoreIdentity({ region: 'us-east-1' });
  * const r = await credentials.getCredential({ service: 'github', mode: 'user', scopes: ['repo'] });
@@ -23,9 +23,9 @@
  * }
  * ```
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/security` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/security`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export type {

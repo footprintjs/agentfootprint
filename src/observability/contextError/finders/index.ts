@@ -6,16 +6,16 @@
  * `src/lib/context-bisect` + `src/lib/influence-core`; the academic method + citation
  * live in `meta`, never in the import name.
  *
- *   import { rankSuspects } from 'agentfootprint/observability/contextError/finders';
+ *   import { rankSuspects } from 'agentfootprint/observe';
  *   const r = await rankSuspects.find(input);   // r.lead, r.evidence ('guessed'|'proven')
  *
  * Tree-shakeable: one finder = one file = one named export. Importing one finder does
  * not pull the others (or the heavy ablation path behind removeAndRetry). This barrel
  * is re-export-only — no runtime code, no registry.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/observe`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 export type {
   ContextPiece,

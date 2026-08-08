@@ -279,7 +279,7 @@ export interface ActiveInjection {
    * readmit them for as long as the skill is active — which is exactly what
    * `buildToolsSlot` does with `inject.tools` on every active injection.
    * Compose your own ToolProvider instead with `skillScopedTools` from
-   * `agentfootprint/tool-providers`.
+   * `agentfootprint/providers`.
    */
   readonly autoActivate?: 'currentSkill';
   /**

@@ -4,7 +4,7 @@
  * Import from the canonical subpath (the `agentfootprint/memory-redis` alias
  * was removed in 4.0.0):
  *
- *   import { RedisStore } from 'agentfootprint/memory-providers';
+ *   import { RedisStore } from 'agentfootprint/memory';
  *
  *   const store = new RedisStore({ url: 'redis://localhost:6379' });
  *

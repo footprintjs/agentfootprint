@@ -1,19 +1,5 @@
 /**
- * agentfootprint/llm-providers — LLM provider adapters (canonical subpath).
- *
- * The Block B canonical name. Mirrors the parallel structure shipped in
- * v2.5:
- *
- *   agentfootprint/llm-providers     ← LLM provider adapters (this file)
- *   agentfootprint/tool-providers    ← tool dispatch + tool sources
- *   agentfootprint/memory-providers  ← memory store adapters
- *   agentfootprint/security          ← cross-cutting authorization
- *
- * The legacy `agentfootprint/providers` subpath stays available as an
- * alias through the v2.x line — it points at the same exports. New
- * code SHOULD import from `agentfootprint/llm-providers` for clarity:
- * grep'ing for "llm-providers" finds every LLM-side import in one
- * shot, parallel to "tool-providers" and "memory-providers".
+ * llm-providers — LLM provider adapters.
  *
  * Pattern: Adapter (GoF) — concrete `LLMProvider` implementations that
  *          translate the agentfootprint port to a specific vendor SDK.
@@ -21,11 +7,11 @@
  *          knows nothing about vendor specifics.
  *
  * @example
- *   import { mock, AnthropicProvider } from 'agentfootprint/llm-providers';
+ *   import { mock, AnthropicProvider } from 'agentfootprint/providers';
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/providers` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/providers`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export * from './providers.js';

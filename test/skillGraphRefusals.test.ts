@@ -27,7 +27,7 @@ import {
   defineInstruction,
 } from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
-import type { InjectionContext } from '../src/lib/injection-engine/types.js';
+import type { Injection, InjectionContext } from '../src/lib/injection-engine/types.js';
 
 const skill = (id: string, description = `use ${id}`) =>
   defineSkill({ id, description, body: `${id} body` });
@@ -393,20 +393,97 @@ describe('skillGraph refusals — valid graphs compile exactly as before', () =>
   });
 });
 
-// ── 5. viaToolName: a door that was never built (8.7.0) ──────────────────────
+// ── 5. viaToolName: a door that was never built (8.7.0 → 9.0.0) ─────────────
+//
+// `viaToolName` named a tool the library never created. 'read_skill' is the
+// only activation tool it builds; the evaluator activates an `llm-activated`
+// skill by matching `ctx.activatedInjectionIds`, and only `read_skill` writes
+// that array. 8.7.0 made a non-'read_skill' value a MOUNT-time refusal. 9.0.0
+// removed the OPTION from `defineSkill` / `skillsFromDir` outright, so there
+// are now two guards at two depths, and both are pinned below:
+//
+//   • the FACTORY refuses the option (9.0.0) — you cannot build one any more;
+//   • the MOUNT still refuses the trigger (8.7.0) — because an injection can
+//     reach an agent without passing through the factory at all (a hand-built
+//     object, or one deserialized from an 8.x artifact).
+//
+// Deleting only the type member would have been a silent DOWNGRADE: an object
+// literal gets an excess-property error, but an options bag arriving through a
+// variable does not — and the value would then be ignored where 8.7.0 refused
+// it. So the field is read at run time exactly once more, to say it is gone.
 
-describe('viaToolName other than read_skill is refused at mount', () => {
-  const custom = () =>
-    defineSkill({
-      id: 'custom',
-      description: 'use custom',
-      body: 'b',
-      viaToolName: 'open_playbook',
-    });
+/**
+ * An `llm-activated` skill with a custom `viaToolName`, built WITHOUT the
+ * factory — the only way one can still exist in 9.0.0, and exactly the shape
+ * a consumer's own loader or a stored 8.x artifact produces.
+ */
+const handBuiltCustomTrigger = (id: string, viaToolName: string, body = `${id} body`): Injection =>
+  ({
+    id,
+    description: `use ${id}`,
+    flavor: 'skill' as const,
+    trigger: { kind: 'llm-activated' as const, viaToolName },
+    inject: { systemPrompt: body },
+    metadata: { surfaceMode: 'auto' as const },
+  } as unknown as Injection);
+
+describe('viaToolName is refused by the FACTORY (9.0.0)', () => {
+  it('unit: defineSkill refuses the option, naming the value and the fix', () => {
+    const build = () =>
+      defineSkill({
+        id: 'custom',
+        description: 'use custom',
+        body: 'b',
+        viaToolName: 'open_playbook',
+      } as never);
+
+    expect(build).toThrow(/`viaToolName` was removed in 9\.0\.0/);
+    expect(build).toThrow(/deprecated since 8\.7\.0/);
+    expect(build).toThrow(/open_playbook/);
+    // The message has to carry the migration, because there is no rename to
+    // reach for: the answer is "delete it", and the reason it is safe.
+    expect(build).toThrow(/read_skill/);
+    expect(build).toThrow(/rule` trigger or a skillGraph\(\) edge/);
+  });
+
+  it('edge: even the value that WAS the default is refused — the option is gone, not narrowed', () => {
+    // 8.7.0 accepted 'read_skill' and refused everything else. 9.0.0 does not
+    // accept a value at all: a caller passing the default is still a caller
+    // who believes the field does something.
+    expect(() =>
+      defineSkill({ id: 'b', description: 'use b', body: 'b', viaToolName: 'read_skill' } as never),
+    ).toThrow(/`viaToolName` was removed in 9\.0\.0/);
+  });
+
+  it('functional: a skill declared WITHOUT the option is untouched', () => {
+    const implicit = defineSkill({ id: 'a', description: 'use a', body: 'a' });
+    expect(implicit.trigger).toEqual({ kind: 'llm-activated', viaToolName: 'read_skill' });
+    expect(() => agent().skill(implicit).build()).not.toThrow();
+  });
+
+  it('security: the refusal quotes the offending name, and nothing from the body', () => {
+    try {
+      defineSkill({
+        id: 'x',
+        description: 'd',
+        body: 'INTERNAL ESCALATION PROCEDURE',
+        viaToolName: 'open_x',
+      } as never);
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain('open_x');
+      expect(message).not.toContain('INTERNAL ESCALATION PROCEDURE');
+    }
+  });
+});
+
+describe('viaToolName other than read_skill is still refused at MOUNT (8.7.0)', () => {
+  const custom = () => handBuiltCustomTrigger('custom', 'open_playbook');
 
   it('unit: .skill() refuses it, naming the field and the fix', () => {
     expect(() => agent().skill(custom())).toThrow(/viaToolName is 'open_playbook'/);
-    expect(() => agent().skill(custom())).toThrow(/removed in 9\.0\.0/);
+    expect(() => agent().skill(custom())).toThrow(/read_skill/);
   });
 
   it('unit: every mounting door funnels through injection(), so all of them refuse', () => {
@@ -431,15 +508,9 @@ describe('viaToolName other than read_skill is refused at mount', () => {
     expect(() => agent().skillGraph(asEntry).build()).not.toThrow();
   });
 
-  it("functional: the default 'read_skill' is untouched, explicit or not", () => {
-    const implicit = defineSkill({ id: 'a', description: 'use a', body: 'a' });
-    const explicit = defineSkill({
-      id: 'b',
-      description: 'use b',
-      body: 'b',
-      viaToolName: 'read_skill',
-    });
-    expect(() => agent().skill(implicit).skill(explicit).build()).not.toThrow();
+  it("functional: a hand-built skill on the default 'read_skill' mounts fine", () => {
+    const fine = handBuiltCustomTrigger('b', 'read_skill');
+    expect(() => agent().skill(fine).build()).not.toThrow();
   });
 
   it('functional: non-skill flavors are unaffected (they have no llm-activated trigger)', () => {
@@ -450,13 +521,8 @@ describe('viaToolName other than read_skill is refused at mount', () => {
     ).not.toThrow();
   });
 
-  it('security: the refusal quotes the offending name, and nothing from the body', () => {
-    const secret = defineSkill({
-      id: 'x',
-      description: 'd',
-      body: 'INTERNAL ESCALATION PROCEDURE',
-      viaToolName: 'open_x',
-    });
+  it('security: the mount refusal quotes the offending name, and nothing from the body', () => {
+    const secret = handBuiltCustomTrigger('x', 'open_x', 'INTERNAL ESCALATION PROCEDURE');
     try {
       agent().skill(secret);
       expect.unreachable('should have thrown');

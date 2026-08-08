@@ -243,7 +243,7 @@ export {
   type CheckInBuilderOptions,
 } from './core/checkin.js';
 // The context-unit shape a `CheckInScorer` ranks — also exported from
-// `agentfootprint/debug` (alongside `explainChoice`), surfaced here because it
+// `agentfootprint/observe` (alongside `explainChoice`), surfaced here because it
 // is part of the `CheckInScoreInput` contract.
 export type { AttributionUnit } from './lib/influence-core/types.js';
 
@@ -350,8 +350,6 @@ export {
   type CompactionRetention,
   type FoldedConversation,
   type FoldedSpan,
-  type FoldRefusal,
-  type FoldRefusalReason,
   type RemovalFacts,
   type RemovalPlan,
   type SlidingWindowOptions,
@@ -502,14 +500,14 @@ export {
 // because bundlers walking these never touch optional peer-dep code.
 //
 // Vendor-SDK-backed providers (AnthropicProvider, OpenAIProvider,
-// BedrockProvider) live ONLY at `agentfootprint/llm-providers`. That
+// BedrockProvider) live ONLY at `agentfootprint/providers`. That
 // subpath segregation means bundlers walking from `agentfootprint` main
 // never see the lazy peer-dep requires for `@anthropic-ai/sdk`,
 // `openai`, `@aws-sdk/client-bedrock-runtime`, etc. — automatic
 // tree-shaking, no bundler-side workarounds.
 //
 //   import { AnthropicProvider } from 'agentfootprint';                  // ❌ not exported
-//   import { AnthropicProvider } from 'agentfootprint/llm-providers';    // ✓ canonical
+//   import { AnthropicProvider } from 'agentfootprint/providers';        // ✓ canonical
 
 export {
   providerFromEnv,
@@ -562,7 +560,7 @@ export {
 // which connect to a Model Context Protocol server and expose its tools
 // as agentfootprint `Tool[]` for `agent.tools(...)` — and the dispatch
 // primitives `staticTools` / `gatedTools` / `skillScopedTools` live
-// ONLY under `agentfootprint/tool-providers`: one subpath for
+// ONLY under `agentfootprint/providers`: one subpath for
 // everything tool-related, so the main barrel stays focused on the core
 // agent API. NONE of them are re-exported here.
 // `@modelcontextprotocol/sdk` stays a lazy-required peer-dep, so an app
@@ -572,6 +570,6 @@ export {
 // dedicated subpath; the root barrel also re-exports `PermissionPolicy`
 // so existing v2.4 consumers find it at the top level.
 
-// Message Catalog Pattern (v2.5+). `agentfootprint/locales` is the
+// Message Catalog Pattern (v2.5+). `agentfootprint/observe` is the
 // dedicated subpath; the root barrel also re-exports the helpers so
 // existing v2.4 consumers find them at the top level.

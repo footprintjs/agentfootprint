@@ -277,18 +277,6 @@ export interface ContextSlotComposedPayload {
  */
 export interface ContextBudgetPressurePayload {
   readonly slot: ContextSlot;
-  /**
-   * @deprecated Misnamed since the event shipped: this is CHARS on the slot
-   * channel and TOKENS on the window channel. Read {@link cap} with
-   * {@link unit}. Still written, with the identical value, and not going
-   * away in 8.x.
-   */
-  readonly capTokens: number;
-  /**
-   * @deprecated Misnamed — see {@link capTokens}. Read {@link projected} with
-   * {@link unit}. Still written, with the identical value.
-   */
-  readonly projectedTokens: number;
   /** How far over the cap, in {@link unit}. Never carried a unit in its name. */
   readonly overflowBy: number;
   readonly planAction: 'evict' | 'summarize' | 'abort' | 'none';
@@ -299,9 +287,17 @@ export interface ContextBudgetPressurePayload {
    * anything.
    */
   readonly unit: 'chars' | 'tokens';
-  /** The budget that was exceeded, in {@link unit}. Same value as `capTokens`. */
+  /**
+   * The budget that was exceeded, in {@link unit}.
+   *
+   * Called `capTokens` until 9.0.0 — a name that asserted tokens on a channel
+   * that is CHARS half the time, since `contextBudget` is on by default and a
+   * slot counts `String.length`. Both spellings shipped through 8.x with the
+   * identical value; 9.0.0 keeps only this one.
+   */
   readonly cap: number;
-  /** What was measured, in {@link unit}. Same value as `projectedTokens`. */
+  /** What was measured, in {@link unit}. Called `projectedTokens` until 9.0.0
+   *  — see {@link cap}. */
   readonly projected: number;
 }
 

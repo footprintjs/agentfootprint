@@ -1,7 +1,7 @@
 /**
  * watch — PUBLIC. The door named for what an observer does.
  *
- * Pattern: naming, not machinery. `.watch()` attaches exactly what
+ * Pattern: naming, not machinery. `.watch()` attaches what the removed
  *          `.recorder()` attached; the type it takes is exactly footprintjs's
  *          `CombinedRecorder`. Nothing new happens at run time.
  * Role:    core/ layer. The counterpart `moments.ts` has described in prose

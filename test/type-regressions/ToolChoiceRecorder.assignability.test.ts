@@ -2,10 +2,12 @@
  * Compile-level regression test — 7.3.0 shipped `onResume` on
  * `ToolChoiceRecorderHandle` (src/recorders/observability/ToolChoiceRecorder.ts,
  * commit f0a87de) typed with a slice that broke assignability to
- * footprintjs's `CombinedRecorder` — the exact type `AgentBuilder.recorder()`
- * accepts (src/core/agent/AgentBuilder.ts:274). A consumer doing
+ * footprintjs's `CombinedRecorder` — the exact type the builder's observer
+ * door accepts. A consumer doing
  * `Agent.create(...).recorder(toolChoiceRecorder(...))` failed to typecheck,
- * even though the recorder worked fine at runtime.
+ * even though the recorder worked fine at runtime. That door was renamed
+ * `.watch()` in 8.0.0 and `.recorder()` was removed in 9.0.0; the type it
+ * accepts never changed, so this regression probe follows the name.
  *
  * The existing 22 ToolChoiceRecorder tests (test/recorders/observability/
  * ToolChoiceRecorder.test.ts) never caught this — vitest transpiles test
@@ -43,16 +45,17 @@ describe('ToolChoiceRecorderHandle — stays assignable to CombinedRecorder (7.3
     expect(asCombinedRecorder.id).toBe('tool-choice');
   });
 
-  it('passes to the real AgentBuilder.recorder() call site (the failing shape from the demo)', () => {
+  it('passes to the real AgentBuilder.watch() call site (the failing shape from the demo)', () => {
     const handle = toolChoiceRecorder({ embedder: mockEmbedder() });
     const provider: LLMProvider = mock({ respond: () => ({ content: 'ok', toolCalls: [] }) });
 
     // Mirrors `agentBuilder.recorder(choice)` from the downstream demo
     // (hcifootprint-demo/dress-shop/src/chatbot/assistant.ts) — the exact
-    // line that failed TS2345 under the 7.3.0 regression.
+    // line that failed TS2345 under the 7.3.0 regression, spelled the way
+    // 9.0.0 spells it.
     const agent = Agent.create({ provider, model: 'mock' })
       .system('regression probe')
-      .recorder(handle)
+      .watch(handle)
       .build();
 
     expect(typeof agent.run).toBe('function');

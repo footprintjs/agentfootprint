@@ -94,7 +94,7 @@ describe('memory recall — the two events and the wire agree on the slot', () =
           store,
         }),
       )
-      .recorder(emitCapture(emits))
+      .watch(emitCapture(emits))
       .build();
 
     const injected: InjectedPayload[] = [];

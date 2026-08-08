@@ -254,7 +254,7 @@ describe('entryScorer — integration: through the REAL Agent loop', () => {
     })
       .system('')
       .skillGraph(graph)
-      .recorder(recorder)
+      .watch(recorder)
       .build();
     await agent.run({ message: 'i need a refund for my payment' });
 

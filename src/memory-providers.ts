@@ -1,25 +1,9 @@
 /**
- * agentfootprint/memory-providers — memory store adapters (canonical subpath).
+ * memory-providers — memory store adapters.
  *
- * The Block B canonical name. Mirrors the parallel structure shipped in
- * v2.5:
- *
- *   agentfootprint/llm-providers     ← LLM provider adapters
- *   agentfootprint/tool-providers    ← tool dispatch + tool sources
- *   agentfootprint/memory-providers  ← memory store adapters (this file)
- *   agentfootprint/security          ← cross-cutting authorization
- *
- * One subpath that grows — RedisStore, AgentCoreStore, and future
- * stores (DynamoDB, Postgres, Pinecone, …) all live here. No more
- * adding `agentfootprint/memory-<vendor>` per-adapter subpath each
- * time a new store ships.
- *
- * Per-adapter aliases (`agentfootprint/memory-redis`,
- * `agentfootprint/memory-agentcore`) stay available through the v2.x
- * line — they point at the same files. New code SHOULD import from
- * `agentfootprint/memory-providers`:
- *
- *   import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
+ * RedisStore, AgentCoreStore, and future stores (DynamoDB, Postgres,
+ * Pinecone, …) all live here — a new store adds an export, never a new
+ * import path.
  *
  * Pattern: Adapter (GoF) — each store translates the `MemoryStore`
  *          interface onto a specific backend (Redis, DynamoDB-style
@@ -30,11 +14,11 @@
  *          actually instantiate pull their SDK in.
  *
  * @example
- *   import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
+ *   import { RedisStore, AgentCoreStore } from 'agentfootprint/memory';
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/memory` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/memory`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 // Lazy-required peer-dep stores. Both adapters defer their vendor SDK

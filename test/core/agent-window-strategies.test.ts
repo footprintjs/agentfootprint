@@ -432,7 +432,10 @@ describe('tokenBudget — scenario', () => {
 
   it('reports budget_pressure with planAction evict, and spends nothing', async () => {
     const { agent, main } = budgetAgent(250);
-    const pressure: Array<{ planAction: string; capTokens: number }> = [];
+    // `cap` + `unit`, not `capTokens`: the token-named pair left the payload
+    // in 9.0.0 because the three context slots emit this same event counting
+    // CHARS. A window strategy is the tokens half, and says so in `unit`.
+    const pressure: Array<{ planAction: string; cap: number; unit: string }> = [];
     agent.on('agentfootprint.context.budget_pressure', (e) => {
       pressure.push(e.payload as never);
     });
@@ -440,7 +443,8 @@ describe('tokenBudget — scenario', () => {
 
     expect(pressure.length).toBeGreaterThan(0);
     expect(pressure.some((p) => p.planAction === 'evict')).toBe(true);
-    expect(pressure.every((p) => p.capTokens === 250)).toBe(true);
+    expect(pressure.every((p) => p.cap === 250)).toBe(true);
+    expect(pressure.every((p) => p.unit === 'tokens')).toBe(true);
     expect(main.requests).toHaveLength(5); // no summarizer call, ever
   });
 });

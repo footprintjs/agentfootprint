@@ -17,7 +17,7 @@
  *   - **Lightstep / ServiceNow Cloud Observability** (OTLP)
  *   - any custom OTel collector / processor pipeline
  *
- * Subpath:  `agentfootprint/observability-providers`
+ * Subpath:  `agentfootprint/observe`
  * Peer dep: `@opentelemetry/api` (OPTIONAL — installed only when
  *           this adapter is used. The consumer ALSO installs the
  *           OTel SDK + exporter of their choice — that's the BYO
@@ -90,7 +90,7 @@
  * import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
  * import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
  * import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
- * import { otelObservability } from 'agentfootprint/observability-providers';
+ * import { otelObservability } from 'agentfootprint/observe';
  *
  * // Set up OTel ONCE at app startup.
  * const provider = new NodeTracerProvider();
@@ -106,7 +106,7 @@
  * });
  * agent.enable.observability({ strategy: otel });
  * // Optional — operator-level decide()/select() evidence as span events:
- * // Agent.create({...}).recorder(otel.decisionEvidenceRecorder())
+ * // Agent.create({...}).watch(otel.decisionEvidenceRecorder())
  * ```
  *
  * @example Test injection
@@ -226,7 +226,7 @@ interface OtelApiModule {
  * footprintjs CombinedRecorder (FlowRecorder channel) that forwards
  * decide()/select() operator-level evidence into the paired
  * otelObservability strategy as span events. Attach via
- * `Agent.create({...}).recorder(...)` or
+ * `Agent.create({...}).watch(...)` or
  * `executor.attachCombinedRecorder(...)`.
  */
 export interface OtelDecisionEvidenceRecorder {

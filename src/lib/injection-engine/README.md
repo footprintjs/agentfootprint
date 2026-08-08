@@ -308,7 +308,7 @@ it.
 Four sugar factories ship :
 
 ```typescript
-import { defineInstruction, defineSkill, defineSteering, defineFact } from 'agentfootprint/injection-engine';
+import { defineInstruction, defineSkill, defineSteering, defineFact } from 'agentfootprint/context';
 
 const agent = Agent.create({ provider, model: 'mock' })
   .steering(jsonOnly)

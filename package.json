@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "8.20.0",
+  "version": "9.0.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -210,136 +210,6 @@
         "default": "./dist/doors/security.js"
       }
     },
-    "./llm-providers": {
-      "import": {
-        "types": "./dist/esm/llm-providers.d.ts",
-        "default": "./dist/esm/llm-providers.js"
-      },
-      "require": {
-        "types": "./dist/types/llm-providers.d.ts",
-        "default": "./dist/llm-providers.js"
-      }
-    },
-    "./embedders": {
-      "import": {
-        "types": "./dist/esm/embedders/index.d.ts",
-        "default": "./dist/esm/embedders/index.js"
-      },
-      "require": {
-        "types": "./dist/types/embedders/index.d.ts",
-        "default": "./dist/embedders/index.js"
-      }
-    },
-    "./tool-providers": {
-      "import": {
-        "types": "./dist/esm/tool-providers/index.d.ts",
-        "default": "./dist/esm/tool-providers/index.js"
-      },
-      "require": {
-        "types": "./dist/types/tool-providers/index.d.ts",
-        "default": "./dist/tool-providers/index.js"
-      }
-    },
-    "./thinking": {
-      "import": {
-        "types": "./dist/esm/thinking/index.d.ts",
-        "default": "./dist/esm/thinking/index.js"
-      },
-      "require": {
-        "types": "./dist/types/thinking/index.d.ts",
-        "default": "./dist/thinking/index.js"
-      }
-    },
-    "./memory-providers": {
-      "import": {
-        "types": "./dist/esm/memory-providers.d.ts",
-        "default": "./dist/esm/memory-providers.js"
-      },
-      "require": {
-        "types": "./dist/types/memory-providers.d.ts",
-        "default": "./dist/memory-providers.js"
-      }
-    },
-    "./observability-providers": {
-      "import": {
-        "types": "./dist/esm/observability-providers.d.ts",
-        "default": "./dist/esm/observability-providers.js"
-      },
-      "require": {
-        "types": "./dist/types/observability-providers.d.ts",
-        "default": "./dist/observability-providers.js"
-      }
-    },
-    "./strategies": {
-      "import": {
-        "types": "./dist/esm/strategies/index.d.ts",
-        "default": "./dist/esm/strategies/index.js"
-      },
-      "require": {
-        "types": "./dist/types/strategies/index.d.ts",
-        "default": "./dist/strategies/index.js"
-      }
-    },
-    "./stream": {
-      "import": {
-        "types": "./dist/esm/stream.d.ts",
-        "default": "./dist/esm/stream.js"
-      },
-      "require": {
-        "types": "./dist/types/stream.d.ts",
-        "default": "./dist/stream.js"
-      }
-    },
-    "./status": {
-      "import": {
-        "types": "./dist/esm/status.d.ts",
-        "default": "./dist/esm/status.js"
-      },
-      "require": {
-        "types": "./dist/types/status.d.ts",
-        "default": "./dist/status.js"
-      }
-    },
-    "./locales": {
-      "import": {
-        "types": "./dist/esm/locales/index.d.ts",
-        "default": "./dist/esm/locales/index.js"
-      },
-      "require": {
-        "types": "./dist/types/locales/index.d.ts",
-        "default": "./dist/locales/index.js"
-      }
-    },
-    "./debug": {
-      "import": {
-        "types": "./dist/esm/debug.d.ts",
-        "default": "./dist/esm/debug.js"
-      },
-      "require": {
-        "types": "./dist/types/debug.d.ts",
-        "default": "./dist/debug.js"
-      }
-    },
-    "./debug/finders": {
-      "import": {
-        "types": "./dist/esm/debug/finders.d.ts",
-        "default": "./dist/esm/debug/finders.js"
-      },
-      "require": {
-        "types": "./dist/types/debug/finders.d.ts",
-        "default": "./dist/debug/finders.js"
-      }
-    },
-    "./observability/contextError/finders": {
-      "import": {
-        "types": "./dist/esm/observability/contextError/finders/index.d.ts",
-        "default": "./dist/esm/observability/contextError/finders/index.js"
-      },
-      "require": {
-        "types": "./dist/types/observability/contextError/finders/index.d.ts",
-        "default": "./dist/observability/contextError/finders/index.js"
-      }
-    },
     "./reliability": {
       "import": {
         "types": "./dist/esm/reliability/index.d.ts",
@@ -348,36 +218,6 @@
       "require": {
         "types": "./dist/types/reliability/index.d.ts",
         "default": "./dist/reliability/index.js"
-      }
-    },
-    "./hosting-providers": {
-      "import": {
-        "types": "./dist/esm/hosting-providers.d.ts",
-        "default": "./dist/esm/hosting-providers.js"
-      },
-      "require": {
-        "types": "./dist/types/hosting-providers.d.ts",
-        "default": "./dist/hosting-providers.js"
-      }
-    },
-    "./injection-engine": {
-      "import": {
-        "types": "./dist/esm/injection-engine.d.ts",
-        "default": "./dist/esm/injection-engine.js"
-      },
-      "require": {
-        "types": "./dist/types/injection-engine.d.ts",
-        "default": "./dist/injection-engine.js"
-      }
-    },
-    "./identity": {
-      "import": {
-        "types": "./dist/esm/identity.d.ts",
-        "default": "./dist/esm/identity.js"
-      },
-      "require": {
-        "types": "./dist/types/identity.d.ts",
-        "default": "./dist/identity.js"
       }
     },
     "./package.json": "./package.json"
@@ -414,56 +254,8 @@
       "security": [
         "./dist/types/doors/security.d.ts"
       ],
-      "llm-providers": [
-        "./dist/types/llm-providers.d.ts"
-      ],
-      "embedders": [
-        "./dist/types/embedders/index.d.ts"
-      ],
-      "tool-providers": [
-        "./dist/types/tool-providers/index.d.ts"
-      ],
-      "thinking": [
-        "./dist/types/thinking/index.d.ts"
-      ],
-      "memory-providers": [
-        "./dist/types/memory-providers.d.ts"
-      ],
-      "observability-providers": [
-        "./dist/types/observability-providers.d.ts"
-      ],
-      "strategies": [
-        "./dist/types/strategies/index.d.ts"
-      ],
-      "stream": [
-        "./dist/types/stream.d.ts"
-      ],
-      "status": [
-        "./dist/types/status.d.ts"
-      ],
-      "locales": [
-        "./dist/types/locales/index.d.ts"
-      ],
-      "debug": [
-        "./dist/types/debug.d.ts"
-      ],
-      "debug/finders": [
-        "./dist/types/debug/finders.d.ts"
-      ],
-      "observability/contextError/finders": [
-        "./dist/types/observability/contextError/finders/index.d.ts"
-      ],
       "reliability": [
         "./dist/types/reliability/index.d.ts"
-      ],
-      "hosting-providers": [
-        "./dist/types/hosting-providers.d.ts"
-      ],
-      "injection-engine": [
-        "./dist/types/injection-engine.d.ts"
-      ],
-      "identity": [
-        "./dist/types/identity.d.ts"
       ]
     }
   },

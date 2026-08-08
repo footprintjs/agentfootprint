@@ -14,9 +14,15 @@
  *   2. `CompactionRecord` is still assignable to `WindowRecord`. The family
  *      record grew out of the shipped one; if they ever diverge, every
  *      consumer reading `scope.compactions` breaks.
- *   3. The 7.16 names still work. `FoldRefusal` / `FoldRefusalReason` are
- *      deprecated aliases, not removals, and code written against 7.16 must
- *      keep compiling unchanged.
+ *   3. The 7.16 aliases are GONE (9.0.0). `FoldRefusal` / `FoldRefusalReason`
+ *      were renamed to `WindowRefusal` / `WindowRefusalReason` in 7.17 —
+ *      refusals are shared by every window strategy, and only one of them
+ *      folds — and the old spellings shipped as deprecated aliases through
+ *      8.x. So did the refusal-reason member `'summary-not-smaller'`, renamed
+ *      `'replacement-not-smaller'` in 8.14.0 because the drop strategies
+ *      reported it while having no summary at all. 9.0.0 removed all three,
+ *      and their absence is pinned below at the type level — the only level
+ *      where a resurrected alias would be visible.
  */
 import { describe, expect, it } from 'vitest';
 import type {
@@ -24,8 +30,6 @@ import type {
   CompactionRetention,
   FoldedConversation,
   FoldedSpan,
-  FoldRefusal,
-  FoldRefusalReason,
   RemovalPlan,
   SlidingWindowRecord,
   TokenBudgetRecord,
@@ -38,6 +42,18 @@ import type {
   WindowStrategyInput,
   WindowStrategyResult,
 } from '../../src/index';
+
+// The two 7.16 aliases are GONE from the root barrel (9.0.0), and these two
+// suppressions ARE the assertion. `@ts-expect-error` fails the build when the
+// line it guards has NO error — so if either name is ever re-exported, this
+// file stops compiling and the resurrection has to be argued for. Type-only
+// imports, erased at runtime; the array below just gives the test something
+// to say out loud.
+// @ts-expect-error FoldRefusal was renamed WindowRefusal in 7.17 and removed in 9.0.0
+import type { FoldRefusal as _RemovedFoldRefusal } from '../../src/index';
+// @ts-expect-error FoldRefusalReason was renamed WindowRefusalReason in 7.17 and removed in 9.0.0
+import type { FoldRefusalReason as _RemovedFoldRefusalReason } from '../../src/index';
+
 import {
   foldedMessages,
   foldedSpanFor,
@@ -45,6 +61,9 @@ import {
   summarizeOldest,
   tokenBudget,
 } from '../../src/index';
+
+/** Names the two `@ts-expect-error` imports above stand guard over. */
+const REMOVED_IN_9 = ['FoldRefusal', 'FoldRefusalReason'] as const;
 
 /**
  * A third-party strategy, written using nothing but the public types: drop
@@ -143,10 +162,10 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
       measuredTokens: 10,
       thresholdTokens: 5,
       overBudget: true,
+      // 9.0.0 removed `foldedStageIds` / `foldedMessageCount`: the family
+      // names below are the only spelling, on every strategy's record.
       removedStageIds: ['seed#0'],
       removedMessageCount: 2,
-      foldedStageIds: ['seed#0'],
-      foldedMessageCount: 2,
       windowCharsBefore: 100,
       windowCharsAfter: 50,
       summaryChars: 40,
@@ -227,22 +246,27 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
     expect(foldedMessages(conversation).map((m) => m.content)).toEqual(['hello']);
   });
 
-  it('the 7.16 refusal names still compile as aliases of the family names', () => {
-    const reason: FoldRefusalReason = 'unresolved-tool-call';
-    const asFamily: WindowRefusalReason = reason;
-    const old: FoldRefusal = { reason, turnIndex: 0, messageIndex: 0 };
-    const asNew: WindowRefusal = old;
-    expect(asFamily).toBe('unresolved-tool-call');
-    expect(asNew.turnIndex).toBe(0);
+  it('the family refusal types are the only ones — the 7.16 aliases are gone (9.0.0)', () => {
+    const reason: WindowRefusalReason = 'unresolved-tool-call';
+    const refusal: WindowRefusal = { reason, turnIndex: 0, messageIndex: 0 };
+    expect(reason).toBe('unresolved-tool-call');
+    expect(refusal.turnIndex).toBe(0);
+
+    // The absence of the two aliases is pinned by the `@ts-expect-error`
+    // imports at the top of this file — see the note there.
+    expect(REMOVED_IN_9).toEqual(['FoldRefusal', 'FoldRefusalReason']);
   });
 
-  it("the 8.13 refusal name 'summary-not-smaller' still NARROWS (8.14.0 rename)", () => {
-    // The string is no longer WRITTEN by any strategy — `drop.ts` and
-    // `summarizeOldest.ts` both emit `'replacement-not-smaller'` — but code
-    // written against 7.17–8.13 that switches on the old member must keep
-    // compiling. The union member is the entire compatibility surface.
-    const old: WindowRefusalReason = 'summary-not-smaller';
+  it("'summary-not-smaller' no longer narrows — 9.0.0 removed the 8.14.0 alias", () => {
+    // No strategy ever wrote it after 8.14.0: `drop.ts` and
+    // `summarizeOldest.ts` both emit `'replacement-not-smaller'`. The old
+    // spelling claimed a SUMMARY the drop strategies never produce, so it
+    // could not stay as a member of a union shared by all three.
     const renamed: WindowRefusalReason = 'replacement-not-smaller';
-    expect([old, renamed]).toHaveLength(2);
+    expect(renamed).toBe('replacement-not-smaller');
+
+    // @ts-expect-error 'summary-not-smaller' left WindowRefusalReason in 9.0.0
+    const removed: WindowRefusalReason = 'summary-not-smaller';
+    void removed;
   });
 });

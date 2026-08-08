@@ -367,7 +367,7 @@ That's the whole model: `Injection = slot × trigger × cache`.
 | `always` | static | Every iteration | `.steering(defineSteering({ id, prompt: 'You are a triage agent…' }))` | `system` |
 | `rule` | runtime — predicate | Your rule returns true | `.instruction(defineInstruction({ id, activeWhen: s => /price\|refund/.test(s.userQuery), prompt }))` | `system` |
 | `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction(defineInstruction({ id, activeWhen: s => s.lastToolResult?.toolName === 'search', prompt: 'Cite source IDs.' }))` | `system` |
-| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body, viaToolName: 'read_skill' }))` | `system` (body) + `tools` |
+| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body }))` | `system` (body) + `tools` |
 
 > [!NOTE]
 > The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. A `Skill` targets more than one slot at once: `tools` (the schemas it contributes — registered up front and visible from iteration 1 unless the Skill sets `autoActivate: 'currentSkill'`, which scopes them to the iterations where it is active) and `system` (its body — or, with `surfaceMode: 'tool-only'`, the `read_skill` result instead). The `messages` slot both projects the conversation and accepts delivery: `slot: 'messages'` (with a `role` you name) appends to the window itself, subject to what the attached provider carries inside `messages` and to a sequence rule that defers rather than reorders.
@@ -652,7 +652,7 @@ Variadic, because observers come in sets. It returns the builder — the runtime
 
 There is deliberately no list of "watch moments" to go with `.act()`'s five. A rule has to be *told* where it may speak, so that list is closed and compiler-pinned; an observer attends the whole stream, and any list we published would be a vocabulary we then had to keep true.
 
-*(`.recorder()` is the same door under its old, internals-flavoured name. It still works and is deprecated — see [8.0.0](./CHANGELOG.md).)*
+*(`.recorder()` was the same door under its old, internals-flavoured name. It was removed in 9.0.0 and now throws a sentence pointing here — see [9.0.0](./CHANGELOG.md).)*
 
 ---
 

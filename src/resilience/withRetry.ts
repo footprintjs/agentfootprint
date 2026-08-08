@@ -62,7 +62,7 @@ export interface WithRetryOptions {
  *
  * @example
  *   import { withRetry } from 'agentfootprint/resilience';
- *   import { anthropic } from 'agentfootprint/llm-providers';
+ *   import { anthropic } from 'agentfootprint/providers';
  *
  *   const robust = withRetry(anthropic({ apiKey }), {
  *     maxAttempts: 5,

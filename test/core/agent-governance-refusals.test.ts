@@ -79,18 +79,25 @@ describe('#1 — two different observers may not share one id', () => {
     expect(fired).toBeGreaterThan(0);
   });
 
-  it('edge — the same reference through .watch() AND the deprecated .recorder()', async () => {
+  it('edge — the same reference through .watch() AND agent.attach() stays one attachment', async () => {
     let fired = 0;
     const observer = { id: 'audit', onEmit: () => void fired++ } as Watcher;
-    const agent = base().watch(observer).recorder(observer).build();
+    const agent = base().watch(observer).build();
+    agent.attach(observer);
 
     await agent.run({ message: 'hi' });
+    // Two doors, one object, one attachment — the build-time check passes on
+    // object identity and footprintjs's runtime dedupe finishes the job.
     expect(fired).toBeGreaterThan(0);
   });
 
-  it('regression — .recorder() feeds the same list, so it collides the same way', () => {
-    const builder = base().watch(watcher('audit')).recorder(watcher('audit'));
-    expect(() => builder.build()).toThrow(/deprecated `.recorder\(\)` feed this list/);
+  it('regression — the check is on the LIST, so several .watch() calls collide too', () => {
+    // 8.13.0 wrote this rule when `.watch()` and the then-deprecated
+    // `.recorder()` both fed one list. 9.0.0 removed `.recorder()`, so the
+    // list has one door — and the rule is unchanged, because it was never
+    // about which door: it is about two DIFFERENT objects under one id.
+    const builder = base().watch(watcher('audit')).watch(watcher('audit'));
+    expect(() => builder.build()).toThrow(/two different observers were given the id 'audit'/);
   });
 
   it('edge — distinct ids build and both observe', async () => {
@@ -176,13 +183,17 @@ describe('#20 — an authorization mode needs a provider to authorize through', 
         onAuthorizationRequired: 'tell-model',
       }).build(),
     ).toThrow(/onAuthorizationRequired was set without a `credentials` provider/);
+    // The refusal names the DOOR a `CredentialProvider` comes through. Until
+    // 9.0.0 that sentence said `agentfootprint/identity`; that subpath is gone,
+    // `agentfootprint/security` absorbed it, and an error message that sends a
+    // reader to a path Node refuses is worse than no message at all.
     expect(() =>
       Agent.create({
         provider: provider(),
         model: 'm',
         onAuthorizationRequired: 'pause',
       }).build(),
-    ).toThrow(/agentfootprint\/identity/);
+    ).toThrow(/agentfootprint\/security/);
   });
 
   it('scenario — with a provider it builds and runs', async () => {

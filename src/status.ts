@@ -1,5 +1,5 @@
 /**
- * agentfootprint/status — chat-bubble status surface.
+ * status — chat-bubble status surface.
  *
  * Pattern: pure projection. `selectStatus` walks the typed
  *          event log forward, tracking active pause / tool / LLM state,
@@ -10,26 +10,16 @@
  *          right now?" indicator. Output feeds `renderStatusLine`
  *          which resolves a template + variables to a final string.
  *
- * Why a subpath:
- *   - Consistent with `agentfootprint/observe` and
- *     `agentfootprint/locales` — every observability surface gets its
- *     own entry point.
- *   - Self-documenting at the import line: `from 'agentfootprint/status'`
- *     vs an opaque main-export grab.
- *   - Future home for extended-thinking primitives (Anthropic
- *     `thinking_delta` / `redacted_thinking` blocks). Adding them here
- *     is non-breaking; consumers already importing from
- *     `agentfootprint/status` get the new state surface for free.
+ * Future home for extended-thinking primitives (Anthropic `thinking_delta` /
+ * `redacted_thinking` blocks). Adding them here is non-breaking; consumers
+ * already importing from `agentfootprint/observe` get the new state surface
+ * for free.
  *
- * Prose lives elsewhere: the `defaultStatusTemplates` catalog's canonical
- * home is `agentfootprint/locales` (the single i18n home for all prose —
- * commentary, thinking, status). It is re-exported here for convenience, but
- * new code should import the words from `/locales` and the LOGIC
- * (`selectStatus` / `renderStatusLine`) from here.
- *
- * As of v7 these are NOT on the main `agentfootprint` barrel — status is a
- * named subpath like every other observability surface. Import the logic
- * from `agentfootprint/status`, the words from `agentfootprint/locales`.
+ * Prose lives elsewhere: the `defaultStatusTemplates` catalog's canonical home
+ * is `src/locales/` (the single i18n home for all prose — commentary,
+ * thinking, status). It is re-exported here for convenience. Both come out of
+ * the `agentfootprint/observe` door; these are NOT on the main `agentfootprint`
+ * barrel.
  *
  * State machine (4 states + null):
  *
@@ -51,13 +41,13 @@
  *
  *      (null)        run done / between calls   → bubble hidden
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/observe`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 // Logic only — the status state machine + renderer. The prose catalog
-// (`defaultStatusTemplates`) lives on `agentfootprint/locales`, the single
+// (`defaultStatusTemplates`) lives on `agentfootprint/observe`, the single
 // home for all user-facing text; `renderStatusLine` consumes it.
 export {
   selectStatus,

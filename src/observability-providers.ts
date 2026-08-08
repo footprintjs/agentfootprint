@@ -1,5 +1,5 @@
 /**
- * agentfootprint/observability-providers — vendor observability strategies.
+ * observability-providers — vendor observability strategies.
  *
  * Grouped subpath following the parallel-providers pattern v2.5
  * established for `llm-providers` / `tool-providers` /
@@ -13,7 +13,7 @@
  *
  * @example
  * ```ts
- * import { agentcoreObservability } from 'agentfootprint/observability-providers';
+ * import { agentcoreObservability } from 'agentfootprint/observe';
  * import { microtaskBatchDriver } from 'footprintjs/detach';
  *
  * agent.enable.observability({
@@ -38,9 +38,9 @@
  * dedicated `dd-trace`-based adapter only if real-world feedback
  * demands the native Datadog APM client.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/observe`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 export {

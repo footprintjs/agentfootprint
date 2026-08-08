@@ -160,9 +160,9 @@ process.on('SIGTERM', async () => { await agent.shutdown(); });
 ```
 
 Errors are isolated per child — one bad exporter doesn't stop the others. (`composeObservability`
-is also reachable at `agentfootprint/strategies`, and the vendor adapters at
-`agentfootprint/observability-providers`; those are the older doors kept alive through 8.x.
-`agentfootprint/observe` is the one to use.)
+and the vendor adapters all come from `agentfootprint/observe`. Through 8.x they were also
+reachable at `agentfootprint/strategies` and `agentfootprint/observability-providers`; 9.0.0
+removed both of those paths.)
 
 ## Wrapping or debugging a strategy
 

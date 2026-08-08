@@ -1,232 +1,330 @@
 /**
- * Subpath exports — Block B parallel-providers restructure.
+ * SUBPATH EXPORTS — the 9.0.0 manifest.
  *
- * Verifies the four canonical subpaths and the legacy aliases all
- * resolve to working source files with the expected exports.
+ * 8.0.0 consolidated 26 subpaths into 10 doors and kept every old path alive
+ * as a deprecated alias. 9.0.0 executed that ledger: sixteen alias subpaths
+ * left `package.json`. What ships now is exactly
  *
- * 7-pattern matrix-lite (this is mechanical; the matrix here is
- * structure validation rather than logical scenarios):
+ *   root  +  the ten doors  +  `./reliability`  +  `./package.json`
  *
- *   - unit:        Each new subpath file exists and re-exports a known symbol
- *   - integration: Symbol identity is preserved across alias and canonical paths
- *                  (`providers.ts.mock === llm-providers.ts.mock`)
- *   - property:    package.json `exports` table has the canonical + legacy entries
- *   - security:    package.json `exports` field paths point at expected dist locations
+ * This file is the MANIFEST half of the pin. Its sibling
+ * `door-aliases.test.ts` reads the built `.d.ts` files and pins the SURFACE
+ * — which NAMES each door carries and whether the retained alias still
+ * resolves to the same declarations. Here we never open a `.d.ts`: we assert
+ * the two tables in `package.json` (`exports` + `typesVersions`) and the
+ * SOURCE-level fact that makes the removal safe.
+ *
+ * That fact is the whole point, and it is easy to lose: **9.0.0 removed
+ * import PATHS, not code.** Every one of the sixteen implementation barrels
+ * is still in `src/`, still exports what it always did, and is now reachable
+ * only through the door that absorbed it — as the SAME object, not a copy.
+ * A door that shadowed a name with a re-implementation would pass a
+ * name-presence check and fail here.
+ *
+ * 7-pattern matrix (structure validation, so the matrix is mechanical):
+ *
+ *   - unit:        every surviving subpath resolves to the dist file its
+ *                  convention predicts, and both tables agree entry for entry
+ *   - integration: door symbol === implementation-barrel symbol, by identity,
+ *                  for every one of the sixteen absorbed barrels
+ *   - property:    the removed list and the surviving list are pinned by
+ *                  exact content — neither can quietly grow or shrink
+ *   - edge:        `./package.json` is a plain string by Node convention and
+ *                  is exempt from the per-condition rules
+ *   - security:    everything is asserted against what `package.json`
+ *                  actually publishes, not against a hand-kept list of files
  */
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ─── Source-level imports (canonical) ──────────────────────────────
+// ─── The doors (what a consumer may import) ────────────────────────
+
+import * as providersDoor from '../../src/doors/providers.js';
+import * as memoryDoor from '../../src/doors/memory.js';
+import * as observeDoor from '../../src/doors/observe.js';
+import * as hostingDoor from '../../src/doors/hosting.js';
+import * as contextDoor from '../../src/doors/context.js';
+import * as securityDoor from '../../src/doors/security.js';
+
+// ─── The implementation barrels behind them (no longer subpaths) ───
 
 import * as llmProviders from '../../src/llm-providers.js';
-import * as memoryProviders from '../../src/memory-providers.js';
+import * as embedders from '../../src/embedders/index.js';
 import * as toolProviders from '../../src/tool-providers/index.js';
-import * as security from '../../src/security/index.js';
+import * as thinking from '../../src/thinking/index.js';
+import * as memoryProviders from '../../src/memory-providers.js';
+import * as observabilityProviders from '../../src/observability-providers.js';
+import * as strategies from '../../src/strategies/index.js';
+import * as stream from '../../src/stream.js';
+import * as status from '../../src/status.js';
+import * as locales from '../../src/locales/index.js';
+import * as debug from '../../src/debug.js';
+import * as debugFinders from '../../src/debug/finders.js';
+import * as contextErrorFinders from '../../src/observability/contextError/finders/index.js';
+import * as hostingProviders from '../../src/hosting-providers.js';
+import * as injectionEngine from '../../src/injection-engine.js';
+import * as identity from '../../src/identity.js';
 
-// ─── Source-level imports (legacy aliases) ─────────────────────────
+// ─── The two lists ─────────────────────────────────────────────────
 
-import * as legacyProviders from '../../src/providers.js';
-import * as legacyRedis from '../../src/adapters/memory/redis.js';
-import * as legacyAgentcore from '../../src/adapters/memory/agentcore.js';
+/**
+ * The sixteen subpaths 9.0.0 removed, each with the door that absorbed it
+ * and one sample name whose IDENTITY proves the absorption is a re-export
+ * rather than a re-implementation. Migration rows live in CHANGELOG 9.0.0.
+ */
+const REMOVED_SUBPATHS = [
+  {
+    subpath: './llm-providers',
+    door: './providers',
+    doorModule: providersDoor,
+    implModule: llmProviders,
+    sample: 'mock',
+  },
+  {
+    subpath: './embedders',
+    door: './providers',
+    doorModule: providersDoor,
+    implModule: embedders,
+    sample: 'openaiEmbedder',
+  },
+  {
+    subpath: './tool-providers',
+    door: './providers',
+    doorModule: providersDoor,
+    implModule: toolProviders,
+    sample: 'staticTools',
+  },
+  {
+    subpath: './thinking',
+    door: './providers',
+    doorModule: providersDoor,
+    implModule: thinking,
+    sample: 'findThinkingHandler',
+  },
+  {
+    subpath: './memory-providers',
+    door: './memory',
+    doorModule: memoryDoor,
+    implModule: memoryProviders,
+    sample: 'RedisStore',
+  },
+  {
+    subpath: './observability-providers',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: observabilityProviders,
+    sample: 'otelObservability',
+  },
+  {
+    subpath: './strategies',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: strategies,
+    sample: 'composeObservability',
+  },
+  {
+    subpath: './stream',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: stream,
+    sample: 'toSSE',
+  },
+  {
+    subpath: './status',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: status,
+    sample: 'selectStatus',
+  },
+  {
+    subpath: './locales',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: locales,
+    sample: 'composeMessages',
+  },
+  {
+    subpath: './debug',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: debug,
+    sample: 'localizeContextBug',
+  },
+  {
+    subpath: './debug/finders',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: debugFinders,
+    sample: 'rankSuspects',
+  },
+  {
+    subpath: './observability/contextError/finders',
+    door: './observe',
+    doorModule: observeDoor,
+    implModule: contextErrorFinders,
+    sample: 'rankSuspects',
+  },
+  {
+    subpath: './hosting-providers',
+    door: './hosting',
+    doorModule: hostingDoor,
+    implModule: hostingProviders,
+    sample: 'agentCoreRuntimeHost',
+  },
+  {
+    subpath: './injection-engine',
+    door: './context',
+    doorModule: contextDoor,
+    implModule: injectionEngine,
+    sample: 'defineInjection',
+  },
+  {
+    subpath: './identity',
+    door: './security',
+    doorModule: securityDoor,
+    implModule: identity,
+    sample: 'agentCoreIdentity',
+  },
+] as const;
 
-// ─── Tests ────────────────────────────────────────────────────────
+const REMOVED_SUBPATH_NAMES = REMOVED_SUBPATHS.map((r) => r.subpath);
 
-describe('Block B — canonical subpath barrels expose expected symbols', () => {
-  it('llm-providers exports mock + provider classes', () => {
-    expect(typeof (llmProviders as { mock: unknown }).mock).toBe('function');
-    // Anthropic / OpenAI / others are exported by name; spot-check one
-    expect((llmProviders as Record<string, unknown>).MockProvider).toBeDefined();
-  });
+/** Everything `package.json` still publishes, `./package.json` aside. */
+const SURVIVING_SUBPATHS = [
+  '.',
+  './providers',
+  './memory',
+  './rag',
+  './cache',
+  './observe',
+  './events',
+  './context',
+  './resilience',
+  './hosting',
+  './security',
+  './reliability',
+] as const;
 
-  it('memory-providers exports RedisStore + AgentCoreStore', () => {
-    expect((memoryProviders as Record<string, unknown>).RedisStore).toBeDefined();
-    expect((memoryProviders as Record<string, unknown>).AgentCoreStore).toBeDefined();
-  });
+// ─── Manifest helpers ──────────────────────────────────────────────
 
-  it('tool-providers exports staticTools + gatedTools + skillScopedTools', () => {
-    expect(typeof (toolProviders as { staticTools: unknown }).staticTools).toBe('function');
-    expect(typeof (toolProviders as { gatedTools: unknown }).gatedTools).toBe('function');
-    expect(typeof (toolProviders as { skillScopedTools: unknown }).skillScopedTools).toBe(
-      'function',
-    );
-  });
+interface PkgExportEntry {
+  readonly import: { readonly types: string; readonly default: string };
+  readonly require: { readonly types: string; readonly default: string };
+}
 
-  it('security exports PermissionPolicy', () => {
-    expect((security as Record<string, unknown>).PermissionPolicy).toBeDefined();
-  });
-});
+interface Pkg {
+  readonly type: string;
+  readonly repository: { readonly url: string };
+  readonly exports: Record<string, PkgExportEntry | string>;
+  readonly typesVersions: Record<string, Record<string, string[]>>;
+}
 
-describe('Block B — legacy aliases preserve symbol identity', () => {
-  it('legacy providers === canonical llm-providers (same exports)', () => {
-    // The new file is `export *` from providers.ts, so identities match
-    expect((llmProviders as Record<string, unknown>).mock).toBe(
-      (legacyProviders as Record<string, unknown>).mock,
-    );
-    expect((llmProviders as Record<string, unknown>).MockProvider).toBe(
-      (legacyProviders as Record<string, unknown>).MockProvider,
-    );
-  });
+function loadPkg(): Pkg {
+  return JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as Pkg;
+}
 
-  it('legacy memory-redis exposes same RedisStore as memory-providers', () => {
-    expect((memoryProviders as Record<string, unknown>).RedisStore).toBe(
-      (legacyRedis as Record<string, unknown>).RedisStore,
-    );
-  });
+function codeEntry(subpath: string): PkgExportEntry {
+  const entry = loadPkg().exports[subpath];
+  if (entry === undefined || typeof entry === 'string') {
+    throw new Error(`package.json exports has no code entry for "${subpath}"`);
+  }
+  return entry;
+}
 
-  it('legacy memory-agentcore exposes same AgentCoreStore as memory-providers', () => {
-    expect((memoryProviders as Record<string, unknown>).AgentCoreStore).toBe(
-      (legacyAgentcore as Record<string, unknown>).AgentCoreStore,
-    );
-  });
-});
+// ─── 1. The removed subpaths are GONE ──────────────────────────────
 
-describe('Block B — package.json exports table', () => {
-  function loadExports(): Record<string, { types?: string; import?: string; require?: string }> {
-    const pkgPath = join(__dirname, '../../package.json');
-    const raw = readFileSync(pkgPath, 'utf-8');
-    const pkg = JSON.parse(raw) as { exports?: Record<string, unknown> };
-    return pkg.exports as Record<string, { types?: string; import?: string; require?: string }>;
+describe('9.0.0 — the sixteen removed subpaths are absent from the manifest', () => {
+  for (const subpath of REMOVED_SUBPATH_NAMES) {
+    it(`${subpath} is not an export subpath, and not a typesVersions key`, () => {
+      const pkg = loadPkg();
+      expect(
+        pkg.exports[subpath],
+        `${subpath} was removed in 9.0.0 — bringing it back is a migration-table conversation`,
+      ).toBeUndefined();
+      // A stale `typesVersions` row is the quiet failure mode: `exports`
+      // refuses the path at runtime while TypeScript still types it, so the
+      // editor says yes and Node says no.
+      expect(
+        pkg.typesVersions['*'][subpath.slice(2)],
+        `${subpath} is gone from exports but still typed by typesVersions`,
+      ).toBeUndefined();
+    });
   }
 
-  it('canonical subpaths are present', () => {
-    const exp = loadExports();
-    expect(exp['./llm-providers']).toBeDefined();
-    expect(exp['./memory-providers']).toBeDefined();
-    expect(exp['./tool-providers']).toBeDefined();
-    expect(exp['./security']).toBeDefined();
+  it('the removed list is pinned at exactly sixteen', () => {
+    expect(REMOVED_SUBPATH_NAMES).toHaveLength(16);
+    expect(new Set(REMOVED_SUBPATH_NAMES).size, 'the removed list has a duplicate').toBe(16);
   });
 
-  it('per-adapter memory aliases stayed removed (collapsed in 4.0.0)', () => {
-    const exp = loadExports();
-    // ./memory-redis + ./memory-agentcore collapsed into ./memory-providers,
-    // which 8.0.0 in turn folded into ./memory. They do not come back.
-    expect(exp['./memory-redis']).toBeUndefined();
-    expect(exp['./memory-agentcore']).toBeUndefined();
+  it('the exports map is exactly the survivors plus ./package.json', () => {
+    const actual = Object.keys(loadPkg().exports).slice().sort();
+    expect(actual).toEqual([...SURVIVING_SUBPATHS, './package.json'].slice().sort());
+  });
+});
+
+// ─── 2. Removal of a PATH was never removal of a NAME ──────────────
+
+describe('9.0.0 removed import paths, not code — every absorbed barrel is still reachable', () => {
+  for (const { subpath, door, doorModule, implModule, sample } of REMOVED_SUBPATHS) {
+    it(`${subpath} still exports ${sample}, and ${door} serves the SAME object`, () => {
+      const impl = implModule as unknown as Record<string, unknown>;
+      const onDoor = doorModule as unknown as Record<string, unknown>;
+
+      expect(impl[sample], `the ${subpath} barrel lost ${sample}`).toBeDefined();
+      expect(onDoor[sample], `${door} does not carry ${sample}`).toBeDefined();
+      // Identity, not presence. A door that re-implemented the name would
+      // satisfy a `toBeDefined()` check and still be a different function
+      // with different bugs.
+      expect(onDoor[sample], `${door}'s ${sample} is a different object`).toBe(impl[sample]);
+    });
+  }
+});
+
+// ─── 3. The two tables agree, entry for entry ──────────────────────
+
+describe('the exports and typesVersions tables agree', () => {
+  it('every surviving subpath is present in exports', () => {
+    const pkg = loadPkg();
+    for (const subpath of SURVIVING_SUBPATHS) {
+      expect(pkg.exports[subpath], `${subpath} must be published`).toBeDefined();
+    }
   });
 
-  it('./providers is back in 8.0.0 — as a DOOR, not the old per-vendor alias', () => {
-    const exp = loadExports();
-    // 4.0.0 removed `./providers` as a one-file alias of ./llm-providers.
-    // 8.0.0 reintroduces the name for a different, bigger job: every "plug in
-    // a backend" surface behind one door. It resolves to its own barrel, NOT
-    // to the llm-providers file the 4.0.0 alias pointed at.
-    expect(exp['./providers']).toBeDefined();
-    expect(exp['./providers'].require.default).toBe('./dist/doors/providers.js');
-    expect(exp['./providers'].require.default).not.toBe('./dist/llm-providers.js');
-  });
-
-  it('every exports entry serves per-condition types (import→ESM, require→CJS)', () => {
-    const exp = loadExports();
-    for (const [key, entry] of Object.entries(exp)) {
-      // The package.json self-reference is a plain string by Node
-      // convention — it lets the library read its own version at
-      // runtime (auditExport genesis records) and lets tooling
-      // deep-import the manifest.
+  it('every code entry serves per-condition types (import→ESM, require→CJS)', () => {
+    for (const [key, entry] of Object.entries(loadPkg().exports)) {
+      // The package.json self-reference is a plain string by Node convention
+      // — it lets the library read its own version at runtime (auditExport
+      // genesis records) and lets tooling deep-import the manifest.
       if (key === './package.json') {
         expect(entry).toBe('./package.json');
         continue;
       }
+      const code = entry as PkgExportEntry;
       // Each condition carries its OWN context-correct types: the `import`
       // (ESM) condition points at ESM-context declarations, the `require`
       // (CJS) condition at CJS-context ones. A single flat `types` field
       // masquerades one module system's types as the other's (attw 🎭/👺).
-      expect(entry.import?.types, `missing import.types for ${key}`).toBeDefined();
-      expect(entry.import?.default, `missing import.default for ${key}`).toBeDefined();
-      expect(entry.require?.types, `missing require.types for ${key}`).toBeDefined();
-      expect(entry.require?.default, `missing require.default for ${key}`).toBeDefined();
+      expect(code.import?.types, `missing import.types for ${key}`).toBeDefined();
+      expect(code.import?.default, `missing import.default for ${key}`).toBeDefined();
+      expect(code.require?.types, `missing require.types for ${key}`).toBeDefined();
+      expect(code.require?.default, `missing require.default for ${key}`).toBeDefined();
     }
   });
 
-  it('canonical subpath dist paths follow predictable conventions', () => {
-    const exp = loadExports();
-    // import → ESM build (dist/esm), require → CJS build (dist), each with
-    // its matching-context .d.ts.
-    expect(exp['./llm-providers'].import.types).toBe('./dist/esm/llm-providers.d.ts');
-    expect(exp['./llm-providers'].import.default).toBe('./dist/esm/llm-providers.js');
-    expect(exp['./llm-providers'].require.types).toBe('./dist/types/llm-providers.d.ts');
-    expect(exp['./llm-providers'].require.default).toBe('./dist/llm-providers.js');
-    expect(exp['./memory-providers'].import.types).toBe('./dist/esm/memory-providers.d.ts');
-    expect(exp['./memory-providers'].require.default).toBe('./dist/memory-providers.js');
-  });
-});
-
-// ─── 8.0.0 — the door map ─────────────────────────────────────────
-
-describe('8.0.0 door map — every path a consumer can type still resolves', () => {
-  function loadPkg(): {
-    exports: Record<string, { import: { types: string; default: string } } | string>;
-    typesVersions: Record<string, Record<string, string[]>>;
-  } {
-    return JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
-  }
-
-  /** The 10 canonical doors. `./cache` and `./events` stand alone by design. */
-  const DOORS = [
-    '.',
-    './providers',
-    './memory',
-    './rag',
-    './cache',
-    './observe',
-    './events',
-    './context',
-    './resilience',
-    './hosting',
-    './security',
-  ];
-
-  /** Every path 7.x consumers could type. NONE of these may ever disappear
-   *  during 8.x — that is the whole promise of the consolidation. */
-  const SEVEN_X_PATHS = [
-    '.',
-    './cache',
-    './events',
-    './memory',
-    './llm-providers',
-    './memory-providers',
-    './strategies',
-    './observability-providers',
-    './observe',
-    './debug',
-    './debug/finders',
-    './observability/contextError/finders',
-    './resilience',
-    './stream',
-    './injection-engine',
-    './tool-providers',
-    './security',
-    './identity',
-    './hosting',
-    './hosting-providers',
-    './reliability',
-    './thinking',
-    './locales',
-    './status',
-    './embedders',
-    './package.json',
-  ];
-
-  it('every 7.x import path still resolves in 8.x', () => {
-    const exp = loadPkg().exports;
-    for (const path of SEVEN_X_PATHS) {
-      expect(exp[path], `${path} worked in 7.x and must keep working`).toBeDefined();
+  it('import points into dist/esm, require into dist — never crossed', () => {
+    for (const [key, entry] of Object.entries(loadPkg().exports)) {
+      if (key === './package.json') continue;
+      const code = entry as PkgExportEntry;
+      expect(code.import.types, `${key} import.types`).toMatch(/^\.\/dist\/esm\//);
+      expect(code.import.default, `${key} import.default`).toMatch(/^\.\/dist\/esm\//);
+      expect(code.require.types, `${key} require.types`).toMatch(/^\.\/dist\/types\//);
+      expect(code.require.default, `${key} require.default`).not.toMatch(
+        /^\.\/dist\/(esm|types)\//,
+      );
+      expect(code.require.default, `${key} require.default`).toMatch(/^\.\/dist\//);
     }
-  });
-
-  it('every door is present and points at a real barrel', () => {
-    const exp = loadPkg().exports;
-    for (const door of DOORS) expect(exp[door], `door ${door} missing`).toBeDefined();
-  });
-
-  it('the doors added since 7.x are ./providers, ./context (8.0.0) and ./rag (8.10.0)', () => {
-    // A door is a promise, so this list only ever grows on purpose. `./rag`
-    // joined in 8.10.0: index time is a different process from run time, it
-    // touches the filesystem, and a browser bundle must never resolve it.
-    const exp = loadPkg().exports;
-    const added = Object.keys(exp).filter((k) => !SEVEN_X_PATHS.includes(k));
-    expect(added.sort()).toEqual(['./context', './providers', './rag']);
   });
 
   it('typesVersions covers every non-root export path (TS < 4.7 fallback)', () => {
@@ -243,16 +341,90 @@ describe('8.0.0 door map — every path a consumer can type still resolves', () 
     const tv = pkg.typesVersions['*'];
     for (const [key, entry] of Object.entries(pkg.exports)) {
       if (key === '.' || key === './package.json' || typeof entry === 'string') continue;
-      const fromExports = (entry as { require: { types: string } }).require.types;
-      expect(tv[key.slice(2)], `typesVersions drifted for ${key}`).toEqual([fromExports]);
+      expect(tv[key.slice(2)], `typesVersions drifted for ${key}`).toEqual([entry.require.types]);
     }
   });
 
-  it('the manifest declares its module type and a full git URL (publint)', () => {
-    const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as {
-      type: string;
-      repository: { url: string };
-    };
+  it('typesVersions carries no key that exports does not publish', () => {
+    const pkg = loadPkg();
+    const published = new Set(
+      Object.keys(pkg.exports)
+        .filter((k) => k !== '.' && k !== './package.json')
+        .map((k) => k.slice(2)),
+    );
+    for (const key of Object.keys(pkg.typesVersions['*'])) {
+      expect(published.has(key), `typesVersions types "${key}", which exports refuses`).toBe(true);
+    }
+  });
+});
+
+// ─── 4. Door targets follow the door convention ────────────────────
+
+describe('surviving subpaths resolve where their convention says', () => {
+  // The eight consolidating doors are their own barrel under `dist/doors/`.
+  // `./cache` and `./events` were never aliases and keep their original
+  // homes; `./reliability` is the one retained alias and keeps its own file
+  // because it is the only home of the reliability GATE's `CircuitOpenError`
+  // (see door-aliases.test.ts for that design fact).
+  const DOOR_BARRELS = [
+    'providers',
+    'memory',
+    'rag',
+    'observe',
+    'context',
+    'resilience',
+    'hosting',
+    'security',
+  ];
+
+  for (const door of DOOR_BARRELS) {
+    it(`./${door} resolves to the dist/doors barrel`, () => {
+      const entry = codeEntry(`./${door}`);
+      expect(entry.require.default).toBe(`./dist/doors/${door}.js`);
+      expect(entry.require.types).toBe(`./dist/types/doors/${door}.d.ts`);
+      expect(entry.import.default).toBe(`./dist/esm/doors/${door}.js`);
+      expect(entry.import.types).toBe(`./dist/esm/doors/${door}.d.ts`);
+    });
+  }
+
+  it('./providers is a DOOR, not the 4.0.0 per-vendor alias it shares a name with', () => {
+    // 4.0.0 removed `./providers` as a one-file alias of `./llm-providers`.
+    // 8.0.0 reintroduced the name for a different, bigger job: every "plug in
+    // a backend" surface behind one door. It resolves to its own barrel, NOT
+    // to the llm-providers file the 4.0.0 alias pointed at — and that file no
+    // longer has a subpath of its own at all.
+    expect(codeEntry('./providers').require.default).toBe('./dist/doors/providers.js');
+    expect(codeEntry('./providers').require.default).not.toBe('./dist/llm-providers.js');
+  });
+
+  it('./cache and ./events keep their pre-door homes — neither was ever an alias', () => {
+    // ./cache stays its own door because importing it RUNS the vendor
+    // cache-strategy registrations; side-effectful code stays opt-in.
+    expect(codeEntry('./cache').require.default).toBe('./dist/cache/index.js');
+    // ./events is the wire vocabulary, kept apart by a `ContextSource` that
+    // is a different type from the one /observe carries.
+    expect(codeEntry('./events').require.default).toBe('./dist/events.js');
+  });
+
+  it('./reliability is the one retained alias and keeps its own barrel', () => {
+    expect(codeEntry('./reliability').require.default).toBe('./dist/reliability/index.js');
+  });
+
+  it('per-adapter memory aliases stayed removed (collapsed in 4.0.0)', () => {
+    const exp = loadPkg().exports;
+    // ./memory-redis + ./memory-agentcore collapsed into ./memory-providers,
+    // which 8.0.0 folded into ./memory and 9.0.0 removed outright. Three
+    // rounds of consolidation, none of them reversible.
+    expect(exp['./memory-redis']).toBeUndefined();
+    expect(exp['./memory-agentcore']).toBeUndefined();
+  });
+});
+
+// ─── 5. Manifest hygiene (publint) ─────────────────────────────────
+
+describe('the manifest itself', () => {
+  it('declares its module type and a full git URL (publint)', () => {
+    const pkg = loadPkg();
     // The root build is CJS; dist/esm carries its own {"type":"module"}.
     expect(pkg.type).toBe('commonjs');
     expect(pkg.repository.url).toMatch(/^git\+https:\/\//);

@@ -80,7 +80,7 @@ Defined in: [src/core/agent/types.ts:167](https://github.com/footprintjs/agentfo
 Credential provider for downstream OAuth (declare-and-push). When set, a
 tool that declares `needs: { credential }` has it resolved BEFORE `execute`
 and injected as `ctx.credential`; tools can also pull via `ctx.credentials`.
-From `agentfootprint/identity` (`agentCoreIdentity({ region })`,
+From `agentfootprint/security` (`agentCoreIdentity({ region })`,
 `staticTokens({ ... })`, or any `CredentialProvider`).
 
 ***

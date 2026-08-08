@@ -59,7 +59,7 @@
  *
  * Node-only. `node:fs/promises` and `node:path` are imported lazily inside the
  * call, the same gating `lib/tool-lint/cli.ts` uses: this module is reachable
- * from the `agentfootprint/injection-engine` barrel, and a TOP-LEVEL node:fs
+ * from the `agentfootprint/context` barrel, and a TOP-LEVEL node:fs
  * import detonates a browser bundle at module-eval even when nothing calls it.
  */
 
@@ -80,16 +80,6 @@ const SKILL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const URL_LIKE_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
 
 export interface SkillsFromDirOptions {
-  /**
-   * Override the activation tool name for every loaded skill. Defaults to
-   * `defineSkill`'s own default, `'read_skill'`.
-   *
-   * @deprecated Since 8.7.0 — see {@link DefineSkillOptions.viaToolName}. Nothing has
-   * ever read the field, and mounting a skill that carries another value is now
-   * refused, so a directory loaded with this option produces skills no agent will
-   * accept. Removed in 9.0.0.
-   */
-  readonly viaToolName?: string;
   /**
    * Where a loaded skill's body lands once activated. Defaults to
    * `defineSkill`'s own default, `'auto'`. See {@link SurfaceMode}.
@@ -135,6 +125,7 @@ export async function skillsFromDir(
   opts: SkillsFromDirOptions = {},
 ): Promise<readonly Injection[]> {
   assertLocalDirectoryArgument(dir);
+  assertNoViaToolNameOption(opts);
 
   // Lazy node imports (browser-compat) — see module header.
   const { readdir, readFile, stat } = await import('node:fs/promises');
@@ -208,13 +199,34 @@ export async function skillsFromDir(
         id: skill.name,
         description: skill.description,
         body: skill.body,
-        ...(opts.viaToolName !== undefined && { viaToolName: opts.viaToolName }),
         ...(opts.surfaceMode !== undefined && { surfaceMode: opts.surfaceMode }),
       }),
     );
 }
 
 // ─── Authorship guard ──────────────────────────────────────────────
+
+/**
+ * Refuse a `viaToolName` option that no longer exists (9.0.0 grace error).
+ *
+ * Deprecated in 8.7.0, removed here — see the same guard in `defineSkill` for
+ * the whole story. It is refused rather than ignored because a directory
+ * loaded with this option used to produce skills that an agent then REFUSED at
+ * mount, and silently accepting them now would be a downgrade: the caller
+ * would believe a per-directory activation tool exists. It never did.
+ *
+ * Deleted in 10.0.0.
+ */
+function assertNoViaToolNameOption(opts: object): void {
+  const legacy = (opts as { readonly viaToolName?: unknown }).viaToolName;
+  if (legacy === undefined) return;
+  throw new Error(
+    `skillsFromDir: \`viaToolName\` was removed in 9.0.0 (deprecated since 8.7.0), and this ` +
+      `call passes '${String(legacy)}'. Nothing ever read it — 'read_skill' is the only ` +
+      `activation tool this library builds, and every skill loaded here already shares it. ` +
+      `Drop the option; the model picks WHICH skill by id.`,
+  );
+}
 
 /**
  * Refuse anything that is not a local path, BY NAME. The message quotes what

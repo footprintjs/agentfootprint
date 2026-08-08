@@ -132,16 +132,17 @@ describe('buildToolsSlot — overflow loudness', () => {
 
     const result = await run(harness(tools));
 
+    // The WHOLE record, asserted by deep equality — so a field that comes
+    // back from the dead fails here, not silently ships. 8.14.0 added the
+    // honest trio (`unit` + `cap` + `projected`) beside two historical names
+    // that said "Tokens"; 9.0.0 removed those, because a slot counts
+    // CHARACTERS while a window strategy emits this same event name counting
+    // TOKENS, and `unit` is the only thing that tells a subscriber which one
+    // it is holding.
     const expected: BudgetPressureRecord = {
       slot: 'tools',
-      capTokens: 2000,
-      projectedTokens: used,
       overflowBy: used - 2000,
       planAction: 'none',
-      // 8.14.0 — the honest trio, written beside the two historical names.
-      // A slot counts CHARACTERS; a window strategy emits this same event
-      // name counting TOKENS, and `unit` is the only thing that tells a
-      // subscriber which one it is holding.
       unit: 'chars',
       cap: 2000,
       projected: used,
@@ -236,10 +237,10 @@ describe('slotOverflow', () => {
 
   it('returns null at exactly the cap and a record one char over', () => {
     expect(slotOverflow(composition(100, 100))).toBeNull();
+    // Six fields, and exactly six — `capTokens` / `projectedTokens` left the
+    // record in 9.0.0 and `toEqual` is what keeps them gone.
     expect(slotOverflow(composition(100, 101))).toEqual({
       slot: 'messages',
-      capTokens: 100,
-      projectedTokens: 101,
       overflowBy: 1,
       planAction: 'none',
       unit: 'chars',

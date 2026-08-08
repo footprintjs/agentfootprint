@@ -4,7 +4,7 @@
  * (per-turn artifact freezing, byte-exact history threading, same-factory
  * runner derivation) while COMPOSING with the 7.5 surface, not duplicating it.
  *
- * Exported from `agentfootprint/debug` (every symbol it composes with lives
+ * Exported from `agentfootprint/observe` (every symbol it composes with lives
  * there). Named exports — `export *` is not the house style.
  */
 

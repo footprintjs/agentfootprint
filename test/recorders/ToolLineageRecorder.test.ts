@@ -170,7 +170,7 @@ describe('toolLineageRecorder — functional (real agent run)', () => {
       .system('')
       .tool(lookup)
       .tool(fetchTool)
-      .recorder(lineage)
+      .watch(lineage)
       .build();
 
     await agent.run({ message: 'go' });

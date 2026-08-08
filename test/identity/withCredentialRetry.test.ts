@@ -94,7 +94,7 @@ async function runAgentWith(credentials: CredentialProvider, tool: unknown): Pro
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .tools([tool as any])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .recorder(probe as any)
+    .watch(probe as any)
     .build();
   const answer = await agent.run({ message: 'go' });
   return { answer: String(answer), events };

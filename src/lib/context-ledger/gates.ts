@@ -69,7 +69,7 @@ function makeVerdict(
  * TOOL GATE — plug into the existing provider combinator:
  *
  * ```ts
- * import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+ * import { gatedTools, staticTools } from 'agentfootprint/providers';
  * builder.toolProvider(gatedTools(staticTools(tools), ledgerToolGate(ledger)));
  * ```
  *

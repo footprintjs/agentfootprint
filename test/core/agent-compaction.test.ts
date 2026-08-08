@@ -11,6 +11,13 @@
  * something unresolved refuses to fold BY NAME; and the threshold is COUNTED
  * from adapter-reported usage, never guessed — a provider that reports none
  * gets a named refusal instead of an invented number.
+ *
+ * The record's two counts are `removedStageIds` / `removedMessageCount` — the
+ * FAMILY names, shared with every window strategy on `WindowRecord`. 7.16
+ * spelled them `foldedStageIds` / `foldedMessageCount`, 7.17 published the
+ * family names beside them, and 9.0.0 removed the fold-specific pair: only one
+ * of the three shipped strategies folds anything, so a reader switching
+ * strategies should not have to switch field names too.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -295,7 +302,7 @@ describe('.compaction() — scenario: the fold', () => {
     await agent.run({ message: 'go' });
 
     expect(sum.calls.length).toBeGreaterThan(0);
-    const folds = compactionsOf(agent).filter((r) => r.foldedMessageCount > 0);
+    const folds = compactionsOf(agent).filter((r) => r.removedMessageCount > 0);
     expect(folds.length).toBeGreaterThan(0);
 
     const lastRequest = main.requests[main.requests.length - 1]!;
@@ -314,12 +321,12 @@ describe('.compaction() — scenario: the fold', () => {
     expect(runToolOutputs.length).toBeGreaterThan(1);
 
     const log = agent.getLastSnapshot()?.commitLog ?? [];
-    const fold = compactionsOf(agent).find((r) => r.foldedMessageCount > 0)!;
-    expect(fold.foldedStageIds.length).toBeGreaterThan(0);
+    const fold = compactionsOf(agent).find((r) => r.removedMessageCount > 0)!;
+    expect(fold.removedStageIds.length).toBeGreaterThan(0);
 
     // Every stage the record names is a stage that really ran and really
     // wrote the window — resolvable in the ledger, not an invented label.
-    for (const stageId of fold.foldedStageIds) {
+    for (const stageId of fold.removedStageIds) {
       const writerIdx = log.findIndex((b) => b.runtimeStageId === stageId);
       expect(writerIdx).toBeGreaterThanOrEqual(0);
       const historyThere = commitValueAt(log, writerIdx, 'history') as
@@ -354,7 +361,7 @@ describe('.compaction() — scenario: the fold', () => {
   it('LAW 1 — the summary step names what it folded, and what it measured', async () => {
     const { agent } = foldingAgent();
     await agent.run({ message: 'go' });
-    const fold = compactionsOf(agent).find((r) => r.foldedMessageCount > 0)!;
+    const fold = compactionsOf(agent).find((r) => r.removedMessageCount > 0)!;
 
     expect(fold.measuredTokens).toBeGreaterThan(fold.thresholdTokens);
     expect(fold.overBudget).toBe(true);
@@ -362,7 +369,7 @@ describe('.compaction() — scenario: the fold', () => {
     expect(fold.summarizerTokens).toEqual({ input: 120, output: 20 });
     // Real runtimeStageIds, not invented ones: each names a stage that ran.
     const ran = new Set((agent.getLastSnapshot()?.commitLog ?? []).map((b) => b.runtimeStageId));
-    for (const id of fold.foldedStageIds) expect(ran.has(id)).toBe(true);
+    for (const id of fold.removedStageIds) expect(ran.has(id)).toBe(true);
     // There is deliberately NO tokensAfter — nothing can count an unsent window.
     expect('tokensAfter' in fold).toBe(false);
   });
@@ -370,7 +377,7 @@ describe('.compaction() — scenario: the fold', () => {
   it('LAW 6 — the next call is measurably smaller than the one that tripped', async () => {
     const { agent, main } = foldingAgent();
     await agent.run({ message: 'go' });
-    const fold = compactionsOf(agent).find((r) => r.foldedMessageCount > 0)!;
+    const fold = compactionsOf(agent).find((r) => r.removedMessageCount > 0)!;
 
     const foldRequestIndex = main.requests.findIndex((r) =>
       r.messages.some((m) => m.content.startsWith(COMPACTED_FRAME_PREFIX)),
@@ -434,7 +441,7 @@ describe('.compaction() — chart shapes', () => {
     const answer = await agent.run({ message: 'go' });
     expect(answer).toBe('final answer');
 
-    const folds = compactionsOf(agent).filter((r) => r.foldedMessageCount > 0);
+    const folds = compactionsOf(agent).filter((r) => r.removedMessageCount > 0);
     expect(folds.length).toBeGreaterThan(0);
     // The fold reached the wire — proof it was written in the OUTER scope and
     // survived the sf-llm-call boundary, which does not map `history` back out.
@@ -544,7 +551,7 @@ describe('.compaction() — unresolved things refuse to fold', () => {
     expect(records.length).toBeGreaterThan(0);
     for (const r of records) {
       expect(r.overBudget).toBe(true);
-      expect(r.foldedMessageCount).toBe(0);
+      expect(r.removedMessageCount).toBe(0);
       expect(r.refusals.every((x) => x.reason === 'inside-keep-window')).toBe(true);
       // The window stayed exactly as big as it was — reported, not truncated.
       expect(r.windowCharsAfter).toBe(r.windowCharsBefore);
@@ -607,7 +614,7 @@ describe('.compaction() — summarizer failure', () => {
       expect(answer).toBe('final answer');
       const records = compactionsOf(agent);
       expect(records.length).toBeGreaterThan(0);
-      expect(records.every((r) => r.foldedMessageCount === 0)).toBe(true);
+      expect(records.every((r) => r.removedMessageCount === 0)).toBe(true);
       expect(records.some((r) => r.refusals.some((x) => x.reason === 'summarizer-failed'))).toBe(
         true,
       );
@@ -657,7 +664,7 @@ describe('.compaction() — summarizer failure', () => {
     expect(records.some((r) => r.refusals.some((x) => x.reason === 'summary-not-smaller'))).toBe(
       false,
     );
-    expect(records.every((r) => r.foldedMessageCount === 0)).toBe(true);
+    expect(records.every((r) => r.removedMessageCount === 0)).toBe(true);
   });
 });
 
@@ -725,7 +732,7 @@ describe('.compaction() — property', () => {
       return compactionsOf(agent).map((r) => ({
         iteration: r.iteration,
         measuredTokens: r.measuredTokens,
-        foldedMessageCount: r.foldedMessageCount,
+        removedMessageCount: r.removedMessageCount,
         refusals: r.refusals,
       }));
     };
@@ -795,7 +802,7 @@ describe('.compaction() — security', () => {
   it('the summarizer only ever sees the span being folded, never the kept turns', async () => {
     const { agent, sum } = foldingAgent({ keepRecentTurns: 2 });
     await agent.run({ message: 'go' });
-    const folds = compactionsOf(agent).filter((r) => r.foldedMessageCount > 0);
+    const folds = compactionsOf(agent).filter((r) => r.removedMessageCount > 0);
     expect(folds.length).toBeGreaterThan(0);
     // Whatever it folded, it never handed over the turn the model is
     // reasoning over right now — that is what keepRecentTurns MEANS.
@@ -806,7 +813,7 @@ describe('.compaction() — security', () => {
       expect(call.messages[0]!.content.includes(newest)).toBe(false);
     }
     // And each fold's record says exactly how much left the window.
-    for (const f of folds) expect(f.foldedMessageCount).toBeGreaterThan(0);
+    for (const f of folds) expect(f.removedMessageCount).toBeGreaterThan(0);
   });
 });
 

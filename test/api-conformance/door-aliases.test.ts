@@ -1,51 +1,40 @@
 /**
- * DOOR ALIASES — the aliases can never drift from their doors.
+ * DOOR SURFACE — the 9.0.0 law.
  *
  * 8.0.0 consolidated 26 export subpaths into 10 doors and kept every old path
- * working as a deprecated alias. The promise made to consumers is exact:
+ * working as a deprecated alias through the 8.x line. 9.0.0 executed the
+ * ledger: SIXTEEN alias subpaths are gone from the exports map. What remains
+ * is pinned here, in both directions:
  *
- *   "Every name here is the same symbol on the new door, not a copy."
+ *   1. ABSENCE. Each removed alias is asserted ABSENT from `package.json`
+ *      exports — so a refactor can never quietly resurrect one, and the
+ *      migration table in CHANGELOG 9.0.0 stays the single story.
  *
- * A promise like that decays the moment someone edits one barrel and forgets
- * the other, and it decays SILENTLY — both paths still compile, both still
- * export something called `mock`, and a consumer following the deprecation
- * notice lands on a different object than the one they had. So it is checked
- * two ways, because neither way can see the whole surface on its own:
+ *   2. PRESENCE. The canonical doors still resolve, still build, and still
+ *      carry every name they absorbed from their constituents in 8.0.0 —
+ *      removal of the alias PATH must never become removal of a NAME.
  *
- *   1. RUNTIME IDENTITY (values). Import both modules and assert
- *      `alias[name] === door[name]`. Catches a re-implementation instantly.
- *      Blind to types, which are erased before this test can look.
+ * ## The one retained alias
  *
- *   2. DECLARATION IDENTITY (values AND types). Drive the TypeScript checker
- *      over the SHIPPED `dist/types`, resolved through `package.json#exports`
- *      — the consumer's exact view, `export *` chains and all — and assert
- *      every name on an alias resolves to the same declaration on the door.
- *      This is the half that sees type-only exports.
+ * `./reliability` deliberately survives 9.0.0. It is the only home of the
+ * reliability GATE's `CircuitOpenError` — a different class from the provider
+ * decorator's `CircuitOpenError` that `/resilience` carries, with a different
+ * constructor and a different `instanceof` answer. Removing the path would not
+ * rename that class; it would make it unreachable, and a consumer could no
+ * longer `instanceof`-check the error their own gate throws. So the full
+ * alias discipline (declaration identity, runtime identity, pinned
+ * exceptions) still applies to it, scoped to exactly one entry:
  *
- * ## The two pinned lists
+ *   ABSENT_FROM_DOOR — `CircuitOpenError` (the design fact above).
+ *   STRUCTURAL_TWINS — `CircuitState`, declared in both breaker files as
+ *     `'closed' | 'open' | 'half-open'`; two declarations, one type.
  *
- * Both are literals. Their LENGTHS are asserted, so neither can quietly grow
- * into a place to hide a drift.
- *
- *   ABSENT_FROM_DOOR — a name the door genuinely does not carry.
- *     One entry, and it is a real design fact, not an oversight:
- *     `CircuitOpenError` is TWO classes (the provider decorator's and the
- *     reliability gate's) with different constructors and different
- *     `instanceof` answers. `/resilience` carries the decorator's. The gate's
- *     stays reachable only from the deprecated `/reliability`.
- *
- *   STRUCTURAL_TWINS — a name declared twice but resolving to the SAME TYPE.
- *     One entry: `CircuitState`, declared in both breaker files as
- *     `'closed' | 'open' | 'half-open'`. Two declarations, mutually
- *     assignable, indistinguishable to every consumer. Checked by comparing
- *     the resolved type, so if either declaration ever changes shape this
- *     stops passing.
- *
- * 7-pattern matrix: unit (each door exports its constituents' names) ·
- * integration (identity across alias and door) · property (every alias is
- * covered; the pinned lists stay exactly this size) · security (the doors
- * resolve from the SHIPPED artifact, not from src, so what is tested is what
- * publishes).
+ * 7-pattern matrix: unit (doors carry their absorbed names) · integration
+ * (identity across the retained alias and its door) · property (the removed
+ * list and the exception lists are pinned by exact content, so neither can
+ * quietly grow or shrink) · security (everything is asserted against the
+ * SHIPPED artifact resolved through `package.json#exports` — what is tested
+ * is what publishes).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -56,25 +45,29 @@ import ts from 'typescript';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-/** Every deprecated alias → the door it folded into. */
+/** The sixteen subpaths 9.0.0 removed. Their migration rows live in CHANGELOG 9.0.0. */
+const REMOVED_SUBPATHS = [
+  './llm-providers',
+  './embedders',
+  './tool-providers',
+  './thinking',
+  './memory-providers',
+  './observability-providers',
+  './strategies',
+  './stream',
+  './status',
+  './locales',
+  './debug',
+  './debug/finders',
+  './observability/contextError/finders',
+  './hosting-providers',
+  './injection-engine',
+  './identity',
+] as const;
+
+/** The one deliberately retained alias → its door. See header for why. */
 const ALIAS_TO_DOOR: Readonly<Record<string, string>> = {
-  './llm-providers': './providers',
-  './embedders': './providers',
-  './tool-providers': './providers',
-  './thinking': './providers',
-  './memory-providers': './memory',
-  './observability-providers': './observe',
-  './strategies': './observe',
-  './stream': './observe',
-  './status': './observe',
-  './locales': './observe',
-  './debug': './observe',
-  './debug/finders': './observe',
-  './observability/contextError/finders': './observe',
   './reliability': './resilience',
-  './hosting-providers': './hosting',
-  './injection-engine': './context',
-  './identity': './security',
 };
 
 /** The canonical doors. `./cache` and `./events` stand alone by design. */
@@ -219,9 +212,31 @@ function names(subpath: string): Map<string, ResolvedExport> {
   return found;
 }
 
-// ─── 1. Declaration identity (values AND types) ────────────────────
+// ─── 1. The removed subpaths are GONE, and stay gone ───────────────
 
-describe.skipIf(!built)('every deprecated alias resolves to its door, name for name', () => {
+describe('the sixteen 9.0.0-removed subpaths are absent from the exports map', () => {
+  for (const removed of REMOVED_SUBPATHS) {
+    it(`${removed} is not an export subpath`, () => {
+      expect(
+        codeSubpaths,
+        `${removed} was removed in 9.0.0 — resurrecting it needs a migration-table conversation, not a refactor`,
+      ).not.toContain(removed);
+    });
+  }
+
+  it('the removed list is pinned at exactly sixteen', () => {
+    expect(REMOVED_SUBPATHS).toHaveLength(16);
+  });
+
+  it('the exports map is exactly: root + the ten doors + the one retained alias', () => {
+    const expected = [...DOORS, ...Object.keys(ALIAS_TO_DOOR)].slice().sort();
+    expect(codeSubpaths.slice().sort()).toEqual(expected);
+  });
+});
+
+// ─── 2. Declaration identity for the retained alias ────────────────
+
+describe.skipIf(!built)('the retained alias resolves to its door, name for name', () => {
   for (const [alias, door] of Object.entries(ALIAS_TO_DOOR)) {
     it(`${alias} → ${door}`, () => {
       const aliasNames = names(alias);
@@ -255,11 +270,6 @@ describe.skipIf(!built)('every deprecated alias resolves to its door, name for n
     });
   }
 
-  it('covers every alias in the package.json exports table', () => {
-    const declaredAliases = codeSubpaths.filter((sp) => !(DOORS as readonly string[]).includes(sp));
-    expect(declaredAliases.slice().sort()).toEqual(Object.keys(ALIAS_TO_DOOR).sort());
-  });
-
   it('every door in the map is a real export subpath', () => {
     for (const door of DOORS) expect(codeSubpaths, `${door} is not in exports`).toContain(door);
     for (const door of Object.values(ALIAS_TO_DOOR)) {
@@ -268,7 +278,7 @@ describe.skipIf(!built)('every deprecated alias resolves to its door, name for n
   });
 });
 
-// ─── 2. The pinned exception lists cannot grow ─────────────────────
+// ─── 3. The pinned exception lists cannot grow ─────────────────────
 
 describe('the exception lists are pinned', () => {
   it('exactly ONE name is absent from its door, and it is CircuitOpenError', () => {
@@ -305,9 +315,9 @@ describe('the exception lists are pinned', () => {
   });
 });
 
-// ─── 3. Runtime identity (values) ──────────────────────────────────
+// ─── 4. Runtime identity for the retained alias ────────────────────
 
-describe.skipIf(!built)('alias values are the SAME objects as the door values', () => {
+describe.skipIf(!built)('retained-alias values are the SAME objects as the door values', () => {
   for (const [alias, door] of Object.entries(ALIAS_TO_DOOR)) {
     // Cold-imports two whole built barrels from dist. That is disk + module
     // graph work whose cost belongs to the machine, not to the library, so
@@ -335,57 +345,39 @@ describe.skipIf(!built)('alias values are the SAME objects as the door values', 
   }
 });
 
-// ─── 4. Doors are supersets, and carry what they claim ─────────────
+// ─── 5. Doors still carry every name they absorbed in 8.0.0 ────────
 
-describe.skipIf(!built)('each door carries every constituent it absorbed', () => {
-  const CONSTITUENTS: Readonly<Record<string, readonly [string, string][]>> = {
-    './providers': [
-      ['./llm-providers', 'mock'],
-      ['./embedders', 'openaiEmbedder'],
-      ['./tool-providers', 'staticTools'],
-      ['./thinking', 'findThinkingHandler'],
-    ],
-    './memory': [
-      ['./memory', 'defineMemory'],
-      ['./memory-providers', 'RedisStore'],
-    ],
+describe.skipIf(!built)('each door carries every constituent name it absorbed', () => {
+  // Removal of the alias PATH must never become removal of a NAME. One sample
+  // name per absorbed constituent, checked on the door that absorbed it.
+  const ABSORBED: Readonly<Record<string, readonly string[]>> = {
+    './providers': ['mock', 'openaiEmbedder', 'staticTools', 'findThinkingHandler'],
+    './memory': ['defineMemory', 'RedisStore'],
     './observe': [
-      ['./observe', 'recordRun'],
-      ['./observability-providers', 'otelObservability'],
-      ['./strategies', 'composeObservability'],
-      ['./stream', 'toSSE'],
-      ['./status', 'selectStatus'],
-      ['./locales', 'composeMessages'],
-      ['./debug', 'localizeContextBug'],
-      ['./debug/finders', 'rankSuspects'],
+      'recordRun',
+      'otelObservability',
+      'composeObservability',
+      'toSSE',
+      'selectStatus',
+      'composeMessages',
+      'localizeContextBug',
+      'rankSuspects',
     ],
-    './resilience': [
-      ['./resilience', 'withRetry'],
-      ['./reliability', 'ReliabilityFailFastError'],
-    ],
-    './hosting': [
-      ['./hosting', 'httpHost'],
-      ['./hosting-providers', 'agentCoreRuntimeHost'],
-    ],
-    './context': [['./injection-engine', 'defineInjection']],
-    './security': [
-      ['./security', 'PermissionPolicy'],
-      ['./identity', 'agentCoreIdentity'],
-    ],
+    './resilience': ['withRetry', 'ReliabilityFailFastError'],
+    './hosting': ['httpHost', 'agentCoreRuntimeHost'],
+    './context': ['defineInjection'],
+    './security': ['PermissionPolicy', 'agentCoreIdentity'],
   };
 
-  for (const [door, entries] of Object.entries(CONSTITUENTS)) {
-    for (const [from, sample] of entries) {
-      it(`${door} carries ${sample} (from ${from})`, () => {
+  for (const [door, sampleNames] of Object.entries(ABSORBED)) {
+    for (const sample of sampleNames) {
+      it(`${door} carries ${sample}`, () => {
         expect(names(door).has(sample), `${door} is missing ${sample}`).toBe(true);
-        expect(names(from).has(sample), `${from} no longer exports ${sample}`).toBe(true);
       });
     }
   }
 
-  it('./cache and ./events stand alone — neither is folded into a door', () => {
-    expect(Object.keys(ALIAS_TO_DOOR)).not.toContain('./cache');
-    expect(Object.keys(ALIAS_TO_DOOR)).not.toContain('./events');
+  it('./cache and ./events stand alone — neither was ever an alias', () => {
     // ./cache stays its own door because importing it RUNS the vendor
     // cache-strategy registrations; side-effectful code stays opt-in.
     expect(names('./cache').has('registerCacheStrategy')).toBe(true);

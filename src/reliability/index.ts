@@ -32,9 +32,21 @@
  * different class than the provider decorator does, so this path stays the
  * only home for it. Everything else here is also on the new door.
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/resilience` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * ## Why this path survived 9.0.0
+ *
+ * 9.0.0 removed the other sixteen 8.0.0 door aliases. This one stayed, and the
+ * reason is that ONE name: the gate's `CircuitOpenError` and the decorator's
+ * are two different classes with different constructors and different
+ * `instanceof` answers, `agentfootprint/resilience` carries the decorator's,
+ * and a name cannot be exported twice from one door. Removing this path would
+ * not have renamed the gate's error — it would have made it unreachable, so a
+ * consumer could no longer `instanceof`-check the error their own reliability
+ * gate throws. That is a capability, not a spelling, so the path stayed.
+ *
+ * @deprecated Since 8.0.0 for every name EXCEPT `CircuitOpenError` — those all
+ * live on `agentfootprint/resilience`, which is the door to prefer. This path
+ * is NOT scheduled for removal: it is the only home of the reliability gate's
+ * `CircuitOpenError`, and the removal date announced in 8.0.0 is withdrawn.
  */
 
 export type {

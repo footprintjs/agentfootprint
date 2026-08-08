@@ -59,7 +59,7 @@ describe('agentThinkingTrace — functional (real agent run)', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 5 })
       .system('')
       .skill(triage)
-      .recorder(att)
+      .watch(att)
       .build();
 
     await agent.run({ message: 'is it healthy?' });
@@ -106,7 +106,7 @@ describe('agentThinkingTrace — functional (real agent run)', () => {
   it('starts a fresh trace per run (run-scoped)', async () => {
     const att = agentThinkingTrace();
     const provider: LLMProvider = mock({ reply: 'hi' });
-    const agent = Agent.create({ provider, model: 'mock' }).system('').recorder(att).build();
+    const agent = Agent.create({ provider, model: 'mock' }).system('').watch(att).build();
     await agent.run({ message: 'one' });
     await agent.run({ message: 'two' });
     const trace = att.getTrace({ task: 'two' });
@@ -151,7 +151,7 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
     return Agent.create({ provider, model: 'mock', maxIterations: 5 })
       .system('')
       .tool(lookup)
-      .recorder(att)
+      .watch(att)
       .build();
   }
 
@@ -314,7 +314,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
       .system('')
       .skillGraph(graph)
-      .recorder(att)
+      .watch(att)
       .build();
 
     await agent.run({ message: 'please probe it' });
@@ -331,7 +331,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
   it('no skillGraph routing → no lead-in (brain is just the LLM content)', async () => {
     const provider: LLMProvider = mock({ reply: 'Plain answer.' });
     const att = agentThinkingTrace({ agent: 'Neo' });
-    const agent = Agent.create({ provider, model: 'mock' }).system('').recorder(att).build();
+    const agent = Agent.create({ provider, model: 'mock' }).system('').watch(att).build();
     await agent.run({ message: 'hi' });
     const answer = att.getTrace({ task: 'hi' }).steps.find((s) => s.kind === 'answer') as
       | { brain?: string }
@@ -368,7 +368,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .skillGraph(graph)
-      .recorder(att)
+      .watch(att)
       .build();
     await agent.run({ message: 'please probe it' });
 
@@ -400,7 +400,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
       .system('')
       .tool(peek)
-      .recorder(att)
+      .watch(att)
       .build();
     await agent.run({ message: 'q' });
 
@@ -437,7 +437,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .tool(peek)
-      .recorder(att)
+      .watch(att)
       .build();
     await agent.run({ message: 'q' });
 
@@ -452,7 +452,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
   it('no tools → no toolsSeen on the beat', async () => {
     const provider: LLMProvider = mock({ reply: 'hi' });
     const att = agentThinkingTrace({ agent: 'Neo' });
-    const agent = Agent.create({ provider, model: 'mock' }).system('').recorder(att).build();
+    const agent = Agent.create({ provider, model: 'mock' }).system('').watch(att).build();
     await agent.run({ message: 'q' });
     const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer') as
       | { toolsSeen?: unknown }

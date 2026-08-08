@@ -177,7 +177,7 @@ export class SkillRegistry {
    *   const { listSkills, readSkill } = registry.toTools();
    *   const tools = [listSkills, readSkill, ...other].filter(Boolean) as Tool[];
    *
-   * Composes with `gatedTools` from `agentfootprint/tool-providers`
+   * Composes with `gatedTools` from `agentfootprint/providers`
    * so PermissionPolicy can scope which roles see the skill discovery
    * surface.
    *

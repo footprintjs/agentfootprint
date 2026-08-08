@@ -322,7 +322,7 @@ const AZURE_BROWSER_SHORTHANDS = new Set([
  * proxy) or a backend. Same trade-off as `browserOpenai`.
  *
  * @example
- *   import { browserAzureOpenai } from 'agentfootprint/llm-providers';
+ *   import { browserAzureOpenai } from 'agentfootprint/providers';
  *   const provider = browserAzureOpenai({
  *     endpoint: 'https://my-co.openai.azure.com',
  *     apiKey: userKey, apiVersion: '2024-12-01-preview', deployment: 'gpt-4o-128k',

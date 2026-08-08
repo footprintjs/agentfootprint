@@ -1,5 +1,5 @@
 /**
- * agentfootprint/locales — Message Catalog Pattern.
+ * locales — Message Catalog Pattern.
  *
  * The Block D piece. agentfootprint emits user-facing prose at two
  * audience levels:
@@ -32,7 +32,7 @@
  * The natural consumer pattern is to ship locale packs alongside the
  * agent code:
  *
- *   import { defaultCommentaryMessages, composeMessages } from 'agentfootprint/locales';
+ *   import { defaultCommentaryMessages, composeMessages } from 'agentfootprint/observe';
  *   import { esCommentaryMessages } from './locales/es.js';
  *
  *   const merged = composeMessages(defaultCommentaryMessages, esCommentaryMessages);
@@ -53,15 +53,15 @@
  *   const agent = Agent.create({...}).thinkingTemplates(esThinking).build();
  *
  * @example  Validate a locale pack against the framework's required keys
- *   import { defaultCommentaryMessages, composeMessages, validateMessages } from 'agentfootprint/locales';
+ *   import { defaultCommentaryMessages, composeMessages, validateMessages } from 'agentfootprint/observe';
  *
  *   const myCatalog = composeMessages(defaultCommentaryMessages, customOverrides);
  *   validateMessages(myCatalog, Object.keys(defaultCommentaryMessages));
  *   // throws on first missing OR empty key — fail-fast at boot
  *
- * @deprecated Since 8.0.0 — import from `agentfootprint/observe` instead.
- * This path keeps working for all of 8.x and is removed in 9.0.0. Every name
- * here is the same symbol on the new door, not a copy.
+ * Not an import path of its own since 9.0.0. This is the implementation barrel
+ * behind `agentfootprint/observe`, which re-exports every name here — same
+ * symbols, one door. Import from the door.
  */
 
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
@@ -89,7 +89,7 @@ export const defaultThinkingMessages = defaultStatusTemplates;
 
 /**
  * Canonical English status bundle — the chat-bubble prose. `/locales` is the
- * single i18n home for ALL prose catalogs; `agentfootprint/status` keeps the
+ * single i18n home for ALL prose catalogs; `agentfootprint/observe` keeps the
  * status LOGIC (`selectStatus` / `renderStatusLine`) and renders with these
  * words. Same object as `defaultThinkingMessages`.
  */

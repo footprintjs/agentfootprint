@@ -606,7 +606,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           "'authorization-required', and with no provider no credential is ever requested (the " +
           'fail-closed stand-in throws instead). Pass `credentials` — agentCoreIdentity({ ' +
           'region }), staticTokens({ … }), or any CredentialProvider from ' +
-          "'agentfootprint/identity' — or drop `onAuthorizationRequired`.",
+          "'agentfootprint/security' — or drop `onAuthorizationRequired`.",
       );
     }
     // 8.6.0 — default `'pause'`: consent is work waiting on a person, and the

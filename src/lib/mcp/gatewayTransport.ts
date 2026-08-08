@@ -66,8 +66,8 @@ const DEFAULT_SERVICE = 'gateway';
  * Describe an MCP connection whose auth headers are vended per request.
  *
  * @example  A managed gateway with a token vault behind it
- *   import { agentCoreIdentity } from 'agentfootprint/identity';
- *   import { gatewayTransport, mcpClient } from 'agentfootprint/tool-providers';
+ *   import { agentCoreIdentity } from 'agentfootprint/security';
+ *   import { gatewayTransport, mcpClient } from 'agentfootprint/providers';
  *
  *   const gateway = await mcpClient({
  *     name: 'gateway',

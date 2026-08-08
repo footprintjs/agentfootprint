@@ -61,7 +61,7 @@ const LENS_REGISTRY = new Map<string, LensFactory>();
  *
  *   ```ts
  *   // agentfootprint/observability-datadog/index.ts
- *   import { registerObservabilityStrategy } from 'agentfootprint/strategies';
+ *   import { registerObservabilityStrategy } from 'agentfootprint/observe';
  *   registerObservabilityStrategy('datadog', (config) => datadogObservability(config));
  *   ```
  *

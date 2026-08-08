@@ -338,10 +338,13 @@ describe('summarizeOldest — unit', () => {
       'writer#3',
       'writer#4',
     ]);
-    // The 7.16 name still carries the same value, for code written against it.
-    expect((result.record as CompactionRecord).foldedStageIds).toEqual(
-      result.record.removedStageIds,
-    );
+    // 9.0.0 — `removedStageIds` is the only name. The 7.16 spelling
+    // (`foldedStageIds`) was published beside it from 7.17 and removed here:
+    // it is the FAMILY field on `WindowRecord`, and only one of the three
+    // shipped strategies folds anything, so a fold-flavoured alias made the
+    // other two read like they were missing a field.
+    expect(Object.hasOwn(result.record, 'foldedStageIds')).toBe(false);
+    expect(Object.hasOwn(result.record, 'foldedMessageCount')).toBe(false);
     expect((result.record as CompactionRecord).summarizerTokens).toEqual({ input: 7, output: 3 });
     // survivalMs is measured, not invented: born at 1000, folded at 1500.
     expect(result.evictions.every((e) => e.survivalMs === 500)).toBe(true);

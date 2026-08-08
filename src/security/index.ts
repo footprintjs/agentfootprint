@@ -4,13 +4,13 @@
  * Permissions are NOT context engineering — they're a guard ON
  * context-engineering operations (tool dispatch, skill activation,
  * memory writes, output emission). That's why this lives in its own
- * subpath, parallel to `agentfootprint/tool-providers` and the
+ * subpath, parallel to `agentfootprint/providers` and the
  * `agentfootprint/memory-*` and `agentfootprint/providers` subpaths.
  *
  * Today's surface is small and data-driven on purpose: one role
  * allowlist primitive that satisfies BOTH the v2.4 `PermissionChecker`
  * interface AND a sync `isAllowed(toolId)` predicate for use with
- * `gatedTools` from `agentfootprint/tool-providers` — plus
+ * `gatedTools` from `agentfootprint/providers` — plus
  * `agentCorePolicy()`, the same port answered by a remote policy store.
  *
  * A local allowlist and a remote policy engine differ in one way that
@@ -25,7 +25,7 @@
  *
  * @example
  *   import { PermissionPolicy } from 'agentfootprint/security';
- *   import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+ *   import { gatedTools, staticTools } from 'agentfootprint/providers';
  *
  *   const policy = PermissionPolicy.fromRoles(
  *     {

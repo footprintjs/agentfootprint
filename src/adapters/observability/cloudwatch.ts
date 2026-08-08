@@ -13,7 +13,7 @@
  *   2. You want full control over log group / stream / format and
  *      don't need AgentCore's hosted-agent telemetry conventions.
  *
- * Subpath:  `agentfootprint/observability-providers`
+ * Subpath:  `agentfootprint/observe`
  * Peer dep: `@aws-sdk/client-cloudwatch-logs` (OPTIONAL — installed
  *           only when this adapter is used; declared via
  *           `peerDependenciesMeta.{name}.optional = true`).
@@ -25,7 +25,7 @@
  *
  * @example
  * ```ts
- * import { cloudwatchObservability } from 'agentfootprint/observability-providers';
+ * import { cloudwatchObservability } from 'agentfootprint/observe';
  * import { microtaskBatchDriver } from 'footprintjs/detach';
  *
  * agent.enable.observability({

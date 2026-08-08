@@ -316,7 +316,7 @@ describe('routeRecorder — through the real Agent loop (wiring)', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .skillGraph(graph)
-      .recorder(routes)
+      .watch(routes)
       .build();
     await agent.run({ message: 'go' });
 
@@ -351,7 +351,7 @@ describe('routeRecorder — through the real Agent loop (wiring)', () => {
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .skillGraph(graph)
-      .recorder(routes)
+      .watch(routes)
       .build();
     await agent.run({ message: 'go' });
 

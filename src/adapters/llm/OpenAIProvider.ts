@@ -169,7 +169,7 @@ const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user'
  *
  * @example
  *   import { Agent } from 'agentfootprint';
- *   import { openai } from 'agentfootprint/llm-providers';
+ *   import { openai } from 'agentfootprint/providers';
  *
  *   const agent = Agent.create({
  *     provider: openai({ defaultModel: 'gpt-4o' }),
@@ -357,7 +357,7 @@ const AZURE_MODEL_SHORTHANDS = new Set(['azure', 'azure-openai', 'openai']);
  * configured default `deployment`.
  *
  * @example
- *   import { azureOpenai } from 'agentfootprint/llm-providers';
+ *   import { azureOpenai } from 'agentfootprint/providers';
  *
  *   const agent = Agent.create({
  *     provider: azureOpenai({

@@ -42,7 +42,7 @@ async function runWithTool(
   } as any)
     .tools([tool])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .recorder(probe as any)
+    .watch(probe as any)
     .build();
   const answer = await agent.run({ message: 'go' });
   return {

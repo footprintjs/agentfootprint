@@ -11,7 +11,7 @@
  *      behavior in CloudWatch Insights / X-Ray traces using the same
  *      schema AgentCore uses internally.
  *
- * Subpath:  `agentfootprint/observability-providers`
+ * Subpath:  `agentfootprint/observe`
  * Peer dep: `@aws-sdk/client-cloudwatch-logs` (OPTIONAL — installed
  *           only when this adapter is used; declared via
  *           `peerDependenciesMeta.{name}.optional = true`).
@@ -25,7 +25,7 @@
  *
  * @example Basic
  * ```ts
- * import { agentcoreObservability } from 'agentfootprint/observability-providers';
+ * import { agentcoreObservability } from 'agentfootprint/observe';
  * import { microtaskBatchDriver } from 'footprintjs/detach';
  *
  * agent.enable.observability({

@@ -127,8 +127,9 @@ export type SnapshotProjection = (typeof SNAPSHOT_PROJECTIONS)[keyof typeof SNAP
  * core/agent/window/strategy.ts, public since 7.17.0). Two exported types of
  * the same name and incompatible shapes, reachable from two entry points, is
  * a trap for anyone importing from the wrong one — so the memory config
- * record took the prefix. `agentfootprint/memory` still exports the old name
- * as a deprecated alias, so no import breaks.
+ * record took the prefix. Through 8.x `agentfootprint/memory` also exported
+ * the old bare name as a deprecated alias; 9.0.0 removed it, so the collision
+ * is gone in both directions.
  */
 export interface MemoryWindowStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.WINDOW;

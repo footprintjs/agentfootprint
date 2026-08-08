@@ -15,7 +15,7 @@
  *
  * Pattern: CombinedRecorder (Convention 1 — single purpose: route evidence). Owns a
  *          `SequenceStore<RouteHop>`. Convention 4: resets on a new `runId`.
- * Role:    Tier-3 /observe recorder — `Agent.create(...).recorder(routeRecorder())`.
+ * Role:    Tier-3 /observe recorder — `Agent.create(...).watch(routeRecorder())`.
  *          Powers the lens, the "Why this skill?" panel, and paper route figures.
  */
 

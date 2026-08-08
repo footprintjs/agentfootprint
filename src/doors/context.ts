@@ -5,9 +5,9 @@
  * one, and the engine subflow that resolves them into the three slots a
  * request is made of (system prompt, messages, tools).
  *
- * Named for the job rather than the machine — this was
- * `agentfootprint/injection-engine`, which described our implementation
- * instead of your task.
+ * Named for the job rather than the machine — through 8.x this was also
+ * reachable at `agentfootprint/injection-engine`, which described our
+ * implementation instead of your task. That path was removed in 9.0.0.
  *
  * @example
  * ```ts

@@ -115,7 +115,7 @@
  *
  * @example Capture → export → verify
  * ```ts
- * import { auditExport, verifyAuditBundle } from 'agentfootprint/observability-providers';
+ * import { auditExport, verifyAuditBundle } from 'agentfootprint/observe';
  *
  * const audit = auditExport({ agent: 'loan-officer' });
  * const stop = agent.enable.observability({ strategy: audit });
