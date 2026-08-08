@@ -6,7 +6,7 @@
 
 # Interface: RemovalPlan
 
-Defined in: [src/core/agent/window/turns.ts:126](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/window/turns.ts#L126)
+Defined in: [src/core/agent/window/turns.ts:126](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/window/turns.ts#L126)
 
 The span a removal will take, plus every refusal it had to name to get there.
 
@@ -16,7 +16,7 @@ The span a removal will take, plus every refusal it had to name to get there.
 
 > `readonly` **from**: `number`
 
-Defined in: [src/core/agent/window/turns.ts:128](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/window/turns.ts#L128)
+Defined in: [src/core/agent/window/turns.ts:128](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/window/turns.ts#L128)
 
 First turn index in the span; -1 when nothing may be removed.
 
@@ -26,7 +26,7 @@ First turn index in the span; -1 when nothing may be removed.
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/agentfootprint/api/generated/interfaces/WindowRefusal.md)[]
 
-Defined in: [src/core/agent/window/turns.ts:131](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/window/turns.ts#L131)
+Defined in: [src/core/agent/window/turns.ts:131](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/window/turns.ts#L131)
 
 ***
 
@@ -34,6 +34,6 @@ Defined in: [src/core/agent/window/turns.ts:131](https://github.com/footprintjs/
 
 > `readonly` **to**: `number`
 
-Defined in: [src/core/agent/window/turns.ts:130](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/window/turns.ts#L130)
+Defined in: [src/core/agent/window/turns.ts:130](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/window/turns.ts#L130)
 
 Last turn index in the span (inclusive); -1 when nothing may be removed.
