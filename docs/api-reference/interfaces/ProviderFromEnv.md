@@ -6,7 +6,7 @@
 
 # Interface: ProviderFromEnv
 
-Defined in: [src/adapters/llm/createProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/llm/createProvider.ts#L91)
+Defined in: [src/adapters/llm/createProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/llm/createProvider.ts#L91)
 
 What `providerFromEnv()` resolved: the provider + the `model` to pass to
  `Agent.create({ provider, model })`, and which `kind` was detected.
@@ -17,7 +17,7 @@ What `providerFromEnv()` resolved: the provider + the `model` to pass to
 
 > `readonly` **kind**: `"mock"` \| `"anthropic"` \| `"openai"` \| `"ollama"` \| `"azure-openai"`
 
-Defined in: [src/adapters/llm/createProvider.ts:94](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/llm/createProvider.ts#L94)
+Defined in: [src/adapters/llm/createProvider.ts:94](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/llm/createProvider.ts#L94)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/adapters/llm/createProvider.ts:94](https://github.com/footprint
 
 > `readonly` **model**: `string`
 
-Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/llm/createProvider.ts#L93)
+Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/llm/createProvider.ts#L93)
 
 ***
 
@@ -33,4 +33,4 @@ Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprint
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/adapters/llm/createProvider.ts:92](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/llm/createProvider.ts#L92)
+Defined in: [src/adapters/llm/createProvider.ts:92](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/llm/createProvider.ts#L92)

@@ -8,7 +8,7 @@
 
 > **topK**(`options?`): [`RetrievalStrategy`](/agentfootprint/api/generated/interfaces/RetrievalStrategy.md)
 
-Defined in: [src/memory/retrieval/topK.ts:69](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/memory/retrieval/topK.ts#L69)
+Defined in: [src/memory/retrieval/topK.ts:75](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/memory/retrieval/topK.ts#L75)
 
 Build the top-K strategy.
 

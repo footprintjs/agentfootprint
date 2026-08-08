@@ -8,6 +8,6 @@
 
 > **MessageOutcome** = [`AllowOutcome`](/agentfootprint/api/generated/interfaces/AllowOutcome.md)\<`string`\> \| [`DenyOutcome`](/agentfootprint/api/generated/interfaces/DenyOutcome.md)
 
-Defined in: [src/core/agent/middleware/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/middleware/types.ts#L130)
+Defined in: [src/core/agent/middleware/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/agent/middleware/types.ts#L130)
 
 Everything a message middleware may answer. No `ask` — see the header.

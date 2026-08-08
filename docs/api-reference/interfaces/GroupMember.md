@@ -6,7 +6,7 @@
 
 # Interface: GroupMember
 
-Defined in: [src/core/translator.ts:61](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/translator.ts#L61)
+Defined in: [src/core/translator.ts:61](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/translator.ts#L61)
 
 One member of a composition. Shape is uniform across composition
 kinds — Parallel branches, Sequence steps, Loop body, Conditional
@@ -33,7 +33,7 @@ into each member's construction; `undefined` otherwise.
 
 > `readonly` **memberId**: `string`
 
-Defined in: [src/core/translator.ts:62](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/translator.ts#L62)
+Defined in: [src/core/translator.ts:62](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/translator.ts#L62)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [src/core/translator.ts:62](https://github.com/footprintjs/agentfoot
 
 > `readonly` **runner**: [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)
 
-Defined in: [src/core/translator.ts:63](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/translator.ts#L63)
+Defined in: [src/core/translator.ts:63](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/translator.ts#L63)
 
 ***
 
@@ -49,4 +49,4 @@ Defined in: [src/core/translator.ts:63](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **uiGroup?**: `unknown`
 
-Defined in: [src/core/translator.ts:64](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/translator.ts#L64)
+Defined in: [src/core/translator.ts:64](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/translator.ts#L64)

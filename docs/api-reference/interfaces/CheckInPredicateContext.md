@@ -6,7 +6,7 @@
 
 # Interface: CheckInPredicateContext
 
-Defined in: [src/core/checkin.ts:180](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/checkin.ts#L180)
+Defined in: [src/core/checkin.ts:180](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/checkin.ts#L180)
 
 Context handed to a [CheckInDemand](/agentfootprint/api/generated/type-aliases/CheckInDemand.md) predicate.
 
@@ -16,7 +16,7 @@ Context handed to a [CheckInDemand](/agentfootprint/api/generated/type-aliases/C
 
 > `readonly` **history**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/core/checkin.ts:186](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/checkin.ts#L186)
+Defined in: [src/core/checkin.ts:186](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/checkin.ts#L186)
 
 The conversation so far (system, user, prior tool results).
 
@@ -26,7 +26,7 @@ The conversation so far (system, user, prior tool results).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/checkin.ts:182](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/checkin.ts#L182)
+Defined in: [src/core/checkin.ts:182](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/checkin.ts#L182)
 
 The current ReAct iteration.
 
@@ -36,6 +36,6 @@ The current ReAct iteration.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/checkin.ts:184](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/checkin.ts#L184)
+Defined in: [src/core/checkin.ts:184](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/checkin.ts#L184)
 
 This tool invocation's id.

@@ -6,7 +6,7 @@
 
 # Interface: WindowEviction
 
-Defined in: [src/core/agent/window/strategy.ts:46](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/strategy.ts#L46)
+Defined in: [src/core/agent/window/strategy.ts:46](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/agent/window/strategy.ts#L46)
 
 One message leaving the window, with the facts an eviction event needs.
 
@@ -16,7 +16,7 @@ One message leaving the window, with the facts an eviction event needs.
 
 > `readonly` **index**: `number`
 
-Defined in: [src/core/agent/window/strategy.ts:48](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/strategy.ts#L48)
+Defined in: [src/core/agent/window/strategy.ts:48](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/agent/window/strategy.ts#L48)
 
 Index in the PRE-change window — the index the content hash was built on.
 
@@ -26,6 +26,6 @@ Index in the PRE-change window — the index the content hash was built on.
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/core/agent/window/strategy.ts:50](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/core/agent/window/strategy.ts#L50)
+Defined in: [src/core/agent/window/strategy.ts:50](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/core/agent/window/strategy.ts#L50)
 
 How long it lived in the window. Exact; 0 when its birth is unknown.

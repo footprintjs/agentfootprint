@@ -6,7 +6,7 @@
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L391)
+Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L391)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:442](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L442)
+Defined in: [src/adapters/types.ts:442](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L442)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/agentfootprint/api/generated/interfaces/LLMRequest.md#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -44,7 +44,7 @@ constrained if both constrain it.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/agentfootprint/api/generated/type-aliases/WireRole.md)[]
 
-Defined in: [src/adapters/types.ts:418](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L418)
+Defined in: [src/adapters/types.ts:418](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L418)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -76,7 +76,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L392)
+Defined in: [src/adapters/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L392)
 
 ## Methods
 
@@ -84,7 +84,7 @@ Defined in: [src/adapters/types.ts:392](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/types.ts:450](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L450)
+Defined in: [src/adapters/types.ts:450](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L450)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -112,7 +112,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [src/adapters/types.ts:451](https://github.com/footprintjs/agentfootprint/blob/095851064601e5ceb1fe1d6417a01f0c1cb4d731/src/adapters/types.ts#L451)
+Defined in: [src/adapters/types.ts:451](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/types.ts#L451)
 
 #### Parameters
 
