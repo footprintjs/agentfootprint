@@ -8,4 +8,4 @@
 
 > **SequenceOutput** = `string`
 
-Defined in: [src/core-flow/Sequence.ts:68](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core-flow/Sequence.ts#L68)
+Defined in: [src/core-flow/Sequence.ts:68](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core-flow/Sequence.ts#L68)

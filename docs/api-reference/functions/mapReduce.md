@@ -8,7 +8,7 @@
 
 > **mapReduce**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/MapReduce.ts:70](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/patterns/MapReduce.ts#L70)
+Defined in: [src/patterns/MapReduce.ts:70](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/patterns/MapReduce.ts#L70)
 
 Build a MapReduce Runner. At run time:
   1. The splitter runs the consumer's `split(input, shardCount)` and

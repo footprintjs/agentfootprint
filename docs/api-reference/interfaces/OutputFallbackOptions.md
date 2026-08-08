@@ -6,7 +6,7 @@
 
 # Interface: OutputFallbackOptions\<T\>
 
-Defined in: [src/core/outputFallback.ts:89](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/outputFallback.ts#L89)
+Defined in: [src/core/outputFallback.ts:89](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/outputFallback.ts#L89)
 
 ## Type Parameters
 
@@ -20,7 +20,7 @@ Defined in: [src/core/outputFallback.ts:89](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **canned?**: `T`
 
-Defined in: [src/core/outputFallback.ts:101](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/outputFallback.ts#L101)
+Defined in: [src/core/outputFallback.ts:101](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/outputFallback.ts#L101)
 
 Tier 3 — guaranteed-valid safety net. Validated against the
  schema at builder time (throws on mismatch — fail-fast on
@@ -36,7 +36,7 @@ Tier 3 — guaranteed-valid safety net. Validated against the
 
 > `readonly` **fallback**: [`OutputFallbackFn`](/agentfootprint/api/generated/type-aliases/OutputFallbackFn.md)\<`T`\>
 
-Defined in: [src/core/outputFallback.ts:93](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/outputFallback.ts#L93)
+Defined in: [src/core/outputFallback.ts:93](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/outputFallback.ts#L93)
 
 Tier 2 — async function that produces a candidate value. May
  throw or return invalid data; the agent will fall through to

@@ -8,7 +8,7 @@
 
 > **ToolMiddleware** = [`ToolCallMiddleware`](/agentfootprint/api/generated/interfaces/ToolCallMiddleware.md) \| [`ToolResultMiddleware`](/agentfootprint/api/generated/interfaces/ToolResultMiddleware.md)
 
-Defined in: [src/core/agent/middleware/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/agent/middleware/types.ts#L273)
+Defined in: [src/core/agent/middleware/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/middleware/types.ts#L273)
 
 One link in the tool chain — a rule about the call, about the result, or
 about both.

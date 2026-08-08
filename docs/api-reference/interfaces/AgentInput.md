@@ -6,7 +6,7 @@
 
 # Interface: AgentInput
 
-Defined in: [src/core/agent/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/agent/types.ts#L391)
+Defined in: [src/core/agent/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/types.ts#L391)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/types.ts:391](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:402](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/agent/types.ts#L402)
+Defined in: [src/core/agent/types.ts:402](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/types.ts#L402)
 
 Multi-tenant memory scope. Populated to `scope.identity` so memory
 subflows registered via `.memory()` can isolate reads/writes per
@@ -29,4 +29,4 @@ without memory work unchanged.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/agent/types.ts#L392)
+Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/agent/types.ts#L392)

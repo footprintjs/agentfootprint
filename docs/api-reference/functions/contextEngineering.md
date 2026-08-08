@@ -8,7 +8,7 @@
 
 > **contextEngineering**(`agent`): [`ContextEngineeringHandle`](/agentfootprint/api/generated/interfaces/ContextEngineeringHandle.md)
 
-Defined in: [src/recorders/core/contextEngineering.ts:167](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/contextEngineering.ts#L167)
+Defined in: [src/recorders/core/contextEngineering.ts:167](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/contextEngineering.ts#L167)
 
 Wrap a runner's `agentfootprint.context.injected` stream into two
 filtered subscriptions: engineered + baseline. Multiple listeners

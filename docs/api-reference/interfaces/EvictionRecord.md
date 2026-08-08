@@ -6,7 +6,7 @@
 
 # Interface: EvictionRecord
 
-Defined in: [src/recorders/core/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/types.ts#L82)
+Defined in: [src/recorders/core/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/types.ts#L82)
 
 Eviction record — a piece that was removed from a slot under pressure.
 
@@ -16,7 +16,7 @@ Eviction record — a piece that was removed from a slot under pressure.
 
 > `readonly` **contentHash**: `string`
 
-Defined in: [src/recorders/core/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/types.ts#L84)
+Defined in: [src/recorders/core/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/types.ts#L84)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/recorders/core/types.ts:84](https://github.com/footprintjs/agen
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"low_score"` \| `"policy"` \| `"user_revoked"`
 
-Defined in: [src/recorders/core/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/types.ts#L85)
+Defined in: [src/recorders/core/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/types.ts#L85)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/recorders/core/types.ts:85](https://github.com/footprintjs/agen
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/types.ts#L83)
+Defined in: [src/recorders/core/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/types.ts#L83)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/recorders/core/types.ts:83](https://github.com/footprintjs/agen
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/recorders/core/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/recorders/core/types.ts#L86)
+Defined in: [src/recorders/core/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/recorders/core/types.ts#L86)

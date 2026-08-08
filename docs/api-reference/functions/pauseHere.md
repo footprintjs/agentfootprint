@@ -8,7 +8,7 @@
 
 > **pauseHere**(`data`): `never`
 
-Defined in: [src/core/pause.ts:311](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/core/pause.ts#L311)
+Defined in: [src/core/pause.ts:311](https://github.com/footprintjs/agentfootprint/blob/b9e290c7bd4b5b5f1c3ca077b90e9cc6fbd1bbcd/src/core/pause.ts#L311)
 
 Called from inside a tool's `execute()` to request a pause. Throws a
 `PauseRequest` that the Agent catches and forwards to the flowchart.
