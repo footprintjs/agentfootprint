@@ -205,6 +205,15 @@ export interface IndexReport {
   readonly failed: readonly FailedDocument[];
   /** Chunks longer than the embedder's declared ceiling — embedded, but clipped by it. */
   readonly truncated: readonly TruncatedChunk[];
+  /**
+   * How many there were (9.1.0) — `truncated.length`, beside the list.
+   *
+   * The list is what you debug with; the count is what you ASSERT on and what
+   * a dashboard row can hold. A number that is normally 0 and suddenly is not
+   * is a check anyone can write; scanning a list for emptiness is a check
+   * nobody writes, which is how the clipping stayed invisible.
+   */
+  readonly truncatedCount: number;
   /** `'<embedderId>@<dims>'` — what this index is now fingerprinted with. */
   readonly embedderFingerprint: string;
   /** The splitter that produced the chunks. */

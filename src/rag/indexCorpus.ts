@@ -55,6 +55,7 @@ import type { TypedScope } from 'footprintjs';
 import { decide } from 'footprintjs';
 
 import type { Embedder } from '../memory/embedding/index.js';
+import { resolveChunkCeiling, truncationWarning } from '../memory/embedding/inputCeiling.js';
 import type { MemoryStore } from '../memory/store/index.js';
 import { assertServesVectors } from '../memory/store/capability.js';
 import type { MemoryIdentity } from '../memory/identity/index.js';
@@ -120,8 +121,22 @@ export interface IndexCorpusConfig {
   /**
    * The embedder's input ceiling in characters. Chunks longer than this are
    * embedded anyway (the embedder clips them) and RECORDED in
-   * `report.truncated` — so silent half-embedding becomes a number you can see.
-   * Default 2000, the measured `localEmbedder` cliff.
+   * `report.truncated` / `report.truncatedCount` — so silent half-embedding
+   * becomes a number you can see, and a run that clipped anything says so once
+   * on `console.warn`.
+   *
+   * **Default (9.1.0): the embedder's own declared `maxInputChars`**, falling
+   * back to 2,000 — the measured `localEmbedder` cliff — for an embedder that
+   * declares none. Passing a number here always wins over both: you are
+   * allowed to know your corpus is denser than the embedder's own arithmetic
+   * assumes.
+   *
+   * Before 9.1.0 this defaulted to 2,000 for EVERY embedder, which is the
+   * on-device cliff applied to hosted models that read sixteen times as much.
+   * Combined with a splitter told to cut larger chunks — `byHeading({ maxChars:
+   * 2500 })` — the result was a corpus indexed by the OPENING of each chunk
+   * while the whole chunk was served as the passage, so retrieval could not
+   * find wording plainly visible in the block the model was shown.
    */
   readonly maxChunkChars?: number;
 }
@@ -146,8 +161,6 @@ interface IndexState {
   report?: IndexReport;
   [key: string]: unknown;
 }
-
-const DEFAULT_MAX_CHUNK_CHARS = 2000;
 
 /**
  * Build and run the indexing chart.
@@ -200,7 +213,12 @@ function compile(config: IndexCorpusConfig) {
   const batchSize = Math.max(1, Math.floor(config.batchSize ?? 64));
   const maxBatches = Math.max(1, Math.floor(config.maxConcurrentBatches ?? 4));
   const attempts = Math.max(1, Math.floor(config.attempts ?? 3));
-  const maxChunkChars = config.maxChunkChars ?? DEFAULT_MAX_CHUNK_CHARS;
+  // The ceiling comes from the embedder unless the caller stated one. The
+  // number lives where the knowledge is: an indexer's own default is a guess
+  // about a backend it has never met, and the safe guess (the smallest cliff
+  // any embedder might have) cuts every larger embedder short.
+  const ceiling = resolveChunkCeiling(config.maxChunkChars, config.embedder);
+  const maxChunkChars = ceiling.chars;
   const removeMissing = config.removeMissing ?? true;
   const startedAt = Date.now();
   const fingerprint = `${embedderId}@${config.embedder.dimensions}`;
@@ -469,6 +487,7 @@ function compile(config: IndexCorpusConfig) {
         (scope) => {
           // The report is a COMMIT, not just a return value. A later reader
           // asks the trace what this run did; nothing had to be saved.
+          const truncated = scope.truncated ?? [];
           scope.report = {
             discovered: scope.discoveredCount ?? 0,
             loaded: (scope.documents ?? []).length,
@@ -477,11 +496,32 @@ function compile(config: IndexCorpusConfig) {
             skipped: (scope.toSkip ?? []).length,
             removed: scope.removedCount ?? 0,
             failed: scope.failed ?? [],
-            truncated: scope.truncated ?? [],
+            truncated,
+            truncatedCount: truncated.length,
             embedderFingerprint: fingerprint,
             splitter: splitter.name,
             elapsedMs: Date.now() - startedAt,
           };
+
+          // Said OUT LOUD, once, at the end of the run — because an invisible
+          // failure is indistinguishable from success. The list has been in
+          // the report since 8.10.0 and nobody reads a report that says
+          // everything went fine; the corpus that is quietly missing a
+          // paragraph is discovered months later as "the model does not know
+          // that". One line, at the one moment the count is final.
+          if (truncated.length > 0) {
+            console.warn(
+              truncationWarning({
+                caller: 'indexCorpus',
+                count: truncated.length,
+                total: (scope.chunks ?? []).length,
+                noun: 'chunk',
+                ceiling,
+                embedderId,
+                idsIn: "the returned report's `truncated` list",
+              }),
+            );
+          }
         },
         'report',
         'File what this run did — the commit log IS the report',

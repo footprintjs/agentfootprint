@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.1.0] - 2026-08-08
+
+**The index stops half-reading a chunk and calling it success.**
+
+Round three of the same production field report. `indexCorpus` defaulted its
+`maxChunkChars` — how much of a chunk the embedder actually reads — to **2,000
+characters for every embedder**, because that is the measured cliff of the
+on-device `localEmbedder`. The integration was running `byHeading({ maxChars:
+2500 })` against an embedder whose real window is 8,192 tokens. Result:
+**6 of 26 chunks embedded CLIPPED** — indexed by their opening, stored and
+served whole as the passage — so retrieval could not find wording plainly
+visible in the `<source>` block the model was shown. Nothing threw. Nothing
+scored zero. The box's own two defaults simply disagreed with each other, and
+the disagreement was invisible.
+
+### The ceiling is declared by the embedder — `Embedder.maxInputChars`
+
+The number lives where the knowledge is. An indexer's own default is a guess
+about a backend it has never met, so it has to be the smallest ceiling any
+embedder might have — which then cuts every larger embedder short.
+
+`Embedder` gains an optional `maxInputChars`: the longest input, in
+characters, that this embedder represents faithfully. Every shipped embedder
+fills it in:
+
+| embedder | `maxInputChars` | where the number comes from |
+|---|---|---|
+| `localEmbedder()` | `2000` | measured — the default model's 512-wordpiece-token cliff |
+| `openaiEmbedder()` | `32000` | the documented 8,191-token window, at 4 characters a token |
+| `bedrockEmbedder()` | `32000` | Titan's documented 8,192-token window, same conversion |
+| `staticEmbedder()` | `1000000` | no transformer, so no context window — nothing is ever clipped |
+| `mockEmbedder()` | `1000000` | reads every character in a loop |
+
+`indexCorpus`, `indexFolder` and `indexDocuments` read the embedder's declared
+ceiling **in preference to** their own 2,000-character default. An explicit
+`maxChunkChars` on the call still wins over both — you are allowed to know your
+corpus is denser than the arithmetic assumes. An embedder that declares nothing
+gets today's behaviour exactly, unchanged.
+
+Three deliberate limits, stated rather than hidden: the characters-per-token
+figure is an **assumption** (4, the English-prose rule of thumb — code, tables
+and CJK tokenise denser, which is what `maxChunkChars` is for); a model this
+library does not know declares **no** ceiling rather than a guessed one, the
+same rule `.dimensions` already applies; and `localEmbedder({ maxInputChars })`
+is accepted because the cliff belongs to the **model**, not to the factory.
+
+### Truncation became visible
+
+A run that clipped anything now says so — **once**, on `console.warn`, naming
+the count, the ceiling in effect *and where that ceiling came from*, and the
+two fixes (re-split smaller, or raise `maxChunkChars`). `IndexReport` gains
+**`truncatedCount`** beside the existing `truncated` list: the list is what you
+debug with, the count is what you assert on and what a dashboard row can hold.
+`indexDocuments` — which returns a count and has no report — warns on the same
+terms, with fix advice appropriate to a door that does not split.
+
+The list has been in the report since 8.10.0. Nobody reads a report that says
+everything went fine, which is exactly how this survived a week of real
+traffic: an invisible failure is indistinguishable from success.
+
+### Behaviour changes
+
+- **A corpus indexed with a hosted embedder and a raised splitter ceiling now
+  embeds whole where it used to clip.** Chunk content hashes are unchanged, so
+  an incremental re-index will NOT re-embed on its own — force a re-index (or
+  change the `embedderId`) if you were affected, since the stored vectors are
+  the clipped ones.
+- **`console.warn` fires from `indexCorpus` / `indexDocuments`** when something
+  was clipped. Runs that clip nothing are as silent as before.
+- **`IndexReport` has one more field.** Additive; code reading the report is
+  unaffected unless it constructs one.
+
+### Docs
+
+The splitter's `maxChars` and the indexer's `maxChunkChars` are now documented
+**together**, on the [indexing](docs-next/content/docs/build/indexing.mdx) page,
+in the [RAG guide](docs-next/content/docs/build/rag.mdx), on the
+[embedders](docs-next/content/docs/build/embedders.mdx) page and in both
+docstrings — because each is safe alone and they only collide when a consumer
+raises the splitter's ceiling, which is precisely what the field did.
+
 ## [9.0.0] - 2026-08-08
 
 **The 8.x deprecation ledger, executed. Nothing new; nothing behaves

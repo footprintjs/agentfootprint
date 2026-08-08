@@ -87,6 +87,48 @@ const NATIVE_DIMENSIONS: Readonly<Record<string, number>> = {
 };
 
 /**
+ * Chars-per-token used to convert a documented TOKEN window into the CHARACTER
+ * ceiling {@link Embedder.maxInputChars} states (9.1.0).
+ *
+ * **4 characters per token**, the standard rule of thumb for English prose, and
+ * the number every ceiling below is derived from — 8,191 tokens becomes 32,000
+ * characters (floored to a round number a warning can state plainly).
+ *
+ * It is an ASSUMPTION, not a measurement, and it is stated here so it can be
+ * argued with. Code, tables, CJK text and heavy punctuation all tokenise
+ * DENSER than prose, so a chunk of exactly 32,000 characters of such material
+ * can still exceed 8,191 tokens and be clipped. That is what an explicit
+ * `maxChunkChars` is for: it always wins over a declared ceiling, precisely so
+ * a caller who knows their corpus is dense can say a smaller number. For the
+ * shipped splitter defaults (1,000 characters a chunk) the distinction never
+ * arises — the ceiling matters when a consumer RAISES the splitter, which is
+ * the case this whole mechanism exists to keep honest.
+ */
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * Documented input window per OpenAI embedding model, in TOKENS.
+ *
+ * All three current models accept 8,191 tokens — OpenAI's embeddings guide and
+ * the model pages state the same limit for `text-embedding-3-small`,
+ * `text-embedding-3-large` and `text-embedding-ada-002`. A model this library
+ * does not know gets NO declared ceiling rather than a guessed one: the same
+ * rule `.dimensions` applies, for the same reason — a wrong ceiling clips in
+ * silence, and an absent one simply leaves the indexer's conservative default
+ * in place.
+ */
+const NATIVE_MAX_INPUT_TOKENS: Readonly<Record<string, number>> = {
+  'text-embedding-3-small': 8191,
+  'text-embedding-3-large': 8191,
+  'text-embedding-ada-002': 8191,
+};
+
+/** Tokens → characters, floored to a round number a message can state plainly. */
+function charsFor(tokens: number | undefined): number | undefined {
+  return tokens === undefined ? undefined : Math.floor((tokens * CHARS_PER_TOKEN) / 1000) * 1000;
+}
+
+/**
  * OpenAI's hosted embeddings endpoint.
  *
  * `.dimensions` is the length callers WILL get back, never an assumption:
@@ -96,6 +138,14 @@ const NATIVE_DIMENSIONS: Readonly<Record<string, number>> = {
  * an Azure deployment name, a future OpenAI model) has no size this library can
  * know, so it is a construction-time error rather than a guess that a vector
  * store would silently trust.
+ *
+ * `.maxInputChars` (9.1.0) reports **32,000** for the three models above:
+ * their documented 8,191-token window at the stated {@link CHARS_PER_TOKEN}
+ * assumption. An indexer reads it in preference to its own 2,000-character
+ * default, so a corpus split at 2,500 characters is embedded WHOLE here
+ * instead of being clipped by a default measured on an on-device model.
+ * An unknown model declares no ceiling — the indexer's default stands, which
+ * is conservative rather than wrong.
  *
  * @throws if there is no API key, or if `model` is unknown and `dimensions`
  *         was not supplied.
@@ -120,6 +170,7 @@ export function openaiEmbedder(options: OpenAIEmbedderOptions = {}): Embedder {
         `Pass { dimensions } with the length that model returns.`,
     );
   }
+  const maxInputChars = charsFor(NATIVE_MAX_INPUT_TOKENS[model]);
   const url = `${options.baseURL ?? 'https://api.openai.com/v1'}/embeddings`;
 
   async function call(input: readonly string[], signal?: AbortSignal): Promise<number[][]> {
@@ -144,6 +195,10 @@ export function openaiEmbedder(options: OpenAIEmbedderOptions = {}): Embedder {
     // fingerprint is `'<id>@<dims>'`, so it appends the dimensions itself and
     // a truncated vector is already a different fingerprint from a native one.
     id: `openai:${model}`,
+    // The documented window, in the unit a splitter cuts in. Spread rather
+    // than assigned so an unknown model declares NOTHING instead of
+    // `undefined` — the field is optional and its absence is meaningful.
+    ...(maxInputChars !== undefined && { maxInputChars }),
     async embed({ text, signal }) {
       return (await call([text], signal))[0];
     },
@@ -226,6 +281,24 @@ const TITAN_DIMENSIONS: Readonly<Record<string, number>> = {
   'amazon.titan-embed-text-v1': 1536,
 };
 
+/**
+ * Documented input window per Titan text-embedding model, in TOKENS.
+ *
+ * Both Titan text-embedding models accept **8,192 tokens** — sixteen times the
+ * on-device model the shipped default ceiling was measured on. That gap is the
+ * whole point of declaring one: without it, a corpus split at 2,500 characters
+ * is reported as clipped (and treated as such by the indexer's default) by an
+ * embedder that reads every one of those chunks whole.
+ *
+ * A model outside this table gets NO declared ceiling — the same rule
+ * `.dimensions` applies. Another vendor's embedding model on the same runtime
+ * may have a far shorter window, and guessing this one's would clip in silence.
+ */
+const TITAN_MAX_INPUT_TOKENS: Readonly<Record<string, number>> = {
+  'amazon.titan-embed-text-v2:0': 8192,
+  'amazon.titan-embed-text-v1': 8192,
+};
+
 const TITAN_V2_SUPPORTED = [1024, 512, 256];
 
 /**
@@ -255,6 +328,16 @@ const TITAN_V2_SUPPORTED = [1024, 512, 256];
  * (Precedent: `localEmbedder` puts `dtype` in its id for the same reason — a
  * q8 and an fp32 build of one model are near-identical spaces, and "near" is
  * exactly the difference that surfaces as a mysteriously worse ranking.)
+ *
+ * ── The input ceiling (9.1.0) ────────────────────────────────────────────
+ * `.maxInputChars` reports **32,000** for both Titan text-embedding models:
+ * their documented 8,192-token window, converted at the stated
+ * {@link CHARS_PER_TOKEN} assumption of 4 characters per token. Sixteen times
+ * the indexer's own default, which was measured on an on-device model — so an
+ * indexing run against this embedder now embeds a 2,500-character chunk whole
+ * instead of clipping it and calling that success. Dense text (code, tables,
+ * CJK) tokenises tighter than the assumption; pass an explicit `maxChunkChars`
+ * for such a corpus, and it wins over this number.
  *
  * @throws if `model` is unknown and `dimensions` was not supplied; if
  *         `dimensions` is not one of Titan V2's supported sizes; or if the SDK
@@ -290,6 +373,7 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
         `embedder reports.`,
     );
   }
+  const maxInputChars = charsFor(TITAN_MAX_INPUT_TOKENS[model]);
 
   type Connection = {
     readonly client: BedrockRuntimeLikeClient;
@@ -373,6 +457,9 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
     dimensions,
     // The embedding SPACE, size included — see the note above.
     id: `bedrock:${model}:${dimensions}`,
+    // Spread, so a model this factory does not know declares NO ceiling rather
+    // than one it cannot stand behind.
+    ...(maxInputChars !== undefined && { maxInputChars }),
     async embed({ text, signal }) {
       return invoke(text, signal);
     },
@@ -482,6 +569,19 @@ export interface LocalEmbedderOptions {
   /** On-disk model cache directory. */
   readonly cacheDir?: string;
   /**
+   * Longest input this model reads whole, in characters (9.1.0). Default
+   * {@link LOCAL_MAX_INPUT_CHARS} — the MEASURED cliff of the default model.
+   *
+   * The option exists because `model` is swappable and the cliff belongs to
+   * the MODEL, not to this factory. A long-context embedding model (one of the
+   * 8k-token sentence-transformer builds) reads far more than the default
+   * says, and without a way to state that, an indexer would keep cutting its
+   * corpus into pieces a quarter the size the model can take. Nothing verifies
+   * it — it is your model's documented window, declared for the indexer to
+   * read.
+   */
+  readonly maxInputChars?: number;
+  /**
    * An ALREADY-IMPORTED `@huggingface/transformers`. Supply this and the lazy
    * `import('@huggingface/transformers')` never happens — which is what makes
    * the embedder work in a BUNDLED app, where a bare specifier reaches the
@@ -499,6 +599,20 @@ export interface LocalEmbedderOptions {
 interface FeaturePipeline {
   (text: unknown, opts: unknown): Promise<{ data: ArrayLike<number>; tolist(): number[][] }>;
 }
+
+/**
+ * The MEASURED cliff of the default model, and the origin of the whole
+ * mechanism: `Xenova/all-MiniLM-L6-v2` silently truncates at 512 wordpiece
+ * tokens ≈ 1,800–2,000 characters of English. Measured directly — at 508 base
+ * tokens an appended tail still moves the vector (cosine 0.9965); at 596 it
+ * does not (0.999999). Nothing is thrown and nothing says so.
+ *
+ * It is the number `indexCorpus` used as its own default for every embedder,
+ * which is why a hosted model with an 8k-token window was being cut into
+ * pieces a sixteenth of what it could read. Here it is declared by the
+ * embedder it was measured on, where it is true.
+ */
+const LOCAL_MAX_INPUT_CHARS = 2000;
 
 export function localEmbedder(options: LocalEmbedderOptions = {}): Embedder {
   const model = options.model ?? 'Xenova/all-MiniLM-L6-v2';
@@ -530,6 +644,7 @@ export function localEmbedder(options: LocalEmbedderOptions = {}): Embedder {
     // are close but not identical spaces, and "close" is exactly the kind of
     // difference that shows up as a mysteriously worse ranking.
     id: `local:${model}:${dtype}`,
+    maxInputChars: options.maxInputChars ?? LOCAL_MAX_INPUT_CHARS,
     async embed({ text }) {
       const p = await getPipe();
       const out = await p(text, { pooling: 'mean', normalize: true });
@@ -585,6 +700,20 @@ export interface StaticEmbedderOptions {
 /** A batch embed fn: text(s) → array of vectors, one per input (potion's shape). */
 type StaticEmbedFn = (texts: readonly string[]) => unknown;
 
+/**
+ * Declared input ceiling for the static path (9.1.0), and the one case where
+ * the honest answer is "there isn't a cliff".
+ *
+ * A Model2Vec model has no transformer and therefore no context window: it
+ * looks each token's vector up and pools them, so the ten-thousandth token
+ * contributes exactly like the first. Nothing is dropped at any length. The
+ * number is a practical bound (a megabyte of text), declared rather than
+ * omitted so that an indexer does not fall back to a 2,000-character default
+ * measured on a model with a real cliff and warn about clipping that never
+ * happened.
+ */
+const STATIC_MAX_INPUT_CHARS = 1_000_000;
+
 export function staticEmbedder(options: StaticEmbedderOptions = {}): Embedder {
   const dimensions = options.dimensions ?? 256;
   const spec = options.module ?? '@yarflam/potion-base-8m';
@@ -635,6 +764,8 @@ export function staticEmbedder(options: StaticEmbedderOptions = {}): Embedder {
   return {
     dimensions,
     id: `static:${spec}`,
+    // No context window to fall off — see the constant.
+    maxInputChars: STATIC_MAX_INPUT_CHARS,
     async embed({ text }) {
       const fn = await getEmbed();
       const rows = toRows(await fn([text]));

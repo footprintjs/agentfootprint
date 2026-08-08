@@ -3,9 +3,11 @@ import {
   openaiEmbedder,
   localEmbedder,
   staticEmbedder,
+  bedrockEmbedder,
   type Model2VecBackend,
   type TransformersBackend,
 } from '../../src/embedders/index.js';
+import { mockEmbedder } from '../../src/memory/index.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -286,4 +288,47 @@ describe('staticEmbedder (real potion embeddings)', () => {
     const single = await e.embed({ text: 'hello world' });
     expect(cosine(rows[0]!, single)).toBeGreaterThan(0.999); // same text ⇒ same vector
   }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// The declared input ceiling (9.1.0). PINNED, because these numbers are what
+// an indexer now trusts INSTEAD of its own conservative default: a ceiling
+// that drifts upward starts clipping chunks in silence, which is the bug the
+// field reported. Vendor-free — every factory below constructs without a key,
+// an SDK, a download or a network call.
+// ─────────────────────────────────────────────────────────────────────────
+describe('maxInputChars — every shipped embedder declares its own ceiling', () => {
+  it('states the number where the knowledge is', () => {
+    // The measured cliff: 512 wordpiece tokens ≈ 1,800-2,000 characters.
+    expect(localEmbedder().maxInputChars).toBe(2000);
+    // Documented 8,191-token window at 4 chars/token, floored.
+    expect(openaiEmbedder({ apiKey: 'k' }).maxInputChars).toBe(32000);
+    // Titan's documented 8,192-token window, same conversion.
+    expect(bedrockEmbedder().maxInputChars).toBe(32000);
+    // No transformer, no context window — nothing is ever clipped.
+    expect(staticEmbedder().maxInputChars).toBe(1_000_000);
+    // Reads every character in a loop; declared so a mock-first run does not
+    // report clipping that only the default ceiling believes in.
+    expect(mockEmbedder().maxInputChars).toBe(1_000_000);
+  });
+
+  it('a model this library does not know declares NOTHING rather than a guess', () => {
+    // A wrong ceiling clips in silence; an absent one leaves the indexer's
+    // conservative default in place. The same rule `.dimensions` applies.
+    expect(
+      openaiEmbedder({ apiKey: 'k', model: 'my-gateway-model', dimensions: 768 }).maxInputChars,
+    ).toBeUndefined();
+    expect(
+      bedrockEmbedder({ model: 'cohere.embed-english-v3', dimensions: 1024 }).maxInputChars,
+    ).toBeUndefined();
+  });
+
+  it('localEmbedder takes the number from the caller — the cliff belongs to the MODEL', () => {
+    // `model` is swappable and a long-context build reads far more than the
+    // default says; without this the indexer would keep cutting a corpus into
+    // pieces a quarter of what the model can take.
+    expect(localEmbedder({ model: 'Xenova/long-ctx', maxInputChars: 30000 }).maxInputChars).toBe(
+      30000,
+    );
+  });
 });

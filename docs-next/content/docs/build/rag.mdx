@@ -140,6 +140,30 @@ first is why the arithmetic above lands where it does: ten chunks off a
 1000-char splitter is ten thousand characters before a single tag is added.
 </Callout>
 
+### The three numbers, and the one place they collide
+
+There is a third, at index time, and it is the one that fails silently. Read
+them together:
+
+| number | where | bounds |
+|---|---|---|
+| `byHeading({ maxChars })` | splitter | how big one chunk is **cut** (default 1000) |
+| `maxChunkChars` | `indexCorpus` / `indexFolder` / `indexDocuments` | how much of that chunk the embedder **reads** |
+| `defineRAG({ maxChars })` | query time | how much retrieved text reaches the **prompt** |
+
+At the defaults the first two compose safely — 1,000 cut, at least 2,000 read.
+**The trap opens when you raise the splitter's ceiling.** `byHeading({ maxChars:
+2500 })` against a 2,000-character reading ceiling stores each chunk whole as
+the passage and indexes it by its **opening**: retrieval cannot find wording
+that is plainly visible in the `<source>` block the model is shown, and nothing
+throws. Measured in a production corpus: 6 of 26 chunks.
+
+Since 9.1.0 the reading ceiling comes from the embedder itself
+(`Embedder.maxInputChars` — 2,000 for `localEmbedder`, 32,000 for the hosted
+ones), an explicit `maxChunkChars` still wins over it, and a run that clipped
+anything says so once on `console.warn` with the count and the fix. Full table
+on the [indexing page](doc:indexing).
+
 ## Indexing — `indexDocuments`
 
 Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs, options?)` is the seeding helper — embeds each doc (via `embedder.embedBatch` when available, else capped-concurrency single calls), then batches into `store.putMany()`. Returns the number of docs indexed. Each `RagDocument` is `{ id, content, metadata? }` — or `{ id, text, metadata? }`, since 8.19.0, because that is how a chunk from the [`rag` door](doc:indexing) spells its passage and both are now read. A document carrying **neither** is refused before anything is embedded: an unrenderable passage and an absent one are different facts, and a citation wrapped around an empty body is the one that costs you a customer.
@@ -203,9 +227,13 @@ Four real embedders ship, all from `agentfootprint/providers`:
 | | key needed | network | notes |
 |---|---|---|---|
 | `staticEmbedder()` | no | no | bundled Model2Vec weights, 256-d. The first rung where ranking is real. |
-| `localEmbedder()` | no | one-time model fetch | on-device sentence-transformer, 384-d. **Truncates input at 512 tokens** (~1,800 characters) — chunk below that or the tail is silently dropped. |
-| `openaiEmbedder()` | yes | yes | hosted, 1536-d by default. |
-| `bedrockEmbedder()` | AWS credentials | yes | hosted on AWS, Titan V2 at 1024-d (512 / 256 on request). See [embedders](doc:embedders). |
+| `localEmbedder()` | no | one-time model fetch | on-device sentence-transformer, 384-d. **Truncates input at 512 tokens** (~1,800 characters) — chunk below that or the tail is silently dropped. Declares `maxInputChars: 2000`. |
+| `openaiEmbedder()` | yes | yes | hosted, 1536-d by default. Declares `maxInputChars: 32000`. |
+| `bedrockEmbedder()` | AWS credentials | yes | hosted on AWS, Titan V2 at 1024-d (512 / 256 on request). Declares `maxInputChars: 32000`. See [embedders](doc:embedders). |
+
+Each one declares the longest input it reads whole, and the indexing doors use
+that instead of guessing — which is why the same corpus can be split into much
+larger chunks for a hosted embedder than for the on-device one.
 
 Never mix two in one store: dimensions differ, and cross-model similarity scores are not comparable. Tag both sides with the same `embedderId` and the mismatch is filtered instead of silently scored.
 

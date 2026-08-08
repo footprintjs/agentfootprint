@@ -15,6 +15,13 @@ import type { Embedder, EmbedArgs, EmbedBatchArgs } from './types.js';
 
 const DEFAULT_DIMENSIONS = 32;
 
+/**
+ * Declared input ceiling (9.1.0). Not a model limit — there is no model. This
+ * embedder reads every character it is given, so the number is a practical
+ * bound (a megabyte of text) rather than a cliff.
+ */
+const MOCK_MAX_INPUT_CHARS = 1_000_000;
+
 function charFrequency(text: string, dims: number): number[] {
   const vec = new Array<number>(dims).fill(0);
   for (let i = 0; i < text.length; i++) {
@@ -43,6 +50,13 @@ export function mockEmbedder(options: MockEmbedderOptions = {}): Embedder {
     // index and a real one — which is a swap worth refusing, since a corpus
     // indexed by letter frequency and queried by meaning scores nothing.
     id: 'mock',
+    // Deliberately generous: this counts characters in a loop, so there is no
+    // window to fall off and nothing is ever clipped. It is declared anyway
+    // (rather than left absent) so a mock-first run does not report truncation
+    // that only the DEFAULT ceiling believes in — a warning about a limit the
+    // embedder does not have teaches the wrong lesson before the real embedder
+    // is swapped in.
+    maxInputChars: MOCK_MAX_INPUT_CHARS,
     async embed({ text }: EmbedArgs): Promise<number[]> {
       return charFrequency(text, dimensions);
     },

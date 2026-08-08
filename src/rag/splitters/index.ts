@@ -26,6 +26,28 @@
  * 8,191. Raise it and you approach a limit whose failure mode is silence —
  * half your chunk embedded, full score reported.
  *
+ * ── How this number composes with the INDEXER's ceiling ─────────────────────
+ *
+ * Two numbers bound one chunk and they are set in different places:
+ * `maxChars` HERE decides how big a chunk is cut, and `maxChunkChars` at
+ * `indexCorpus` / `indexFolder` / `indexDocuments` decides how much of it the
+ * embedder actually reads. At the shipped defaults they compose safely —
+ * 1,000 out of a ceiling of at least 2,000, so every chunk is embedded whole.
+ *
+ * **The trap opens when the splitter's ceiling is raised.** `byHeading({
+ * maxChars: 2500 })` against an embedder whose ceiling is 2,000 produces
+ * chunks that are stored WHOLE as the passage and indexed by their OPENING:
+ * retrieval cannot find wording that is plainly visible in the block the model
+ * is later shown, and no error is raised anywhere. Measured in a production
+ * corpus: 6 of 26 chunks, against an embedder that would have read every one
+ * of them in full.
+ *
+ * Since 9.1.0 the indexer reads the ceiling off the EMBEDDER
+ * (`Embedder.maxInputChars`) rather than assuming the on-device cliff, and
+ * says out loud — once, with the count — when anything was clipped. So raising
+ * `maxChars` is safe up to what your embedder declares, and past it you are
+ * told rather than left to discover it in a retrieval result.
+ *
  * The 150-character overlap (15%) exists so a sentence spanning a boundary is
  * whole in one of the two neighbours. It is the smallest overlap that reliably
  * does that for English prose; there is nothing deeper claimed for it.

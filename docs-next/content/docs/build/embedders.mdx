@@ -250,6 +250,43 @@ const fake: Model2VecBackend = { embed: (texts) => texts.map(() => [0.1, 0.2]) }
 const embedder = staticEmbedder({ backend: fake, dimensions: 2 });
 ```
 
+## How much text each one reads — `maxInputChars` (9.1.0)
+
+Text past an embedder's input window is not refused. It is **clipped**, and a
+full-looking vector comes back for the opening of the passage. An indexer then
+stores the whole chunk as the passage and the clipped vector as its index, so
+retrieval cannot find wording that is plainly visible in the block the model is
+later shown. Nothing throws; the corpus is quietly partially indexed.
+
+So each embedder declares the longest input it reads **whole**, in characters —
+the unit a splitter cuts in:
+
+| | `maxInputChars` | where the number comes from |
+|---|---|---|
+| `localEmbedder()` | `2000` | measured: the default model's 512-wordpiece-token cliff (~1,800–2,000 characters) |
+| `openaiEmbedder()` | `32000` | the documented 8,191-token window, at 4 characters a token |
+| `bedrockEmbedder()` | `32000` | Titan's documented 8,192-token window, same conversion |
+| `staticEmbedder()` | `1000000` | no transformer, so no context window — nothing is ever clipped |
+| `mockEmbedder()` | `1000000` | reads every character in a loop |
+
+`indexCorpus`, `indexFolder` and `indexDocuments` read this in preference to
+their own 2,000-character default, and an explicit `maxChunkChars` on the call
+wins over both. Two consequences worth knowing:
+
+- **A model this library does not know declares nothing.** Pass
+  `openaiEmbedder({ model: 'my-gateway-model', dimensions: 768 })` or a
+  non-Titan Bedrock model and there is no ceiling on the returned embedder —
+  the indexer's conservative default stands. A wrong ceiling clips in silence;
+  an absent one only under-uses the backend.
+- **The characters-per-token figure is an assumption, not a measurement.** Code,
+  tables and CJK text tokenise denser than English prose, so a corpus of those
+  can exceed the token window inside the stated character ceiling. Pass
+  `maxChunkChars` for such a corpus — it always wins.
+
+`localEmbedder({ maxInputChars })` exists because the cliff belongs to the
+**model**, not to the factory: a long-context sentence-transformer build reads
+far more than the default model does, and this is how you say so.
+
 ## Never mix two embedders in one store
 
 Vectors from different models live in incompatible spaces, and cosine similarity
@@ -268,6 +305,10 @@ import type { Embedder } from 'agentfootprint/providers';
 
 const myEmbedder: Embedder = {
   dimensions: 1024,
+  // Optional, but say it if you know it: the indexers read this instead of
+  // their conservative default, and without it your ceiling gets discovered
+  // by someone reading a retrieval result that is missing a paragraph.
+  maxInputChars: 32000,
   async embed({ text, signal }) {
     const res = await fetch('https://api.voyageai.com/v1/embeddings', {
       method: 'POST',

@@ -64,6 +64,39 @@ export interface Embedder {
    */
   readonly id?: string;
 
+  /**
+   * The longest input, in CHARACTERS, this embedder represents FAITHFULLY
+   * (9.1.0). Text past it is not refused by the backend — it is CLIPPED, and
+   * a full-looking vector comes back for the opening of the passage.
+   *
+   * That is the failure this field exists to stop. An indexer stores the whole
+   * chunk as the passage and the clipped vector as its index, so retrieval
+   * cannot find text that is visibly present in the passage it later serves.
+   * Nothing throws, nothing scores zero; the corpus is simply, quietly,
+   * partially indexed.
+   *
+   * The number belongs HERE because this is the only object that knows it. An
+   * indexer's own default is a guess about a backend it has never met: it is
+   * necessarily the smallest ceiling any embedder might have, which then
+   * under-uses every embedder that can read four times as much. Declared, the
+   * indexers (`indexCorpus`, `indexFolder`, `indexDocuments`) read this in
+   * preference to their own default, and an explicit `maxChunkChars` on the
+   * call still wins over both — the caller is allowed to know better.
+   *
+   * Optional, because `Embedder` is a structural interface and every
+   * hand-written one predates this field. Absent, the indexers behave exactly
+   * as they did before it existed. Every shipped embedder declares one, and a
+   * hand-written embedder over a hosted model should: the alternative is that
+   * its ceiling is discovered by someone reading a retrieval result that is
+   * missing a paragraph they can see.
+   *
+   * Characters rather than tokens, because a splitter cuts characters. Where
+   * a backend states a TOKEN limit, the shipped embedders convert it at a
+   * stated, deliberately conservative characters-per-token assumption and say
+   * so in their own docs.
+   */
+  readonly maxInputChars?: number;
+
   /** Embed a single text into a vector of length `dimensions`. */
   embed(args: EmbedArgs): Promise<number[]>;
 

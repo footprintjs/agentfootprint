@@ -75,11 +75,41 @@ So `byHeading` and `byParagraph` enforce a floor. A section (or packed paragraph
 
 **Re-indexing an existing corpus after upgrading will produce different chunks.** That is the fix, not a regression: the old default could ship the exact chunk shape that drove a fabricated citation.
 
-Chunks that exceed the ceiling anyway are **recorded**, not silently clipped:
+### The ceiling — `maxChunkChars` and `maxInputChars` (9.1.0)
+
+Two numbers bound one chunk, and they are set in different places. **`maxChars`** on the splitter decides how big a chunk is *cut*. **`maxChunkChars`** on `indexCorpus` / `indexFolder` / `indexDocuments` decides how much of it the embedder actually *reads*. At the shipped defaults they compose safely: 1,000 characters cut, at least 2,000 read.
+
+**The trap opens when you raise the splitter's ceiling.** `byHeading({ maxChars: 2500 })` against a 2,000-character reading ceiling produces chunks that are stored **whole** as the passage and indexed by their **opening**. Retrieval then cannot find wording that is plainly visible in the `<source>` block the model is shown, and nothing throws. Measured in a production corpus: 6 of 26 chunks, against an embedder that would have read every one of them in full.
+
+So the reading ceiling comes from the **embedder**, which is the only object that knows it:
+
+| what the embedder declares | what an indexer uses |
+|---|---|
+| `localEmbedder()` → `maxInputChars: 2000` | 2,000 — the measured 512-token cliff |
+| `openaiEmbedder()` / `bedrockEmbedder()` → `32000` | 32,000 — their documented 8k-token window at 4 chars/token |
+| `staticEmbedder()` / `mockEmbedder()` → `1000000` | no context window at all; nothing is ever clipped |
+| nothing (a hand-written embedder) | 2,000 — the old default, unchanged |
+
+An explicit `maxChunkChars` on the call **always wins** over the embedder's number: dense text (code, tables, CJK) tokenises tighter than 4 characters a token, and you are allowed to know that about your own corpus.
+
+Chunks past whichever ceiling is in effect are **recorded**, and — since 9.1.0 — **said out loud once per run**, because a number nobody reads is not visibility:
 
 ```ts
 report.truncated; // [{ id: 'handbook.pdf#3', chars: 4200 }]
+report.truncatedCount; // 1  ← the number you can assert on
 ```
+
+```
+indexCorpus: 6 of 26 chunk(s) are longer than the 2000-character input ceiling in effect
+  ('local:Xenova/all-MiniLM-L6-v2:q8's declared maxInputChars), so they were embedded CLIPPED.
+  The vector represents only the opening of each one, while the FULL text is stored and served
+  as the passage — so retrieval cannot find wording that is plainly visible in the block the
+  model is shown. …
+  Fix:  re-split smaller (lower the splitter's maxChars), or raise maxChunkChars if … really
+  reads more than 2000 characters.
+```
+
+Writing your own `Embedder`? Declare `maxInputChars` on it. It is optional — absent, an indexer behaves exactly as it did before the field existed — but the alternative is that your ceiling is discovered by someone reading a retrieval result that is missing a paragraph they can see.
 
 ### The invariant every splitter holds
 
@@ -154,7 +184,7 @@ Everything on `agentfootprint/rag`.
 |---|---|
 | `loadDocuments(source, options?)` | Read a `DocumentSource` into documents. Returns `LoadDocumentsResult` — `{ documents, failed, discovered }`. `LoadDocumentsOptions` carries `loaders` and `maxBytes`. |
 | `splitDocuments(docs, splitter, options?)` | Cut documents into `Chunk`s and verify each one's offsets. `SplitDocumentsOptions` has `verifyOffsets`. |
-| `indexCorpus(config)` | Run the indexing chart. `IndexCorpusConfig` takes `source`, `store`, `embedder`, and the optional `corpus`, `splitter`, `loaders`, `embedderId`, `batchSize`, `maxConcurrentBatches`, `attempts`, `removeMissing`, `maxChunkChars`. Refuses a store that declares `supportsVectorSearch: false` — see [the store table](doc:memory-stores). |
+| `indexCorpus(config)` | Run the indexing chart. `IndexCorpusConfig` takes `source`, `store`, `embedder`, and the optional `corpus`, `splitter`, `loaders`, `embedderId`, `batchSize`, `maxConcurrentBatches`, `attempts`, `removeMissing`, `maxChunkChars` (defaults to the embedder's own `maxInputChars`). Refuses a store that declares `supportsVectorSearch: false` — see [the store table](doc:memory-stores). |
 | `buildIndexChart(config)` | The same chart, unrun — mount it, attach recorders, or run it under your own executor. |
 | `indexFolder(dir, options)` | Sugar over `indexCorpus`. `IndexFolderOptions` renames `store` to `to` and adds `include` / `recursive`. |
 | `sha256(input)` | The content hash the incremental skip compares. Distinct from the trace's FNV-1a: this one decides whether something is re-embedded. |
@@ -169,7 +199,7 @@ Everything on `agentfootprint/rag`.
 | `LoadedDocumentDraft` | What a loader returns — `{ text, pages? }`. The bookkeeping is added around it. |
 | `Chunk` | `{ id, docUri, index, text, charStart, charEnd, page?, heading?, contentHash }`. |
 | `SplitPiece` | One cut, before it is given an id and a hash. |
-| `IndexReport` | `{ discovered, loaded, chunks, embedded, skipped, removed, failed, truncated, embedderFingerprint, splitter, elapsedMs }`. |
+| `IndexReport` | `{ discovered, loaded, chunks, embedded, skipped, removed, failed, truncated, truncatedCount, embedderFingerprint, splitter, elapsedMs }`. |
 | `FailedDocument` / `TruncatedChunk` | A document that could not be read; a chunk past the embedder's ceiling. |
 
 ### Ports and adapters

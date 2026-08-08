@@ -31,6 +31,7 @@ import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
  */
 
 import type { Embedder } from '../../memory/embedding/index.js';
+import { resolveChunkCeiling, truncationWarning } from '../../memory/embedding/inputCeiling.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryStore } from '../../memory/store/index.js';
 import { assertServesVectors } from '../../memory/store/capability.js';
@@ -148,6 +149,25 @@ export interface IndexDocumentsOptions {
    * its own batching).
    */
   readonly maxConcurrency?: number;
+
+  /**
+   * The embedder's input ceiling in characters (9.1.0). Documents longer than
+   * it are embedded anyway — the backend CLIPS them rather than refusing — and
+   * the run says so once on `console.warn`.
+   *
+   * Default: the embedder's own declared `maxInputChars`, falling back to
+   * 2,000 (the measured `localEmbedder` cliff) for one that declares none.
+   * An explicit number here wins over both.
+   *
+   * This helper does not split — a document you hand it is stored whole and
+   * served whole. So a document past the ceiling is indexed by its OPENING
+   * while the model is later shown all of it, and retrieval cannot find
+   * wording that is plainly there. Nothing throws; the corpus is quietly
+   * partially indexed. Cut such documents into chunks first — the
+   * `agentfootprint/rag` door does exactly that, and its chunks keep the
+   * coordinates a citation is checked against.
+   */
+  readonly maxChunkChars?: number;
 }
 
 const DEFAULT_IDENTITY: MemoryIdentity = { conversationId: '_global' };
@@ -195,6 +215,7 @@ export async function indexDocuments(
   // that get embedded and the bytes the model is later shown can never be
   // two different things.
   const texts = documents.map((d) => chunkText(d));
+  warnIfClipped(texts, embedder, options.maxChunkChars, embedderId);
   let vectors: readonly (readonly number[])[];
   if (embedder.embedBatch) {
     vectors = await embedder.embedBatch({
@@ -270,6 +291,41 @@ function assertPassages(documents: readonly RagDocument[]): void {
       `a passage's coordinates without the passage.\n` +
       `  Fix:  put the passage on \`content\` (or \`text\` — both are read), or drop the ` +
       `document from the batch.`,
+  );
+}
+
+/**
+ * Say out loud, once, that some of these documents will be embedded CLIPPED.
+ *
+ * The sibling door files the same fact in `report.truncated`; this one returns
+ * a count and has no report to file anything in, so the console is the only
+ * channel it has — and the alternative is what shipped before 9.1.0: nothing
+ * at all. A vector built from the opening of a document, stored against the
+ * whole document as its passage, is retrieval that cannot find text the model
+ * can see. It fires BEFORE the embedding call, so the warning arrives even
+ * when the backend then rejects the batch for the same reason.
+ */
+function warnIfClipped(
+  texts: readonly string[],
+  embedder: Embedder,
+  explicit: number | undefined,
+  embedderId: string,
+): void {
+  const ceiling = resolveChunkCeiling(explicit, embedder);
+  const over = texts.filter((t) => t.length > ceiling.chars).length;
+  if (over === 0) return;
+  console.warn(
+    truncationWarning({
+      caller: 'indexDocuments',
+      count: over,
+      total: texts.length,
+      noun: 'document',
+      ceiling,
+      embedderId,
+      resplitHint:
+        'cut them into chunks before indexing (the `agentfootprint/rag` door splits with ' +
+        'coordinates, so each piece can still cite where it came from)',
+    }),
   );
 }
 
