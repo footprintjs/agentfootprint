@@ -13,21 +13,45 @@
  *
  * A single paragraph longer than `maxChars` is hard-cut — see the note in
  * `shared.ts` on why packing and cutting are separate decisions.
+ *
+ * Packing already merges neighbours that FIT — but a short paragraph whose
+ * next neighbour is near `maxChars` cannot pack and used to ship alone, where
+ * its density outranks real passages (the same failure `byHeading` measured;
+ * see `DEFAULT_MIN_CHARS`). Since 8.20.0 a chunk under `minChars` merges
+ * FORWARD into the next chunk instead — never dropped, never alone.
  */
 import type { LoadedDocument, Splitter, SplitPiece } from '../types.js';
 import { DEFAULT_MAX_CHARS, DEFAULT_OVERLAP_CHARS } from './constants.js';
-import { applyOverlap, foldRunts, hardCut, packSpans, paragraphSpans, toPieces } from './shared.js';
+import {
+  applyOverlap,
+  foldRunts,
+  hardCut,
+  mergeShortSpansForward,
+  packSpans,
+  paragraphSpans,
+  resolveMinChars,
+  toPieces,
+} from './shared.js';
 
 export interface ByParagraphOptions {
   /** Target chunk size in characters. Default 1000 — see the family docstring. */
   readonly maxChars?: number;
   /** Backward overlap between adjacent chunks. Default 150. */
   readonly overlapChars?: number;
+  /**
+   * The floor under a chunk, in characters (8.20.0). A packed chunk that
+   * remains shorter — a stray short paragraph that could not pack with its
+   * full-sized neighbour — merges FORWARD into the next chunk rather than
+   * shipping alone. Default `min(250, maxChars / 4)`; `0` disables. See
+   * `DEFAULT_MIN_CHARS` for the measured failure behind the number.
+   */
+  readonly minChars?: number;
 }
 
 export function byParagraph(options: ByParagraphOptions = {}): Splitter {
   const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS;
   const overlapChars = options.overlapChars ?? DEFAULT_OVERLAP_CHARS;
+  const minChars = resolveMinChars(options.minChars, maxChars);
 
   return {
     name: 'byParagraph',
@@ -37,7 +61,8 @@ export function byParagraph(options: ByParagraphOptions = {}): Splitter {
       const cut = packed.flatMap((span) =>
         span.end - span.start > maxChars ? hardCut(span, maxChars, overlapChars) : [span],
       );
-      return toPieces(doc, applyOverlap(foldRunts(cut), overlapChars));
+      const floored = mergeShortSpansForward(foldRunts(cut), minChars);
+      return toPieces(doc, applyOverlap(floored, overlapChars));
     },
   };
 }

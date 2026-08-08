@@ -30,6 +30,20 @@
  * whole in one of the two neighbours. It is the smallest overlap that reliably
  * does that for English prose; there is nothing deeper claimed for it.
  *
+ * **`minChars` (8.20.0): the floor, from a different measurement.** Short
+ * chunks retrieve too WELL, not too badly — similarity is a density measure,
+ * and a heading plus a preamble sentence concentrates a topic's vocabulary
+ * with none of its substance. Measured in a production corpus: a 180-char
+ * heading-and-preamble chunk outranked its own section's 1,032-char body, and
+ * the model fabricated a citation to fill the promise the empty chunk made.
+ * `byHeading` and `byParagraph` therefore merge sub-floor chunks FORWARD into
+ * the next chunk (default floor `min(250, maxChars / 4)`; nothing is ever
+ * dropped, and a heading with no body is never emitted alone regardless of
+ * the floor). `fixedWithOverlap` does not have the failure shape — its chunks
+ * are uniformly `chars` long BY REQUEST, and its only runt (the file tail) has
+ * always folded backward — and `wholeDocument` is one-chunk-per-document by
+ * definition, so neither takes the option.
+ *
  * ── Which one to use ────────────────────────────────────────────────────────
  *
  * | splitter | cuts on | use when |
@@ -47,4 +61,4 @@ export { byParagraph, type ByParagraphOptions } from './byParagraph.js';
 export { byHeading, type ByHeadingOptions } from './byHeading.js';
 export { fixedWithOverlap, type FixedWithOverlapOptions } from './fixedWithOverlap.js';
 export { wholeDocument } from './wholeDocument.js';
-export { DEFAULT_MAX_CHARS, DEFAULT_OVERLAP_CHARS } from './constants.js';
+export { DEFAULT_MAX_CHARS, DEFAULT_OVERLAP_CHARS, DEFAULT_MIN_CHARS } from './constants.js';

@@ -136,6 +136,7 @@ import type { Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
 import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
+import { summarizeEmbeddings } from './embeddingSummary.js';
 
 // ─── DomainEvent: discriminated union ────────────────────────────────
 
@@ -560,6 +561,22 @@ export interface BoundaryRecorderOptions {
    * that silently — a lean default would quietly empty their replays.
    */
   readonly snapshot?: 'full' | 'lean';
+  /**
+   * Keep raw embedding vectors in captured payloads (8.20.0). Default
+   * `false`: every `embedding` / `embeddings` field in a boundary payload is
+   * replaced with its `{ dims, norm }` summary at capture time.
+   *
+   * The default exists because of a field measurement: the memory-read
+   * subflow's boundary output carries each retrieved entry's full vector,
+   * and one retrieval turn's recording weighed 2.76 MB — ~1.1 MB of it
+   * embedding floats no consumer of a recording reads. The retrieval
+   * evidence a debugger needs (score, passage, document, rejected
+   * candidates) does not live in those floats and is untouched.
+   *
+   * Set `true` only when a consumer genuinely replays vectors (say, to
+   * re-rank offline) — the recording grows by the full vector bytes again.
+   */
+  readonly recordEmbeddings?: boolean;
 }
 
 /**
@@ -691,6 +708,11 @@ export class BoundaryRecorder implements CombinedRecorder {
    *  is always full, so in-process consumers are never affected. */
   private readonly snapshotMode: 'full' | 'lean';
 
+  /** See `BoundaryRecorderOptions.recordEmbeddings`. Applied at CAPTURE
+   *  time, so the summary is what every projection (live stream, snapshot,
+   *  lean) sees — one truth, not per-reader rewrites. */
+  private readonly keepEmbeddings: boolean;
+
   /**
    * Tracks whether the most recent `llm.end` had toolCalls. Used to
    * classify the NEXT `llm.start` as `'tool→llm'` (vs `'user→llm'` if
@@ -737,9 +759,17 @@ export class BoundaryRecorder implements CombinedRecorder {
   constructor(options: BoundaryRecorderOptions = {}) {
     this.id = options.id ?? `boundary-${++_counter}`;
     this.snapshotMode = options.snapshot ?? 'full';
+    this.keepEmbeddings = options.recordEmbeddings ?? false;
     this.hasCommitTracking = options.getCommitCount !== undefined;
     const raw = options.getCommitCount;
     this.getCommitCount = raw === undefined ? () => 0 : () => sanitizeCommitCount(raw());
+  }
+
+  /** Boundary payloads keep a vector's shape, not its bytes — see
+   *  `recordEmbeddings`. Copy-on-write: payloads without embeddings pass
+   *  through by reference. */
+  private capturePayload(payload: unknown): unknown {
+    return this.keepEmbeddings ? payload : summarizeEmbeddings(payload);
   }
 
   /**
@@ -789,7 +819,7 @@ export class BoundaryRecorder implements CombinedRecorder {
   onRunStart(event: FlowRunEvent): void {
     this.observeRunId(event.traversalContext?.runId);
     const commitIdxBefore = this.getCommitCount();
-    const e = buildRunEvent('run.entry', event.payload, commitIdxBefore);
+    const e = buildRunEvent('run.entry', this.capturePayload(event.payload), commitIdxBefore);
     // Open range BEFORE the store push so a failed push doesn't leak
     // an unclosed range (DS+logic panel review). The label is the
     // stripped projection (no payload) — security-panel YELLOW #1.
@@ -803,7 +833,7 @@ export class BoundaryRecorder implements CombinedRecorder {
   onRunEnd(event: FlowRunEvent): void {
     this.observeRunId(event.traversalContext?.runId);
     const commitIdxBefore = this.getCommitCount();
-    const e = buildRunEvent('run.exit', event.payload, commitIdxBefore);
+    const e = buildRunEvent('run.exit', this.capturePayload(event.payload), commitIdxBefore);
     // Close the range BEFORE store.push so a failed push doesn't
     // leak a permanently-open range. The range is the canonical
     // truth; the store entry is downstream telemetry.
@@ -838,7 +868,9 @@ export class BoundaryRecorder implements CombinedRecorder {
   onSubflowEntry(event: FlowSubflowEvent): void {
     this.observeRunId(event.traversalContext?.runId);
     const commitIdxBefore = this.getCommitCount();
-    const e = buildSubflowEvent(event, 'subflow.entry', commitIdxBefore);
+    const e = buildSubflowEvent(event, 'subflow.entry', commitIdxBefore, (p) =>
+      this.capturePayload(p),
+    );
     if (!e) return;
     if (this.hasCommitTracking) {
       const token = this.boundaryIndex.open(toBoundaryLabel(e), commitIdxBefore);
@@ -850,7 +882,9 @@ export class BoundaryRecorder implements CombinedRecorder {
   onSubflowExit(event: FlowSubflowEvent): void {
     this.observeRunId(event.traversalContext?.runId);
     const commitIdxBefore = this.getCommitCount();
-    const e = buildSubflowEvent(event, 'subflow.exit', commitIdxBefore);
+    const e = buildSubflowEvent(event, 'subflow.exit', commitIdxBefore, (p) =>
+      this.capturePayload(p),
+    );
     if (!e) return;
     if (this.hasCommitTracking) {
       const token = this.openTokens.get(e.runtimeStageId);
@@ -1396,6 +1430,7 @@ function buildSubflowEvent(
   event: FlowSubflowEvent,
   type: 'subflow.entry' | 'subflow.exit',
   commitIdxBefore: number,
+  transformPayload: (payload: unknown) => unknown,
 ): DomainSubflowEvent | undefined {
   const subflowId = event.subflowId;
   if (!subflowId) return undefined;
@@ -1410,7 +1445,8 @@ function buildSubflowEvent(
   const primitiveKind = description ? parsePrimitiveKindFromDescription(description) : undefined;
   const slotKind = slotFromSubflowId(subflowId);
   const isAgentInternal = isAgentInternalId(localSubflowId);
-  const payload = type === 'subflow.entry' ? event.mappedInput : event.outputState;
+  const rawPayload = type === 'subflow.entry' ? event.mappedInput : event.outputState;
+  const payload = rawPayload === undefined ? undefined : transformPayload(rawPayload);
 
   return {
     type,

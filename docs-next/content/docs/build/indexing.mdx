@@ -67,6 +67,14 @@ await loadDocuments({ dir: './docs' }, { loaders: [myConfluenceLoader()] });
 
 Defaults are **1000 characters with 150 of overlap**, and they are chosen by constraint rather than taste. `localEmbedder`'s default model silently truncates at 512 wordpiece tokens — measured directly: at 508 tokens an appended tail still moves the vector, at 596 it does not, and nothing says so. 1,000 characters is about 250 tokens, comfortably inside that cliff and inside the length the model was trained at.
 
+### The floor — `minChars` (8.20.0)
+
+Short chunks retrieve too **well**, not too badly. Similarity is a density measure: a heading plus one preamble sentence concentrates its topic's vocabulary with none of its substance. Measured in a production corpus, a 180-character heading-and-preamble chunk outranked the 1,032-character body of its own section — and the model, handed a passage that promises findings and contains none, fabricated a plausible file path to fill the gap.
+
+So `byHeading` and `byParagraph` enforce a floor. A section (or packed paragraph chunk) whose own text is under `minChars` — default `min(250, maxChars / 4)` — merges **forward** into the next chunk under its own heading: the preamble sentence survives, leading the chunk it introduces, and nothing is ever dropped. The last chunk has no next, so a trailing short merges backward. Two rules are unconditional, even at `minChars: 0`: a heading with no body is never emitted alone (a coordinate, not a passage), and a document that is nothing but headings yields no chunks at all. `fixedWithOverlap` is exempt by design — its chunks are uniformly sized *by request* — and `wholeDocument` is one chunk per document by definition.
+
+**Re-indexing an existing corpus after upgrading will produce different chunks.** That is the fix, not a regression: the old default could ship the exact chunk shape that drove a fabricated citation.
+
 Chunks that exceed the ceiling anyway are **recorded**, not silently clipped:
 
 ```ts
@@ -175,7 +183,13 @@ Everything on `agentfootprint/rag`.
 | `stripTags(html)` | The HTML loader's own pass, exported because a custom markup loader may want it. |
 | `Splitter` | The strategy — `{ name, split(doc) }`. |
 | `byHeading(options?)` · `byParagraph(options?)` · `fixedWithOverlap(options?)` · `wholeDocument()` | The shipped strategies, with `ByHeadingOptions` / `ByParagraphOptions` / `FixedWithOverlapOptions`. |
-| `DEFAULT_MAX_CHARS` · `DEFAULT_OVERLAP_CHARS` | `1000` and `150` — the measured defaults. |
+| `DEFAULT_MAX_CHARS` · `DEFAULT_OVERLAP_CHARS` · `DEFAULT_MIN_CHARS` | `1000`, `150` and `250` — the measured defaults (the floor scales as `min(250, maxChars / 4)`). |
+| `exportCorpus(store, identity?)` · `importCorpus(store, bundle, identity?)` | The corpus as a build artifact (8.20.0): a plain-JSON `CorpusBundle` out of any listable store, and back into any writable vector-capable one. |
+| `staticVectorStore(bundle, embedder?)` | Read-only `MemoryStore` over a bundle — canonical in `agentfootprint/memory`, re-exported here. Refuses a mismatched embedder at load. |
+| `CorpusBundle` · `CorpusBundleEntry` · `CORPUS_BUNDLE_FORMAT` | The bundle shape: entries of `{ id, text, vector, metadata }` under a `format` marker (`CORPUS_BUNDLE_FORMAT` versions the FORMAT, not the library). |
+| `EmbedderFingerprint` | The `{ id?, dimensions }` slice `staticVectorStore` checks at load — pass your embedder itself; it satisfies the shape. |
+| `assertCorpusBundle(bundle, caller)` | The shared bundle validator — a truncated or hand-edited file fails the same way at every door. |
+| `bundleEntryToMemoryEntry(entry, bundle)` | How a bundle entry becomes a served `MemoryEntry` — passage on `value.content`, provenance under `value.metadata` — shared by `staticVectorStore` and `importCorpus` so both render identically. |
 
 ## Deliberately not here
 

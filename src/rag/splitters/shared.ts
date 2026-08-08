@@ -13,7 +13,7 @@
  * is what makes the invariant true by construction rather than by care.
  */
 import type { LoadedDocument, SplitPiece } from '../types.js';
-import { MIN_CHUNK_CHARS } from './constants.js';
+import { DEFAULT_MIN_CHARS, MIN_CHUNK_CHARS } from './constants.js';
 
 /** A half-open span of the source text. */
 export interface Span {
@@ -164,6 +164,89 @@ export function foldRunts(spans: readonly Span[], minChars: number = MIN_CHUNK_C
       continue;
     }
     out.push(span);
+  }
+  return out;
+}
+
+/**
+ * Resolve the effective `minChars` floor for a splitter (8.20.0).
+ *
+ * Unset → `min(DEFAULT_MIN_CHARS, maxChars / 4)`: 250 at the default target,
+ * shrinking proportionally when the caller asked for small chunks, so a
+ * defaulted floor can never swallow the chunk size the caller chose.
+ *
+ * An EXPLICIT floor is validated instead of clamped: a floor at or above the
+ * target would merge every chunk into its neighbour, which is a configuration
+ * contradiction, not a preference — refused by name rather than rounded away.
+ */
+export function resolveMinChars(minChars: number | undefined, maxChars: number): number {
+  if (minChars === undefined) {
+    return Math.min(DEFAULT_MIN_CHARS, Math.floor(maxChars / 4));
+  }
+  if (!Number.isFinite(minChars) || minChars < 0) {
+    throw new Error(
+      `minChars must be a non-negative number of characters — received ${String(minChars)}. ` +
+        `Pass 0 to disable the floor (heading-only chunks are still never emitted).`,
+    );
+  }
+  if (minChars >= maxChars) {
+    throw new Error(
+      `minChars (${minChars}) must be smaller than maxChars (${maxChars}) — a floor at or ` +
+        `above the target chunk size would merge every chunk into its neighbour. Lower ` +
+        `minChars, or raise maxChars.`,
+    );
+  }
+  return minChars;
+}
+
+/**
+ * Merge sub-floor spans FORWARD into their next neighbour (8.20.0).
+ *
+ * For heading-less span families (paragraphs, and `byHeading`'s no-headings
+ * fallback). A span under the floor is never dropped and never shipped alone:
+ *
+ *   - adjacent short spans accumulate; the moment the accumulation reaches the
+ *     floor it is emitted as its own span (two 150-char paragraphs make a fine
+ *     300-char chunk — better than pushing both into a full-sized neighbour);
+ *   - an accumulation still under the floor joins the NEXT full span, so the
+ *     short text leads the merged chunk;
+ *   - at the end of the document there is no next, so a trailing accumulation
+ *     merges BACKWARD into the last emitted span;
+ *   - a document that is nothing but short spans stays one merged span —
+ *     there is no neighbour, and "never dropped" wins.
+ *
+ * Merged spans slice the SOURCE (start of the first constituent to end of the
+ * last), so the offset invariant holds by construction, as everywhere else.
+ */
+export function mergeShortSpansForward(spans: readonly Span[], minChars: number): Span[] {
+  if (minChars <= 0 || spans.length <= 1) return [...spans];
+  const out: Span[] = [];
+  let pendingStart: number | undefined;
+  let lastEnd = 0;
+  for (const span of spans) {
+    lastEnd = span.end;
+    if (span.end - span.start < minChars && pendingStart === undefined) {
+      pendingStart = span.start;
+      continue;
+    }
+    if (pendingStart !== undefined) {
+      // Accumulating: emit as soon as the accumulation clears the floor,
+      // whether the closer was itself short or full-sized.
+      if (span.end - pendingStart >= minChars) {
+        out.push({ start: pendingStart, end: span.end });
+        pendingStart = undefined;
+      }
+      continue;
+    }
+    out.push(span);
+  }
+  if (pendingStart !== undefined) {
+    const previous = out.pop();
+    out.push(
+      previous === undefined
+        ? { start: pendingStart, end: lastEnd }
+        : { start: previous.start, end: lastEnd },
+    );
   }
   return out;
 }

@@ -293,9 +293,19 @@ describe('splitters — property', () => {
     expect(a[0]?.contentHash).not.toBe(c[0]?.contentHash);
   });
 
-  it('no chunk exceeds maxChars by more than the overlap it was given', () => {
+  it('no chunk exceeds maxChars by more than overlap plus the minChars floor', () => {
+    // The floor (8.20.0) may fold a sub-floor tail backward into the last
+    // chunk, so the ceiling is maxChars + overlapChars + the effective floor
+    // (min(250, maxChars / 4) when unset).
     const long = doc(`# S\n\n${'word '.repeat(2000)}`);
     for (const chunk of splitDocuments([long], byHeading({ maxChars: 500, overlapChars: 50 }))) {
+      expect(chunk.text.length).toBeLessThanOrEqual(500 + 50 + 125);
+    }
+    // With the floor disabled, the pre-8.20.0 ceiling still holds exactly.
+    for (const chunk of splitDocuments(
+      [long],
+      byHeading({ maxChars: 500, overlapChars: 50, minChars: 0 }),
+    )) {
       expect(chunk.text.length).toBeLessThanOrEqual(500 + 50);
     }
   });
@@ -305,11 +315,12 @@ describe('splitters — property', () => {
 
 describe('splitters — unit', () => {
   it('byHeading cuts on headings and carries the heading onto the chunk', () => {
+    // Bodies above the `minChars` floor, so each section stands on its own.
     const chunks = splitDocuments(
       [
         doc(
-          '# Alpha\n\nAlpha body, long enough to be a chunk in its own right here.' +
-            '\n\n# Beta\n\nBeta body, also long enough to be a chunk in its own right.',
+          `# Alpha\n\nAlpha body, long enough to clear the floor.${' Alpha detail.'.repeat(20)}` +
+            `\n\n# Beta\n\nBeta body, also long enough to clear it.${' Beta detail.'.repeat(20)}`,
         ),
       ],
       byHeading(),
@@ -321,7 +332,7 @@ describe('splitters — unit', () => {
 
   it('byHeading keeps a preamble as its own unnamed section', () => {
     const chunks = splitDocuments(
-      [doc(`Front matter that precedes any heading.${' pad'.repeat(30)}\n\n# Real\n\nBody.`)],
+      [doc(`Front matter that precedes any heading.${' pad'.repeat(70)}\n\n# Real\n\nBody.`)],
       byHeading(),
     );
     expect(chunks[0]?.heading).toBeUndefined();
@@ -343,8 +354,8 @@ describe('splitters — unit', () => {
 
   it('maxLevel keeps deep headings from starting a section', () => {
     const text =
-      '# Top\n\nBody one, written long enough that it survives the runt fold on its own.' +
-      '\n\n#### Deep\n\nBody two, also long enough to stand as its own chunk of text.';
+      `# Top\n\nBody one, long enough to clear the floor.${' More top.'.repeat(30)}` +
+      `\n\n#### Deep\n\nBody two, also long enough to clear it.${' More deep.'.repeat(30)}`;
     expect(splitDocuments([doc(text)], byHeading({ maxLevel: 6 })).length).toBe(2);
     expect(splitDocuments([doc(text)], byHeading({ maxLevel: 1 })).length).toBe(1);
   });

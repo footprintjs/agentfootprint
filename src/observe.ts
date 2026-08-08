@@ -99,6 +99,16 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// What a recording keeps of a vector: `{ dims, norm }`, not the bytes (8.20.0).
+// Applied by BoundaryRecorder and recordRun unless `recordEmbeddings: true`;
+// exported so consumers that render or post-process recordings can apply or
+// recognise the same projection.
+export {
+  summarizeEmbeddings,
+  summarizeVector,
+  type EmbeddingSummary,
+} from './recorders/observability/embeddingSummary.js';
+
 // Offline replay: freeze a live run model into a UI-free, JSON-lossless Trace
 // (redaction applied at the serialize boundary). agentfootprint-lens's <Replay>
 // rehydrates it. See docs/design/local-observability-and-pii.md.

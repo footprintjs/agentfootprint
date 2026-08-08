@@ -7,6 +7,144 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.20.0] - 2026-08-07
+
+**The corpus stops promising what it does not contain.**
+
+Round two of the same production field report that drove 8.19.0 — the same
+integration, now running all four of those fixes, coming back with what the
+next week of real traffic found. Three findings again, and the first one is
+the reason this release exists: the default splitter could manufacture the
+exact chunk shape that makes a model fabricate a citation.
+
+### A heading is a label, not a passage — the splitter floor
+
+`byHeading()` emitted heading-only and heading-plus-preamble chunks, and those
+chunks do not retrieve badly — they retrieve **too well**. Similarity is a
+density measure: a heading plus one preamble sentence concentrates its topic's
+vocabulary with none of its substance. Measured in the field: a 180-character
+chunk (`## Findings` plus one sentence promising them) outranked the
+1,032-character body of its own section at 0.430. The model was handed a
+passage that PROMISES findings, contains none — and fabricated a plausible
+file path to fill the gap. A fabricated citation born entirely from a
+chunking default.
+
+The fix is one coherent rule across the structural splitters:
+
+- **`minChars` — a floor, merged FORWARD.** `byHeading` and `byParagraph`
+  take a `minChars` option, default `min(250, maxChars / 4)` — 250 at the
+  default target, ~60 tokens, comfortably above the measured 180-character
+  failure and a quarter of the target so merged chunks (short section + full
+  neighbour ≈ 1,250 chars ≈ 310 tokens) stay far inside the measured
+  512-wordpiece embedder cliff. A section whose body is under the floor joins
+  the NEXT chunk **under its own heading** — the preamble sentence survives,
+  leading the chunk it introduces, and the citation still names the section a
+  reader would look up. Nothing is ever dropped. Adjacent shorts whose bodies
+  together clear the floor become one chunk of their own; a trailing short
+  merges backward (the one edge with no next); a document that is one short
+  section ships whole.
+- **Heading-plus-whitespace is never emitted, unconditionally.** Even at
+  `minChars: 0`. A chunk with no body is a coordinate, not a passage — the
+  same distinction `indexDocuments` enforces one layer up when it refuses a
+  passage-less document. A document that is nothing but headings yields no
+  chunks at all.
+- **The long-section variant of the same bug is closed.** A section too long
+  to fit whole used to pack its heading LINE as its own paragraph unit — and
+  when the first body paragraph could not pack with it, the heading shipped
+  alone. The heading is now glued to the first body paragraph; it can never
+  again be a chunk by itself.
+- **The family was inspected, and two members are exempt by design.**
+  `fixedWithOverlap` cuts uniformly sized chunks *by request* — imposing a
+  250-char floor on `fixedWithOverlap({ chars: 120 })` would repeal the
+  caller's own choice, and its only runt (the file tail) has always folded
+  backward. `wholeDocument` is one chunk per document by definition.
+
+**LOUD behaviour change: re-indexing an existing corpus produces different
+chunks.** Incremental re-index will re-embed where boundaries moved (content
+hashes change) — that is the fix working, not a regression. Today's default
+can fabricate citations; the new default cannot ship the chunk shape that
+did. Pin `minChars: 0` only if you must reproduce the old cuts, and know that
+heading-only chunks are refused regardless. Two smaller consequences, named:
+a chunk may now exceed `maxChars` by up to the floor (in addition to the
+overlap) when a short neighbour merged into it, and `minChars ≥ maxChars` is
+refused as the configuration contradiction it is.
+
+### A recording keeps a vector's shape, not its bytes
+
+One retrieval turn's recording measured **2.76 MB — about 1.1 MB of it
+embedding floats.** The memory-read subflow's boundary output carries each
+retrieved entry, and each entry carried its full vector; the snapshot's
+subflow results then carried the same entries again through every state
+mirror the engine keeps. Nobody reads those floats: retrieval debugging needs
+the score, the passage, the document, and the rejected candidates — all in
+the retrieval evidence, none of it a vector.
+
+Recordings now keep `{ dims, norm }` where a vector was — dimensionality and
+L2 norm, the two facts that make a vector recognisable without shipping its
+bytes. Applied uniformly at the recording boundary: `BoundaryRecorder`
+subflow/run payloads at capture time, and `recordRun`'s snapshot and event
+tail at freeze time, covering both spellings the memory layer writes
+(`embedding` on entries, `embeddings` on write-side batches). The projection
+is copy-on-write (payloads without vectors pass through by reference,
+shared entries stay shared) and idempotent. Live run state, stores, and the
+retrieval evidence are untouched — this is about what a RECORDING retains,
+not what the run computes with.
+
+**Behaviour change:** recordings are smaller and their `embedding` fields are
+summaries. `recordEmbeddings: true` on `recordRun` or `boundaryRecorder`
+restores raw vectors for the rare consumer that replays them offline.
+`summarizeEmbeddings` / `summarizeVector` / `EmbeddingSummary` are exported
+from `agentfootprint/observe` so recording post-processors can apply or
+recognise the same projection.
+
+### The corpus as a build artifact — `exportCorpus` / `staticVectorStore`
+
+The field deployment runs on a runtime whose disk does not survive the
+process — while its build machine holds both the embedding credentials and a
+durable disk. The corpus therefore wants to be an artifact of the BUILD, and
+this release gives that shape first-class words (vendor- and runtime-neutral;
+any immutable or serverless runtime has this problem):
+
+- **`exportCorpus(store, identity?)`** (`agentfootprint/rag`) — every entry
+  of a corpus namespace as one plain-JSON `CorpusBundle`:
+  `{ entries: [{ id, text, vector, metadata }], embedder: { id, dimensions },
+  namespace }`. Plain JSON on purpose — the runtime that needs this is
+  exactly the runtime that cannot open a database file. It refuses an empty
+  namespace (naming the identity-mismatch cause), entries with no vector or
+  no passage (a bundle never ships an unservable or uncitable entry), and a
+  namespace that mixes embedding spaces (no single query embedder could
+  search both).
+- **`staticVectorStore(bundle, embedder?)`** (`agentfootprint/memory`,
+  re-exported from `/rag`) — a read-only `MemoryStore` over the bundle,
+  `supportsVectorSearch: true`, ranking by the same cosine as the reference
+  store. Every write method refuses teachingly (a static corpus that
+  silently accepted writes would lose them with the process). Pass the
+  runtime's embedder and a fingerprint mismatch is refused **at load** —
+  the `sqliteVectorStore` rule, applied at the door: dimensions always
+  decide; ids decide only when both sides named themselves. At search time a
+  wrong-length query or a mismatched `embedderId` throws by name instead of
+  ranking to an empty page — the loud version of the mismatch machinery
+  that already caught this integration's own embedder-id format change.
+  Entries are served in the exact shape the retrieval formatter reads
+  (passage on `value.content`, provenance under `value.metadata`) — the
+  8.19.0 blank-citation lesson, enforced at the seam.
+- **`importCorpus(store, bundle, identity?)`** — the inverse, into any
+  writable vector-capable store: seed an in-memory corpus at boot, or
+  migrate between machines without re-embedding (and re-billing) anything.
+- **CLI:** `agentfootprint-index ./docs --to ./corpus.json` builds a bundle
+  directly — same pipeline, one JSON artifact for the deploy to carry.
+
+### The threshold docstring learns another embedder's numbers
+
+The `threshold` guidance on `defineRAG` / `topK` (and the rag guide's
+threshold section) now carries field-measured score bands for Amazon Titan
+Text V2 alongside the existing sentence-transformer note: 0.55–0.57 for a
+direct hit, ~0.49 for the right section diluted, 0.36–0.42 for noise — **the
+0.7 default retrieves NOTHING on that embedder, silently**; ~0.5 separates
+its signal from its noise. One vendor's measured example of the general
+rule: the right threshold is a property of the embedder, and the rejected
+candidates on `agentfootprint.memory.retrieved` are how you read yours.
+
 ## [8.19.0] - 2026-08-07
 
 **The corpus says what it retrieved.**

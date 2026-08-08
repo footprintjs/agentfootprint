@@ -199,12 +199,15 @@ export interface DefineRAGOptions {
    * meets the threshold, NO injection happens (no fallback that would
    * pollute the prompt with weak matches). Default 0.7.
    *
-   * Tuning note: 0.7 is a high bar for some embedders. Sentence-BERT
-   * relatives (`all-MiniLM-L6-v2`, etc.) often score 0.4–0.6 even on
-   * relevant chunks. You no longer have to guess: the rejected
-   * candidates and their scores are on every
-   * `agentfootprint.memory.retrieved` event, so the right threshold is
-   * a number you can read off a run.
+   * Tuning note: the right threshold is a property of the EMBEDDER. 0.7
+   * is a high bar for some of them. Sentence-BERT relatives
+   * (`all-MiniLM-L6-v2`, etc.) often score 0.4–0.6 even on relevant
+   * chunks; Amazon Titan Text V2 was field-measured at 0.55–0.57 for a
+   * direct hit, ~0.49 for the right section diluted, 0.36–0.42 for
+   * noise — on that embedder the 0.7 default retrieves NOTHING,
+   * silently. You no longer have to guess: the rejected candidates and
+   * their scores are on every `agentfootprint.memory.retrieved` event,
+   * so the right threshold is a number you can read off a run.
    *
    * Shorthand for `retrieval: topK({ threshold })`; the two EXCLUDE.
    */

@@ -43,25 +43,40 @@ function write(name: string, content: string): void {
   writeFileSync(join(dir, name), content, 'utf8');
 }
 
+// Section bodies sit ABOVE the splitter floor (8.20.0), so each section is a
+// chunk of its own and the incremental story below (one section edited, the
+// others skipped) stays observable.
 const REFUNDS = `# Refund policy
 
 Our refund policy is designed to be simple and fair to every customer here.
+It applies to every plan and every billing period without exception, and it
+is written to be read in one sitting rather than discovered clause by clause.
+Nothing in it overrides a stronger consumer right where the law grants one.
 
 ## Refund timing
 
 Refunds are processed within 3 business days of approval. The money returns
 to the original payment method, and a bank may take a further 2-5 days.
+Approval itself happens within one business day of the request being filed,
+and the request form asks only for the order number and the reason category.
+Weekends and public holidays do not count as business days for either clock.
 
 ## Eligibility
 
-Purchases are refundable within 30 days of the original purchase date here.`;
+Purchases are refundable within 30 days of the original purchase date here.
+Renewals are refundable within 14 days of the renewal charge. A purchase
+that has consumed more than half of its included usage is refunded pro rata
+rather than in full, and gift purchases refund to the original buyer only.`;
 
 const PRICING = `# Pricing
 
 ## Plans
 
 The Pro plan costs $20 per month and includes priority support for teams.
-The Free plan is limited to 100 API calls per month for evaluation only.`;
+The Free plan is limited to 100 API calls per month for evaluation only.
+Annual billing takes two months off the Pro price, and every plan change
+takes effect at the next billing boundary rather than mid-cycle. Enterprise
+pricing is quoted per seat with volume bands published on request to sales.`;
 
 /** An embedder that counts every call, so "embedded nothing" is provable. */
 function countingEmbedder(): Embedder & { calls: () => number; reset: () => void } {

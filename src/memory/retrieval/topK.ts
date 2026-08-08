@@ -32,13 +32,19 @@ export interface TopKOptions {
    * Minimum similarity to admit, in the store's score space ([-1, 1]
    * cosine for every shipped store). Default 0.7.
    *
-   * 0.7 is a high bar for some embedders. Sentence-transformer relatives
-   * (`all-MiniLM-L6-v2` and family, which `localEmbedder` uses by
+   * **The right threshold is a property of the EMBEDDER, not of this
+   * library.** 0.7 is a high bar for some embedders. Sentence-transformer
+   * relatives (`all-MiniLM-L6-v2` and family, which `localEmbedder` uses by
    * default) often score 0.4–0.6 on genuinely relevant chunks; OpenAI
-   * `text-embedding-3-*` sits comfortably at 0.7. If retrievals come back
-   * empty, read the `agentfootprint.memory.retrieved` event: it now
-   * carries the rejected candidates and their scores, so the right
-   * threshold is a number you can see rather than one you guess.
+   * `text-embedding-3-*` sits comfortably at 0.7. Amazon Titan Text V2
+   * (`bedrockEmbedder`'s default) was measured in a production corpus at
+   * 0.55–0.57 for a direct hit, ~0.49 for the right section diluted by its
+   * neighbours, and 0.36–0.42 for noise — **on that embedder the 0.7
+   * default retrieves NOTHING, silently**; ~0.5 separates its signal from
+   * its noise. If retrievals come back empty, read the
+   * `agentfootprint.memory.retrieved` event: it carries the rejected
+   * candidates and their scores, so the right threshold is a number you
+   * can see rather than one you guess.
    *
    * Pass `null` for no floor — every candidate up to `k` is admitted.
    */

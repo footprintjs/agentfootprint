@@ -61,7 +61,15 @@ agent.on('agentfootprint.memory.retrieved', (e) => {
 });
 ```
 
-Sentence-transformer-class embedders (`all-MiniLM-L6-v2` and relatives) often score genuinely relevant chunks at 0.4–0.6, so 0.7 is a high bar for them; OpenAI `text-embedding-3-*` sits comfortably at 0.7.
+**The right threshold is a property of the embedder, not of this library.** The default 0.7 suits some score distributions and silently starves others:
+
+| embedder family | relevant chunks score | at the 0.7 default |
+|---|---|---|
+| OpenAI `text-embedding-3-*` | comfortably ≥ 0.7 | works as-is |
+| sentence-transformers (`all-MiniLM-L6-v2` and relatives — `localEmbedder`'s default) | 0.4–0.6 | many real hits rejected |
+| Amazon Titan Text V2 (`bedrockEmbedder`'s default) — field-measured | 0.55–0.57 direct hit · ~0.49 right section, diluted · 0.36–0.42 noise | retrieves **nothing**, silently |
+
+The Titan numbers are one vendor's measured example of the general rule: read your embedder's actual score bands off a run before trusting any default. The rejected candidates and their scores are on every `agentfootprint.memory.retrieved` event, so the right threshold is a number you read, not one you guess — for Titan V2, ~0.5 separates its signal from its noise.
 
 ## How much text, not just how many chunks — `maxChars`
 
@@ -156,6 +164,35 @@ await indexDocuments(store, embedder, docs, {
 ```
 
 Identity defaults to `{ conversationId: '_global' }` — matching `defineRAG`'s `corpus` default, so the plain path needs no argument on either side. Index per tenant and you must name the same tenant on the retriever; see [The corpus namespace](#the-corpus-namespace).
+
+## The corpus as a build artifact — `exportCorpus` / `staticVectorStore`
+
+An immutable or serverless runtime loses its disk between invocations and often holds no embedding-API credentials — while the build machine has both. So build the index where the credentials live, ship it with the deploy, and serve it read-only where the process runs (8.20.0):
+
+```ts
+// build step (CI, cron, deploy hook) — credentials and durable disk live here
+import { indexFolder, exportCorpus } from 'agentfootprint/rag';
+
+const store = new InMemoryStore();
+await indexFolder('./docs', { to: store, embedder });
+writeFileSync('corpus.json', JSON.stringify(await exportCorpus(store)));
+```
+
+```ts
+// runtime — no disk, no writes, no drift
+import { staticVectorStore } from 'agentfootprint/memory';
+
+const corpus = staticVectorStore(JSON.parse(readFileSync('corpus.json', 'utf8')), embedder);
+const docs = defineRAG({ id: 'docs', store: corpus, embedder });
+```
+
+The bundle is plain JSON — `{ entries: [{ id, text, vector, metadata }], embedder: { id, dimensions }, namespace }` — so it survives any transport a deploy already has: a file next to the code, a bundler import, a KV fetch. Three properties are load-bearing:
+
+- **Read-only, loudly.** Every write method refuses with the fix named (re-export at build time, or `importCorpus(store, bundle)` into a writable store). A static corpus that silently accepted writes would lose them with the process.
+- **The wrong embedder is refused at LOAD.** The bundle records the embedder id and dimensions it was built with; pass your runtime embedder as the second argument and a mismatch throws at startup — the same fingerprint rule the durable store enforces (dimensions always decide; ids decide only when both sides named themselves) — instead of surfacing as an empty retrieval at the first question.
+- **Entries are served in the exact shape the formatter reads** — passage on `value.content`, provenance under `value.metadata` — so a bundled corpus renders citations identically to a live-indexed one.
+
+`importCorpus(store, bundle)` is the inverse: seed a writable store from a bundle at boot, or migrate a corpus between machines without re-embedding (and re-billing) anything. The CLI can produce a bundle directly: `npx agentfootprint-index ./docs --to ./corpus.json --embedder local`.
 
 ## Mocks-first development
 

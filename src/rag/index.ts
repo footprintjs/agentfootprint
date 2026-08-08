@@ -16,6 +16,20 @@ export { indexCorpus, buildIndexChart, type IndexCorpusConfig } from './indexCor
 export { indexFolder, type IndexFolderOptions } from './indexFolder.js';
 export { sha256 } from './hash.js';
 
+// Corpus-as-build-artifact (8.20.0): index where the credentials and durable
+// disk live, ship a plain-JSON bundle, serve it read-only where the process
+// runs. `staticVectorStore` is canonical in `agentfootprint/memory` (the
+// runtime side needs no filesystem door) and re-exported here so the whole
+// story is visible from the door that builds the bundle.
+export { exportCorpus, importCorpus } from './exportCorpus.js';
+export {
+  staticVectorStore,
+  CORPUS_BUNDLE_FORMAT,
+  type CorpusBundle,
+  type CorpusBundleEntry,
+  type EmbedderFingerprint,
+} from '../memory/store/staticVectorStore.js';
+
 export {
   DEFAULT_LOADERS,
   textLoader,
@@ -36,6 +50,7 @@ export {
   wholeDocument,
   DEFAULT_MAX_CHARS,
   DEFAULT_OVERLAP_CHARS,
+  DEFAULT_MIN_CHARS,
   type ByParagraphOptions,
   type ByHeadingOptions,
   type FixedWithOverlapOptions,

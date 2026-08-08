@@ -62,6 +62,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
 import { DEFAULT_MAX_EVENTS, eventTail } from '../../events/eventTail.js';
 import { boundaryRecorder, type BoundaryRecorder } from './BoundaryRecorder.js';
+import { summarizeEmbeddings } from './embeddingSummary.js';
 
 /**
  * One frozen run — everything a viewer needs, and nothing it doesn't.
@@ -99,6 +100,22 @@ export interface RecordRunOptions {
    *     consumer reading the bundle's `meta.mode` can say so.
    */
   readonly boundaryDetail?: 'full' | 'lean';
+  /**
+   * Keep raw embedding vectors in the recording (8.20.0). Default `false`:
+   * every `embedding` / `embeddings` field — in boundary payloads, in the
+   * snapshot's subflow results, in tool results riding the event stream —
+   * is replaced with its `{ dims, norm }` summary when the recording is
+   * frozen.
+   *
+   * Field measurement behind the default: one retrieval turn's recording
+   * weighed 2.76 MB, ~1.1 MB of it embedding floats, because the
+   * memory-read subflow's boundary output carries each retrieved entry's
+   * full vector. Nothing that renders a recording reads those floats; the
+   * retrieval evidence a debugger needs (score, passage, document,
+   * rejected candidates) carries no vectors and is untouched. Set `true`
+   * only when a consumer genuinely replays raw vectors offline.
+   */
+  readonly recordEmbeddings?: boolean;
 }
 
 /** A recording in progress. Keep it until the run ends, then freeze it. */
@@ -163,9 +180,11 @@ export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRe
   //    to call this instead of wiring it yourself. `getCommitCount` reads
   //    through the runner on every boundary, so it reports the count at
   //    that moment rather than a number captured now (when it is 0).
+  const keepEmbeddings = options.recordEmbeddings ?? false;
   const boundary = boundaryRecorder({
     getCommitCount: () => runner.getCommitCount(),
     ...(options.boundaryDetail === 'lean' ? { snapshot: 'lean' as const } : {}),
+    ...(keepEmbeddings ? { recordEmbeddings: true } : {}),
   });
   const offAttach = runner.attach(boundary);
   const offTyped = boundary.subscribe(runner);
@@ -175,9 +194,20 @@ export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRe
   return {
     toRecording: (): Recording => ({
       // Read at freeze time. Before the run there is no snapshot; during
-      // one it grows; after it, it is the finished run's.
-      snapshot: runner.getLastSnapshot(),
-      events: tail.snapshot().events,
+      // one it grows; after it, it is the finished run's. Unless
+      // `recordEmbeddings` asked for them, raw vectors are summarised to
+      // `{ dims, norm }` here — the snapshot's subflow results carry every
+      // retrieved entry's full vector otherwise, which is what made a
+      // single retrieval turn's recording weigh 2.76 MB in the field. The
+      // summarisation is copy-on-write: parts of the snapshot without
+      // embeddings are the runner's own objects, held by reference, as
+      // before — serialize to detach.
+      snapshot: keepEmbeddings
+        ? runner.getLastSnapshot()
+        : summarizeEmbeddings(runner.getLastSnapshot()),
+      events: keepEmbeddings
+        ? tail.snapshot().events
+        : (summarizeEmbeddings(tail.snapshot().events) as readonly AgentfootprintEvent[]),
       // The one piece a run does not leave behind — it lives on the
       // chart, which is built once and never changes.
       structure: (runner.getSpec() as { buildTimeStructure?: unknown }).buildTimeStructure,

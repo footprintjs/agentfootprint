@@ -46,6 +46,20 @@ log records what each stage *wrote* — never when a boundary was *crossed*. Cal
 `recordRun()` before `run()`, or you are recording the next one.
 </Callout>
 
+### What a recording keeps of a vector
+
+A retrieval turn drags every retrieved entry's embedding through the
+memory-read subflow's boundary output — measured at 2.76 MB for one recorded
+turn, ~1.1 MB of it floats nothing renders. Since 8.20.0 a recording keeps a
+vector's **shape, not its bytes**: every `embedding` / `embeddings` field is
+replaced with an `EmbeddingSummary` — `{ dims, norm }` — by `recordRun` and by
+`boundaryRecorder` at capture time. The retrieval evidence a debugger reads
+(scores, passages, documents, rejected candidates) carries no vectors and is
+untouched. Pass `recordEmbeddings: true` to either to keep the raw floats, and
+use the exported `summarizeEmbeddings` (whole values, copy-on-write) or
+`summarizeVector` (one vector) from `agentfootprint/observe` when a recording
+post-processor wants to apply or recognise the same projection.
+
 ### If you are wiring it by hand
 
 You rarely should, but the requirement is the one `recordRun` satisfies for

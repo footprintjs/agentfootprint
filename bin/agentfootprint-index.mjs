@@ -26,11 +26,15 @@ const USAGE = `
 agentfootprint-index — build a corpus index
 
 USAGE
-  agentfootprint-index <dir> --to <file.db> [options]
+  agentfootprint-index <dir> --to <file.db|file.json> [options]
 
 REQUIRED
   <dir>                  Directory of documents to index
   --to <file.db>         SQLite index file (created if missing)
+  --to <file.json>       Corpus BUNDLE instead: index in memory, export a
+                         plain-JSON artifact for staticVectorStore() — the
+                         build-time half of serving a corpus on a runtime
+                         with no durable disk
 
 OPTIONS
   --embedder <name>      static (default) | local | openai | mock
@@ -53,6 +57,7 @@ EXAMPLES
   agentfootprint-index ./docs --to ./corpus.db
   agentfootprint-index ./docs --to ./corpus.db --embedder local --chars 800
   agentfootprint-index ./docs --to ./corpus.db --dry-run --json
+  agentfootprint-index ./docs --to ./corpus.json --embedder local
 `;
 
 function fail(message) {
@@ -100,7 +105,7 @@ if (!values.to && !values['dry-run']) {
 
 // Imported through the package's own entry points, so the CLI exercises the
 // same doors a consumer does — a break in the export map fails here too.
-const { indexCorpus } = await import('../dist/esm/doors/rag.js');
+const { indexCorpus, exportCorpus } = await import('../dist/esm/doors/rag.js');
 const { byHeading, byParagraph, fixedWithOverlap, wholeDocument } = await import(
   '../dist/esm/doors/rag.js'
 );
@@ -143,10 +148,18 @@ try {
   fail(err instanceof Error ? err.message : String(err));
 }
 
+// A `.json` target builds a corpus BUNDLE: index into a throwaway in-memory
+// store, export with exportCorpus, write one plain-JSON artifact for
+// staticVectorStore() to serve on a runtime with no durable disk.
+const jsonTarget = !values['dry-run'] && values.to !== undefined && values.to.endsWith('.json');
+
 // --dry-run writes to a throwaway in-memory index, so it reports real chunk
 // counts and real splitting without touching the file. It still EMBEDS —
 // the alternative is reporting a count that the real run might not match.
-const store = values['dry-run'] ? new InMemoryStore() : sqliteVectorStore({ file: resolve(values.to) });
+const store =
+  values['dry-run'] || jsonTarget
+    ? new InMemoryStore()
+    : sqliteVectorStore({ file: resolve(values.to) });
 
 try {
   const report = await indexCorpus({
@@ -161,6 +174,18 @@ try {
     removeMissing: values.remove,
     ...(values.corpus && { corpus: { conversationId: values.corpus } }),
   });
+
+  if (jsonTarget) {
+    const { writeFileSync } = await import('node:fs');
+    const target = resolve(values.to);
+    const bundle = await exportCorpus(store, values.corpus ? { conversationId: values.corpus } : undefined);
+    writeFileSync(target, JSON.stringify(bundle));
+    process.stdout.write(
+      `wrote corpus bundle: ${target} — ${bundle.entries.length} entries, ` +
+        `'${bundle.embedder.id}@${bundle.embedder.dimensions}'. Serve it with ` +
+        `staticVectorStore(JSON.parse(readFileSync(...)), embedder).\n`,
+    );
+  }
 
   if (values.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
