@@ -217,8 +217,6 @@
 - [EmittedEvent](/agentfootprint/api/generated/type-aliases/EmittedEvent.md)
 - [EvidencePreset](/agentfootprint/api/generated/type-aliases/EvidencePreset.md)
 - [FlowchartResultMapper](/agentfootprint/api/generated/type-aliases/FlowchartResultMapper.md)
-- [~~FoldRefusal~~](/agentfootprint/api/generated/type-aliases/FoldRefusal.md)
-- [~~FoldRefusalReason~~](/agentfootprint/api/generated/type-aliases/FoldRefusalReason.md)
 - [GraphInput](/agentfootprint/api/generated/type-aliases/GraphInput.md)
 - [GraphOutput](/agentfootprint/api/generated/type-aliases/GraphOutput.md)
 - [GroupKind](/agentfootprint/api/generated/type-aliases/GroupKind.md)

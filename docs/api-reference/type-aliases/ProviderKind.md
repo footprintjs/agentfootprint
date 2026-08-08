@@ -8,6 +8,6 @@
 
 > **ProviderKind** = `"mock"` \| `"anthropic"` \| `"openai"` \| `"ollama"` \| `"bedrock"` \| `"browser-anthropic"` \| `"browser-openai"`
 
-Defined in: [src/adapters/llm/createProvider.ts:36](https://github.com/footprintjs/agentfootprint/blob/55ab6101a19749cb9a4b597db692af726c9bb431/src/adapters/llm/createProvider.ts#L36)
+Defined in: [src/adapters/llm/createProvider.ts:36](https://github.com/footprintjs/agentfootprint/blob/52c477b2ecd2d7726225ffb62f954a70f5d77804/src/adapters/llm/createProvider.ts#L36)
 
 Built-in provider kinds. Custom providers don't go through this factory.
