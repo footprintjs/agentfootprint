@@ -790,10 +790,32 @@ export interface CredentialAuthorizationRequiredPayload {
   readonly service: string;
   readonly sessionId: string;
 }
-/** Credential resolution failed (the tool is not run). Carries the reason only. */
+/**
+ * Credential resolution failed — the provider threw, so the tool is not run
+ * (fail-closed: never half-authed).
+ *
+ * **Never carries the credential, the token, or the authorization URL.** See
+ * the security contract on `CredentialProvider`: `reason` is the provider's own
+ * thrown message, so a provider must scrub secrets before throwing.
+ *
+ * `tool` and `errorClass` were added in 9.4.0, for the operator watching a
+ * dashboard rather than reading a transcript. Without the tool name this event
+ * says a service failed but not what stopped working; without the class every
+ * distinct failure is one undifferentiated string. Both are optional because
+ * neither is always knowable: `tool` is absent when the resolution was not made
+ * on a tool's behalf, and `errorClass` is absent when what was thrown was not
+ * an `Error`.
+ */
 export interface CredentialFailedPayload {
+  /** The service id the tool declared (or asked for), never the credential. */
   readonly service: string;
+  /** The provider's thrown message. */
   readonly reason: string;
+  /** The tool whose call needed it — the thing that actually stopped working. */
+  readonly tool?: string;
+  /** Constructor name of what was thrown (e.g. `'TypeError'`, `'TimeoutError'`)
+   *  — the routable half of the failure, so alerts do not have to parse prose. */
+  readonly errorClass?: string;
 }
 
 export interface PermissionGateClosedPayload {

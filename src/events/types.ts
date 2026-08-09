@@ -96,6 +96,23 @@ export interface EventMeta {
   readonly correlationId?: string;
   /** Run id — demultiplex concurrent runs sharing one dispatcher. */
   readonly runId: string;
+  /**
+   * The hosting CONVERSATION this run belongs to, when it belongs to one
+   * (9.4.0).
+   *
+   * A `runId` is per `run()` / `resume()`; a session outlives both. So a
+   * shipped event stream could say which run an event came from but not which
+   * conversation — and every session-oriented host (AgentCore above all) asks
+   * its questions the other way round: "what happened in session X?". Joining
+   * runs back into sessions after the fact is not possible from the events
+   * alone, which is why this rides on the meta rather than being reconstructed.
+   *
+   * **Absent when the run is not session-bound**, and never invented: an
+   * anonymous `standingAgent` request has no session, and a bare `agent.run()`
+   * has none either. `standingAgent` passes the caller's own session id
+   * through; anyone else sets it with `run({ ... }, { sessionId })`.
+   */
+  readonly sessionId?: string;
 }
 
 /** Discriminated-union envelope every event implements. */

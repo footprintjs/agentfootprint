@@ -156,6 +156,29 @@ export interface BedrockProviderOptions {
     readonly Converse: new (input: BedrockConverseCommand) => unknown;
     readonly ConverseStream: new (input: BedrockConverseCommand) => unknown;
   };
+  /**
+   * @internal Test injection (9.4.0) — the AWS SDK MODULE, keyed by the
+   * constructor names the package really exports.
+   *
+   * `_commands` above is keyed `Converse` / `ConverseStream`, which is
+   * convenient and hides the one fact worth pinning: which exported command
+   * this adapter reaches for. Two adapters in this package have shipped
+   * dispatching operations that do not exist, so the shared pin
+   * (test/adapters/aws/) drives every AWS adapter through an `_sdk` double and
+   * asserts the names. Takes precedence over `_commands` when both are given.
+   */
+  readonly _sdk?: BedrockConverseSdkModule;
+}
+
+/**
+ * The slice of `@aws-sdk/client-bedrock-runtime` this provider touches, named
+ * as the package names it. (The embedder door declares its own slice for
+ * `InvokeModel` — same package, different operation.)
+ */
+export interface BedrockConverseSdkModule {
+  readonly BedrockRuntimeClient?: new (config: { region?: string }) => BedrockClient;
+  readonly ConverseCommand?: new (input: BedrockConverseCommand) => unknown;
+  readonly ConverseStreamCommand?: new (input: BedrockConverseCommand) => unknown;
 }
 
 /**
@@ -331,26 +354,50 @@ function resolveClient(options: BedrockProviderOptions): {
     ConverseStream: new (input: BedrockConverseCommand) => unknown;
   };
 } {
-  if (options._client && options._commands) {
+  let mod: BedrockConverseSdkModule;
+  if (options._sdk) {
+    mod = options._sdk;
+  } else if (options._client && options._commands) {
     return { client: options._client, Commands: options._commands };
+  } else {
+    try {
+      mod = lazyRequire<BedrockConverseSdkModule>('@aws-sdk/client-bedrock-runtime');
+    } catch {
+      throw new Error(
+        'BedrockProvider requires `@aws-sdk/client-bedrock-runtime`.\n' +
+          '  Install:  npm install @aws-sdk/client-bedrock-runtime\n' +
+          '  Or pass `_client` + `_commands` for test injection.',
+      );
+    }
   }
-  let mod: {
-    BedrockRuntimeClient: new (opts: { region?: string }) => BedrockClient;
-    ConverseCommand: new (input: BedrockConverseCommand) => unknown;
-    ConverseStreamCommand: new (input: BedrockConverseCommand) => unknown;
-  };
-  try {
-    mod = lazyRequire('@aws-sdk/client-bedrock-runtime');
-  } catch {
-    throw new Error(
-      'BedrockProvider requires `@aws-sdk/client-bedrock-runtime`.\n' +
-        '  Install:  npm install @aws-sdk/client-bedrock-runtime\n' +
-        '  Or pass `_client` + `_commands` for test injection.',
-    );
+  // Named one at a time so a missing one is reported BY NAME. `Converse` and
+  // `ConverseStream` are the two operations this provider has; an SDK missing
+  // either is a different problem to an SDK that is not installed.
+  for (const name of ['ConverseCommand', 'ConverseStreamCommand'] as const) {
+    if (typeof mod[name] !== 'function') {
+      throw new Error(
+        `BedrockProvider: \`@aws-sdk/client-bedrock-runtime\` is missing ${name}. ` +
+          'Upgrade the SDK, or pass `_client` + `_commands` with your own mapping.',
+      );
+    }
   }
+  const client =
+    options._client ??
+    (() => {
+      if (typeof mod.BedrockRuntimeClient !== 'function') {
+        throw new Error(
+          'BedrockProvider: `@aws-sdk/client-bedrock-runtime` is installed but ' +
+            '`BedrockRuntimeClient` was not found. Update the SDK.',
+        );
+      }
+      return new mod.BedrockRuntimeClient({ region: options.region });
+    })();
   return {
-    client: new mod.BedrockRuntimeClient({ region: options.region }),
-    Commands: { Converse: mod.ConverseCommand, ConverseStream: mod.ConverseStreamCommand },
+    client,
+    // Both checked by name directly above.
+    /* eslint-disable @typescript-eslint/no-non-null-assertion */
+    Commands: { Converse: mod.ConverseCommand!, ConverseStream: mod.ConverseStreamCommand! },
+    /* eslint-enable @typescript-eslint/no-non-null-assertion */
   };
 }
 

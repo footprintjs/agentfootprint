@@ -80,6 +80,37 @@ renders the agent/tool/LLM spans over them. The log group must exist (or the rol
 first delivery (the adapters call `CreateLogStream`, so the role needs `logs:CreateLogStream`);
 only the **group** is the operator's job.
 
+### Which CONVERSATION an event belongs to — `meta.sessionId` (9.4.0)
+
+Every shipped event carries `meta.runId`, and a runId is per `run()` /
+`resume()`. A session outlives both, so a log group could answer *"what
+happened in this run?"* and not *"what happened in this conversation?"* — which
+is the question a session-oriented host like AgentCore is built around, and one
+you cannot reconstruct from the events afterwards.
+
+`standingAgent` now threads the caller's own session id onto every event the
+run emits:
+
+```ts
+// nothing to configure — the host already knows the session
+await standingAgent({ agent, sessions: agentCoreSessions({ store: 'memory', memoryId }), host });
+```
+
+```
+fields @timestamp, meta.sessionId, type
+| filter meta.sessionId = 'conv-77'
+| sort @timestamp asc
+```
+
+The CloudWatch and AgentCore adapters serialize the whole envelope, so this
+arrives without their knowing it exists. Outside a host, set it yourself with
+`agent.run(input, { sessionId })`.
+
+**Absent when there is no session, never invented.** An anonymous request has
+none; a bare `agent.run()` has none. Neither gets a fabricated id, and neither
+gets the runId wearing a session's name — so `meta.sessionId` being present is
+itself evidence the run really was session-bound.
+
 ## Connect OpenTelemetry
 
 `otelObservability()` turns the event stream into a GenAI **span tree** on a tracer **you

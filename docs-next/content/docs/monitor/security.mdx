@@ -12,6 +12,7 @@ description: Permission gating for tool calls, multi-tenant identity isolation, 
 | **Multi-tenant identity** | Memory + RAG cross-tenant isolation | ✅ Shipped (every store call scopes by `MemoryIdentity`) |
 | **PermissionChecker** | Per-tool-call guard with caller identity context | ✅ Shipped |
 | **PermissionPolicy** | Data-driven role allowlist + sync `isAllowed` for tool gating | ✅ Shipped v2.5 |
+| **AgentCore Policy** | Enforced at the Gateway, surfaced as an MCP error | ⛔ `agentCorePolicy` retired 9.4.0 |
 | **Prompt-injection defense** | Detect injection patterns in tool results / RAG chunks | 🚧 Planned v2.6+ |
 | **Audit trail** | Decision evidence persisted for compliance | ✅ Shipped via Causal memory + event stream |
 
@@ -135,6 +136,7 @@ The role map is shared across instances; only the active role differs. No re-con
 - `PermissionPolicy.fromRoles(...)` data-driven role allowlist (v2.5)
 - `agentfootprint/security` subpath
 - Typed audit events (`permission.check`, `permission.denied`)
+- Subscribable `agentfootprint.credential.*` domain (9.4.0)
 - Causal memory for decision-evidence retention
 - `MemoryRedactionPolicy` reserved field on memory definitions (impl deferred)
 
@@ -171,6 +173,86 @@ to the CALLER only — on the pause outcome or on the error object — and never
 model, the conversation, the trace or any recording. The error's `message` deliberately
 omits it, because a message is the one string that reliably reaches a log line; read
 `error.authorizationUrl` instead.
+
+## AgentCore Policy is enforced at the Gateway (9.4.0)
+
+**The library's role is to surface AgentCore's denials honestly, not to
+pre-evaluate them.**
+
+Through 9.3.0 this package shipped `agentCorePolicy()`, a `PermissionChecker`
+that asked an AgentCore policy store to authorize each tool call. It dispatched
+`EvaluatePolicyCommand`, and **that command does not exist** in
+`@aws-sdk/client-bedrock-agentcore` — in any version. AgentCore has no
+data-plane authorization call at all: policy is authored on the control plane
+and **enforced at the Gateway**, in front of the tool, before a request reaches
+your process. So every check ended in the adapter's `catch`, and fail-closed
+turned that into a denial of every tool call.
+
+It is **retired in 9.4.0**. The export and its types remain so existing imports
+still compile; calling the factory throws `AgentCorePolicyRetiredError`
+(`ERR_AGENTCORE_POLICY_RETIRED`) naming the reason and the alternatives.
+
+- **Rules you own** → `PermissionPolicy.fromRoles(...)` as `permissionChecker`,
+  exactly as above. For conditional rules — per-argument, per-sequence,
+  ask-a-human — use the `.toolMiddleware()` chain.
+- **Gateway policy** → already enforced without this library. A denial arrives
+  as an **MCP error** on the tool call made through `mcpClient(...)`, and lands
+  in the loop as that tool's result, which the model reads and adapts to.
+
+The `PermissionChecker` port is untouched: a remote checker is an object with a
+`check()` method, and yours can call any service you like.
+
+## A fail-closed refusal has to READ final (9.4.0)
+
+When a `PermissionChecker` **throws**, the call is denied — something that did
+not answer did not say yes. What the model is *told* about that changed in
+9.4.0, because the old wording was measured failing in production.
+
+The model used to receive the checker's own thrown message. Those are written
+for operators — *"not available right now"*, `ECONNREFUSED`, *"timed out"* —
+and a model reads weather and waits for it to change: one deployment re-called
+the same tool until `maxIterations` ran out and returned the empty string.
+Against the local policy's long-standing bracketed form, the same model adapted
+cleanly on the first refusal.
+
+So the denial is now terminal and says so, in that same form:
+
+```
+[permission denied: Tool 'refund' could not be authorized. This will not change
+during this run — do not call it again. Continue without it, or say what you are
+unable to do.]
+```
+
+The thrown message is an operator's fact and stays where operators look: the
+`agentfootprint.permission.check` event's `rationale`. It never reaches the
+transcript, which also keeps infrastructure detail (hostnames, internal IPs) out
+of the conversation. **A checker that ANSWERED still speaks for itself** — an
+explicit `deny` carries its own `rationale`/`tellLLM` to the model, unchanged.
+
+## Watch credential failures as a group (9.4.0)
+
+`agentfootprint.credential.*` is now a subscribable domain, and
+`credential.failed` names the tool:
+
+```ts
+agent.on('agentfootprint.credential.*', (e) => log.info(e.type, e.payload));
+
+agent.on('agentfootprint.credential.failed', (e) => {
+  // { service, reason, tool?, errorClass? } — never the token, never a consent URL
+  alert(`${e.payload.tool} cannot authenticate to ${e.payload.service}`);
+});
+```
+
+The domain has emitted since 6.11.0 and had **no dispatcher bridge and no
+wildcard**, so `agent.on(...)` observed nothing however correctly the events
+fired — which is how a credential adapter that failed 100% of its calls did so
+in a silence that read like health. Both are wired in 9.4.0, and a tool that
+resolves its own credential through `ctx.credentials` now reports failures too
+(it used to be silent, its throw indistinguishable from any other tool error).
+
+`tool` and `errorClass` are optional and never invented: `tool` is absent when
+the resolution was not made on a tool's behalf, `errorClass` when what was
+thrown was not an `Error`.
 
 ## Audit trail via Causal memory
 

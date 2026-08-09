@@ -97,6 +97,10 @@ export interface CloudwatchObservabilityOptions {
   /** Test injection — bypasses SDK lazy-require entirely. When set,
    *  `region` / IAM are ignored. */
   readonly _client?: CloudWatchLikeClient;
+  /** @internal Test injection (9.4.0) — the AWS SDK module, so the real shim
+   *  (`send(new Command(...))`) runs against a fake SDK and the command names
+   *  it dispatches can be asserted. Ignored when `_client` is set. */
+  readonly _sdk?: CloudWatchSdkModule;
 }
 
 // ─── SDK-shaped surface (just what we use) ───────────────────────────
@@ -117,7 +121,16 @@ export interface CloudWatchLikeClient {
   createLogStream?(input: { logGroupName: string; logStreamName: string }): Promise<unknown>;
 }
 
-interface CloudWatchSdkModule {
+/**
+ * The slice of `@aws-sdk/client-cloudwatch-logs` this shim touches.
+ *
+ * Exported since 9.4.0 so `opts._sdk` can name it — which is what lets the
+ * shared command-name pin (test/adapters/aws/) assert the OPERATIONS this
+ * adapter dispatches without an AWS account or the peer dep installed. A
+ * `_client` double proves the batching; only an `_sdk` double can prove the
+ * adapter reaches for `PutLogEvents` and not something that does not exist.
+ */
+export interface CloudWatchSdkModule {
   readonly CloudWatchLogsClient?: new (config: { region?: string }) => unknown;
   readonly PutLogEventsCommand?: new (input: unknown) => unknown;
   readonly CreateLogStreamCommand?: new (input: unknown) => unknown;
@@ -180,7 +193,7 @@ export function _buildCloudWatchObservability(
   let client: CloudWatchLikeClient | undefined = opts._client;
   function ensureClient(): CloudWatchLikeClient {
     if (client) return client;
-    client = createCloudWatchClient(opts.region, strategyName);
+    client = createCloudWatchClient(opts.region, strategyName, opts._sdk);
     return client;
   }
 
@@ -415,16 +428,21 @@ export function cloudwatchObservability(
 function createCloudWatchClient(
   region: string | undefined,
   strategyName: string,
+  injected?: CloudWatchSdkModule,
 ): CloudWatchLikeClient {
   let mod: CloudWatchSdkModule;
-  try {
-    mod = lazyRequire<CloudWatchSdkModule>('@aws-sdk/client-cloudwatch-logs');
-  } catch {
-    throw new Error(
-      `[${strategyName}Observability] requires the \`@aws-sdk/client-cloudwatch-logs\` peer dependency.\n` +
-        `  Install:  npm install @aws-sdk/client-cloudwatch-logs\n` +
-        `  Or pass \`_client\` for test injection.`,
-    );
+  if (injected) {
+    mod = injected;
+  } else {
+    try {
+      mod = lazyRequire<CloudWatchSdkModule>('@aws-sdk/client-cloudwatch-logs');
+    } catch {
+      throw new Error(
+        `[${strategyName}Observability] requires the \`@aws-sdk/client-cloudwatch-logs\` peer dependency.\n` +
+          `  Install:  npm install @aws-sdk/client-cloudwatch-logs\n` +
+          `  Or pass \`_client\` for test injection.`,
+      );
+    }
   }
   if (!mod.CloudWatchLogsClient || !mod.PutLogEventsCommand) {
     throw new Error(

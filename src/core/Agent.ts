@@ -59,6 +59,7 @@ import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { embeddingRecorder } from '../recorders/core/EmbeddingRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
+import { credentialRecorder } from '../recorders/core/CredentialRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
@@ -183,6 +184,22 @@ export interface AgentRunOptions extends RunOptions {
   correlationId?: string;
   /** OTEL-style trace id — forwarded onto every emitted event's `EventMeta.traceId`. Falls back to `options.env?.traceId` when unset. */
   traceId?: string;
+  /**
+   * The hosting CONVERSATION this run belongs to (9.4.0) — forwarded onto
+   * every emitted event's `EventMeta.sessionId`, and from there into whatever
+   * an observability strategy ships (the CloudWatch/AgentCore adapters
+   * serialize the whole envelope, so it arrives without their knowing).
+   *
+   * `runId` is per run; a session spans many. Without this, a shipped event
+   * stream can answer "what happened in this run?" and not "what happened in
+   * this conversation?", which is the question a session-oriented host is
+   * built around. `standingAgent` sets this for you from the request's own
+   * session id, on both `run()` and `resume()`.
+   *
+   * Omit it for an unhosted run. It is never derived, guessed, or defaulted to
+   * the runId: an absent session and an invented one are different facts.
+   */
+  sessionId?: string;
   /**
    * Who this run is for — the same tuple as `run({ identity })`, reachable
    * from the doors whose input is a stored conversation rather than a
@@ -1724,12 +1741,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.assertForcedToolChoiceSupported();
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
+    const sessionId = runOptions?.sessionId;
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
       compositionPath: [`Agent:${this.id}`],
       ...(correlationId !== undefined && { correlationId }),
       ...(traceId !== undefined && { traceId }),
+      // Session identity rides beside runId, not instead of it: one session
+      // produces many runs, and an event needs to say which of each it is.
+      ...(sessionId !== undefined && { sessionId }),
     };
 
     // Reuse the cached chart built at constructor time.
@@ -1833,6 +1854,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Tool-args validation events (#9) — always-on; zero-cost when no
     // validation event fires.
     attachObserver(validationRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Credential lifecycle (9.4.0). The domain has emitted since 6.11.0 with no
+    // bridge, so `agent.on('agentfootprint.credential.failed', …)` observed
+    // nothing however correctly the event fired — which is how an identity
+    // adapter that failed every call did so in a silence that read like health.
+    // Always-on and zero-cost: the bridge drops an event nobody listens for.
+    attachObserver(credentialRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
     attachObserver(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));

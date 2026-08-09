@@ -361,10 +361,36 @@ refusing your longer chunks partway through an indexing run.
 
 Only `ns` (the identity namespace) and `tier` are ever filtered on.
 
-A **euclidean** index is refused at construction: the port's score is a cosine
-similarity, a cosine distance converts exactly (`1 - distance`), and a euclidean
-one does not — any mapping into `[-1, 1]` produces a number that reads like a
-cosine and is not one.
+### The store reads your index before it trusts it (9.4.0)
+
+On its first call — once, memoized — the store issues one **`GetIndex`** and
+refuses anything it cannot serve honestly:
+
+| It checks | It refuses when | Why it is fatal |
+|---|---|---|
+| `distanceMetric` is cosine | the index says `euclidean` | a self-query scored **0.9991630113800056** against a euclidean index, where a true cosine is exactly `1.0`. A number that reads like a cosine and is not one — no threshold (starting with `defineRAG`'s `0.7`) can separate it from a real score. |
+| `af` is non-filterable | the index does not declare it | otherwise the import writes the short chunks and then fails on a longer one with AWS's *"Filterable metadata must have at most 2048 bytes"* — **partway through**, having already reported success for everything before it. The refusal happens before the first byte. |
+| `dimension` matches the embedder | the vectors are another length | the service would reject each write anyway, one at a time, saying nothing about which embedder is wrong. This names both numbers, and catches the first search of a fresh process — which the per-process fingerprint cannot. |
+
+Before 9.4.0 this store dispatched only `PutVectors` and `QueryVectors` and
+never looked at the index. The euclidean check read `options.distanceMetric` —
+a **claim by the caller** about an index the store did not create — so leaving
+it undefined (the default) sailed straight through. A production deployment hit
+all three at once.
+
+<Callout type="warn" title="New IAM permission">
+The caller now needs **`s3vectors:GetIndex`** alongside `PutVectors` /
+`QueryVectors` / `GetVectors` / `ListVectors` / `DeleteVectors`. A `GetIndex`
+that fails is refused by name — naming the index, and telling you to check the
+permission, the region and the names — never passed through, because an index
+this store cannot read is an index whose metric, layout and dimension it would
+be guessing at.
+</Callout>
+
+This is the discipline the sibling stores already had at open —
+`sqliteVectorStore`'s schema identity, `pgVectorStore`'s schema check,
+`staticVectorStore`'s load-time fingerprint. This store had nothing to open, so
+it opened nothing.
 
 ### What a vector index is not
 

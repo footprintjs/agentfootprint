@@ -7,6 +7,198 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.4.0] - 2026-08-09
+
+**AWS adapters tell the truth.**
+
+A production field report tested 9.3.0 against a real account and found two
+adapters *dispatching calls that were never made against AWS* — one sending a
+command that does not exist, one calling a method that a command-based client
+does not have. Both compiled. Both had green tests. Every one of those tests
+injected a double past the SDK, which is exactly why the bug class survives: the
+one part of an adapter a type-checker cannot see is **which operation of the
+vendor's API it dispatches**, and a fake answers whatever it is asked.
+
+This release fixes both, seals the class across every AWS adapter in the
+package, and closes three more things the same report measured. No breaking
+changes to any type.
+
+### Fixed — `agentCoreIdentity` never worked at all
+
+`agentCoreIdentity({ region })` — the documented path, in the README and in its
+own docstring — failed **100% of the time, on the first call**, with a message
+blaming the SDK version:
+
+```
+agentCoreIdentity: the SDK client has no getResourceOauth2Token. Confirm the
+@aws-sdk/client-bedrock-agentcore version, or pass `_client`.
+```
+
+It built a `BedrockAgentCoreClient` and then duck-typed
+`client.getResourceOauth2Token` off it. A bare `@aws-sdk/client-*` **Client** is
+command-based: its prototype carries `send` and `destroy` and nothing else. The
+per-operation shortcuts live on the AGGREGATED client (`BedrockAgentCore`),
+which is a different class. Verified on 3.1066.0 — the installed
+`BedrockAgentCoreClient` prototype is exactly `[constructor, destroy]`.
+
+It now goes through `sdk.send(new GetResourceOauth2TokenCommand(input))`, which
+is the pattern the **memory adapter in this same package** has used all along.
+Two more things the shim was getting wrong, found while fixing it:
+
+- **`sessionId` came back empty on every consent round-trip.** The service
+  reports a 3LO session as `sessionUri`; the adapter read `sessionId`, which is
+  not a field of `GetResourceOauth2TokenResponse`. Now mapped.
+- **`workloadIdentityToken` is REQUIRED on the request** and was sent as
+  optional, so a call without one bought an opaque `ValidationException`. It is
+  now refused by name before the call, naming both ways to supply one
+  (`workloadIdentityToken`, or `workloadName` for per-user scoping).
+- `expiresAt` is documented as never reported by AgentCore, because the response
+  has no expiry field.
+
+The `_client` seam is untouched: an injected client is somebody else's mapping
+and keeps it.
+
+### Added — one registry pins the AWS command names, for every adapter
+
+The systemic half. `test/adapters/aws/` holds ONE registry naming, per adapter,
+the SDK package, the client constructor and every command constructor it
+dispatches — and three assertions over it:
+
+1. **Dispatch.** Each adapter is driven through an `_sdk` double whose only
+   exports are the pinned names. Reach for anything else and the adapter's own
+   "missing command" refusal fires. Runs offline, always.
+2. **Reality.** Wherever the peer dep is resolvable, every pinned name must be a
+   real function export of the real package. (The AWS SDKs are deliberately NOT
+   devDependencies: six adapters prove their missing-peer-dep refusals by the
+   packages genuinely being absent. The check runs on any machine that installs
+   them, and reports its own reach rather than skipping silently.)
+3. **Completeness.** Every source file that LOADS an `@aws-sdk/*` package must
+   have a row. A new AWS adapter cannot ship unpinned.
+
+Coverage: `agentCoreIdentity`, `AgentCoreStore`, `agentCoreSessions`,
+`BedrockAgentMemory`, `s3VectorsStore`, `cloudwatchObservability` /
+`agentcoreObservability`, `xrayObservability`, `bedrockEmbedder`, the `bedrock`
+LLM provider — and `agentCorePolicy`, whose row records that it now dispatches
+nothing. CloudWatch, X-Ray and the Bedrock provider gained an internal `_sdk`
+test seam so their command names are assertable at all; nothing about their
+public behaviour changed.
+
+### Changed — `agentCorePolicy` is retired, and says why
+
+It dispatched `EvaluatePolicyCommand`. **That command does not exist** in
+`@aws-sdk/client-bedrock-agentcore`, in any version, under any name. AgentCore
+has no data-plane authorization operation: the policy surface is control-plane
+only, and **AgentCore enforces policy AT THE GATEWAY**, in front of the tool,
+before a request reaches your process. So every evaluation ended in the
+adapter's own `catch`, and fail-closed turned that into a denial of every tool
+call while reporting the engine unreachable.
+
+The factory and all of its types remain exported and still type-check; calling
+it now throws `AgentCorePolicyRetiredError` (`ERR_AGENTCORE_POLICY_RETIRED`)
+naming the phantom command, the Gateway, and the alternatives —
+`PermissionPolicy.fromRoles(...)` for local rules, `.toolMiddleware()` for
+conditional ones. Deleting an export breaks a build with a module-resolution
+error that explains nothing; a factory that refuses breaks it with a paragraph.
+Whether the symbol is removed is a decision for 10.0.
+
+**Gateway-enforced denials arrive as MCP errors** on the tool call made through
+`mcpClient(...)`, and land in the loop as that tool's result. Surfacing them
+honestly is the library's job; pre-evaluating a second copy of the rule
+in-process never was. The `PermissionChecker` port and every local policy on it
+are untouched.
+
+### Changed — a fail-closed refusal now READS final
+
+When a `PermissionChecker` throws, the call is denied. What the model was *told*
+was the checker's own thrown message — and those are written for operators:
+*"not available right now"*, `ECONNREFUSED`, *"timed out"*. **Measured in
+production: a real model read that as weather and retried the same tool to
+`maxIterations`, then returned the empty string.** Against the local policy's
+long-standing bracketed form the same model adapted cleanly on the first
+refusal. So the denial now uses that form and states that it is terminal:
+
+```
+[permission denied: Tool 'refund' could not be authorized. This will not change
+during this run — do not call it again. Continue without it, or say what you are
+unable to do.]
+```
+
+The thrown message stays on `agentfootprint.permission.check`'s `rationale`,
+where operators already look — which also keeps infrastructure detail
+(hostnames, internal IPs) out of the transcript. A checker that ANSWERED still
+speaks for itself: an explicit `deny` carries its own `rationale` / `tellLLM`
+unchanged.
+
+### Fixed — credential failures were invisible to `agent.on(...)`
+
+`agentfootprint.credential.*` has had payload types, registry entries and real
+emit sites since 6.11.0 — and **no dispatcher bridge and no domain wildcard**.
+Every one of those events stopped on footprintjs's raw emit channel:
+`agent.on('agentfootprint.credential.failed', …)` observed nothing however
+correctly the event fired. That is how an identity adapter failing 100% of its
+calls did so in a silence that read like health.
+
+- `credentialRecorder` is attached on every run (zero-cost with no listener), so
+  the domain reaches the typed dispatcher at last.
+- `agentfootprint.credential.*` joined `DomainWildcard`, so an operator can
+  subscribe to the domain as a group.
+- `CredentialFailedPayload` gained **`tool`** (what actually stopped working)
+  and **`errorClass`** (routable without parsing prose). Both optional and never
+  invented; still never the token, and never a consent URL.
+- A tool that resolves its **own** credential via `ctx.credentials` now reports
+  failures too. That path emitted nothing at all: the throw was caught by the
+  generic tool catch and became one indistinguishable `error: true`.
+
+### Added — `EventMeta.sessionId`: which CONVERSATION an event belongs to
+
+`meta.runId` is per `run()` / `resume()`; a session spans many. A shipped
+telemetry stream could answer *"what happened in this run?"* and not *"what
+happened in this conversation?"* — the question a session-oriented host is built
+around, and one the events alone cannot be joined back into afterwards.
+
+`standingAgent` now threads the caller's own session id onto every event the run
+emits, and `agent.run(input, { sessionId })` sets it outside a host. The
+CloudWatch and AgentCore adapters serialize the whole envelope, so it arrives
+without their knowing it exists.
+
+**Absent when there is no session, never fabricated.** An anonymous request has
+none (the host's internal `#anonymous-N` concurrency latch is not published as
+telemetry); a bare `agent.run()` has none.
+
+### Fixed — `s3VectorsStore` never verified the index it was given
+
+The same field report, on the same run. This store dispatched exactly
+`PutVectors` and `QueryVectors` and **never looked at the index** — trusting
+three preconditions it had no evidence for, all three of which were wrong at
+once:
+
+- **A euclidean index was accepted.** The construction refusal read
+  `options.distanceMetric`, a *claim by the caller* about an index the store did
+  not create, so the default (undeclared) sailed through. Measured live: a
+  vector queried against itself returned **0.9991630113800056**, where a true
+  cosine self-similarity is exactly `1.0` — the very "number that READS like a
+  cosine and is not one" this adapter's own header warns about.
+- **A missing `nonFilterableMetadataKeys: ['af']`** surfaced as a raw AWS
+  `ValidationException` — *"Filterable metadata must have at most 2048 bytes"* —
+  **mid-import**, with documents already written and success already reported
+  for them.
+- **The index dimension was never compared with the embedder.**
+
+One `GetIndex`, lazily on first use and memoized, now answers all three: the
+metric is verified (refused by name, quoting both the index's answer and the
+caller's declaration when they disagree), `af` is verified **before the first
+byte is written**, and the dimension is checked against the vectors being
+written or searched — which also catches the first search of a fresh process,
+which the per-process fingerprint could not. This is the discipline
+`sqliteVectorStore`, `pgVectorStore` and `staticVectorStore` already applied at
+open; this store had nothing to open, so it opened nothing.
+
+A `GetIndex` that fails is refused teachingly — naming the index and what to
+check — never passed through, because an index this store cannot read is an
+index whose metric, layout and dimension it would be guessing at.
+
+**Requires a new IAM permission: `s3vectors:GetIndex`.**
+
 ## [9.3.0] - 2026-08-09
 
 **Three promises the code had already made, kept.**

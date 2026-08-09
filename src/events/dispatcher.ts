@@ -73,6 +73,13 @@ export type DomainWildcard =
   | 'agentfootprint.tools.*'
   | 'agentfootprint.skill.*'
   | 'agentfootprint.permission.*'
+  // 9.4.0 — the credential domain has emitted four events since 6.11.0 and had
+  // no wildcard, so the ONE audience that wants all of them (an operator
+  // watching "is anything failing to authenticate?") could not subscribe to
+  // them as a group. That is how a credential adapter can fail every call and
+  // nobody notices: the events were on the wire, and nothing was listening to
+  // the wire. `validation.*` and `reliability.*` are still missing here.
+  | 'agentfootprint.credential.*'
   | 'agentfootprint.risk.*'
   | 'agentfootprint.fallback.*'
   | 'agentfootprint.cost.*'

@@ -31,7 +31,7 @@ agentfootprint's adapters wrap.
 | **Identity — workload token** | data → `GetWorkloadAccessToken[ForUserId]` | `agentCoreIdentity({ workloadName, userIdFor })` (`agentfootprint/security`) | ✅ shipped |
 | **Identity — OAuth2 / API key** | data → `GetResourceOauth2Token` / `GetResourceApiKey` | `agentCoreIdentity()` | ✅ shipped |
 | **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient({ transport: gatewayTransport({ url, credentials }) })` (`agentfootprint/providers`) | ✅ shipped |
-| **Policy — authorize a tool call** | data → policy evaluation | `agentCorePolicy({ policyStoreId })` (`agentfootprint/security`) | ✅ shipped |
+| **Policy — authorize a tool call** | enforced at the Gateway | nothing to attach; a denial arrives as an MCP error (`agentCorePolicy` retired 9.4.0) | ⛔ not a data-plane call |
 | **Observability** | CloudWatch GenAI Observability + X-Ray (OTEL spans) | `agentcoreObservability()` (`agentfootprint/observe`) | ✅ shipped |
 | **LLM** | Bedrock **Converse** | `bedrock()` (`agentfootprint/providers`) | ✅ shipped |
 | **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`, session header) | `agentCoreRuntimeHost()` + `agentCoreSessions()` (`agentfootprint/hosting`) | ✅ shipped |
@@ -125,21 +125,21 @@ Agent.create({ provider }).toolProvider(tools).build();
 agentfootprint does **not** create Gateways (no control-plane client) — `CreateGateway` /
 `CreateGatewayTarget` are SDK / CDK.
 
-## Policy — `agentCorePolicy`
+## Policy — enforced at the Gateway, not here
 
-```ts
-import { agentCorePolicy } from 'agentfootprint/security';
+There is nothing to attach. AgentCore enforces policy **at the Gateway**, in front of the tool,
+before a request reaches your process; a denial comes back as an **MCP error** on the tool call
+made through `mcpClient(...)` and lands in the loop as that tool's result, which the model reads
+and adapts to.
 
-Agent.create({
-  provider,
-  model,
-  permissionChecker: agentCorePolicy({ policyStoreId: process.env.POLICY_STORE_ID!, region: 'us-west-2' }),
-}).build();
-```
+`agentCorePolicy()` tried to pre-evaluate the same rule in-process and is **retired in 9.4.0**:
+it dispatched `EvaluatePolicyCommand`, which does not exist in
+`@aws-sdk/client-bedrock-agentcore` — AgentCore has no data-plane authorization call at all. The
+export remains and refuses at construction with the whole explanation.
 
-Every attempted tool call becomes one policy evaluation. It **fails closed** — an engine that
-did not answer did not say yes — and a denial reaches the model as data so it can re-decide
-instead of the run dying. See **[AgentCore adapters](doc:agentcore-adapters)**.
+For rules you own, use `PermissionPolicy.fromRoles(...)` as the `permissionChecker`, or the
+`.toolMiddleware()` chain for conditional ones. See
+**[AgentCore adapters](doc:agentcore-adapters)**.
 
 ## Observability — `agentcoreObservability`
 

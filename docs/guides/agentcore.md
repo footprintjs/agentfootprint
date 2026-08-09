@@ -22,7 +22,7 @@ onto AgentCore.
 | **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/providers` |
 | **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/security` |
 | **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
-| **Policy** | ✅ adapter | `agentCorePolicy()` (the `PermissionChecker` port), or local `gatedTools` — `agentfootprint/security` |
+| **Policy** | ⛔ enforced at the Gateway | `agentCorePolicy()` is retired in 9.4.0 (it dispatched a command AgentCore does not have). Use `PermissionPolicy` / `.toolMiddleware()` for rules you own — `agentfootprint/security` |
 | **Evaluations** | ✅ overlaps | emit `$eval` + `QualityRecorder`; export via the observability adapter |
 
 **How much of this is verified:** the Runtime host is plain HTTP with no AWS SDK on its path
@@ -348,23 +348,32 @@ second backend has real pull.
 
 ## Policy & Evaluations
 
-- **Policy** (control agent actions) → `agentCorePolicy({ policyStoreId })`
-  (`agentfootprint/security`) puts an AgentCore policy store behind the
-  `PermissionChecker` port: every attempted tool call is one evaluation, it fails
-  closed, and a denial reaches the model as data so it can re-decide instead of
-  the run dying.
+- **Policy** → **nothing to attach, and that is the correct answer.** AgentCore
+  enforces policy AT THE GATEWAY, in front of the tool, before a request reaches
+  your process. A denial comes back as an **MCP error** on the tool call made
+  through `mcpClient(...)` and lands in the ReAct loop as that tool's result,
+  which the model reads and adapts to. The library's job is to surface that
+  honestly, not to pre-evaluate a copy of the rule.
+
+  `agentCorePolicy({ policyStoreId })` tried to do the latter and is **retired in
+  9.4.0**: it dispatched `EvaluatePolicyCommand`, which does not exist in
+  `@aws-sdk/client-bedrock-agentcore` — AgentCore has no data-plane
+  authorization call at all. The export remains and refuses at construction with
+  the full explanation.
+
+  For rules you own, the `PermissionChecker` port is unchanged:
 
   ```ts
-  import { agentCorePolicy } from 'agentfootprint/security';
+  import { PermissionPolicy } from 'agentfootprint/security';
 
-  Agent.create({ provider, model, permissionChecker: agentCorePolicy({ policyStoreId }) }).build();
+  const policy = PermissionPolicy.fromRoles({ readonly: ['lookup'] }, 'readonly');
+  Agent.create({ provider, model, permissionChecker: policy }).build();
   ```
 
   It composes with `gatedTools` unchanged and neither knows the other exists: the
   gate decides what the model is *shown*, the checker decides what actually
-  *runs*. For a purely local allowlist, `PermissionPolicy` still doubles as a
-  sync `gatedTools` predicate — a remote engine cannot, because that predicate is
-  synchronous.
+  *runs*. A local allowlist also doubles as a sync `gatedTools` predicate; a
+  remote checker cannot, because that predicate is synchronous.
 - **Evaluations** (quality monitoring) → emit `$eval(name, score)` and use
   `QualityRecorder`; export the scores through the observability adapter.
 

@@ -4,8 +4,9 @@
  * Two halves of the same question:
  *
  *   • Authorization — `PermissionPolicy`, `PolicyHaltError`, the
- *     `PermissionChecker` port, the remote `agentCorePolicy` engine, and
- *     thinking-block redaction.
+ *     `PermissionChecker` port, and thinking-block redaction. (`agentCorePolicy`
+ *     is retired in 9.4.0 — AgentCore enforces policy at the Gateway, so there
+ *     was never a data-plane call for it to make.)
  *   • Identity — the `CredentialProvider` port, the credential kinds
  *     (`bearer`, `apiKey`, `basic`, `headers`), `staticTokens`,
  *     `withCredentialRetry`, and `agentCoreIdentity`.

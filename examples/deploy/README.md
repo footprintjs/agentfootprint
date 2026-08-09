@@ -148,17 +148,26 @@ through agentfootprint adapters — see the
 - **Observability** → `agentcoreObservability` (`agentfootprint/observe`)
 - **Gateway tools** → `gatewayTransport()` + `mcpClient()` (`agentfootprint/providers`)
 - **Identity** (downstream OAuth) → `agentCoreIdentity()` (`agentfootprint/security`)
-- **Policy** (authorize each tool call) → `agentCorePolicy()` (`agentfootprint/security`)
+- **Policy** → nothing to attach. AgentCore enforces policy **at the Gateway**,
+  in front of the tool; a denial arrives as an MCP error on the tool call and
+  lands in the loop as that tool's result. (`agentCorePolicy()` is retired in
+  9.4.0 — it dispatched a command AgentCore does not have. For rules you own,
+  use `PermissionPolicy.fromRoles(...)` or `.toolMiddleware()`.)
 
 ## A note on verification
 
 The host is plain HTTP with no AWS SDK on its path, so its conformance-suite
 result is real verification. Everything that calls an AWS SDK — the `'memory'`
-session store, `agentCorePolicy`, `AgentCoreStore.search()` — is
-**contract-mapped and injection-tested**: exercised through the adapters'
-`_client` / `_sdk` seams, never against AWS. Confirm command and field names
-against your installed `@aws-sdk/client-bedrock-agentcore`; real-cloud
-verification lands with a field deployment.
+session store, `AgentCoreStore.search()` — is **contract-mapped and
+injection-tested**: exercised through the adapters' `_client` / `_sdk` seams,
+never against AWS.
+
+Since 9.4.0 the command NAMES are no longer only contract-mapped: one registry
+(`test/adapters/aws/`) pins the SDK command constructors every AWS adapter
+dispatches, and fails the build for a command the installed SDK does not
+export. That check exists because contract-mapping alone let two adapters ship
+calls that were never made against AWS — one of them a command that does not
+exist at all.
 
 ## See also — the same agent, no cloud
 

@@ -101,6 +101,10 @@ export interface XrayObservabilityOptions {
   readonly onError?: (error: Error, event?: AgentfootprintEvent) => void;
   /** Test injection — bypasses SDK lazy-require entirely. */
   readonly _client?: XRayLikeClient;
+  /** @internal Test injection (9.4.0) — the AWS SDK module, so the real shim
+   *  (`send(new Command(...))`) runs against a fake SDK and the command name it
+   *  dispatches can be asserted. Ignored when `_client` is set. */
+  readonly _sdk?: XRaySdkModule;
 }
 
 // ─── SDK-shaped surface ──────────────────────────────────────────────
@@ -109,7 +113,15 @@ export interface XRayLikeClient {
   putTraceSegments(input: { TraceSegmentDocuments: ReadonlyArray<string> }): Promise<unknown>;
 }
 
-interface XRaySdkModule {
+/**
+ * The slice of `@aws-sdk/client-xray` this shim touches.
+ *
+ * Exported since 9.4.0 so `opts._sdk` can name it — which is what lets the
+ * shared command-name pin (test/adapters/aws/) assert that this adapter
+ * dispatches `PutTraceSegments` and nothing invented, without an AWS account
+ * or the peer dep installed.
+ */
+export interface XRaySdkModule {
   readonly XRayClient?: new (config: { region?: string }) => unknown;
   readonly PutTraceSegmentsCommand?: new (input: unknown) => unknown;
 }
@@ -179,7 +191,7 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   let client: XRayLikeClient | undefined = opts._client;
   function ensureClient(): XRayLikeClient {
     if (client) return client;
-    client = createXRayClient(opts.region);
+    client = createXRayClient(opts.region, opts._sdk);
     return client;
   }
 
@@ -594,16 +606,20 @@ function nowSeconds(): number {
 
 // ─── SDK construction (lazy) ─────────────────────────────────────────
 
-function createXRayClient(region: string | undefined): XRayLikeClient {
+function createXRayClient(region: string | undefined, injected?: XRaySdkModule): XRayLikeClient {
   let mod: XRaySdkModule;
-  try {
-    mod = lazyRequire<XRaySdkModule>('@aws-sdk/client-xray');
-  } catch {
-    throw new Error(
-      'xrayObservability requires the `@aws-sdk/client-xray` peer dependency.\n' +
-        '  Install:  npm install @aws-sdk/client-xray\n' +
-        '  Or pass `_client` for test injection.',
-    );
+  if (injected) {
+    mod = injected;
+  } else {
+    try {
+      mod = lazyRequire<XRaySdkModule>('@aws-sdk/client-xray');
+    } catch {
+      throw new Error(
+        'xrayObservability requires the `@aws-sdk/client-xray` peer dependency.\n' +
+          '  Install:  npm install @aws-sdk/client-xray\n' +
+          '  Or pass `_client` for test injection.',
+      );
+    }
   }
   if (!mod.XRayClient || !mod.PutTraceSegmentsCommand) {
     throw new Error(

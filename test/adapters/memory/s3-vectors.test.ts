@@ -43,6 +43,19 @@ interface SentCommand {
 }
 
 /**
+ * What GetIndex says about a HEALTHY index (9.4.0): cosine, and with the large
+ * metadata budget declared for the key this store writes passages into. The
+ * preflight reads this before the store's first call — see
+ * s3-vectors-index-preflight.test.ts for every way it refuses.
+ */
+const HEALTHY_INDEX = {
+  index: {
+    distanceMetric: 'cosine',
+    metadataConfiguration: { nonFilterableMetadataKeys: ['af'] },
+  },
+};
+
+/**
  * An S3 Vectors double.
  *
  * The `_sdk` seam is used rather than `_client` alone, because the constructor
@@ -52,6 +65,7 @@ interface SentCommand {
  */
 function fakeS3Vectors(answers: Partial<Record<string, unknown>> = {}) {
   const sent: SentCommand[] = [];
+  const replies: Partial<Record<string, unknown>> = { GetIndex: HEALTHY_INDEX, ...answers };
   const command = (name: string): new (input: unknown) => unknown =>
     class {
       readonly __name = name;
@@ -65,7 +79,7 @@ function fakeS3Vectors(answers: Partial<Record<string, unknown>> = {}) {
     send: async (cmd: unknown): Promise<unknown> => {
       const c = cmd as { __name: string; __input: Record<string, unknown> };
       sent.push({ name: c.__name, input: c.__input });
-      return answers[c.__name] ?? {};
+      return replies[c.__name] ?? {};
     },
   };
 
@@ -73,6 +87,7 @@ function fakeS3Vectors(answers: Partial<Record<string, unknown>> = {}) {
     sent,
     client,
     sdk: {
+      GetIndexCommand: command('GetIndex'),
       PutVectorsCommand: command('PutVectors'),
       QueryVectorsCommand: command('QueryVectors'),
       GetVectorsCommand: command('GetVectors'),
@@ -132,6 +147,15 @@ function row(id: string, distance?: number, fp = 'mock@4') {
   };
 }
 
+/** The first PutVectors / QueryVectors that reached `send()` — named, never
+ *  positional, because the preflight now leads and positions shift. */
+function put(aws: { sent: SentCommand[] }): SentCommand | undefined {
+  return aws.sent.find((c) => c.name === 'PutVectors');
+}
+function query(aws: { sent: SentCommand[] }): SentCommand | undefined {
+  return aws.sent.find((c) => c.name === 'QueryVectors');
+}
+
 /** The namespace the port derives from `CORPUS` — asked, never mirrored. */
 function identityNs(): string {
   return identityNamespace(CORPUS);
@@ -158,7 +182,12 @@ describe('s3VectorsStore — the operations it dispatches', () => {
     // Every name below is an operation of the S3 Vectors API. If a future
     // edit reaches for `SearchVectors` or `UpsertVectors`, this fails HERE
     // rather than on somebody's first real call.
+    //
+    // `GetIndex` leads, ONCE (9.4.0): the store reads the index before its
+    // first call and memoizes the verdict — see the preflight suite in
+    // s3-vectors-index-preflight.test.ts for what it refuses.
     expect(aws.sent.map((c) => c.name)).toEqual([
+      'GetIndex',
       'PutVectors',
       'GetVectors',
       'QueryVectors',
@@ -191,8 +220,10 @@ describe('s3VectorsStore — the operations it dispatches', () => {
   it('every command carries the bucket and index it was built for', async () => {
     const { store, aws } = open();
     await store.put(CORPUS, entry('a', [1, 0, 0, 0]));
-    expect(aws.sent[0]?.input['vectorBucketName']).toBe('my-corpus');
-    expect(aws.sent[0]?.input['indexName']).toBe('docs');
+    for (const command of aws.sent) {
+      expect(command.input['vectorBucketName']).toBe('my-corpus');
+      expect(command.input['indexName']).toBe('docs');
+    }
   });
 });
 
@@ -202,7 +233,7 @@ describe('s3VectorsStore — unit', () => {
   it('put sends the vector as float32, namespaced, with the entry as metadata', async () => {
     const { store, aws } = open();
     await store.put(CORPUS, entry('refunds.md#0', [1, 0, 0, 0], { tier: 'hot' }));
-    const vectors = aws.sent[0]?.input['vectors'] as {
+    const vectors = put(aws)?.input['vectors'] as {
       key: string;
       data: { float32: number[] };
       metadata: Record<string, string>;
@@ -220,7 +251,7 @@ describe('s3VectorsStore — unit', () => {
   it('search is QueryVectors: k → topK, ns → filter, distance → cosine score', async () => {
     const { store, aws } = open({ QueryVectors: { vectors: [row('a', 0.1), row('b', 0.4)] } });
     const hits = await store.search(CORPUS, [1, 0, 0, 0], { k: 2 });
-    const input = aws.sent[0]?.input as Record<string, unknown>;
+    const input = query(aws)?.input as Record<string, unknown>;
     expect(input['topK']).toBe(2);
     expect(input['queryVector']).toEqual({ float32: [1, 0, 0, 0] });
     expect(input['filter']).toEqual({ ns: { $eq: NS } });
@@ -233,7 +264,7 @@ describe('s3VectorsStore — unit', () => {
   it('a tier filter becomes a server-side metadata filter, not a local one', async () => {
     const { store, aws } = open({ QueryVectors: { vectors: [] } });
     await store.search(CORPUS, [1, 0, 0, 0], { tiers: ['hot', 'warm'] });
-    expect(aws.sent[0]?.input['filter']).toEqual({
+    expect(query(aws)?.input['filter']).toEqual({
       $and: [{ ns: { $eq: NS } }, { tier: { $in: ['hot', 'warm'] } }],
     });
   });
@@ -308,6 +339,7 @@ describe('s3VectorsStore — scenario', () => {
             destroyed += 1;
           }
         },
+        GetIndexCommand: class {},
         PutVectorsCommand: class {},
         QueryVectorsCommand: class {},
         GetVectorsCommand: class {},
@@ -327,12 +359,13 @@ describe('s3VectorsStore — scenario', () => {
       bucket: 'b',
       index: 'i',
       client: {
-        send: async () => ({ vectors: [] }),
+        send: async () => ({ vectors: [], index: HEALTHY_INDEX.index }),
         destroy: () => {
           destroyed += 1;
         },
       },
       _sdk: {
+        GetIndexCommand: class {},
         PutVectorsCommand: class {},
         QueryVectorsCommand: class {},
         GetVectorsCommand: class {},
@@ -406,7 +439,7 @@ describe('s3VectorsStore — security', () => {
   it('the identity reaches the SERVER-side filter, not just the client', async () => {
     const { store, aws } = open({ QueryVectors: { vectors: [] } });
     await store.search({ conversationId: 'user-42' }, [1, 0, 0, 0]);
-    expect(JSON.stringify(aws.sent[0]?.input['filter'])).toContain('user-42');
+    expect(JSON.stringify(query(aws)?.input['filter'])).toContain('user-42');
   });
 });
 

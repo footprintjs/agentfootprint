@@ -46,6 +46,9 @@ export interface RunContext {
   /** Optional turn/iter indices from agent runtime. */
   readonly turnIndex?: number;
   readonly iterIndex?: number;
+  /** The hosting conversation this run belongs to, when it belongs to one
+   *  (9.4.0). Absent for an unhosted or anonymous run — never fabricated. */
+  readonly sessionId?: string;
 }
 
 /**
@@ -83,6 +86,9 @@ export function buildEventMeta(
     ...(run.correlationId !== undefined && { correlationId: run.correlationId }),
     ...(run.turnIndex !== undefined && { turnIndex: run.turnIndex }),
     ...(run.iterIndex !== undefined && { iterIndex: run.iterIndex }),
+    // Present only when the run really is session-bound. An absent key and an
+    // empty string are different facts, and only one of them is honest.
+    ...(run.sessionId !== undefined && { sessionId: run.sessionId }),
   };
 }
 

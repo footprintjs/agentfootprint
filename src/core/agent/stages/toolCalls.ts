@@ -212,6 +212,58 @@ function dedupeIds(ids: readonly string[]): readonly string[] {
 }
 
 /**
+ * The constructor name of what was thrown, when what was thrown was an Error.
+ *
+ * Reported on `agentfootprint.credential.failed` so an alert can route on the
+ * CLASS of failure rather than parse a message. `undefined` for a thrown
+ * non-Error, because "Object" would be a fact about JavaScript rather than
+ * about the failure.
+ */
+function errorClassOf(err: unknown): string | undefined {
+  return err instanceof Error ? err.constructor?.name ?? err.name : undefined;
+}
+
+/**
+ * Wrap the credential provider handed to a tool as `ctx.credentials`, so a
+ * failure inside the tool's OWN `getCredential(...)` call is as visible as one
+ * on the declared-`needs` path.
+ *
+ * Why this exists (9.4.0). `needs` resolution has emitted
+ * `agentfootprint.credential.failed` since 6.11.0. The pull path — a tool that
+ * asks for its own credential mid-execute — emitted nothing: the throw was
+ * caught by the generic tool catch and became `tool_end` with `error: true`,
+ * one indistinguishable failure among all the other ways a tool can fail. An
+ * operator watching the credential domain saw a healthy silence while every
+ * call was failing to authenticate, which is the exact shape of the AWS
+ * identity-adapter bug this release fixes.
+ *
+ * It is a decorator, not a replacement: the same `id`, the same result, the
+ * same throw. It only makes a noise on the way past.
+ */
+function reportingCredentials(
+  provider: CredentialProvider,
+  scope: TypedScope<AgentState>,
+  toolName: string,
+): CredentialProvider {
+  return {
+    id: provider.id,
+    async getCredential(req) {
+      try {
+        return await provider.getCredential(req);
+      } catch (err) {
+        typedEmit(scope, 'agentfootprint.credential.failed', {
+          service: req.service,
+          reason: err instanceof Error ? err.message : String(err),
+          tool: toolName,
+          ...(errorClassOf(err) !== undefined && { errorClass: errorClassOf(err) }),
+        });
+        throw err;
+      }
+    },
+  };
+}
+
+/**
  * The re-prompt a refused `read_skill` gets back. It is the model's only feedback,
  * so it names what IS allowed rather than only what isn't.
  *
@@ -464,7 +516,12 @@ export function buildToolCallsHandler(
         }
       } catch (credErr) {
         const reason = credErr instanceof Error ? credErr.message : String(credErr);
-        typedEmit(scope, 'agentfootprint.credential.failed', { service: need.credential, reason });
+        typedEmit(scope, 'agentfootprint.credential.failed', {
+          service: need.credential,
+          reason,
+          tool: toolName,
+          ...(errorClassOf(credErr) !== undefined && { errorClass: errorClassOf(credErr) }),
+        });
         return { result: `credential error for '${need.credential}': ${reason}`, error: true };
       }
     }
@@ -473,7 +530,7 @@ export function buildToolCallsHandler(
         toolCallId,
         iteration,
         ...(env.signal && { signal: env.signal }),
-        credentials,
+        credentials: reportingCredentials(credentials, scope, toolName),
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
       });
@@ -657,9 +714,25 @@ export function buildToolCallsHandler(
               };
             }
           } catch (permErr) {
-            // A checker that throws is treated as deny-by-default. The
-            // denial message records the thrown error so consumers can
-            // debug policy-adapter failures without losing the run.
+            // A checker that threw is treated as deny-by-default — fail closed:
+            // something that did not answer did not say yes.
+            //
+            // ── What the MODEL is told, and why it changed in 9.4.0 ────────
+            // It used to be told the checker's own error text. Those messages
+            // are written for operators and read as WEATHER — "not available
+            // right now", "ECONNREFUSED", "timed out" — so a model does the
+            // reasonable thing and tries again. In a real deployment one did
+            // exactly that, burned every iteration to `maxIterations`, and
+            // returned the empty string; nobody could see why, because the
+            // reason never left the tool result.
+            //
+            // The refusal is now TERMINAL and says so, in the bracketed form
+            // the local policy has always used (`[permission denied: …]`) —
+            // the one a model adapts to cleanly. The thrown message is an
+            // operator's fact and stays on the typed event's `rationale`,
+            // where it was already going: an outage is not something a model
+            // should be invited to argue with, and infrastructure text does
+            // not belong in a transcript.
             denied = true;
             const msg = permErr instanceof Error ? permErr.message : String(permErr);
             typedEmit(scope, 'agentfootprint.permission.check', {
@@ -669,7 +742,10 @@ export function buildToolCallsHandler(
               result: 'deny',
               rationale: `permission-checker threw: ${msg}`,
             });
-            result = `[permission denied: checker error: ${msg}]`;
+            result =
+              `[permission denied: Tool '${tc.name}' could not be authorized. This will not ` +
+              `change during this run — do not call it again. Continue without it, or say ` +
+              `what you are unable to do.]`;
           }
         }
         // ── The middleware chain ─────────────────────────────────────────
@@ -901,6 +977,8 @@ export function buildToolCallsHandler(
               typedEmit(scope, 'agentfootprint.credential.failed', {
                 service: need.credential,
                 reason,
+                tool: tc.name,
+                ...(errorClassOf(credErr) !== undefined && { errorClass: errorClassOf(credErr) }),
               });
               result = `credential error for '${need.credential}': ${reason}`;
             }
@@ -916,7 +994,7 @@ export function buildToolCallsHandler(
                 toolCallId: tc.id,
                 iteration,
                 ...(env.signal && { signal: env.signal }),
-                credentials,
+                credentials: reportingCredentials(credentials, scope, tc.name),
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
               });

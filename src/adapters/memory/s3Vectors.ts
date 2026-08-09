@@ -68,6 +68,29 @@
  * Only `ns` (the identity namespace) and `tier` are ever filtered on, and both
  * are short strings.
  *
+ * ── The preflight: this store now READS the index before trusting it (9.4.0) ─
+ * One `GetIndex`, lazily on first use and memoized for the life of the store.
+ * It checks the three things this adapter used to assume — and that a
+ * production deployment got wrong in all three ways at once:
+ *
+ *   1. the distance metric really is cosine (a euclidean index scored a
+ *      self-query at 0.999…, where a true cosine is exactly 1.0);
+ *   2. `af` really is non-filterable, checked BEFORE the first write, so a
+ *      misconfigured index fails at document 1 rather than at document 400
+ *      with an AWS "Filterable metadata must have at most 2048 bytes";
+ *   3. the index dimension matches the vectors being written or searched.
+ *
+ * This is the discipline every sibling store already had at open —
+ * `sqliteVectorStore`'s schema identity, `pgVectorStore`'s schema check,
+ * `staticVectorStore`'s load-time fingerprint. This store had nothing to open,
+ * so it opened nothing.
+ *
+ * **IAM:** the caller now needs `s3vectors:GetIndex` alongside `PutVectors` /
+ * `QueryVectors` / `GetVectors` / `ListVectors` / `DeleteVectors`. A GetIndex
+ * that fails is refused by name, never passed through — an index this store
+ * cannot read is an index whose metric, layout and dimension it would be
+ * guessing at.
+ *
  * ── Cosine only, said out loud ──────────────────────────────────────────────
  * The port's score is a cosine similarity, and every threshold in this library
  * — starting with `defineRAG`'s 0.7 default — is calibrated on that range. A
@@ -93,10 +116,16 @@
  *     one is what survives a restart: the first query after an embedder swap
  *     sees documents stamped by the old embedder and refuses by name, instead
  *     of returning a confident ranking of two incompatible spaces.
- *   - What is NOT caught: the first WRITE of a fresh process into a namespace
- *     another embedder built. There is no cheap read that would catch it, and a
- *     full index scan on every boot is not one either. It is caught at the next
- *     search, before a single wrong answer is returned.
+ *   - Since 9.4.0 the index's OWN dimension is checked too, at the preflight —
+ *     so a wrong-size embedder is caught on the first write and the first
+ *     search of a fresh process, which the per-process fingerprint could not do
+ *     (it has nothing to disagree with at boot).
+ *   - What is still NOT caught: the first write of a fresh process into a
+ *     namespace built by a different embedder OF THE SAME SIZE. Only the model
+ *     id separates those, and it lives in the vectors rather than on the index.
+ *     There is no cheap read that would catch it, and a full index scan on
+ *     every boot is not one either. It is caught at the next search, before a
+ *     single wrong answer is returned.
  *
  * ── Lazy peer dependency ────────────────────────────────────────────────────
  * `@aws-sdk/client-s3vectors` is an OPTIONAL peer dependency, required at
@@ -144,6 +173,9 @@ export interface S3VectorsLikeClient {
 /** The constructors this adapter needs out of `@aws-sdk/client-s3vectors`. */
 export interface S3VectorsSdkModule {
   readonly S3VectorsClient?: new (config: { region?: string }) => S3VectorsLikeClient;
+  /** The PREFLIGHT (9.4.0) — the one call that reads the index rather than its
+   *  vectors. See `verifyIndex` for what it checks and why each one is fatal. */
+  readonly GetIndexCommand?: new (input: unknown) => unknown;
   readonly PutVectorsCommand?: new (input: unknown) => unknown;
   readonly QueryVectorsCommand?: new (input: unknown) => unknown;
   readonly GetVectorsCommand?: new (input: unknown) => unknown;
@@ -270,6 +302,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
 
   type Connection = {
     readonly client: S3VectorsLikeClient;
+    readonly GetIndex: new (input: unknown) => unknown;
     readonly Put: new (input: unknown) => unknown;
     readonly Query: new (input: unknown) => unknown;
     readonly Get: new (input: unknown) => unknown;
@@ -295,6 +328,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       const sdk = options._sdk;
       connection = {
         client: options._client,
+        GetIndex: sdk?.GetIndexCommand ?? shimCommand('GetIndex'),
         Put: sdk?.PutVectorsCommand ?? shimCommand('PutVectors'),
         Query: sdk?.QueryVectorsCommand ?? shimCommand('QueryVectors'),
         Get: sdk?.GetVectorsCommand ?? shimCommand('GetVectors'),
@@ -307,6 +341,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     const sdk = options._sdk ?? loadS3VectorsSdk();
     const missing = (
       [
+        'GetIndexCommand',
         'PutVectorsCommand',
         'QueryVectorsCommand',
         'GetVectorsCommand',
@@ -333,8 +368,9 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
         // Checked directly above.
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         new sdk.S3VectorsClient!({ ...(options.region && { region: options.region }) }),
-      // All five checked directly above.
+      // All six checked directly above.
       /* eslint-disable @typescript-eslint/no-non-null-assertion */
+      GetIndex: sdk.GetIndexCommand!,
       Put: sdk.PutVectorsCommand!,
       Query: sdk.QueryVectorsCommand!,
       Get: sdk.GetVectorsCommand!,
@@ -346,7 +382,8 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     return connection;
   };
 
-  const call = async (
+  /** Send one command. Used by the preflight itself, so it does NOT preflight. */
+  const rawCall = async (
     build: (conn: Connection) => unknown,
     signal?: AbortSignal,
   ): Promise<unknown> => {
@@ -355,7 +392,176 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     return signal ? conn.client.send(command, { abortSignal: signal }) : conn.client.send(command);
   };
 
+  /** Send one command, after the index has been verified once. */
+  const call = async (
+    build: (conn: Connection) => unknown,
+    signal?: AbortSignal,
+  ): Promise<unknown> => {
+    await verifyIndex(signal);
+    return rawCall(build, signal);
+  };
+
   const scope = { vectorBucketName: bucket, indexName: index };
+
+  // ─── The preflight (9.4.0) ─────────────────────────────────────────
+  //
+  // Until 9.4.0 this adapter never looked at the index it was handed. It
+  // dispatched PutVectors and QueryVectors and trusted three preconditions it
+  // had no evidence for — and a production field report found all three
+  // failing, each in the way that is hardest to notice:
+  //
+  //   1. A EUCLIDEAN index was accepted. The construction refusal above reads
+  //      `options.distanceMetric`, which is a CLAIM BY THE CALLER about an
+  //      index this store did not create; leave it undefined (the default) and
+  //      a euclidean index sails through. Measured live: a vector queried
+  //      against itself scored 0.9991630113800056 where a true cosine is
+  //      exactly 1.0. That is precisely the "number that READS like a cosine
+  //      and is not one" this file's own header warns about, and no threshold
+  //      can separate it from a real score.
+  //   2. An index created without `nonFilterableMetadataKeys: ['af']` failed
+  //      as a raw AWS ValidationException — "Filterable metadata must have at
+  //      most 2048 bytes" — MID-IMPORT, after some documents were written.
+  //   3. The index DIMENSION was never compared with the embedder. The service
+  //      rejects a wrong-length vector at the call, which is loud but arrives
+  //      one write at a time and says nothing about which embedder is wrong.
+  //
+  // One GetIndex, lazily on first use, memoized for the life of the store,
+  // answers all three — and it is the discipline every sibling store already
+  // applies at open (`sqliteVectorStore`'s schema identity, `pgVectorStore`'s
+  // schema check, `staticVectorStore`'s load-time fingerprint). This store had
+  // nothing to open, so it checked nothing; it does now.
+
+  /** What GetIndex told us about the index, once. */
+  interface IndexFacts {
+    readonly distanceMetric?: string;
+    readonly dimension?: number;
+    readonly nonFilterableMetadataKeys: readonly string[];
+  }
+
+  let verification: Promise<IndexFacts> | undefined;
+
+  const readIndex = async (signal?: AbortSignal): Promise<IndexFacts> => {
+    let raw: unknown;
+    try {
+      raw = await rawCall((c) => new c.GetIndex({ ...scope }), signal);
+    } catch (err) {
+      // Never a silent pass-through: an index this store cannot READ is an
+      // index whose metric, layout and dimension it is guessing at, and it
+      // guessed wrong three times in the field.
+      throw new Error(
+        `s3VectorsStore: could not read the index '${bucket}/${index}' to verify it.\n` +
+          `  ${err instanceof Error ? err.message : String(err)}\n` +
+          `  This store reads the index ONCE before its first call, to check the distance ` +
+          `metric, the metadata layout and the dimension — three things it used to assume, ` +
+          `and that a production deployment got wrong in all three ways at once.\n` +
+          `  Check:  the index exists in this region; the caller has the \`s3vectors:GetIndex\` ` +
+          `permission (PutVectors/QueryVectors alone are not enough since 9.4.0); the bucket ` +
+          `and index names are right.`,
+      );
+    }
+    const info = (raw as { index?: Record<string, unknown> } | null)?.index ?? {};
+    const metadata = info['metadataConfiguration'] as
+      | { nonFilterableMetadataKeys?: unknown }
+      | undefined;
+    const keys = Array.isArray(metadata?.nonFilterableMetadataKeys)
+      ? (metadata?.nonFilterableMetadataKeys as unknown[]).map(String)
+      : [];
+    return {
+      ...(typeof info['distanceMetric'] === 'string' && {
+        distanceMetric: info['distanceMetric'],
+      }),
+      ...(typeof info['dimension'] === 'number' && { dimension: info['dimension'] }),
+      nonFilterableMetadataKeys: keys,
+    };
+  };
+
+  /**
+   * Read the index once and refuse anything this store cannot serve honestly.
+   *
+   * Memoized on the PROMISE, so concurrent first calls share one GetIndex and
+   * one verdict. A refusal is memoized too — re-asking a broken index on every
+   * operation would turn one clear failure into a storm of them.
+   */
+  const verifyIndex = async (signal?: AbortSignal): Promise<IndexFacts> => {
+    verification ??= readIndex(signal).then((found) => {
+      // (1) The metric. `options.distanceMetric` was a declaration; this is the
+      // index. A declaration that disagrees with the index is worse than none,
+      // so the message says which said what.
+      if (found.distanceMetric !== undefined && found.distanceMetric.toLowerCase() !== 'cosine') {
+        throw new TypeError(
+          `s3VectorsStore: the index '${bucket}/${index}' was created with distance metric ` +
+            `'${found.distanceMetric}', and this store reports COSINE similarity.\n` +
+            (options.distanceMetric !== undefined
+              ? `  You declared '${options.distanceMetric}'. The index disagrees, and the index ` +
+                `is the one that ranks.\n`
+              : '') +
+            `  A cosine distance converts exactly (score = 1 - distance). A euclidean one does ` +
+            `not: mapped into [-1, 1] it produces a number that READS like a cosine and is ` +
+            `not one — a self-query scores 0.999… where a real cosine is exactly 1.0, which ` +
+            `no threshold (starting with defineRAG's 0.7 default) can separate from a real ` +
+            `score.\n` +
+            `  Fix:  recreate the index with --distance-metric cosine, or rank euclidean ` +
+            `results in your own adapter where the units are yours to interpret.`,
+        );
+      }
+      return found;
+    });
+    return verification;
+  };
+
+  /**
+   * (2) The metadata layout, checked before the first byte is written.
+   *
+   * Separate from the metric because the failure it prevents is a WRITE
+   * failure: with `af` filterable, short entries go in and longer ones are
+   * refused by the service partway through an import — a corpus that is 60%
+   * indexed and reports success for the part that fit.
+   */
+  const assertWritableLayout = (found: IndexFacts): void => {
+    if (found.nonFilterableMetadataKeys.includes(PAYLOAD_KEY)) return;
+    throw new TypeError(
+      `s3VectorsStore: the index '${bucket}/${index}' does not declare '${PAYLOAD_KEY}' as ` +
+        `non-filterable metadata, so this store cannot write to it.\n` +
+        `  It stores each entry — the passage the model will read, its provenance, its ` +
+        `timestamps — as JSON under the metadata key '${PAYLOAD_KEY}'. Filterable metadata ` +
+        `has a small per-vector budget (2048 bytes); non-filterable has the large one. ` +
+        `Without this, an import writes the short chunks, then fails on a longer one with ` +
+        `"Filterable metadata must have at most 2048 bytes" — partway through, having ` +
+        `already reported success for everything before it.\n` +
+        `  The index declares: ${
+          found.nonFilterableMetadataKeys.length === 0
+            ? '(no non-filterable keys)'
+            : found.nonFilterableMetadataKeys.join(', ')
+        }\n` +
+        `  Fix:  recreate the index with\n` +
+        `          --metadata-configuration '{"nonFilterableMetadataKeys":["${PAYLOAD_KEY}"]}'\n` +
+        `        This cannot be changed after creation, so the index has to be rebuilt.`,
+    );
+  };
+
+  /**
+   * (3) The dimension, against the embedder that is actually being used.
+   *
+   * Same rule `sqliteVectorStore` applies and for the same reason: DIMENSIONS
+   * ALWAYS DECIDE. The service would reject the vector anyway — one write at a
+   * time, saying nothing about which embedder is wrong — where this names both
+   * numbers and the two ways out.
+   */
+  const assertDimension = (
+    found: IndexFacts,
+    dims: number,
+    operation: 'write to' | 'search',
+  ): void => {
+    if (found.dimension === undefined || found.dimension === dims) return;
+    throw new EmbedderMismatchError(
+      `${bucket}/${index}`,
+      `the index@${found.dimension}`,
+      `this embedder@${dims}`,
+      'dimensions',
+      operation,
+      'point this store at an index whose dimension matches this embedder',
+    );
+  };
 
   /** Fingerprints this process has seen, one per namespace. */
   const fingerprints = new Map<string, string>();
@@ -442,6 +648,13 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       // skip a round-trip on a turn that produced nothing.
       if (entries.length === 0) return;
       const ns = identityNamespace(identity);
+      // Before a byte: the index really is cosine, and it really has room for a
+      // passage. Memoized, so this is one GetIndex for the life of the store —
+      // and it happens HERE rather than inside `call` below, because a layout
+      // that cannot hold an entry must stop the import at document 1, not at
+      // document 400 with 399 already written.
+      const found = await verifyIndex();
+      assertWritableLayout(found);
 
       const vectors = entries.map((entry) => {
         const embedding = entry.embedding;
@@ -459,6 +672,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
           ...(entry.embeddingModel !== undefined && { id: entry.embeddingModel }),
           dims: embedding.length,
         };
+        assertDimension(found, embedding.length, 'write to');
         reconcile(ns, fp, 'write to');
         return {
           key: vectorKey(ns, entry.id),
@@ -616,6 +830,11 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       const ns = identityNamespace(identity);
       const k = Math.max(1, Math.floor(searchOptions?.k ?? 10));
       if (query.length === 0) return [];
+
+      // The index's own dimension, which outranks anything this process has
+      // merely SEEN: a fresh process searching an index built for another
+      // embedder has no stored fingerprint to disagree with.
+      assertDimension(await verifyIndex(), query.length, 'search');
 
       // Refused BEFORE the call, against what this process has seen — and
       // again below, against what actually comes back.

@@ -16,7 +16,7 @@ first cloud adapter was written against them.
 |---|---|---|
 | `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting` |
 | `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting` |
-| `agentCorePolicy({ policyStoreId })` | `PermissionChecker` — a remote policy store decides tool calls | `agentfootprint/security` |
+| ~~`agentCorePolicy({ policyStoreId })`~~ | **Retired in 9.4.0** — AgentCore enforces policy at the Gateway; there was never a data-plane call to make | `agentfootprint/security` |
 | `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/providers` |
 | `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory` |
 
@@ -35,8 +35,18 @@ and field names against your installed `@aws-sdk/client-bedrock-agentcore`.
 **Both session modes have now run against the real service.** A production
 integration deployed them and reported back: `{ store: 'session-storage' }`
 works as documented, and `{ store: 'memory' }` had a real defect that no
-injected fake could have shown — fixed in 7.22.1, below. `agentCorePolicy` and
-`AgentCoreStore.search()` are still contract-mapped only.
+injected fake could have shown — fixed in 7.22.1, below.
+`AgentCoreStore.search()` is still contract-mapped only.
+
+**And contract-mapped was not enough.** A second field report tested 9.3.0 live
+and found two adapters dispatching calls that were never made against AWS:
+`agentCorePolicy` sent a command that does not exist (retired in 9.4.0, below),
+and `agentCoreIdentity` called a method that a command-based `*Client` does not
+have (fixed in 9.4.0 — it now goes through `send(new Command(...))`, like the
+memory adapter always did). Both compiled and both passed their tests, because
+every test injected past the SDK. Since 9.4.0 a single registry pins the
+**command names every AWS adapter dispatches** and fails the build if one is
+reached for that the installed SDK does not export.
 </Callout>
 
 ## Run it: the whole container entry point
@@ -262,61 +272,71 @@ Both are field facts, recorded here because this is where an integrator looks:
   `/invocations`; `{ server }` remains the escape hatch for anything the ports
   do not express.
 
-## Policy: a remote engine behind the same gate
+## Policy: enforced at the Gateway, not here (retired 9.4.0)
 
-`agentCorePolicy` fills the `PermissionChecker` port, so every attempted tool
-call becomes one policy evaluation.
+`agentCorePolicy()` filled the `PermissionChecker` port by asking an AgentCore
+policy store to evaluate every attempted tool call. **It could never have
+worked, and as of 9.4.0 it refuses to be constructed.**
 
 ```ts
 import { agentCorePolicy } from 'agentfootprint/security';
 
-const agent = Agent.create({
-  provider,
-  model,
-  permissionChecker: agentCorePolicy({
-    policyStoreId: process.env.POLICY_STORE_ID!,
-    region: 'us-west-2',
-  }),
-}).build();
+agentCorePolicy({ policyStoreId });
+// throws AgentCorePolicyRetiredError — with the reason and the alternatives
 ```
 
-Three rules it is written under:
+**Why.** It dispatched `EvaluatePolicyCommand` against
+`@aws-sdk/client-bedrock-agentcore`. That command does not exist in any version
+of that package, under any name. AgentCore has no data-plane
+"evaluate this permission" operation at all: the policy surface is
+**control-plane only**, and **AgentCore enforces policy AT THE GATEWAY**, in
+front of the tool, before a request reaches your process. Every evaluation the
+adapter ran therefore ended in its own `catch` — and the default there is
+fail-closed, so it denied every tool call while reporting the policy engine
+unreachable. It compiled, and its forty-odd tests passed, because every one of
+them injected a client past the SDK.
 
-**It fails closed.** A policy engine you cannot reach has not said yes. An
-evaluation that throws — network, credentials, a renamed field — is a `deny`.
-So is a verdict the adapter does not recognise: an unfamiliar future value is
-not a permission.
+**The library's role is to surface Gateway denials honestly, not to
+pre-evaluate a second copy of the rule.** A Gateway-enforced denial comes back
+as an **MCP error** on the tool call made through `mcpClient(...)`, and lands
+in the ReAct loop as that tool's result — which the model reads and adapts to,
+exactly like any other refusal.
 
-**The reason reaches the model as data.** A denial comes back as a tool result
-the model reads, not as an exception that ends the run — which is the
-difference between an agent that says "I'm not allowed to do that" and one that
-dies mid-conversation. Telemetry stays out of it; the model is not taught the
-shape of your rule space.
-
-**One evaluation per (tool, principal, turn).** The cache key includes the
-iteration, so a policy that changes mid-conversation takes effect on the *next*
-turn rather than after the run.
-
-For a gradual rollout there is one escape hatch, deliberately awkward to type:
+**For rules you own**, the same port is open and nothing about it changed:
 
 ```ts
-agentCorePolicy({
-  policyStoreId,
-  onUnavailable: 'allow-with-warning',
-  onWarning: (message, error) => logger.warn({ err: error }, message),
-});
+import { PermissionPolicy } from 'agentfootprint/security';
+
+const policy = PermissionPolicy.fromRoles(
+  { readonly: ['lookup'], admin: ['lookup', 'refund'] },
+  'readonly',
+);
+
+const agent = Agent.create({ provider, model, permissionChecker: policy }).build();
 ```
 
-It applies **only** to a failure to check. An explicit denial is always a
-denial.
+For anything conditional — per-argument, per-sequence, ask-a-human — use the
+[`.toolMiddleware()`](doc:middleware) chain, which sees the call and the run's
+own history. A remote checker is still perfectly possible: a `PermissionChecker`
+is an object with a `check()` method, and yours can call whatever service you
+like.
 
-<Callout type="info" title="It composes with gatedTools, and neither knows the other exists">
+<Callout type="info" title="The export stays, and refuses">
+Deleting an export breaks a build with a module-resolution error that explains
+nothing. `agentCorePolicy` and all of its types are still exported and still
+type-check; calling the factory throws `AgentCorePolicyRetiredError` (code
+`ERR_AGENTCORE_POLICY_RETIRED`) carrying the whole explanation — the phantom
+command, the Gateway, `PermissionPolicy.fromRoles`, `.toolMiddleware()`, and
+where denials really arrive. Whether the symbol is removed is a decision for
+10.0.
+</Callout>
+
+<Callout type="info" title="gatedTools is a different layer, and always was">
 `gatedTools(...)` decides what the model is **shown**; a `permissionChecker`
 decides what actually **runs**. A tool the gate hides is never evaluated — the
 model cannot call what it cannot see — and a tool the gate shows still has to
-get past the policy. Note that only a *local* policy can double as a
-`gatedTools` predicate: that predicate is synchronous, and a remote engine
-cannot be.
+get past the checker. Only a *local* policy can double as a `gatedTools`
+predicate: that predicate is synchronous.
 </Callout>
 
 ## Gateway tools: headers vended per request
@@ -453,11 +473,14 @@ session store calls — implement it to inject a fake — and it yields
 of the AWS SDK the shim touches, injectable as `_sdk` to exercise the real
 mapping against a fake module.
 
-**Policy** (`agentfootprint/security`) — `AgentCorePolicyOptions` configures
-`agentCorePolicy()`, including `AgentCorePolicyUnavailable`, the two-value type
-behind `onUnavailable`. `AgentCorePolicyClientLike` is the one-method evaluate
-surface (inject it as `_client`), returning an `AgentCorePolicyEvaluation`;
-`BedrockAgentCorePolicySdkModule` is the SDK slice behind it.
+**Policy** (`agentfootprint/security`) — retired in 9.4.0 and kept exported so
+existing imports still compile. `AgentCorePolicyRetiredError` is what the
+factory throws (code `ERR_AGENTCORE_POLICY_RETIRED`). `AgentCorePolicyOptions`
+still configures `agentCorePolicy()`, including `AgentCorePolicyUnavailable`,
+the two-value type behind `onUnavailable`; `AgentCorePolicyClientLike` is the
+one-method evaluate surface returning an `AgentCorePolicyEvaluation`, and
+`BedrockAgentCorePolicySdkModule` is the SDK slice behind it. All four are
+`@deprecated`.
 
 **Gateway** (`agentfootprint/providers`) — `GatewayTransportOptions` is
 what `gatewayTransport()` takes, and `McpGatewayTransport` is the descriptor it

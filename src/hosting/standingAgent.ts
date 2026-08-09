@@ -89,7 +89,7 @@ import type {
   StandingAgentOptions,
   SessionLifecycle,
 } from './types.js';
-import type { Agent } from '../core/Agent.js';
+import type { Agent, AgentRunOptions } from '../core/Agent.js';
 
 /**
  * Serve one agent, with per-session conversation memory, on any
@@ -231,7 +231,21 @@ export async function standingAgent<TH extends HostHandle>(
       // The signal reaches tool execution, tool discovery and skill-entry
       // scoring. It does NOT currently reach the LLM call, so a caller who
       // hangs up mid-generation stops the tools, not the token stream.
-      const runOptions = request.signal ? { env: { signal: request.signal } } : undefined;
+      //
+      // `sessionId` (9.4.0) rides the same bag onto every event this run
+      // emits, so a shipped telemetry stream can be asked "what happened in
+      // this conversation?" and not only "what happened in this run?". This is
+      // the only place that knows the answer — the agent is handed a message,
+      // not a session. An ANONYMOUS request has no session and gets no key:
+      // `sessionKey` above is a concurrency latch this host invented, and
+      // stamping it on telemetry would be publishing a fact nobody can join to.
+      const runOptions: AgentRunOptions | undefined =
+        request.signal !== undefined || sessionId !== undefined
+          ? {
+              ...(request.signal !== undefined && { env: { signal: request.signal } }),
+              ...(sessionId !== undefined && { sessionId }),
+            }
+          : undefined;
 
       // ── The one discriminant ─────────────────────────────────────────
       // A request carrying `decision` answers a pending question; a request

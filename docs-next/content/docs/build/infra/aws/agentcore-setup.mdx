@@ -163,16 +163,19 @@ Agent.create({ provider }).toolProvider(tools).build();
 `gatewayTransport` vends the auth headers **per request**, so a long-running agent never
 outlives its bearer token. The token is used once and never stored.
 
-Optionally add a **policy store** as the tool-call gate — it fails closed, and a denial reaches
-the model as data rather than as an exception:
+**Policy needs no step here.** AgentCore enforces it at the Gateway, in front of the tool: a
+denial arrives as an MCP error on the tool call and lands in the loop as that tool's result,
+which the model reads and adapts to. (`agentCorePolicy()` is retired in 9.4.0 — it dispatched
+`EvaluatePolicyCommand`, which AgentCore does not have.) For rules **you** own, the same
+`permissionChecker` port takes a local policy:
 
 ```ts
-import { agentCorePolicy } from 'agentfootprint/security';
+import { PermissionPolicy } from 'agentfootprint/security';
 
 Agent.create({
   provider,
   model,
-  permissionChecker: agentCorePolicy({ policyStoreId: process.env.POLICY_STORE_ID!, region: 'us-west-2' }),
+  permissionChecker: PermissionPolicy.fromRoles({ readonly: ['lookup'] }, 'readonly'),
 }).build();
 ```
 
