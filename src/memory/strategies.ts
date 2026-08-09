@@ -24,7 +24,10 @@
  * `requirements` is what a host must SUPPLY (an embedder, an LLM, a store
  * that can search). Empty means the strategy runs anywhere, at $0.
  *
- * Pattern: declared capability descriptors + a guard that enforces them.
+ * Pattern: declared capability descriptors + the two guards that enforce
+ *          them — SHAPE first (`assertStrategyShape`: is this even a
+ *          strategy?), REQUIREMENTS after (`assertStrategyRequirements`: can
+ *          this deployment run it?).
  * Role:    memory/ layer-1, beside the const it describes.
  * Emits:   N/A — build-time only.
  *
@@ -190,6 +193,126 @@ export function listMemoryStrategies(): readonly MemoryStrategyInfo[] {
  */
 export function memoryStrategyInfo(kind: string): MemoryStrategyInfo | undefined {
   return BUILT_IN.find((s) => s.kind === kind);
+}
+
+// ─── The guard that makes the SHAPE true ────────────────────────────
+
+/**
+ * One correct line per kind — what a caller writes to get that strategy.
+ * These are quoted verbatim into refusals, so a reader can copy the fix out
+ * of the message instead of going to look for a doc.
+ */
+const EXAMPLE: Readonly<Record<MemoryStrategyKind, string>> = Object.freeze({
+  [MEMORY_STRATEGIES.WINDOW]: `{ kind: 'window', size: 20 }`,
+  [MEMORY_STRATEGIES.BUDGET]: `{ kind: 'budget', maxEntries: 20 }`,
+  [MEMORY_STRATEGIES.SUMMARIZE]: `{ kind: 'summarize', recent: 5, llm }`,
+  [MEMORY_STRATEGIES.TOP_K]: `{ kind: 'topK', topK: 3, embedder }`,
+  [MEMORY_STRATEGIES.EXTRACT]: `{ kind: 'extract', extractor: 'pattern' }`,
+  [MEMORY_STRATEGIES.DECAY]: `{ kind: 'decay', halfLifeMs: 86_400_000 }`,
+  [MEMORY_STRATEGIES.HYBRID]: `{ kind: 'hybrid', strategies: [{ kind: 'window', size: 20 }] }`,
+});
+
+const LISTING_HINT =
+  `  \`listMemoryStrategies()\` describes all seven kinds — what each one does, which memory ` +
+  `TYPES accept it, and what it needs supplied.`;
+
+/**
+ * Refuse a strategy whose SHAPE is wrong, before anything reads into it.
+ *
+ * WHY it runs FIRST, ahead of both the pipeline dispatch and the
+ * requirements walk: those two read FIELDS off the strategy
+ * (`strategies[0]`, `s.embedder`, `for (const sub of strategy.strategies)`),
+ * and a field read off a shape that never had it is a `TypeError` with the
+ * library's internals in the text — `Cannot read properties of undefined
+ * (reading '0')` for `{ kind: 'hybrid', size: 5 }`, which names neither the
+ * option the caller got wrong nor the one they meant. A caller cannot act on
+ * that. This guard turns every such read into a refusal that names the
+ * field, shows the line that would have worked, and points at the catalogue.
+ *
+ * It checks SHAPE only — is this an object, does it carry a `kind`, does a
+ * `hybrid` carry the array that makes it a hybrid. It deliberately does NOT
+ * judge whether the kind is real or legal for the type: the dispatch refuses
+ * those and names the alternative for that type, which is the better message.
+ *
+ * @param strategy the strategy exactly as the caller wrote it — `unknown`,
+ *                 because the whole point is that it may not be a `Strategy`.
+ * @param site     the call to name in the message, e.g. `defineMemory[chat]`.
+ */
+export function assertStrategyShape(strategy: unknown, site: string): void {
+  checkShape(strategy, site, 'strategy');
+}
+
+function checkShape(value: unknown, site: string, path: string): void {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(notAStrategyObject(value, site, path));
+  }
+
+  const kind = (value as { readonly kind?: unknown }).kind;
+  if (typeof kind !== 'string' || kind === '') {
+    throw new Error(missingKind(site, path));
+  }
+
+  if (kind !== MEMORY_STRATEGIES.HYBRID) return;
+
+  // A hybrid IS its list. Every other kind can survive a missing field on a
+  // default; this one has nothing left to be.
+  const subs = (value as { readonly strategies?: unknown }).strategies;
+  if (!Array.isArray(subs) || subs.length === 0) {
+    throw new Error(hybridWithoutStrategies(subs, site, path));
+  }
+  subs.forEach((sub, index) => checkShape(sub, site, `${path}.strategies[${index}]`));
+}
+
+/** `'window'`, `42`, `null` — anything that is not an object at all. */
+function notAStrategyObject(value: unknown, site: string, path: string): string {
+  const written =
+    typeof value === 'string'
+      ? `the string \`'${value}'\``
+      : value === undefined
+      ? 'nothing at all'
+      : `\`${String(value)}\``;
+  // A bare string is almost always a caller reaching for the right kind with
+  // the wrong syntax — so answer with THAT kind's line, not a generic one.
+  const example =
+    typeof value === 'string' && memoryStrategyInfo(value) !== undefined
+      ? EXAMPLE[value as MemoryStrategyKind]
+      : EXAMPLE[MEMORY_STRATEGIES.WINDOW];
+  return (
+    `${site}: \`${path}\` must be an OBJECT with a \`kind\` — got ${written}.\n` +
+    `  A bare kind name is not a strategy: the kind names the rule, and the object's other ` +
+    `fields configure it.\n` +
+    `  Fix:  ${path}: ${example}\n` +
+    LISTING_HINT
+  );
+}
+
+/** `{}`, or an object whose `kind` is not a string. */
+function missingKind(site: string, path: string): string {
+  return (
+    `${site}: \`${path}\` has no \`kind\` — that field is what says which strategy this is, ` +
+    `so there is nothing here to build.\n` +
+    `  Fix:  ${path}: ${EXAMPLE[MEMORY_STRATEGIES.WINDOW]}\n` +
+    LISTING_HINT
+  );
+}
+
+/** `{ kind: 'hybrid' }` — the field-report shape, and its neighbours. */
+function hybridWithoutStrategies(subs: unknown, site: string, path: string): string {
+  const written = !Array.isArray(subs)
+    ? subs === undefined
+      ? 'none was passed'
+      : `\`strategies\` is not an array (got \`${typeof subs}\`)`
+    : 'the array is empty';
+  return (
+    `${site}: the \`hybrid\` strategy needs a non-empty \`strategies\` array and ${written} — a ` +
+    `hybrid is defined by the strategies it composes, so an empty one has nothing to compose ` +
+    `and no behaviour of its own.\n` +
+    `  Fix:  ${path}: { kind: 'hybrid', strategies: [{ kind: 'window', size: 20 }, ` +
+    `{ kind: 'topK', topK: 3, embedder }] }\n` +
+    `  Or:   drop \`hybrid\` and name the one rule you meant, e.g. ` +
+    `${EXAMPLE[MEMORY_STRATEGIES.WINDOW]}.\n` +
+    LISTING_HINT
+  );
 }
 
 // ─── The guard that makes the declaration true ──────────────────────

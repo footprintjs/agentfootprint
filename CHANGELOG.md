@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.5.1] - 2026-08-09
+
+### Fixed — a malformed strategy is a sentence, not a `TypeError` from inside the library
+
+Field report: `defineMemory({ type: EPISODIC, strategy: { kind: HYBRID, size: 5 }, store })`
+— a hybrid written with the fields of a window — failed with
+
+```
+TypeError: Cannot read properties of undefined (reading '0')
+```
+
+A hybrid IS its `strategies` list, and that config has none. 9.5.0 added the
+requirements walk, which checks what each sub-strategy NEEDS but reads the
+sub-strategy list before anything establishes there is one; the pipeline
+dispatch reads `strategies[0]` even earlier. Both are field reads off a shape
+that never had the field, so the caller got the library's internals instead of
+the name of the option they got wrong.
+
+`defineMemory` now checks the strategy's SHAPE first, before the dispatch and
+before the requirements walk, and every refusal names the field, shows a line
+that would have worked, and points at `listMemoryStrategies()`:
+
+```
+defineMemory[chat]: the `hybrid` strategy needs a non-empty `strategies` array
+and none was passed — a hybrid is defined by the strategies it composes, so an
+empty one has nothing to compose and no behaviour of its own.
+  Fix:  strategy: { kind: 'hybrid', strategies: [{ kind: 'window', size: 20 },
+        { kind: 'topK', topK: 3, embedder }] }
+  Or:   drop `hybrid` and name the one rule you meant, e.g. { kind: 'window', size: 20 }.
+  `listMemoryStrategies()` describes all seven kinds — what each one does,
+  which memory TYPES accept it, and what it needs supplied.
+```
+
+Four shapes that used to end in a raw `TypeError` or in nonsense now end in
+that kind of sentence:
+
+- **`hybrid` with no `strategies`** — the reported one. It threw on EPISODIC
+  from the dispatch, and on SEMANTIC / NARRATIVE from the requirements walk
+  (`strategy.strategies is not iterable`).
+- **`hybrid` with an EMPTY `strategies: []`** — EPISODIC refused it tersely;
+  SEMANTIC and NARRATIVE **accepted** it, because the pipeline they build
+  never reads the list. An empty hybrid composes nothing, so it is now refused
+  uniformly.
+- **`strategies` that is not an array** — `strategies: 'window'` indexed the
+  STRING, took the character `'w'`, and refused it as an unknown strategy kind.
+- **A malformed ENTRY in the list** (`null`, a nested `hybrid` with no list of
+  its own) — refused at its own path, e.g. `strategy.strategies[1]`.
+
+Two more shapes one level up, found by sweeping the other six kinds:
+
+- **No strategy object at all** (`strategy: undefined` / `null`) — was
+  `Cannot read properties of undefined (reading 'kind')`.
+- **The bare-string form** (`strategy: 'window'`) — refused with a bare
+  "unknown strategy kind", which does not tell a caller what is wrong with a
+  perfectly reasonable-looking line. It now teaches the object shape and
+  echoes the kind that was reached for: `strategy: { kind: 'window', size: 20 }`.
+  (Strings are still not accepted — the message teaches, it does not widen the
+  API.)
+
+The sweep found no other raw-`TypeError` gap: `summarize` without its `llm`,
+`topK` without its `embedder`, `decay` without its `halfLifeMs` and CAUSAL
+without an embedder already refuse by name, and the remaining absent-field
+cases (`window` without `size`, `topK` without `topK`, `extract` without
+`extractor`) fall through to a stage default rather than throwing — behaviour
+that has shipped for many releases and is deliberately left alone in a patch.
+
+The new guard judges SHAPE only. It does not rule on whether a kind is real or
+legal for the type — the dispatch refuses those and names what that type does
+accept, which is the better message, and it still speaks. Nothing that built
+before builds differently: every refused shape either threw already or built a
+definition with no coherent behaviour.
+
 ## [9.5.0] - 2026-08-09
 
 **Memory strategies tell the truth.**

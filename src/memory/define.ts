@@ -29,7 +29,7 @@
  */
 
 import { refuseAsRole } from './asRoleRefusal.js';
-import { assertStrategyRequirements } from './strategies.js';
+import { assertStrategyRequirements, assertStrategyShape } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
@@ -144,6 +144,14 @@ function validate(options: DefineMemoryOptions): void {
         'Pass `new InMemoryStore()` for dev/tests, or a backed store for production.',
     );
   }
+  // SHAPE before anything reads a field (9.5.1). Both the dispatch below and
+  // the requirements walk read fields off the strategy — `h.strategies[0]`,
+  // `for (const sub of strategy.strategies)` — and a field read off a shape
+  // that never had it is a `TypeError` from inside this library, naming
+  // neither the option the caller got wrong nor the one they meant.
+  // Field-reported: `{ kind: 'hybrid', size: 5 }` produced `Cannot read
+  // properties of undefined (reading '0')`.
+  assertStrategyShape(options.strategy, `defineMemory[${options.id}]`);
   // The shorthand and the spelled-out rule EXCLUDE. Accepting both would
   // mean one of two numbers silently loses, and the recording would name
   // a `k` the run did not use.
@@ -239,6 +247,10 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
       const h = s as HybridStrategy;
       const inner = h.strategies[0];
       if (!inner) {
+        // Unreachable since 9.5.1 — `assertStrategyShape` refuses a missing,
+        // non-array or empty `strategies` in `validate()`, with the field
+        // named and a working line in the message. Kept as the index-access
+        // backstop the type system asks for, not as the message a caller sees.
         throw new Error(
           `defineMemory[${options.id}]: HYBRID strategy requires at least one sub-strategy.`,
         );

@@ -246,6 +246,152 @@ describe('declared requirements — properties', () => {
   });
 });
 
+// ─── Shape refusals (9.5.1) — malformed strategies teach, not TypeError ──
+
+/**
+ * The field report: `{ kind: 'hybrid', size: 5 }` — a hybrid written with the
+ * fields of a window, so the list that MAKES it a hybrid is missing. Before
+ * 9.5.1 that read `strategies[0]` (episodic) or iterated `strategies`
+ * (semantic/narrative requirements walk) and surfaced a raw
+ * `TypeError: Cannot read properties of undefined (reading '0')`.
+ */
+const HYBRID_TYPES = [MEMORY_TYPES.EPISODIC, MEMORY_TYPES.SEMANTIC, MEMORY_TYPES.NARRATIVE];
+
+/** Build with a deliberately malformed strategy and hand back the error. */
+function refusalFor(type: MemoryType, strategy: unknown, id = 'chat'): Error {
+  try {
+    defineMemory({ id, type, strategy, store: vectorStore() } as never);
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error(`expected a refusal for ${JSON.stringify(strategy)} on ${type}`);
+}
+
+describe('malformed hybrid — shape refusals', () => {
+  it('the field-reported shape is refused by name on every type that accepts hybrid', () => {
+    for (const type of HYBRID_TYPES) {
+      const error = refusalFor(type, { kind: MEMORY_STRATEGIES.HYBRID, size: 5 });
+      expect(error, `${type}: still a raw internal error`).not.toBeInstanceOf(TypeError);
+      expect(error.message).toContain('defineMemory[chat]');
+      expect(error.message).toContain('`strategies`');
+      expect(error.message).toContain(
+        "{ kind: 'hybrid', strategies: [{ kind: 'window', size: 20 }",
+      );
+      expect(error.message).toContain('listMemoryStrategies()');
+    }
+  });
+
+  it('an EMPTY `strategies` array is refused on every type — not silently composed', () => {
+    // Semantic/narrative used to accept this: the pipeline they build never
+    // reads the list, so an empty hybrid compiled and behaved like something
+    // nobody asked for.
+    for (const type of HYBRID_TYPES) {
+      const error = refusalFor(type, { kind: MEMORY_STRATEGIES.HYBRID, strategies: [] });
+      expect(error).not.toBeInstanceOf(TypeError);
+      expect(error.message, `${type}: empty hybrid accepted`).toContain('the array is empty');
+    }
+  });
+
+  it('a `strategies` that is not an array says so, instead of indexing a string', () => {
+    // `strategies: 'window'` used to take `[0]` of the STRING — the character
+    // `'w'` — and refuse it as an unknown strategy kind.
+    const error = refusalFor(MEMORY_TYPES.EPISODIC, {
+      kind: MEMORY_STRATEGIES.HYBRID,
+      strategies: MEMORY_STRATEGIES.WINDOW,
+    });
+    expect(error.message).toContain('is not an array');
+    expect(error.message).toContain('`strategies`');
+  });
+
+  it('a malformed ENTRY names its position in the list', () => {
+    const error = refusalFor(MEMORY_TYPES.SEMANTIC, {
+      kind: MEMORY_STRATEGIES.HYBRID,
+      strategies: [{ kind: MEMORY_STRATEGIES.WINDOW, size: 5 }, null],
+    });
+    expect(error).not.toBeInstanceOf(TypeError);
+    expect(error.message).toContain('strategy.strategies[1]');
+  });
+
+  it('a nested hybrid missing its own list is refused at its own path', () => {
+    const error = refusalFor(MEMORY_TYPES.EPISODIC, {
+      kind: MEMORY_STRATEGIES.HYBRID,
+      strategies: [{ kind: MEMORY_STRATEGIES.HYBRID }],
+    });
+    expect(error).not.toBeInstanceOf(TypeError);
+    expect(error.message).toContain('strategy.strategies[0]');
+    expect(error.message).toContain('`strategies`');
+  });
+});
+
+describe('malformed strategy VALUE — shape refusals', () => {
+  it('the bare-string form teaches the object shape, echoing the kind that was reached for', () => {
+    const error = refusalFor(MEMORY_TYPES.EPISODIC, MEMORY_STRATEGIES.WINDOW);
+    expect(error.message).toContain("got the string `'window'`");
+    expect(error.message).toContain("strategy: { kind: 'window', size: 20 }");
+    expect(error.message).toContain('listMemoryStrategies()');
+  });
+
+  it('a missing or null strategy is refused by name, not by TypeError', () => {
+    for (const value of [undefined, null, 42]) {
+      const error = refusalFor(MEMORY_TYPES.EPISODIC, value);
+      expect(error, `${String(value)}: still a raw internal error`).not.toBeInstanceOf(TypeError);
+      expect(error.message).toContain('must be an OBJECT with a `kind`');
+    }
+  });
+
+  it('an object with no `kind` is told which field is missing', () => {
+    const error = refusalFor(MEMORY_TYPES.EPISODIC, {});
+    expect(error.message).toContain('has no `kind`');
+    expect(error.message).toContain("strategy: { kind: 'window', size: 20 }");
+  });
+
+  it('every shape refusal names the call site and points at the catalogue', () => {
+    const malformed: unknown[] = [
+      'window',
+      undefined,
+      null,
+      {},
+      { kind: MEMORY_STRATEGIES.HYBRID },
+      { kind: MEMORY_STRATEGIES.HYBRID, strategies: [] },
+    ];
+    for (const strategy of malformed) {
+      const error = refusalFor(MEMORY_TYPES.EPISODIC, strategy, 'shape-probe');
+      expect(error).not.toBeInstanceOf(TypeError);
+      expect(error.message, JSON.stringify(strategy) ?? 'undefined').toContain(
+        'defineMemory[shape-probe]',
+      );
+      expect(error.message).toContain('listMemoryStrategies()');
+    }
+  });
+
+  it('the guard judges SHAPE only — a well-formed strategy still reaches its own refusal', () => {
+    // An unknown kind is well-SHAPED; the dispatch refuses it and names what
+    // the type does accept, which is the better message. The shape guard must
+    // not speak over it.
+    expect(() =>
+      defineMemory({
+        id: 'telepathy',
+        type: MEMORY_TYPES.EPISODIC,
+        strategy: { kind: 'telepathy' },
+        store: new InMemoryStore(),
+      } as never),
+    ).toThrow(/unknown strategy kind/);
+    // And a well-shaped hybrid whose SUB-strategy needs something absent is
+    // still caught by the requirements walk, not by the shape guard.
+    expect(() =>
+      defineMemory({
+        id: 'smuggler-2',
+        type: MEMORY_TYPES.SEMANTIC,
+        strategy: {
+          kind: MEMORY_STRATEGIES.HYBRID,
+          strategies: [{ kind: MEMORY_STRATEGIES.TOP_K, topK: 3 } as never],
+        },
+        store: vectorStore(),
+      }),
+    ).toThrow(/inside `hybrid`.*embedder/s);
+  });
+});
+
 // ─── Security — the refusals teach ──────────────────────────────────
 
 describe('requirement refusals — security', () => {
