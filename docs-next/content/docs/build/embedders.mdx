@@ -88,7 +88,8 @@ corrupts silently, which is why this is an error and not a warning.
 
 ## `bedrockEmbedder()` — hosted on AWS
 
-Amazon Titan Text Embeddings V2 through Bedrock's `InvokeModel`. There is no
+Amazon Titan Text Embeddings and Cohere Embed v3 through Bedrock's
+`InvokeModel`. There is no
 `apiKey` option, deliberately: Bedrock authenticates through the normal AWS
 credential chain (environment, profile, instance role, SSO), and a second way
 to configure the same thing is a second way to get it wrong.
@@ -103,18 +104,61 @@ import { bedrockEmbedder } from 'agentfootprint/providers';
 const embedder = bedrockEmbedder({ region: 'us-east-1' }); // 1024 dimensions
 ```
 
-`BedrockEmbedderOptions` is `{ model?, dimensions?, region?, client? }`. Titan
-V2 returns **1024** dimensions by default and also supports **512** and **256**;
-the value you pass is sent to the model *and* reported as `.dimensions`, so the
-two can never disagree, and a size Titan does not produce is refused rather than
-stored. A model this library does not know the size of has to say its own, the
-same rule `openaiEmbedder` applies:
+`BedrockEmbedderOptions` is
+`{ model?, dimensions?, family?, inputType?, maxInputChars?, region?, client? }`.
+Titan V2 returns **1024** dimensions by default and also supports **512** and
+**256**; the value you pass is sent to the model *and* reported as
+`.dimensions`, so the two can never disagree, and a size the model does not
+produce is refused rather than stored. A model this library does not know the
+size of has to say its own, the same rule `openaiEmbedder` applies:
 
 ```ts
 bedrockEmbedder({ dimensions: 512 });                        // smaller vectors, cheaper storage
-bedrockEmbedder({ model: 'amazon.titan-embed-text-v1' });     // known: 1536
-bedrockEmbedder({ model: 'cohere.embed-english-v3', dimensions: 1024 }); // unknown: state it
+bedrockEmbedder({ model: 'amazon.titan-embed-text-v1' });    // known: 1536, fixed
+bedrockEmbedder({ model: 'cohere.embed-english-v3' });       // known: 1024, fixed
+bedrockEmbedder({ model: 'my-provisioned-deployment', dimensions: 768 }); // unknown: state it
 ```
+
+### One operation, two body shapes (9.3.0)
+
+`InvokeModel` is a single API over **vendor-specific JSON**. Titan takes
+`{ inputText }` and answers `{ embedding }`; Cohere takes `{ texts, input_type }`
+and answers `{ embeddings }`. Before 9.3.0 this factory sent Titan's body to
+everything, so a Cohere model id constructed fine and failed at the first embed
+— against the real service, with a validation error from AWS rather than a
+sentence from here.
+
+The model id now selects a **family**, and the family owns the request, the
+response and the batching:
+
+| model | family | dimensions | window | one call embeds |
+|---|---|---|---|---|
+| `amazon.titan-embed-text-v2:0` (default) | `titan` | 1024 / 512 / 256 | 8,192 tokens | 1 text |
+| `amazon.titan-embed-text-v1` | `titan` | 1536, fixed | 8,192 tokens | 1 text |
+| `cohere.embed-english-v3` | `cohere` | 1024, fixed | 512 tokens | up to 96 texts |
+| `cohere.embed-multilingual-v3` | `cohere` | 1024, fixed | 512 tokens | up to 96 texts |
+
+An id that **wraps** one of those — a cross-region inference profile
+(`us.amazon.titan-embed-text-v2:0`) or an ARN ending in the model id — resolves
+to the model it names. Anything else is a model this library has never met: pass
+`dimensions` (its length cannot be known) and `family` if it is not
+Titan-shaped. Unstated, the body is Titan's, which is what every earlier release
+sent.
+
+The family is exported as the `BedrockEmbeddingFamily` type (`'titan' | 'cohere'`),
+which is what the `family` option takes.
+
+Cohere's `input_type` is a real parameter, not a hint: the v3 models embed a
+QUERY and a DOCUMENT into deliberately different places, and the two are meant
+to be compared with each other. `embed()` sends `'search_query'` and
+`embedBatch()` sends `'search_document'`, because that is what this library's own
+two call sites are — retrieval embeds one question, indexing embeds many
+passages. `inputType` pins both when your own code uses them differently — it takes a
+`CohereInputType`, `'search_document' | 'search_query'`.
+
+Titan has no batch-embed operation, so `embedBatch` there is honestly N
+sequential calls rather than a batch discount that does not exist. For Cohere it
+is a real batch: 500 chunks are 6 round-trips, not 500.
 
 Pass `client` to share one SDK configuration with the rest of your app — the
 type is exported as `BedrockRuntimeLikeClient` (a single `send`), with
@@ -265,7 +309,7 @@ the unit a splitter cuts in:
 |---|---|---|
 | `localEmbedder()` | `2000` | measured: the default model's 512-wordpiece-token cliff (~1,800–2,000 characters) |
 | `openaiEmbedder()` | `32000` | the documented 8,191-token window, at 4 characters a token |
-| `bedrockEmbedder()` | `32000` | Titan's documented 8,192-token window, same conversion |
+| `bedrockEmbedder()` | `32000` (Titan) · `2000` (Cohere v3) | each model's documented window — 8,192 tokens and 512 — at the same conversion |
 | `staticEmbedder()` | `1000000` | no transformer, so no context window — nothing is ever clipped |
 | `mockEmbedder()` | `1000000` | reads every character in a loop |
 
@@ -273,11 +317,16 @@ the unit a splitter cuts in:
 their own 2,000-character default, and an explicit `maxChunkChars` on the call
 wins over both. Two consequences worth knowing:
 
+- **The ceiling is per MODEL, not per vendor.** Titan and Cohere Embed v3 are
+  the same runtime and the same factory, and the same 2,500-character chunk is
+  read whole by one and truncated by the other. That gap is the whole argument
+  for declaring the number where the knowledge is.
 - **A model this library does not know declares nothing.** Pass
-  `openaiEmbedder({ model: 'my-gateway-model', dimensions: 768 })` or a
-  non-Titan Bedrock model and there is no ceiling on the returned embedder —
+  `openaiEmbedder({ model: 'my-gateway-model', dimensions: 768 })` or an
+  unrecognised Bedrock model and there is no ceiling on the returned embedder —
   the indexer's conservative default stands. A wrong ceiling clips in silence;
-  an absent one only under-uses the backend.
+  an absent one only under-uses the backend. `bedrockEmbedder({ maxInputChars })`
+  is how such a model states its own.
 - **The characters-per-token figure is an assumption, not a measurement.** Code,
   tables and CJK text tokenise denser than English prose, so a corpus of those
   can exceed the token window inside the stated character ceiling. Pass

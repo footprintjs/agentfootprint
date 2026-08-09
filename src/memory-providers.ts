@@ -1,9 +1,9 @@
 /**
  * memory-providers — memory store adapters.
  *
- * RedisStore, AgentCoreStore, and future stores (DynamoDB, Postgres,
- * Pinecone, …) all live here — a new store adds an export, never a new
- * import path.
+ * RedisStore, AgentCoreStore, sqliteVectorStore, pgVectorStore, s3VectorsStore
+ * and future stores (DynamoDB, Pinecone, …) all live here — a new store adds an
+ * export, never a new import path.
  *
  * Pattern: Adapter (GoF) — each store translates the `MemoryStore`
  *          interface onto a specific backend (Redis, DynamoDB-style
@@ -47,7 +47,6 @@ export {
 export {
   sqliteVectorStore,
   UnreadableIndexFileError,
-  EmbedderMismatchError,
   type SqliteVectorStore,
   type SqliteVectorStoreOptions,
   type SqliteVectorDatabaseLike,
@@ -58,6 +57,38 @@ export {
 // The SAME refusal `sqliteSessions` raises for the same missing module — one
 // class, so catching it does not require knowing which store was being built.
 export { SqliteUnavailableError } from './lib/sqliteUnavailable.js';
+
+// ONE refusal for every store that can tell a vector met an index built by a
+// different embedder (9.3.0). It lived in sqliteVector.ts from 8.9.0; when
+// pgVectorStore and s3VectorsStore learned the same check it moved to lib/, so
+// `catch (e) { if (e instanceof EmbedderMismatchError) }` cannot depend on
+// which store threw. The old import path still works.
+export { EmbedderMismatchError } from './lib/embedderMismatch.js';
+
+// Postgres + pgvector: the corpus beside the application's own data, inheriting
+// its backups, failover and access control. `pg` is lazy-required at the first
+// call — pass `client` to reuse the pool your app already has.
+export {
+  pgVectorStore,
+  PgVectorSchemaError,
+  type PgVectorStore,
+  type PgVectorStoreOptions,
+  type PgVectorColumns,
+  type PgLikeClient,
+  type PgQueryResult,
+  type PgSdkModule,
+} from './adapters/memory/pgVector.js';
+
+// Amazon S3 Vectors: a durable corpus with nothing to run, that can be added to
+// from a cron job rather than at the next deploy. Lazy-requires
+// `@aws-sdk/client-s3vectors` at the first call.
+export {
+  s3VectorsStore,
+  type S3VectorsStore,
+  type S3VectorsStoreOptions,
+  type S3VectorsLikeClient,
+  type S3VectorsSdkModule,
+} from './adapters/memory/s3Vectors.js';
 
 // Read-only reader for the legacy Bedrock Agents auto session-summary memory.
 // NOT a MemoryStore (Bedrock owns the writes) — see the class docstring.

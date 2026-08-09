@@ -123,6 +123,7 @@ import type { MemoryStore } from '../../memory/store/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { RetrievalStrategy } from '../../memory/retrieval/index.js';
+import { resolveRankingMode } from '../../memory/store/capability.js';
 import { MEMORY_TYPES, MEMORY_STRATEGIES } from '../../memory/define.types.js';
 import { defineMemory } from '../../memory/define.js';
 import { refuseAsRole } from '../../memory/asRoleRefusal.js';
@@ -147,10 +148,13 @@ export interface DefineRAGOptions {
   readonly description?: string;
 
   /**
-   * Vector-capable store containing the indexed corpus. Must implement
-   * `search()`. Use `indexDocuments(store, embedder, docs)` at startup
-   * to populate it. Ships with `InMemoryStore` for dev/tests; swap to
-   * a durable adapter in production.
+   * Store containing the indexed corpus. Must implement `search()`. Use
+   * `indexDocuments(store, embedder, docs)` at startup to populate it. Ships
+   * with `InMemoryStore` for dev/tests; swap to a durable adapter in
+   * production.
+   *
+   * A store that declares `ranksBy: 'server-text'` is served by the backend's
+   * own index rather than one built here — see {@link embedder}.
    */
   readonly store: MemoryStore;
 
@@ -158,13 +162,28 @@ export interface DefineRAGOptions {
    * Embedder used for the read-side query. Pass the SAME embedder
    * instance (or one with the same `embedderId`) that was used for
    * indexing — cross-model similarity scores are not comparable.
+   *
+   * **Optional since 9.3.0, for one case only.** A store that declares
+   * `ranksBy: 'server-text'` (see {@link MemoryStore.ranksBy}) takes the
+   * question as WORDS and ranks it on the backend's side; there is nothing
+   * here for an embedder to do, and embedding the query anyway would be spend
+   * on a vector discarded on arrival. Against such a store this must be
+   * OMITTED — passing one is refused rather than ignored, because an ignored
+   * embedder reads, from the wiring, exactly like a working one.
+   *
+   * Against every other store it is still required.
    */
-  readonly embedder: Embedder;
+  readonly embedder?: Embedder;
 
   /**
    * Stable id of the embedder. Stored on entries during indexing
    * (via `indexDocuments`) and filtered at search time so a later
    * embedder swap doesn't pollute results.
+   *
+   * Refused alongside a `'server-text'` store for the same reason
+   * {@link embedder} is: the backend's records were never written here and
+   * carry no `embeddingModel` to filter on, so the option would name a filter
+   * that filtered nothing.
    */
   readonly embedderId?: string;
 
@@ -289,7 +308,11 @@ export interface DefineRAGOptions {
  * (or, equivalently, `.memory(definition)` — same plumbing).
  *
  * @throws when `store` does not implement `search()`. RAG requires a
- *         vector-capable adapter.
+ *         store that can retrieve.
+ * @throws when `embedder` is missing and the store does not rank text
+ *         server-side — somebody has to turn the question into a vector.
+ * @throws when `embedder`/`embedderId` is passed to a store that DOES rank
+ *         text server-side — the option would be read by nothing.
  * @throws when `retrieval` is combined with `topK` or `threshold`.
  */
 export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
@@ -303,8 +326,35 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
   if (!opts.store) {
     throw new Error(`defineRAG[${opts.id}]: \`store\` is required.`);
   }
-  if (!opts.embedder) {
-    throw new Error(`defineRAG[${opts.id}]: \`embedder\` is required.`);
+  // Which query form this store takes decides whether an embedder belongs
+  // here at all. A contradiction between the store's two declarations is
+  // refused inside the resolver, naming the store.
+  const ranksBy = resolveRankingMode(opts.store, `defineRAG[${opts.id}]`);
+  if (ranksBy === 'server-text') {
+    const ignored: string[] = [];
+    if (opts.embedder !== undefined) ignored.push('`embedder`');
+    if (opts.embedderId !== undefined) ignored.push('`embedderId`');
+    if (ignored.length > 0) {
+      throw new Error(
+        `defineRAG[${opts.id}]: ${ignored.join(' and ')} cannot be used with a store that ` +
+          `declares \`ranksBy: 'server-text'\`.\n` +
+          `  That store takes the question as WORDS and ranks it on the backend's side. An ` +
+          `embedder here would turn every question into a vector that is discarded on ` +
+          `arrival — paid for, per turn, and read by nothing.\n` +
+          `  Fix:  drop ${ignored.join('/')} — \`defineRAG({ id, store })\` is the whole ` +
+          `wiring for a server-text corpus.\n` +
+          `  This refuses rather than ignoring the option, because an ignored embedder reads ` +
+          `from the wiring exactly like a working one: the same line, the same id in the ` +
+          `recording, and no way to tell that nothing was embedded.`,
+      );
+    }
+  } else if (!opts.embedder) {
+    throw new Error(
+      `defineRAG[${opts.id}]: \`embedder\` is required — somebody has to turn the question ` +
+        `into a vector before this store can rank it.\n` +
+        `  Omit it only for a store that declares \`ranksBy: 'server-text'\` (it embeds and ` +
+        `ranks the question on its own side, so there is nothing to embed here).`,
+    );
   }
   if (!opts.store.search) {
     throw new Error(
@@ -340,7 +390,10 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
       opts.retrieval !== undefined
         ? {
             kind: MEMORY_STRATEGIES.TOP_K,
-            embedder: opts.embedder,
+            // Spread, not assigned: a server-text corpus has no embedder, and
+            // an explicit `embedder: undefined` is a different fact from an
+            // absent one to every `!== undefined` check downstream.
+            ...(opts.embedder !== undefined && { embedder: opts.embedder }),
             retrieval: opts.retrieval,
             ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
             // Rides BOTH arms: the rule chooses the passages, this bounds
@@ -351,7 +404,7 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
             kind: MEMORY_STRATEGIES.TOP_K,
             topK: opts.topK ?? 3,
             threshold: opts.threshold ?? 0.7,
-            embedder: opts.embedder,
+            ...(opts.embedder !== undefined && { embedder: opts.embedder }),
             ...(opts.embedderId !== undefined && { embedderId: opts.embedderId }),
             ...(opts.maxChars !== undefined && { maxChars: opts.maxChars }),
           },

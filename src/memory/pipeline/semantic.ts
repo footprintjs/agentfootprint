@@ -61,8 +61,19 @@ export interface SemanticPipelineConfig {
   /** Vector-capable store. Must implement `search()`. */
   readonly store: MemoryStore;
 
-  /** Embedder used for both write-side indexing and read-side query. */
-  readonly embedder: Embedder;
+  /**
+   * Embedder used for both write-side indexing and read-side query.
+   *
+   * Optional since 9.3.0 for stores that declare `ranksBy: 'server-text'`:
+   * they take the query as words, so nothing here embeds. **Without one there
+   * is no WRITE half** — this library cannot embed a turn it has no embedder
+   * for, and a write subflow that stored vectorless entries into a backend
+   * that never reads them would be a no-op wearing a stage's name. The
+   * returned pipeline then carries `read` only (`defineMemory` refuses the
+   * combination unless the memory is `readOnly`, so the missing half is never
+   * a surprise).
+   */
+  readonly embedder?: Embedder;
 
   /**
    * Stable id for the embedder — attached to written entries and used
@@ -131,7 +142,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
 
   const loadConfig: LoadRelevantConfig = {
     store: config.store,
-    embedder: config.embedder,
+    ...(config.embedder !== undefined && { embedder: config.embedder }),
     ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
     ...(config.k !== undefined && { k: config.k }),
     ...(config.minScore !== undefined && { minScore: config.minScore }),
@@ -148,10 +159,6 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     ...(config.formatHeader !== undefined && { header: config.formatHeader }),
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
     ...(config.flavor !== undefined && { flavor: config.flavor }),
-  };
-  const embedConfig: EmbedMessagesConfig = {
-    embedder: config.embedder,
-    ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
   };
   const writeConfig: WriteMessagesConfig = {
     store: config.store,
@@ -177,6 +184,16 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     .build();
 
   // ── Write subflow: EmbedMessages → WriteMessages
+  //
+  // Built only when there is an embedder to build it around. Without one the
+  // pipeline is read-only by construction rather than by a flag — nothing to
+  // disable later by accident, and no stage in the chart that does nothing.
+  if (config.embedder === undefined) return { read };
+
+  const embedConfig: EmbedMessagesConfig = {
+    embedder: config.embedder,
+    ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
+  };
   const write = flowChart<EmbedMessagesState>(
     'EmbedMessages',
     embedMessages(embedConfig),

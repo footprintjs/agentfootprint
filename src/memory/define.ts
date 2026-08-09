@@ -29,6 +29,7 @@
  */
 
 import { refuseAsRole } from './asRoleRefusal.js';
+import { resolveRankingMode } from './store/capability.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
 import { ephemeralPipeline } from './pipeline/ephemeral.js';
@@ -259,9 +260,32 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
   switch (s.kind) {
     case MEMORY_STRATEGIES.TOP_K: {
       const t = s as TopKStrategy;
+      // Whether an embedder is required is a fact about the STORE, which the
+      // type cannot see — so the requirement lives here (9.3.0). Absence is
+      // legal for exactly one store shape and refused for every other.
+      const ranksBy = resolveRankingMode(options.store, `defineMemory[${options.id}]`);
+      if (t.embedder === undefined) {
+        if (ranksBy !== 'server-text') {
+          throw new Error(
+            `defineMemory[${options.id}]: TOP_K needs an \`embedder\` — somebody has to turn ` +
+              `the query into a vector before this store can rank it.\n` +
+              `  Omit it only for a store that declares \`ranksBy: 'server-text'\`, which ` +
+              `embeds and ranks the question on its own side.`,
+          );
+        }
+        if (options.readOnly !== true) {
+          throw new Error(
+            `defineMemory[${options.id}]: a store that declares \`ranksBy: 'server-text'\` has ` +
+              `no write half here — this library cannot embed the turn (no embedder) and the ` +
+              `backend does its own ingestion.\n` +
+              `  Fix:  pass \`readOnly: true\` (which \`defineRAG\` sets for you), so the write ` +
+              `subflow is never compiled rather than compiled and silently doing nothing.`,
+          );
+        }
+      }
       const config: SemanticPipelineConfig = {
         store: options.store,
-        embedder: t.embedder,
+        ...(t.embedder !== undefined && { embedder: t.embedder }),
         ...(t.topK !== undefined && { k: t.topK }),
         ...(t.threshold !== undefined && { minScore: t.threshold }),
         // Composes with either spelling — a size bound, not a second
@@ -408,6 +432,19 @@ function buildCausalPipeline(options: DefineCausalOptions): MemoryPipeline {
       `defineMemory[${options.id}]: CAUSAL type does not read \`maxChars\` — it recalls whole ` +
         'past-run snapshots, not a pool of passages to spend a character budget across. ' +
         'Bound it with `topK` (snapshots recalled) or `projection` (how much of each one).',
+    );
+  }
+
+  // CAUSAL matches a stored QUERY VECTOR against a new one — there is no
+  // server-side text path into a snapshot pool, so the embedder stays
+  // unconditionally required here even though the type made it optional for
+  // the semantic case (9.3.0).
+  if (s.embedder === undefined) {
+    throw new Error(
+      `defineMemory[${options.id}]: CAUSAL type requires an \`embedder\` — snapshot recall ` +
+        'matches the new query against the query vector each past run was filed under, so ' +
+        "there is always a vector to produce. (`ranksBy: 'server-text'` relaxes this for " +
+        'SEMANTIC retrieval only.)',
     );
   }
 

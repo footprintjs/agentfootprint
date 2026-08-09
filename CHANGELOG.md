@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.3.0] - 2026-08-09
+
+**Three promises the code had already made, kept.**
+
+`MemoryStore`'s own docstring has named its backends since 2.x — *"Every storage
+backend (InMemory, Redis, DynamoDB, **Postgres**, Bedrock AgentCore) implements
+this interface"* — and named the queries too, in the two places an implementer
+would look: *"**Postgres**: multi-row INSERT … ON CONFLICT DO UPDATE"* for
+`putMany`, and *"**pgvector**: `ORDER BY embedding <=> query LIMIT k`"* for
+`search`. Every one of those sentences was true about the design and false about
+the shipped package. Two of the three items below are the same shape: a
+documented promise with nothing behind it.
+
+### `pgVectorStore` — the backend the port has named since 2.x
+
+```ts
+import { Pool } from 'pg';
+import { pgVectorStore } from 'agentfootprint/memory';
+
+const store = pgVectorStore({ client: new Pool({ connectionString: process.env.DATABASE_URL }) });
+await indexDocuments(store, embedder, docs, { embedderId: embedder.id });
+```
+
+Postgres is the database most teams already run; a corpus that lives in it
+inherits the backups, the failover, the access control and the migrations you
+already have. `putMany` is the multi-row upsert the docstring promised and
+`search` is `1 - (embedding <=> $query::vector)` — pgvector's cosine distance
+turned into the cosine similarity the port reports.
+
+Three decisions worth knowing:
+
+- **It does not create the table.** A `vector(N)` column fixes N at creation and
+  N is a fact about your embedder; picking it implicitly would pick it forever,
+  in a migration nobody reviewed. The `CREATE TABLE` is in the docs and in the
+  adapter's own docstring, and a **missing table is refused**
+  (`PgVectorSchemaError`) rather than read as an empty corpus — an unreadable
+  index and an empty one are different facts, and only one is safe to answer
+  with "no matches".
+- **Nothing is ever two statements pretending to be a transaction.** A `pg.Pool`
+  hands each `query()` its own connection, so everything that must be atomic is
+  ONE statement: `putMany` is one upsert, `putIfVersion` is one conditional
+  upsert, `forget` is one statement with CTEs across all four tables.
+- **Identifiers are validated, not escaped.** Every table and column name is an
+  option (so this fits a schema with conventions), and a name that is not a
+  plain SQL identifier is refused — a store configured from an environment
+  variable is one `DB_TABLE` away from being an injection point.
+
+### `s3VectorsStore` — a corpus you can add to at 14:00
+
+`sqliteVectorStore` (8.9.0) made a corpus survive a restart, and a corpus bundle
+(8.20.0) made it survive a runtime with no disk. Both leave the same gap, and a
+field report named it: **a bundle can only change when you redeploy.**
+
+```ts
+const store = s3VectorsStore({ bucket: 'my-corpus', index: 'docs', region: 'us-east-1' });
+
+// From a cron job. No deploy, no restart — the agent sees it next turn.
+await indexDocuments(store, embedder, newDocs, { embedderId: embedder.id });
+```
+
+`search()` maps 1:1 onto QueryVectors and `put`/`putMany` onto PutVectors, so
+`indexCorpus`, `indexFolder` and `indexDocuments` run against it unchanged —
+that is the point of writing it rather than only reading it. It refuses a
+euclidean index at construction (a rescaled euclidean distance reads like a
+cosine and is not one), refuses the three operations a vector index cannot do
+(`putIfVersion`, `recordSignature`, `feedback`) rather than faking them, and
+answers their read halves truthfully.
+
+Both adapters carry the embedder-fingerprint refusals `sqliteVectorStore` has
+had since 8.9.0 — and `EmbedderMismatchError` is now ONE class in `lib/`, shared
+by all three, so `catch (e) { if (e instanceof EmbedderMismatchError) }` cannot
+depend on which store threw. The import path is unchanged.
+
+### The store says what its `search()` ranks
+
+`defineRAG` has always required an `Embedder`, because somebody has to turn the
+question into a vector. A managed knowledge-base service does not work that way:
+it embeds and ranks on ITS side, and its retrieval API takes TEXT. Wired to one
+of those, the embedder was still constructed, still called once per turn, still
+billed — and the vector it produced was discarded on arrival. The wiring read
+exactly like a working one.
+
+```ts
+// The store declares `ranksBy: 'server-text'`, so this is the whole wiring:
+.rag(defineRAG({ id: 'docs', store: managedKnowledgeBase }))
+```
+
+`MemoryStore.ranksBy` is `'vector' | 'server-text' | undefined`. Passing an
+`embedder` (or `embedderId`) to a server-text store is **refused**, not ignored:
+an ignored embedder reads, from the wiring, exactly like a working one — same
+line, same id in the recording, no way to tell that nothing was embedded. Such a
+retriever is read-only by construction, and no
+`agentfootprint.embedding.generated` event is emitted because none happened.
+
+It is a second member rather than a widened `supportsVectorSearch`, because a
+boolean that grew a third value would slip past every `!== false` already
+written against it. The two must agree, and a store that declares both and
+contradicts itself is refused by name rather than silently resolved.
+
+**Absence still means undeclared.** Every store written before this release, and
+every store you have written yourself, behaves exactly as it did.
+
+### `bedrockEmbedder` speaks each model's own body shape
+
+`InvokeModel` is one operation over vendor-specific JSON: Titan takes
+`{ inputText }` and answers `{ embedding }`; Cohere takes `{ texts, input_type }`
+and answers `{ embeddings }`. This factory sent Titan's body to everything, so
+`bedrockEmbedder({ model: 'cohere.embed-english-v3', dimensions: 1024 })` —
+a call the previous docstring suggested — constructed fine and failed at the
+first embed, against the real service.
+
+The model id now selects a FAMILY, and the family owns the request body, the
+response field and the batching. Four models are known by name (Titan V2, Titan
+V1, Cohere Embed English/Multilingual v3), each with its own size rule and its
+own documented input window: **32,000 characters for Titan, 2,000 for Cohere v3**
+— the same runtime, the same factory, and the same 2,500-character chunk read
+whole by one and truncated by the other. That gap is the argument for a
+per-model ceiling. Cohere also batches for real: 500 chunks are 6 round-trips
+(96 texts a call), not 500.
+
+`input_type` is a real parameter, not a hint — the v3 models embed a QUERY and a
+DOCUMENT into deliberately different places. `embed()` sends `'search_query'`
+and `embedBatch()` sends `'search_document'`, matching this library's own two
+call sites; `inputType` pins both when yours differ.
+
+The unknown-model refusal stays: a model this library has never met must state
+its `dimensions`, and now may also state its `family` and `maxInputChars`. An id
+that WRAPS a known model — `us.amazon.titan-embed-text-v2:0`, or an ARN ending
+in the model id — now resolves to the model it names instead of being refused.
+
+### Compatibility
+
+- Additive across the board except one refusal that got stricter:
+  `bedrockEmbedder({ model, dimensions })` where the model has ONE fixed size
+  (Titan V1 at 1536, Cohere v3 at 1024) and `dimensions` disagrees now throws at
+  construction. It previously reported a length that could never come back —
+  which is the value a vector store fingerprints on. Drop `dimensions`; the
+  factory knows the model's size.
+- `EmbedderMismatchError` moved to `lib/embedderMismatch.ts` and is re-exported
+  from its original module, so both import paths work and `instanceof` is now
+  one class rather than one per store.
+- `pg` and `@aws-sdk/client-s3vectors` are OPTIONAL peer dependencies, lazily
+  required at the first call. Importing `agentfootprint/memory` costs nothing
+  for consumers who never build one of the new stores.
+
 ## [9.2.0] - 2026-08-08
 
 **The agent stops forgetting the conversation it is in and calling it success.**

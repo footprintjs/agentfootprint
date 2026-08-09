@@ -157,6 +157,47 @@ export interface MemoryStore {
   readonly supportsVectorSearch?: boolean;
 
   /**
+   * What does this store's `search()` rank — the vectors, or the text? (9.3.0)
+   *
+   * {@link supportsVectorSearch} answers "can you serve back the embeddings I
+   * wrote?", which is what a corpus BUILDER needs to know. This answers the
+   * next question down, which is what a corpus READER needs: **what query form
+   * does your search take?** They are different questions, so they are
+   * different members rather than one widened one — a boolean that grew a
+   * third value would slip past every `!== false` already written against it.
+   *
+   *   - `'vector'`      — vectors in, ranked vectors out. `search()` ranks the
+   *                       `embedding` it was handed. Every local backend:
+   *                       `InMemoryStore`, `sqliteVectorStore`,
+   *                       `staticVectorStore`, `pgVectorStore`,
+   *                       `s3VectorsStore`.
+   *   - `'server-text'` — the backend embeds and ranks on ITS side and its
+   *                       retrieval API takes TEXT. `search()` reads
+   *                       {@link SearchOptions.text}; the vector argument is
+   *                       the one thing it cannot use. A managed knowledge-base
+   *                       service is the shape.
+   *   - absent          — undeclared. Treated exactly as before this existed:
+   *                       nothing refuses, nothing changes. Every adapter
+   *                       written against an earlier release is in this case,
+   *                       which is why absence can never mean either value.
+   *
+   * **What the declaration buys.** `defineRAG` requires an `Embedder` because
+   * somebody has to turn the question into a vector. A `'server-text'` store
+   * needs no such thing — it takes the question as words — so a retriever over
+   * one accepts NO embedder, and embedding the query anyway would be spend on
+   * a vector that is discarded on arrival. Declaring this is what lets the
+   * wiring layer know that before the first turn instead of after the bill.
+   *
+   * **The two members must agree.** `'vector'` says the same thing as
+   * `supportsVectorSearch: true`, and `'server-text'` is only ever compatible
+   * with `false` or absence. A store that declares both and contradicts itself
+   * is REFUSED by name (`resolveRankingMode`) rather than silently resolved —
+   * two spellings of one fact that could disagree is the same law `topK` and
+   * `retrieval` are refused under.
+   */
+  readonly ranksBy?: 'vector' | 'server-text';
+
+  /**
    * Fetch one entry by id within the given identity's namespace.
    * Returns `null` when the entry doesn't exist OR has expired (TTL).
    * Callers should not distinguish — both mean "no data."

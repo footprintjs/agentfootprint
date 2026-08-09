@@ -305,6 +305,9 @@ describe('maxInputChars — every shipped embedder declares its own ceiling', ()
     expect(openaiEmbedder({ apiKey: 'k' }).maxInputChars).toBe(32000);
     // Titan's documented 8,192-token window, same conversion.
     expect(bedrockEmbedder().maxInputChars).toBe(32000);
+    // …and Cohere Embed v3's 512-token window on the SAME runtime, which is
+    // why the ceiling is per MODEL and not per vendor (9.3.0).
+    expect(bedrockEmbedder({ model: 'cohere.embed-english-v3' }).maxInputChars).toBe(2000);
     // No transformer, no context window — nothing is ever clipped.
     expect(staticEmbedder().maxInputChars).toBe(1_000_000);
     // Reads every character in a loop; declared so a mock-first run does not
@@ -319,8 +322,21 @@ describe('maxInputChars — every shipped embedder declares its own ceiling', ()
       openaiEmbedder({ apiKey: 'k', model: 'my-gateway-model', dimensions: 768 }).maxInputChars,
     ).toBeUndefined();
     expect(
-      bedrockEmbedder({ model: 'cohere.embed-english-v3', dimensions: 1024 }).maxInputChars,
+      bedrockEmbedder({ model: 'my-provisioned-deployment', dimensions: 1024 }).maxInputChars,
     ).toBeUndefined();
+  });
+
+  it('bedrockEmbedder takes the number from the caller for a model it does not know', () => {
+    // The same escape hatch `localEmbedder` has, for the same reason: a custom
+    // deployment's window is a fact only its owner holds, and an absent ceiling
+    // makes the indexer cut to a default that may be four times too small.
+    expect(
+      bedrockEmbedder({
+        model: 'my-provisioned-deployment',
+        dimensions: 1024,
+        maxInputChars: 30000,
+      }).maxInputChars,
+    ).toBe(30000);
   });
 
   it('localEmbedder takes the number from the caller — the cliff belongs to the MODEL', () => {

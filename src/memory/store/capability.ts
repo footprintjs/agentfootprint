@@ -1,9 +1,9 @@
 /**
- * assertServesVectors — the refusal a corpus-building call owes its caller
- * when the store it was handed cannot serve vectors back.
+ * Store capabilities — the two declared facts a store may state about its own
+ * `search()`, and the refusals they buy.
  *
- * Pattern: guard clause over a declared port capability.
- * Role:    memory/store layer, next to the port whose one bit it reads.
+ * Pattern: guard clauses over declared port capabilities.
+ * Role:    memory/store layer, next to the port whose bits they read.
  * Emits:   N/A.
  *
  * ── The failure this exists to end ──────────────────────────────────────────
@@ -26,7 +26,71 @@
 import type { MemoryStore } from './types.js';
 
 /** The stores this library ships that DO rank the vectors they were given. */
-const VECTOR_CAPABLE = 'InMemoryStore (dev/tests) or sqliteVectorStore (durable, one file)';
+const VECTOR_CAPABLE =
+  'InMemoryStore (dev/tests), sqliteVectorStore (durable, one file), pgVectorStore ' +
+  '(Postgres + pgvector) or s3VectorsStore (Amazon S3 Vectors)';
+
+/**
+ * The ranking mode a store DECLARES, with a contradiction refused by name.
+ *
+ * Two members answer two questions ({@link MemoryStore.supportsVectorSearch}
+ * "can you serve my vectors back?" and {@link MemoryStore.ranksBy} "what query
+ * form does your search take?"), and a store may state either, both, or
+ * neither. Both, disagreeing, is the one case that cannot be resolved: there is
+ * no reading of `{ supportsVectorSearch: true, ranksBy: 'server-text' }` that
+ * is not somebody's bug, and picking a winner would encode a guess about which
+ * line was the mistake. Refused — the same law that refuses `topK` beside
+ * `retrieval`.
+ *
+ * @returns `'vector'` | `'server-text'` | `undefined` (undeclared — the state
+ *          every adapter written before 9.3.0 is in, and the one that must
+ *          change nothing).
+ * @throws when the two declarations contradict each other.
+ */
+export function resolveRankingMode(
+  store: MemoryStore,
+  caller: string,
+): 'vector' | 'server-text' | undefined {
+  const declared = store.ranksBy;
+  const servesVectors = store.supportsVectorSearch;
+  if (declared === undefined) {
+    // A bare `supportsVectorSearch: true` is a store saying it ranks the
+    // vectors it was given, which IS `'vector'` — read it as one, so a
+    // pre-9.3.0 adapter gets the new behaviour without a new line. A bare
+    // `false` says only that it cannot serve them back, not how it ranks, so
+    // it stays undeclared here.
+    return servesVectors === true ? 'vector' : undefined;
+  }
+  if (declared === 'vector' && servesVectors === false) {
+    throw new Error(contradiction(store, caller, 'vector', false));
+  }
+  if (declared === 'server-text' && servesVectors === true) {
+    throw new Error(contradiction(store, caller, 'server-text', true));
+  }
+  return declared;
+}
+
+function contradiction(
+  store: MemoryStore,
+  caller: string,
+  ranksBy: 'vector' | 'server-text',
+  supportsVectorSearch: boolean,
+): string {
+  const name = storeName(store);
+  return (
+    `${caller}: \`${name}\` declares \`ranksBy: '${ranksBy}'\` and ` +
+    `\`supportsVectorSearch: ${String(supportsVectorSearch)}\`, and those two cannot both be ` +
+    `true.\n` +
+    `  \`ranksBy: 'vector'\` means search() ranks the embeddings you wrote, which is exactly ` +
+    `what \`supportsVectorSearch: true\` claims; \`'server-text'\` means the backend ranks ` +
+    `text on its own side, which is exactly what \`false\` admits.\n` +
+    `  Fix:  keep ONE of them. A local vector backend declares ` +
+    `\`ranksBy: 'vector'\` (or nothing but \`supportsVectorSearch: true\`); a managed ` +
+    `text-ranking backend declares \`ranksBy: 'server-text'\` and \`supportsVectorSearch: false\`.\n` +
+    `  This refuses rather than picking a winner — either line could be the mistake, and ` +
+    `guessing which would silently decide whether your queries get embedded.`
+  );
+}
 
 /**
  * Refuse a store that has declared it cannot rank the vectors it is given.
@@ -34,10 +98,26 @@ const VECTOR_CAPABLE = 'InMemoryStore (dev/tests) or sqliteVectorStore (durable,
  * @param store  the store the caller passed.
  * @param caller the function name to put in the message — the call the
  *               reader actually wrote, not this helper.
- * @throws when `store.supportsVectorSearch === false`. Never throws on a
- *         store that declares nothing.
+ * @throws when `store.supportsVectorSearch === false`, when it declares
+ *         `ranksBy: 'server-text'`, or when the two declarations contradict.
+ *         Never throws on a store that declares nothing.
  */
 export function assertServesVectors(store: MemoryStore, caller: string): void {
+  // A contradiction is refused here too — a corpus builder is usually the
+  // FIRST call a new store meets, and it is the cheapest place to find out.
+  const mode = resolveRankingMode(store, caller);
+  if (mode === 'server-text') {
+    throw new Error(
+      `${caller}: \`${storeName(store)}\` declares \`ranksBy: 'server-text'\`, so indexing a ` +
+        `corpus into it would report success and retrieve nothing.\n` +
+        `  It embeds and ranks on the BACKEND's side, over a population the backend derived ` +
+        `itself — the vectors written here would be stored and never read.\n` +
+        `  Fix:  index into a vector-ranking store — ${VECTOR_CAPABLE}.\n` +
+        `  Or:   let the backend do its own ingestion (its console, its API), and point ` +
+        `\`defineRAG\` at it with NO embedder — a server-text store takes the question as ` +
+        `words, so there is nothing for this library to embed.`,
+    );
+  }
   if (store.supportsVectorSearch !== false) return;
   const name = storeName(store);
   // Two ways a store can be unable to serve vectors back, and the message

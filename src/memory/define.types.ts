@@ -186,7 +186,17 @@ export interface TopKShorthandStrategy {
   readonly topK: number;
   /** Min cosine similarity. Strict — no fallback below this. Default 0.7. */
   readonly threshold?: number;
-  readonly embedder: Embedder;
+  /**
+   * The embedder that turns the query into a vector.
+   *
+   * Optional since 9.3.0 for ONE case: a store declaring
+   * `ranksBy: 'server-text'` ranks the question as words on the backend's
+   * side, so there is nothing here to embed. Omitted anywhere else,
+   * `defineMemory` refuses by name — the requirement moved from the type to a
+   * runtime check because it now depends on the STORE, which the type cannot
+   * see.
+   */
+  readonly embedder?: Embedder;
   /**
    * Stable id of the embedder, filtered against `MemoryEntry.embeddingModel`
    * at search time so a later embedder swap cannot silently mix two vector
@@ -204,7 +214,8 @@ export interface TopKShorthandStrategy {
 /** The spelled-out rule (8.8.0) — and the seam a re-ranker will arrive through. */
 export interface TopKRetrievalStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.TOP_K;
-  readonly embedder: Embedder;
+  /** See {@link TopKShorthandStrategy.embedder} — optional for server-text stores only. */
+  readonly embedder?: Embedder;
   readonly retrieval: RetrievalStrategy;
   /** See {@link TopKShorthandStrategy.embedderId}. */
   readonly embedderId?: string;

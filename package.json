@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.2.0",
+  "version": "9.3.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -269,6 +269,7 @@
     "@aws-sdk/client-bedrock-agentcore": "*",
     "@aws-sdk/client-bedrock-runtime": "*",
     "@aws-sdk/client-cloudwatch-logs": "*",
+    "@aws-sdk/client-s3vectors": "*",
     "@aws-sdk/client-xray": "*",
     "@huggingface/transformers": "*",
     "@modelcontextprotocol/sdk": "*",
@@ -277,6 +278,7 @@
     "footprintjs": "^9.15.0",
     "ioredis": "*",
     "openai": "*",
+    "pg": "*",
     "unpdf": "*",
     "zod": "*"
   },
@@ -299,7 +301,13 @@
     "@aws-sdk/client-cloudwatch-logs": {
       "optional": true
     },
+    "@aws-sdk/client-s3vectors": {
+      "optional": true
+    },
     "@aws-sdk/client-xray": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     },
     "@modelcontextprotocol/sdk": {

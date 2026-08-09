@@ -61,6 +61,7 @@ import type { LLMMessage as Message } from '../../adapters/types.js';
 import type { MemoryStore, ScoredEntry } from '../store/index.js';
 import type { MemoryState } from '../stages/index.js';
 import { identityNamespace } from '../identity/index.js';
+import { resolveRankingMode } from '../store/capability.js';
 import { fnv1a } from '../../lib/fnv1a.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import { topK } from '../retrieval/topK.js';
@@ -77,8 +78,16 @@ export interface LoadRelevantConfig {
   /** The vector-capable store. Must implement `search()`. */
   readonly store: MemoryStore;
 
-  /** Embedder used to turn the query text into a vector. */
-  readonly embedder: Embedder;
+  /**
+   * Embedder used to turn the query text into a vector.
+   *
+   * Optional since 9.3.0, for a store that declares `ranksBy: 'server-text'`:
+   * it takes the question as words (`SearchOptions.text`) and ranks it on the
+   * backend's side, so no vector is ever produced, nothing is billed for one,
+   * and no `agentfootprint.embedding.generated` is emitted — the recording
+   * says an embedding happened only when one did.
+   */
+  readonly embedder?: Embedder;
 
   /**
    * Identifier for the embedder. When set, the search filters entries
@@ -153,7 +162,19 @@ export function loadRelevant(config: LoadRelevantConfig) {
   if (!store.search) {
     throw new Error(
       'loadRelevant: the configured store does not implement search(). ' +
-        'Use a vector-capable adapter (InMemoryStore, pgvector, Pinecone, ...).',
+        'Use a store that can retrieve (InMemoryStore, sqliteVectorStore, pgVectorStore, ' +
+        's3VectorsStore, ...).',
+    );
+  }
+  // Fail-loud at STAGE BUILD time, as this stage has always done for a store
+  // with no `search()`: a retriever with no embedder over a store that ranks
+  // vectors is a config bug, not a runtime condition, and its symptom would be
+  // an empty answer.
+  if (!embedder && resolveRankingMode(store, 'loadRelevant') !== 'server-text') {
+    throw new Error(
+      'loadRelevant: no `embedder` was configured, and this store does not declare ' +
+        "`ranksBy: 'server-text'`. Something has to turn the query into a vector before a " +
+        'vector-ranking store can answer it.',
     );
   }
   const queryFrom = config.queryFrom ?? defaultQueryFrom;
@@ -202,24 +223,31 @@ export function loadRelevant(config: LoadRelevantConfig) {
     }
 
     const signal = scope.$getEnv?.()?.signal;
-    const embedStartedAt = Date.now();
-    const queryVec = (await embedder.embed({
-      text,
-      ...(signal ? { signal } : {}),
-    })) as number[];
+    // No embedder means a store that ranks the TEXT server-side: there is no
+    // vector to make, so none is made, none is billed, and no embedding event
+    // is emitted. `[]` is what the port's `query` argument honestly is here,
+    // and `options.text` below is the query such a store actually reads.
+    let queryVec: number[] = [];
+    if (embedder) {
+      const embedStartedAt = Date.now();
+      queryVec = (await embedder.embed({
+        text,
+        ...(signal ? { signal } : {}),
+      })) as number[];
 
-    // The QUERY-time half of the two-phase cost model (8.9.0): one embedding
-    // per retrieval, scaling with traffic rather than with corpus size. Paired
-    // with the `'document'` side in `embedMessages`, this is what makes the
-    // cost of a corpus a number you can read rather than one you estimate.
-    emitEmbedding(scope, {
-      model: config.embedderId ?? embedder.id ?? 'unknown',
-      provider: 'custom',
-      inputKind: 'query',
-      dimension: queryVec.length,
-      count: 1,
-      durationMs: Date.now() - embedStartedAt,
-    });
+      // The QUERY-time half of the two-phase cost model (8.9.0): one embedding
+      // per retrieval, scaling with traffic rather than with corpus size. Paired
+      // with the `'document'` side in `embedMessages`, this is what makes the
+      // cost of a corpus a number you can read rather than one you estimate.
+      emitEmbedding(scope, {
+        model: config.embedderId ?? embedder.id ?? 'unknown',
+        provider: 'custom',
+        inputKind: 'query',
+        dimension: queryVec.length,
+        count: 1,
+        durationMs: Date.now() - embedStartedAt,
+      });
+    }
 
     // store.search optional on MemoryStore but required when an embedder
     // is configured (validated upstream by defineMemory).

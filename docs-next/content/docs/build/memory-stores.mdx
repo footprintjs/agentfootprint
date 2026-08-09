@@ -1,6 +1,6 @@
 ---
 title: Memory store adapters
-description: Where memory lives. InMemoryStore for dev; sqliteVectorStore for a durable corpus in one file; RedisStore + AgentCoreStore for production conversation state.
+description: Where memory lives. InMemoryStore for dev; sqliteVectorStore, pgVectorStore and s3VectorsStore for a durable corpus; RedisStore + AgentCoreStore for production conversation state — and what each store's search() actually ranks.
 ---
 
 > Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
@@ -11,12 +11,14 @@ description: Where memory lives. InMemoryStore for dev; sqliteVectorStore for a 
 |---|---|---|---|---|
 | `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
 | `sqliteVectorStore` | `agentfootprint/memory` | **none** (`node:sqlite`) | ✅ exact | **A document corpus that must survive a restart** |
+| `pgVectorStore` | `agentfootprint/memory` | `pg` + the `vector` extension | ✅ | **A corpus beside the application's own data**, on the database you already run |
+| `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | ✅ | **A corpus you can add to without a redeploy** — durable, serverless, nothing to run |
 | `RedisStore` | `agentfootprint/memory` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
-| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ❌ (ranks TEXT server-side) | Bedrock-native session + event memory |
 
-Both store adapters live on the canonical `agentfootprint/memory` subpath. Per-adapter aliases (`agentfootprint/memory`, `agentfootprint/memory`) still resolve for back-compat, but new code should import from `agentfootprint/memory`.
+Every store adapter lives on the canonical `agentfootprint/memory` subpath — a new store adds an export, never a new import path.
 
-All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
+They all implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
 
 ### "Vector search" is two different questions
 
@@ -50,6 +52,53 @@ undeclared**, and behaves exactly as it did before this existed. Every adapter
 written against an earlier release — and any you have written yourself — is in
 that third case and is unaffected. Declare `true` on your own adapter if it
 ranks the vectors it is given.
+
+### Ranking mode: what query form does your search take?
+
+`supportsVectorSearch` answers what a corpus **builder** needs to know. There is
+one question further down, and it is what a corpus **reader** needs:
+`ranksBy`.
+
+| `ranksBy` | What `search()` ranks | What `defineRAG` needs |
+|---|---|---|
+| `'vector'` | The `embedding` it was handed. Every local backend. | An `embedder` — somebody has to turn the question into a vector |
+| `'server-text'` | TEXT, on the backend's side, over its own index. Reads `SearchOptions.text`. | **No embedder at all** |
+| absent | Undeclared. | Unchanged from before this existed |
+
+A managed knowledge-base service takes the question as WORDS. Wired to one of
+those, `defineRAG` still built an embedder, still called it once per turn, still
+billed you — and the vector it produced was discarded on arrival. The wiring
+read exactly like a working one.
+
+Declare `ranksBy: 'server-text'` and the retriever is the whole wiring:
+
+```ts
+// A store whose backend embeds and ranks on its own side.
+const kb = myManagedKnowledgeBase();  // ranksBy: 'server-text'
+
+const agent = Agent.create({ provider })
+  .rag(defineRAG({ id: 'docs', store: kb }))   // no embedder — nothing to embed
+  .build();
+```
+
+Passing one anyway is **refused**, not ignored: an ignored embedder reads, from
+the wiring, exactly like a working one — the same line, the same id in the
+recording, and no way to tell that nothing was embedded. Such a retriever is
+read-only by construction (there is no embedder to build a write half around),
+and no `agentfootprint.embedding.generated` event is emitted, because none
+happened.
+
+The two declarations must agree. `{ ranksBy: 'vector', supportsVectorSearch: false }`
+is refused by name rather than resolved — either line could be the mistake, and
+guessing which would silently decide whether your queries get embedded.
+
+**Writing your own adapter?** Two helpers are exported from
+`agentfootprint/memory` so you can make the same checks the library makes:
+`resolveRankingMode(store, caller)` returns `'vector' | 'server-text' | undefined`
+and refuses a contradiction (call it in your own tests, so a typo in your two
+declarations fails there rather than at somebody's first query), and
+`assertServesVectors(store, caller)` is the refusal the corpus builders raise —
+useful if you write your own indexing helper and want it to fail the same way.
 
 ## InMemoryStore
 
@@ -169,6 +218,164 @@ One process on one machine, writing one file. It survives a restart, a crash, a 
 
 `putMany` is one transaction. The port does not require that, but a half-indexed corpus is a specific kind of bad: retrieval keeps working and quietly cannot see what did not land, which reads as "the model does not know that" rather than as a failure.
 
+## pgVectorStore — a corpus beside your own data
+
+Postgres is the database most teams already run and `pgvector` is an extension
+away. A corpus that lives in it inherits the backups, the failover, the access
+control and the migrations you already have.
+
+`pg` is an optional peer dependency, required at the first call — pass `client`
+to reuse the pool your app already has, which is the recommended shape (a second
+pool to one database is a second set of connections nobody counted).
+
+```ts
+import { Pool } from 'pg';
+import { pgVectorStore } from 'agentfootprint/memory';
+import { openaiEmbedder } from 'agentfootprint/providers';
+import { indexDocuments, defineRAG } from 'agentfootprint';
+
+const store = pgVectorStore({ client: new Pool({ connectionString: process.env.DATABASE_URL }) });
+const embedder = openaiEmbedder();
+
+await indexDocuments(store, embedder, docs, { embedderId: embedder.id });
+
+const agent = Agent.create({ provider })
+  .rag(defineRAG({ id: 'docs', store, embedder, embedderId: embedder.id }))
+  .build();
+```
+
+### The table, and why this does not create it
+
+A `vector(N)` column fixes N at creation, and N is a fact about your embedder.
+Creating the table implicitly would pick that number — and the index type, and
+the operator class — on your behalf, in a migration you never reviewed. So the
+schema is yours to run, and a missing table is **refused**
+(`PgVectorSchemaError`) rather than read as an empty corpus:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 1024 = your embedder's dimensions. bedrockEmbedder() default: 1024.
+--        openaiEmbedder() default: 1536. staticEmbedder(): 256.
+CREATE TABLE af_vectors (
+  namespace        TEXT    NOT NULL,
+  id               TEXT    NOT NULL,
+  value            JSONB   NOT NULL,
+  metadata         JSONB,
+  embedding        vector(1024),
+  embedder_fp      TEXT,
+  version          INTEGER NOT NULL,
+  created_at       BIGINT  NOT NULL,
+  updated_at       BIGINT  NOT NULL,
+  last_accessed_at BIGINT  NOT NULL,
+  access_count     INTEGER NOT NULL,
+  ttl              BIGINT,
+  tier             TEXT,
+  source           JSONB,
+  embedding_model  TEXT,
+  PRIMARY KEY (namespace, id)
+);
+
+-- Cosine, because that is the score this port reports and every threshold in
+-- this library is calibrated on. Match the operator class to the metric.
+CREATE INDEX af_vectors_hnsw ON af_vectors USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX af_vectors_ns ON af_vectors (namespace);
+
+-- Recognition (seen/recordSignature), usefulness feedback, and the
+-- per-namespace embedder fingerprint.
+CREATE TABLE af_signatures (
+  namespace TEXT NOT NULL, signature TEXT NOT NULL,
+  PRIMARY KEY (namespace, signature)
+);
+CREATE TABLE af_feedback (
+  namespace TEXT NOT NULL, id TEXT NOT NULL,
+  total DOUBLE PRECISION NOT NULL, count INTEGER NOT NULL,
+  PRIMARY KEY (namespace, id)
+);
+CREATE TABLE af_index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+```
+
+Every table and column name above is an option with that value as its default
+(`schema`, `table`, `signaturesTable`, `feedbackTable`, `metaTable`, `columns`),
+so this drops into a schema that already has naming conventions. Identifiers are
+validated and quoted — a name that is not a plain SQL identifier is refused
+rather than interpolated.
+
+`search` is `1 - (embedding <=> $query::vector)` — pgvector's cosine distance
+turned into the cosine similarity the port reports. `<->` (L2) and `<#>` (inner
+product) are deliberately not options: their ranges are not that range.
+
+<Callout>
+**One statement at a time, on purpose.** A `pg.Pool` hands each `query()` its own
+connection, so `BEGIN` on one and the next statement on another is a transaction
+that silently is not one. Everything that must be atomic here is ONE statement:
+`putMany` is one multi-row upsert, `putIfVersion` is one conditional upsert, and
+`forget` is one statement with CTEs across all four tables.
+</Callout>
+
+## s3VectorsStore — a corpus you can add to at 14:00
+
+`sqliteVectorStore` made a corpus survive a restart; a corpus bundle made it
+survive a runtime with no disk. Both leave the same gap: **a bundle can only
+change when you redeploy.** Amazon S3 Vectors closes it — object storage with a
+native vector index and a query API, priced like storage rather than like a
+database cluster.
+
+```ts
+import { s3VectorsStore } from 'agentfootprint/memory';
+import { bedrockEmbedder } from 'agentfootprint/providers';
+import { indexDocuments, defineRAG } from 'agentfootprint';
+
+const store = s3VectorsStore({ bucket: 'my-corpus', index: 'docs', region: 'us-east-1' });
+const embedder = bedrockEmbedder({ region: 'us-east-1' });
+
+// Run this from a cron job. No deploy, no restart — the agent sees it next turn.
+await indexDocuments(store, embedder, newDocs, { embedderId: embedder.id });
+```
+
+`search()` maps 1:1 onto **QueryVectors** (`k` → `topK`, tiers → a metadata
+filter, `distance` → the cosine score); `put`/`putMany` map onto **PutVectors**,
+which is what lets the corpus builders run against it unchanged.
+
+### Create the index first — this store never does
+
+A vector index has a dimension and a distance metric fixed at creation, and both
+are decisions about your embedder:
+
+```bash
+aws s3vectors create-vector-bucket --vector-bucket-name my-corpus
+aws s3vectors create-index \
+  --vector-bucket-name my-corpus \
+  --index-name docs \
+  --data-type float32 \
+  --dimension 1024 \
+  --distance-metric cosine \
+  --metadata-configuration '{"nonFilterableMetadataKeys":["af"]}'
+```
+
+`nonFilterableMetadataKeys: ["af"]` is load-bearing. This adapter stores the
+whole entry — the passage, its provenance, its timestamps — as JSON under the
+metadata key `af`. Filterable metadata has a small per-vector budget;
+non-filterable has the large one. Leave `af` filterable and PutVectors starts
+refusing your longer chunks partway through an indexing run.
+
+Only `ns` (the identity namespace) and `tier` are ever filtered on.
+
+A **euclidean** index is refused at construction: the port's score is a cosine
+similarity, a cosine distance converts exactly (`1 - distance`), and a euclidean
+one does not — any mapping into `[-1, 1]` produces a number that reads like a
+cosine and is not one.
+
+### What a vector index is not
+
+A vector index is not a key-value store, and this adapter refuses the operations
+that would need one rather than faking them: `putIfVersion` (PutVectors is
+last-write-wins — there is no compare-and-set), `recordSignature` and
+`feedback`. Their read halves answer truthfully — `seen()` is `false` and
+`getFeedback()` is `null`, because nothing can be recorded, so nothing has been.
+Pair it with a second store for conversation memory: `defineRAG` for the corpus,
+`defineMemory` for the chat.
+
 ## RedisStore
 
 Subpath import keeps the main barrel small. Lazy-required `ioredis`:
@@ -259,11 +466,24 @@ See [Auto memory (hybrid)](doc:auto-memory) for the layered pattern.
 | Store | Why it's planned |
 |---|---|
 | **DynamoDB** | AWS-native, globally distributed, serverless-friendly |
-| **Postgres** (with pgvector) | Vector search built-in; queryable + joinable with app data |
 | **Pinecone** / **Qdrant** / **Weaviate** | Vector-first; serious-scale RAG / semantic-retrieval workloads |
 | **`RedisSearchStore`** | Vector search via the RedisSearch module |
 
-All four follow the same peer-dep + subpath import pattern as RedisStore + AgentCoreStore.
+All three follow the same peer-dep + subpath import pattern as every store above. (Postgres + pgvector was on this list until 9.3.0 — it ships as `pgVectorStore`.)
+
+### Reference — the two vector adapters added in 9.3.0
+
+| Name | What it is |
+|---|---|
+| `pgVectorStore(options?)` | The factory. Returns a `PgVectorStore` — every `MemoryStore` method, plus `fingerprintOf(identity)` and `close()`. |
+| `PgVectorStoreOptions` | `{ connectionString?, client?, schema?, table?, signaturesTable?, feedbackTable?, metaTable?, columns?, batchSize? }`. |
+| `PgVectorColumns` | Per-column overrides, each defaulting to the documented name. |
+| `PgVectorSchemaError` | The database is reachable but its schema is not this store's — carries `missingColumns`. |
+| `PgLikeClient` · `PgQueryResult` · `PgSdkModule` | The slice of `pg` the adapter calls, declared locally so nothing takes a hard import on an optional peer. |
+| `s3VectorsStore(options)` | The factory. Returns an `S3VectorsStore` — every `MemoryStore` method it can honour, plus `bucket`, `index`, `fingerprintOf(identity)` and `close()`. |
+| `S3VectorsStoreOptions` | `{ bucket, index, region?, distanceMetric?, batchSize?, client? }`. |
+| `S3VectorsLikeClient` · `S3VectorsSdkModule` | The slice of `@aws-sdk/client-s3vectors` the adapter calls. |
+| `EmbedderMismatchError` | Shared by all three vector stores since 9.3.0 — catching it does not depend on which store threw. |
 
 ## Multi-tenant identity is enforced at the store
 

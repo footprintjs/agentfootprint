@@ -8,7 +8,8 @@
  * you use and agentfootprint stays dependency-free.
  *
  *   openaiEmbedder()  — hosted; needs OPENAI_API_KEY; no extra install (fetch).
- *   bedrockEmbedder() — hosted on AWS; Titan Text Embeddings V2; credentials
+ *   bedrockEmbedder() — hosted on AWS; Titan Text Embeddings and Cohere Embed
+ *                       v3 (the model id picks the body shape); credentials
  *                       come from the AWS chain, so no key option at all.
  *                       peer dep: @aws-sdk/client-bedrock-runtime.
  *   localEmbedder()   — on-device sentence-transformer; no key; offline after a
@@ -209,7 +210,7 @@ export function openaiEmbedder(options: OpenAIEmbedderOptions = {}): Embedder {
 }
 
 // ---------------------------------------------------------------------------
-// Amazon Bedrock (hosted) — Titan Text Embeddings, via the AWS SDK.
+// Amazon Bedrock (hosted) — Titan and Cohere embeddings, via the AWS SDK.
 // ---------------------------------------------------------------------------
 
 /**
@@ -235,25 +236,87 @@ export interface BedrockRuntimeSdkModule {
   readonly InvokeModelCommand?: new (input: unknown) => unknown;
 }
 
+/**
+ * The request/response SHAPE a Bedrock embedding model speaks (9.3.0).
+ *
+ * `InvokeModel` is one operation with a vendor-specific body on both sides:
+ * Titan takes `{ inputText }` and answers `{ embedding }`, Cohere takes
+ * `{ texts, input_type }` and answers `{ embeddings }`. One model id therefore
+ * does not describe one call, and until 9.3.0 this factory sent Titan's body to
+ * everything — so a Cohere model id was accepted at construction (with
+ * `dimensions`) and failed at the first embed, against the real service, with a
+ * validation error from AWS rather than a sentence from here.
+ */
+export type BedrockEmbeddingFamily = 'titan' | 'cohere';
+
+/**
+ * Cohere's `input_type`, which is a real parameter and not a hint: the v3
+ * models embed a QUERY and a DOCUMENT into deliberately different places, and
+ * the two are meant to be compared with each other. Sending one value for both
+ * halves is a measurable loss of retrieval quality, not a style choice — and
+ * Cohere requires the field, so there is no "unset" to fall back to.
+ */
+export type CohereInputType = 'search_document' | 'search_query';
+
 export interface BedrockEmbedderOptions {
   /**
    * Bedrock model id. Default `'amazon.titan-embed-text-v2:0'`.
    *
-   * Titan V2 is the one this factory knows the sizes of. Another model (V1,
-   * a Cohere embedding model, an inference profile ARN) works, but its
-   * output length is not something this library can know — pass
-   * `dimensions` with it, the same rule `openaiEmbedder` applies.
+   * Four are known by name — Titan V2, Titan V1, and Cohere Embed English /
+   * Multilingual v3 (see {@link BEDROCK_EMBEDDING_MODELS}) — and each brings
+   * its own body shape, vector length and input window. An id that WRAPS one of
+   * those (a cross-region inference profile `us.amazon.titan-embed-text-v2:0`,
+   * or an ARN ending in the model id) is resolved to the model it names.
+   *
+   * Anything else is a model this library has never met: pass `dimensions`
+   * with it (its vector length is not something this can know) and `family` if
+   * it is not Titan-shaped.
    */
   readonly model?: string;
   /**
-   * Vector length to request. Titan V2 supports 1024 (default), 512 and 256;
-   * the value is SENT to the model AND reported as `.dimensions`, so the two
-   * can never disagree.
+   * Vector length to request.
    *
-   * Required for a model outside {@link TITAN_DIMENSIONS} — a wrong
-   * `.dimensions` silently corrupts a vector store.
+   * Titan V2 is the one CONFIGURABLE model — 1024 (default), 512 or 256 — and
+   * the value is SENT to the model AND reported as `.dimensions`, so the two
+   * can never disagree. Every other known model has ONE size, and asking for a
+   * different one is refused rather than reported: `.dimensions` is what a
+   * vector store fingerprints on, and a wrong one corrupts it silently.
+   *
+   * Required for a model outside {@link BEDROCK_EMBEDDING_MODELS}.
    */
   readonly dimensions?: number;
+  /**
+   * The body shape to speak, when the model id does not say (9.3.0).
+   *
+   * Inferred for every known model and for anything that wraps one, so this is
+   * only for a model id this library has never met — a provisioned-throughput
+   * ARN, a custom deployment. Unknown and unstated, the body is **Titan's**,
+   * which is the shape every release before 9.3.0 sent to everything.
+   *
+   * Stating a family that contradicts a known model id is refused by name.
+   */
+  readonly family?: BedrockEmbeddingFamily;
+  /**
+   * Pin Cohere's `input_type` instead of deriving it from the call (9.3.0).
+   *
+   * Unset — the default — `embed()` sends `'search_query'` and `embedBatch()`
+   * sends `'search_document'`, because that is what this library's own two
+   * call sites are: retrieval embeds ONE question (`loadRelevant`), indexing
+   * embeds MANY passages (`indexDocuments`, `embedMessages`). Pin it when your
+   * own code uses the two calls differently — embedding a single document, say,
+   * or scoring a batch of queries.
+   *
+   * Ignored by Titan, which has no such parameter.
+   */
+  readonly inputType?: CohereInputType;
+  /**
+   * The longest input this model reads whole, in CHARACTERS
+   * ({@link Embedder.maxInputChars}). Declared for every known model from its
+   * documented token window; this option is how a model this library does not
+   * know states its own, rather than declaring none and leaving the indexer's
+   * conservative default in place. An explicit value always wins.
+   */
+  readonly maxInputChars?: number;
   /** AWS region. Passed to the SDK client when this factory builds one. */
   readonly region?: string;
   /** A pre-built Bedrock runtime client, so one SDK config serves the whole app. */
@@ -264,42 +327,118 @@ export interface BedrockEmbedderOptions {
   readonly _sdk?: BedrockRuntimeSdkModule;
 }
 
+/** Everything this library knows about ONE Bedrock embedding model. */
+interface BedrockModelFacts {
+  /** Which body shape it speaks on the way in and out. */
+  readonly family: BedrockEmbeddingFamily;
+  /** Native output size — what `.dimensions` reports when nothing is asked for. */
+  readonly dimensions: number;
+  /**
+   * The sizes it can be ASKED for, when it takes a size at all. Absent means
+   * one fixed length: the request carries no size field, and an explicit
+   * `dimensions` that disagrees with {@link dimensions} is refused rather than
+   * reported.
+   */
+  readonly sizes?: readonly number[];
+  /** Documented input window, in TOKENS, converted at {@link CHARS_PER_TOKEN}. */
+  readonly maxInputTokens: number;
+}
+
 /**
- * Default output size per Titan text-embedding model, so `.dimensions` reports
- * the truth rather than one hard-coded guess.
+ * The Bedrock embedding models this library knows by name — three facts each,
+ * in one table, because they arrive together and drift apart when they are
+ * kept apart (9.3.0; two Titan-only tables until then).
  *
- * Titan Text Embeddings **V2** is configurable — 1024 (default), 512, 256.
- * Titan Embeddings G1 – Text (**V1**) has one size, 1536, and no `dimensions`
- * parameter at all. Every other model on Bedrock (Cohere's, a custom
- * deployment, one released after this version) has a size this library cannot
- * know, so it must state its own rather than be guessed at — the same rule
- * `openaiEmbedder` applies, for the same reason: a store that trusts
+ * **Size.** Titan Text Embeddings **V2** is the configurable one — 1024
+ * (default), 512, 256. Titan Embeddings G1 – Text (**V1**) has one size, 1536,
+ * and no `dimensions` parameter at all. Cohere Embed v3 (English and
+ * Multilingual) returns 1024 and likewise takes no size. A model outside this
+ * table has a length this library cannot know and must state its own — the same
+ * rule `openaiEmbedder` applies, for the same reason: a store that trusts
  * `.dimensions` and gets a different length back corrupts silently.
+ *
+ * **Window.** Both Titan text-embedding models accept **8,192 tokens** —
+ * sixteen times the on-device model the shipped default ceiling was measured
+ * on. Cohere Embed v3 accepts **512**, and that number is the whole argument
+ * for a per-MODEL ceiling rather than a per-VENDOR one: 512 tokens is ~2,000
+ * characters, so the same corpus that is embedded whole by Titan is silently
+ * truncated by Cohere at a quarter of the chunk. Declared, the indexers cut to
+ * fit; guessed from a sibling model, they would not.
+ *
+ * **Family.** The body shape (see {@link BedrockEmbeddingFamily}) — the fact
+ * whose absence made a Cohere model id constructible and unusable before 9.3.0.
  */
-const TITAN_DIMENSIONS: Readonly<Record<string, number>> = {
-  'amazon.titan-embed-text-v2:0': 1024,
-  'amazon.titan-embed-text-v1': 1536,
+const BEDROCK_EMBEDDING_MODELS: Readonly<Record<string, BedrockModelFacts>> = {
+  'amazon.titan-embed-text-v2:0': {
+    family: 'titan',
+    dimensions: 1024,
+    sizes: [1024, 512, 256],
+    maxInputTokens: 8192,
+  },
+  'amazon.titan-embed-text-v1': { family: 'titan', dimensions: 1536, maxInputTokens: 8192 },
+  'cohere.embed-english-v3': { family: 'cohere', dimensions: 1024, maxInputTokens: 512 },
+  'cohere.embed-multilingual-v3': { family: 'cohere', dimensions: 1024, maxInputTokens: 512 },
 };
 
 /**
- * Documented input window per Titan text-embedding model, in TOKENS.
- *
- * Both Titan text-embedding models accept **8,192 tokens** — sixteen times the
- * on-device model the shipped default ceiling was measured on. That gap is the
- * whole point of declaring one: without it, a corpus split at 2,500 characters
- * is reported as clipped (and treated as such by the indexer's default) by an
- * embedder that reads every one of those chunks whole.
- *
- * A model outside this table gets NO declared ceiling — the same rule
- * `.dimensions` applies. Another vendor's embedding model on the same runtime
- * may have a far shorter window, and guessing this one's would clip in silence.
+ * Titan V2's configurable sizes, kept as a constant because an id this table
+ * has never seen can still be recognisably Titan V2 (a variant released after
+ * this version) — and for such an id the size must still be SENT, or the model
+ * returns 1024 while `.dimensions` reports 512.
  */
-const TITAN_MAX_INPUT_TOKENS: Readonly<Record<string, number>> = {
-  'amazon.titan-embed-text-v2:0': 8192,
-  'amazon.titan-embed-text-v1': 8192,
-};
+const TITAN_V2_SIZES: readonly number[] = [1024, 512, 256];
 
-const TITAN_V2_SUPPORTED = [1024, 512, 256];
+/**
+ * How many texts Cohere embeds in ONE `InvokeModel` call.
+ *
+ * **96**, the documented maximum, and the reason `embedBatch` is a real batch
+ * here and N calls for Titan: a 500-chunk corpus is 6 round-trips instead of
+ * 500. Chunked at exactly the documented number rather than under it, because
+ * unlike a byte limit this one is a count the caller can see — and a batch that
+ * silently used half the allowance would be a cost nobody asked for.
+ */
+const COHERE_MAX_TEXTS_PER_CALL = 96;
+
+/**
+ * The body shape sent to a model id this library has never met.
+ *
+ * Titan's — because it is the shape EVERY release before 9.3.0 sent to every
+ * model, so an unknown id keeps doing exactly what it did. `family` is how a
+ * caller says otherwise, and the read-side refusal names that option.
+ */
+const DEFAULT_BEDROCK_FAMILY: BedrockEmbeddingFamily = 'titan';
+
+/**
+ * The facts for a model id, including ids that WRAP a known one.
+ *
+ * A cross-region inference profile (`us.amazon.titan-embed-text-v2:0`) and an
+ * inference-profile ARN both END in the model id they route to, so containment
+ * resolves them exactly rather than by guess — and an id that names its model is
+ * not "unknown" just because it has a prefix. Before 9.3.0 those were refused
+ * as unknown models, which is why widening this is safe: it accepts what used
+ * to throw.
+ */
+function bedrockFactsFor(model: string): BedrockModelFacts | undefined {
+  const exact = BEDROCK_EMBEDDING_MODELS[model];
+  if (exact) return exact;
+  for (const [id, facts] of Object.entries(BEDROCK_EMBEDDING_MODELS)) {
+    if (model.includes(id)) return facts;
+  }
+  return undefined;
+}
+
+/**
+ * The family a model id NAMES, or `undefined` when it names none.
+ *
+ * Substring, not prefix: the id may be wrapped by a region prefix or an ARN.
+ * An id that says neither gets Titan's body — the shape every release before
+ * 9.3.0 sent to everything — and `family` is how you say otherwise.
+ */
+function inferBedrockFamily(model: string): BedrockEmbeddingFamily | undefined {
+  if (model.includes('cohere.embed')) return 'cohere';
+  if (model.includes('titan-embed')) return 'titan';
+  return undefined;
+}
 
 /**
  * Amazon Bedrock's hosted embeddings, through `InvokeModel`.
@@ -329,19 +468,31 @@ const TITAN_V2_SUPPORTED = [1024, 512, 256];
  * q8 and an fp32 build of one model are near-identical spaces, and "near" is
  * exactly the difference that surfaces as a mysteriously worse ranking.)
  *
+ * ── One operation, two body shapes (9.3.0) ───────────────────────────────
+ * `InvokeModel` is a single API over vendor-specific JSON. Titan takes
+ * `{ inputText }` and answers `{ embedding }`; Cohere takes
+ * `{ texts, input_type }` and answers `{ embeddings }`, embeds up to
+ * {@link COHERE_MAX_TEXTS_PER_CALL} of them per call, and distinguishes a
+ * QUERY from a DOCUMENT. So the model id selects a FAMILY
+ * ({@link BedrockEmbeddingFamily}), and the family owns the request, the
+ * response and the batching. Before this, one shape was sent to everything —
+ * a Cohere id constructed fine and failed at the first embed.
+ *
  * ── The input ceiling (9.1.0) ────────────────────────────────────────────
- * `.maxInputChars` reports **32,000** for both Titan text-embedding models:
- * their documented 8,192-token window, converted at the stated
- * {@link CHARS_PER_TOKEN} assumption of 4 characters per token. Sixteen times
- * the indexer's own default, which was measured on an on-device model — so an
- * indexing run against this embedder now embeds a 2,500-character chunk whole
- * instead of clipping it and calling that success. Dense text (code, tables,
- * CJK) tokenises tighter than the assumption; pass an explicit `maxChunkChars`
- * for such a corpus, and it wins over this number.
+ * `.maxInputChars` is per MODEL, from its documented token window converted at
+ * the stated {@link CHARS_PER_TOKEN} assumption of 4 characters per token:
+ * **32,000** for both Titan text-embedding models (8,192 tokens — sixteen
+ * times the indexer's own default, which was measured on an on-device model),
+ * and **2,000** for Cohere Embed v3 (512 tokens). Those two numbers are why the
+ * ceiling cannot be a per-vendor constant: the same 2,500-character chunk is
+ * read whole by Titan and truncated by Cohere. Dense text (code, tables, CJK)
+ * tokenises tighter than the assumption; pass an explicit `maxChunkChars` for
+ * such a corpus, and it wins over this number.
  *
  * @throws if `model` is unknown and `dimensions` was not supplied; if
- *         `dimensions` is not one of Titan V2's supported sizes; or if the SDK
- *         is missing and no `client` / `_client` / `_sdk` was passed.
+ *         `dimensions` is a size the model does not produce; if `family`
+ *         contradicts a known model id; or if the SDK is missing and no
+ *         `client` / `_client` / `_sdk` was passed.
  *
  * @example
  * ```ts
@@ -352,12 +503,34 @@ const TITAN_V2_SUPPORTED = [1024, 512, 256];
  * const embedder = bedrockEmbedder({ region: 'us-east-1', dimensions: 512 });
  * await indexFolder('./docs', { to: sqliteVectorStore({ file: './corpus.db' }), embedder });
  * ```
+ *
+ * @example  A Cohere embedding model on the same runtime
+ * ```ts
+ * // Body shape, response field, batch size and 512-token window all follow
+ * // from the model id — nothing else changes at the call site.
+ * const embedder = bedrockEmbedder({ model: 'cohere.embed-english-v3' });
+ * ```
  */
 export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder {
   const model = options.model ?? 'amazon.titan-embed-text-v2:0';
-  const isTitanV2 = model.startsWith('amazon.titan-embed-text-v2');
+  const facts = bedrockFactsFor(model);
+  const named = inferBedrockFamily(model);
+  if (options.family !== undefined && facts !== undefined && options.family !== facts.family) {
+    throw new Error(
+      `bedrockEmbedder: model '${model}' is a ${facts.family} model, and \`family: ` +
+        `'${options.family}'\` says otherwise. The two cannot both be right, and guessing ` +
+        `which line is the mistake would decide the request body — the one thing a wrong ` +
+        `answer here breaks at the first embed. Drop \`family\` (the model id already says ` +
+        `it), or name the model you meant.`,
+    );
+  }
+  // Explicit, then what the id names, then Titan — which is the body every
+  // release before 9.3.0 sent to every model, so an id this library has never
+  // met keeps behaving exactly as it did.
+  const family: BedrockEmbeddingFamily =
+    options.family ?? facts?.family ?? named ?? DEFAULT_BEDROCK_FAMILY;
   const requested = options.dimensions;
-  const dimensions = requested ?? TITAN_DIMENSIONS[model];
+  const dimensions = requested ?? facts?.dimensions;
   if (dimensions === undefined) {
     throw new Error(
       `bedrockEmbedder: unknown model '${model}' — its vector length is not something this ` +
@@ -365,15 +538,38 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
         `Pass { dimensions } with the length that model returns.`,
     );
   }
-  if (isTitanV2 && requested !== undefined && !TITAN_V2_SUPPORTED.includes(requested)) {
+  // A model this table has never seen can still be recognisably Titan V2, and
+  // for one of those the requested size must still be validated and SENT.
+  const sizes =
+    facts?.sizes ??
+    (family === 'titan' && model.includes('titan-embed-text-v2') ? TITAN_V2_SIZES : undefined);
+  if (requested !== undefined && sizes !== undefined && !sizes.includes(requested)) {
     throw new Error(
-      `bedrockEmbedder: Titan Text Embeddings V2 returns ${TITAN_V2_SUPPORTED.join(', ')} ` +
+      `bedrockEmbedder: '${model}' returns ${sizes.join(', ')} ` +
         `dimensions — received ${String(requested)}. Asking for a size the model does not ` +
         `produce would store vectors of a length that disagrees with the .dimensions this ` +
         `embedder reports.`,
     );
   }
-  const maxInputChars = charsFor(TITAN_MAX_INPUT_TOKENS[model]);
+  if (
+    requested !== undefined &&
+    sizes === undefined &&
+    facts !== undefined &&
+    requested !== facts.dimensions
+  ) {
+    throw new Error(
+      `bedrockEmbedder: '${model}' returns ${facts.dimensions}-dimension vectors and takes no ` +
+        `size parameter — received ${String(requested)}, which would be reported as ` +
+        `.dimensions and never be the length that comes back. Drop \`dimensions\`: this ` +
+        `factory already knows this model's size.`,
+    );
+  }
+  const maxInputChars = options.maxInputChars ?? charsFor(facts?.maxInputTokens);
+  // Only a size the model actually TAKES is sent. Titan V2 defaults to 1024 on
+  // its own side, V1 and Cohere reject the field — so a caller who asked for
+  // nothing gets a request body identical to the one before this option
+  // existed.
+  const sendSize = requested !== undefined && sizes !== undefined;
 
   type Connection = {
     readonly client: BedrockRuntimeLikeClient;
@@ -427,20 +623,32 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
   };
 
   /**
-   * One text in, one vector out. Titan's `InvokeModel` embeds a SINGLE
-   * `inputText` per call — there is no batch operation on the API, so
-   * `embedBatch` below is honest about being N calls rather than pretending
-   * to a batch discount that does not exist.
+   * ONE `InvokeModel` round-trip, with the family's body on the way in and the
+   * family's field on the way out.
+   *
+   * Takes a slice of texts rather than one, because how many fit in a call is
+   * itself a family fact: Titan embeds a single `inputText`, Cohere embeds up
+   * to {@link COHERE_MAX_TEXTS_PER_CALL}. The callers below never have to know
+   * which — they hand over texts and get one vector per text back, in order.
    */
-  async function invoke(text: string, signal?: AbortSignal): Promise<number[]> {
+  async function invoke(
+    texts: readonly string[],
+    inputType: CohereInputType,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const conn = connect();
-    const body = JSON.stringify({
-      inputText: text,
-      // Only an EXPLICIT request is sent. Titan V2 defaults to 1024 on its own
-      // side, and V1 rejects the field — so a caller who asked for nothing
-      // gets a request body identical to the one before this option existed.
-      ...(requested !== undefined && isTitanV2 && { dimensions: requested }),
-    });
+    const body = JSON.stringify(
+      family === 'cohere'
+        ? {
+            texts: [...texts],
+            // Required by the model, so there is no "unset" — see `inputType`.
+            input_type: options.inputType ?? inputType,
+          }
+        : {
+            inputText: texts[0],
+            ...(sendSize && { dimensions: requested }),
+          },
+    );
     const command = new conn.Command({
       modelId: model,
       contentType: 'application/json',
@@ -450,7 +658,34 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
     const out = await (signal
       ? conn.client.send(command, { abortSignal: signal })
       : conn.client.send(command));
-    return readEmbedding(out, model);
+    return readEmbeddings(out, model, family, texts.length, facts === undefined);
+  }
+
+  /**
+   * The calls one batch becomes: Titan one text at a time, Cohere in chunks.
+   *
+   * Sequential rather than parallel either way: callers of the batch path are
+   * usually indexing a whole corpus, and `indexCorpus` already fans out over
+   * batches with its own bounded parallelism and retry. Racing N more requests
+   * inside one of those branches is how a corpus index meets a throttling
+   * error.
+   *
+   * The abort is checked between calls as well as passed into each one, so an
+   * aborted batch stops at the next boundary instead of embedding the rest of a
+   * corpus nobody is waiting for.
+   */
+  async function invokeAll(
+    texts: readonly string[],
+    inputType: CohereInputType,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
+    const perCall = family === 'cohere' ? COHERE_MAX_TEXTS_PER_CALL : 1;
+    const out: number[][] = [];
+    for (let i = 0; i < texts.length; i += perCall) {
+      signal?.throwIfAborted();
+      out.push(...(await invoke(texts.slice(i, i + perCall), inputType, signal)));
+    }
+    return out;
   }
 
   return {
@@ -461,24 +696,16 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
     // than one it cannot stand behind.
     ...(maxInputChars !== undefined && { maxInputChars }),
     async embed({ text, signal }) {
-      return invoke(text, signal);
+      // ONE text is this library's query shape (`loadRelevant` embeds the
+      // question) — so Cohere is told it is a query unless `inputType` says
+      // otherwise. Titan ignores the argument entirely.
+      return (await invoke([text], 'search_query', signal))[0] as number[];
     },
     async embedBatch({ texts, signal }) {
-      // Titan has no batch embed operation. Sequential rather than parallel:
-      // callers of this path are usually indexing a whole corpus, and
-      // `indexCorpus` already fans out over batches with its own bounded
-      // parallelism and retry. Racing N more requests inside one of those
-      // branches is how a corpus index meets a throttling error.
-      //
-      // The abort is checked between calls as well as passed into each one,
-      // so an aborted batch stops at the next boundary instead of embedding
-      // the rest of a corpus nobody is waiting for.
-      const out: number[][] = [];
-      for (const text of texts) {
-        signal?.throwIfAborted();
-        out.push(await invoke(text, signal));
-      }
-      return out;
+      // MANY texts is this library's document shape (`indexDocuments`,
+      // `embedMessages`), and Cohere embeds a document into a different place
+      // from a query on purpose.
+      return invokeAll(texts, 'search_document', signal);
     },
   };
 }
@@ -503,15 +730,32 @@ function loadBedrockRuntimeSdk(): BedrockRuntimeSdkModule {
 }
 
 /**
- * Pull the vector out of an `InvokeModel` response.
+ * Pull the vectors out of an `InvokeModel` response, by FAMILY.
  *
  * The SDK hands back `body` as a `Uint8Array`; a hand-rolled or mock client
  * may hand back the decoded object or a string. All three are read, and
  * anything else is refused by NAME rather than returning an empty vector —
  * an embedder that silently returns `[]` writes a row a store will never
  * rank, which is indistinguishable from "the corpus does not mention that".
+ *
+ * The field differs with the family (`embedding` vs `embeddings`), so the
+ * refusal has to as well: told the wrong family, the response is perfectly
+ * valid and this is the only place that can say so — which is why the message
+ * names `family` when the model id was not one this library knows.
+ *
+ * @param expected how many vectors were asked for. A count mismatch is refused
+ *   rather than returned short: the caller pairs vectors with texts by
+ *   POSITION, so a missing one does not go missing — it silently re-labels
+ *   every passage after it.
+ * @param guessedFamily whether the family was a fallback rather than a fact.
  */
-function readEmbedding(response: unknown, model: string): number[] {
+function readEmbeddings(
+  response: unknown,
+  model: string,
+  family: BedrockEmbeddingFamily,
+  expected: number,
+  guessedFamily: boolean,
+): number[][] {
   const body = (response as { body?: unknown } | null)?.body ?? response;
   let parsed: unknown = body;
   if (body instanceof Uint8Array) {
@@ -519,15 +763,43 @@ function readEmbedding(response: unknown, model: string): number[] {
   } else if (typeof body === 'string') {
     parsed = JSON.parse(body);
   }
-  const embedding = (parsed as { embedding?: unknown } | null)?.embedding;
-  if (!Array.isArray(embedding) || embedding.some((n) => typeof n !== 'number')) {
+  const field = family === 'cohere' ? 'embeddings' : 'embedding';
+  const raw = (parsed as Record<string, unknown> | null)?.[field];
+  // Cohere answers `{ embeddings: [[...]] }`, or `{ embeddings: { float: [[...]] } }`
+  // when a caller asked for typed embeddings. This never asks, and reads both.
+  const rows =
+    family === 'cohere'
+      ? Array.isArray(raw)
+        ? raw
+        : (raw as { float?: unknown } | null)?.float
+      : [raw];
+  const vectors =
+    Array.isArray(rows) &&
+    rows.every((row) => Array.isArray(row) && row.every((n) => typeof n === 'number'))
+      ? (rows as number[][])
+      : undefined;
+  if (vectors === undefined) {
     throw new Error(
-      `bedrockEmbedder: '${model}' returned no \`embedding\` array. Bedrock answered with ` +
+      `bedrockEmbedder: '${model}' returned no \`${field}\` array. Bedrock answered with ` +
         `${describeShape(parsed)}, which this adapter cannot read — check the model id names an ` +
-        `EMBEDDING model (a text-generation model answers a different shape).`,
+        `EMBEDDING model (a text-generation model answers a different shape).` +
+        (guessedFamily
+          ? `\n  This model id is not one this library knows, so it was sent the ${family} ` +
+            `request body. If it is a ${family === 'titan' ? 'Cohere' : 'Titan'} model, pass ` +
+            `\`family: '${family === 'titan' ? 'cohere' : 'titan'}'\` — the request body and ` +
+            `the response field both differ per family.`
+          : ''),
     );
   }
-  return embedding as number[];
+  if (vectors.length !== expected) {
+    throw new Error(
+      `bedrockEmbedder: '${model}' was sent ${expected} text(s) and answered with ` +
+        `${vectors.length} vector(s). Vectors are paired with texts by POSITION, so a short ` +
+        `answer would not lose one passage — it would attach every later vector to the wrong ` +
+        `passage, and the corpus would rank confidently and wrongly forever.`,
+    );
+  }
+  return vectors;
 }
 
 /** Describe a response by shape, never by content — it may carry customer text. */
