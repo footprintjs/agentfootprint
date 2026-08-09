@@ -145,6 +145,116 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* the business case — the one band on this page that is deliberately audience-neutral.
+          Product and Technical are two ways of describing the same machinery; this is the
+          argument that pays for it, and it reads the same to either reader, so it uses no
+          HomeViewText. Copy derives from docs/design/product-narrative.md (canon) and follows
+          its honesty rule: the case study is named as customer-reported and the general claim
+          is left open until the 2×2 comparison is actually run. */}
+      <section className="af-buscase" id="af-business-case" aria-labelledby="af-buscase-h">
+        <span className="af-pill">
+          <span className="af-pill-dot" /> the business case
+        </span>
+        <h2 id="af-buscase-h" className="af-bc-head">
+          Structure, where a <em>bigger model</em> used to be.
+        </h2>
+        <p className="af-bc-statement">
+          agentfootprint helps AI-product teams achieve equal or better response quality with
+          lower-cost models by dynamically loading the right procedures and tools — and provides
+          the infrastructure to deploy, debug, and scale that behavior.
+        </p>
+
+        <table className="af-bc-chain">
+          <caption className="af-bc-caption">The value chain</caption>
+          <thead>
+            <tr>
+              <th scope="col">Layer</th>
+              <th scope="col">The customer&apos;s situation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">End-customer benefit</th>
+              <td>Higher-quality responses</td>
+            </tr>
+            <tr>
+              <th scope="row">Business outcome</th>
+              <td>Equal or better quality using a lower-cost model</td>
+            </tr>
+            <tr>
+              <th scope="row">Mechanism</th>
+              <td>
+                The skill graph selects the operating procedure and exposes only the relevant
+                tools, instead of showing the model dozens of tools at once
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Supporting activity</th>
+              <td>
+                Infrastructure to integrate, deploy, debug, and scale that behavior — roughly 20
+                lines of declarations instead of hundreds of lines of hand-written orchestration
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Economic benefit</th>
+              <td>Lower model spend, less engineering time, lower cognitive load</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* the reconfiguration, side by side. Two stacked lists rather than one ASCII block:
+            the same four steps, but they reflow on a phone instead of scrolling sideways. */}
+        <div className="af-bc-diagram">
+          <figure className="af-bc-side">
+            <figcaption>Before</figcaption>
+            <ol>
+              <li>flat ~40-tool surface</li>
+              <li>frontier model</li>
+              <li>substantial orchestration code</li>
+              <li>high inference + engineering cost</li>
+            </ol>
+          </figure>
+          <span className="af-bc-turn" aria-hidden="true">
+            →
+          </span>
+          <figure className="af-bc-side af-bc-after">
+            <figcaption>After</figcaption>
+            <ol>
+              <li>task → relevant skill-graph node</li>
+              <li>relevant procedure + small tool surface</li>
+              <li>lower-cost model</li>
+              <li>better observed response</li>
+            </ol>
+          </figure>
+        </div>
+        <p className="af-bc-note">
+          The line count is the demonstration, not the point. The runtime takes the activity
+          over: you describe the graph and its rules, it performs the per-iteration
+          orchestration — and records why every handoff happened.
+        </p>
+
+        <blockquote className="af-bc-evidence">
+          <p>
+            In one customer implementation, replacing a flat ~40-tool agent that required a
+            frontier model with the dynamic skill graph enabled a lower-cost model to produce
+            better evaluated responses at lower operating cost.
+          </p>
+          <footer>
+            That is a <b>customer-reported case study</b>, not a controlled benchmark. The general
+            claim needs the 2×2 — flat tool surface vs. skill graph × small model vs. frontier
+            model, scored on cost per successful task, never token cost alone. Until that
+            comparison is run, this page says nothing stronger.
+          </footer>
+        </blockquote>
+
+        <p className="af-bc-more">
+          Every library in the family makes the same trade.{' '}
+          <a href="https://footprintjs.github.io/?view=business">
+            The ecosystem through the business lens →
+          </a>
+        </p>
+      </section>
+
       <div className="af-scrollcue-wrap">
         <p className="af-bridge-line">
           <HomeViewText

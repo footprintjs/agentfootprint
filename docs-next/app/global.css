@@ -265,6 +265,209 @@ html {
 .af-valueband { max-width: var(--af-content-max); margin: 8px auto 0; padding: 0 var(--af-gutter); text-align: center; }
 .af-valueband .af-value-tag { margin: 0 0 16px; }
 
+/* ── the business case ──────────────────────────────────────────────────────
+   The one band on the homepage with a single voice for both views: Product and
+   Technical are two descriptions of the same machinery, and this is the argument
+   that pays for it. Same tokens as the rest of the page — no new palette, and the
+   evidence note is deliberately the quietest thing here, because it is the part
+   that keeps the claim honest. */
+.af-buscase {
+  max-width: 860px;
+  margin: 54px auto 8px;
+  padding: 0 var(--af-gutter);
+  text-align: center;
+}
+.af-buscase .af-pill { margin-bottom: 16px; }
+.af-bc-head {
+  font-size: clamp(24px, 3.4vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.af-bc-head em {
+  font-style: normal;
+  color: var(--fg);
+  background: linear-gradient(transparent 58%, color-mix(in oklab, var(--yellow) 85%, transparent) 58%);
+}
+.af-bc-statement {
+  max-width: 64ch;
+  margin: 0 auto 30px;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* the value chain — a real table, because it is genuinely tabular */
+.af-bc-chain {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 30px;
+  text-align: left;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.af-bc-caption {
+  caption-side: top;
+  padding: 0 0 10px;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  text-align: left;
+}
+.af-bc-chain thead th {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  font-weight: 600;
+  background: var(--bg-alt);
+}
+.af-bc-chain th,
+.af-bc-chain td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.af-bc-chain tbody tr:last-child th,
+.af-bc-chain tbody tr:last-child td { border-bottom: 0; }
+.af-bc-chain tbody th {
+  width: 34%;
+  color: var(--fg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.af-bc-chain tbody td { color: var(--fg-muted); }
+
+/* before → after: the reconfiguration, as two stacked pipelines */
+.af-bc-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 0 14px;
+}
+.af-bc-side {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elev);
+}
+.af-bc-side figcaption {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  margin-bottom: 9px;
+}
+.af-bc-side ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+.af-bc-side li + li { margin-top: 6px; }
+/* the chevrons are drawn, not typed, so a screen reader is not read a column of arrows */
+.af-bc-side li + li::before {
+  content: '→';
+  margin-right: 6px;
+  color: var(--fg-faint);
+}
+/* the accent marks the side being argued for — the only colour in the pair */
+.af-bc-after { border-color: color-mix(in oklab, var(--yellow) 55%, var(--border)); }
+.af-bc-after ol { color: var(--fg); }
+.af-bc-after figcaption { color: var(--yellow-dark); }
+.af-bc-turn {
+  flex: none;
+  font-size: 20px;
+  color: var(--fg-faint);
+}
+.af-bc-note {
+  max-width: 60ch;
+  margin: 0 auto 26px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* the evidence, and its bounds */
+.af-bc-evidence {
+  margin: 0 0 22px;
+  padding: 16px 20px;
+  text-align: left;
+  border-left: 3px solid var(--yellow);
+  background: var(--bg-alt);
+  border-radius: 0 10px 10px 0;
+}
+.af-bc-evidence p {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+.af-bc-evidence footer {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+.af-bc-evidence footer b { color: var(--fg); font-weight: 600; }
+.af-bc-more {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+.af-bc-more a {
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--yellow) 70%, transparent);
+  text-underline-offset: 3px;
+}
+.af-bc-more a:hover { text-decoration-color: var(--yellow); }
+
+@media (max-width: 720px) {
+  /* the pair becomes a stack, and the arrow turns with it */
+  .af-bc-diagram { flex-direction: column; align-items: stretch; gap: 8px; }
+  .af-bc-turn { transform: rotate(90deg); align-self: center; }
+  /* the table stops being a grid: each row becomes its own block, its layer name
+     riding above the value, so nothing has to scroll sideways */
+  .af-bc-chain, .af-bc-chain tbody, .af-bc-chain tr, .af-bc-chain td { display: block; }
+  .af-bc-chain thead { display: none; }
+  .af-bc-chain tbody tr { padding: 11px 16px; border-bottom: 1px solid var(--border); }
+  .af-bc-chain tbody tr:last-child { border-bottom: 0; }
+  .af-bc-chain tbody th {
+    display: block;
+    width: auto;
+    white-space: normal;
+    padding: 0 0 3px;
+    border-bottom: 0;
+    font-family: var(--fd-font-mono, monospace);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .af-bc-chain tbody td { padding: 0; border-bottom: 0; }
+}
+
 .af-scrollcue-wrap { text-align: center; margin: 26px 0 6px; }
 .af-scrollcue-wrap .af-bridge-line { max-width: 62ch; margin: 0 auto 16px; }
 @media (max-width: 860px) {
