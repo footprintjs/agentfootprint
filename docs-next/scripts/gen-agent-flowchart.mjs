@@ -12,7 +12,7 @@
  *   Run:  npm run gen:flowchart   (also runs in predev/prebuild)
  */
 import { Agent } from 'agentfootprint'
-import { mock } from 'agentfootprint/llm-providers';
+import { mock } from 'agentfootprint/providers';
 // The flowchart GRAPH (nodes+edges) comes from a build-time footprintjs StructureRecorder.
 // createTraceStructureRecorder is a pure recorder from the explainable-ui flowchart entry
 // (node-importable, no DOM) — so we capture the graph here and the agent stays lens-free.

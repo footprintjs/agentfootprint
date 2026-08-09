@@ -4,7 +4,7 @@ title: FlowStageEvent
 
 # Interface: FlowStageEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:162
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:173
 
 Event passed to FlowRecorder.onStageExecuted.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onStageExecuted.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:164
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:175
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:163
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:174
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageType**: `StageType`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:172
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:183
 
 Which kind of stage completed. The engine fires `onStageExecuted`
 uniformly for every stage kind (proposal #003); consumers route by
@@ -42,6 +42,6 @@ uniformly for every stage kind (proposal #003); consumers route by
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:166
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:177
 
 Traversal context from the engine — read-only, set by traverser.

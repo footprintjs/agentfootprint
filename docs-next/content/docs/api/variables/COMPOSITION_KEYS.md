@@ -6,7 +6,7 @@ title: COMPOSITION_KEYS
 
 > `const` **COMPOSITION\_KEYS**: `object`
 
-Defined in: [src/recorders/core/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L110)
+Defined in: [src/recorders/core/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L126)
 
 ## Type Declaration
 

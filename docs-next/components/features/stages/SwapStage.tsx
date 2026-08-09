@@ -18,7 +18,7 @@ import { CodeCard, Ln, Caret, K, S } from '../CodeCard';
  *   ollama({ defaultModel })    → src/adapters/llm/OpenAIProvider.ts:427 · JSDoc example :424
  *                                 uses `ollama({ defaultModel: 'llama3.2' })`; the returned
  *                                 provider's `name` is 'ollama' (:437)
- *   all three ship from the "./llm-providers" subpath → package.json:136
+ *   all three ship from the "./providers" subpath
  *
  * The provider is CONSTRUCTOR OPTIONS (`Agent.create({ provider, model })`, src/core/Agent.ts:469
  * + src/core/agent/types.ts:48/53) — there is no `.model()` builder method to chain.
@@ -76,7 +76,7 @@ export function SwapStage({ step }: { step: number }) {
         <div id="aff-swap-panel" role="tabpanel" aria-labelledby={`aff-swap-tab-${v.key}`}>
           <Ln className="dim">
             <K>import</K> {`{ ${v.fn} } `}
-            <K>from</K> <S>&apos;agentfootprint/llm-providers&apos;</S>
+            <K>from</K> <S>&apos;agentfootprint/providers&apos;</S>
           </Ln>
           <Ln>
             <K>const</K> scout = Agent.create({'{'}

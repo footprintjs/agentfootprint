@@ -4,7 +4,7 @@ title: FlowNextEvent
 
 # Interface: FlowNextEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:175
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:186
 
 Event passed to FlowRecorder.onNext.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onNext.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:178
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:189
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **from**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:176
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:187
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **to**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:177
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:188
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:179
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:190

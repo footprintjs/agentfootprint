@@ -4,7 +4,7 @@ title: RoutingDecision
 
 # Interface: RoutingDecision
 
-Defined in: [src/patterns/LlmRouter.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L120)
+Defined in: [src/patterns/LlmRouter.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L121)
 
 The router's answer for one turn.
 
@@ -17,7 +17,7 @@ the swarm halts. `agentId` present = hand `message` to that agent next.
 
 > `readonly` `optional` **agentId?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L130)
+Defined in: [src/patterns/LlmRouter.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L131)
 
 The chosen agent id, verbatim as the model wrote it (trimmed).
 Absent when the router decided the work is done.
@@ -33,7 +33,7 @@ Rewriting it would hide a real routing failure.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L132)
+Defined in: [src/patterns/LlmRouter.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L133)
 
 What the next agent — or the user, on a halt — should see.
 
@@ -43,7 +43,7 @@ What the next agent — or the user, on a halt — should see.
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L138)
+Defined in: [src/patterns/LlmRouter.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L139)
 
 The model's one-sentence justification. TRACE ONLY: it is recorded on
 the decision and on the `route_decided` event, and is never written

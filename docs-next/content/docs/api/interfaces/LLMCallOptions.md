@@ -4,20 +4,50 @@ title: LLMCallOptions
 
 # Interface: LLMCallOptions
 
-Defined in: [src/core/LLMCall.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L76)
+Defined in: [src/core/LLMCall.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L82)
 
 ## Properties
 
+### contextBudget?
+
+> `readonly` `optional` **contextBudget?**: `object`
+
+Defined in: [src/core/LLMCall.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L104)
+
+Per-slot context budgets, in characters (8.11.0). The LLMCall twin of
+`AgentOptions.contextBudget` — two slots here, since an LLMCall has no
+tools slot.
+
+Each slot warns (and emits `agentfootprint.context.budget_pressure`) when
+it composes over its budget. **Nothing is truncated** — the full content
+still reaches the LLM; the budget is a signal, not a limiter. Defaults:
+`systemPrompt` 4000, `messages` 10000.
+
+#### messages?
+
+> `readonly` `optional` **messages?**: `number`
+
+#### systemPrompt?
+
+> `readonly` `optional` **systemPrompt?**: `number`
+
+***
+
 ### costBudget?
 
-> `readonly` `optional` **costBudget?**: `number`
+> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
 
-Defined in: [src/core/LLMCall.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L100)
+Defined in: [src/core/LLMCall.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L125)
 
 Cumulative USD budget per run. When provided along with `pricingTable`,
 LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
 the first time cumulative USD crosses the budget. Execution continues
 — consumers choose whether to abort by listening to the event.
+
+The object form `{ usd, onExceed }` is accepted for symmetry with `Agent`,
+but `onExceed` must be `'warn'` here: halting means "stop at the next
+iteration boundary", and one call has no next boundary. `'halt'` is
+refused at build rather than silently ignored.
 
 ***
 
@@ -25,7 +55,7 @@ the first time cumulative USD crosses the budget. Execution continues
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/LLMCall.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L118)
+Defined in: [src/core/LLMCall.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L143)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -41,7 +71,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core/LLMCall.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L81)
+Defined in: [src/core/LLMCall.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L87)
 
 Stable id used for topology + events. Default: 'llm-call'.
 
@@ -51,7 +81,7 @@ Stable id used for topology + events. Default: 'llm-call'.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/LLMCall.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L87)
+Defined in: [src/core/LLMCall.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L93)
 
 Optional max output tokens.
 
@@ -61,7 +91,7 @@ Optional max output tokens.
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/LLMCall.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L83)
+Defined in: [src/core/LLMCall.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L89)
 
 Model to request from the provider.
 
@@ -71,7 +101,7 @@ Model to request from the provider.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/LLMCall.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L79)
+Defined in: [src/core/LLMCall.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L85)
 
 Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
@@ -81,7 +111,7 @@ Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/docs/api/interfaces/PricingTable)
 
-Defined in: [src/core/LLMCall.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L93)
+Defined in: [src/core/LLMCall.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L113)
 
 Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
 after every LLM response with per-call and cumulative USD. Run-scoped
@@ -93,7 +123,7 @@ after every LLM response with per-call and cumulative USD. Run-scoped
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/LLMCall.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L77)
+Defined in: [src/core/LLMCall.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L83)
 
 ***
 
@@ -101,7 +131,7 @@ Defined in: [src/core/LLMCall.ts:77](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/LLMCall.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L108)
+Defined in: [src/core/LLMCall.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L133)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder observes per-node build
@@ -115,6 +145,6 @@ omitted, no build-time observation is wired up.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/LLMCall.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L85)
+Defined in: [src/core/LLMCall.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L91)
 
 Optional sampling temperature.

@@ -16,8 +16,8 @@
 
 // #region demo
 import { Agent, defineTool } from 'agentfootprint'
-import { mock } from 'agentfootprint/llm-providers'
-import { defineSteering, defineInstruction, defineSkill, defineFact } from 'agentfootprint/injection-engine';
+import { mock } from 'agentfootprint/providers'
+import { defineSteering, defineInstruction, defineSkill, defineFact } from 'agentfootprint/context';
 
 /** Builds the Dynamic ReAct agent the docs trace live (mock LLM — no network). */
 export function buildDynamicReactAgent() {

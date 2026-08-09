@@ -15,7 +15,7 @@
  *   Run:  npm run gen:replay   (also runs in predev/prebuild)
  */
 import { Agent } from 'agentfootprint'
-import { mock } from 'agentfootprint/llm-providers';
+import { mock } from 'agentfootprint/providers';
 import { redactContent } from 'agentfootprint/observe';
 import { structureGraphFromSpec } from 'agentfootprint-lens/core';
 import { mkdirSync, writeFileSync } from 'node:fs';

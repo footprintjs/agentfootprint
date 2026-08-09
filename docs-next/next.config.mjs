@@ -26,7 +26,20 @@ const config = {
     // library is untouched — this is a consumer-side bundler config.
     resolveAlias: {
       'node:module': './lib/stubs/node-module.js',
+      // localEmbedder's model packages — call-time-only, never reached by a
+      // browser mock agent (see lib/stubs/embedder-deps.js).
+      '@huggingface/transformers': './lib/stubs/embedder-deps.js',
+      'fs/promises': './lib/stubs/embedder-deps.js',
     },
+  },
+  // `next build` bundles with webpack; mirror the same three stubs there.
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@huggingface/transformers': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
+      'fs/promises': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
+    };
+    return config;
   },
   ...(isExport
     ? {

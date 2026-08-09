@@ -8,8 +8,8 @@ import { CodeCard, Ln, Caret, K, S } from '../CodeCard';
  *
  * REAL API (hand-verified against src/ — these are display strings, so this list IS the guard):
  *   import { Agent }     → src/index.ts (public entry); quick-start.mdx uses the same import
- *   import { anthropic } from 'agentfootprint/llm-providers'
- *                        → package.json exports "./llm-providers" (package.json:136)
+ *   import { anthropic } from 'agentfootprint/providers'
+ *                        → package.json exports "./providers"
  *   Agent.create(opts)   → src/core/Agent.ts:469  `static create(opts: AgentOptions): AgentBuilder`
  *   { provider, model }  → src/core/agent/types.ts:48 `readonly provider: LLMProvider` (required)
  *                                                 :53 `readonly model: string`         (required)
@@ -34,7 +34,7 @@ export function BuildStage({ step }: { step: number }) {
       <CodeCard className={step >= 7 ? 'is-built' : ''}>
         <Ln className={`${on(1)} dim`}>
           <K>import</K> {'{ anthropic } '}
-          <K>from</K> <S>&apos;agentfootprint/llm-providers&apos;</S>
+          <K>from</K> <S>&apos;agentfootprint/providers&apos;</S>
         </Ln>
         <Ln className={on(2)}>
           <K>const</K> scout = Agent.create({'{'}

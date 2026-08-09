@@ -14,7 +14,7 @@ Everything a strategy is allowed to look at.
 
 > `readonly` **agentModel**: `string`
 
-Defined in: [src/core/agent/window/strategy.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L81)
+Defined in: [src/core/agent/window/strategy.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L91)
 
 The agent's own model — the sensible default for a strategy that bills.
 
@@ -61,7 +61,7 @@ that cost nothing. A token-triggered strategy should throw
 
 > `readonly` **now**: () => `number`
 
-Defined in: [src/core/agent/window/strategy.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L87)
+Defined in: [src/core/agent/window/strategy.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L97)
 
 Wall clock, injectable so a caller can pin `survivalMs`.
 
@@ -75,7 +75,7 @@ Wall clock, injectable so a caller can pin `survivalMs`.
 
 > `readonly` **planRemoval**: (`keepRecentTurns`, `isExistingSummary?`) => [`RemovalPlan`](/docs/api/interfaces/RemovalPlan)
 
-Defined in: [src/core/agent/window/strategy.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L102)
+Defined in: [src/core/agent/window/strategy.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L112)
 
 THE shared refusal engine, bound to this iteration.
 
@@ -111,7 +111,7 @@ optional predicate marking a turn that is a
 
 > `readonly` **providerName**: `string`
 
-Defined in: [src/core/agent/window/strategy.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L83)
+Defined in: [src/core/agent/window/strategy.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L93)
 
 `provider.name` of the MAIN provider, for a refusal that names it.
 
@@ -121,7 +121,7 @@ Defined in: [src/core/agent/window/strategy.ts:83](https://github.com/footprintj
 
 > `readonly` **removalFacts**: (`indices`, `atMs`) => [`RemovalFacts`](/docs/api/interfaces/RemovalFacts)
 
-Defined in: [src/core/agent/window/strategy.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L113)
+Defined in: [src/core/agent/window/strategy.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L123)
 
 Turn removed message indices into the facts the ledger needs: which
 stages wrote them, and how long each lived in the window.
@@ -146,11 +146,27 @@ the moment they leave (usually `input.now()`)
 
 ***
 
+### runId
+
+> `readonly` **runId**: `string`
+
+Defined in: [src/core/agent/window/strategy.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L89)
+
+The run this decision belongs to.
+
+A strategy that retains what it removed has to name the run whose commit
+log held it — that is the honest answer to "where else could I have found
+this?", and the answer is "nowhere, once that process ended", which is the
+whole reason retention exists. `'unknown'` when the runtime could not name
+the run, never a fabricated id.
+
+***
+
 ### signal
 
 > `readonly` **signal**: `AbortSignal` \| `undefined`
 
-Defined in: [src/core/agent/window/strategy.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L85)
+Defined in: [src/core/agent/window/strategy.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L95)
 
 The run's cancellation signal, when there is one.
 

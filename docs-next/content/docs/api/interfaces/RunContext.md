@@ -56,6 +56,17 @@ Millisecond wall-clock timestamp when the run started.
 
 ***
 
+### sessionId?
+
+> `readonly` `optional` **sessionId?**: `string`
+
+Defined in: [src/bridge/eventMeta.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/bridge/eventMeta.ts#L51)
+
+The hosting conversation this run belongs to, when it belongs to one
+ (9.4.0). Absent for an unhosted or anonymous run — never fabricated.
+
+***
+
 ### traceId?
 
 > `readonly` `optional` **traceId?**: `string`

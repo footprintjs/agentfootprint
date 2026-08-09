@@ -6,7 +6,7 @@ title: SCHEMA_TOOL_NAME
 
 > `const` **SCHEMA\_TOOL\_NAME**: `"respond_with_schema"` = `'respond_with_schema'`
 
-Defined in: [src/core/agent/outputEnforcement.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L186)
+Defined in: [src/core/agent/outputEnforcement.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L197)
 
 Name of the tool the schema is presented as.
 

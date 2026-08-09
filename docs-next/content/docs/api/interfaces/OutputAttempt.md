@@ -24,6 +24,23 @@ Defined in: [src/core/agent/outputEnforcement.ts:52](https://github.com/footprin
 
 ***
 
+### brokenBy?
+
+> `readonly` `optional` **brokenBy?**: `string`
+
+Defined in: [src/core/agent/outputEnforcement.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L83)
+
+Set on an `'exhausted'` row when the answer the MODEL produced satisfied
+the schema and an `act({ output })` middleware's rewrite broke it — the
+name of that middleware (8.18.0).
+
+Its presence is also why the row is `'exhausted'` with retries still on
+the clock: a rule that turns a valid answer into an invalid one will do it
+to the next answer too, so the run stops paying for re-asks that cannot
+converge.
+
+***
+
 ### correctiveMessageHash?
 
 > `readonly` `optional` **correctiveMessageHash?**: `string`
