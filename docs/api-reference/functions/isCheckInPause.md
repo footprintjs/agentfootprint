@@ -8,7 +8,7 @@
 
 > **isCheckInPause**(`result`): `result is RunnerPauseOutcome & { checkIn: CheckInRequest }`
 
-Defined in: [src/core/pause.ts:89](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/core/pause.ts#L89)
+Defined in: [src/core/pause.ts:89](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core/pause.ts#L89)
 
 Type guard — is this a check-in pause (evidence-carrying human consent),
 as opposed to a plain `askHuman` pause? Narrows `checkIn` to present.

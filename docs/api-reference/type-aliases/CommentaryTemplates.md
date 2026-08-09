@@ -8,7 +8,7 @@
 
 > **CommentaryTemplates** = `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:49](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/recorders/observability/commentary/commentaryTemplates.ts#L49)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:49](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/recorders/observability/commentary/commentaryTemplates.ts#L49)
 
 Flat map of template keys to template strings. Keys use a dotted
  hierarchy mirroring event types + payload branches
