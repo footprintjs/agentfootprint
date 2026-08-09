@@ -8,7 +8,7 @@
 
 > `const` **DEFAULT\_CARRIES\_IN\_MESSAGES**: readonly [`WireRole`](/agentfootprint/api/generated/type-aliases/WireRole.md)[]
 
-Defined in: [src/adapters/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/adapters/types.ts#L130)
+Defined in: [src/adapters/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/adapters/types.ts#L130)
 
 The floor every known wire supports. Used for any provider that does not
 declare `carriesInMessages` — a third-party adapter is assumed to carry

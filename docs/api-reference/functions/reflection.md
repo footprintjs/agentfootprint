@@ -8,7 +8,7 @@
 
 > **reflection**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/Reflection.ts:55](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/patterns/Reflection.ts#L55)
+Defined in: [src/patterns/Reflection.ts:55](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/patterns/Reflection.ts#L55)
 
 Build a Reflection Runner. Each iteration:
   1. Propose — LLMCall writes a candidate answer based on the input

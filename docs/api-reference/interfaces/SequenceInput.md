@@ -6,7 +6,7 @@
 
 # Interface: SequenceInput
 
-Defined in: [src/core-flow/Sequence.ts:64](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core-flow/Sequence.ts#L64)
+Defined in: [src/core-flow/Sequence.ts:64](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/core-flow/Sequence.ts#L64)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/core-flow/Sequence.ts:64](https://github.com/footprintjs/agentf
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:65](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core-flow/Sequence.ts#L65)
+Defined in: [src/core-flow/Sequence.ts:65](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/core-flow/Sequence.ts#L65)

@@ -8,6 +8,6 @@
 
 > `const` **COMPACTED\_FRAME\_PREFIX**: `"[compacted history"` = `'[compacted history'`
 
-Defined in: [src/core/agent/window/summarize.ts:32](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/window/summarize.ts#L32)
+Defined in: [src/core/agent/window/summarize.ts:32](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/core/agent/window/summarize.ts#L32)
 
 Opening of the authored label. Stable — tests and readers match on it.

@@ -8,7 +8,7 @@
 
 > **ToolArgValidationMode** = `"enforce"` \| `"warn"` \| `"off"`
 
-Defined in: [src/core/agent/toolArgsValidation.ts:37](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/toolArgsValidation.ts#L37)
+Defined in: [src/core/agent/toolArgsValidation.ts:37](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/core/agent/toolArgsValidation.ts#L37)
 
 When to enforce: 'enforce' rejects before dispatch (default), 'warn'
  emits the event but executes anyway, 'off' skips validation entirely.

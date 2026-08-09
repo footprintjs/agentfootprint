@@ -8,7 +8,7 @@
 
 > **ToolResultContent** = `string`
 
-Defined in: [src/adapters/types.ts:587](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/adapters/types.ts#L587)
+Defined in: [src/adapters/types.ts:587](https://github.com/footprintjs/agentfootprint/blob/b523c2fedb76df5519470c43583559bfaafdfff4/src/adapters/types.ts#L587)
 
 v2.12 — content shape mirroring `LLMMessage.content`. Future-compatible
 with multi-modal `tool_result` blocks once `LLMMessage` widens.
