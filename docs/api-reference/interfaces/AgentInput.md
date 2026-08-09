@@ -6,7 +6,7 @@
 
 # Interface: AgentInput
 
-Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/types.ts#L392)
+Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/types.ts#L392)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **continueFrom?**: [`AgentRunCheckpoint`](/agentfootprint/api/generated/interfaces/AgentRunCheckpoint.md)
 
-Defined in: [src/core/agent/types.ts:445](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/types.ts#L445)
+Defined in: [src/core/agent/types.ts:445](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/types.ts#L445)
 
 The conversation this turn continues — an `AgentRunCheckpoint` from
 `agent.checkpoint()`, persisted anywhere and handed back here.
@@ -49,7 +49,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:416](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/types.ts#L416)
+Defined in: [src/core/agent/types.ts:416](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/types.ts#L416)
 
 WHO this run is for — the scoping tuple, not a session handle.
 
@@ -77,4 +77,4 @@ system-prompt slot as a `<memory>` block rather than as message turns.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/types.ts#L393)
+Defined in: [src/core/agent/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/types.ts#L393)

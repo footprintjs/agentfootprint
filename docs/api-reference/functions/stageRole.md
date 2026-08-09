@@ -8,7 +8,7 @@
 
 > **stageRole**(`id`): [`StageRole`](/agentfootprint/api/generated/type-aliases/StageRole.md)
 
-Defined in: [src/conventions.ts:257](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/conventions.ts#L257)
+Defined in: [src/conventions.ts:257](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/conventions.ts#L257)
 
 Classify a stage id into its [StageRole](/agentfootprint/api/generated/type-aliases/StageRole.md). Accepts a path-qualified id
 (`sf-llm-call/call-llm`) — only the LOCAL segment matters, so it works at

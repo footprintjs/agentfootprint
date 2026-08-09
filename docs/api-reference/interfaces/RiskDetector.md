@@ -6,7 +6,7 @@
 
 # Interface: RiskDetector
 
-Defined in: [src/adapters/types.ts:511](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/adapters/types.ts#L511)
+Defined in: [src/adapters/types.ts:511](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/adapters/types.ts#L511)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:511](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:512](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/adapters/types.ts#L512)
+Defined in: [src/adapters/types.ts:512](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/adapters/types.ts#L512)
 
 ## Methods
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:512](https://github.com/footprintjs/agentfoot
 
 > **check**(`content`, `context`): `Promise`\<[`RiskResult`](/agentfootprint/api/generated/interfaces/RiskResult.md)\>
 
-Defined in: [src/adapters/types.ts:513](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/adapters/types.ts#L513)
+Defined in: [src/adapters/types.ts:513](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/adapters/types.ts#L513)
 
 #### Parameters
 

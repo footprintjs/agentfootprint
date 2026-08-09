@@ -6,7 +6,7 @@
 
 # Interface: MessageDeniedContext
 
-Defined in: [src/core/agent/middleware/errors.ts:38](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/middleware/errors.ts#L38)
+Defined in: [src/core/agent/middleware/errors.ts:38](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/middleware/errors.ts#L38)
 
 MessageDeniedError — typed error thrown by `Agent.run()` when a
 `messageMiddleware` returns `deny(reason)`.
@@ -52,7 +52,7 @@ try {
 
 > `readonly` **middleware**: `string`
 
-Defined in: [src/core/agent/middleware/errors.ts:44](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/middleware/errors.ts#L44)
+Defined in: [src/core/agent/middleware/errors.ts:44](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/middleware/errors.ts#L44)
 
 `name` of the middleware that returned `deny`.
 
@@ -62,7 +62,7 @@ Defined in: [src/core/agent/middleware/errors.ts:44](https://github.com/footprin
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: [src/core/agent/middleware/errors.ts:42](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/middleware/errors.ts#L42)
+Defined in: [src/core/agent/middleware/errors.ts:42](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/middleware/errors.ts#L42)
 
 Which boundary refused.
 
@@ -72,6 +72,6 @@ Which boundary refused.
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/middleware/errors.ts:40](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/agent/middleware/errors.ts#L40)
+Defined in: [src/core/agent/middleware/errors.ts:40](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/agent/middleware/errors.ts#L40)
 
 The refusal text the middleware returned.

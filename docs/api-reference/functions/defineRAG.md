@@ -8,7 +8,7 @@
 
 > **defineRAG**(`opts`): `MemoryDefinition`
 
-Defined in: [src/lib/rag/defineRAG.ts:295](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L295)
+Defined in: [src/lib/rag/defineRAG.ts:318](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L318)
 
 Build a RAG context-engineering definition. The returned
 `MemoryDefinition` is registered on the Agent via `.rag(definition)`
@@ -27,7 +27,17 @@ Build a RAG context-engineering definition. The returned
 ## Throws
 
 when `store` does not implement `search()`. RAG requires a
-        vector-capable adapter.
+        store that can retrieve.
+
+## Throws
+
+when `embedder` is missing and the store does not rank text
+        server-side — somebody has to turn the question into a vector.
+
+## Throws
+
+when `embedder`/`embedderId` is passed to a store that DOES rank
+        text server-side — the option would be read by nothing.
 
 ## Throws
 

@@ -8,7 +8,7 @@
 
 > **StrategyHandle** = `Unsubscribe` & `AsyncDisposable` & `object`
 
-Defined in: [src/strategies/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/strategies/types.ts#L93)
+Defined in: [src/strategies/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/strategies/types.ts#L93)
 
 What every `enable.*` strategy call returns (8.12.0).
 

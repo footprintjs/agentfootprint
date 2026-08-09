@@ -6,7 +6,7 @@
 
 # Class: InvalidRunInputError
 
-Defined in: [src/core/runInput.ts:45](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/runInput.ts#L45)
+Defined in: [src/core/runInput.ts:45](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/runInput.ts#L45)
 
 Thrown by `run()` (and `runTyped()`) when the input is not a message.
 
@@ -24,7 +24,7 @@ for being the wrong shape is still the caller's data.
 
 > **new InvalidRunInputError**(`ctx`): `InvalidRunInputError`
 
-Defined in: [src/core/runInput.ts:52](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/runInput.ts#L52)
+Defined in: [src/core/runInput.ts:52](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/runInput.ts#L52)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INVALID_RUN_INPUT"`
 
-Defined in: [src/core/runInput.ts:46](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/runInput.ts#L46)
+Defined in: [src/core/runInput.ts:46](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/runInput.ts#L46)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **received**: `string`
 
-Defined in: [src/core/runInput.ts:48](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/runInput.ts#L48)
+Defined in: [src/core/runInput.ts:48](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/runInput.ts#L48)
 
 Short description of what was passed, e.g. `'object with keys: text'`.
 
@@ -110,7 +110,7 @@ Short description of what was passed, e.g. `'object with keys: text'`.
 
 > `readonly` **runner**: `string`
 
-Defined in: [src/core/runInput.ts:50](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/core/runInput.ts#L50)
+Defined in: [src/core/runInput.ts:50](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/core/runInput.ts#L50)
 
 Which runner refused, e.g. `'Agent.run'`.
 

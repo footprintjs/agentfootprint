@@ -6,7 +6,7 @@
 
 # Interface: DefineRAGOptions
 
-Defined in: [src/lib/rag/defineRAG.ts:138](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L138)
+Defined in: [src/lib/rag/defineRAG.ts:139](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L139)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/rag/defineRAG.ts:138](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **corpus?**: `MemoryIdentity`
 
-Defined in: [src/lib/rag/defineRAG.ts:186](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L186)
+Defined in: [src/lib/rag/defineRAG.ts:205](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L205)
 
 The namespace this corpus lives in. Default
 `{ conversationId: '_global' }` — the same default `indexDocuments`
@@ -36,7 +36,7 @@ than an empty answer.
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/lib/rag/defineRAG.ts:147](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L147)
+Defined in: [src/lib/rag/defineRAG.ts:148](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L148)
 
 Human-readable description. Surfaces in narrative + Lens hover.
 Recommend describing the *corpus* (e.g., "Product documentation
@@ -44,15 +44,25 @@ chunks indexed weekly from docs.example.com").
 
 ***
 
-### embedder
+### embedder?
 
-> `readonly` **embedder**: `Embedder`
+> `readonly` `optional` **embedder?**: `Embedder`
 
-Defined in: [src/lib/rag/defineRAG.ts:162](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L162)
+Defined in: [src/lib/rag/defineRAG.ts:176](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L176)
 
 Embedder used for the read-side query. Pass the SAME embedder
 instance (or one with the same `embedderId`) that was used for
 indexing — cross-model similarity scores are not comparable.
+
+**Optional since 9.3.0, for one case only.** A store that declares
+`ranksBy: 'server-text'` (see MemoryStore.ranksBy) takes the
+question as WORDS and ranks it on the backend's side; there is nothing
+here for an embedder to do, and embedding the query anyway would be spend
+on a vector discarded on arrival. Against such a store this must be
+OMITTED — passing one is refused rather than ignored, because an ignored
+embedder reads, from the wiring, exactly like a working one.
+
+Against every other store it is still required.
 
 ***
 
@@ -60,11 +70,16 @@ indexing — cross-model similarity scores are not comparable.
 
 > `readonly` `optional` **embedderId?**: `string`
 
-Defined in: [src/lib/rag/defineRAG.ts:169](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L169)
+Defined in: [src/lib/rag/defineRAG.ts:188](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L188)
 
 Stable id of the embedder. Stored on entries during indexing
 (via `indexDocuments`) and filtered at search time so a later
 embedder swap doesn't pollute results.
+
+Refused alongside a `'server-text'` store for the same reason
+[embedder](/agentfootprint/api/generated/interfaces/DefineRAGOptions.md#embedder) is: the backend's records were never written here and
+carry no `embeddingModel` to filter on, so the option would name a filter
+that filtered nothing.
 
 ***
 
@@ -72,7 +87,7 @@ embedder swap doesn't pollute results.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/rag/defineRAG.ts:140](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L140)
+Defined in: [src/lib/rag/defineRAG.ts:141](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L141)
 
 Stable id. Becomes the scope-key suffix and the Lens label.
 
@@ -82,7 +97,7 @@ Stable id. Becomes the scope-key suffix and the Lens label.
 
 > `readonly` `optional` **maxChars?**: `number`
 
-Defined in: [src/lib/rag/defineRAG.ts:258](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L258)
+Defined in: [src/lib/rag/defineRAG.ts:277](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L277)
 
 A character budget for the retrieved passages, spent across them in
 RANK order (8.19.0). Default: none — `topK` stays the only bound, so
@@ -131,7 +146,7 @@ it): the strategy picks the candidates, this bounds their size.
 
 > `readonly` `optional` **retrieval?**: [`RetrievalStrategy`](/agentfootprint/api/generated/interfaces/RetrievalStrategy.md)
 
-Defined in: [src/lib/rag/defineRAG.ts:274](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L274)
+Defined in: [src/lib/rag/defineRAG.ts:293](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L293)
 
 The retrieval rule, spelled out. Replaces `topK` + `threshold`
 entirely — passing both is refused, because they could disagree
@@ -152,12 +167,15 @@ next two adapters behind this same interface; neither ships in
 
 > `readonly` **store**: `MemoryStore`
 
-Defined in: [src/lib/rag/defineRAG.ts:155](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L155)
+Defined in: [src/lib/rag/defineRAG.ts:159](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L159)
 
-Vector-capable store containing the indexed corpus. Must implement
-`search()`. Use `indexDocuments(store, embedder, docs)` at startup
-to populate it. Ships with `InMemoryStore` for dev/tests; swap to
-a durable adapter in production.
+Store containing the indexed corpus. Must implement `search()`. Use
+`indexDocuments(store, embedder, docs)` at startup to populate it. Ships
+with `InMemoryStore` for dev/tests; swap to a durable adapter in
+production.
+
+A store that declares `ranksBy: 'server-text'` is served by the backend's
+own index rather than one built here — see [embedder](/agentfootprint/api/generated/interfaces/DefineRAGOptions.md#embedder).
 
 ***
 
@@ -165,7 +183,7 @@ a durable adapter in production.
 
 > `readonly` `optional` **threshold?**: `number`
 
-Defined in: [src/lib/rag/defineRAG.ts:214](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L214)
+Defined in: [src/lib/rag/defineRAG.ts:233](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L233)
 
 Minimum cosine similarity to inject. **Strict** — when no chunk
 meets the threshold, NO injection happens (no fallback that would
@@ -189,7 +207,7 @@ Shorthand for `retrieval: topK({ threshold })`; the two EXCLUDE.
 
 > `readonly` `optional` **topK?**: `number`
 
-Defined in: [src/lib/rag/defineRAG.ts:195](https://github.com/footprintjs/agentfootprint/blob/46a226862ee67a629d071a39169d46fb5aa79ccf/src/lib/rag/defineRAG.ts#L195)
+Defined in: [src/lib/rag/defineRAG.ts:214](https://github.com/footprintjs/agentfootprint/blob/da4d9975cc6a2f88b2692e1773dc59434515cc7a/src/lib/rag/defineRAG.ts#L214)
 
 Top-K chunks to retrieve per turn. Default 3 (balanced —
 defends against lost-in-the-middle while giving multiple
