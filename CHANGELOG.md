@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.5.0] - 2026-08-09
+
+**Memory strategies tell the truth.**
+
+`MEMORY_STRATEGIES` advertised seven strategies and `defineMemory` built six —
+`DECAY` was in the const, in the type union, in the docs table, and threw "not
+yet wired" on every config. A host building a strategy picker off that const
+offered a choice that could only fail. This release wires `decay`, and makes
+every strategy DECLARE what it needs so a host can check before it offers,
+rather than learning from an exception mid-run.
+
+### Added — `DECAY` is wired: old memory fades
+
+`defineMemory({ type: EPISODIC, strategy: { kind: DECAY, halfLifeMs, minScore } })`
+now builds a real pipeline. A `FilterByDecay` stage sits between the load and
+the budget picker: every entry loaded this turn is scored `2 ^ (-age /
+halfLifeMs)` against its `lastAccessedAt` and dropped below `minScore`
+(default `0.1`, ≈ 3.3 half-lives). A day-old entry scores `0.5` against a
+one-day half-life; a week-old one scores `0.008` and is gone. Free — no LLM,
+no embedder, no store round-trip beyond the load that was happening anyway.
+
+Three decisions worth stating, because each is a thing it deliberately does
+not do:
+
+- **Age, not use.** `computeDecayFactor` also has an access term, and this
+  passes a neutral `1` for it. `accessCount` is incremented by `store.get()`,
+  and no shipped read path calls `get()` — they `list()` or `search()`. A knob
+  for it would be a dial wired to a counter that never moves.
+- **Nothing is deleted.** Decay is a read-time judgement; the entry stays in
+  the store, and a shorter half-life or a lower floor lets it back in. `ttl`
+  is still the way to say "stop storing this".
+- **Dropped before the picker, not by it.** What has faded is not a budget
+  question, and a stale entry that fits should still not be injected.
+
+An entry whose `lastAccessedAt` is missing or non-finite is **kept**: a store
+that does not date its entries has not told us they are old, and the
+alternative is `NaN`, which fails every comparison and would silently drop
+everything such a store returns. `halfLifeMs` must be finite and non-negative
+— a negative half-life scores OLDER entries higher, which no config means, so
+it is refused by name. Runnable: `examples/memory/11-decay-strategy.ts`.
+
+### Added — `listMemoryStrategies()`: strategies declare their requirements
+
+Seven bare strings are enough to WRITE `strategy: { kind: … }` and not nearly
+enough to OFFER the choice. `listMemoryStrategies()` returns the same seven
+described — `{ kind, description, types, requirements }` — following the
+`listInfluenceStrategies()` exemplar already in this package. `requirements`
+is what the HOST must supply (`'embedder'`, `'vector-store'`, `'llm'`); empty
+means it runs anywhere at $0. `types` is the other half of "can I offer this?"
+— `decay` on a SEMANTIC store is refused however good your credentials are.
+`memoryStrategyInfo(kind)` looks up one.
+
+```ts
+const canSupply = new Set(embedder ? ['embedder', 'vector-store'] : []);
+listMemoryStrategies()
+  .filter((s) => s.types.includes('episodic'))
+  .filter((s) => s.requirements.every((r) => canSupply.has(r)));
+// → window, budget, decay, hybrid
+```
+
+The declaration is enforced rather than decorative — the pairs it calls
+supported are built in a test, and the requirements it declares are removed
+one at a time to prove each is refused.
+
+### Fixed — a missing dependency is a sentence at build, not a `TypeError` mid-run
+
+`defineMemory` now refuses at BUILD when a strategy's declared requirement is
+absent. Two gaps this closes, both of which used to build a definition that
+could not do its job:
+
+- **`SUMMARIZE` without its `llm`** built silently for JavaScript callers and
+  casts (TypeScript already required it).
+- **A `HYBRID` whose sub-strategy needs something the host does not have** was
+  accepted and the sub-strategy list then quietly ignored — a `hybrid`
+  containing `topK` with no embedder built a pipeline that embedded nothing.
+  Every sub-strategy is now checked where the caller's words still exist.
+
+The check runs AFTER the pipeline dispatch on purpose: the existing arms know
+more (the `ranksBy: 'server-text'` exemption, that it does not apply to
+CAUSAL, that `EXTRACT`'s `llm` matters only for `extractor: 'llm'`), so they
+speak first and this is the backstop that leaves no declared requirement
+unchecked. A throw where there was a silent no-op is a fix, not a break:
+nothing that worked stops working.
+
+### Fixed — `SUMMARIZE` says what it actually does
+
+The `summarize` stage exists in the source and is composed into **no**
+pipeline. `defineMemory({ strategy: { kind: SUMMARIZE, recent, llm } })` loads
+the last `recent` turns and stops — verified by counting: eight turns through
+that pipeline with a counting provider produced zero `complete()` calls, while
+the docs table promised "LLM compresses older turns" and the example passed a
+summarizer that was never called.
+
+The compression is not wired in this release — it needs things the strategy
+does not carry (a model name, cost accounting, the separate-instance law
+`.compaction()` enforces), and the Agent already has that door. What changes
+is that the library now SAYS so: the caveat is in the strategy's own
+`description` from `listMemoryStrategies()`, in the docs table, and in the
+factory's dispatch table. `.compaction({ summarizer, model })` is the
+compaction that runs.
+
 ## [9.4.0] - 2026-08-09
 
 **AWS adapters tell the truth.**

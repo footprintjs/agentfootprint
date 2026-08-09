@@ -35,11 +35,15 @@ Causal memory is the differentiator. Other libraries' memory remembers what was 
 |---|---|---|
 | `WINDOW` | Last N entries (rule, no LLM, no embeddings) | Free |
 | `BUDGET` | Fit-to-tokens via decider | Free |
-| `SUMMARIZE` | LLM compresses older turns into beats | One LLM call per write |
+| `SUMMARIZE` | Keeps the last `recent` turns raw — see the caveat below | Free today; the `llm` is required and not yet called |
 | `TOP_K` | Score-threshold semantic retrieval | Embedding call per query |
 | `EXTRACT` | LLM distills structured facts on write | One LLM call per write |
-| `DECAY` | Recency-weighted relevance | Free; needs `decayPolicy` per entry |
+| `DECAY` | Drops entries that have faded on a half-life | Free — a timestamp and an exponent |
 | `HYBRID` | Compose multiple strategies | Sum of constituents |
+
+<Callout type="warn" title="SUMMARIZE does not compress yet">
+`defineMemory({ strategy: { kind: SUMMARIZE, recent, llm } })` builds a pipeline that loads the last `recent` turns and stops — the compression stage exists in the source but is composed into nothing, so the `llm` you pass is never called. It is still **required**, and `listMemoryStrategies()` reports the caveat in the strategy's own description rather than leaving you to discover it from a token bill that never arrives. For compaction that does run, reach for [`.compaction({ summarizer, model })`](doc:window-strategies) on the Agent.
+</Callout>
 
 A `WINDOW` strategy on an Episodic store keeps the last N messages; on Semantic / Narrative it keeps the last N facts / beats. **Causal is the exception** — it supports only `TOP_K` (semantic match), never `WINDOW` (see the Causal section below). Mix and match the rest.
 
@@ -56,6 +60,37 @@ The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good d
 <CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="examples/memory/01-window-strategy.ts (region: define)" />
 
 `InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory`), `AgentCoreStore` (`agentfootprint/memory`), or another adapter — same `MemoryStore` interface, drop-in.
+
+## Letting old memory fade — `DECAY`
+
+Window keeps the last N turns whatever their age. `DECAY` asks the other question — *is this still worth remembering?* — and answers it with a half-life: each entry loaded this turn is scored `2 ^ (-age / halfLifeMs)` against its `lastAccessedAt` and dropped below `minScore`, **before** the token budget is spent on it. Free: no LLM, no embeddings, no key.
+
+<CodeFile path="examples/memory/11-decay-strategy.ts" region="define" title="examples/memory/11-decay-strategy.ts (region: define)" />
+
+A day-old entry scores `0.5` against a one-day half-life; a week-old one scores `0.008` and is gone. `minScore: 0` scores without dropping.
+
+Composing a pipeline by hand instead of through `defineMemory`? The stage itself is exported: `filterByDecay(config)` takes a `FilterByDecayConfig` (`halfLifeMs`, `minScore` — default `DEFAULT_DECAY_MIN_SCORE`, and a `now` clock seam for tests) and drops into any chart between your load stage and your picker.
+
+Two things it deliberately does not do. It never **deletes**: the entry stays in the store, so a shorter half-life, a lower floor, or a different memory over the same store sees it again — reach for `ttl` on the entry when you mean "stop storing this". And it scores by **age, not use**: the underlying model has an access term, but `accessCount` is only bumped by `store.get()` and no shipped read path calls `get()`, so the strategy passes a neutral value rather than offering a knob wired to a counter that never moves.
+
+## Which strategies can this deployment actually run?
+
+`MEMORY_STRATEGIES` is seven bare strings — enough to *write* a strategy, not enough to *offer* one. `listMemoryStrategies()` is the same seven described, so a settings screen (or an agent choosing its own memory) can check before it offers the choice instead of learning from an exception:
+
+```ts
+import { listMemoryStrategies } from 'agentfootprint/memory';
+
+const canSupply = new Set(embedder ? ['embedder', 'vector-store'] : []);
+
+const offerable = listMemoryStrategies()
+  .filter((s) => s.types.includes('episodic'))
+  .filter((s) => s.requirements.every((r) => canSupply.has(r)));
+// no embedder → window, budget, decay, hybrid: the four that cost nothing to run.
+```
+
+Each record is a `MemoryStrategyInfo`: the `kind` you write into `strategy.kind`, a plain `description` (current-truth caveats included), the `types` that accept it, and `requirements` — what the host must supply, as `MemoryStrategyRequirement` values (`'embedder'`, `'vector-store'`, `'llm'`). Empty means it runs anywhere, at $0. `memoryStrategyInfo(kind)` looks up one.
+
+The declaration is enforced, not decorative: `defineMemory` refuses at **build** when a strategy's declared requirement is missing — including inside a `HYBRID`, whose sub-strategies used to be accepted and then quietly ignored. A missing embedder is a sentence at startup, never a `TypeError` from inside a stage halfway through a paid run.
 
 ## Causal memory — replay decisions, not just messages
 

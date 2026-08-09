@@ -11,3 +11,5 @@ export { approximateTokenCounter, countMessageTokens } from './tokenize.js';
 export type { TokenCounter } from './tokenize.js';
 export { summarize } from './summarize.js';
 export type { SummarizeConfig } from './summarize.js';
+export { filterByDecay, DEFAULT_DECAY_MIN_SCORE } from './filterByDecay.js';
+export type { FilterByDecayConfig } from './filterByDecay.js';

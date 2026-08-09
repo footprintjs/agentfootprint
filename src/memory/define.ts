@@ -29,6 +29,7 @@
  */
 
 import { refuseAsRole } from './asRoleRefusal.js';
+import { assertStrategyRequirements } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
@@ -55,6 +56,7 @@ import {
   type SummarizeStrategy,
   type TopKStrategy,
   type ExtractStrategy,
+  type DecayStrategy,
   type HybridStrategy,
 } from './define.types.js';
 import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.js';
@@ -74,7 +76,8 @@ import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.j
  * | --------- | ------------- | ------------------------ |
  * | EPISODIC  | WINDOW        | defaultPipeline          |
  * | EPISODIC  | BUDGET        | defaultPipeline          |
- * | EPISODIC  | SUMMARIZE     | defaultPipeline + summarize stage |
+ * | EPISODIC  | SUMMARIZE     | defaultPipeline (the compression stage is NOT composed in yet — see `listMemoryStrategies()`) |
+ * | EPISODIC  | DECAY         | defaultPipeline + filterByDecay stage |
  * | SEMANTIC  | TOP_K         | semanticPipeline         |
  * | SEMANTIC  | EXTRACT       | factPipeline             |
  * | SEMANTIC  | WINDOW        | factPipeline (recency-load) |
@@ -90,6 +93,15 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
   validate(options);
 
   const pipeline = buildPipeline(options);
+
+  // The declared-requirements backstop (9.5.0), deliberately AFTER the
+  // dispatch: the arms above know things this check does not (the
+  // server-text exemption, that it does not apply to CAUSAL, that EXTRACT's
+  // `llm` matters only for `extractor: 'llm'`), so they speak first and this
+  // says something only when nothing better did. What it guarantees is that
+  // no requirement `listMemoryStrategies()` DECLARES can go unchecked —
+  // including the ones a composed pipeline would have quietly ignored.
+  assertStrategyRequirements(options, `defineMemory[${options.id}]`);
 
   // `readOnly` drops the write half entirely (8.8.0). Not "writes are
   // skipped at runtime" — the subflow is never compiled and never mounted,
@@ -202,10 +214,18 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
     }
 
     case MEMORY_STRATEGIES.SUMMARIZE: {
-      // Load recent N raw turns; older content is summarized by an LLM
-      // before injection. defaultPipeline handles load+pick; the
-      // summarize stage is composed in by the wire helpers when the
-      // strategy carries an `llm` provider.
+      // WHAT THIS ACTUALLY DOES, as of 9.5.0: loads the last `recent` turns
+      // and stops. The `summarize` stage exists (stages/summarize.ts) and is
+      // composed into NOTHING — the comment that used to sit here said the
+      // wire helpers add it "when the strategy carries an `llm`", and they
+      // never have. Verified by counting calls: eight turns through this
+      // pipeline with a counting provider, zero `complete()` calls.
+      //   It is left as-is rather than half-wired because the compressor
+      // needs things this strategy does not carry (a model name, cost
+      // accounting, the separate-instance law `.compaction()` enforces), and
+      // the Agent already has that door. `listMemoryStrategies()` says so in
+      // the strategy's own description so a reader learns it from the
+      // library rather than from a token bill.
       const sum = s as SummarizeStrategy;
       const config: DefaultPipelineConfig = { store: options.store, loadCount: sum.recent };
       return defaultPipeline(config);
@@ -238,11 +258,30 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
           'Use type=SEMANTIC for vector retrieval, or type=EPISODIC with strategy=WINDOW for recency.',
       );
 
-    case MEMORY_STRATEGIES.DECAY:
-      throw new Error(
-        `defineMemory[${options.id}]: DECAY strategy is not yet wired. ` +
-          'Workaround: set TTL on MemoryEntry, or compose manually via mountMemoryRead.',
-      );
+    case MEMORY_STRATEGIES.DECAY: {
+      // Wired in 9.5.0. Until then this arm threw "not yet wired" while
+      // `MEMORY_STRATEGIES` went on offering the choice — a const that
+      // advertised seven strategies and built six.
+      const d = s as DecayStrategy;
+      if (!Number.isFinite(d.halfLifeMs) || d.halfLifeMs < 0) {
+        throw new Error(
+          `defineMemory[${options.id}]: DECAY needs a \`halfLifeMs\` that is a non-negative ` +
+            `number of milliseconds — how long before an untouched entry is worth half as ` +
+            `much. Got \`${String(d.halfLifeMs)}\`.\n` +
+            `  A negative half-life inverts the curve (older scores HIGHER), which no config ` +
+            `means to say, so it is refused rather than obeyed.\n` +
+            `  Fix:  a day is \`86_400_000\`; an hour is \`3_600_000\`.`,
+        );
+      }
+      const config: DefaultPipelineConfig = {
+        store: options.store,
+        decay: {
+          halfLifeMs: d.halfLifeMs,
+          ...(d.minScore !== undefined && { minScore: d.minScore }),
+        },
+      };
+      return defaultPipeline(config);
+    }
 
     default: {
       const _exhaustive: never = s;

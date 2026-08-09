@@ -111,6 +111,23 @@ describe('defineMemory — unit', () => {
     expect(def.read).toBeDefined();
     expect(def.write).toBeDefined();
   });
+
+  it('EPISODIC × DECAY → defaultPipeline + the FilterByDecay stage (9.5.0)', () => {
+    const def = defineMemory({
+      id: 'fading',
+      type: MEMORY_TYPES.EPISODIC,
+      strategy: { kind: MEMORY_STRATEGIES.DECAY, halfLifeMs: 86_400_000, minScore: 0.1 },
+      store: new InMemoryStore(),
+    });
+    expect(def.type).toBe('episodic');
+    expect(def.read).toBeDefined();
+    expect(def.write).toBeDefined();
+    // The stage is IN the compiled chart, not merely configured: it sits
+    // between the load and the picker, so faded entries are gone before a
+    // token budget is spent on them.
+    const chart = def.read as unknown as { stageMap?: Map<string, unknown> };
+    expect([...(chart.stageMap?.keys() ?? [])]).toContain('filter-by-decay');
+  });
 });
 
 // ─── Scenario — common consumer paths ──────────────────────────────
@@ -335,15 +352,26 @@ describe('defineMemory — security', () => {
     expect(def.write).toBeDefined();
   });
 
-  it('throws on DECAY (not yet supported in v2.0) with workaround hint', () => {
+  it('throws on DECAY with a half-life that would run the curve backwards', () => {
+    // Wired in 9.5.0 — this arm used to throw "not yet wired" for every
+    // config. What is refused now is a config that cannot mean anything: a
+    // negative half-life scores OLDER entries higher.
     expect(() =>
       defineMemory({
         id: 'decay',
         type: MEMORY_TYPES.EPISODIC,
-        strategy: { kind: MEMORY_STRATEGIES.DECAY, halfLifeMs: 60000 },
+        strategy: { kind: MEMORY_STRATEGIES.DECAY, halfLifeMs: -1 },
         store: new InMemoryStore(),
       }),
-    ).toThrow(/TTL|mountMemoryRead/);
+    ).toThrow(/non-negative/);
+    expect(() =>
+      defineMemory({
+        id: 'decay-nan',
+        type: MEMORY_TYPES.EPISODIC,
+        strategy: { kind: MEMORY_STRATEGIES.DECAY, halfLifeMs: Number.NaN },
+        store: new InMemoryStore(),
+      }),
+    ).toThrow(/non-negative/);
   });
 });
 

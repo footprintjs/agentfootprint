@@ -65,3 +65,12 @@ export {
 // `MemoryWindowStrategy` is the only name for `{ kind: 'window', size }`.
 
 export { defineMemory } from './define.js';
+
+// What each strategy IS, which types accept it, and what a host must supply
+// to run it — the const `MEMORY_STRATEGIES` in described form (9.5.0).
+export {
+  listMemoryStrategies,
+  memoryStrategyInfo,
+  type MemoryStrategyInfo,
+  type MemoryStrategyRequirement,
+} from './strategies.js';

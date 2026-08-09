@@ -201,6 +201,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 08 | [`08-redis-store.ts`](memory/08-redis-store.ts) | RedisStore — persistent MemoryStore via Redis | Drop-in replacement for InMemoryStore that persists entries in Redis.  |
 | 09 | [`09-agentcore-store.ts`](memory/09-agentcore-store.ts) | AgentCoreStore — AWS Bedrock AgentCore Memory adapter | Persist conversation memory in AWS Bedrock AgentCore. Mock-injected  |
 | 10 | [`10-durable-vector-index.ts`](memory/10-durable-vector-index.ts) | Durable vector index — embed the corpus once, ever | sqliteVectorStore keeps the corpus in one file, so a restart re-embeds  |
+| 11 | [`11-decay-strategy.ts`](memory/11-decay-strategy.ts) | Decay strategy — old memory fades on a half-life | Score every recalled entry by age against a half-life and drop what has  |
 
 ### [`features/`](features/) — runtime features
 

@@ -73,6 +73,12 @@ export type MemoryType = (typeof MEMORY_TYPES)[keyof typeof MEMORY_TYPES];
  * `CAUSAL` type accepts ONLY `TOP_K` — its snapshots are matched semantically
  * against the new query, never by recency, so `buildCausalPipeline` throws on
  * any other strategy kind. Mix and match the non-Causal types.
+ *
+ * These are BARE STRINGS, which is enough to write one and not enough to
+ * OFFER one. `listMemoryStrategies()` (./strategies.ts) is the same seven
+ * described — what each does, which TYPES accept it, and what the host must
+ * supply (`requirements`) — so a picker can grey out what this deployment
+ * cannot run instead of finding out from an exception.
  */
 export const MEMORY_STRATEGIES = {
   WINDOW: 'window',
@@ -253,14 +259,34 @@ export interface ExtractStrategy {
 }
 
 /**
- * Decay — score entries by `recency × accessCount`, drop below floor.
- * For long-running agents where unused memory should fade.
+ * Decay — let old memory fade. Each loaded entry is scored by AGE against
+ * `halfLifeMs` (`2^(-age / halfLife)`) and dropped below `minScore`, so a
+ * long-running agent stops rehearsing last month. Free: arithmetic on a
+ * timestamp, no LLM and no embedder. EPISODIC only.
+ *
+ * Wired in 9.5.0. Before that, this type existed, `MEMORY_STRATEGIES.DECAY`
+ * existed, and `defineMemory` threw "not yet wired" on it.
+ *
+ * AGE, not use. The underlying model (`computeDecayFactor`) also has an
+ * access term, and the read path passes a neutral `1` for it: `accessCount`
+ * is bumped by `store.get()`, and no shipped read path calls `get()` — they
+ * `list()` or `search()`. A knob for it here would be wired to a counter
+ * that never moves, so there isn't one. Nothing stored is mutated either:
+ * an entry that decays out of one turn is still in the store, and the next
+ * turn scores it again.
  */
 export interface DecayStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.DECAY;
-  /** Half-life in milliseconds for the recency component. */
+  /**
+   * How long before an untouched entry is worth half as much, in
+   * milliseconds. A day is `86_400_000`. Must be finite and non-negative —
+   * a negative half-life would score OLDER entries higher, so it is refused.
+   */
   readonly halfLifeMs: number;
-  /** Drop entries scoring below this. Default 0.1. */
+  /**
+   * Drop entries scoring below this. Default 0.1 — roughly "older than
+   * three-and-a-bit half-lives". `0` keeps everything.
+   */
   readonly minScore?: number;
 }
 

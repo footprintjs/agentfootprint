@@ -50,6 +50,7 @@
 import { flowChart } from 'footprintjs';
 
 import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
+import { filterByDecay, type FilterByDecayConfig } from '../stages/filterByDecay.js';
 import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
 import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
 import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages.js';
@@ -100,6 +101,22 @@ export interface DefaultPipelineConfig {
   readonly writeTtlMs?: number;
 
   /**
+   * Let old entries fade (9.5.0). When present, a `FilterByDecay` stage is
+   * composed between the load and the picker: every loaded entry is scored
+   * by AGE against `halfLifeMs` and dropped below `minScore`, so a
+   * long-running conversation stops rehearsing last month.
+   *
+   * Absent — the historical behaviour — means no decay stage is compiled at
+   * all, not a decay stage that keeps everything. What is not in the chart
+   * cannot cost anything or appear in the narrative.
+   *
+   * `defineMemory({ strategy: { kind: MEMORY_STRATEGIES.DECAY, halfLifeMs } })`
+   * is the door most consumers use; this is the same thing, spelled at the
+   * pipeline level so it composes with `loadCount` / the budget knobs.
+   */
+  readonly decay?: FilterByDecayConfig;
+
+  /**
    * Override for the formatter's header text. Omit to use the default
    * "Relevant context from prior conversations..." phrasing.
    */
@@ -136,13 +153,24 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     ...(config.writeTtlMs !== undefined && { ttlMs: config.writeTtlMs }),
   };
 
-  // Compose: LoadRecent → [PickDecider → skip-empty | skip-no-budget | pick] → Format
+  // Compose: LoadRecent → [FilterByDecay] → [PickDecider → skip-empty |
+  //          skip-no-budget | pick] → Format
   // pickByBudget is a builder-extension — it appends a decider + 3
   // branches to the pipeline so "why did / didn't we inject memory?" is
   // answerable via FlowRecorder.onDecision evidence, not just emit events.
   let readBuilder = flowChart<MemoryState>('LoadRecent', loadRecent(loadConfig), 'load-recent', {
     description: 'Read N most-recent entries from storage into scope.loaded',
   });
+  if (config.decay !== undefined) {
+    // Before the picker: what has faded is not a budget question, and the
+    // budget is better spent on entries that are still worth something.
+    readBuilder = readBuilder.addFunction(
+      'FilterByDecay',
+      filterByDecay(config.decay),
+      'filter-by-decay',
+      'Drop loaded entries whose age-decayed score is below the floor',
+    );
+  }
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
     .addFunction(

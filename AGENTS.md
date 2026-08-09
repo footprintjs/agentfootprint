@@ -545,7 +545,8 @@ One builder call mounts ONE skill that, when the user asks a why-question, unloc
 | Remember last N turns of conversation | `defineMemory({ type: EPISODIC, strategy: WINDOW })` |
 | Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
 | Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
-| Long conversation overflows context | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
+| Old memories should stop coming back | `defineMemory({ type: EPISODIC, strategy: DECAY, halfLifeMs })` |
+| Long conversation overflows context | `.compaction({ summarizer, model })` on the Agent (memory's `SUMMARIZE` does not compress yet — `listMemoryStrategies()` says so) |
 | Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
 | Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |
 
