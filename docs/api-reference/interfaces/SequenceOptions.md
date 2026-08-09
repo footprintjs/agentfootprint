@@ -6,7 +6,7 @@
 
 # Interface: SequenceOptions
 
-Defined in: [src/core-flow/Sequence.ts:34](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Sequence.ts#L34)
+Defined in: [src/core-flow/Sequence.ts:34](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Sequence.ts#L34)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core-flow/Sequence.ts:34](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core-flow/Sequence.ts:61](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Sequence.ts#L61)
+Defined in: [src/core-flow/Sequence.ts:61](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Sequence.ts#L61)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -29,7 +29,7 @@ translator produces. When omitted, `getUIGroup()` returns
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:38](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Sequence.ts#L38)
+Defined in: [src/core-flow/Sequence.ts:38](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Sequence.ts#L38)
 
 Stable id used for topology + events. Default: 'sequence'.
 
@@ -39,7 +39,7 @@ Stable id used for topology + events. Default: 'sequence'.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:36](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Sequence.ts#L36)
+Defined in: [src/core-flow/Sequence.ts:36](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Sequence.ts#L36)
 
 Human-friendly name for events + topology. Default: 'Sequence'.
 
@@ -49,7 +49,7 @@ Human-friendly name for events + topology. Default: 'Sequence'.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Sequence.ts:52](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Sequence.ts#L52)
+Defined in: [src/core-flow/Sequence.ts:52](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Sequence.ts#L52)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

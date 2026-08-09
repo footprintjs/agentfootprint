@@ -6,7 +6,7 @@
 
 # Interface: LoopOptions
 
-Defined in: [src/core-flow/Loop.ts:40](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Loop.ts#L40)
+Defined in: [src/core-flow/Loop.ts:40](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Loop.ts#L40)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core-flow/Loop.ts:40](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core-flow/Loop.ts:58](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Loop.ts#L58)
+Defined in: [src/core-flow/Loop.ts:58](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Loop.ts#L58)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -28,7 +28,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Loop.ts:42](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Loop.ts#L42)
+Defined in: [src/core-flow/Loop.ts:42](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Loop.ts#L42)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core-flow/Loop.ts:42](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Loop.ts:41](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Loop.ts#L41)
+Defined in: [src/core-flow/Loop.ts:41](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Loop.ts#L41)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/core-flow/Loop.ts:41](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Loop.ts:50](https://github.com/footprintjs/agentfootprint/blob/f7aefd072fb1f22dbb28729feade35990af9f796/src/core-flow/Loop.ts#L50)
+Defined in: [src/core-flow/Loop.ts:50](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Loop.ts#L50)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build
