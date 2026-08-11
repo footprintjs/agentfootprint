@@ -6,7 +6,7 @@
 
 # Interface: GraphEdge
 
-Defined in: [src/core-flow/Graph.ts:166](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Graph.ts#L166)
+Defined in: [src/core-flow/Graph.ts:166](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core-flow/Graph.ts#L166)
 
 A directed dependency: `from` must finish before `to` starts.
 
@@ -16,7 +16,7 @@ A directed dependency: `from` must finish before `to` starts.
 
 > `readonly` **from**: `string`
 
-Defined in: [src/core-flow/Graph.ts:167](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Graph.ts#L167)
+Defined in: [src/core-flow/Graph.ts:167](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core-flow/Graph.ts#L167)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [src/core-flow/Graph.ts:167](https://github.com/footprintjs/agentfoo
 
 > `readonly` **to**: `string`
 
-Defined in: [src/core-flow/Graph.ts:168](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Graph.ts#L168)
+Defined in: [src/core-flow/Graph.ts:168](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core-flow/Graph.ts#L168)

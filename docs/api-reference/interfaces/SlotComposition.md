@@ -6,7 +6,7 @@
 
 # Interface: SlotComposition
 
-Defined in: [src/recorders/core/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L63)
+Defined in: [src/recorders/core/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L63)
 
 Slot composition summary — written by a slot subflow at the END of its
 composition pass. ContextRecorder emits one `context.slot_composed`
@@ -18,7 +18,7 @@ event per slot exit, built from this record.
 
 > `readonly` **budget**: `object`
 
-Defined in: [src/recorders/core/types.ts:66](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L66)
+Defined in: [src/recorders/core/types.ts:66](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L66)
 
 #### cap
 
@@ -38,7 +38,7 @@ Defined in: [src/recorders/core/types.ts:66](https://github.com/footprintjs/agen
 
 > `readonly` **droppedCount**: `number`
 
-Defined in: [src/recorders/core/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L75)
+Defined in: [src/recorders/core/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L75)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/recorders/core/types.ts:75](https://github.com/footprintjs/agen
 
 > `readonly` **droppedSummaries**: readonly `string`[]
 
-Defined in: [src/recorders/core/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L76)
+Defined in: [src/recorders/core/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L76)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/recorders/core/types.ts:76](https://github.com/footprintjs/agen
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/recorders/core/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L65)
+Defined in: [src/recorders/core/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L65)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/recorders/core/types.ts:65](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **orderingStrategy?**: `string`
 
-Defined in: [src/recorders/core/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L74)
+Defined in: [src/recorders/core/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L74)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/recorders/core/types.ts:74](https://github.com/footprintjs/agen
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L64)
+Defined in: [src/recorders/core/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L64)
 
 ***
 
@@ -78,4 +78,4 @@ Defined in: [src/recorders/core/types.ts:64](https://github.com/footprintjs/agen
 
 > `readonly` **sourceBreakdown**: `Readonly`\<`Partial`\<`Record`\<`ContextSource`, \{ `chars`: `number`; `count`: `number`; \}\>\>\>
 
-Defined in: [src/recorders/core/types.ts:71](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/recorders/core/types.ts#L71)
+Defined in: [src/recorders/core/types.ts:71](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/types.ts#L71)

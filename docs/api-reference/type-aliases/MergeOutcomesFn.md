@@ -8,7 +8,7 @@
 
 > **MergeOutcomesFn** = (`outcomes`) => `string`
 
-Defined in: [src/core-flow/Parallel.ts:98](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core-flow/Parallel.ts#L98)
+Defined in: [src/core-flow/Parallel.ts:98](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core-flow/Parallel.ts#L98)
 
 ## Parameters
 

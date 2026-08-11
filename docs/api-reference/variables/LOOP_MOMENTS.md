@@ -8,7 +8,7 @@
 
 > `const` **LOOP\_MOMENTS**: readonly \[`"input"`, `"before-tool"`, `"after-tool"`, `"window"`, `"output"`\]
 
-Defined in: [src/core/agent/moments.ts:41](https://github.com/footprintjs/agentfootprint/blob/1f27a25722e893a7b412ef966f7c9c12ebef3b6c/src/core/agent/moments.ts#L41)
+Defined in: [src/core/agent/moments.ts:41](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core/agent/moments.ts#L41)
 
 Every moment of one agent turn where a rule may act, in the order the loop
 reaches them.
