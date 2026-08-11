@@ -4231,7 +4231,7 @@ Added, all on the existing `agentfootprint/hosting` door — no new subpath:
 - `SqliteUnavailableError` (`ERR_SQLITE_UNAVAILABLE`)
 - `UnreadableSessionFileError` (`ERR_UNREADABLE_SESSION_FILE`)
 
-Docs: [Sessions in a file](https://footprintjs.github.io/agentfootprint/docs/build/infra/sqlite).
+Docs: [Sessions in a file](https://footprintjs.github.io/agentfootprint/docs/infrastructure/sqlite).
 Runnable: `examples/deploy/sqlite-sessions.ts` — serves a conversation, throws
 away everything but the file, serves the same session again, holds a
 human-in-the-loop turn across that boundary, and proves an unreadable store is
@@ -4883,7 +4883,7 @@ tests pin exactly that.
   path, so **that result is real verification** — the same sense 7.15 used the
   phrase for `/invocations`.
 
-- **[The conversation door](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting)**
+- **[The conversation door](https://footprintjs.github.io/agentfootprint/docs/infrastructure/hosting-and-runtime)**
   in the hosting guide, and the `/ws` wire on the AgentCore adapters page. Plus
   `examples/deploy/echo-conversation.ts`: two turns over one open channel, an
   ordinary `POST /invoke` on the same socket, both refusals, and `onClose`
@@ -5933,7 +5933,7 @@ that could ever answer it.
   store keeps paused sessions as readily as conversations; the AgentCore runtime
   wire reads `decision` and answers `awaiting` in its own dialect.
 
-Docs: [Hosting](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting) ·
+Docs: [Hosting](https://footprintjs.github.io/agentfootprint/docs/infrastructure/hosting-and-runtime) ·
 Example: `examples/deploy/durable-sessions.ts`.
 
 ## [7.18.0] - 2026-08-03
@@ -6393,7 +6393,7 @@ three turned out not to be about this vendor at all.
   the hosting sources for vendor names to keep "these ports name no cloud"
   literally true, and the barrel is a hosting source.
 
-  Docs: [AgentCore adapters](https://footprintjs.github.io/agentfootprint/docs/build/infra/aws/agentcore-adapters) ·
+  Docs: [AgentCore adapters](https://footprintjs.github.io/agentfootprint/docs/infrastructure/aws/agentcore-adapters) ·
   Example: `examples/deploy/agentcore-runtime.ts`.
 
 - **`httpHost({ name, wire, invokePath, healthPath, port?, hostname?,
@@ -6552,7 +6552,7 @@ and if writing one ever needs a change to a port, the port was wrong.
   of the same text, never an addition to it. **The handler cannot tell the
   difference and does not need to.**
 
-  Docs: [Host it](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting) ·
+  Docs: [Host it](https://footprintjs.github.io/agentfootprint/docs/infrastructure/hosting-and-runtime) ·
   Example: `examples/deploy/standing-agent.ts`.
 
 - **`nodeHost({ port?, hostname?, invokePath?, healthPath? })` — plain
