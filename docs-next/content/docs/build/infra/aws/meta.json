@@ -1,5 +1,0 @@
-{
-  "title": "AWS",
-  "icon": "Server",
-  "pages": ["bedrock-agentcore", "agentcore-adapters", "agentcore-setup"]
-}

@@ -1,0 +1,221 @@
+---
+title: Observability sinks
+description: The ObservabilityStrategy port — one required hot-path method that must be sync and must not throw. Compose several sinks into one, choose when delivery happens, and know exactly what a recording keeps and what it summarizes away.
+---
+
+Every run emits a typed `AgentfootprintEvent` stream. Where that stream **goes**
+is a port with adapters, exactly like memory or hosting: the agent loop never
+knows whether it is feeding CloudWatch, an OTel collector, a file, or nothing.
+
+## The port
+
+```ts
+interface ObservabilityStrategy extends BaseStrategy {
+  readonly capabilities: ObservabilityCapabilities;
+  exportEvent(event: AgentfootprintEvent): void;
+}
+```
+
+Two members of its own, six inherited — and only two of the eight are required:
+
+| Member | Required | What it is |
+|---|---|---|
+| `name` | ✅ | Registry key, lowercase-kebab (`'datadog'`, `'agentcore'`). Used to look it up and to de-dupe registrations |
+| `capabilities` | ✅ | `{ events?, logs?, traces?, metrics? }` — declared, so a consumer can branch instead of guess |
+| `exportEvent(event)` | ✅ | The hot path. Translate to the vendor's wire format and ship |
+| `flush?()` | — | Drain whatever the hot path buffered. `void` for sync sinks, `Promise<void>` for async ones |
+| `stop?()` | — | Teardown: close clients, clear timers. Idempotent, and **terminal** — after it, events are dropped and there is no restart |
+| `relevantEventTypes?` | — | An event-type filter. Set it and the dispatcher only forwards those types |
+| `validate?()` | — | Config validator, called **once** at registration. Throw here rather than produce an empty dashboard |
+| `_onError?` | — | Error sink for this strategy's own failures. A property you **assign after construction**, not a constructor option |
+
+Two laws govern `exportEvent`, and they are what make a bad sink survivable:
+
+> `exportEvent` MUST be sync `void`. Buffer internally; drain in `flush()`.
+
+> MUST NOT throw. Errors caught and routed to `_onError` at the dispatch layer;
+> one bad strategy never breaks the agent loop.
+
+### Who calls `flush()` and `stop()`
+
+Three doors, since 8.12.0: the handle `enable.*` returns (`handle.flush()` /
+`handle.stop()`), `agent.shutdown()`, and a `standingAgent` closing with its
+default `shutdown: 'flush'`. **`agent.run()` never flushes** — that part is
+unchanged, and it is why a batching exporter still needs one of the three at
+process end.
+
+## Mounting one
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observe';
+
+const handle = agent.enable.observability({
+  strategy: agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+});
+```
+
+`ObservabilityEnableOptions` is `{ strategy?, tier?, sampleRate?, detach?, flushOn? }`.
+
+<Callout type="warn" title="No strategy means no telemetry — not a default one">
+`enable.observability()` called without a `strategy` returns a no-op handle and
+attaches nothing. It does **not** silently fall back to
+`consoleObservability()`: choosing a destination is an opinion the library does
+not impose. Pass a strategy, or you get silence.
+</Callout>
+
+## Axis 1 — which sink
+
+All on `agentfootprint/observe`:
+
+| Adapter | Ships to | Peer dep | Choose it when |
+|---|---|---|---|
+| `consoleObservability()` | stdout | none | Local development; you want to *see* the stream |
+| `cloudwatchObservability(opts)` | CloudWatch Logs | `@aws-sdk/client-cloudwatch-logs` | You already read CloudWatch |
+| `agentcoreObservability(opts)` | CloudWatch Logs, in AgentCore's GenAI-Observability shape | `@aws-sdk/client-cloudwatch-logs` | A hosted AgentCore runtime, so agent events land beside the runtime's own telemetry |
+| `xrayObservability(opts)` | AWS X-Ray segment trees | `@aws-sdk/client-xray` | You trace with X-Ray. `serviceName` is required — a missing one is a `TypeError` |
+| `otelObservability(opts)` | Your OTel tracer, as spans + span events under `gen_ai.*` | `@opentelemetry/api` | Portability, or a collector you already run |
+| `auditExport(opts)` | A hash-chained bundle | none (`node:crypto`) | You need an **evidence** record, not a dashboard |
+
+`agentcoreObservability` is a thin wrapper over the CloudWatch base — the only
+difference is the strategy `name`. That is stated here rather than implied,
+because it tells you the two rows have the same reliability, not merely similar
+shapes.
+
+`otelObservability` takes **your** tracer rather than bundling an SDK: OTel's SDK
+is heavyweight and exporter-specific, and forcing one would defeat the
+portability the standard exists for. When an injected tracer's spans do not
+implement `addEvent`, the adapter falls back to flattened
+`${eventName}.${key}` attributes — degraded (last-write-wins) but never silently
+dropped.
+
+<Callout title="auditExport is tamper-EVIDENT, not tamper-PROOF">
+Every record carries the SHA-256 of its own canonical serialization plus the hash
+of the previous record, and `verifyAuditBundle` names the exact record that
+broke. It does **not** prove provenance: an adversary holding the only copy can
+recompute every hash from the mutation onward and present a self-consistent
+forgery. Ship the bundle somewhere they do not control, and that gap closes.
+</Callout>
+
+## Axis 2 — composition
+
+`composeObservability(children)` returns one `ObservabilityStrategy` named
+`'compose'`, whose capabilities are the OR of its children's:
+
+```ts
+import { composeObservability, agentcoreObservability, otelObservability } from 'agentfootprint/observe';
+
+agent.enable.observability({
+  strategy: composeObservability([
+    agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+    otelObservability({ tracer }),
+  ]),
+});
+```
+
+`exportEvent` fans out to every child; `flush()` and `stop()` reach all of them.
+One child failing does not stop the others — the passive-recorder rule. Siblings
+exist for the other strategy kinds: `composeCost`, `composeLiveStatus`,
+`composeLens`.
+
+## Axis 3 — delivery timing
+
+`detach` decides *when* the sink's work happens relative to the agent loop:
+
+| `detach` | Behaviour | Choose it when |
+|---|---|---|
+| omitted | The strategy's hot path runs **inline**, in the loop | Cheap sinks; you want back-pressure to be visible |
+| `{ driver, mode: 'forget' }` | Scheduled off the loop; the handle is discarded | Pure telemetry — the common case |
+| `{ driver, mode: 'join-later', onHandle }` | Scheduled off the loop; every handle is delivered to `onHandle` so you can await it | You must know delivery finished (a test, a shutdown barrier) |
+
+`driver` is **required** — there is no library default, because the right one is
+an environment fact. Drivers come from `footprintjs/detach`:
+`microtaskBatchDriver` (cross-runtime, the usual in-process pick),
+`setImmediateDriver` (Node), `setTimeoutDriver` (configurable delay),
+`immediateDriver`, plus factories `createSendBeaconDriver` (browser, survives
+page-unload) and `createWorkerThreadDriver`.
+
+```ts
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+agent.enable.observability({
+  strategy: agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },   // keep the loop unblocked
+});
+```
+
+## Axis 4 — volume
+
+`tier` is `'minimal' | 'standard' | 'firehose'`, default `'standard'`, and
+filters which event types reach the strategy. `sampleRate` (0–1) thins what is
+left.
+
+<Callout type="warn">
+**`tier` is not a privacy control.** It reduces volume, not sensitivity —
+`redactContent` does not apply to it. If a payload must not leave the process,
+filter or redact it, do not lower the tier.
+</Callout>
+
+`relevantEventTypes` on the strategy itself is the finer instrument: the
+dispatcher will not even forward types outside that set.
+
+## Which conversation an event belongs to
+
+`EventMeta.sessionId` (9.4.0) rides beside `runId` — one session produces many
+runs, and an event needs to say which of each it is. The CloudWatch and AgentCore
+adapters serialize the whole envelope, so it arrives without their knowing about
+it.
+
+```ts
+await agent.run(message, { sessionId });   // or let standingAgent do it for you
+```
+
+`standingAgent` sets it on both `run()` and `resume()` from the request's own
+session id. It is **never derived, guessed, or defaulted to the runId**: an
+anonymous request has no session, and an absent key and an invented one are
+different facts. Worked example: [Exporters](doc:exporters).
+
+## What a recording keeps
+
+`recordRun(runner, options?)` produces the canonical `Recording` —
+`{ snapshot, events, structure }` — which is what an offline viewer replays.
+
+| Option | Default | What it controls |
+|---|---|---|
+| `maxEvents` | `10000` | Oldest events are dropped past this; the count is reported as `droppedEvents` |
+| `boundaryDetail` | `'full'` | `'full'` = every field, content included. `'lean'` = boundary structure only, no captured payloads |
+| `recordEmbeddings` | `false` | Whether raw vectors survive the freeze |
+
+**Embeddings are summarized, not kept.** By default every `embedding` /
+`embeddings` field — in boundary payloads, in the snapshot's subflow results, in
+tool results riding the event stream — is replaced with `{ dims, norm }` when the
+recording is frozen. `dims` is the dimensionality; `norm` is the L2 norm rounded
+to four decimals — a checksum, not an operand.
+
+The measurement behind the default: one retrieval turn's recording weighed
+2.76 MB, about 1.1 MB of it embedding floats. Nothing that renders a recording
+reads those floats, and the retrieval evidence a debugger actually needs — score,
+passage, document, rejected candidates — carries no vectors and is untouched. Set
+`recordEmbeddings: true` only when a consumer genuinely replays raw vectors
+offline.
+
+The same option exists on `BoundaryRecorder`, where it applies at **capture**
+time rather than at freeze time.
+
+## Status
+
+| Piece | Door | Status |
+|---|---|---|
+| `ObservabilityStrategy` port, `composeObservability` | `agentfootprint/observe` | Shipped |
+| `consoleObservability`, `auditExport` / `verifyAuditBundle` | `agentfootprint/observe` | Shipped — no vendor SDK |
+| `otelObservability` | `agentfootprint/observe` | Shipped — BYO tracer |
+| `cloudwatchObservability`, `agentcoreObservability`, `xrayObservability` | `agentfootprint/observe` | Shipped; contract-mapped and injection-tested, command names pinned |
+| `detach` delivery, `tier`, `sampleRate` | — | Shipped |
+| `recordRun` + `{ dims, norm }` embedding summary | `agentfootprint/observe` | Shipped |
+| `EventMeta.sessionId` | `agentfootprint/events` | Shipped (9.4.0) |
+
+## Next
+
+- [Observability](doc:observability) — the event taxonomy and the three workflows
+- [Exporters: AgentCore & OTEL](doc:exporters) — step-by-step wiring for both
+- [Offline replay](doc:offline-replay) — what a recording is for
+- [AWS & Bedrock AgentCore](doc:aws) — the worked provider

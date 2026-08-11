@@ -1,0 +1,204 @@
+---
+title: Tools & gateways
+description: The McpClient port — four members, three transports. Where a tool comes from is a transport decision (stdio, fixed HTTP headers, per-request vending, or your own signing fetch); what a tool is allowed to do is a governance decision, and they compose without knowing about each other.
+---
+
+A tool the agent defines in-process needs no infrastructure at all — `defineTool`
+is a function and a schema. The moment tools live somewhere else, three questions
+appear that `defineTool` never had to answer: **who serves them**, **how each
+request proves who is asking**, and **who is allowed to say no**.
+
+This page is the first two. The third is
+[Governance & policy](doc:governance-and-policy).
+
+## The port
+
+`McpClient` (`src/lib/mcp/types.ts`) is the whole boundary — one property and
+three methods:
+
+| Member | What it is |
+|---|---|
+| `name` | The logical name from options (default `'mcp'`). Every tool this client serves is attributed to it. |
+| `tools()` | Snapshot the server's tool list as agentfootprint `Tool[]`. |
+| `refresh()` | Re-list, for a server whose tools change while you are connected. |
+| `close()` | Close the transport. After `close()` the client is unusable. |
+
+> Connect once; call `.tools()` to snapshot the tool list, `.refresh()` to
+> re-list after the server's tools change, `.close()` when done.
+
+That is deliberately small. An MCP server's tools become ordinary `Tool` objects,
+so everything downstream — the permission gate, the middleware chain, the
+`ToolProvider` combinators, the recording — treats a remote tool exactly like a
+local one.
+
+```ts
+import { mcpClient, staticTools } from 'agentfootprint/providers';
+import { Agent } from 'agentfootprint';
+
+const server = await mcpClient({
+  name: 'files',
+  transport: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/data'] },
+});
+
+const agent = Agent.create({ provider }).toolProvider(staticTools(await server.tools())).build();
+```
+
+## Axis 1 — the transport: *when* are the auth headers decided?
+
+`McpTransport` is a three-arm union, and the arms differ in one thing that
+matters operationally more than the protocol does: **the moment the credentials
+are chosen.**
+
+| `transport` | Where the server is | Auth decided | Choose it when |
+|---|---|---|---|
+| `'stdio'` | A local subprocess, over its stdin/stdout | n/a — no HTTP | Development, single-user, a locally-installed MCP server |
+| `'http'` | Remote, over Streamable HTTP | **At connect time** — `headers` fixed for the life of the connection | A static API key, or a server that needs no auth |
+| `'gateway'` | Remote, over Streamable HTTP | **Per request** — a `CredentialProvider` vends inside every `fetch` | Anything with an expiry: a managed gateway, an OAuth-brokered endpoint, a standing agent |
+
+The `http` and `gateway` arms ride the same wire. The library's own note on why
+they are still two things:
+
+> The `http` transport takes headers once and reuses them for the life of the
+> connection. That is right for a static API key and wrong for anything with an
+> expiry: a standing agent outlives its bearer token, and the failure mode is a
+> burst of 401s an hour into a session that worked perfectly when you tested it.
+
+### `gatewayTransport` — vending, and why the vend happens late
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient } from 'agentfootprint/providers';
+
+const gateway = await mcpClient({
+  name: 'gateway',
+  transport: gatewayTransport({
+    url: process.env.GATEWAY_MCP_URL!,
+    credentials: agentCoreIdentity({ region: 'us-west-2' }),
+    service: 'gateway',            // defaults to 'gateway'
+  }),
+});
+```
+
+`GatewayTransportOptions` is `{ url, credentials, service?, scopes?, mode?, headers? }`.
+`url` and `credentials` are required and refused by name when missing.
+
+Two laws worth knowing before you build on it:
+
+> **A vended token is used once and dropped.** It is not cached between requests,
+> not stored on the transport object, not put in an event payload, not written to
+> a log, and not included in any error this module throws — including the errors
+> it throws WHILE holding one.
+
+> That is why the vend happens inside `fetch` rather than at construction. A
+> token resolved at construction has to live somewhere for the connection to use
+> it later, and "somewhere" is what leaks.
+
+Static `headers` are applied first and the vended header last, so a stale static
+header can never quietly shadow the live credential. A 3-legged provider that
+answers `authorization-required` surfaces as
+`GatewayAuthorizationRequiredError` (`code: 'ERR_GATEWAY_AUTHORIZATION_REQUIRED'`),
+carrying `authorizationUrl` — see
+[Identity & credentials](doc:identity-and-credentials).
+
+Nothing in `gatewayTransport` is vendor-specific: it is the `CredentialProvider`
+port on one side and Streamable HTTP on the other. AWS AgentCore's Gateway is one
+consumer of it, not its definition.
+
+### The fourth option: sign it yourself
+
+Some endpoints do not want a header, they want a **signature** — SigV4, DPoP, an
+HMAC over the body. None of those can be decided when the connection is built,
+because they are computed *from* the request. So the library implements none of
+them and hands you the hook instead: `McpHttpTransport.fetch`.
+
+```ts
+const signed = await mcpClient({
+  transport: {
+    transport: 'http',
+    url: process.env.MCP_URL!,
+    fetch: async (input, init) => fetch(input, await signSigV4(input, init)),
+  },
+});
+```
+
+> Whatever you set here is between you and the server: this library never reads,
+> stores, logs or records the headers your function produces.
+
+`headers` and `fetch` compose — the SDK merges the static headers into the `init`
+your function receives, so you see them and have the last word. Worked example:
+[Connect to an MCP server](doc:mcp-client).
+
+### Throttling is handled, and only throttling
+
+`retryOnThrottle` is on by default: retry up to 3 times, never more than 10
+seconds of waiting in total across one call, **429 only**. A 429 is a
+pre-execution rejection —
+the tool did not run — which is the one status where a retry cannot double an
+effect. Ignored for `stdio`, which has no HTTP status to read.
+
+## Axis 2 — the provider: what the model is *shown*
+
+`ToolProvider` decides visibility per iteration; it is a different question from
+whether a call is permitted. Three combinators chain decorator-style, all on
+`agentfootprint/providers`:
+
+| Combinator | What it does | Choose it when |
+|---|---|---|
+| `staticTools(tools)` | Wrap a fixed `Tool[]`. The identity provider. | You have a list and it does not change |
+| `gatedTools(inner, predicate)` | Filter `inner` by tool name, per tool per iteration | Some tools should not be *offered* in this context |
+| `skillScopedTools(skillId, tools)` | Expose a subset only while that skill is the one most recently loaded | Tools that only make sense inside one skill |
+
+```ts
+import { gatedTools, staticTools } from 'agentfootprint/providers';
+
+const tools = gatedTools(staticTools(await gateway.tools()), (name) => allowed.has(name));
+```
+
+The gate decides what the model is shown; the permission checker decides what
+actually runs. They compose without knowing about each other. Deep dive:
+[Tool providers](doc:tool-providers).
+
+## Axis 3 — the governance verdict
+
+Two vocabularies at two layers, and conflating them is the common mistake.
+
+**At the permission gate** (`PermissionChecker.check`) the verdict is
+`'allow' | 'deny' | 'halt' | 'gate_open'`. **A denial is final for that call** —
+the tool does not execute, and the model reads a bracketed refusal it can adapt
+to. There is no `ask` here.
+
+**In the middleware chain** (`ToolOutcome`) the verdict is `allow | deny | ask`,
+and **an ask suspends the run and puts the exact operation in front of a
+person**: the transformed args ride the checkpoint, so a human approves what the
+chain produced rather than what the model originally proposed. Approve and the
+real tool runs; decline and it becomes a denial the model reads.
+
+The full table, with the exact strings the model sees, is on
+[Governance & policy](doc:governance-and-policy).
+
+## Serving tools, not only consuming them
+
+`mcpServe` turns an agentfootprint agent's governed tools into an MCP server, so
+another client gets the same gate you do. One thing does not cross that boundary:
+`ask` — MCP is request/response and there is no pause to carry the question, so a
+middleware that asks answers the client with a tool error naming it, rather than
+executing ungoverned. See [Serve tools over MCP](doc:mcp-serve).
+
+## Status
+
+| Piece | Door | Peer dep | Status |
+|---|---|---|---|
+| `mcpClient` / `McpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` (optional) | Shipped |
+| `stdio` / `http` transports | `agentfootprint/providers` | as above | Shipped |
+| `gatewayTransport` | `agentfootprint/providers` | as above | Shipped |
+| Custom `fetch` seam | `agentfootprint/providers` | — | Shipped |
+| `mockMcpClient` | `agentfootprint/providers` | none | Shipped — offline tests |
+| `mcpServe` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` (optional) | Shipped |
+| `staticTools` / `gatedTools` / `skillScopedTools` | `agentfootprint/providers` | — | Shipped |
+
+## Next
+
+- [Connect to an MCP server](doc:mcp-client) — the three transports, worked
+- [Governance & policy](doc:governance-and-policy) — who is allowed to say no
+- [Identity & credentials](doc:identity-and-credentials) — what the gateway vends
+- [AWS & Bedrock AgentCore](doc:aws) — a Gateway as one worked provider

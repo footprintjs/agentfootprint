@@ -1,0 +1,211 @@
+---
+title: Governance & policy
+description: Four places a tool call can be stopped — visibility, the in-process permission gate, the middleware chain, and a gateway upstream where this library has nothing to attach. What enforces what, the exact refusal each one hands the model, and why agentCorePolicy was retired.
+---
+
+"Can the agent do this?" is not one question, and answering it in one place is
+how a governance story quietly stops being true. There are **four** enforcement
+points, they live at different layers, and only three of them are yours.
+
+| Where | Decides | Vocabulary | Runs |
+|---|---|---|---|
+| **Visibility** — `ToolProvider` / `gatedTools` | What the model is *offered* | a boolean predicate | per tool, per iteration |
+| **Permission gate** — `PermissionChecker` | Whether a call *executes* | `allow` / `deny` / `halt` / `gate_open` | per tool call, before `execute` |
+| **Middleware chain** — `.toolMiddleware()` | Whether it executes, with what args, and whether a person is asked first | `allow` / `deny` / `ask` | per tool call, after the gate |
+| **Upstream** — a gateway in front of the tool | Whether the request ever reaches your process | the gateway's own | before you see it |
+
+The gate decides what the model is *shown*; the checker decides what actually
+*runs*; and they compose without knowing about each other.
+
+## Ordering, once, so it is not a guess
+
+For a single tool call:
+
+```text
+permission → MIDDLEWARE CHAIN → arg validation → check-in → credentials
+           → execute → THE CHAIN AGAIN, BACKWARDS (onToolResult)
+```
+
+## 1. `PermissionPolicy.fromRoles` — the in-process rule you own
+
+```ts
+import { PermissionPolicy } from 'agentfootprint/security';
+
+const policy = PermissionPolicy.fromRoles(
+  {
+    viewer: ['search_docs', 'read_ticket'],
+    agent: ['search_docs', 'read_ticket', 'update_ticket'],
+    admin: ['search_docs', 'read_ticket', 'update_ticket', 'delete_ticket'],
+  },
+  'agent',
+);
+
+const agent = Agent.create({ provider, model, permissionChecker: policy }).build();
+```
+
+One object satisfies **both** surfaces: the async `PermissionChecker` interface
+(`check(request)`) and a sync `isAllowed(toolId)` predicate you can hand straight
+to `gatedTools`. So the same allowlist can shape what the model sees *and* what
+is permitted to run, with no second source of truth.
+
+`withActiveRole(role)` returns a new policy for a different caller — the
+per-identity swap — and `allowedToolIds()` reports the active role's set.
+
+**Where it runs, and how often.** Inside the `toolCalls` stage of the ReAct loop,
+once per tool call, per iteration, **before** `tool.execute`. Every check emits
+`agentfootprint.permission.check` carrying the decision, so the trace records
+what was allowed as well as what was refused.
+
+**Fail-closed, twice over.** Missing role membership is denied by design — an
+unknown tool is not an implicitly permitted one. An `activeRole` that is not in
+the map throws at **construction**, not at the first denied call. And a checker
+that *threw* is treated as deny-by-default:
+
+> something that did not answer did not say yes.
+
+### Refusal as data
+
+A denial is not an exception. The tool does not run, and the model receives a
+synthetic tool result it can read and adapt to:
+
+| Case | What the model reads |
+|---|---|
+| `deny` | `decision.tellLLM`, or `[permission denied: <rationale>]` |
+| `halt` | `decision.tellLLM`, or `Tool 'x' is not available in this context.` |
+| The checker threw | `[permission denied: Tool 'x' could not be authorized. This will not change during this run — do not call it again. Continue without it, or say what you are unable to do.]` |
+
+Three deliberate choices in that table:
+
+**The halt default is generic on purpose.** It never falls back to `reason`,
+which is a telemetry tag like `'security:exfiltration'` — leaking it to the model
+teaches it the shape of the rule space.
+
+**The fail-closed refusal reads as terminal (9.4.0).** It used to hand the model
+the checker's own error text. Those messages are written for operators and read
+as *weather* — "not available right now", "ECONNREFUSED", "timed out" — so a
+model does the reasonable thing and retries. In a real deployment one did exactly
+that, burned every iteration to `maxIterations`, and returned the empty string;
+nobody could see why, because the reason never left the tool result. The refusal
+now says it will not change during this run. The operator's fact still exists —
+on the typed event's `rationale`.
+
+**A denial is visible in history but was never dispatched.** The framework writes
+`SYNTHETIC_DENY_PREFIX` (`'[permission denied:'`) on synthetic results, so
+`extractSequence` can report what actually ran rather than what was attempted.
+
+### `halt` vs `deny`
+
+`deny` refuses one call and the loop continues. `halt` refuses the call **and
+ends the run**: the synthetic result lands, the halt event fires, state is
+committed, then `$break` — and `agent.run()` raises `PolicyHaltError` at the API
+boundary. Use `halt` when continuing would itself be the incident.
+
+## 2. `ToolMiddleware` — the separate layer
+
+Middleware is not the permission gate with more features. It is a different
+layer with a different power, and one thing it deliberately **cannot** do:
+
+> **A middleware cannot answer for the tool.** The outcome union has three arms —
+> allow, deny, ask — and no `result` arm. That is not a convention a reviewer has
+> to enforce; it is the absence of a field.
+
+```ts
+type ToolOutcome     = AllowOutcome<Record<string, unknown>> | DenyOutcome | AskOutcome;
+type MessageOutcome  = AllowOutcome<string> | DenyOutcome;   // no ask
+type ToolResultOutcome = AllowOutcome<unknown> | DenyOutcome; // no ask
+```
+
+`allow` may carry a **transformed value** — rewritten args on the way in, a
+scrubbed result on the way out. `deny`'s reason reaches the model verbatim as the
+tool's result and the loop continues.
+
+### `ask` — a denial is final; an ask suspends the run
+
+`ask` puts the exact operation in front of a person:
+
+> Suspend the run and put the question to a person. Tool dispatch only.
+>
+> The answer is a decision, not a result: approve and the chain continues and the
+> REAL tool runs; decline and it becomes a denial the model reads. A middleware
+> never gets to write the answer itself.
+
+The **transformed** args ride the checkpoint — a person approves what the chain
+produced, not what the model originally proposed. The caller sees
+`outcome.ask: MiddlewareAsk` (`{ question, detail?, middleware }`) and answers
+with the same vocabulary a check-in uses, `checkInApproved()` /
+`checkInDeclined()`, because a person approving is a person approving.
+
+Three places `ask` is deliberately absent, each for a stated reason:
+
+- **The message boundary** — it is a plain stage, and inventing a second pause to
+  give it one would be a worse answer than not offering it.
+- **After the tool ran** (`onToolResult`) — the tool has already run. A person
+  woken to answer a question about a side effect that already happened cannot
+  prevent it.
+- **Across `mcpServe`** — MCP is request/response and there is no pause to carry
+  the question, so a middleware that asks answers the client with a tool error
+  naming it, rather than executing ungoverned.
+
+Deep dive: [Middleware](doc:middleware). For consent that carries its evidence
+pack, see [Check in with the receipts](doc:checkin).
+
+## 3. Upstream policy — enforced where you cannot attach
+
+A managed gateway can enforce policy **in front of the tool**, before a request
+reaches your process. There is nothing to attach on this side, and that is the
+correct amount of machinery: a denial comes back as an **MCP error** on the tool
+call made through `mcpClient(...)`, lands in the loop as that tool's result, and
+the model reads it and adapts — the same shape as a local refusal.
+
+<Callout type="warn" title="agentCorePolicy is retired (9.4.0)">
+`agentCorePolicy()` tried to pre-evaluate the same rule in-process. It dispatched
+`EvaluatePolicyCommand` against `@aws-sdk/client-bedrock-agentcore` — **and that
+command does not exist in any version of that package.** AgentCore has no
+data-plane "evaluate this permission" operation at all: policy is authored on the
+control plane and enforced at the Gateway.
+
+So every `check()` it ever ran ended in the `catch`, and the default is
+fail-closed — which means it denied every tool call and reported the policy
+engine as unreachable. It compiled, it passed its tests (all of which injected
+`_client` past the SDK), and it could never have worked.
+
+The export remains and refuses at construction with
+`AgentCorePolicyRetiredError` (`code: 'ERR_AGENTCORE_POLICY_RETIRED'`), carrying
+the whole explanation. Removal is deferred to 10.0. Its row stays in the AWS
+command pin with `commands: []`, so re-adding an SDK call there is a decision
+somebody has to record.
+</Callout>
+
+For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
+`permissionChecker`, or `.toolMiddleware()` for conditional ones.
+
+## Choose-when
+
+| You want to… | Use | Because |
+|---|---|---|
+| Keep a tool out of the model's sight in this context | `gatedTools(inner, predicate)` | Cheaper than refusing it later, and it never appears in the prompt |
+| Enforce a role allowlist you control | `PermissionPolicy.fromRoles` | Data-driven, fail-closed, one object for both surfaces |
+| Enforce a rule that depends on the *arguments* | `.toolMiddleware()` with `deny` | The gate sees the tool; the chain sees the call |
+| Rewrite arguments or scrub a result | `.toolMiddleware()` with `allow({ value })` | The only layer allowed to transform — and still not to answer |
+| Require a person before a consequential action | `ask`, or `checkIn` on the tool | `ask` suspends the run with the exact operation; `checkIn` adds the evidence pack |
+| End the run rather than continue after a refusal | a checker returning `halt` | Continuing would itself be the incident |
+| Enforce policy for callers you do not control | a gateway in front of the tool | It is enforced before your process sees the request |
+
+## Status
+
+| Piece | Door | Status |
+|---|---|---|
+| `PermissionChecker` port, `PermissionPolicy.fromRoles` | `agentfootprint/security` | Shipped |
+| `halt` + `PolicyHaltError`, `SYNTHETIC_DENY_PREFIX`, `extractSequence` | `agentfootprint/security` | Shipped |
+| `.toolMiddleware()` / `.messageMiddleware()`, `allow` / `deny` / `ask` | `agentfootprint` | Shipped |
+| `gatedTools` / `skillScopedTools` visibility layer | `agentfootprint/providers` | Shipped |
+| Gateway-enforced policy | — | Not a data-plane call; nothing to attach |
+| `agentCorePolicy` | `agentfootprint/security` | **Retired 9.4.0** — refuses at construction |
+
+## Next
+
+- [Middleware](doc:middleware) — the chain, its three verbs, and the law
+- [Check in with the receipts](doc:checkin) — consent that carries evidence
+- [Security](doc:security) — the three surfaces end to end
+- [Tools & gateways](doc:tools-and-gateways) — where a remote tool comes from
+- [Identity & credentials](doc:identity-and-credentials) — the other half of the question

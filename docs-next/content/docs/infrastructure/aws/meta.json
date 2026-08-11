@@ -1,0 +1,5 @@
+{
+  "title": "AWS",
+  "icon": "Server",
+  "pages": ["index", "agentcore-setup", "agentcore-adapters", "agentcore", "[Bedrock — the LLM provider](/docs/build/aws-bedrock)"]
+}

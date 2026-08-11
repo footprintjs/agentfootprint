@@ -43,9 +43,9 @@
     "aws-bedrock",
     "ollama",
     "custom-provider",
-    "---[HardDrive]Memory stores---",
-    "memory-stores",
-    "agentcore",
-    "infra"
+    "---[Cloud]Run it somewhere---",
+    "[Infrastructure: ports & adapters](/docs/infrastructure)",
+    "[Memory stores](/docs/infrastructure/memory-and-stores)",
+    "[AWS & Bedrock AgentCore](/docs/infrastructure/aws)"
   ]
 }

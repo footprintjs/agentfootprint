@@ -8,7 +8,7 @@ description: sqliteSessions({ file }) is the SessionLifecycle port backed by Nod
 > Anywhere was the whole of the offer.
 
 `sqliteSessions({ file })` is the first battery included — the same
-`SessionLifecycle` port [`memorySessions()`](/docs/build/infra/hosting#sessions-what-crosses-the-restart)
+`SessionLifecycle` port [`memorySessions()`](/docs/infrastructure/hosting-and-runtime#sessions-what-crosses-the-restart)
 implements, backed by a real file, with nothing to install.
 
 ```ts
@@ -88,7 +88,7 @@ request, and lose a person's conversation at 3am with nothing in the log.
 
 ## Unreadable is not absent — one level up
 
-The [envelope law](/docs/build/infra/hosting#unreadable-is-not-the-same-as-absent)
+The [envelope law](/docs/infrastructure/hosting-and-runtime#unreadable-is-not-the-same-as-absent)
 says an unreadable stored conversation and an absent one are different facts,
 and only one of them is safe to answer with a fresh start. A file store can
 break that promise one level higher: point it at a log file, or at a database

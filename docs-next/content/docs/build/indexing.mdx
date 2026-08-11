@@ -51,7 +51,7 @@ An index in a corpus bundle changes when you redeploy.
 A store that declares it cannot serve vectors back is refused **before anything
 is embedded**, and therefore before anything is billed — including a store that
 ranks TEXT on its own server (`ranksBy: 'server-text'`), whose own console does
-its ingestion. See [ranking mode](doc:memory-stores).
+its ingestion. See [ranking mode](doc:memory-and-stores).
 
 <Callout>
 **`defineRAG` is not on this door, deliberately.** The retriever is run-time wiring — registered on an agent, running every turn — so it stays on the main barrel beside `defineTool`. This door is the other half: the part that runs once, before any agent exists. Index time touches the filesystem and reaches for a PDF dependency; run time must never resolve either.
@@ -207,7 +207,7 @@ Everything on `agentfootprint/rag`.
 |---|---|
 | `loadDocuments(source, options?)` | Read a `DocumentSource` into documents. Returns `LoadDocumentsResult` — `{ documents, failed, discovered }`. `LoadDocumentsOptions` carries `loaders` and `maxBytes`. |
 | `splitDocuments(docs, splitter, options?)` | Cut documents into `Chunk`s and verify each one's offsets. `SplitDocumentsOptions` has `verifyOffsets`. |
-| `indexCorpus(config)` | Run the indexing chart. `IndexCorpusConfig` takes `source`, `store`, `embedder`, and the optional `corpus`, `splitter`, `loaders`, `embedderId`, `batchSize`, `maxConcurrentBatches`, `attempts`, `removeMissing`, `maxChunkChars` (defaults to the embedder's own `maxInputChars`). Refuses a store that declares `supportsVectorSearch: false`, or `ranksBy: 'server-text'` — see [the store table](doc:memory-stores). |
+| `indexCorpus(config)` | Run the indexing chart. `IndexCorpusConfig` takes `source`, `store`, `embedder`, and the optional `corpus`, `splitter`, `loaders`, `embedderId`, `batchSize`, `maxConcurrentBatches`, `attempts`, `removeMissing`, `maxChunkChars` (defaults to the embedder's own `maxInputChars`). Refuses a store that declares `supportsVectorSearch: false`, or `ranksBy: 'server-text'` — see [the store table](doc:memory-and-stores). |
 | `buildIndexChart(config)` | The same chart, unrun — mount it, attach recorders, or run it under your own executor. |
 | `indexFolder(dir, options)` | Sugar over `indexCorpus`. `IndexFolderOptions` renames `store` to `to` and adds `include` / `recursive`. |
 | `sha256(input)` | The content hash the incremental skip compares. Distinct from the trace's FNV-1a: this one decides whether something is re-embedded. |
@@ -252,4 +252,4 @@ Everything on `agentfootprint/rag`.
 ## Next steps
 
 - [RAG](doc:rag) — `defineRAG`, and reading back why a passage was retrieved
-- [Memory store adapters](doc:memory-stores) — `sqliteVectorStore`, `pgVectorStore`, `s3VectorsStore`, and what each store's `search()` ranks
+- [Memory store adapters](doc:memory-and-stores) — `sqliteVectorStore`, `pgVectorStore`, `s3VectorsStore`, and what each store's `search()` ranks

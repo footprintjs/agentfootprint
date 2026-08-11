@@ -1,24 +1,71 @@
 ---
-title: Memory store adapters
-description: Where memory lives. InMemoryStore for dev; sqliteVectorStore, pgVectorStore and s3VectorsStore for a durable corpus; RedisStore + AgentCoreStore for production conversation state — and what each store's search() actually ranks.
+title: Memory & stores
+description: The MemoryStore port — eleven required members, one optional method, and two declared capability bits. Seven adapters with their supported and missing operations stated honestly, the strategy axes that sit above them, and what each store's search() actually ranks.
 ---
 
 > Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
 
-## What ships today
+## The port
 
-| Store | Subpath | Peer-dep | Vector search | When to use |
-|---|---|---|---|---|
-| `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
-| `sqliteVectorStore` | `agentfootprint/memory` | **none** (`node:sqlite`) | ✅ exact | **A document corpus that must survive a restart** |
-| `pgVectorStore` | `agentfootprint/memory` | `pg` + the `vector` extension | ✅ | **A corpus beside the application's own data**, on the database you already run |
-| `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | ✅ | **A corpus you can add to without a redeploy** — durable, serverless, nothing to run |
-| `RedisStore` | `agentfootprint/memory` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
-| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ❌ (ranks TEXT server-side) | Bedrock-native session + event memory |
+`MemoryStore` is the I/O boundary. Stages above it never talk to a concrete
+backend — they invoke these members and trust the adapter to handle durability,
+consistency, encryption and pagination.
 
-Every store adapter lives on the canonical `agentfootprint/memory` subpath — a new store adds an export, never a new import path.
+**Eleven required members**, in four groups:
+
+| Group | Members | Notes |
+|---|---|---|
+| Read / write | `get`, `put`, `putMany`, `putIfVersion`, `list`, `delete` | `putIfVersion` is the optimistic-concurrency write; `put` is the "I know I'm the only writer" convenience |
+| Recognition | `seen(signature)`, `recordSignature(signature)` | Cheaper than `get` when the caller only needs *have we processed this before?* — and a signature outlives the entry that produced it |
+| Feedback | `feedback(id, usefulness)`, `getFeedback(id)` | `usefulness` in `[-1, 1]`. `getFeedback` returns `null` for "never recorded", which is **not** the same as an average of 0 |
+| GDPR | `forget(identity)` | Remove everything for one identity, in one operation per backend |
+
+Four design principles are baked into those signatures, and they are worth
+reading before you write an adapter:
+
+1. **Identity is always the first argument.** Every call takes `MemoryIdentity`,
+   so stores enforce tenant / principal isolation at the boundary. A bug passing
+   the wrong identity surfaces as "no data" rather than a cross-tenant leak.
+2. **Every method returns a Promise**, even `InMemoryStore`'s sync ops — so an
+   adapter can swap sync ↔ async without breaking a caller.
+3. **Reads return cursors, not unbounded arrays.** `list` takes
+   `{ cursor?, limit?, tiers? }`, so a large namespace never OOMs.
+4. **`putMany` with an empty batch MUST be a no-op** — callers rely on it to skip
+   a round-trip for a turn that produced nothing.
+
+### The optional, feature-detected members
+
+Three, and each answers a different question:
+
+| Member | Question | Absence means |
+|---|---|---|
+| `search?(identity, query, options?)` | Does this store rank at all? | No vector search. Callers feature-detect with `if (store.search)` |
+| `supportsVectorSearch?: boolean` | Can you serve back the embeddings **I wrote**? | Undeclared — behaves exactly as before this bit existed |
+| `ranksBy?: 'vector' \| 'server-text'` | What **query form** does your `search()` take? | Undeclared — nothing refuses, nothing changes |
+
+The next two sections are why the second and third exist.
+
+## The adapters
+
+| Store | Door | Peer dep | Ranks | Missing / emulated | When to use |
+|---|---|---|---|---|---|
+| `InMemoryStore` | `agentfootprint/memory` | — | ✅ vectors (O(n) scan) | nothing — full port | Dev, tests, single-process |
+| `sqliteVectorStore` | `agentfootprint/memory` | **none** (`node:sqlite`) | ✅ vectors, exact cosine | nothing — full port | **A corpus that must survive a restart** |
+| `pgVectorStore` | `agentfootprint/memory` | `pg` + the `vector` extension | ✅ vectors | nothing — full port. Does **not** create the table | **A corpus beside your own data** |
+| `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | ✅ vectors | **refuses** `putIfVersion`, `recordSignature`, `feedback`; `seen()`→`false`, `getFeedback()`→`null` | **A corpus you can add to without a redeploy** |
+| `staticVectorStore` | `agentfootprint/memory` | — | ✅ vectors | **read-only**: every write method refuses. `seen()`→`false`, `getFeedback()`→`null` | A corpus built elsewhere, served on a runtime with no disk |
+| `RedisStore` | `agentfootprint/memory` | `ioredis` | ❌ no `search()` at all | vector search (RedisSearch is a separate module) | Hot recent memory + signatures + durable feedback |
+| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | ⚠️ ranks **text**, server-side, over records it derived itself | `putIfVersion` emulated; `seen`/`feedback` are in-process and do **not** survive a restart | Bedrock-native session + event memory |
+
+Every store adapter lives on the canonical `agentfootprint/memory` door — a new store adds an export, never a new import path.
 
 They all implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
+
+The refusals above are worth reading as a pattern rather than as gaps: an
+operation a backend genuinely cannot do is **refused by name**, and its read half
+answers truthfully rather than stubbing. `s3VectorsStore.seen()` returns `false`
+because nothing can be recorded there, so nothing has been —
+*"TRUE, not a stub"*.
 
 ### "Vector search" is two different questions
 
@@ -40,9 +87,10 @@ into it would report success and retrieve nothing.
   sqliteVectorStore (durable, one file), …
 ```
 
-`InMemoryStore` and `sqliteVectorStore` declare `true`. `AgentCoreStore` and
-`RedisStore` declare `false` — the ❌ in the table above is now a fact the code
-states, not only prose. For `RedisStore` that moves an existing failure earlier:
+`InMemoryStore`, `sqliteVectorStore` and `staticVectorStore` declare `true`.
+`AgentCoreStore` and `RedisStore` declare `false` — the ⚠️ and ❌ in the table
+above are facts the code states, not only prose. For `RedisStore` that moves an
+existing failure earlier:
 it has no `search()`, so `defineRAG` always refused it, but only *after* the
 corpus had been embedded and billed.
 
@@ -92,6 +140,20 @@ The two declarations must agree. `{ ranksBy: 'vector', supportsVectorSearch: fal
 is refused by name rather than resolved — either line could be the mistake, and
 guessing which would silently decide whether your queries get embedded.
 
+<Callout title="Which shipped stores declare what, exactly">
+`pgVectorStore` and `s3VectorsStore` declare `ranksBy: 'vector'` explicitly.
+`InMemoryStore`, `sqliteVectorStore` and `staticVectorStore` declare only
+`supportsVectorSearch: true`, which `resolveRankingMode` reads as `'vector'` —
+a bare `true` **is** a store saying it ranks the vectors it was given.
+`AgentCoreStore` and `RedisStore` declare only `supportsVectorSearch: false`,
+which says they cannot serve your vectors back but says nothing about how they
+rank, so they stay **undeclared** here.
+
+So **no store shipped today declares `'server-text'`.** It is the slot a managed
+knowledge-base adapter fills — and `AgentCoreStore`, whose `search()` really does
+take text, is the shape it describes without yet claiming the label.
+</Callout>
+
 **Writing your own adapter?** Two helpers are exported from
 `agentfootprint/memory` so you can make the same checks the library makes:
 `resolveRankingMode(store, caller)` returns `'vector' | 'server-text' | undefined`
@@ -99,6 +161,110 @@ and refuses a contradiction (call it in your own tests, so a typo in your two
 declarations fails there rather than at somebody's first query), and
 `assertServesVectors(store, caller)` is the refusal the corpus builders raise —
 useful if you write your own indexing helper and want it to fail the same way.
+
+## Strategy axes — two kinds of recall, and they are not interchangeable
+
+Once the store is picked, one choice remains: **who does the recalling.**
+
+### Axis A — the library's own strategies, and what each one needs
+
+A strategy is a rule this library runs over what the store returns.
+`MEMORY_STRATEGIES` is a const of seven bare strings, which is enough to *write*
+`strategy: { kind: … }` and not nearly enough to *offer* the choice — a picker
+built off that const offers seven options and learns which of them a deployment
+can run by calling `defineMemory` and reading the exception. That is a selector
+that discovers its own capabilities by failing.
+
+So each strategy declares itself, and `listMemoryStrategies()` enumerates the
+declarations:
+
+```ts
+interface MemoryStrategyInfo {
+  readonly kind: MemoryStrategyKind;                          // the value you write as strategy.kind
+  readonly description: string;                               // plain, current-truth caveats included
+  readonly requirements: readonly MemoryStrategyRequirement[]; // what the HOST must supply
+  readonly types: readonly MemoryType[];                       // the memory TYPES that accept it
+}
+```
+
+`requirements` is the load-bearing field. Three well-known values ship, and the
+type stays open so your own strategy descriptor can name something else:
+
+| Requirement | What the host must supply |
+|---|---|
+| `'embedder'` | An `Embedder` that turns text into a vector |
+| `'vector-store'` | A store that implements `search()` — **not** the same requirement as an embedder: the embedder makes the query vector, the store ranks against it, and a deployment can easily have one without the other |
+| `'llm'` | A chat provider the strategy calls on the host's behalf |
+
+**Empty means the strategy runs anywhere, at $0.** Since 9.5.0 `defineMemory`
+refuses at **build** when a declared requirement is absent — including inside a
+`HYBRID`, so a composite cannot smuggle in a strategy this deployment cannot run.
+
+| `kind` | Requires | Accepted by types | Choose it when |
+|---|---|---|---|
+| `WINDOW` | — | episodic, semantic, narrative | The right default for short-to-medium chats: keep the last `size` entries, no LLM, nothing to configure but the number |
+| `BUDGET` | — | episodic | You care about tokens: inject as many recent entries as fit, and none at all below the floor. The pick/skip decision is recorded as branch evidence |
+| `DECAY` | — | episodic | A long-running agent should stop rehearsing last month. Arithmetic on a timestamp — free |
+| `EXTRACT` | — (`extractor: 'llm'` additionally needs `llm`) | semantic, narrative | You want structured facts or narrative beats distilled on the **write** side |
+| `TOP_K` | `embedder`, `vector-store` | semantic, causal | Similarity recall above a threshold — and strictly: when nothing clears it, nothing is injected |
+| `HYBRID` | — (each sub-strategy carries its own) | episodic, semantic, narrative | Several rules on one store |
+| `SUMMARIZE` | `llm` | episodic | See the caveat below |
+
+Offer only what a deployment can run:
+
+```ts
+import { listMemoryStrategies } from 'agentfootprint/memory';
+
+const available = new Set(embedder ? ['embedder', 'vector-store'] : []);
+const offerable = listMemoryStrategies().filter(
+  (s) => s.types.includes('episodic') && s.requirements.every((r) => available.has(r)),
+);
+// → window, budget, decay, hybrid — the four that cost nothing to run.
+```
+
+`memoryStrategyInfo(kind)` returns one descriptor, or `undefined` for a string
+that is not a strategy at all.
+
+<Callout type="warn" title="SUMMARIZE says its own caveat out loud (9.5.0)">
+The compression stage exists but is **not composed into the pipeline
+`defineMemory` builds**, so what runs today is the last `recent` entries,
+verbatim — the `llm` is required and not yet called. Until it is wired,
+`.compaction({ summarizer, model })` on the Agent is the summarizer that does
+run. That sentence lives in the strategy's own `description`, so a picker
+rendering `listMemoryStrategies()` shows it to the person choosing.
+</Callout>
+
+### Axis B — the service's own extraction, targeted by opaque ids
+
+A managed backend can do its own recall, and then the strategy is not a rule this
+library runs — it is a resource **someone configured on the service**, addressed
+by an id this library never interprets.
+
+`AgentCoreStore` is the shipped example. AgentCore organises the records its
+extraction strategies derive (semantic, summary, user-preference…) into
+namespaces on the Memory resource, and two options steer `search()` at them:
+
+| Option | What it is | Default |
+|---|---|---|
+| `searchNamespace({ actorId, sessionId })` | Where `search()` looks — a **function**, because the namespace usually contains the actor. Commonly shaped like `/strategies/{strategyId}/actors/{actorId}` | `/actors/{actorId}/sessions/{sessionId}` — the session's own records |
+| `searchStrategyId` | Restrict `search()` to **one** extraction strategy. Omit to search across all of them | omitted |
+
+Both are **opaque**: they reach AgentCore's own side as a filter, and this
+library never parses, validates or reasons about them. What comes back are
+records AgentCore derived, not the entries you `put()` — `k`, `minScore` and
+`tiers` from `SearchOptions` are applied to what arrives.
+
+### Choose-when
+
+| Your situation | Axis | Reach for |
+|---|---|---|
+| No embedder, no LLM, and a chat that needs recent context | A | `WINDOW`, or `BUDGET` if tokens are the constraint |
+| A long-lived assistant that should forget gracefully | A | `DECAY` |
+| Similarity recall over facts you wrote | A | `TOP_K` + an embedder + a vector-ranking store |
+| Several rules over one store | A | `HYBRID` — every sub-requirement is still checked at build |
+| The backend already extracts summaries and preferences for you | B | `AgentCoreStore` + `searchStrategyId` / `searchNamespace` |
+| A managed knowledge base that takes the question as words | B | A store declaring `ranksBy: 'server-text'` and `defineRAG` with **no** embedder |
+| You are building a picker for someone else to choose from | either | `listMemoryStrategies()` — filter on `requirements` and `types` |
 
 ## InMemoryStore
 
@@ -515,8 +681,26 @@ All three follow the same peer-dep + subpath import pattern as every store above
 
 Every `MemoryStore` method takes `MemoryIdentity` as the first arg. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong identity surfaces as "no data" — not as a cross-tenant leak.
 
+## Status
+
+| Piece | Door | Peer dep | Status |
+|---|---|---|---|
+| `MemoryStore` port + `supportsVectorSearch` / `ranksBy` capability bits | `agentfootprint/memory` | — | Shipped |
+| `InMemoryStore`, `staticVectorStore` | `agentfootprint/memory` | — | Shipped |
+| `sqliteVectorStore` | `agentfootprint/memory` | none (`node:sqlite`, Node ≥ 22.5) | Shipped |
+| `pgVectorStore` | `agentfootprint/memory` | `pg` + the `vector` extension | Shipped (9.3.0) |
+| `RedisStore` | `agentfootprint/memory` | `ioredis` | Shipped; tested through an injected `_client` |
+| `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | Shipped (9.3.0); contract-mapped and injection-tested, command names pinned |
+| `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned |
+| `BedrockAgentMemory` (reader, not a store) | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agent-runtime` | Shipped; contract-mapped and injection-tested |
+| `listMemoryStrategies()` / build-time requirement refusal | `agentfootprint/memory` | — | Shipped (9.5.0) |
+| `SUMMARIZE` LLM compression | — | — | **Declared, not wired** — see the caveat above |
+| `RedisSearchStore`, DynamoDB, Pinecone / Qdrant / Weaviate | — | — | Planned |
+
 ## Next steps
 
 - [Memory guide](doc:memory) — types × strategies × stores
 - [Auto memory (hybrid)](doc:auto-memory) — layer multiple stores per their access pattern
+- [Infrastructure: ports & adapters](doc:infrastructure) — the boundary this page is one port of
+- [AWS & Bedrock AgentCore](doc:aws) — the AgentCore and S3 Vectors rows, service by service
 - [Deployment](doc:deployment) — production checklist

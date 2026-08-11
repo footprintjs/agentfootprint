@@ -127,7 +127,7 @@ uses, so `GET /ping` and `POST /invocations` are 404s from it. That is pinned in
 left to prose. The two are different protocols: serve the runtime contract with
 `agentCoreRuntimeHost` and MCP with `mcpServe`. They cannot share a port today —
 `mcpServe`'s HTTP transport always owns its listener, and it has no
-`{ server }` option the way [the hosting adapters do](doc:hosting).
+`{ server }` option the way [the hosting adapters do](doc:hosting-and-runtime).
 </Callout>
 
 ## When to serve, and when not to

@@ -1,0 +1,20 @@
+{
+  "title": "Infrastructure",
+  "icon": "Cloud",
+  "pages": [
+    "index",
+    "---[Database]State---",
+    "memory-and-stores",
+    "sqlite",
+    "---[KeyRound]Identity & governance---",
+    "identity-and-credentials",
+    "governance-and-policy",
+    "---[Server]Runtime & tools---",
+    "hosting-and-runtime",
+    "tools-and-gateways",
+    "---[Activity]Telemetry---",
+    "observability-sinks",
+    "---[Plug]Providers---",
+    "aws"
+  ]
+}

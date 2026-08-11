@@ -1,0 +1,278 @@
+---
+title: AWS & Bedrock AgentCore
+description: The first worked provider. Every AWS service agentfootprint adapts — Memory, Identity, Runtime hosting, Gateway MCP, Observability, Policy, S3 Vectors, Bedrock models and embedders — with its adapter, its door, its peer dependency, the SDK commands it dispatches, and its honest status.
+---
+
+[Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/) is AWS's managed
+runtime + primitives for agents (Memory, Identity, Gateway, Observability, Code Interpreter,
+Browser). agentfootprint is **framework-side** — it ships **adapters for the data-plane
+primitives** and consumes a Gateway over **MCP**. You bring the **control plane**
+(provisioning) and the **runtime host**; everything else is a [port](doc:infrastructure) you fill
+with an AgentCore adapter.
+
+<Callout type="info" title="Prefer hands-on?">
+Follow **[AgentCore: step by step](doc:agentcore-setup)** — build mock-first, then swap to
+AgentCore one adapter (one line) at a time. This page is the reference map behind it.
+</Callout>
+
+<Callout type="info" title="Two AgentCore surfaces">
+**Control plane** (`bedrock-agentcore-control`) *creates* resources (`CreateMemory`,
+`CreateGateway`, `CreateWorkloadIdentity`, `CreateAgentRuntime`, …) — do this with the AWS
+SDK / CDK. **Data plane** (`bedrock-agentcore`) *uses* them at runtime — this is what
+agentfootprint's adapters wrap.
+</Callout>
+
+## Service → adapter map
+
+Every row: what the adapter is called, which door exports it, which peer
+dependency it lazily requires, which SDK commands it dispatches, and what its
+status honestly is.
+
+| AWS service | Adapter | Door | Peer dep | Dispatches | Status | Capability page |
+|---|---|---|---|---|---|---|
+| **AgentCore Memory** | `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | `CreateEvent`, `ListEvents`, `DeleteEvent`, `RetrieveMemoryRecords` | Shipped; contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
+| **Bedrock Agents memory** (prior generation) | `BedrockAgentMemory` — a **reader**, not a store | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agent-runtime` | `GetAgentMemory`, `DeleteAgentMemory` | Shipped; contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
+| **AgentCore Identity** | `agentCoreIdentity` | `agentfootprint/security` | `@aws-sdk/client-bedrock-agentcore` | `GetWorkloadAccessTokenForUserId`, `GetResourceOauth2Token` | Shipped; contract-mapped and injection-tested | [Identity & credentials](doc:identity-and-credentials) |
+| **AgentCore Runtime** (hosting) | `agentCoreRuntimeHost`, `agentCoreRuntimeWire` | `agentfootprint/hosting` | **none** — plain HTTP | — | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket | [Hosting & runtime](doc:hosting-and-runtime) |
+| **AgentCore Runtime** (sessions) | `agentCoreSessions({ store })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` — **only** for `store: 'memory'` | `CreateEvent`, `ListEvents` | Shipped; the file mode uses `node:fs` only | [Hosting & runtime](doc:hosting-and-runtime) |
+| **AgentCore Gateway** | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | — (MCP over Streamable HTTP) | Shipped | [Tools & gateways](doc:tools-and-gateways) |
+| **AgentCore Observability** | `agentcoreObservability` | `agentfootprint/observe` | `@aws-sdk/client-cloudwatch-logs` | `CreateLogStream`, `PutLogEvents` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
+| **CloudWatch Logs** (generic) | `cloudwatchObservability` | `agentfootprint/observe` | `@aws-sdk/client-cloudwatch-logs` | `CreateLogStream`, `PutLogEvents` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
+| **X-Ray** | `xrayObservability` | `agentfootprint/observe` | `@aws-sdk/client-xray` | `PutTraceSegments` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
+| **AgentCore Policy** | `agentCorePolicy` | `agentfootprint/security` | — | **nothing** | **Retired 9.4.0** — refuses at construction | [Governance & policy](doc:governance-and-policy) |
+| **S3 Vectors** | `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | `GetIndex`, `PutVectors`, `QueryVectors`, `GetVectors`, `ListVectors`, `DeleteVectors` | Shipped (9.3.0); contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
+| **Bedrock models** | `bedrock()` — Converse, model-agnostic | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `Converse`, `ConverseStream` | Shipped | [AWS Bedrock](doc:aws-bedrock) |
+| **Bedrock embeddings** | `bedrockEmbedder()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `InvokeModel` | Shipped | [Embedders](doc:embedders) |
+| **Control plane** (all `Create*`) | — | — | — | — | 🔴 Bridge it yourself — AWS SDK or CDK | — |
+| **Code Interpreter / Browser** | — | — | — | — | 🔴 Bridge it — wrap as a `defineTool` or an MCP tool | [Tools](doc:tools) |
+
+<Callout type="warn" title="What each status label means, exactly">
+**Really verified** is used for one row only: `agentCoreRuntimeHost` is plain
+HTTP with no AWS SDK on its path, and it passes the same host conformance suite
+as `nodeHost` over a real socket.
+
+**Contract-mapped and injection-tested** means the adapter's AWS calls are
+exercised through its `_client` / `_sdk` seams — never against AWS. The command
+names are pinned by test (below); the field semantics are read from the API
+docs. Confirm them against your installed SDK. Nothing on this site is described
+as *verified in a production field deployment*.
+</Callout>
+
+## The command-name pin
+
+Every AWS adapter's dispatched SDK command constructors are **pinned by test**
+in `test/adapters/aws/awsCommandPin.ts`, and a completeness assertion fails the
+build for any `src/**` file that loads an `@aws-sdk/*` package without a row.
+Adding or renaming a dispatched command means editing that row — it cannot be
+done quietly.
+
+The rule the registry exists to enforce is one line: **a bare
+`@aws-sdk/client-*` client is command-based.** Its prototype is exactly
+`[constructor, destroy]` plus `send` — per-operation method shortcuts live on the
+*aggregated* client, so `client.someOperation(...)` is always wrong here.
+
+Three adapters shipped violating it, which is why the registry exists:
+
+| Version | The defect |
+|---|---|
+| 6.42.0 | An adapter dispatched commands belonging to a different service |
+| 9.4.0 | `agentCorePolicy` dispatched `EvaluatePolicyCommand`, which **does not exist** in that package |
+| 9.4.0 | `agentCoreIdentity` called `client.getResourceOauth2Token(...)` — a method that is never there, so the documented path failed 100% of the time on the first call |
+
+Each compiled, and each passed tests that injected `_client` past the SDK. The
+AWS SDKs are deliberately **not** devDependencies — six adapters prove their
+missing-peer-dep refusals by real absence — so the real-module half of the suite
+runs only where the SDKs are installed.
+
+## Memory — `AgentCoreStore`
+
+The store is just the **Memory-store port** pointed at an AgentCore Memory resource. Its
+methods map 1:1 to data-plane events; the agent code is identical to the in-memory version.
+
+```ts
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint/memory';
+import { AgentCoreStore } from 'agentfootprint/memory';
+
+const store = new AgentCoreStore({
+  memoryId: process.env.AGENTCORE_MEMORY_ID!,
+  region: 'us-west-2',
+});
+
+const memory = defineMemory({
+  id: 'conversation',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store,
+});
+
+Agent.create({ provider }).memory(memory).build();
+```
+
+- `put`/`putMany → CreateEvent`, `list → ListEvents`, `delete → DeleteEvent`. `get` and
+  `delete` by id are **list-then-find** — AgentCore assigns event ids on write, so there is
+  nothing to fetch by — and `forget` lists then deletes each event, because AgentCore has no
+  `DeleteSession`. The memory `identity` (`conversationId`) maps to the AgentCore
+  **sessionId**.
+- `putIfVersion` is emulated client-side; `seen` / `recordSignature` / `feedback` are
+  **in-process** shadow state and do not survive a restart. Pair with `RedisStore` for durable
+  recognition.
+- The full memory deep-dive lives in **[AgentCore Memory](doc:agentcore)**; the port and the
+  other six stores are on **[Memory & stores](doc:memory-and-stores)**.
+- `search()` wraps `RetrieveMemoryRecords`. AgentCore ranks server-side and takes a **text**
+  query, so pass `options.text` alongside the vector — details and the reason in
+  **[AgentCore adapters](doc:agentcore-adapters)**.
+
+## Identity — `agentCoreIdentity`
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/security';
+
+const credentials = agentCoreIdentity({
+  region: 'us-west-2',
+  workloadName: 'workflow_assistant_agent',
+  userIdFor: ({ principal }) => principal, // per-(workload, user) token vault
+});
+
+Agent.create({ provider, model, credentials }).build();
+```
+
+Resolves `GetWorkloadAccessTokenForUserId` / `GetResourceOauth2Token` at runtime. Swapping
+from dev static credentials to managed AgentCore identity is this one line — **no tool-code
+change**. Provisioning the providers (`CreateWorkloadIdentity`, `CreateOauth2CredentialProvider`)
+is control-plane → SDK / CDK.
+
+Two facts worth carrying into a deployment: this adapter reports **no `expiresAt`**
+(`GetResourceOauth2TokenResponse` has no expiry field, so there is nothing honest to report),
+and until 9.4.0 it called a method that is never present on a command-based client — the
+defect that bought the command-name pin above. The whole story, plus the port it implements:
+**[Identity & credentials](doc:identity-and-credentials)**.
+
+## Gateway — tools over MCP
+
+An AgentCore **Gateway** turns a Lambda / OpenAPI / Smithy / MCP target into a single **MCP**
+endpoint with Identity-brokered egress auth. agentfootprint *consumes* it through the
+Tools/Gateway port:
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { gatewayTransport, mcpClient, staticTools, gatedTools } from 'agentfootprint/providers';
+
+const gateway = await mcpClient({
+  name: 'gateway',
+  // Auth headers vended PER REQUEST, so a standing agent never outlives its token.
+  transport: gatewayTransport({
+    url: process.env.GATEWAY_MCP_URL!,
+    credentials: agentCoreIdentity({ region: 'us-west-2' }),
+    service: 'gateway',
+  }),
+});
+const tools = gatedTools(staticTools(await gateway.tools()), (name) => allowed.has(name));
+
+Agent.create({ provider }).toolProvider(tools).build();
+```
+
+agentfootprint does **not** create Gateways (no control-plane client) — `CreateGateway` /
+`CreateGatewayTarget` are SDK / CDK.
+
+## Policy — enforced at the Gateway, not here
+
+There is nothing to attach. AgentCore enforces policy **at the Gateway**, in front of the tool,
+before a request reaches your process; a denial comes back as an **MCP error** on the tool call
+made through `mcpClient(...)` and lands in the loop as that tool's result, which the model reads
+and adapts to.
+
+`agentCorePolicy()` tried to pre-evaluate the same rule in-process and is **retired in 9.4.0**:
+it dispatched `EvaluatePolicyCommand`, which does not exist in
+`@aws-sdk/client-bedrock-agentcore` — AgentCore has no data-plane authorization call at all. The
+export remains and refuses at construction with the whole explanation.
+
+For rules you own, use `PermissionPolicy.fromRoles(...)` as the `permissionChecker`, or the
+`.toolMiddleware()` chain for conditional ones. See
+**[AgentCore adapters](doc:agentcore-adapters)**.
+
+## Observability — `agentcoreObservability`
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observe';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+agent.enable.observability({
+  strategy: agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+  detach: { driver: microtaskBatchDriver, mode: 'forget' }, // keep the loop unblocked
+});
+```
+
+Ships the typed `AgentfootprintEvent` stream to CloudWatch in AgentCore's GenAI-Observability
+schema. `otelObservability()` / `cloudwatchObservability()` / `xrayObservability()` are the
+other adapters behind the same port. Full step-by-step (AgentCore Observability **and** OTEL,
+multi-exporter, detach): **[Exporters: AgentCore & OTEL](doc:exporters)**.
+
+## S3 Vectors — a corpus you can add to without a redeploy
+
+Not an AgentCore primitive, but the AWS row a RAG deployment usually needs:
+object storage with a native vector index and a query API, priced like storage
+rather than like a database cluster.
+
+```ts
+import { s3VectorsStore } from 'agentfootprint/memory';
+import { bedrockEmbedder } from 'agentfootprint/providers';
+
+const store = s3VectorsStore({ bucket: 'my-corpus', index: 'docs', region: 'us-east-1' });
+const embedder = bedrockEmbedder({ region: 'us-east-1' });
+```
+
+`search()` maps onto **QueryVectors**, `put`/`putMany` onto **PutVectors**. Since
+9.4.0 the store issues one memoized **GetIndex** before it trusts the index, and
+refuses a metric, a metadata layout or a dimension it cannot serve honestly —
+which needs the `s3vectors:GetIndex` IAM permission alongside the others. Create
+the index yourself; this store never does. Full story, including the
+`nonFilterableMetadataKeys: ["af"]` requirement:
+**[Memory & stores](doc:memory-and-stores)**.
+
+## Bedrock — models and embeddings
+
+`bedrock()` is model-agnostic through the **Converse** API: one adapter covers
+Claude, Llama, Mistral, Titan and Mixtral. Tool calling works on **both** paths —
+`complete()` reads `toolUse` blocks off the response, and `stream()` accumulates
+the ConverseStream `contentBlockStart` / `contentBlockDelta` / `contentBlockStop`
+events keyed by `contentBlockIndex`, so parallel tool calls that interleave are
+reassembled correctly. A parity test pins the two paths together.
+
+<Callout title="Honest by construction">
+A response with `stopReason: 'tool_use'` and zero parsed tool calls is never
+returned quietly: the provider throws a `BedrockProviderError` with
+`code: 'BEDROCK_STREAM_TOOLUSE_LOST'` so a `reliability` rule can act, instead of
+the agent confidently answering without running its tools. Applied on **both**
+exits, so the two paths cannot drift apart again. (Streamed tool calls were
+genuinely dropped before 7.6.1 — that is history now, not current behaviour.)
+</Callout>
+
+Documented limits: multi-modal is not exposed (text content only), and Bedrock
+Guardrails are not wrapped — pass them via the SDK client directly. Details:
+**[AWS Bedrock](doc:aws-bedrock)**.
+
+`bedrockEmbedder()` speaks per-model body shapes (Titan V2/V1, Cohere Embed
+English / Multilingual v3) and declares `maxInputChars` — 32,000 for Titan's
+8,192-token window, 2,000 for Cohere, which batches 96 texts per call. See
+**[Embedders](doc:embedders)**.
+
+## What you bridge yourself
+
+agentfootprint is runtime-only, so these are yours:
+
+- **Control plane** — every `Create*` (Runtime, Memory, Gateway, WorkloadIdentity, policy
+  store) via SDK / CDK.
+- **Code Interpreter**, **Browser** — wrap as tools (`defineTool` or an MCP server) for now.
+
+The **Runtime host** used to be on this list. It is not any more —
+`agentCoreRuntimeHost()` + `agentCoreSessions()` are the `:8080` `/ping` +
+`/invocations` contract, including the session header. See
+**[AgentCore adapters](doc:agentcore-adapters)**.
+
+## Next steps
+
+- **[AgentCore: step by step](doc:agentcore-setup)** — mock-first, then one adapter at a time.
+- **[AgentCore adapters](doc:agentcore-adapters)** — runtime, sessions, policy, gateway.
+- **[AgentCore Memory](doc:agentcore)** — the memory-store deep dive.
+- **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.
+- **[AWS Bedrock](doc:aws-bedrock)** (the LLM provider) · **[Observability sinks](doc:observability-sinks)** · **[Tools & gateways](doc:tools-and-gateways)**.

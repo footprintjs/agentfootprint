@@ -13,17 +13,20 @@ npm install @aws-sdk/client-bedrock-agentcore
 
 Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS credentials resolved via the standard SDK chain (env, profile, IAM role).
 
-## Subpath import
+## Door
 
 ```ts
-// Canonical subpath:
-import { AgentCoreStore } from 'agentfootprint/memory';
-
-// Legacy alias (still exported, kept for back-compat):
 import { AgentCoreStore } from 'agentfootprint/memory';
 ```
 
-Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory` (the canonical location, shared with `RedisStore`); `agentfootprint/memory` remains as a back-compat alias.
+`agentfootprint/memory` is the canonical — and only — door for every store
+adapter, shared with `RedisStore`, `sqliteVectorStore`, `pgVectorStore` and
+`s3VectorsStore`. Keeping vendor-backed stores off the main barrel keeps it small
+and lets bundlers tree-shake when AgentCore is not used.
+
+The older memory-providers alias subpath was **removed in 9.0.0**, along with
+fifteen others. No symbol moved or was lost with them, so upgrading is a
+find-and-replace on the import line.
 
 ## Use
 
@@ -86,15 +89,22 @@ These are documented in the JSDoc; promoted here for visibility:
 
 ```ts
 const mockClient = {
-  putEvent: async () => ({}),
-  getEvent: async () => ({ payload: '...' }),
+  createEvent: async () => {},
   listEvents: async () => ({ events: [] }),
-  deleteEvent: async () => ({}),
-  deleteSession: async () => ({}),
+  deleteEvent: async () => {},
+  // optional — search() feature-detects it rather than assuming
+  retrieveRecords: async () => ({ records: [] }),
 };
 
 const store = new AgentCoreStore({ memoryId: 'test', _client: mockClient });
 ```
+
+That is the whole `AgentCoreLikeClient` shape: three required methods and one
+optional. The real client built from `@aws-sdk/client-bedrock-agentcore` is a
+thin shim over `send(new CreateEventCommand(...))` and friends — a bare
+`@aws-sdk/client-*` client is **command-based**, so there are no per-operation
+methods on it to call. The commands it dispatches are pinned by test; see
+**[AWS & Bedrock AgentCore](doc:aws)**.
 
 ## When to use AgentCore vs Redis vs InMemory
 
@@ -105,6 +115,6 @@ const store = new AgentCoreStore({ memoryId: 'test', _client: mockClient });
 
 ## Next steps
 
-- [Memory store adapters](doc:memory-stores) — full adapter matrix
+- [Memory store adapters](doc:memory-and-stores) — full adapter matrix
 - [Memory guide](doc:memory) — types × strategies that pair with this store
 - [AWS Bedrock provider](doc:aws-bedrock) — paired LLM provider

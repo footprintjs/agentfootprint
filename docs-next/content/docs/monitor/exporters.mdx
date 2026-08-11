@@ -4,7 +4,7 @@ description: Step-by-step — ship the agent's typed event trace to AWS AgentCor
 ---
 
 agentfootprint emits a typed `AgentfootprintEvent` stream for every run. **Where that stream
-goes is a [port](doc:adapters)** — you pick an *exporter strategy* and mount it. The agent
+goes is a [port](doc:infrastructure)** — you pick an *exporter strategy* and mount it. The agent
 doesn't change; only the destination does.
 
 ```ts
@@ -31,8 +31,8 @@ agent.enable.observability({ strategy: otel });
 > **Which exporter?** If you are on AWS, start with `xrayObservability` — one optional peer dependency, one IAM permission (`xray:PutTraceSegments`), a region, and no collector to run. Reach for `otelObservability` when the destination is *not* AWS (Honeycomb, Grafana, Datadog) or when you already run an OTLP collector — it is backend-agnostic precisely because it exports nothing itself.
 
 All ship from `agentfootprint/observe`. This is the Monitoring-side how-to;
-for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** and the
-[adapter pattern](doc:adapters); for the event taxonomy + recorders see
+for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:aws)** and the
+[adapter pattern](doc:infrastructure); for the event taxonomy + recorders see
 **[Observability](doc:observability)**.
 
 <Callout type="info" title="Keep the loop unblocked">
@@ -216,5 +216,5 @@ those doors a no-op.
 ## Next steps
 
 - **[Observability](doc:observability)** — the typed event taxonomy + recorders the exporters consume.
-- **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** · **[AgentCore: step by step](doc:agentcore-setup)** — the full AgentCore integration (this is Step 7 of it).
-- **[Ports & adapters](doc:adapters)** — why "where the trace goes" is a one-line swap.
+- **[AWS Bedrock AgentCore](doc:aws)** · **[AgentCore: step by step](doc:agentcore-setup)** — the full AgentCore integration (this is Step 7 of it).
+- **[Ports & adapters](doc:infrastructure)** — why "where the trace goes" is a one-line swap.

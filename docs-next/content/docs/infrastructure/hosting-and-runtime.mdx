@@ -1,6 +1,6 @@
 ---
-title: Host it — an agent that stays up and remembers
-description: standingAgent + nodeHost + memorySessions. Three ports (AgentHost, ConversationHost, SessionLifecycle) that name no cloud, a plain node:http adapter with a real WebSocket door and no dependency, and two conformance suites every future adapter has to pass.
+title: Hosting & runtime
+description: The ports between an agent and the place it runs — AgentHost, ConversationHost and SessionLifecycle, none of which names a cloud. Plus httpHost/HttpWire for a second HTTP adapter, three reply terminals, three durability modes with stated crash semantics, and the human-in-the-loop resume loop.
 ---
 
 > **An agent in a script answers once and forgets.** A deployed one has to do
@@ -36,17 +36,43 @@ process.on('SIGTERM', () => void handle.close());
 ```
 
 That is a live agent on port 8080 that remembers each caller's conversation.
-Three pieces, and only the middle one is new thinking:
+Three ports, one composer, and one seam for writing your own HTTP adapter:
 
-| | |
-|---|---|
-| `AgentHost` | something can call me |
-| `ConversationHost` | something can *talk* to me, both ways, until one of us ends it |
-| `SessionLifecycle` | the conversation outlives the request |
-| `standingAgent` | hydrate → resume-or-fresh → persist → reply |
+| Type | What it says | Members |
+|---|---|---|
+| `AgentHost` | something can call me | `name`, `capabilities`, `serve(handler)` |
+| `ConversationHost` | something can *talk* to me, both ways, until one of us ends it | `name`, `capabilities`, `conversationLimits?`, `serveConversations(handler)` |
+| `SessionLifecycle` | the conversation outlives the request | `hydrate`, `persist`, `onWake?` |
+| `HttpHost` / `HttpWire` | the HTTP work, parameterised by the JSON dialect it speaks | two paths + five body shapes |
+| `standingAgent` | the composer | hydrate → resume-or-fresh → persist → reply |
+
+`SessionLifecycle` is **deliberately two required methods**:
+
+> Anything a real store also wants — a TTL, a scan, a delete — is that store's
+> own API, not a demand this port makes of every store that will ever implement
+> it.
 
 (`ConversationHost` is the newest and has [its own section](#a-door-that-stays-open--serveconversations)
 — skip to it if the caller you have to serve cannot be *called*.)
+
+### The reply has exactly three terminals
+
+`HostReply` ends exactly once, and a second call is ignored rather than allowed
+to corrupt the wire:
+
+| Terminal | Meaning | Never |
+|---|---|---|
+| `complete(output)` | It answered | — |
+| `awaiting(pending)` | It stopped to ask a person something. The paused run is stored; a later request carrying `decision` continues it | **not** a failure — an adapter mapping this onto a 5xx, an error counter or a dead-letter queue is telling every dashboard it feeds something untrue |
+| `fail(error)` | It broke | — |
+
+`awaiting` and `emit` are optional **on the type** so a minimal adapter need not
+implement them; every shipped adapter does. When `awaiting` is absent the
+composer still **stores** the paused run — the store is not the transport's
+business — and ends the reply with a named refusal instead, so a pause is never
+lost merely because the wire could not describe it. That refusal is
+[`ERR_PAUSE_NOT_CARRIED`](#a-pause-the-wire-could-not-describe), and it is the
+smallest complete example of how these ports are written.
 
 <CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
 
@@ -580,9 +606,24 @@ would describe a system that does not exist.
 
 `memorySessions()` is a Map. It is exactly as durable as the process, which is
 the point: swap it for Redis and nothing above it changes. The step in between
-ships beside it — [`sqliteSessions({ file })`](/docs/build/infra/sqlite) is the
+ships beside it — [`sqliteSessions({ file })`](/docs/infrastructure/sqlite) is the
 same port in one file, on Node's built-in SQLite, so a restart is not an amnesia
 event and there is still nothing to install.
+
+### The session-store axis
+
+| Adapter | Survives | Peer dep | Ceiling | Choose it when |
+|---|---|---|---|---|
+| `memorySessions()` | nothing — the process | none | one process | Tests and local dev. It says so in its name |
+| `sqliteSessions({ file })` | restarts, crashes, deploys | none (`node:sqlite`, Node ≥ 22.5) | one machine, one file, **one writer at a time** | A single box, and you want conversations *and* paused runs to outlive it |
+| `agentCoreSessions({ store: 'session-storage' })` | the container's session directory | none (`node:fs`) | one runtime session | A hosted AgentCore runtime that gives you session-scoped disk |
+| `agentCoreSessions({ store: 'memory' })` | the AgentCore Memory resource | `@aws-sdk/client-bedrock-agentcore` | the service's | You want sessions managed, not filed |
+| Your own | whatever your store does | yours | yours | Redis, DynamoDB, Postgres — two methods is the whole contract |
+
+None of them silently degrades. `sqliteSessions` refuses by name on a Node
+without `node:sqlite` rather than falling back to memory, because a store that
+quietly forgot every conversation on restart looks — from the outside — exactly
+like a brand-new user.
 
 What gets stored is a `CheckpointEnvelope` — a union of two shapes,
 discriminated on `format`:
@@ -800,9 +841,32 @@ Two mismatches are refused by name rather than guessed at:
   ordinary message would put a raw approval into the conversation as if a
   person had typed it.
 
-`PauseNotCarriedError` still exists, for the one case where a pause genuinely
-cannot be carried: a request with **no session id**. There is nowhere to store
-it and no later request that could ever answer it.
+### A pause the wire could not describe
+
+`PauseNotCarriedError` (`code: 'ERR_PAUSE_NOT_CARRIED'`) is worth reading even if
+you never see it, because the whole design is visible in one class.
+
+A run paused. That is not a failure and it is not an answer — it is *unfinished
+work*, and something has to be true about it. The error therefore reports **two
+independent facts**, because they need different responses:
+
+| `stored` | What happened | What you do |
+|---|---|---|
+| `true` | The paused run **is** in the store. The transport simply could not describe the question, because this host does not implement `reply.awaiting()` | Send another request for that session carrying a `decision`. Read the pending ask from the session store, or serve on a host that has `awaiting` |
+| `false` | Nothing was written. Either the request carried **no session id** — so there is nowhere to store a paused run and no later request that could ever answer it — or the session still holds exactly what it held before | Send a `sessionId`, or carry the pause yourself with `agent.run()` / `agent.resume()` |
+
+The error carries `toolName`, `sessionId` and `stored`, and its message says
+which case you are in and what to do about it. Three design rules are visible in
+that one class:
+
+- **A capability nobody implements is never assumed.** `awaiting` is optional on
+  the type, so the composer has to handle its absence — and does, by storing
+  anyway.
+- **State and transport are separate concerns.** The store is not the
+  transport's business, so a wire that cannot describe a pause does not get to
+  lose one.
+- **A refusal names the fix, not the symptom.** "It paused" is useless; "it is
+  stored, send a decision to session X" is actionable.
 
 **Resuming a pause is not a replay.** The conversation-replay caveat above
 applies to `resumeOnError`; a paused run continues from the engine's own
@@ -974,3 +1038,25 @@ It crashes a run on purpose under `durability: 'sync'` and shows that both tool
 results survived in the store, then holds a human-in-the-loop turn over HTTP end
 to end: `202` with the ask and its receipts, a nudge refused with
 `ERR_AWAITING_DECISION`, and `200` once a decision arrives.
+
+## Status
+
+| Piece | Door | Peer dep | Status |
+|---|---|---|---|
+| `AgentHost` / `ConversationHost` / `SessionLifecycle` ports | `agentfootprint/hosting` | — | Shipped |
+| `nodeHost` (+ its WebSocket door, no dependency) | `agentfootprint/hosting` | none (`node:http`) | Shipped — passes both conformance suites over a real socket |
+| `httpHost` / `HttpWire` (write your own HTTP adapter) | `agentfootprint/hosting` | none | Shipped |
+| `memorySessions` | `agentfootprint/hosting` | none | Shipped |
+| `sqliteSessions` | `agentfootprint/hosting` | none (`node:sqlite`, Node ≥ 22.5) | Shipped |
+| `standingAgent` + `durability` (`exit` / `async` / `sync`) | `agentfootprint/hosting` | — | Shipped |
+| `agentCoreRuntimeHost` / `agentCoreRuntimeWire` | `agentfootprint/hosting` | none — plain HTTP, no AWS SDK on its path | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket |
+| `agentCoreSessions({ store: 'session-storage' })` | `agentfootprint/hosting` | none (`node:fs`) | Shipped |
+| `agentCoreSessions({ store: 'memory' })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned |
+| Binary conversation frames | — | — | Deferred — a capability question, until a consumer needs it |
+
+## Next
+
+- [Sessions in a file](doc:sqlite) — `sqliteSessions` in depth
+- [Infrastructure: ports & adapters](doc:infrastructure) — the boundary this page is three ports of
+- [AWS & Bedrock AgentCore](doc:aws) — the AgentCore runtime and session rows
+- [Pause & resume](doc:pausable) · [Check in with the receipts](doc:checkin) — what a pause carries

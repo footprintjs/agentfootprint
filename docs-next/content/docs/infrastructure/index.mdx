@@ -1,0 +1,137 @@
+---
+title: Infrastructure — ports & adapters
+description: agentfootprint is framework-side. Everything that touches your infrastructure — memory, identity, hosting, tools, telemetry — is a PORT with swappable ADAPTERS. This is the translation boundary, the one decision table, and the honest status of every adapter that ships.
+---
+
+The agent loop is infrastructure-agnostic on purpose. agentfootprint owns the
+*reasoning* — context engineering and the ReAct loop — and exposes a small set of
+**ports** for everything that touches your infrastructure. An **adapter**
+implements one port for one backend. Swap the adapter, keep the agent.
+
+<Callout type="info" title="This is the classic ports-&-adapters pattern">
+Core stays free of vendor SDKs; each adapter is a thin shim around one provider.
+The agent depends on the **interface**, never the implementation — so a vendor
+swap never reaches your agent code.
+</Callout>
+
+## The translation boundary
+
+Three layers, and keeping them apart is the whole design.
+
+**A port** is written in the vocabulary every backend already has — an identity,
+an entry, a cursor, a request, a reply, a session id, an event. Nothing else. The
+hosting ports say it out loud:
+
+> **The rule these types are written under:** no runtime, product or protocol
+> gets a field, a name or an assumption here. A port shaped around one provider's
+> request envelope stops being a port and becomes that provider's SDK with extra
+> steps, and every later adapter pays for it.
+
+**An adapter** is the vendor layer, and the only place a vendor SDK is allowed to
+appear. It is lazily required, declared as an **optional peer dependency**, and
+refuses by name when its SDK is missing — so the main bundle stays lean and you
+install only what you use.
+
+**A strategy** is the choice you make *inside* a port once the adapter is
+picked: which memory strategy runs, which retrieval rule ranks, which detach
+driver ships telemetry, which durability mode writes a session. Strategies are
+about behaviour; adapters are about backends. Confusing them is how a "swap the
+database" ticket becomes a rewrite.
+
+## The ports
+
+| Port | Interface | Question it answers | Door |
+|---|---|---|---|
+| **Memory store** | `MemoryStore` | Where do entries and vectors live? | `agentfootprint/memory` |
+| **Credentials** | `CredentialProvider` | How does a tool get a token to call something? | `agentfootprint/security` |
+| **Permission** | `PermissionChecker` | Is this tool call allowed? | `agentfootprint/security` |
+| **Host / conversation** | `AgentHost`, `ConversationHost` | What carries requests to the agent? | `agentfootprint/hosting` |
+| **Session** | `SessionLifecycle` | Where does the conversation live between requests? | `agentfootprint/hosting` |
+| **Tools** | `McpClient`, `ToolProvider` | Where do tools come from, and which are visible? | `agentfootprint/providers` |
+| **Telemetry** | `ObservabilityStrategy` | Where does the typed event stream go? | `agentfootprint/observe` |
+| **LLM** | `LLMProvider` | Which model backend answers? | `agentfootprint/providers` |
+| **Embedder** | `Embedder` | What turns text into a vector? | `agentfootprint/providers` |
+
+The agent wires ports, not vendors:
+
+```ts
+const agent = Agent.create({ provider, model, credentials }) // LLM + credential ports
+  .memory(defineMemory({ store }))                            // memory-store port
+  .toolProvider(tools)                                        // tools port
+  .build();
+```
+
+## One decision table
+
+Start from what you are trying to do, not from which cloud you are on.
+
+| You need… | Reach for | Why that one |
+|---|---|---|
+| A **fixed corpus** on a runtime with no disk (serverless, edge, immutable image) | `staticVectorStore(bundle)` — or `s3VectorsStore` if it must change without a redeploy | The bundle is plain JSON built where the credentials live; S3 Vectors is durable object storage with a native index |
+| A **durable corpus** on one machine | `sqliteVectorStore({ file })` | Node's built-in `node:sqlite` — nothing to install, exact cosine, survives a restart. Documented ceiling: 50,000 chunks |
+| A corpus **beside your own data** | `pgVectorStore` | Inherits the backups, failover, access control and migrations you already run |
+| **Conversation memory** in production | `AgentCoreStore` or `RedisStore` via `defineMemory({ store })` | Managed event log, or sub-ms hot reads with TTL. Neither ranks your vectors — see the ranking axis |
+| **Conversations to survive a restart** | `sqliteSessions({ file })` as `SessionLifecycle` | Conversations *and* paused runs in one table, zero dependencies |
+| An agent that **stays up and answers HTTP** | `standingAgent({ agent, sessions, host })` with `nodeHost()` | The composer: hydrate → resume-or-fresh → persist → reply |
+| A **container runtime's** own HTTP contract | `httpHost({ wire })`, or `agentCoreRuntimeHost()` | Two paths and five body shapes are all a second HTTP adapter re-decides |
+| **Per-request auth** on a remote tool server | `gatewayTransport({ url, credentials })` | Headers vended inside every `fetch`, so a standing agent never outlives its token |
+| A **signed** request (SigV4, DPoP, HMAC) | `McpHttpTransport.fetch` — your own function | A signature is computed *from* the request, so it cannot be decided at connect time |
+| **Consent and spend gates** before a consequential action | `checkIn` on the tool + a `CredentialProvider`; `ask` in `.toolMiddleware()` | A pause puts the exact operation in front of a person, with its evidence pack |
+| A **role allowlist** you own | `PermissionPolicy.fromRoles(roles, activeRole)` | In-process, fail-closed, refusal-as-data — the model reads a bracketed denial it can adapt to |
+| **Events beside your runtime telemetry** | `agentcoreObservability()` / `cloudwatchObservability()` / `otelObservability()` | The typed event stream, shipped in the shape that platform already reads |
+| **Two sinks at once** | `composeObservability([a, b])` | One strategy that fans out; `flush` and `stop` reach both |
+| A **tamper-evident** record | `auditExport()` | Hash-chained records; `verifyAuditBundle` names the exact record that broke |
+
+## Dev → prod is one line per port
+
+The promise: **mock-first locally, real infra in prod**, and the agent code in
+between never changes.
+
+```ts
+// dev — $0, offline, deterministic
+const store = new InMemoryStore();
+const provider = mock({ replies: [/* scripted */] });
+
+// prod — same agent, real infra (just these two lines change)
+const store = new AgentCoreStore({ memoryId: process.env.AGENTCORE_MEMORY_ID! });
+const provider = bedrock({ model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0' });
+```
+
+## How each page below is laid out
+
+Every capability page follows the same four parts, so you can skim to the one you
+need:
+
+1. **The port** — the exact members, and which are optional and feature-detected.
+2. **The adapters** — what ships, which peer dependency, and what each one
+   genuinely does *not* do.
+3. **The strategy axes** — the choices left after the adapter is picked, with a
+   choose-when row for each.
+4. **Status** — shipped, or the honest label. Nothing is called verified that has
+   not been.
+
+<Callout type="warn" title="What the status labels mean">
+**Shipped** means it works and is tested. Where an adapter's calls are exercised
+through an injected client seam rather than against the real service, the page
+says **contract-mapped and injection-tested** and names it. Only a claim that has
+been seen working in a real deployment is written as
+*verified in a production field deployment* — and no adapter on this site
+carries that phrase today.
+</Callout>
+
+## Capability pages
+
+- **[Memory & stores](doc:memory-and-stores)** — the `MemoryStore` port, seven adapters, and what each `search()` actually ranks
+- **[Sessions in a file](doc:sqlite)** — `sqliteSessions`, the zero-dependency `SessionLifecycle`
+- **[Identity & credentials](doc:identity-and-credentials)** — the `CredentialProvider` port, machine vs user, consent
+- **[Governance & policy](doc:governance-and-policy)** — who is allowed to say no, and where each refusal is enforced
+- **[Hosting & runtime](doc:hosting-and-runtime)** — hosts, sessions, durability, and the human-in-the-loop resume loop
+- **[Tools & gateways](doc:tools-and-gateways)** — the `McpClient` port and its four transport choices
+- **[Observability sinks](doc:observability-sinks)** — the `ObservabilityStrategy` port, composition, and delivery timing
+
+## Providers
+
+- **[AWS & Bedrock AgentCore](doc:aws)** — the first worked provider: every service, its adapter, its door, its peer dependency, and its honest status.
+
+More clouds plug in the same way — each is a set of adapters behind the same
+ports. Nothing about the ports above knows AWS exists.

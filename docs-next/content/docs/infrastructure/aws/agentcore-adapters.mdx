@@ -6,7 +6,7 @@ description: agentCoreRuntimeHost, agentCoreSessions, agentCorePolicy and gatewa
 > **A cloud adapter should be vendor paths, a header mapping and some SDK calls.**
 > If writing one needs a change to a port, the port was wrong.
 
-[Hosting](doc:hosting) shipped two ports that name no cloud, and a conformance
+[Hosting](doc:hosting-and-runtime) shipped two ports that name no cloud, and a conformance
 suite that any host adapter has to pass. This page is what happened when the
 first cloud adapter was written against them.
 
@@ -111,7 +111,7 @@ contract's own `:8080` default included, because with your server this adapter
 binds nothing and so names nothing. The laws (and the one consequence worth
 knowing: an unmatched path *hangs* rather than 404s if nobody routes it) are the
 same for every adapter built on `httpHost` — see
-[One port, two protocols](doc:hosting).
+[One port, two protocols](doc:hosting-and-runtime).
 
 If all you want is a route of your own beside the runtime's — a `/debug/trace`,
 say — the inverse option is cheaper: `agentCoreRuntimeHost({ onUnhandled })`
@@ -119,7 +119,7 @@ keeps the host binding the container's port and hands you every path it does not
 own, instead of answering 404 for your application. `/invocations`, `/ping` and
 `/ws` never reach it, and it is refused beside `{ server }`, where unmatched
 paths already reach your own listeners. See
-[Your routes on the host's socket](doc:hosting).
+[Your routes on the host's socket](doc:hosting-and-runtime).
 
 ### The runtime's second door — `/ws`
 
@@ -179,7 +179,7 @@ plain client, driven by the same handler constant. That is real verification.
 
 The frame codec underneath is checked against the byte sequences RFC 6455 §5.7
 publishes. It is not run against the Autobahn suite, no extension is negotiated,
-and there are no binary frames — see [Hosting](doc:hosting) for the boundary
+and there are no binary frames — see [Hosting](doc:hosting-and-runtime) for the boundary
 stated in full.
 </Callout>
 
@@ -206,7 +206,7 @@ by name** rather than restoring half a conversation — that law comes from
 The same is true of its other half: a stored session that is present but
 **unreadable** raises `UnreadableEnvelopeError` naming the session, rather than
 hydrating as "no conversation". See
-[Unreadable is not the same as absent](doc:hosting).
+[Unreadable is not the same as absent](doc:hosting-and-runtime).
 
 The file mode writes then renames, so a container killed mid-write leaves the
 previous conversation intact rather than a truncated file nothing can parse.
@@ -347,7 +347,7 @@ connection, which is right for a static API key and wrong here: a standing
 agent outlives its bearer token, and the failure is a burst of 401s an hour
 into a session that tested perfectly.
 
-`gatewayTransport` asks the [credential provider](doc:adapters) on **every**
+`gatewayTransport` asks the [credential provider](doc:infrastructure) on **every**
 request:
 
 ```ts
@@ -492,9 +492,9 @@ as `AgentCoreLikeClient` reports it.
 
 ## Next steps
 
-- **[Host it](doc:hosting)** — the ports, the composer, and the conformance
+- **[Host it](doc:hosting-and-runtime)** — the ports, the composer, and the conformance
   suite these adapters pass.
-- **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** — the full capability map.
+- **[AWS Bedrock AgentCore](doc:aws)** — the full capability map.
 - **[AgentCore: step by step](doc:agentcore-setup)** — build mock-first, then
   swap one adapter at a time.
-- **[Ports & adapters](doc:adapters)** — the pattern this page is one instance of.
+- **[Ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.

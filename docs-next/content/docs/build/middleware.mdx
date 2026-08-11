@@ -67,7 +67,7 @@ if (isAskPause(out)) {
 }
 ```
 
-The checkpoint is JSON. It is the same pause machinery `askHuman` and `checkIn` ride — not a second one — which is why it already works everywhere they do, including [hosting](doc:hosting), where an outstanding question is refused as unfinished work rather than silently dropped.
+The checkpoint is JSON. It is the same pause machinery `askHuman` and `checkIn` ride — not a second one — which is why it already works everywhere they do, including [hosting](doc:hosting-and-runtime), where an outstanding question is refused as unfinished work rather than silently dropped.
 
 **One human question per resume.** footprintjs's resumed dispatch has no second checkpoint to offer, so if a later link also asks — or the tool itself declares `checkIn` — the call is **not executed** and a named refusal reaches the model instead. Ask through one gate, not two.
 

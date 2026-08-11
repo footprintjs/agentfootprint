@@ -129,7 +129,7 @@ const identity = { tenant: 'acme', principal: 'alice', conversationId: 'thread-4
 await agent.run({ message: '...', identity });
 ```
 
-For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Memory store adapters](doc:memory-stores).
+For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Memory store adapters](doc:memory-and-stores).
 
 ## Stores
 
@@ -140,7 +140,7 @@ For a deeper dive on how identity flows through the store + RAG indexing footgun
 | `AgentCoreStore` | `agentfootprint/memory` | ✅ — peer-dep `@aws-sdk/client-bedrock-agentcore`, session/event mapping |
 | DynamoDB / Postgres / Pinecone | (planned) | v2.6+ |
 
-Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](doc:memory-stores) for the full integration matrix.
+Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](doc:memory-and-stores) for the full integration matrix.
 
 ## Anti-patterns
 
@@ -152,4 +152,4 @@ Both production adapters lazy-require their SDK and accept `_client` for test in
 
 - [Skills, explained](doc:skills-explained) — context engineering for instructions, the cousin pattern to memory
 - [Auto memory (Hybrid)](doc:auto-memory) — stack recent window + extracted facts + causal snapshots, each its own `.memory()` call
-- [Memory store adapters](doc:memory-stores) — Redis · AgentCore · planned backends
+- [Memory store adapters](doc:memory-and-stores) — Redis · AgentCore · planned backends

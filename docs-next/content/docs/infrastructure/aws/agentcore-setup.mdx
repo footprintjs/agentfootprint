@@ -3,8 +3,8 @@ title: 'AgentCore: step by step'
 description: A hands-on walkthrough — build the agent mock-first, then swap one adapter at a time (Bedrock, AgentCore Memory, Identity, Gateway, Observability), host the Runtime contract, and deploy. The agent code never changes; only the adapters do.
 ---
 
-This is the practical companion to the [AWS Bedrock AgentCore](doc:bedrock-agentcore)
-overview. The through-line is the [adapter pattern](doc:adapters): you build and prove the
+This is the practical companion to the [AWS Bedrock AgentCore](doc:aws)
+overview. The through-line is the [adapter pattern](doc:infrastructure): you build and prove the
 agent **locally with mock adapters**, then swap to AgentCore **one line at a time** — the
 agent logic in between never changes.
 
@@ -89,7 +89,7 @@ const agent = buildAgent(provider);
 `bedrock().stream()` returns `toolCalls: []` (it streams text but doesn't reconstruct
 `tool_use` from deltas). For a tool-using agent, use `complete()` (non-streaming) until
 delta reconstruction lands, or your first tool call will be dropped. See the
-[overview](doc:bedrock-agentcore) gotcha.
+[overview](doc:aws) gotcha.
 </Callout>
 
 ## Step 4 — Memory on AgentCore
@@ -267,5 +267,5 @@ console.log(await a.run({ message: 'What was my order id?', identity: id })); //
 | 9 | **provision + deploy** (control plane) | yours |
 
 The agent's logic — system prompt, tools, memory strategy, ReAct loop — **never changed**.
-That's the [adapter pattern](doc:adapters) paying off: the same agent runs on `mock` +
+That's the [adapter pattern](doc:infrastructure) paying off: the same agent runs on `mock` +
 `InMemoryStore` locally and on Bedrock + AgentCore in production.
