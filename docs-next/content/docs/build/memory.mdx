@@ -61,6 +61,23 @@ The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good d
 
 `InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory`), `AgentCoreStore` (`agentfootprint/memory`), or another adapter — same `MemoryStore` interface, drop-in.
 
+## What "last N turns" actually retains
+
+A window of 12 keeps twelve **turns**, and a turn is an ordinal the store has to agree on: memory entries are keyed by it (`msg-{turn}-{index}` for messages, `snap-{turn}` for causal snapshots, `beat-{turn}-{index}` for narrative beats). Two turns that share a number are one turn overwriting the other.
+
+Through 9.5.1 the Agent seeded that number to `1` on every `run()`, so a conversation whose host builds a fresh agent per turn — a new request, a new process, the same `conversationId` — rewrote `msg-1-0` and `msg-1-1` every time. Nothing threw, the store reported successful writes, and a `.memory()` declaring a twelve-turn window recalled exactly one prior exchange. As of **9.6.0** the turn is resolved once per run from two honest sources:
+
+- the conversation the run was handed (how many user turns are already in the history — right for `followUp()` and `run({ continueFrom })`), and
+- **the stores the memory writes to**, which is the only thing that survives a fresh agent per turn.
+
+The rule is `max(hostTurn, highestStoredTurn + 1)`: a host that tracks turns honestly keeps its numbering, a stale counter is raised to the next unused turn, and neither can drag a conversation backwards. Gaps are legal — it is an ordinal, not a count.
+
+<Callout type="warn" title="Memory usage grows with this — that is the fix, not a regression">
+  A six-turn conversation now stores twelve message entries where it used to store two, and the window injects up to `size` of them instead of the last exchange. Prompts get longer and stores get bigger *because the agent is now remembering what you asked it to remember*. If that is more than you want, that is a `size` / `DECAY` / [`.compaction()`](doc:window-strategies) decision — turn it down deliberately rather than by accident.
+</Callout>
+
+The resolution costs one paged `list()` per store per run, and only when a memory actually writes: an agent with no memory, a read-only memory, or a corpus-only `.rag(...)` makes no extra call. Hosts that mount `mountMemoryRead` / `mountMemoryWrite` into their own flowchart own the number themselves — pass a real `turnNumber`, or derive one with `resolveTurnNumber({ stores, identity, hostTurn })` (and `maxStoredTurn(store, identity)` if you only want to know how far a conversation has got), both exported from `agentfootprint/memory`. Their argument shapes are exported too: `ResolveTurnNumberOptions` (`stores`, `identity`, the optional `hostTurn` floor) and `MaxStoredTurnOptions` (a `turnFor` narrowing, which is how causal snapshots count only their own `snap-{n}` ids).
+
 ## Letting old memory fade — `DECAY`
 
 Window keeps the last N turns whatever their age. `DECAY` asks the other question — *is this still worth remembering?* — and answers it with a half-life: each entry loaded this turn is scored `2 ^ (-age / halfLifeMs)` against its `lastAccessedAt` and dropped below `minScore`, **before** the token budget is spent on it. Free: no LLM, no embeddings, no key.

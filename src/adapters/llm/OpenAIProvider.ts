@@ -30,6 +30,7 @@ import type {
   WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { asContextWindowExceeded } from './contextWindow.js';
 
 // ─── OpenAI SDK shape (duck-typed) ─────────────────────────────────
 
@@ -671,6 +672,11 @@ function normalizeStopReason(raw: string): string {
 }
 
 function wrapError(err: unknown): Error {
+  // "Your request was too big" is a distinct failure with distinct fixes, so
+  // it leaves this adapter as a typed error rather than as one more opaque
+  // 400 that a retry loop will re-send forever. Nothing else is translated.
+  const tooBig = asContextWindowExceeded(err, { provider: 'openai' });
+  if (tooBig) return tooBig;
   if (err instanceof Error) {
     return Object.assign(new Error(`[openai] ${err.message}`), {
       name: 'OpenAIProviderError',

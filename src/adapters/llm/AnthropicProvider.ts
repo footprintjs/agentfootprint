@@ -28,6 +28,7 @@ import type {
   WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { asContextWindowExceeded } from './contextWindow.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -490,6 +491,10 @@ function normalizeStopReason(raw: string): string {
 }
 
 function wrapError(err: unknown): Error {
+  // See OpenAIProvider.wrapError — one shared detector, one typed error, so
+  // "prompt is too long" reads the same whichever vendor said it.
+  const tooBig = asContextWindowExceeded(err, { provider: 'anthropic' });
+  if (tooBig) return tooBig;
   if (err instanceof Error) {
     return Object.assign(new Error(`[anthropic] ${err.message}`), {
       name: 'AnthropicProviderError',

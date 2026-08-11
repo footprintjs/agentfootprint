@@ -84,6 +84,7 @@ import {
 } from './checkin.js';
 import { assertCostBudgetHasPricing, resolveCostBudget, type ResolvedCostBudget } from './cost.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
+import type { MemoryStore } from '../memory/store/index.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { SelfExplainBinding } from '../lib/trace-toolpack/selfExplain.js';
 import {
@@ -2176,6 +2177,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // toolSchemas is finalized further down; pass a getter that reads
     // the eventual const at stage-execution time.
     let toolSchemasResolved: readonly LLMToolSchema[] = [];
+    // The stores the conversation itself is kept in — the durable anchor seed
+    // resolves the turn number against. Deduplicated (several memories over
+    // one store is the common shape) and reference-stable, so the scan runs
+    // once per store per run.
+    const conversationStores = Array.from(
+      new Set(
+        this.memories
+          .filter((m) => m.write !== undefined && m.corpus === undefined && m.store !== undefined)
+          .map((m) => m.store as MemoryStore),
+      ),
+    );
     const seed = buildSeedStage({
       maxIterations,
       cachingDisabled,
@@ -2194,6 +2206,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return f;
       },
       getCurrentRunId: () => this.currentRunContext?.runId,
+      // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
+      // are consulted: they are the ones whose entry ids are turn-stamped, and
+      // a corpus (`.rag(...)`, which reads under its own namespace) has no
+      // turns at all. Empty list → seed stays synchronous and makes no store
+      // call, so an agent without memory is unchanged.
+      ...(conversationStores.length > 0 && { conversationStores }),
       // The `'input'` half of the message chain, run BEFORE `userMessage` and
       // `history` are committed — see SeedStageDeps.messageMiddleware.
       ...(this.messageMiddleware.length > 0 && { messageMiddleware: this.messageMiddleware }),

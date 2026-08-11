@@ -15,6 +15,7 @@ export * from './identity/index.js';
 export * from './pipeline/index.js';
 export * from './stages/index.js';
 export * from './store/index.js';
+export * from './turn/index.js';
 export * from './wire/index.js';
 export * from './retrieval/index.js';
 

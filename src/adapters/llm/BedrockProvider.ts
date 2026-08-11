@@ -38,6 +38,7 @@ import type {
   WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { asContextWindowExceeded } from './contextWindow.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -599,6 +600,11 @@ function wrapError(err: unknown): Error {
   // Already ours (the typed tool-use conditions above) — re-wrapping would
   // drop `code` / `toolName` / `toolUseId` and double-prefix the message.
   if (err instanceof Error && err.name === 'BedrockProviderError') return err;
+  // A `ValidationException` reading "Input is too long for requested model"
+  // is the same failure OpenAI spells `context_length_exceeded`; it leaves
+  // here typed, with the fixes, rather than as a generic validation error.
+  const tooBig = asContextWindowExceeded(err, { provider: 'bedrock' });
+  if (tooBig) return tooBig;
   if (err instanceof Error) {
     return Object.assign(new Error(`[bedrock] ${err.message}`), {
       name: 'BedrockProviderError',

@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.6.0] - 2026-08-11
+
+**Three findings from one production blowup — an 879,073-token request against
+a 272,000-token limit — fixed at the root.**
+
+A field deployment ran an agent with `.memory()` over a stable
+`conversationId`, tools returning large inventory dumps, and a fresh agent per
+turn. It failed with a provider 400. Investigating it turned up three separate
+things the library was doing quietly: memory that remembered one exchange
+however large the window said it was, a provider refusal that reached the
+caller as an opaque 400 naming none of the fixes, and a checkpoint that
+advertised a resume which could only reproduce the same failure.
+
+### Fixed — episodic memory retains the turns you asked for
+
+`.memory(defineMemory({ strategy: { kind: WINDOW, size: 12 } }))` recalled
+exactly ONE prior turn, silently, forever. The seed stage wrote
+`turnNumber = 1` on every `run()`, and `writeMessages` keys entries
+`msg-{turn}-{index}` — so every turn overwrote `msg-1-0` / `msg-1-1`. Six
+turns of conversation left two entries in the store. Nothing threw. Every
+write reported success. The only symptom was an agent that kept forgetting,
+which reads exactly like a model problem.
+
+The turn is now resolved **once per run**, from the two sources that can know
+it:
+
+- the conversation the run was handed — how many user turns the history
+  already contains, which is right for `followUp()` and
+  `run({ continueFrom })`, and
+- **the stores the memory writes to**, which is the only anchor that survives
+  the shape the field deployment actually uses: a fresh `Agent`, in a fresh
+  process, per turn.
+
+The rule is `max(hostTurn, highestStoredTurn + 1)` — a host that tracks turns
+honestly keeps its numbering, a stale counter is raised to the next unused
+turn, and neither can drag a conversation backwards. It is the rule
+`writeSnapshot` has applied to causal snapshots since 9.1, generalised so
+every memory kind shares one definition of which turn this is; the causal
+stage keeps its own narrower scan as self-defense for hand-composed pipelines
+and now shares the paging with the general one.
+
+**Behaviour change, named loudly: multi-turn memory starts actually
+retaining.** A six-turn conversation stores twelve message entries where it
+stored two, and the window injects up to `size` of them instead of the last
+exchange — so prompts get longer and stores get bigger *because the agent is
+now remembering what it was asked to remember*. Turn it down deliberately
+(`size`, `DECAY`, `.compaction()`) rather than by accident.
+
+Cost: one paged `list()` per store per run, and only when a memory actually
+writes — an agent with no memory, a read-only memory, or a corpus-only
+`.rag(...)` makes no extra call and its seed stage stays synchronous.
+`resolveTurnNumber({ stores, identity, hostTurn })` and
+`maxStoredTurn(store, identity)` are exported from `agentfootprint/memory` for
+hosts that mount the memory subflows into their own flowchart, and
+`MemoryDefinition` now carries the `store` it was built with so the Agent can
+ask it this question.
+
+### Added — `ContextWindowExceededError`: the refusal that names its fixes
+
+Every vendor refuses an over-long request in its own words and none of them
+says which dial moves the number. What the field saw was:
+
+```
+[openai] 400 Input tokens exceed the configured limit of 272000 tokens.
+Your messages resulted in 879073 tokens.
+```
+
+True, and useless: it looks exactly like a transient 400, so the natural next
+move is a retry that re-sends the same oversized history. The `openai`,
+`anthropic`, `bedrock`, `browser-openai` and `browser-anthropic` adapters now
+translate that class of refusal — and only that class — into one typed error
+carrying `provider`, `limitTokens`, `actualTokens` (when the vendor stated
+them), `status`, the original as `cause`, and the code
+`ERR_CONTEXT_WINDOW_EXCEEDED`. Its message carries the three fixes in the
+order they are worth trying: cap oversized **tool results** where they are
+produced; `.window(slidingWindow({ keepRecentTurns }))` to drop older rounds;
+and the one that is not obvious until it fails — **`.compaction()` cannot fold
+a span bigger than the window**, because the summarizer call sends that span.
+
+Detection is deliberately conservative. Only unmistakable wording translates
+(`context_length_exceeded`, `maximum context length`, `prompt is too long`,
+`exceed context limit`, `Input is too long for requested model`, `Input tokens
+exceed the configured limit`); a **rate** limit and a `max_tokens` validation
+error are different failures with different fixes and are never translated;
+everything else passes through as the provider error it always was. The
+browser adapters translate in `wrapStatus` as well as `wrapError`, because an
+HTTP refusal never reaches the latter. `isContextWindowExceeded(err)` asks the
+question without importing the class.
+
+### Fixed — a checkpoint stops advertising a resume that cannot work
+
+`RunCheckpointError` said `Pass to agent.resumeOnError(checkpoint) to
+continue` for every failure. Measured on the field case: resume re-sent the
+same 540k-token history and got the identical 400 — a deterministic loop, and
+the library was recommending it.
+
+`resumeOnError` replays the checkpointed conversation to the same provider
+with the same credentials, which is right for a transient fault and hopeless
+for a failure the request itself causes. So three classes now get a checkpoint
+message that says plainly why resume cannot help and what to do instead: a
+context-window refusal (the item above, with its three fixes — recognised
+both as the typed error and as the vendor's own sentence, because the field
+case came from a custom `LLMProvider` in front of a gateway and never passed
+through an adapter at all), rejected credentials (401 / 403,
+`UnrecognizedClientException`, `invalid api key` — matched on the vendor's
+exception NAME rather than loose prose), and a malformed request
+(400 / 404 / 422). Everything else keeps today's hint word
+for word, because wrongly telling a caller not to resume costs them a run that
+would have succeeded.
+
+The checkpoint is still built and still carries the whole conversation for
+every class — `checkpoint.history` is what was about to be sent, which is what
+a post-mortem wants. The message now says that too: evidence, not a retry
+handle. `canResume(error)` is the same classification as a boolean, so a retry
+loop can branch on it instead of reading prose.
+
 ## [9.5.1] - 2026-08-09
 
 ### Fixed — a malformed strategy is a sentence, not a `TypeError` from inside the library

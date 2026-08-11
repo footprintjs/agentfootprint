@@ -351,6 +351,24 @@ export interface MemoryDefinition<T = unknown> {
   /** Compiled write subflow. Optional — `EPHEMERAL`-style configs omit. */
   readonly write?: ReadonlyMemoryFlowChart<T>;
 
+  /**
+   * The store this memory reads and writes (9.6.0).
+   *
+   * The compiled subflows already closed over it — this carries it in the
+   * open for the one question a subflow cannot answer from inside itself:
+   * **which turn of this conversation is about to happen?** A turn number
+   * is the key in `msg-{turn}-{index}` / `snap-{turn}` / `beat-{turn}-{i}`,
+   * and the only thing that remembers how far a conversation has got —
+   * across processes, across a fresh `Agent` per turn — is the store. The
+   * Agent reads this to resolve the turn once per run (`resolveTurnNumber`)
+   * before any memory subflow runs.
+   *
+   * Optional because a `MemoryDefinition` may be hand-built; a definition
+   * without it simply keeps whatever turn number its host supplies, which
+   * is what every release before 9.6.0 did.
+   */
+  readonly store?: MemoryStore;
+
   /** When `read` runs. Default `TURN_START`. */
   readonly timing: MemoryTiming;
 

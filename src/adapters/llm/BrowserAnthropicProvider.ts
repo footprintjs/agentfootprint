@@ -29,6 +29,7 @@ import type {
   LLMToolSchema,
   WireRole,
 } from '../types.js';
+import { asContextWindowExceeded } from './contextWindow.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -717,6 +718,14 @@ async function wrapStatus(response: Response): Promise<Error> {
   } catch {
     /* ignore */
   }
+  // Same as the browser OpenAI adapter: an HTTP refusal never reaches
+  // `wrapError`, and the body is where "prompt is too long" is written.
+  const tooBig = asContextWindowExceeded(new Error(bodyText), {
+    provider: 'browser-anthropic',
+    bodyText,
+    status: response.status,
+  });
+  if (tooBig) return tooBig;
   return Object.assign(
     new Error(
       `[browser-anthropic] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`,
@@ -729,6 +738,8 @@ async function wrapStatus(response: Response): Promise<Error> {
 }
 
 function wrapError(err: unknown): Error {
+  const tooBig = asContextWindowExceeded(err, { provider: 'browser-anthropic' });
+  if (tooBig) return tooBig;
   if (err instanceof Error) {
     return Object.assign(new Error(`[browser-anthropic] ${err.message}`), {
       name: 'BrowserAnthropicProviderError',

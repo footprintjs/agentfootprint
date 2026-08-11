@@ -22,14 +22,27 @@
  *   processes). Rationale:
  *     - Hosts that track `turnNumber` correctly keep their numbering
  *       (`turnNumber: 5` → `snap-5`, gaps preserved).
- *     - Hosts with a stale counter (the Agent seeds `turnNumber = 1` on
- *       every run) still get a fresh, ordered id — turn 2 of the same
- *       conversation lands `snap-2` instead of silently replacing
- *       `snap-1`.
+ *     - Hosts with a stale counter still get a fresh, ordered id — turn 2
+ *       of the same conversation lands `snap-2` instead of silently
+ *       replacing `snap-1`.
  *   Causal snapshots are decision evidence (audit/replay data): when
  *   "stale counter" and "deliberate same-turn rewrite" are
  *   indistinguishable, never destroying a prior turn's evidence wins.
  *   TTL-expired snapshots are ignored by the scan (same as every read).
+ *
+ *   Since 9.6.0 this is SELF-DEFENSE, not the primary mechanism. The Agent
+ *   resolves the turn once per run against the same stores (`seed` →
+ *   `resolveTurnNumber`), so under an Agent `scope.turnNumber` already
+ *   satisfies this rule and the scan changes nothing — it re-answers what
+ *   it is given. It stays for hand-composed pipelines mounted through
+ *   `mountMemoryWrite` in a host that numbers its own turns, which is
+ *   exactly the case the Agent's resolution cannot reach.
+ *
+ *   The scan is deliberately narrowed to `snap-{n}` ids rather than to
+ *   every turn-stamped entry: `writeMessages` may already have written
+ *   turn N into a SHARED store by the time this stage runs, and a scan that
+ *   counted those would answer N+1 and file this turn's evidence under a
+ *   turn its own messages do not have.
  *
  * Empty-newMessages handling:
  *   When `newMessages` is empty (no final answer produced — e.g.
@@ -47,6 +60,7 @@ import type { MemoryStore } from '../store/index.js';
 import type { Embedder } from '../embedding/index.js';
 import type { MemoryIdentity } from '../identity/index.js';
 import type { MemoryState } from '../stages/index.js';
+import { maxStoredTurn, normalizeHostTurn } from '../turn/resolveTurnNumber.js';
 import type { SnapshotEntry } from './types.js';
 
 /** Ids written by this stage: `snap-{turn}`. Used to find the highest
@@ -59,28 +73,20 @@ const SNAPSHOT_ID_PATTERN = /^snap-(\d+)$/;
  * conversation. 0 when none. One paged `list()` scan per turn-write —
  * snapshot writes happen once per turn, and the namespace is a single
  * conversation, so the scan stays small.
+ *
+ * The paging (and its bound) is `maxStoredTurn`'s, shared with the Agent's
+ * per-run resolution; only WHICH entries count is this stage's own.
  */
 async function maxStoredSnapshotTurn(
   store: MemoryStore,
   identity: MemoryIdentity,
 ): Promise<number> {
-  let max = 0;
-  let cursor: string | undefined;
-  do {
-    const page = await store.list(identity, {
-      limit: 1000,
-      ...(cursor !== undefined && { cursor }),
-    });
-    for (const entry of page.entries) {
+  return maxStoredTurn(store, identity, {
+    turnFor: (entry) => {
       const match = SNAPSHOT_ID_PATTERN.exec(entry.id);
-      if (match) {
-        const turn = Number(match[1]);
-        if (turn > max) max = turn;
-      }
-    }
-    cursor = page.cursor;
-  } while (cursor !== undefined);
-  return max;
+      return match ? Number(match[1]) : 0;
+    },
+  });
 }
 
 export interface WriteSnapshotConfig {
@@ -134,13 +140,11 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
     if (query.length === 0) return; // No query → no useful snapshot.
 
     // Effective turn — anchored on the store, not the host's counter
-    // (see header: "Turn derivation"). Guarantees distinct, ordered ids
-    // for consecutive turns of one conversation even when the host
-    // re-seeds `turnNumber = 1` on every run.
-    const hostTurn =
-      typeof scope.turnNumber === 'number' && Number.isFinite(scope.turnNumber)
-        ? Math.max(1, Math.floor(scope.turnNumber))
-        : 1;
+    // (see header: "Turn derivation"). Guarantees distinct, ordered ids for
+    // consecutive turns of one conversation even when the host's own counter
+    // is stale — which the Agent's is not since 9.6.0, and a hand-composed
+    // host's may still be.
+    const hostTurn = normalizeHostTurn(scope.turnNumber);
     const storedMax = await maxStoredSnapshotTurn(store, identity);
     const turn = Math.max(hostTurn, storedMax + 1);
 

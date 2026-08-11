@@ -5,18 +5,18 @@
   "recordedAt": "2026-08-11",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1382,
+    "declaredSymbols": 1390,
     "declaredEvents": 73,
     "eventSource": "src/events/registry.ts:542"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 514,
+      "documented-never-exercised": 523,
       "exercised-undocumented": 35,
       "undocumented-unexercised": 584,
       "site-code-sample-only": 23,
-      "written-but-not-published": 126,
+      "written-but-not-published": 125,
       "ok": 100
     },
     "events": {
@@ -752,7 +752,6 @@
     "mockAnthropicRaw",
     "mockOpenAIRaw",
     "mockThinkingHandler",
-    "mountMemoryWrite",
     "narrativePipeline",
     "openAIThinkingHandler",
     "optionalParamRule",

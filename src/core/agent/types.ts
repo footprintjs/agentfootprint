@@ -483,8 +483,11 @@ export interface AgentState {
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];
-  // Turn counter — incremented per agent.run(). Memory writes tag
-  // entries with this so retrieval can show "recalled from turn 5".
+  // WHICH TURN of this conversation this run is (9.6.0) — an ordinal, not a
+  // count, so gaps are legal and repeats are not. Memory writes KEY their
+  // entries on it (`msg-{turn}-{index}`), which is why seed resolves it from
+  // the conversation it was handed AND from the memory stores themselves
+  // rather than seeding a constant 1 as every release through 9.5.1 did.
   turnNumber: number;
   // Token-budget signal used by memory pickByBudget deciders. Defaults
   // to a permissive cap; consumers tune via PricingTable hooks later.

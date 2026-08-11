@@ -410,10 +410,20 @@ export {
 } from './core/agent/outputEnforcement.js';
 export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
 export {
+  canResume,
   ConversationMismatchError,
   RunCheckpointError,
   type AgentRunCheckpoint,
 } from './core/runCheckpoint.js';
+// 9.6.0 — "the request did not fit" as a typed error the adapters translate
+// from every vendor's wording, carrying the numbers and the fixes. Exported
+// from the ROOT (not `/llm-providers`) because the thing you catch it with is
+// `agent.run()`, and because `canResume` classifies on it.
+export {
+  ContextWindowExceededError,
+  ERR_CONTEXT_WINDOW_EXCEEDED,
+  isContextWindowExceeded,
+} from './adapters/llm/contextWindow.js';
 // The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
 // "you are already running" from "somebody is still waiting on an answer" from
 // "there is nothing to follow up on".

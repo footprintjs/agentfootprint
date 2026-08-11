@@ -7,7 +7,7 @@ description: Tool failure recovery, retry/fallback/circuit-breaker decorators, r
 
 ## Errors at the boundary
 
-Provider adapters surface the underlying SDK error — there is no wrapper `LLMError` class with `err.code`/`err.retryable` fields. A failed `agent.run(...)` rejects with the raw error, and observability captures it (the run-failed boundary fires so a monitor shows a humanized, actionable message rather than a stuck "thinking" state):
+Provider adapters surface the underlying SDK error — there is no wrapper `LLMError` class with `err.code`/`err.retryable` fields. (One failure is the deliberate exception: a request too large for the context window, which every vendor words differently and which is translated into a single typed error — see the next section.) A failed `agent.run(...)` rejects with the raw error, and observability captures it (the run-failed boundary fires so a monitor shows a humanized, actionable message rather than a stuck "thinking" state):
 
 ```ts
 try {
@@ -21,6 +21,36 @@ try {
 ```
 
 The retry/fallback decorators carry their OWN classification heuristics (HTTP 4xx vs 5xx vs `AbortError`), which you can override per call via `shouldRetry` / `shouldFallback`.
+
+## The request did not fit — `ContextWindowExceededError`
+
+One failure is translated rather than passed through, because every vendor words it differently and none of them names the fix. When the provider refuses a request for exceeding the context window, the `openai`, `anthropic`, `bedrock`, `browser-openai` and `browser-anthropic` adapters all raise the same typed error:
+
+```ts
+import { Agent, ContextWindowExceededError, isContextWindowExceeded } from 'agentfootprint';
+
+try {
+  await agent.run({ message: 'summarise the fabric inventory' });
+} catch (err) {
+  if (err instanceof ContextWindowExceededError) {
+    console.error(err.provider);      // 'openai'
+    console.error(err.limitTokens);   // 272000  — when the vendor stated it
+    console.error(err.actualTokens);  // 879073  — when the vendor stated it
+  }
+}
+```
+
+`isContextWindowExceeded(err)` is the same question without the import of the class, and `err.code` is the stable string `ERR_CONTEXT_WINDOW_EXCEEDED`.
+
+The message carries the three fixes, cheapest first, because the numbers alone do not tell you which dial moves them:
+
+1. **Cap oversized tool results where they are produced.** One raw database dump handed back to the model is usually the whole overrun. Return a summary plus an id the model can ask about, not every row.
+2. **`.window(slidingWindow({ keepRecentTurns: 2 }))`** drops older rounds before the request is assembled — see [Window strategies](doc:window-strategies).
+3. **`.compaction()` cannot rescue a span bigger than the window.** Folding a span means *sending* that span to the summarizer, so a single round that already overflows fails in the summarizer call exactly as it did in the agent's. Compaction keeps a long conversation small; it does not repair one oversized round.
+
+<Callout type="info" title="Detection is conservative on purpose">
+  Only unmistakable vendor wording translates — `context_length_exceeded`, `maximum context length`, `prompt is too long`, `exceed context limit`, `Input is too long for requested model`, `Input tokens exceed the configured limit`, `exceeds the maximum allowed input tokens`. A **rate** limit ("tokens per min") is a different failure with a different fix and is never translated; neither is a `max_tokens` parameter validation error, nor an OUTPUT token cap worded the same way as an input one. Everything else reaches you as the provider error it always was.
+</Callout>
 
 ## Tool errors
 
@@ -174,12 +204,12 @@ The breaker is per-instance, in-process (no Redis dependency). See [the resilien
 </Callout>
 
 ```ts
-import { Agent, RunCheckpointError } from 'agentfootprint';
+import { Agent, canResume, RunCheckpointError } from 'agentfootprint';
 
 try {
   const result = await agent.run({ message: 'long task' });
 } catch (err) {
-  if (err instanceof RunCheckpointError) {
+  if (err instanceof RunCheckpointError && canResume(err.cause)) {
     await checkpointStore.put(sessionId, err.checkpoint);
     // hours / restart later, after the vendor recovers:
     const checkpoint = await checkpointStore.get(sessionId);
@@ -189,6 +219,21 @@ try {
   }
 }
 ```
+
+### Some failures cannot be resumed — `canResume`
+
+`resumeOnError` re-sends the checkpointed conversation to the same provider with the same credentials. For a transient fault that is exactly right. For a failure the request itself causes, it is a deterministic loop: a context-length refusal resumed into the identical 400, measured in a production field deployment, forever.
+
+So `canResume(error)` classifies the cause, and `RunCheckpointError`'s own message says plainly why resume cannot help instead of advertising it:
+
+| Class | `canResume` | Why |
+|---|---|---|
+| Transient — 5xx, 429, timeouts, socket errors, an open circuit | `true` | The same request can succeed later. This is what resume is for. |
+| `ContextWindowExceededError` — or the same vendor sentence from a custom `LLMProvider` that never passed through an adapter | `false` | The conversation is what did not fit; re-sending it fails identically. Shrink the request instead. |
+| Rejected credentials — 401 / 403, `UnrecognizedClientException`, `invalid api key` | `false` | The replay carries the same key. |
+| Malformed request — 400 / 404 / 422 | `false` | The provider refused the request itself: an unknown model id, a bad tool schema, an unsupported parameter. |
+
+The checkpoint is still built and still carries the full conversation for every class, including the non-resumable ones — `checkpoint.history` is what was about to be sent, which is exactly what a post-mortem wants. It is evidence there, not a retry handle.
 
 ## Rules-based reliability
 

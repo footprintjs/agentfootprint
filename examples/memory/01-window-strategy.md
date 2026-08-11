@@ -67,6 +67,24 @@ await agent.run({
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## How many turns you actually get (9.6.0)
+
+A window of 10 keeps ten **turns**, and a turn is an ordinal the store agrees
+on: entries are keyed `msg-{turn}-{index}`. Through 9.5.1 the Agent seeded that
+number to `1` on every `run()`, so turn 2 overwrote turn 1's entries and this
+example's window held one exchange no matter how long the conversation ran —
+silently, with every write reporting success.
+
+The turn is now resolved once per run from the conversation the run was handed
+**and** from the store itself (`max(hostTurn, highestStoredTurn + 1)`), so the
+numbering survives what production actually does: a fresh `Agent`, in a fresh
+process, per turn, against one `conversationId`. Turn six of this example
+stores `msg-6-0` / `msg-6-1` next to the five turns before it.
+
+The flip side is real and intended: prompts and stores grow with what is being
+remembered. Turn it down with `size`, `MEMORY_STRATEGIES.DECAY`, or
+`.compaction()` — deliberately, rather than by accident.
+
 ## Multi-tenant isolation
 
 `identity.tenant` and `identity.principal` namespace the store so

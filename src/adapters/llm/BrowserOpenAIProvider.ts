@@ -27,6 +27,7 @@ import type {
   LLMToolSchema,
   WireRole,
 } from '../types.js';
+import { asContextWindowExceeded } from './contextWindow.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -586,6 +587,15 @@ async function wrapStatus(response: Response): Promise<Error> {
   } catch {
     /* ignore */
   }
+  // The refusal body is where a context overflow says so, and this adapter
+  // reads the response itself — so the translation happens HERE as well as in
+  // `wrapError`. An HTTP error never passes through `wrapError`.
+  const tooBig = asContextWindowExceeded(new Error(bodyText), {
+    provider: 'browser-openai',
+    bodyText,
+    status: response.status,
+  });
+  if (tooBig) return tooBig;
   return Object.assign(
     new Error(
       `[browser-openai] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`,
@@ -595,6 +605,8 @@ async function wrapStatus(response: Response): Promise<Error> {
 }
 
 function wrapError(err: unknown): Error {
+  const tooBig = asContextWindowExceeded(err, { provider: 'browser-openai' });
+  if (tooBig) return tooBig;
   if (err instanceof Error) {
     return Object.assign(new Error(`[browser-openai] ${err.message}`), {
       name: 'BrowserOpenAIProviderError',

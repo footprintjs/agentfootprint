@@ -19,6 +19,8 @@
 
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { MemoryStore } from '../../../memory/store/index.js';
+import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
 import type { FoldedSpan } from '../window/types.js';
@@ -91,6 +93,53 @@ export interface SeedStageDeps {
    * Empty / undefined → seed stays the synchronous stage it always was.
    */
   readonly messageMiddleware?: readonly MessageMiddleware[];
+
+  /**
+   * The durable stores this agent's WRITING memories keep the conversation
+   * in (9.6.0). Consulted once per run to resolve `turnNumber` — see
+   * `anchorTurnNumber` and `resolveTurnNumber` for why the store is the only
+   * honest anchor when a host builds a fresh Agent per turn.
+   *
+   * Empty / undefined (no memory, read-only memory, corpus-only retrieval) →
+   * seed stays the synchronous stage it always was, makes no store call, and
+   * commits exactly the keys it always did.
+   */
+  readonly conversationStores?: readonly MemoryStore[];
+}
+
+/**
+ * How many user turns the conversation already contains, this one included.
+ * At least 1 — a run always IS a turn.
+ */
+function countUserTurns(history: readonly LLMMessage[]): number {
+  let count = 0;
+  for (const message of history) if (message.role === 'user') count++;
+  return Math.max(1, count);
+}
+
+/**
+ * Raise `scope.turnNumber` to what the conversation's own stores know.
+ *
+ * The turn number is the KEY memory writes stamp on their entries, so two
+ * turns of one conversation must never share it. In-process counting cannot
+ * provide that: the shape seen in a production field deployment builds a
+ * fresh `Agent` per turn against a stable `conversationId`, so every run
+ * starts counting from scratch while the store holds the whole history.
+ *
+ * Runs after `seedFrom`, because it needs the identity that stage resolves.
+ * A store that throws is not swallowed — a memory whose store is unreachable
+ * fails at its next read anyway, and a guessed turn number is how a
+ * conversation quietly overwrites itself.
+ */
+async function anchorTurnNumber(
+  scope: TypedScope<AgentState>,
+  stores: readonly MemoryStore[],
+): Promise<void> {
+  scope.turnNumber = await resolveTurnNumber({
+    stores,
+    identity: scope.runIdentity,
+    hostTurn: scope.turnNumber,
+  });
 }
 
 /**
@@ -102,12 +151,20 @@ export function buildSeedStage(
   deps: SeedStageDeps,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
   const chain = deps.messageMiddleware ?? [];
-  // No chain → the same synchronous function this stage has always been.
-  // Not an optimisation: an agent without middleware must produce the same
-  // stage shape, the same committed keys and the same request bytes as before.
-  if (chain.length === 0) {
+  const stores = deps.conversationStores ?? [];
+  // No chain and no conversation store → the same synchronous function this
+  // stage has always been. Not an optimisation: an agent without middleware
+  // and without memory must produce the same stage shape, the same committed
+  // keys and the same request bytes as before.
+  if (chain.length === 0 && stores.length === 0) {
     return (scope) => {
       seedFrom(scope, scope.$getArgs<AgentInput>().message, deps);
+    };
+  }
+  if (chain.length === 0) {
+    return async (scope) => {
+      seedFrom(scope, scope.$getArgs<AgentInput>().message, deps);
+      await anchorTurnNumber(scope, stores);
     };
   }
   return async (scope) => {
@@ -133,10 +190,14 @@ export function buildSeedStage(
       scope.messageDeniedBy = verdict.middleware;
       // Stops the chart here: no injections, no slots, no LLM call. The
       // boundary turns these flags into a MessageDeniedError.
+      // No turn anchoring on this path: a denied message never reaches the
+      // memory subflows, so nothing will be written under this turn and the
+      // store call would be spent on a question nothing asks.
       scope.$break(`message denied at input: ${verdict.reason}`);
       return;
     }
     seedFrom(scope, verdict.content, deps);
+    if (stores.length > 0) await anchorTurnNumber(scope, stores);
   };
 }
 
@@ -156,11 +217,11 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // Always clear the field after reading so subsequent runs
   // (without resumeOnError) start fresh.
   const resumeHistory = deps.consumePendingResumeHistory();
-  if (resumeHistory && resumeHistory.length > 0) {
-    scope.history = [...resumeHistory];
-  } else {
-    scope.history = [{ role: 'user', content: message }];
-  }
+  const history: readonly LLMMessage[] =
+    resumeHistory && resumeHistory.length > 0
+      ? [...resumeHistory]
+      : [{ role: 'user', content: message }];
+  scope.history = history;
 
   // The window's durable companion. Restored whether or not THIS agent is
   // configured to fold: the spans belong to the conversation, not to the
@@ -180,7 +241,19 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
     conversationId: deps.getCurrentRunId() ?? 'default',
   };
   scope.newMessages = [];
-  scope.turnNumber = 1;
+  // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
+  // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),
+  // so turn two of a conversation overwrote turn one and a `.memory()` with a
+  // twelve-turn window silently recalled exactly one exchange.
+  //
+  // The honest floor available without I/O is the conversation this run was
+  // handed: a fresh run is turn 1, a run continuing a stored conversation of
+  // three exchanges is turn 4. It is a FLOOR, not the answer — a host that
+  // builds a fresh Agent per turn hands over no history at all, and for that
+  // shape `anchorTurnNumber` below raises this to what the STORE knows.
+  // Over-counting (a checkpoint captured mid-retry carries an extra authored
+  // user message) costs a skipped ordinal, never a collision.
+  scope.turnNumber = countUserTurns(history);
   // Permissive default — explicit cap will land when PricingTable
   // gets a context-window field. Memory pickByBudget treats anything
   // ≥ minimumTokens as "fits", so this just enables the budget path.

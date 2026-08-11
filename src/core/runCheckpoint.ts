@@ -55,6 +55,10 @@
  */
 
 import type { LLMMessage } from '../adapters/types.js';
+import {
+  isContextWindowExceeded,
+  looksLikeContextWindowExceeded,
+} from '../adapters/llm/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 
@@ -216,13 +220,132 @@ export class RunCheckpointError extends Error {
       `[agent run] failed at iteration ${checkpoint.failurePoint?.iteration ?? '?'} ` +
         `${describeFailurePoint(checkpoint.failurePoint)}. ` +
         `Last-good checkpoint captured at iteration ${checkpoint.lastCompletedIteration}. ` +
-        `Pass to agent.resumeOnError(checkpoint) to continue. ` +
+        `${resumeAdvice(cause)} ` +
         `Underlying error: ${cause.message}`,
     );
     this.name = 'RunCheckpointError';
     this.cause = cause;
     this.checkpoint = checkpoint;
   }
+}
+
+// ─── Can this failure be resumed at all? (9.6.0) ─────────────────────
+
+/**
+ * Why `resumeOnError` cannot help — one clause per class, or `undefined`
+ * when the failure really is worth retrying.
+ *
+ * `resumeOnError(checkpoint)` re-sends the checkpointed conversation to the
+ * same provider with the same credentials. That is the right move for a
+ * transient failure (a 503, a timeout, a circuit that has since closed) and a
+ * DETERMINISTIC LOOP for a failure the request itself causes: measured in the
+ * field, a context-length refusal resumed into the identical 400, forever.
+ *
+ * The list is deliberately short. Anything not named here keeps today's
+ * advice, because wrongly telling a caller not to resume costs them a run
+ * that would have succeeded.
+ */
+function notResumableBecause(cause: unknown): string | undefined {
+  // The typed error when an adapter caught it, and the vendor's own sentence
+  // when it came from somewhere else — a custom `LLMProvider`, a gateway
+  // wrapper, a proxy. The advice is the same either way, and it is the advice
+  // the field case needed: that error never passed through an adapter and
+  // would otherwise have fallen into the generic "malformed request" arm.
+  if (isContextWindowExceeded(cause) || looksLikeContextWindowExceeded(cause)) {
+    return (
+      `Resume cannot help: agent.resumeOnError(checkpoint) re-sends this same ` +
+      `conversation, and the conversation is what did not fit — the identical ` +
+      `request fails identically. Make the next request smaller instead: cap ` +
+      `oversized tool results where they are produced, add ` +
+      `.window(slidingWindow({ keepRecentTurns: 2 })) to drop older rounds, and ` +
+      `note that .compaction() cannot fold a span bigger than the window (its ` +
+      `summarizer call sends that span). The checkpoint still carries the full ` +
+      `history — keep it for the post-mortem (checkpoint.history is what was ` +
+      `about to be sent), not for a retry.`
+    );
+  }
+
+  const status = statusOf(cause);
+  const name = cause instanceof Error ? cause.name : '';
+  const text = cause instanceof Error ? cause.message : '';
+
+  if (status === 401 || status === 403 || AUTH_NAMES.test(name) || AUTH_PHRASES.test(text)) {
+    return (
+      `Resume cannot help: the provider rejected the CREDENTIALS, and resume ` +
+      `replays the run with the same ones. Fix the key / role / region and start ` +
+      `a fresh run — the checkpoint keeps the conversation meanwhile, so nothing ` +
+      `said so far is lost (checkpoint.history).`
+    );
+  }
+
+  if (status === 400 || status === 404 || status === 422) {
+    return (
+      `Resume cannot help: the provider refused the REQUEST itself (HTTP ` +
+      `${status}), and resume re-sends the same one. Fix what it named — an ` +
+      `unknown model id, a malformed tool schema, an unsupported parameter — ` +
+      `then start a fresh run. The checkpoint keeps the conversation for the ` +
+      `post-mortem (checkpoint.history).`
+    );
+  }
+
+  return undefined;
+}
+
+/**
+ * Auth failures that arrive without a status — matched on the vendor's
+ * EXCEPTION NAME (AWS SDK errors carry theirs there) rather than on loose
+ * prose, so a tool that happens to report "unauthorized" from some downstream
+ * system is not mistaken for the agent's own credentials being wrong.
+ */
+const AUTH_NAMES =
+  /^(UnrecognizedClientException|ExpiredTokenException|InvalidSignatureException|IncompleteSignatureException|MissingAuthenticationTokenException|InvalidClientTokenId|AccessDenied\w*|AuthFailure|CredentialsError|UnauthorizedException|AuthenticationError|PermissionDeniedError)$/i;
+
+/** The two phrasings every LLM vendor uses for "that key is not a key". */
+const AUTH_PHRASES = /(invalid[_ -]?api[_ -]?key|incorrect api key|no api key provided)/i;
+
+function statusOf(err: unknown): number | undefined {
+  const record = err as {
+    status?: unknown;
+    statusCode?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  for (const value of [record?.status, record?.statusCode, record?.$metadata?.httpStatusCode]) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Can `agent.resumeOnError(checkpoint)` plausibly succeed for this failure?
+ *
+ * `true` for the transient classes resume exists for; `false` for the ones
+ * where replaying the same request reproduces the same refusal (a request too
+ * large for the context window, rejected credentials, a malformed request).
+ * Branch on this instead of reading the message — a retry loop that resumes a
+ * non-resumable failure is an expensive infinite loop.
+ *
+ * @example
+ * ```ts
+ * import { canResume, RunCheckpointError } from 'agentfootprint';
+ *
+ * try {
+ *   await agent.run({ message });
+ * } catch (err) {
+ *   if (err instanceof RunCheckpointError && canResume(err.cause)) {
+ *     await agent.resumeOnError(err.checkpoint);
+ *   } else {
+ *     throw err; // fix the request; the checkpoint is evidence, not a retry handle
+ *   }
+ * }
+ * ```
+ */
+export function canResume(error: unknown): boolean {
+  return notResumableBecause(error) === undefined;
+}
+
+/** Today's hint, verbatim, unless the failure is one resume cannot fix. */
+function resumeAdvice(cause: Error): string {
+  return notResumableBecause(cause) ?? 'Pass to agent.resumeOnError(checkpoint) to continue.';
 }
 
 /**

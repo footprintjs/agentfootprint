@@ -115,6 +115,10 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
     type: options.type,
     read: brandPipeline(pipeline.read),
     ...(write !== undefined && { write: brandPipeline(write) }),
+    // Carried in the open so the host can resolve WHICH TURN this is against
+    // the same durable namespace the pipeline writes into — the turn number
+    // is a key, not a label (see MemoryDefinition.store).
+    store: options.store,
     timing: options.timing ?? MEMORY_TIMING.TURN_START,
     ...(options.redact !== undefined && { redact: options.redact }),
     ...(options.corpus !== undefined && { corpus: options.corpus }),

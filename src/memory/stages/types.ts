@@ -26,9 +26,19 @@ export interface MemoryState {
   readonly identity: MemoryIdentity;
 
   /**
-   * Run-local turn counter — 1 for the first `agent.run`, 2 for the second,
-   * and so on within the same conversationId. Written into `MemoryEntry.source`
-   * by write-side stages for provenance.
+   * WHICH TURN of this conversation this pipeline is running for — 1 for the
+   * first exchange, 2 for the second, and so on within one `conversationId`.
+   * Set by the wire layer before the pipeline runs.
+   *
+   * Not a label: write-side stages KEY their entries on it (`msg-{turn}-{i}`,
+   * `snap-{turn}`, `beat-{turn}-{i}`) and stamp it into `MemoryEntry.source`
+   * so recall can say "remembered from turn 5". Two turns that share this
+   * number are one turn overwriting the other.
+   *
+   * Under an Agent it is resolved once per run against the memory stores
+   * themselves (`resolveTurnNumber`), so it survives a fresh Agent — or a
+   * fresh process — per turn. A host that mounts these subflows itself owns
+   * the number: pass a real one, or call `resolveTurnNumber` to derive it.
    */
   readonly turnNumber: number;
 
