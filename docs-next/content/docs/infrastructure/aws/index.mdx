@@ -54,8 +54,11 @@ as `nodeHost` over a real socket.
 **Contract-mapped and injection-tested** means the adapter's AWS calls are
 exercised through its `_client` / `_sdk` seams — never against AWS. The command
 names are pinned by test (below); the field semantics are read from the API
-docs. Confirm them against your installed SDK. Nothing on this site is described
-as *verified in a production field deployment*.
+docs. Confirm them against your installed SDK. **No adapter on this page — and
+no adapter anywhere on this site — is described as *verified in a production
+field deployment*.** That phrase appears in one place only,
+[On-premises & self-hosted](doc:on-premises), where it describes a deployment
+shape rather than an adapter.
 </Callout>
 
 ## The command-name pin
@@ -269,9 +272,20 @@ The **Runtime host** used to be on this list. It is not any more —
 `/invocations` contract, including the session header. See
 **[AgentCore adapters](doc:agentcore-adapters)**.
 
+## Other providers
+
+AWS is one column, not the pattern. Every port on this page is filled by
+something else somewhere else, and the agent code does not change between them:
+**[On-premises & self-hosted](doc:on-premises)** is the same map for a
+deployment that owns its own machines — a local model instead of Bedrock,
+`sqliteVectorStore` or `pgVectorStore` instead of S3 Vectors, `sqliteSessions`
+instead of AgentCore sessions, `fileObservability` instead of CloudWatch,
+`vaultCredentials` instead of AgentCore Identity.
+
 ## Next steps
 
 - **[AgentCore: step by step](doc:agentcore-setup)** — mock-first, then one adapter at a time.
+- **[On-premises & self-hosted](doc:on-premises)** — the same services, filled without a cloud account.
 - **[AgentCore adapters](doc:agentcore-adapters)** — runtime, sessions, policy, gateway.
 - **[AgentCore Memory](doc:agentcore)** — the memory-store deep dive.
 - **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.

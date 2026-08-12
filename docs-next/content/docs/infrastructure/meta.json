@@ -15,6 +15,7 @@
     "---[Activity]Telemetry---",
     "observability-sinks",
     "---[Plug]Providers---",
-    "aws"
+    "aws",
+    "on-premises"
   ]
 }

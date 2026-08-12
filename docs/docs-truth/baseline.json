@@ -5,17 +5,17 @@
   "recordedAt": "2026-08-12",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1413,
+    "declaredSymbols": 1418,
     "declaredEvents": 77,
     "eventSource": "src/events/registry.ts:566"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 547,
+      "documented-never-exercised": 553,
       "exercised-undocumented": 35,
       "undocumented-unexercised": 584,
-      "site-code-sample-only": 23,
+      "site-code-sample-only": 22,
       "written-but-not-published": 124,
       "ok": 100
     },
@@ -24,8 +24,8 @@
       "documented-never-exercised": 16,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
-      "site-code-sample-only": 5,
-      "written-but-not-published": 11,
+      "site-code-sample-only": 6,
+      "written-but-not-published": 10,
       "ok": 21
     },
     "phantoms": 0,
@@ -407,7 +407,6 @@
     "NarrativePipelineConfig",
     "NoOpCacheStrategy",
     "NoopLensOptions",
-    "ObservabilityCapabilities",
     "ObservabilityTier",
     "ObserverDeliveryOptions",
     "ObserverDrainResult",

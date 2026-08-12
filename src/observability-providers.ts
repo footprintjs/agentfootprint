@@ -30,7 +30,9 @@
  *   - agentcoreObservability   ← v2.8.1
  *   - cloudwatchObservability  ← v2.8.2
  *   - xrayObservability        ← v2.8.3
- *   - otelObservability        ← v2.9.0 (this release)
+ *   - otelObservability        ← v2.9.0
+ *   - fileObservability        ← 9.8.0 (no vendor at all — NDJSON on disk,
+ *                                 for the on-premises shop with no collector)
  *
  * Note: `datadogObservability` was on the v2.9 roadmap, but Datadog
  * APM accepts OTLP — point your OTel SDK at Datadog's OTLP endpoint
@@ -66,6 +68,14 @@ export {
   type OtelSpanOptions,
   type OtelAttributeValue,
 } from './adapters/observability/otel.js';
+// NDJSON to a local file (9.8.0) — the sink for a deployment with no
+// collector to ship to. Vendor-free: `node:fs`, lazily required the same
+// way the vendor SDKs are, so importing this barrel stays browser-safe.
+export {
+  fileObservability,
+  type FileObservabilityOptions,
+  type FileSinkFs,
+} from './adapters/observability/file.js';
 // Tamper-evident audit export (#20) — the one vendor-free strategy in
 // this subpath (its only runtime requirement is `node:crypto`, lazily
 // imported the same way the vendor SDKs are).

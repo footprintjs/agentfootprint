@@ -1,0 +1,421 @@
+---
+title: On-premises & self-hosted
+description: The provider column for a deployment that owns its own machines. Every service — LLM, stores, embeddings, hosting, code execution, telemetry, credentials, tools — with the adapter that fills it without a cloud account, its door, its dependency and its honest status.
+---
+
+There is no `onPremises()` adapter, and that is the point: **on-premises is not
+a vendor, it is the absence of one.** Every port on this site is already filled
+by something that runs on a machine you own — a model on your GPU, a corpus in
+your Postgres, sessions in a file, telemetry on a disk, secrets in your vault.
+This page is the map: service by service, what fills it, and what each one
+genuinely does not do.
+
+<Callout type="info" title="The rule this page follows">
+Every adapter here is either **zero-dependency** (Node built-ins only) or
+speaks a **protocol** rather than importing a vendor's client. That is what
+makes it portable across the very different things "on-premises" means — a
+laptop, a rack, an air-gapped VLAN, a corporate gateway that terminates every
+outbound call.
+</Callout>
+
+## Start local, stay local, pay only where you must
+
+The workflow the whole library is built around reads, on this column, as a
+ladder. Each rung is one line of change, and you can stop at any of them.
+
+| Rung | LLM | Store | Embeddings | Cost | What it proves |
+|---|---|---|---|---|---|
+| **1 — mock** | `mock({ replies })` | `new InMemoryStore()` | `mockEmbedder()` | $0, offline, deterministic | The context engineering, the tools, the control flow. Most bugs die here |
+| **2 — local model** | `ollama('llama3.2')` | `sqliteVectorStore({ file })` | `localEmbedder()` | $0, your GPU, still offline | That a real model reads what you assembled — and where it does not |
+| **3 — your gateway** | `openai({ baseURL })` | `pgVectorStore({ … })` | `localEmbedder()` or your gateway's | Your contract, your network | Production shape, nothing leaving the perimeter |
+| **4 — a paid API** | `anthropic()` / `openai()` / `bedrock()` | anything above | any | Per token | Only where a hosted model is the requirement |
+
+Nothing about rungs 1–3 is a toy path. Rung 3 is a production deployment
+shape, and the honest labels below say exactly which parts of it have been seen
+working in one.
+
+## Service → adapter map
+
+| Service | What fills it | Door | Dependency | Status |
+|---|---|---|---|---|
+| **LLM — local runtime** | `ollama(model, opts?)` | `agentfootprint/providers` | none — plain HTTP to `localhost:11434` | Shipped |
+| **LLM — anything OpenAI-compatible** (vLLM, llama.cpp `--server`, LM Studio, TGI, a corporate gateway) | `openai({ baseURL })` | `agentfootprint/providers` | `openai` | Shipped |
+| **LLM — your own runtime** | an object implementing `LLMProvider` | `agentfootprint/providers` | none | Shipped — the port is two methods |
+| **Vector store — one machine** | `sqliteVectorStore({ file })` | `agentfootprint/memory` | none (`node:sqlite`) | Shipped |
+| **Vector store — beside your data** | `pgVectorStore({ … })` | `agentfootprint/memory` | `pg` | Shipped |
+| **Vector store — build artifact** | `staticVectorStore(bundle)` | `agentfootprint/memory` | none | Shipped |
+| **Hot store / cache** | `RedisStore` | `agentfootprint/memory` | `ioredis` | Shipped |
+| **Dev store** | `InMemoryStore` | `agentfootprint/memory` | none | Shipped |
+| **Embeddings — on this machine** | `localEmbedder()` | `agentfootprint/providers` | `@huggingface/transformers` | Shipped |
+| **Embeddings — no model at all** | `staticEmbedder()` | `agentfootprint/providers` | `model2vec` backend | Shipped |
+| **Embeddings — your gateway** | `openaiEmbedder({ baseURL })` | `agentfootprint/providers` | `openai` | Shipped |
+| **HTTP surface** | `httpHost({ wire })` / `nodeHost({ port })` | `agentfootprint/hosting` | none | Shipped — **verified in a production field deployment** (see below) |
+| **Sessions — durable** | `sqliteSessions({ file })` | `agentfootprint/hosting` | none (`node:sqlite`) | Shipped — **verified in a production field deployment** |
+| **Sessions — process-lifetime** | `memorySessions()` | `agentfootprint/hosting` | none | Shipped |
+| **Code execution** | `localCodeRunner(opts?)` | `agentfootprint/providers` | none (`node:child_process`) | Shipped — **isolation, not a sandbox** |
+| **Telemetry — a collector you run** | `otelObservability({ tracer })` | `agentfootprint/observe` | `@opentelemetry/api` | Shipped — BYO tracer |
+| **Telemetry — no collector at all** | `fileObservability({ path })` | `agentfootprint/observe` | none (`node:fs`) | **New in 9.8.0** — contract-shaped and tested; awaiting field use |
+| **Telemetry — an evidence record** | `auditExport()` | `agentfootprint/observe` | none (`node:crypto`) | Shipped |
+| **Credentials — dev / small fixed set** | `staticTokens(map)` | `agentfootprint/security` | none | Shipped |
+| **Credentials — your vault** | `vaultCredentials({ address })` | `agentfootprint/security` | none — plain HTTP | **New in 9.8.0** — contract-shaped and tested; awaiting field use |
+| **Credentials — anything else** | the `CredentialProvider` port | `agentfootprint/security` | none | Shipped — one method |
+| **Tools — a local process** | `mcpClient({ transport: { command } })` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | Shipped |
+| **Tools — an internal MCP server** | `mcpClient({ transport: { url } })` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | Shipped |
+| **Policy** | `PermissionPolicy.fromRoles(...)` | `agentfootprint/security` | none | Shipped — in-process, fail-closed |
+
+<Callout type="warn" title="What the status labels mean on this page">
+**Shipped** means it works and is tested.
+
+**Verified in a production field deployment** is used for exactly one row-group
+and describes a **deployment shape**, not an adapter's feature list: a standing
+agent answering HTTP through `httpHost`, persisting conversations and paused
+runs with `sqliteSessions`, against an OpenAI-compatible gateway. That shape
+has run in production, and several releases exist *because* it did — the
+context-length refusal that reached a caller as an opaque 400
+([error handling](doc:error-handling)), the memory window that retained one
+turn per process ([memory & stores](doc:memory-and-stores)), the chunking
+default that produced a fabricated citation ([RAG](doc:rag)). Findings from a
+real deployment, not a demo.
+
+**Contract-shaped and tested; awaiting field use** is the honest label on
+`fileObservability` and `vaultCredentials`. They implement their ports exactly,
+their behaviour is pinned by tests including the refusals, and neither has yet
+been run against a real production disk or a real production vault. Nothing on
+this page calls them verified.
+</Callout>
+
+## LLM — three ways to keep the model inside the perimeter
+
+**Ollama**, for a machine with a model on it:
+
+```ts
+import { ollama } from 'agentfootprint/providers';
+
+const provider = ollama('llama3.2');                                  // localhost:11434
+const remote  = ollama('llama3.2', { baseUrl: 'http://gpu-01:11434' }); // or OLLAMA_HOST
+```
+
+It is a first-class adapter rather than a `baseURL` alias, because Ollama's own
+failures deserve their own words: nothing answering at that address, or a model
+that is not pulled on that machine, are two different things and both are named
+(`OllamaUnavailableError`). Deep dive: [Ollama](doc:ollama).
+
+**Anything OpenAI-compatible** — vLLM, llama.cpp's server, TGI, LM Studio, or
+the corporate gateway that fronts all of them — is the `baseURL` option:
+
+```ts
+import { openai } from 'agentfootprint/providers';
+
+const provider = openai({
+  model: 'llama-3.3-70b',
+  baseURL: 'https://llm-gateway.corp.internal/v1',
+  apiKey: process.env.GATEWAY_KEY,     // many gateways want any non-empty string
+});
+```
+
+A custom `baseURL` means the adapter treats the endpoint as OpenAI-COMPATIBLE
+rather than as OpenAI itself: capabilities real OpenAI declares are not assumed
+of a gateway that merely speaks its wire format. That distinction is why
+`.outputSchema({ strategy: 'tool-forced' })` refuses at run start against a
+provider that has not declared it carries forced tool choice — an **absence is
+a no**, never a maybe.
+
+**Your own runtime** is two methods. `LLMProvider` is `{ name, complete,
+stream? }`, `stream` optional; the `MockProvider` source is the reference
+implementation. See [Custom provider](doc:custom-provider).
+
+## Stores — the corpus stays on your disk
+
+The ranking axis and all seven stores are on
+[Memory & stores](doc:memory-and-stores); the on-premises picks are three:
+
+```ts
+import { sqliteVectorStore, pgVectorStore, staticVectorStore } from 'agentfootprint/memory';
+
+const one   = sqliteVectorStore({ file: './corpus.db' });   // one machine, zero deps
+const yours = pgVectorStore({ connectionString: process.env.PG_URL });
+const built = staticVectorStore(bundle);                    // corpus as a build artifact
+```
+
+`sqliteVectorStore` runs on Node's built-in `node:sqlite` — nothing to install,
+nothing to operate, exact cosine over a resident matrix, and a **documented
+ceiling of 50,000 chunks**, which is a ceiling rather than a cliff because it is
+written down. `pgVectorStore` inherits the backups, failover, access control and
+migrations your Postgres already has, which for a regulated on-prem shop is
+usually the deciding argument. Both refuse a vector that meets an index built by
+a different embedder (`EmbedderMismatchError`) — the failure that otherwise
+presents as *retrieval got worse*.
+
+For conversation memory, `RedisStore` if you already run one, `InMemoryStore` if
+the process is the boundary.
+
+## Embeddings — a model on the machine, or no model at all
+
+```ts
+import { localEmbedder, staticEmbedder } from 'agentfootprint/providers';
+
+const local  = localEmbedder();    // transformers.js — MiniLM-class, ~23 MB, on CPU
+const static_ = staticEmbedder();  // model2vec — no neural forward pass at all
+```
+
+Both run offline after their first model fetch, which matters twice: an
+air-gapped host needs the model files staged with the build, and an embedder
+that never leaves the machine means **the corpus never leaves it either** — the
+usual reason a document set cannot be indexed by a hosted API. `openaiEmbedder`
+takes the same `baseURL` treatment when your gateway serves embeddings.
+See [Embedders](doc:embedders).
+
+## Hosting — the shape that is field-validated
+
+```ts
+import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: sqliteSessions({ file: '/var/lib/agent/sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+});
+```
+
+Three ports, one composer: hydrate → resume-or-fresh → persist → reply.
+`sqliteSessions` holds conversations **and paused runs** in one table on
+`node:sqlite`, so a human-in-the-loop question survives a restart with no
+service to run beside the agent. `httpHost({ wire })` is the door when the
+runtime dictates its own HTTP contract; `nodeHost` is a configuration of it.
+
+This is the shape the label above refers to. Everything on
+[Hosting & runtime](doc:hosting-and-runtime) applies unchanged — durability
+modes, the resume loop, the `PendingAsk` a person answers.
+
+## Code execution — isolation, not a sandbox
+
+```ts
+import { localCodeRunner } from 'agentfootprint/providers';
+
+const runner = localCodeRunner({ timeoutMs: 10_000 });
+```
+
+The name is `localCodeRunner`, never `sandboxedCodeRunner`, and the difference
+is the security posture rather than modesty. A child process gives you a
+separate heap, a kill-on-timeout ceiling, no inherited stdin, and an environment
+**allowlist** — your shell's secrets are not in the model's reach. It does not
+give you a filesystem jail, a network jail, or memory limits. So: a development
+loop, a trusted-input pipeline, a machine you would be relaxed about a shell
+script running on — and a real sandbox (gVisor, Firecracker, a container with
+no egress) behind the same `CodeRunner` port when the input is not trusted. The
+tool code does not change. In-process `eval` / `node:vm` is refused outright,
+because Node's own documentation says `vm` is not a security mechanism.
+
+Why run code at all: **summarize prose, compute data**. A 40,000-row export
+belongs in a process, not in a context window. See
+[Tools & gateways](doc:tools-and-gateways).
+
+## Telemetry — a collector if you run one, a file if you do not
+
+`otelObservability({ tracer })` takes **your** tracer, so any OTLP collector you
+already operate — Tempo, Jaeger, Grafana Alloy, a vendor-agnostic OTel
+Collector — receives the run as spans and span events under `gen_ai.*`. That is
+the first choice whenever a collector exists.
+
+Plenty of deployments have none. **`fileObservability` is the sink for those**:
+NDJSON on a local disk, one `JSON.stringify(event)` per line, in the same
+envelope `cloudwatchObservability` puts in a log event — so a query written
+against one reads the other, and Filebeat / Fluent Bit / Vector / `jq` all read
+it already.
+
+```ts
+import { fileObservability } from 'agentfootprint/observe';
+
+const telemetry = agent.enable.observability({
+  strategy: fileObservability({
+    path: '/var/log/agentfootprint/events.ndjson',
+    maxBytes: 64 * 1024 * 1024,   // a safety ceiling — see below
+    // eventTypes: ['agentfootprint.agent.turn_end', 'agentfootprint.error.fatal'],
+  }),
+});
+
+process.on('SIGTERM', async () => { await agent.shutdown(); });   // flushes
+```
+
+`FileObservabilityOptions` is the whole surface — `path` (required), `maxBytes`,
+`maxBufferEvents`, `maxBufferBytes`, `flushIntervalMs`, `eventTypes`, `onError`
+— plus `_fs`, a `FileSinkFs` test seam that swaps the five filesystem calls this
+adapter makes, which is how the rotation policy is asserted without a real disk.
+
+Four things it is honest about:
+
+- **Buffered, not synchronous.** `exportEvent` serializes and returns; batches
+  are appended on a size trigger, a timer, and `flush()`. A hard kill loses at
+  most the buffer — the price of keeping telemetry out of agent-loop latency.
+  `agent.shutdown()` flushes, as do the handle and a closing `standingAgent`.
+- **Rotation is ONE generation.** With `maxBytes` set, a batch that would cross
+  the ceiling renames the file to `<path>.1`, replacing any previous `.1`, and
+  starts fresh. No `.2`, no compression, no schedule, no cross-process
+  coordination. It exists so an unattended agent cannot fill a disk, and for
+  nothing else — **retention is a log-management daemon's job**, and omitting
+  `maxBytes` (the default) means this adapter never renames anything, which is
+  the right choice when `logrotate` already owns the file.
+- **Nothing is bounded or redacted on the way out.** A payload that must not be
+  on that disk must not reach the strategy: narrow it with `eventTypes` (it
+  becomes the strategy's `relevantEventTypes`, so the dispatcher does not even
+  forward the rest), with `tier` / `sampleRate`, or with a footprintjs
+  `RedactionPolicy` upstream. For a record bounded by construction,
+  `auditExport({ payloadMode: 'bounded' })` is the adapter that does that job.
+- **An unwritable path is refused at construction**, naming the path — not at
+  the first event, hours later, into nobody's console. Write failures after
+  that reach `onError` (a rate-limited `console.error` by default) and the batch
+  is dropped rather than requeued, so a disk that has been full for an hour
+  cannot grow the buffer without bound.
+
+Compose them when you want both:
+
+```ts
+import { composeObservability, otelObservability, fileObservability } from 'agentfootprint/observe';
+
+agent.enable.observability({
+  strategy: composeObservability([
+    otelObservability({ tracer }),
+    fileObservability({ path: '/var/log/agentfootprint/events.ndjson' }),
+  ]),
+});
+```
+
+For a tamper-evident record rather than a dashboard, `auditExport()` hash-chains
+every event and `verifyAuditBundle` names the exact record that broke. Full port
+detail: [Observability sinks](doc:observability-sinks).
+
+## Credentials — your vault, read over its own HTTP API
+
+`staticTokens` is the dev provider and is genuinely enough for a small fixed set
+of service tokens supplied by your orchestrator. When the secrets live in a
+vault, **`vaultCredentials` reads them** — no SDK, one `GET` per resolution
+through the runtime's own `fetch`, against HashiCorp Vault or anything
+Vault-API-compatible (OpenBao, and the Vault-API modes of several managed
+stores).
+
+```ts
+import { vaultCredentials } from 'agentfootprint/security';
+
+const credentials = vaultCredentials({
+  address: 'https://vault.internal:8200',   // https, or say `allowHttp` out loud
+  mount: 'secret',                          // the KV v2 mount, default 'secret'
+  paths: { github: 'ci/github', warehouse: 'ci/postgres' },
+  // token: …  ← or the VAULT_TOKEN environment variable
+});
+
+Agent.create({ provider, model, credentials }).build();
+```
+
+The tool code does not change from the `staticTokens` version — same port, same
+`ctx.credential!.toHeaders()`. `VaultCredentialsOptions` carries `address`,
+`token`, `auth`, `mount`, `namespace`, the path mapping (`paths` or `resolve`),
+`toCredential`, `apiKeyHeader`, `timeoutMs`, `allowHttp`, `id` — and `_fetch`,
+the test seam that stands in for the network.
+
+**V1 is deliberately one shape, and every other shape is refused by name.**
+
+| Axis | V1 does | Anything else |
+|---|---|---|
+| Auth | a **token** — the `token` option, else `VAULT_TOKEN` | AppRole, Kubernetes, JWT/OIDC, AWS IAM, userpass, LDAP are refused at construction, each naming the options a login would arrive on (`roleId` + `secretId`, a role + a projected service-account token, …) |
+| Secret engine | **KV v2** — `<mount>/data/<path>`, unwrapping the `data.data` envelope | a KV v1 mount is named as such the moment its response shape gives it away, and `kvVersion` is named as the option a v1 reader would arrive on |
+| Leases / renewal | **none** — every `getCredential` re-reads the secret | re-resolve-per-call is the library's model since 9.7.0; a lease-aware provider is a different object |
+| Path mapping | `paths` map, a `resolve(service)` function, or neither (the service id **is** the path) | `paths` **and** `resolve` together is refused — two spellings of one rule can disagree, and the loser would do so silently |
+| Transport | **https** | a plain-`http://` address is refused unless `allowHttp: true`: the Vault token travels in the `X-Vault-Token` header, so on plaintext anyone on the path reads a token that can usually read every secret it can reach |
+
+Those refusals are field gates rather than opinions. An auth method nobody has
+exercised against a real cluster would be a guess wearing an adapter's clothes,
+so each refusal names what it would take — *tell us your auth shape* is a field
+report, not an issue title.
+
+A secret's fields become a credential by the first rule that matches, so a
+secret written the ordinary way needs no configuration:
+
+| Fields in the secret | Becomes | Applies |
+|---|---|---|
+| `token` | `bearer(token)` | `authorization: Bearer …` |
+| `api_key` / `apiKey` / `key` (+ optional `header`) | `apiKey(value, header ?? 'x-api-key')` | that header |
+| `username` + `password` | `basic(...)` | `authorization: Basic …` |
+| `headers` (an object of strings) | `headers(map)` | all of them |
+
+`toCredential(secret, service)` is the seam for a shop whose field names are its
+own; returning `undefined` falls back to the table.
+
+<Callout type="warn" title="What this adapter will never say out loud">
+Every error it raises names the **service**, the **mount path** and the **HTTP
+status** — and nothing from the response body, nothing from the token, not even
+the field names the secret carries. That restraint is the contract, because a
+thrown message reaches the model as a tool result *and* rides
+`agentfootprint.credential.failed` to every observer. It is pinned by a
+grep-shaped test that runs every failure path — unknown service, 401, 403, 404,
+503, a non-JSON reply, a KV v1 response, an unrecognised field set, and a
+transport error whose own text echoes the request headers — and asserts no
+secret survives into any message. The credential it returns hides its secret
+fields (non-enumerable, so `JSON.stringify` emits `{"kind":"bearer"}`) and
+carries `toHeaders`, so `structuredClone` rejects it and it cannot reach
+tracked scope by accident.
+</Callout>
+
+Everything else — an internal IdP, a Kubernetes secret projected into the pod, a
+config server — is one `getCredential` method behind the same port. See
+[Identity & credentials](doc:identity-and-credentials).
+
+## Tools — a local process, or an internal server
+
+```ts
+import { mcpClient } from 'agentfootprint/providers';
+
+const local    = mcpClient({ transport: { command: 'python', args: ['./tools/server.py'] } });
+const internal = mcpClient({ transport: { url: 'https://tools.corp.internal/mcp' } });
+```
+
+Stdio for a tool server that runs beside the agent (nothing on the network at
+all); Streamable HTTP for one your platform team operates. `McpHttpTransport`
+accepts **your own `fetch`**, which is how a request that must be signed (mTLS,
+an internal HMAC scheme, a proxy that wants its own header) is served — a
+signature is computed *from* the request, so it cannot be decided at connect
+time. Serving the other direction, `mcpServe` exposes your agent as an MCP tool
+to the rest of the estate. See [Tools & gateways](doc:tools-and-gateways) and
+[MCP client](doc:mcp-client).
+
+## What is NOT here
+
+Honest gaps, so nobody discovers them at integration time:
+
+- **No Kubernetes-native anything.** No operator, no CRD, no service-account
+  auth. The library is a Node dependency; the pod, the probe and the secret
+  mount are yours.
+- **No secret-manager adapter besides Vault**, and Vault only in its V1 shape
+  above. Everything else is the `CredentialProvider` port — one method.
+- **No metrics exporter.** `ObservabilityCapabilities` has a `metrics` flag and
+  no shipped strategy sets it; counters come from the event stream, or from your
+  OTel pipeline downstream of `otelObservability`.
+- **No log-retention policy.** `fileObservability` rotates one generation as a
+  disk-safety ceiling. Retention, compression and shipping belong to the daemon
+  you already run.
+- **No air-gapped model distribution.** `localEmbedder` and `staticEmbedder`
+  fetch their model files once; staging them into an air-gapped image is your
+  build's job.
+
+## Status
+
+| Piece | Status |
+|---|---|
+| `ollama`, `openai({ baseURL })`, the `LLMProvider` port | Shipped |
+| `sqliteVectorStore`, `pgVectorStore`, `staticVectorStore`, `RedisStore`, `InMemoryStore` | Shipped |
+| `localEmbedder`, `staticEmbedder`, `openaiEmbedder({ baseURL })` | Shipped |
+| `httpHost` / `nodeHost` + `sqliteSessions` + an OpenAI-compatible gateway | Shipped — verified in a production field deployment (the deployment SHAPE; see the callout above) |
+| `localCodeRunner` | Shipped — isolation, not a sandbox |
+| `otelObservability`, `auditExport`, `composeObservability` | Shipped |
+| `fileObservability` | **9.8.0** — contract-shaped and tested; awaiting field use |
+| `staticTokens`, the `CredentialProvider` port | Shipped |
+| `vaultCredentials` (token auth, KV v2, no leases) | **9.8.0** — contract-shaped and tested; awaiting field use |
+| `mcpClient` stdio + Streamable HTTP, `mcpServe` | Shipped |
+
+## Next
+
+- [Infrastructure — ports & adapters](doc:infrastructure) — the ports, the decision table, the translation boundary
+- [Ollama](doc:ollama) — the local-model provider in full
+- [Hosting & runtime](doc:hosting-and-runtime) — the standing agent and the resume loop
+- [Observability sinks](doc:observability-sinks) — the port `fileObservability` implements
+- [Identity & credentials](doc:identity-and-credentials) — the port `vaultCredentials` implements
+- [AWS & Bedrock AgentCore](doc:aws) — the other provider column, filled the same way

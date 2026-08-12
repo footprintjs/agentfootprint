@@ -4,7 +4,7 @@ title: AgentInput
 
 # Interface: AgentInput
 
-Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L392)
+Defined in: [src/core/agent/types.ts:409](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L409)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **continueFrom?**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 
-Defined in: [src/core/agent/types.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L445)
+Defined in: [src/core/agent/types.ts:466](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L466)
 
 The conversation this turn continues — an `AgentRunCheckpoint` from
 `agent.checkpoint()`, persisted anywhere and handed back here.
@@ -47,7 +47,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L416)
+Defined in: [src/core/agent/types.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L437)
 
 WHO this run is for — the scoping tuple, not a session handle.
 
@@ -55,8 +55,12 @@ Committed to `scope.runIdentity` at seed and read by five consumers:
 memory + RAG namespacing (`.memory()` / `.rag()` isolate reads and
 writes per tenant + principal + conversation), `PermissionChecker.check`,
 the `.toolMiddleware()` / `.messageMiddleware()` chains,
-`ToolProvider.list(ctx)`, and the credential provider. It does NOT reach
-`tool.execute` — `ToolExecutionContext` carries no identity field.
+`ToolProvider.list(ctx)`, and the credential provider.
+
+Since 9.7.0 it also reaches `tool.execute` as `ctx.identity` — but only
+when you PASSED one. The default `{ conversationId: '<runId>' }` below is
+synthesized, and a tool told about a conversation nobody named would key a
+session on a fiction, so `ctx.identity` is absent in that case.
 
 Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
 without memory work unchanged.
@@ -75,4 +79,4 @@ system-prompt slot as a `<memory>` block rather than as message turns.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L393)
+Defined in: [src/core/agent/types.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L410)

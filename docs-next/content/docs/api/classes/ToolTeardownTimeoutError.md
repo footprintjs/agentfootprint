@@ -1,34 +1,12 @@
 ---
-title: RunCheckpointError
+title: ToolTeardownTimeoutError
 ---
 
-# Class: RunCheckpointError
+# Class: ToolTeardownTimeoutError
 
-Defined in: [src/core/runCheckpoint.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L208)
+Defined in: [src/core/toolSessions.ts:521](https://github.com/footprintjs/agentfootprint/blob/main/src/core/toolSessions.ts#L521)
 
-Thrown by `agent.run()` when a fault occurs mid-run. Carries the
-underlying error AND the last-known-good checkpoint. Catch this
-specifically to engage the resume-on-error path; let other errors
-propagate normally.
-
-## Example
-
-```ts
-import { Agent, RunCheckpointError } from 'agentfootprint';
-
-try {
-  const result = await agent.run({ message: 'long task' });
-} catch (err) {
-  if (err instanceof RunCheckpointError) {
-    await checkpointStore.put(sessionId, err.checkpoint);
-    // hours / restart later:
-    const checkpoint = await checkpointStore.get(sessionId);
-    const result = await agent.resumeOnError(checkpoint);
-  } else {
-    throw err; // not a recoverable error — propagate
-  }
-}
-```
+A teardown that outran its budget. Named so an alert can route on it.
 
 ## Extends
 
@@ -38,23 +16,23 @@ try {
 
 ### Constructor
 
-> **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
+> **new ToolTeardownTimeoutError**(`what`, `timeoutMs`): `ToolTeardownTimeoutError`
 
-Defined in: [src/core/runCheckpoint.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L218)
+Defined in: [src/core/toolSessions.ts:523](https://github.com/footprintjs/agentfootprint/blob/main/src/core/toolSessions.ts#L523)
 
 #### Parameters
 
-##### cause
+##### what
 
-`Error`
+`string`
 
-##### checkpoint
+##### timeoutMs
 
-[`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
+`number`
 
 #### Returns
 
-`RunCheckpointError`
+`ToolTeardownTimeoutError`
 
 #### Overrides
 
@@ -62,38 +40,15 @@ Defined in: [src/core/runCheckpoint.ts:218](https://github.com/footprintjs/agent
 
 ## Properties
 
-### cause
+### cause?
 
-> `readonly` **cause**: `Error`
+> `optional` **cause?**: `unknown`
 
-Defined in: [src/core/runCheckpoint.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L213)
+Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
-The error that triggered the checkpoint. Inspect for retry
- decisions ("if cause is CircuitOpenError, wait for cooldown
- before resuming").
-
-#### Overrides
+#### Inherited from
 
 `Error.cause`
-
-***
-
-### checkpoint
-
-> `readonly` **checkpoint**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
-
-Defined in: [src/core/runCheckpoint.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L216)
-
-The last-known-good checkpoint. Persist + pass back to
- `agent.resumeOnError(checkpoint)` to continue from here.
-
-***
-
-### code
-
-> `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
-
-Defined in: [src/core/runCheckpoint.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L209)
 
 ***
 
@@ -152,6 +107,14 @@ not capture any frames.
 #### Inherited from
 
 `Error.stackTraceLimit`
+
+***
+
+### timeoutMs
+
+> `readonly` **timeoutMs**: `number`
+
+Defined in: [src/core/toolSessions.ts:522](https://github.com/footprintjs/agentfootprint/blob/main/src/core/toolSessions.ts#L522)
 
 ## Methods
 

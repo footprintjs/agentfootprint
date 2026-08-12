@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.8.0] - 2026-08-11
+
+**The on-premises column, finished.**
+
+Every port on this library is vendor-neutral, and every one of them has had an
+AWS adapter for months. The deployments that own their own machines have been
+filling the same ports the whole time — a model on a GPU, a corpus in Postgres,
+sessions in a SQLite file — and two of them had nowhere to go but "write it
+yourself": telemetry with no collector to ship to, and secrets in a vault.
+
+This release fills those two, and writes the column down.
+
+### Added — `fileObservability({ path })`, telemetry for a shop with no collector
+
+`agentfootprint/observe`. An `ObservabilityStrategy` that appends the typed
+event stream to a local file as NDJSON — one `JSON.stringify(event)` per line,
+in **the same envelope `cloudwatchObservability` puts in a log event**, so a
+query written against one reads the other. Zero dependencies: `node:fs`, lazily
+required, so importing the door stays browser-safe.
+
+```ts
+import { fileObservability } from 'agentfootprint/observe';
+
+agent.enable.observability({
+  strategy: fileObservability({
+    path: '/var/log/agentfootprint/events.ndjson',
+    maxBytes: 64 * 1024 * 1024,
+  }),
+});
+process.on('SIGTERM', async () => { await agent.shutdown(); });  // flushes
+```
+
+Four things it is deliberate about:
+
+- **Rotation is ONE generation.** With `maxBytes`, a batch that would cross the
+  ceiling renames the file to `<path>.1` — replacing any previous `.1` — and
+  starts fresh. No `.2`, no compression, no schedule, no cross-process
+  coordination. It exists so an unattended agent cannot fill a disk, and for
+  nothing else: **retention is a log-management daemon's job**, and omitting
+  `maxBytes` (the default) means the adapter never renames anything, which is
+  right when `logrotate` already owns the file. The docstring says exactly this
+  rather than implying a rotator.
+- **An unwritable path is refused at construction**, naming the path and the
+  three ordinary causes — not at the first event, hours later, into nobody's
+  console.
+- **The hot path never throws.** `exportEvent` serializes, buffers and returns;
+  even an unserializable event is reported rather than raised. Write failures
+  follow the 8.11.0 `deliveryErrors` pattern — loud but not fatal, rate-limited
+  on the console, every failure to a wired `onError`, and the batch **dropped
+  rather than requeued** so a full disk cannot grow the buffer without bound.
+- **Nothing is bounded or redacted on the way out**, and the page says so.
+  Narrow it with `eventTypes` (which becomes the strategy's
+  `relevantEventTypes`, so the dispatcher does not even forward the rest),
+  `tier` / `sampleRate`, or a footprintjs `RedactionPolicy`. For a record
+  bounded by construction, `auditExport({ payloadMode: 'bounded' })` is still
+  the adapter that does that job.
+
+`flush()` / `stop()` follow the 8.12.0 lifecycle laws exactly, including the
+8.11.1 one that cost a shutdown spin: a `flush()` after `stop()` still writes
+what was already accepted, and the drain is bounded by construction.
+
+### Added — `vaultCredentials({ address })`, a CredentialProvider over KV v2
+
+`agentfootprint/security`. A `CredentialProvider` for HashiCorp Vault and
+anything Vault-API-compatible (OpenBao, and the Vault-API modes of several
+managed stores). No SDK: one `GET` per resolution through the runtime's own
+`fetch`, with a `_fetch` test seam.
+
+```ts
+import { vaultCredentials } from 'agentfootprint/security';
+
+const credentials = vaultCredentials({
+  address: 'https://vault.internal:8200',
+  paths: { github: 'ci/github' },      // …or resolve(service), or neither
+});                                     // token: `token`, else VAULT_TOKEN
+```
+
+The tool code does not change from the `staticTokens` version — same port, same
+`ctx.credential!.toHeaders()`.
+
+**V1 is one shape, and every other shape is refused by name.** Token auth only;
+KV v2 only; no leases, no renewal (`getCredential` re-reads the secret every
+call, which is the library's model since 9.7.0). AppRole, Kubernetes, JWT/OIDC,
+AWS IAM, userpass and LDAP each refuse at construction **naming the options a
+login would arrive on** — `roleId` + `secretId`, a role plus a projected
+service-account token — because an auth method nobody has exercised against a
+real cluster would be a guess wearing an adapter's clothes. A KV v1 mount is
+named as such the moment its response shape gives it away (`data` with no inner
+`data`), and names `kvVersion` as the option a v1 reader would arrive on.
+Passing `paths` **and** `resolve` is refused: two spellings of one rule can
+disagree, and the loser would do so silently.
+
+A secret's fields become a credential by the first rule that matches — `token` →
+`bearer`, `api_key`/`apiKey`/`key` (+ optional `header`) → `apiKey`, `username` +
+`password` → `basic`, `headers` → `headers` — with `toCredential(secret,
+service)` as the seam for a shop whose field names are its own.
+
+### Security
+
+- **A plain-`http://` address is refused unless `allowHttp: true`.** The Vault
+  token travels in the `X-Vault-Token` header: on plaintext, anyone on the path
+  reads a token that can usually read every secret it can reach, and a leaked
+  read token is not revoked by rotating one secret. The refusal names that,
+  rather than saying "use https".
+- **No secret can reach a message.** Every error `vaultCredentials` raises names
+  the service, the mount path and the HTTP status — and nothing from the
+  response body, nothing from the token, not even the field names the secret
+  carries. This is the 8.6.0 law applied one adapter down: a thrown message
+  reaches the model as a tool result *and* rides
+  `agentfootprint.credential.failed` to every observer. It is pinned by a
+  grep-shaped test that walks every failure path — unknown service, 401, 403,
+  404, 503, a non-JSON reply, a KV v1 response, an unrecognised field set, and a
+  transport error whose own text echoes the request headers — and asserts that
+  no secret and no `x-vault-token` survives into any message, stack or JSON
+  projection of the thrown error.
+
+### Documentation
+
+- **`infrastructure/on-premises.mdx`** — the provider page beside AWS. The
+  local-first ladder (mock → local model → your gateway → a paid API) as the
+  opening frame, then a service-by-service map: LLM (`ollama`, `openai({
+  baseURL })` for vLLM / llama.cpp / a corporate gateway, or the two-method
+  port), stores (`sqliteVectorStore`, `pgVectorStore`, `staticVectorStore`,
+  `RedisStore`), embedders (`localEmbedder`, `staticEmbedder`), hosting
+  (`httpHost` / `nodeHost` + `sqliteSessions` / `memorySessions`), code
+  execution (`localCodeRunner` — *isolation, not a sandbox*), telemetry
+  (`otelObservability` to any OTLP collector, `fileObservability` when there is
+  none, `auditExport` for evidence), credentials (`staticTokens`,
+  `vaultCredentials`, and the port for everything else) and tools (`mcpClient`
+  over stdio or Streamable HTTP). It ends with **what is NOT here** — no
+  Kubernetes-native anything, no second secret-manager adapter, no metrics
+  exporter, no retention policy, no air-gapped model distribution.
+- **The status vocabulary gained one honest rung.** *Contract-shaped and tested;
+  awaiting field use* is what `fileObservability` and `vaultCredentials` carry:
+  their ports and refusals are pinned by tests, and neither has met a real
+  production disk or vault. *Verified in a production field deployment* now
+  appears in exactly one place, describing a deployment **shape** — a standing
+  agent over `httpHost` + `sqliteSessions` against an OpenAI-compatible gateway,
+  the shape several past releases exist because of — and never an adapter. The
+  infrastructure index and the AWS page were both updated to say so rather than
+  keep an absolute claim that had stopped being true.
+
 ## [9.7.0] - 2026-08-11
 
 **Tools have somewhere to hold a session.**

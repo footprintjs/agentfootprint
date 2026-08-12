@@ -1,31 +1,30 @@
 ---
-title: RunCheckpointError
+title: ContextWindowExceededError
 ---
 
-# Class: RunCheckpointError
+# Class: ContextWindowExceededError
 
-Defined in: [src/core/runCheckpoint.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L208)
+Defined in: [src/adapters/llm/contextWindow.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L57)
 
-Thrown by `agent.run()` when a fault occurs mid-run. Carries the
-underlying error AND the last-known-good checkpoint. Catch this
-specifically to engage the resume-on-error path; let other errors
-propagate normally.
+Thrown by an LLM adapter when the provider refused the request because the
+prompt did not fit the model's context window.
+
+A refusal, not a failure of the model: nothing was generated and nothing was
+charged for output. Retrying the identical request is deterministic — it
+fails the same way — so this is one of the classes
+[canResume](/docs/api/functions/canResume) reports as not resumable.
 
 ## Example
 
 ```ts
-import { Agent, RunCheckpointError } from 'agentfootprint';
+import { ContextWindowExceededError } from 'agentfootprint';
 
 try {
-  const result = await agent.run({ message: 'long task' });
+  await agent.run({ message: 'summarise the fabric inventory' });
 } catch (err) {
-  if (err instanceof RunCheckpointError) {
-    await checkpointStore.put(sessionId, err.checkpoint);
-    // hours / restart later:
-    const checkpoint = await checkpointStore.get(sessionId);
-    const result = await agent.resumeOnError(checkpoint);
-  } else {
-    throw err; // not a recoverable error — propagate
+  if (err instanceof ContextWindowExceededError) {
+    console.error(`sent ${err.actualTokens} against ${err.limitTokens}`);
+    // …cap the tool result, or add .window(slidingWindow({ keepRecentTurns: 2 }))
   }
 }
 ```
@@ -38,23 +37,41 @@ try {
 
 ### Constructor
 
-> **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
+> **new ContextWindowExceededError**(`args`): `ContextWindowExceededError`
 
-Defined in: [src/core/runCheckpoint.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L218)
+Defined in: [src/adapters/llm/contextWindow.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L75)
 
 #### Parameters
 
-##### cause
+##### args
+
+###### actualTokens?
+
+`number`
+
+###### cause?
 
 `Error`
 
-##### checkpoint
+###### limitTokens?
 
-[`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
+`number`
+
+###### provider
+
+`string`
+
+###### providerMessage
+
+`string`
+
+###### status?
+
+`number`
 
 #### Returns
 
-`RunCheckpointError`
+`ContextWindowExceededError`
 
 #### Overrides
 
@@ -62,15 +79,23 @@ Defined in: [src/core/runCheckpoint.ts:218](https://github.com/footprintjs/agent
 
 ## Properties
 
-### cause
+### actualTokens?
 
-> `readonly` **cause**: `Error`
+> `readonly` `optional` **actualTokens?**: `number`
 
-Defined in: [src/core/runCheckpoint.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L213)
+Defined in: [src/adapters/llm/contextWindow.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L67)
 
-The error that triggered the checkpoint. Inspect for retry
- decisions ("if cause is CircuitOpenError, wait for cooldown
- before resuming").
+What the request actually came to in tokens, when the vendor said it.
+
+***
+
+### cause?
+
+> `readonly` `optional` **cause?**: `Error`
+
+Defined in: [src/adapters/llm/contextWindow.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L73)
+
+The provider's own error, unchanged.
 
 #### Overrides
 
@@ -78,22 +103,21 @@ The error that triggered the checkpoint. Inspect for retry
 
 ***
 
-### checkpoint
+### code
 
-> `readonly` **checkpoint**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
+> `readonly` **code**: `"ERR_CONTEXT_WINDOW_EXCEEDED"` = `ERR_CONTEXT_WINDOW_EXCEEDED`
 
-Defined in: [src/core/runCheckpoint.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L216)
-
-The last-known-good checkpoint. Persist + pass back to
- `agent.resumeOnError(checkpoint)` to continue from here.
+Defined in: [src/adapters/llm/contextWindow.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L58)
 
 ***
 
-### code
+### limitTokens?
 
-> `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
+> `readonly` `optional` **limitTokens?**: `number`
 
-Defined in: [src/core/runCheckpoint.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L209)
+Defined in: [src/adapters/llm/contextWindow.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L64)
+
+The model's (or gateway's) ceiling in tokens, when the vendor said it.
 
 ***
 
@@ -118,6 +142,16 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 #### Inherited from
 
 `Error.name`
+
+***
+
+### provider
+
+> `readonly` **provider**: `string`
+
+Defined in: [src/adapters/llm/contextWindow.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L61)
+
+Which adapter refused — `'openai'`, `'anthropic'`, `'bedrock'`, …
 
 ***
 
@@ -152,6 +186,16 @@ not capture any frames.
 #### Inherited from
 
 `Error.stackTraceLimit`
+
+***
+
+### status?
+
+> `readonly` `optional` **status?**: `number`
+
+Defined in: [src/adapters/llm/contextWindow.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/contextWindow.ts#L70)
+
+HTTP status, when there was one. Kept so retry policies still see a 4xx.
 
 ## Methods
 

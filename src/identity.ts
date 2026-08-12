@@ -67,3 +67,7 @@ export {
   type AgentCoreIdentityClientLike,
   type AgentCoreOauthResponse,
 } from './adapters/identity/agentcore.js';
+// HashiCorp-Vault-compatible KV v2, over plain HTTP (9.8.0) — no SDK, no
+// vendor client. V1 is token auth + KV v2 + no leases, and every other shape
+// is refused by name rather than guessed at; see the module docstring.
+export { vaultCredentials, type VaultCredentialsOptions } from './adapters/identity/vault.js';

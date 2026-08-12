@@ -74,6 +74,7 @@ All on `agentfootprint/observe`:
 | `agentcoreObservability(opts)` | CloudWatch Logs, in AgentCore's GenAI-Observability shape | `@aws-sdk/client-cloudwatch-logs` | A hosted AgentCore runtime, so agent events land beside the runtime's own telemetry |
 | `xrayObservability(opts)` | AWS X-Ray segment trees | `@aws-sdk/client-xray` | You trace with X-Ray. `serviceName` is required — a missing one is a `TypeError` |
 | `otelObservability(opts)` | Your OTel tracer, as spans + span events under `gen_ai.*` | `@opentelemetry/api` | Portability, or a collector you already run |
+| `fileObservability(opts)` | NDJSON on a local disk — one `JSON.stringify(event)` per line | none (`node:fs`) | There is no collector to ship to. A log shipper, `jq` or a person with `grep` reads the file already |
 | `auditExport(opts)` | A hash-chained bundle | none (`node:crypto`) | You need an **evidence** record, not a dashboard |
 
 `agentcoreObservability` is a thin wrapper over the CloudWatch base — the only
@@ -87,6 +88,19 @@ portability the standard exists for. When an injected tracer's spans do not
 implement `addEvent`, the adapter falls back to flattened
 `${eventName}.${key}` attributes — degraded (last-write-wins) but never silently
 dropped.
+
+<Callout type="warn" title="fileObservability rotates ONE generation, and nothing is bounded on the way out">
+`maxBytes` renames the file to `<path>.1` — replacing any previous `.1` — and
+starts fresh. No `.2`, no compression, no schedule, no cross-process
+coordination: it is a disk-safety ceiling, and **retention belongs to the
+log-management daemon you already run** (omit `maxBytes` and the adapter never
+renames anything, which is the right choice when `logrotate` owns the file).
+Payloads are written verbatim, so narrow what reaches the strategy with
+`eventTypes` / `tier` / `sampleRate` or a footprintjs `RedactionPolicy` — a
+bounded record by construction is `auditExport({ payloadMode: 'bounded' })`.
+An unwritable path is refused at **construction**, naming the path. Full detail
+on [On-premises & self-hosted](doc:on-premises).
+</Callout>
 
 <Callout title="auditExport is tamper-EVIDENT, not tamper-PROOF">
 Every record carries the SHA-256 of its own canonical serialization plus the hash
@@ -207,6 +221,7 @@ time rather than at freeze time.
 |---|---|---|
 | `ObservabilityStrategy` port, `composeObservability` | `agentfootprint/observe` | Shipped |
 | `consoleObservability`, `auditExport` / `verifyAuditBundle` | `agentfootprint/observe` | Shipped — no vendor SDK |
+| `fileObservability` | `agentfootprint/observe` | 9.8.0 — contract-shaped and tested; awaiting field use |
 | `otelObservability` | `agentfootprint/observe` | Shipped — BYO tracer |
 | `cloudwatchObservability`, `agentcoreObservability`, `xrayObservability` | `agentfootprint/observe` | Shipped; contract-mapped and injection-tested, command names pinned |
 | `detach` delivery, `tier`, `sampleRate` | — | Shipped |
