@@ -6,7 +6,7 @@
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:26](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L26)
+Defined in: [src/core/tools.ts:26](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L26)
 
 One executable tool the Agent can call.
 
@@ -27,11 +27,47 @@ One executable tool the Agent can call.
 
 ## Properties
 
+### capabilities?
+
+> `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/agentfootprint/api/generated/type-aliases/ToolCapability.md)[]
+
+Defined in: [src/core/tools.ts:90](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L90)
+
+What this tool touches, DECLARED by whoever wrote it (9.11.0).
+
+The framework never infers this. A tool's capabilities are not knowable
+from its name, its schema or its description, and classifying them by guess
+would rest a policy decision on a heuristic — so a tool that says nothing
+gets nothing asked about it, exactly as before.
+
+**Enforced when both sides speak.** When a tool declares a capability AND
+the configured `PermissionChecker` declares it `governs` that capability,
+the dispatch loop asks once per declared capability, right after the
+`'tool_call'` check allows — `check({ capability: 'external_net', target:
+'<tool name>' })`. Either side silent → not asked, not refused. A denial
+lands like every other refusal in the loop: the tool does not run and the
+model reads a result it can adapt to.
+
+#### Example
+
+```ts
+a tool the operator wants governed as a network egress
+  defineTool({
+    name: 'fetch_invoice',
+    description: 'Fetch an invoice PDF from the billing service',
+    capabilities: ['external_net', 'user_data'],
+    inputSchema: { … },
+    execute: async ({ id }) => …,
+  });
+```
+
+***
+
 ### checkIn?
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)
 
-Defined in: [src/core/tools.ts:46](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L46)
+Defined in: [src/core/tools.ts:46](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L46)
 
 Declarative demand for a human check-in BEFORE this tool runs — consent
 for a consequential action, with an evidence pack riding the ask.
@@ -52,7 +88,7 @@ exposes a predicate typed to the tool's args at the CALL site.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:31](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L31)
+Defined in: [src/core/tools.ts:31](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L31)
 
 Declare-and-push: a credential this tool needs. The framework resolves it
  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
@@ -64,7 +100,7 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 > `readonly` **schema**: [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)
 
-Defined in: [src/core/tools.ts:27](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L27)
+Defined in: [src/core/tools.ts:27](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L27)
 
 ***
 
@@ -72,7 +108,7 @@ Defined in: [src/core/tools.ts:27](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **source?**: `string`
 
-Defined in: [src/core/tools.ts:64](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L64)
+Defined in: [src/core/tools.ts:64](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L64)
 
 Where this tool came from — the name of the MCP server that served it.
 
@@ -96,7 +132,7 @@ when it is genuinely relaying another source's tool.
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:65](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L65)
+Defined in: [src/core/tools.ts:91](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/tools.ts#L91)
 
 #### Parameters
 

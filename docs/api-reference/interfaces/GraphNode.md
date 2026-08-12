@@ -6,7 +6,7 @@
 
 # Interface: GraphNode\<I, O\>
 
-Defined in: [src/core-flow/Graph.ts:147](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core-flow/Graph.ts#L147)
+Defined in: [src/core-flow/Graph.ts:147](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Graph.ts#L147)
 
 One node of the graph: an id, the runner that does the work, and — when
 the node has more than one parent — how to merge what those parents
@@ -28,7 +28,7 @@ produced into this node's input.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Graph.ts:149](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core-flow/Graph.ts#L149)
+Defined in: [src/core-flow/Graph.ts:149](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Graph.ts#L149)
 
 Unique within the graph. Used as the results key and the chart node id.
 
@@ -38,7 +38,7 @@ Unique within the graph. Used as the results key and the chart node id.
 
 > `readonly` `optional` **join?**: (`upstream`) => `I`
 
-Defined in: [src/core-flow/Graph.ts:160](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core-flow/Graph.ts#L160)
+Defined in: [src/core-flow/Graph.ts:160](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Graph.ts#L160)
 
 Merge upstream outputs into this node's input. `upstream` is keyed by
 PARENT NODE ID, and each value is that parent's output, unchanged.
@@ -63,7 +63,7 @@ merge is a wrong merge, so the build refuses and names the node.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Graph.ts:162](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core-flow/Graph.ts#L162)
+Defined in: [src/core-flow/Graph.ts:162](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Graph.ts#L162)
 
 Human-friendly label for events + topology. Default: the node id.
 
@@ -73,6 +73,6 @@ Human-friendly label for events + topology. Default: the node id.
 
 > `readonly` **runner**: [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<`I`, `O`\>
 
-Defined in: [src/core-flow/Graph.ts:151](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core-flow/Graph.ts#L151)
+Defined in: [src/core-flow/Graph.ts:151](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Graph.ts#L151)
 
 The work. Any Runner: LLMCall, Agent, a Sequence, another graph.

@@ -6,7 +6,7 @@
 
 # Class: ConversationMismatchError
 
-Defined in: [src/core/runCheckpoint.ts:362](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/runCheckpoint.ts#L362)
+Defined in: [src/core/runCheckpoint.ts:362](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/runCheckpoint.ts#L362)
 
 Thrown when a stored conversation is handed to an agent that is provably
 not the one that recorded it (9.2.0).
@@ -28,7 +28,7 @@ deploy is the ordinary case and must keep working.
 
 > **new ConversationMismatchError**(`door`, `storedAgentId`, `agentId`): `ConversationMismatchError`
 
-Defined in: [src/core/runCheckpoint.ts:369](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/runCheckpoint.ts#L369)
+Defined in: [src/core/runCheckpoint.ts:369](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/runCheckpoint.ts#L369)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/core/runCheckpoint.ts:369](https://github.com/footprintjs/agent
 
 > `readonly` **agentId**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:367](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/runCheckpoint.ts#L367)
+Defined in: [src/core/runCheckpoint.ts:367](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/runCheckpoint.ts#L367)
 
 The id of the agent it was handed to.
 
@@ -80,7 +80,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_CONVERSATION_MISMATCH"`
 
-Defined in: [src/core/runCheckpoint.ts:363](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/runCheckpoint.ts#L363)
+Defined in: [src/core/runCheckpoint.ts:363](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/runCheckpoint.ts#L363)
 
 ***
 
@@ -146,7 +146,7 @@ not capture any frames.
 
 > `readonly` **storedAgentId**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:365](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/runCheckpoint.ts#L365)
+Defined in: [src/core/runCheckpoint.ts:365](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/runCheckpoint.ts#L365)
 
 The id stamped on the stored conversation.
 

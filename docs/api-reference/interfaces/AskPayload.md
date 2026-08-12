@@ -6,7 +6,7 @@
 
 # Interface: AskPayload
 
-Defined in: [src/core/agent/middleware/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/middleware/types.ts#L111)
+Defined in: [src/core/agent/middleware/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L111)
 
 What a person is being asked. Carried verbatim to the checkpoint.
 
@@ -16,7 +16,7 @@ What a person is being asked. Carried verbatim to the checkpoint.
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/middleware/types.ts#L115)
+Defined in: [src/core/agent/middleware/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L115)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -26,6 +26,6 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/middleware/types.ts#L113)
+Defined in: [src/core/agent/middleware/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L113)
 
 The question, in your own words. Shown to whoever answers.

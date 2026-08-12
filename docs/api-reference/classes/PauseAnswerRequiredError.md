@@ -6,7 +6,7 @@
 
 # Class: PauseAnswerRequiredError
 
-Defined in: [src/core/pause.ts:252](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/pause.ts#L252)
+Defined in: [src/core/pause.ts:252](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L252)
 
 Raised when an `askHuman()` / `pauseHere()` pause is resumed with NO answer.
 
@@ -34,7 +34,7 @@ and resume the same checkpoint again.
 
 > **new PauseAnswerRequiredError**(`ctx`): `PauseAnswerRequiredError`
 
-Defined in: [src/core/pause.ts:259](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/pause.ts#L259)
+Defined in: [src/core/pause.ts:259](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L259)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PAUSE_ANSWER_REQUIRED"`
 
-Defined in: [src/core/pause.ts:253](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/pause.ts#L253)
+Defined in: [src/core/pause.ts:253](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L253)
 
 ***
 
@@ -140,7 +140,7 @@ not capture any frames.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/pause.ts:257](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/pause.ts#L257)
+Defined in: [src/core/pause.ts:257](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L257)
 
 The tool call id the pause is filed under.
 
@@ -150,7 +150,7 @@ The tool call id the pause is filed under.
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/pause.ts:255](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/pause.ts#L255)
+Defined in: [src/core/pause.ts:255](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L255)
 
 The tool whose `execute()` paused.
 

@@ -8,7 +8,7 @@
 
 > **ActKey**\<`M`\> = `M` *extends* `` `${infer Head}-${infer Tail}` `` ? `` `${Head}${Capitalize<Tail>}` `` : `M`
 
-Defined in: [src/core/agent/moments.ts:52](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/moments.ts#L52)
+Defined in: [src/core/agent/moments.ts:52](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/moments.ts#L52)
 
 The `.act()` key that governs a moment: the moment's name, camel-cased.
 
