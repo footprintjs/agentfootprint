@@ -8,7 +8,7 @@
 
 > **StageRole** = `"hero-slot"` \| `"hero-llm"` \| `"hero-action"` \| `"plumbing"` \| `"boundary"`
 
-Defined in: [src/conventions.ts:218](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/conventions.ts#L218)
+Defined in: [src/conventions.ts:218](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/conventions.ts#L218)
 
 Semantic role of a stage, used by renderers to decide visual emphasis.
 

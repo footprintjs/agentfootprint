@@ -6,7 +6,7 @@
 
 # Interface: ConsentGate
 
-Defined in: [src/core/pause.ts:131](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/pause.ts#L131)
+Defined in: [src/core/pause.ts:131](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/pause.ts#L131)
 
 What [pauseDemandsDecision](/agentfootprint/api/generated/functions/pauseDemandsDecision.md) reports about a pause that is a consent gate.
 
@@ -16,7 +16,7 @@ What [pauseDemandsDecision](/agentfootprint/api/generated/functions/pauseDemands
 
 > `readonly` **kind**: [`ConsentGateKind`](/agentfootprint/api/generated/type-aliases/ConsentGateKind.md)
 
-Defined in: [src/core/pause.ts:132](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/pause.ts#L132)
+Defined in: [src/core/pause.ts:132](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/pause.ts#L132)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/pause.ts:132](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **middleware?**: `string`
 
-Defined in: [src/core/pause.ts:136](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/pause.ts#L136)
+Defined in: [src/core/pause.ts:136](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/pause.ts#L136)
 
 `'ask'` only — the `name` of the middleware that asked.
 
@@ -34,6 +34,6 @@ Defined in: [src/core/pause.ts:136](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/pause.ts:134](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/pause.ts#L134)
+Defined in: [src/core/pause.ts:134](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/pause.ts#L134)
 
 The tool the gate is about, when the pause payload named one.

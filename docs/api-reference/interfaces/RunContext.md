@@ -6,7 +6,7 @@
 
 # Interface: RunContext
 
-Defined in: [src/bridge/eventMeta.ts:35](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L35)
+Defined in: [src/bridge/eventMeta.ts:35](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L35)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/bridge/eventMeta.ts:35](https://github.com/footprintjs/agentfoo
 
 > `readonly` **compositionPath**: readonly `string`[]
 
-Defined in: [src/bridge/eventMeta.ts:45](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L45)
+Defined in: [src/bridge/eventMeta.ts:45](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L45)
 
 Composition ancestry path (e.g. ['Sequence:bot', 'Agent:classify']).
 
@@ -24,7 +24,7 @@ Composition ancestry path (e.g. ['Sequence:bot', 'Agent:classify']).
 
 > `readonly` `optional` **correlationId?**: `string`
 
-Defined in: [src/bridge/eventMeta.ts:43](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L43)
+Defined in: [src/bridge/eventMeta.ts:43](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L43)
 
 Optional correlation id for cross-event tying (retrieval→injection→LLM).
 
@@ -34,7 +34,7 @@ Optional correlation id for cross-event tying (retrieval→injection→LLM).
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/bridge/eventMeta.ts:48](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L48)
+Defined in: [src/bridge/eventMeta.ts:48](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L48)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/bridge/eventMeta.ts:48](https://github.com/footprintjs/agentfoo
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/bridge/eventMeta.ts:39](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L39)
+Defined in: [src/bridge/eventMeta.ts:39](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L39)
 
 Unique run id (demultiplex concurrent runs sharing one dispatcher).
 
@@ -52,7 +52,7 @@ Unique run id (demultiplex concurrent runs sharing one dispatcher).
 
 > `readonly` **runStartMs**: `number`
 
-Defined in: [src/bridge/eventMeta.ts:37](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L37)
+Defined in: [src/bridge/eventMeta.ts:37](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L37)
 
 Millisecond wall-clock timestamp when the run started.
 
@@ -62,7 +62,7 @@ Millisecond wall-clock timestamp when the run started.
 
 > `readonly` `optional` **sessionId?**: `string`
 
-Defined in: [src/bridge/eventMeta.ts:51](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L51)
+Defined in: [src/bridge/eventMeta.ts:51](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L51)
 
 The hosting conversation this run belongs to, when it belongs to one
  (9.4.0). Absent for an unhosted or anonymous run — never fabricated.
@@ -73,7 +73,7 @@ The hosting conversation this run belongs to, when it belongs to one
 
 > `readonly` `optional` **traceId?**: `string`
 
-Defined in: [src/bridge/eventMeta.ts:41](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L41)
+Defined in: [src/bridge/eventMeta.ts:41](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L41)
 
 Optional OTEL trace id forwarded from executor.run({ env: { traceId } }).
 
@@ -83,6 +83,6 @@ Optional OTEL trace id forwarded from executor.run({ env: { traceId } }).
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/bridge/eventMeta.ts:47](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/bridge/eventMeta.ts#L47)
+Defined in: [src/bridge/eventMeta.ts:47](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/bridge/eventMeta.ts#L47)
 
 Optional turn/iter indices from agent runtime.

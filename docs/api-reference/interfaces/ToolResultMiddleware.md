@@ -6,7 +6,7 @@
 
 # Interface: ToolResultMiddleware
 
-Defined in: [src/core/agent/middleware/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L242)
+Defined in: [src/core/agent/middleware/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L242)
 
 A link that decides only about the RESULT. It takes no part in dispatch.
 
@@ -20,7 +20,7 @@ A link that decides only about the RESULT. It takes no part in dispatch.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L232)
+Defined in: [src/core/agent/middleware/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L232)
 
 Identifies this middleware in every ledger row and event it produces.
 
@@ -34,7 +34,7 @@ Identifies this middleware in every ledger row and event it produces.
 
 > `optional` **onToolCall?**: `undefined`
 
-Defined in: [src/core/agent/middleware/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L243)
+Defined in: [src/core/agent/middleware/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L243)
 
 ## Methods
 
@@ -42,7 +42,7 @@ Defined in: [src/core/agent/middleware/types.ts:243](https://github.com/footprin
 
 > **onToolResult**(`call`): [`ToolResultOutcome`](/agentfootprint/api/generated/type-aliases/ToolResultOutcome.md) \| `Promise`\<[`ToolResultOutcome`](/agentfootprint/api/generated/type-aliases/ToolResultOutcome.md)\>
 
-Defined in: [src/core/agent/middleware/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L244)
+Defined in: [src/core/agent/middleware/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L244)
 
 #### Parameters
 

@@ -6,7 +6,7 @@
 
 # Interface: MessageMiddleware
 
-Defined in: [src/core/agent/middleware/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L290)
+Defined in: [src/core/agent/middleware/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L290)
 
 One link in the message chain. Runs at both phases unless it decides
 otherwise by reading `msg.phase`.
@@ -29,7 +29,7 @@ const scrubSSNs: MessageMiddleware = {
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L291)
+Defined in: [src/core/agent/middleware/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L291)
 
 ## Methods
 
@@ -37,7 +37,7 @@ Defined in: [src/core/agent/middleware/types.ts:291](https://github.com/footprin
 
 > **onMessage**(`msg`): [`MessageOutcome`](/agentfootprint/api/generated/type-aliases/MessageOutcome.md) \| `Promise`\<[`MessageOutcome`](/agentfootprint/api/generated/type-aliases/MessageOutcome.md)\>
 
-Defined in: [src/core/agent/middleware/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/agent/middleware/types.ts#L292)
+Defined in: [src/core/agent/middleware/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/agent/middleware/types.ts#L292)
 
 #### Parameters
 

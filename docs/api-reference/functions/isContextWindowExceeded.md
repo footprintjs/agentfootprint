@@ -8,7 +8,7 @@
 
 > **isContextWindowExceeded**(`err`): `err is ContextWindowExceededError`
 
-Defined in: [src/adapters/llm/contextWindow.ts:96](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/adapters/llm/contextWindow.ts#L96)
+Defined in: [src/adapters/llm/contextWindow.ts:96](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/adapters/llm/contextWindow.ts#L96)
 
 `true` for the typed error, including across a `structuredClone`-free
  boundary where `instanceof` still holds. Kept as a function so callers do

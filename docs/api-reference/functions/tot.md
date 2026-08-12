@@ -8,7 +8,7 @@
 
 > **tot**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/ToT.ts:57](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/ToT.ts#L57)
+Defined in: [src/patterns/ToT.ts:57](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/patterns/ToT.ts#L57)
 
 Build a ToT Runner. At run time:
   1. Seed — treat the input message as the initial frontier of 1 thought.
