@@ -7,6 +7,176 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.9.0] - 2026-08-12
+
+**A bug report IS the evidence.**
+
+The usual bug report is a person's memory of a run: "it said the wrong thing, I
+think it called the search tool twice". The run itself — the timeline, the
+state, the chart, the narrative — was sitting in the process the whole time and
+never left it. This release turns that around: the report is the run, packaged,
+with the prose attached.
+
+### Added — `describeBugReport()` / `exportBugReport()`, the consent seam
+
+`agentfootprint/observe`. Two calls, because consent needs two:
+
+```ts
+import { describeBugReport, exportBugReport } from 'agentfootprint/observe';
+
+const offer = describeBugReport(recording);        // measure — nothing has left yet
+// …show offer.units to the human; they tick some…
+const report = exportBugReport(recording, {
+  include: ['conv-1', 'file-conversation', 'file-environment'],
+  title: 'Agent answered with a stale price',
+  stepsToReproduce: '1. ask\n2. update\n3. ask again',
+  expected: 'the updated price',
+  actual: 'the price from before the update',
+});
+fs.writeFileSync(report.filename, report.zip);     // a real .zip
+```
+
+- **The manifest is SELECTABLE UNITS, not a blob.** Each conversation is a unit
+  — keyed by session id when the run was session-bound, else by run id, so
+  several `run()` calls in one session are ONE unit, which is what a person
+  means by "the chat that went wrong" — carrying its size, event count and turn
+  count. Each derived file (`conversation.json`, `narrative.txt`,
+  `environment.json`) is a unit too. A dialog cannot ask about a blob it has not
+  measured, which is the whole reason `describeBugReport` exists separately.
+- **A deselected unit is out of EVERY file.** The transcript and the narrative
+  are rebuilt over the selected conversations, not filtered afterwards — the
+  first cut of this shipped a conv-2 that was out of its own file and quietly
+  inside `conversation.json`, and the property test that caught it is now the
+  pin.
+- **What was left out is STATED.** `manifest.excluded` counts the conversations,
+  files, events and turns that were withheld, names their unit ids, and the
+  issue body repeats it. A maintainer reading turn 4 must be able to tell that
+  turns 1–3 were *withheld*, not *lost*.
+- **Redacted keys, BY NAME.** The recording arrives already redacted (footprintjs
+  scrubs at commit time), so nothing here scrubs anything — it would be too late
+  to matter and a second policy could only disagree with the first. Instead the
+  manifest lists the key names whose values are placeholders, derived from the
+  evidence itself, so a human can consent knowing which secrets were protected.
+  An empty list is explained rather than left to look like "nothing secret here".
+- **`environment.json` is versions and nothing else** — library, engine, Node,
+  platform, arch, plus the reporter's prose. No username, no hostname, no
+  working directory, no environment variables, no file paths. A bug report should
+  not be how an internal directory layout leaves a company.
+- **Over 20 MB, the trim hints name real unit ids** ("Drop conv-2 (14.0 MB) →
+  6.1 MB."), never "make it smaller", and never the last remaining conversation.
+- **An agent works as input too**, honestly: a finished runner gives up its
+  snapshot and its chart but not its events (the dispatcher drops events nobody
+  subscribed to), so that arm produces a note saying the timeline is missing and
+  naming the one-line fix, rather than a silently empty panel.
+
+The zip writer is **~150 lines, zero dependencies, STORE-only (no compression)**,
+and says so in its docstring. Deflate would shrink a JSON bundle well and would
+cost either a dependency or `node:zlib` — which would make the export Node-only,
+when building a bundle in the browser is exactly the flow the consent dialog is
+for. Verified two ways: a structural parser written against APPNOTE walks the
+central directory and re-checks every CRC, and the system `unzip` opens the real
+file (`unzip -t` verifies the CRCs, `unzip -p` prints back the exact bytes,
+extraction recreates the tree). Zip-slip names (`..`, a leading `/`, a drive
+letter, a backslash) are refused by name — an archive is extracted on the
+machine of the person it was filed against.
+
+### Added — `githubBugReporter()`, with TWIN TARGETS
+
+`agentfootprint/observe`. Commits the evidence zip and files the issue, over
+plain `fetch` with no SDK:
+
+```ts
+const reporter = githubBugReporter({
+  issueRepo: 'footprintjs/agentfootprint',   // public — the conversation
+  evidenceRepo: 'acme/af-bug-evidence',      // private — the run
+});                                          // token: GITHUB_TOKEN, or `token`
+const { issueUrl, zipUrl } = await reporter.file(report);
+```
+
+- **The issue and the evidence may live in different repos.** The case that
+  shipped it: a field tester files a LIBRARY bug — the issue into the library's
+  public repo, the evidence zip into a private repo the maintainers can read.
+  The issue links the bundle and says plainly that the evidence is private.
+- **The doctrine's teeth.** Before committing evidence, the repo's metadata is
+  read; a PUBLIC evidence repo is **refused** unless
+  `acknowledgePublicEvidence: true` says so out loud. If the metadata call itself
+  fails (a token that can write contents but not read metadata is a legitimate
+  configuration) the report proceeds and the result carries
+  `checkedVisibility: false` — a permissions quirk must not block a bug report,
+  and skipping the check silently would be worse than either.
+- **Size is refused BEFORE the upload** (24 MB), quoting the manifest's own trim
+  hints rather than inventing advice.
+- **A name already taken is suffixed, never overwritten** — no `sha` is ever
+  sent, so this reporter cannot replace somebody else's evidence even by
+  mistake.
+- **The two-clause secrecy law, applied.** The token appears in no message, no
+  error and no log, and neither does a byte of the bundle: a failure names the
+  status and GitHub's own `message` field only — never the request, never the
+  headers, never the response body (which can echo both). Transport failures are
+  re-wrapped rather than rethrown, because a `fetch` implementation is free to
+  put the whole request into the error it throws. Pinned by a suite that forces
+  ten failure paths — including a transport error carrying the auth header
+  verbatim — and greps the message, the stack and the JSON projection.
+- **Refusals teach where each thing goes**: a missing token names both the env
+  var and the option AND the fine-grained-token page, scoped to exactly the two
+  repos with exactly two permissions; a 403 names those permissions again; a 404
+  explains that GitHub answers 404 for a private repo a token cannot see.
+- **`apiBase` for GitHub Enterprise Server**, so the whole path works on a
+  network that never reaches github.com.
+
+### Added — `githubDeviceSignIn()`, filing as yourself
+
+`agentfootprint/observe`. GitHub's OAuth **device flow** in three plain `fetch`
+calls — browser-safe and server-safe, no client secret, no dependency:
+
+```ts
+const signIn = await githubDeviceSignIn({ clientId });     // returns at once
+show(`Open ${signIn.verificationUri} and enter ${signIn.userCode}`);
+const { token, login } = await signIn.completed;           // resolves on approve
+```
+
+A server PAT files every report as the *application*; this files it as the
+*reporter*, which is what a field tester filing upstream needs. It honours
+`slow_down`, respects the code's expiry, takes an `AbortSignal`, and fetches
+`/user` for attribution (a `/user` that refuses is not fatal — the token still
+works, the login is simply absent). The token it returns is handed to
+`githubBugReporter` with no special-casing: a token is a token.
+
+Two things the docstring says plainly rather than leaving to be discovered:
+classic OAuth scopes are **coarser** than a fine-grained PAT (GitHub's design,
+not ours — `public_repo` is the default here and grants write across every
+public repo the account can reach), and the token must live **in memory for the
+session only** — never `localStorage`, never a log line. The collaborator caveat
+is stated too: a reporter who is not a collaborator on a private evidence repo
+gets a 404, and the honest fallback is attaching the zip by hand.
+
+### Docs
+
+- New page: **File a bug with the run attached** (`debug/file-a-bug`) — the
+  browser consent flow with the manifest shown before anything leaves, the
+  server wiring (two endpoints, hand-written: there is deliberately no route
+  helper, because consent needs two round trips and the run-id → recording
+  lookup is state the application owns), the token-provisioning section
+  (fine-grained, two repos, two permissions, an expiry), the "filing upstream"
+  twin-target recipe with the private-evidence pattern, the two-mode table
+  (server PAT vs device sign-in), and the cross-organisation doctrine.
+- **On-premises & self-hosted** gains a row: the whole path runs on a network
+  that never reaches github.com, GHES included, via `apiBase`.
+- New example: `examples/observability/22-file-a-bug.ts` — records two
+  conversations, prints the consent manifest, exports a subset, parses the zip's
+  central directory back off disk, and files it against a scripted GitHub. Exits
+  non-zero if any of that stops being true. No key, no network, no token.
+
+### Internal
+
+- `libraryVersion()` moved from `adapters/observability/audit.ts` to
+  `lib/libraryVersion.ts` and gained `engineVersion()` beside it. Two copies of
+  "which version produced this?" would be two answers to a question that must
+  have exactly one; `auditExport` now imports the shared one.
+- `narrativeFrom()` (the shape-detector for a narrative recorder's snapshot row)
+  is exported `@internal` from `lib/trace-toolpack/openRecording.ts` and reused
+  by the bundler, for the same reason.
+
 ## [9.8.0] - 2026-08-11
 
 **The on-premises column, finished.**

@@ -314,6 +314,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 19 | [`19-recorded-chat.ts`](observability/19-recorded-chat.ts) | recordedChat — a chat session that can explain itself | A three-turn financial-advisor chat recorded turn-by-turn. Every send() freezes that turn\'s  |
 | 20 | [`20-record-and-render.ts`](observability/20-record-and-render.ts) | Record a run, save it, render it in both UIs | recordRun() saves a run as the three fields a viewer needs — snapshot, events, structure —  |
 | 21 | [`21-variable-recall.ts`](observability/21-variable-recall.ts) | Variable recall — a variable’s recorded life, and a walk that stops guessing | traceVariable joins footprintjs keyTimeline/forwardSliceForKey to agent vocabulary (loops,  |
+| 22 | [`22-file-a-bug.ts`](observability/22-file-a-bug.ts) | File a bug with the run attached | describeBugReport() measures the run into selectable units (sizes, counts, redacted keys  |
 
 ### [`rag/`](rag/) — examples
 

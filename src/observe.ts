@@ -99,6 +99,32 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// exportBugReport — a bug report IS the evidence. `describeBugReport` measures
+// the run first (selectable units, sizes, the redacted keys by NAME) so a human
+// can consent to exactly what leaves; `exportBugReport` bundles the units they
+// kept as named files plus a real (stored) zip. `githubBugReporter` — in this
+// same door, from the providers barrel — files that bundle.
+export {
+  describeBugReport,
+  exportBugReport,
+  type BugReport,
+  type BugReportEnvironment,
+  type BugReportExcluded,
+  type BugReportFields,
+  type BugReportFile,
+  type BugReportFileSummary,
+  type BugReportInput,
+  type BugReportManifest,
+  type BugReportOversize,
+  type BugReportSource,
+  type BugReportUnit,
+  type DescribeBugReportOptions,
+  type ExportBugReportOptions,
+  type Transcript,
+  type TranscriptStep,
+  type TranscriptTurn,
+} from './lib/bug-report/index.js';
+
 // What a recording keeps of a vector: `{ dims, norm }`, not the bytes (8.20.0).
 // Applied by BoundaryRecorder and recordRun unless `recordEmbeddings: true`;
 // exported so consumers that render or post-process recordings can apply or

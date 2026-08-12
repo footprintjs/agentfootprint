@@ -1,0 +1,376 @@
+---
+title: File a bug with the run attached
+description: A bug report IS the evidence. describeBugReport() measures the run into selectable units so a human can consent; exportBugReport() bundles what they kept as a real zip; githubBugReporter() commits it and files the issue.
+---
+
+The usual bug report is a person's memory of a run: *"it said the wrong thing,
+I think it called the search tool twice."* The run itself — the timeline, the
+state, the chart, the narrative — was right there in the process, and never
+left it.
+
+This turns that around. **The report is the run**, packaged, with the prose
+attached.
+
+```ts
+import { describeBugReport, exportBugReport, githubBugReporter } from 'agentfootprint/observe';
+```
+
+## The two steps, and why there are two
+
+| | what it does |
+|---|---|
+| `describeBugReport(input)` | **Measures.** Returns a manifest of *selectable units* — each conversation with its size, event count and turn count; each derived file; the redacted keys **by name**; the total; and trim hints if it is too big. Nothing has left yet. |
+| `exportBugReport(input, fields)` | **Bundles.** Takes the unit ids the reporter kept as `include`, and produces `{ manifest, files, zip, filename }`. What they left out is **counted** in the manifest. |
+
+One call is enough for a server-side reporter with no human in front of it. The
+two-step shape is what makes a consent dialog possible at all: **a dialog
+cannot ask about a blob it has not measured.**
+
+## Step 1 — record the run
+
+Same three fields as [Replay a saved run](doc:offline-replay); `recordRun` is
+the producer, and it must be wired **before** the run.
+
+```ts
+import { recordRun } from 'agentfootprint/observe';
+
+const recorder = recordRun(agent);          // BEFORE run()
+await agent.run({ message }, { sessionId });
+const recording = recorder.toRecording();
+recorder.stop();
+```
+
+<Callout type="info" title="You can also hand it the agent">
+`describeBugReport(agent)` and `exportBugReport(agent, …)` accept a runner
+directly. That gives you the state and the chart but **no event timeline and no
+transcript** — events are delivered live and dropped when nothing is listening.
+The manifest says so in a note rather than shipping a silent gap. Wire
+`recordRun` and you get all three.
+</Callout>
+
+## Step 2 — show the manifest, take the consent
+
+```ts
+const offer = describeBugReport([broken, unrelated]);
+
+for (const unit of offer.units) {
+  console.log(`[ ] ${unit.id}  ${(unit.bytes / 1024).toFixed(1)} KB  ${unit.label}`);
+}
+```
+
+```text
+[ ] conv-1             357.3 KB  conv-1 — session session-broken: 1 run, 1 turn, 37 events
+[ ] conv-2             356.6 KB  conv-2 — session session-unrelated: 1 run, 1 turn, 37 events
+[ ] file-conversation    1.7 KB  conversation.json — the readable transcript
+[ ] file-environment     0.1 KB  environment.json — library, engine, Node and platform versions
+
+total 715.8 KB · 74 events · 2 turns · redacted keys: none
+```
+
+Every row is a checkbox. A **conversation** unit is one conversation's evidence
+— keyed by session id when the run was session-bound, else by run id, so
+several `run()` calls in one session are **one** unit, which is what a person
+means by "the chat that went wrong". A **file** unit is a derived file that is
+not per-conversation.
+
+`manifest.json` is never a unit: it is the statement of the selection, and a
+bundle that could omit its own statement is not an honest bundle.
+
+## Step 3 — export only what they ticked
+
+```ts
+const report = exportBugReport([broken, unrelated], {
+  include: ['conv-1', 'file-conversation', 'file-environment'],   // conv-2 stays home
+  title: 'Agent answered with a stale price',
+  stepsToReproduce: '1. ask for the price\n2. update it\n3. ask again',
+  expected: 'the updated price',
+  actual: 'the price from before the update',
+  appVersion: '4.2.0',
+});
+
+fs.writeFileSync(report.filename, report.zip);
+```
+
+A deselected unit is out of **every** file — its own recording file, the derived
+transcript, and the narrative. And the exclusion is stated:
+
+```json
+"excluded": { "conversations": 1, "files": 0, "events": 37, "turns": 1, "unitIds": ["conv-2"] }
+```
+
+<Callout type="warn" title="An excluded conversation is a stated fact, not a silent absence">
+The manifest carries a loud warning when a subset was sent, and the issue body
+repeats it. A maintainer reading turn 4 must be able to tell that turns 1–3 were
+*withheld*, not *lost*.
+</Callout>
+
+### What is in the bundle
+
+| file | what it is |
+|---|---|
+| `manifest.json` | the manifest, reflecting the selection — always present |
+| `recording.json` | the canon `{ snapshot, events, structure }` — drops straight into `observeRecording()` |
+| `conversations/<id>.json` | one file per conversation, when there is more than one run |
+| `conversation.json` | the readable transcript — prompts, model replies, tool calls and results |
+| `narrative.txt` | the narrative recorder's lines, when one was attached |
+| `environment.json` | library, engine, Node and platform versions, plus the reporter's prose |
+
+`environment.json` is deliberately the *whole* environment: **no username, no
+hostname, no working directory, no environment variables, no file paths.** A
+bug report should not be how an internal directory layout leaves a company.
+
+### The zip is stored, not compressed
+
+The writer is ~150 lines with zero dependencies, and it uses method 0 (STORE).
+Deflate would shrink a JSON bundle well — and would cost either a dependency or
+`node:zlib`, which would make the export Node-only, when building a bundle *in
+the browser* is exactly the flow the consent dialog is for. So the trade is
+stated rather than hidden: **a stored bundle is roughly the sum of its files.**
+Every unzip tool reads it. If a bundle is too big to attach, send fewer
+conversations — which is what the trim hints name.
+
+### Redaction already happened
+
+The recording arrives **already redacted**: footprintjs scrubs at commit time
+under the run's `RedactionPolicy`, so a redacted value was never in the snapshot
+this reads. Nothing in the export scrubs anything — it would be too late to
+matter, and a second policy could only disagree with the first.
+
+What the export *does* do is list the redacted keys **by name**, derived from
+the placeholders actually present in the evidence:
+
+```json
+"redactedKeys": ["apiKey", "customerSsn"]
+```
+
+So a human consenting to the bundle can see which secrets were protected. An
+empty list is explained rather than left to look like "nothing secret here": it
+means the run had no redaction policy, and every value in the bundle is real.
+
+## Step 4 — file it
+
+```ts
+const reporter = githubBugReporter({
+  issueRepo: 'acme/checkout-agent',   // where the ISSUE goes
+});                                   // token: GITHUB_TOKEN, or `token`
+
+const { issueUrl, zipUrl } = await reporter.file(report);
+```
+
+Two HTTP calls and no SDK: `PUT /repos/{repo}/contents/{path}` commits the zip
+under `bug-reports/<yyyy-mm-dd>-<slug>-<shortid>.zip`, then
+`POST /repos/{repo}/issues` files the issue with the steps, a manifest table, a
+link to the committed bundle, the redacted-key list and the environment block.
+A name already taken is **suffixed, never overwritten** — the earlier bundle is
+somebody else's evidence.
+
+## Wiring it into a server
+
+There is no `bugReportRoute()` helper, deliberately: consent needs two round
+trips, and the *lookup* from a run id to a recording is state your application
+owns, not something a library can invent. So the wiring is yours, and it is
+short — two endpoints over whatever framework you already have:
+
+```ts
+import { describeBugReport, exportBugReport, githubBugReporter, recordRun } from 'agentfootprint/observe';
+
+const recordings = new Map<string, Recording>();          // your store, your eviction
+const reporter = githubBugReporter({ issueRepo: 'acme/checkout-agent' });
+
+app.post('/api/run', async (req, res) => {
+  const recorder = recordRun(agent);
+  const reply = await agent.run({ message: req.body.message }, { sessionId: req.body.sessionId });
+  recordings.set(req.body.sessionId, recorder.toRecording());
+  recorder.stop();
+  res.json(reply);
+});
+
+// 1. the consent step — the browser shows these rows as checkboxes
+app.get('/api/bug-report/describe', (req, res) => {
+  res.json(describeBugReport(recordings.get(String(req.query.sessionId))));
+});
+
+// 2. the filing step — `include` is exactly what the human ticked
+app.post('/api/bug-report', async (req, res) => {
+  const report = exportBugReport(recordings.get(req.body.sessionId), {
+    include: req.body.include,
+    title: req.body.title,
+    stepsToReproduce: req.body.steps,
+    expected: req.body.expected,
+    actual: req.body.actual,
+    appVersion: process.env.APP_VERSION,
+  });
+  res.json(await reporter.file(report));
+});
+```
+
+The browser never sees a token: it sees a manifest, sends back ids and prose,
+and the server does the filing.
+
+## Provisioning the token
+
+Use a **fine-grained personal access token** — GitHub → *Settings → Developer
+settings → Fine-grained tokens*:
+
+| | |
+|---|---|
+| Repository access | **only** `issueRepo` and `evidenceRepo` |
+| Permissions | **Contents: read and write** (commit the zip) · **Issues: read and write** (file the issue) |
+| Expiry | set one |
+| Where it lives | the server's environment — `GITHUB_TOKEN`, or the `token` option |
+
+The contrast matters. A **classic** PAT's `repo` scope is coarse: it grants
+read/write across *every* repository the account can reach, so a leaked
+bug-report token is a leaked key to the whole account. With a fine-grained token
+scoped as above, the blast radius of a leak is filing bug reports and committing
+files to one evidence repo — nothing else.
+
+For an organisation that wants central revocation, **GitHub App installation
+tokens** (short-lived, org-installed) are the next rung. This adapter does not
+mint them; hand it whatever token your app already obtained — a token is a
+token.
+
+<Callout type="warn" title="The token never appears in an error">
+Every failure names the status and GitHub's own `message` field, and nothing
+else: never the request, never the headers, never the body that carried the
+token, never a byte of evidence. Transport failures are re-wrapped rather than
+rethrown, because a `fetch` implementation is free to put the whole request into
+the error it throws. Pinned by a suite that forces every failure path and greps
+the message, the stack and the JSON projection.
+</Callout>
+
+## Filing upstream — twin targets
+
+The issue and the evidence do not have to live in the same repository.
+
+The case: a field tester finds a bug in a **library**. The issue belongs in the
+library's public repo, where the maintainers and the next person to hit it will
+find it. The evidence — a real run, with real prompts, real tool arguments and
+real retrieved documents — does not.
+
+```ts
+githubBugReporter({
+  issueRepo: 'footprintjs/agentfootprint',   // public — the conversation
+  evidenceRepo: 'acme/af-bug-evidence',      // private — the run
+});
+```
+
+The issue links the bundle and says plainly that the evidence is in a private
+repository visible to maintainers. The token needs Contents: read/write on the
+**evidence** repo; filing an issue on a public repo needs only a valid account
+token.
+
+### The guard
+
+Before committing evidence, the reporter reads the evidence repo's metadata. If
+it is **public**, it refuses:
+
+> refusing to commit evidence to `acme/public-evidence`, which is a PUBLIC
+> repository. A bug-report bundle carries a real run — prompts, tool arguments,
+> retrieved documents — and committing it here publishes all of it permanently.
+> Point `evidenceRepo` at a private repo the maintainers can read (the issue can
+> still go to the public one), or pass `acknowledgePublicEvidence: true` if this
+> is intended.
+
+If the metadata call itself fails — a token that can write contents but cannot
+read repository metadata is a legitimate configuration — the report proceeds and
+the result says the guard did not run:
+
+```ts
+const filed = await reporter.file(report);
+filed.checkedVisibility;      // false — the check could not run
+filed.evidenceRepoPrivate;    // undefined
+```
+
+A permissions quirk must not block a bug report. Skipping the check silently
+would be worse than either.
+
+### The doctrine
+
+**File into the application's own repo.** That is the default (`evidenceRepo`
+defaults to `issueRepo`) and it is the right one: the run belongs to the
+organisation that produced it. Sending a run's evidence across an organisational
+boundary — to a vendor, to an upstream library, to anyone whose access your
+company did not grant — is a **human act** with consequences a library cannot
+weigh. This adapter will do it, because a field tester filing upstream is a real
+and valuable thing. It will not do it quietly: the consent manifest is what
+makes one-click filing acceptable, because a person saw exactly what would leave
+before it did.
+
+## File as yourself — device sign-in
+
+A server token files every report as the *application*. When the value is
+**attribution** — a field tester filing upstream should appear as themselves, so
+a maintainer can ask them a follow-up question — let the reporter sign in.
+
+```ts
+import { githubDeviceSignIn, githubBugReporter } from 'agentfootprint/observe';
+
+const signIn = await githubDeviceSignIn({ clientId: 'Iv1.0123456789abcdef' });
+show(`Open ${signIn.verificationUri} and enter ${signIn.userCode}`);
+
+const { token, login } = await signIn.completed;      // resolves when they approve
+const reporter = githubBugReporter({ issueRepo: 'footprintjs/agentfootprint', token });
+```
+
+Set-up is once, by you: create an **OAuth App** under the organisation
+(*Settings → Developer settings → OAuth Apps*), tick **Enable Device Flow**, and
+put the client id in your front-end. The client id is **public by design** — the
+device flow has no client secret, which is exactly why it works from a page.
+
+| | server PAT | device sign-in |
+|---|---|---|
+| The issue is from | the application | the reporter |
+| Token lives | the server's environment | the reporter's session, **in memory** |
+| Human steps | none | one: enter a code, approve |
+| Scope granularity | fine-grained, two repos, two permissions | classic OAuth scopes — coarse |
+| Right for | an in-app "report a problem" button | field testers filing upstream |
+
+<Callout type="warn" title="Memory only, for the session">
+Never `localStorage`, never a cookie, never a log line. A device-flow token is a
+live credential for the account that approved it; persisting it in a browser
+turns one XSS into a lasting account compromise. Hold it in a variable, use it,
+drop it when the tab closes.
+</Callout>
+
+Scopes here are coarse and that is GitHub's design, not a choice this library
+made: the device flow issues a **classic** token, and `public_repo` (the default
+here) grants write across every public repository the account can reach. That
+trade buys attribution. Where least privilege matters more, use a fine-grained
+PAT on a server.
+
+**The collaborator caveat**, stated rather than discovered: a reporter signed in
+as themselves can file an issue on a public repo, and can commit evidence only to
+a repository *they* can write to. Pointing `evidenceRepo` at a private repo the
+reporter is not a collaborator on fails with a 404 — GitHub hides private repos
+from tokens that cannot see them. Either add them as a collaborator, or let them
+attach the zip by hand: `exportBugReport` gives them the file either way.
+
+## On-premises
+
+Everything on this page works on a network that never reaches github.com. Pass
+`apiBase: 'https://github.your-company.com/api/v3'` (and `authBase` for the
+device flow) and both adapters speak to GitHub Enterprise Server — plain
+`fetch`, no SDK, no vendor client. See
+[On-premises & self-hosted](doc:on-premises).
+
+## The surface
+
+Everything on this page comes out of `agentfootprint/observe`.
+
+| symbol | what it is |
+|---|---|
+| `describeBugReport(input, options?)` | measures a run into a `BugReportManifest`. `DescribeBugReportOptions` carries the size ceiling and a fixed timestamp |
+| `exportBugReport(input, options)` | bundles the selection into a `BugReport` — `{ manifest, files, zip, filename }`. `ExportBugReportOptions` is the reporter's `BugReportFields` plus `include` |
+| `BugReportInput` / `BugReportSource` | what you may pass: a recording, a `recordRun` handle, a runner, or an array of them |
+| `BugReportUnit` | one selectable unit — `{ id, kind, label, bytes, eventCount?, turnCount?, runCount?, sessionId?, files }` |
+| `BugReportManifest` | the honest summary: units, `selected`, `BugReportExcluded`, `BugReportFileSummary[]`, counts, `redactedKeys`, warnings, notes, `BugReportOversize`, `BugReportEnvironment` |
+| `BugReportFile` | one file in the bundle — `{ name, bytes, text }` |
+| `Transcript` / `TranscriptTurn` / `TranscriptStep` | the shape of `conversation.json`, derived from the events |
+| `githubBugReporter(options)` | the `BugReporter` that files it. `GithubBugReporterOptions` in, `FiledBugReport` out |
+| `githubDeviceSignIn(options)` | the device-flow sign-in. `GithubDeviceSignInOptions` in, a `GithubDeviceSignIn` handle whose `completed` resolves to a `GithubDeviceIdentity` |
+
+## See also
+
+- [Replay a saved run](doc:offline-replay) — the recording the bundle carries
+- [Debug a run](doc:debug) — what to do once you have the evidence open

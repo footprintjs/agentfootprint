@@ -133,6 +133,7 @@
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { canonicalJson, CANONICAL_JSON_VERSION } from '../../lib/canonicalJson.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { libraryVersion } from '../../lib/libraryVersion.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
@@ -269,32 +270,6 @@ function resolveCrypto(): NodeCryptoModule {
 
 function sha256Hex(text: string): string {
   return resolveCrypto().createHash('sha256').update(text, 'utf8').digest('hex');
-}
-
-/** Best-effort library version for header + genesis.
- *
- *  Tries the package self-reference first (`exports["./package.json"]`
- *  — resolves from source and the CJS build), then relative paths to
- *  the root manifest (the ESM build sits under `dist/esm/`, whose
- *  type-stamp `package.json` has no `name`, which breaks Node's
- *  self-reference scope; relative specifiers resolve from
- *  `lib/lazyRequire` — `../../` from `src//dist/lib`, `../../../`
- *  from `dist/esm/lib`). The `name` guard rejects any manifest that
- *  isn't actually ours. 'unknown' where nothing resolves (bundlers). */
-function libraryVersion(): string {
-  for (const specifier of [
-    'agentfootprint/package.json',
-    '../../package.json',
-    '../../../package.json',
-  ]) {
-    try {
-      const pkg = lazyRequire<{ name?: string; version?: string }>(specifier);
-      if (pkg.name === 'agentfootprint' && typeof pkg.version === 'string') return pkg.version;
-    } catch {
-      /* try the next candidate */
-    }
-  }
-  return 'unknown';
 }
 
 // ─── JSON sanitization (both modes) ──────────────────────────────────

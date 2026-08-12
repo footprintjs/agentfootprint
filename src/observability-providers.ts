@@ -93,3 +93,22 @@ export {
   type AuditVerifyResult,
 } from './adapters/observability/audit.js';
 export { canonicalJson, CANONICAL_JSON_VERSION } from './lib/canonicalJson.js';
+// File a bug report WITH the run attached (9.9.0). Two vendor-free adapters
+// over plain `fetch` — no SDK, `apiBase` for GitHub Enterprise Server, and a
+// `_fetch` seam so the whole path is testable without a network:
+//   • `githubBugReporter` — commits the evidence zip and files the issue.
+//     TWIN TARGETS: the issue and the evidence may live in different repos.
+//   • `githubDeviceSignIn` — the reporter signs in as themselves, so the issue
+//     carries their name (OAuth device flow; browser-safe).
+export {
+  githubBugReporter,
+  type BugReporter,
+  type FiledBugReport,
+  type GithubBugReporterOptions,
+} from './adapters/observability/githubBugReporter.js';
+export {
+  githubDeviceSignIn,
+  type GithubDeviceIdentity,
+  type GithubDeviceSignIn,
+  type GithubDeviceSignInOptions,
+} from './adapters/observability/githubDeviceSignIn.js';

@@ -56,6 +56,7 @@ working in one.
 | **Telemetry — a collector you run** | `otelObservability({ tracer })` | `agentfootprint/observe` | `@opentelemetry/api` | Shipped — BYO tracer |
 | **Telemetry — no collector at all** | `fileObservability({ path })` | `agentfootprint/observe` | none (`node:fs`) | **New in 9.8.0** — contract-shaped and tested; awaiting field use |
 | **Telemetry — an evidence record** | `auditExport()` | `agentfootprint/observe` | none (`node:crypto`) | Shipped |
+| **Bug reports with the run attached** | `exportBugReport()` + `githubBugReporter({ apiBase })` | `agentfootprint/observe` | none — plain `fetch`, and a zip writer with no zlib | **New in 9.9.0** — works fully on-premises, including GitHub Enterprise Server via `apiBase`. See [File a bug with the run attached](doc:file-a-bug) |
 | **Credentials — dev / small fixed set** | `staticTokens(map)` | `agentfootprint/security` | none | Shipped |
 | **Credentials — your vault** | `vaultCredentials({ address })` | `agentfootprint/security` | none — plain HTTP | **New in 9.8.0** — contract-shaped and tested; awaiting field use |
 | **Credentials — anything else** | the `CredentialProvider` port | `agentfootprint/security` | none | Shipped — one method |

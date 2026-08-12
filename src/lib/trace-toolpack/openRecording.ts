@@ -63,8 +63,16 @@ interface RecorderRow {
   readonly data?: unknown;
 }
 
-/** The narrative recorder's row: `data` is an array of `{ text, depth }`. */
-function narrativeFrom(snapshot: { recorders?: readonly RecorderRow[] }): string[] | undefined {
+/**
+ * The narrative recorder's row: `data` is an array of `{ text, depth }`.
+ *
+ * @internal Exported for the bug-report bundler, which writes the same lines to
+ * `narrative.txt`. One shape-detector, one answer to "is there a narrative in
+ * this snapshot?" — two copies would disagree the first time the row changes.
+ */
+export function narrativeFrom(snapshot: {
+  recorders?: readonly RecorderRow[];
+}): string[] | undefined {
   const rows = snapshot.recorders;
   if (!Array.isArray(rows)) return undefined;
   for (const row of rows) {
