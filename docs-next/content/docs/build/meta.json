@@ -46,6 +46,7 @@
     "---[Cloud]Run it somewhere---",
     "[Infrastructure: ports & adapters](/docs/infrastructure)",
     "[Memory stores](/docs/infrastructure/memory-and-stores)",
-    "[AWS & Bedrock AgentCore](/docs/infrastructure/aws)"
+    "[AWS & Bedrock AgentCore](/docs/infrastructure/aws)",
+    "[On-premises](/docs/infrastructure/on-premises)"
   ]
 }
