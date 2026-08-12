@@ -102,6 +102,19 @@ export {
   type SkillGraphTreeConfig,
   type SkillGraphStart,
   type SkillGraphStep,
+  // The rules front door — data matchers on start rules (`match:` beside `when`),
+  // comparable by the check-up and captioned by toMermaid. `SkillMatchData` is the
+  // serializable descriptor stored on provenance/edges.
+  type SkillMatch,
+  type SkillMatchData,
+  type SkillStartRule,
+  // The graph's note that its body-contract checks wait for Agent build (present
+  // only when built without `knownTools`) — see SkillGraph.deferredBodyContract.
+  // The note rides the graph AND each compiled skill's metadata (under
+  // SKILL_GRAPH_DEFERRED_CONTRACT_KEY), so Agent build honors it whichever way
+  // the skills arrive — `.skillGraph(graph)` or `.skills({ list: () => graph.skills })`.
+  SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
+  type DeferredBodyContract,
   type BuildOptions,
   type CheckupOptions,
   type GraphCheckMode,

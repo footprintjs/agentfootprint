@@ -1,14 +1,14 @@
 /**
  * skillGraphDemo — the SINGLE SOURCE for the skill-graph embed.
  *
- * `buildSupportSkillGraph()` returns a real `skillGraph().build()` — the very
- * object an agent runs on via `Agent.create()....skillGraph(graph)`. The embed
- * shows this exact builder (via <CodeFile region="demo">) AND draws the graph it
- * returns with <SkillGraphFlow>. The picture IS the compiled routing graph — its
- * `nodes` / `edges` are a build product of the same `.entry()` / `.route()` calls,
- * not a hand-drawn diagram.
+ * `buildSupportSkillGraph()` returns a real `skillGraph({ ... })` — the very
+ * object an agent runs on via `Agent.create()....skillGraph(graph)`, declared in
+ * the canonical object-literal form. The embed shows this exact code (via
+ * <CodeFile region="demo">) AND draws the graph it returns with <SkillGraphFlow>.
+ * The picture IS the compiled routing graph — its `nodes` / `edges` are a build
+ * product of the same `start` / `steps` declarations, not a hand-drawn diagram.
  *
- * Imports the `agentfootprint` PACKAGE (one copy), so the builder here is the same
+ * Imports the `agentfootprint` PACKAGE (one copy), so the code here is the same
  * API a reader uses in their own app.
  */
 
@@ -55,14 +55,17 @@ const tech = defineSkill({
 /**
  * The support agent's routing graph. `triage` is where every turn starts; a tool
  * result that looks like a billing or tech case routes the cursor onward. Feed the
- * SAME object to an agent with `Agent.create()....skillGraph(graph)` — the routes
+ * SAME object to an agent with `Agent.create()....skillGraph(graph)` — the steps
  * below ARE the agent's runtime cursor logic.
  */
 export function buildSupportSkillGraph() {
-  return skillGraph()
-    .entry(triage)
-    .route(triage, billing, { when: (r) => /refund|charge|bill/i.test(String(r.result)) })
-    .route(triage, tech, { when: (r) => /error|bug|crash/i.test(String(r.result)) })
-    .build();
+  return skillGraph({
+    skills: [triage, billing, tech],
+    start: 'triage',
+    steps: [
+      { from: 'triage', to: 'billing', when: (r) => /refund|charge|bill/i.test(String(r.result)) },
+      { from: 'triage', to: 'tech', when: (r) => /error|bug|crash/i.test(String(r.result)) },
+    ],
+  });
 }
 // #endregion demo

@@ -79,7 +79,28 @@ a skill listed in `skills[]` but wired to nothing all work under a graph; before
 every call. What the graph *does* wire stays bounded — including a bare model
 edge `.route(a, m)`, which is still reachable only from `a`.
 
-### Declaring the graph: the object form is a union
+### Declaring the graph — the object form is the canonical spelling
+
+You declare a graph as **one object literal**: the skills, where a turn starts,
+and the tool-result transitions between them. This is the form the docs teach
+everywhere (a fluent builder also exists — see
+[Advanced: the fluent builder](#advanced-the-fluent-builder) — and compiles to
+the identical graph). New to skill graphs? The
+[5-minute quickstart](doc:skill-graph-quickstart) builds one end to end and
+draws it.
+
+```ts
+import { skillGraph } from 'agentfootprint/context';
+
+const graph = skillGraph({
+  skills: [triage, billing, tech],
+  start: 'triage', // or { rules: [...] } — see "Start rules as data" below
+  steps: [
+    { from: 'triage', to: 'billing', when: (r) => /refund|charge/i.test(String(r.result)) },
+    { from: 'triage', to: 'tech', onToolReturn: 'run_diagnostic' },
+  ],
+});
+```
 
 `skillGraph({ ... })` takes a `SkillGraphConfig`, which is a union of two arms
 that cannot be mixed: `SkillGraphFlatConfig` (`start` + `steps` — where `start`
@@ -99,8 +120,11 @@ broken graph. Since 8.7.0 it also reports `multi-entry-fanout` (two or more entr
 no `.entryBy()` / `.entryByRead()` to choose between them, so every matching entry loads
 while only one can be the cursor), `dead-entry-step` (an entry declared after an
 unconditional one can never be the cold-start cursor, so the routes out of it never fire
-from there) and `model-edge-only` (the only way in is a bare `.route(a, b)`, which
-compiles to no trigger at all — the model has to ask, and only from `a`).
+from there) and `model-edge-only` (the only way in is a bare step `{ from, to }` with no
+`when`/`onToolReturn`, which compiles to no trigger at all — the model has to ask, and
+only from `from`). Start rules declared as data add three more codes —
+`rule-id-exists`, `overlapping-rules` and `rules-shadowed-by-order` — covered in
+[Start rules as data](#start-rules-as-data--match-beside-when) below.
 
 Pass `CheckupOptions` — today, `knownTools` — to tell it about the tools the AGENT
 registers with `.tool()`. A graph knows only the tools its own skills carry, so without
@@ -119,6 +143,108 @@ if (!report.ok) throw new Error(formatCheckup(report));
 `.build()` runs the same check, and since 8.7.0 defaults to `check: 'throw'` for both
 the fluent and the object form — a graph with no entry cannot start a turn, and used to
 build in silence. `check: 'warn'` still never throws.
+
+### Start rules as data — `match` beside `when`
+
+A start rule can declare its condition as **data** instead of code: `match` takes a
+`SkillMatch` — either a `RegExp` tested against the user's message, or
+`{ keywords: [...] }` (case-insensitive, any keyword present, whole-word at word
+edges, so `refund` never fires on "refunds"). Each rule takes **exactly one** of
+`match`/`when` — both or neither is a build-time refusal naming the rule — and the
+rule's type is `SkillStartRule`, so TypeScript refuses the same pair at the keystroke.
+
+```ts
+const graph = skillGraph({
+  skills: [refunds, billing, triage],
+  start: {
+    rules: [
+      { match: /refund|money back/i, use: 'refunds' },
+      { match: { keywords: ['charge', 'invoice'] }, use: 'billing' },
+      { when: (ctx) => ctx.iteration > 1, use: 'triage' }, // predicates still work beside data
+    ],
+  },
+});
+```
+
+Why data? A predicate is opaque — the library can only run it. A matcher can be
+**compared**, **drawn** and **stored**: `toMermaid()` captions the entry edge with the
+pattern, the compiled skill's provenance (`metadata.skillGraph.match`) and the entry
+edge carry a serializable `SkillMatchData` (`{ kind: 'regex', source, flags }` or
+`{ kind: 'keywords', keywords }`), and the check-up gains three codes — one for every rule, two only
+possible over data: `rule-id-exists` (ERROR — a rule routing to a skill that is
+not in `skills[]` refuses to build under every `check` mode, listing every bad id and
+the known catalog), `overlapping-rules` (two data matchers provably overlap — a shared
+keyword — and declaration order decides those messages) and `rules-shadowed-by-order`
+(a later rule provably can never win: an identical regex earlier, or an earlier
+keyword set that is a superset of the later one). The comparisons claim only what the
+data proves — `when` predicates are opaque and the messages say they were not checked.
+And a router where every entry carries a `when` or a `match` is a supported design:
+it never trips `multi-entry-fanout`.
+
+### Scoping tools on the flat arm — `scopeTools`
+
+A decision `.tree()` has stamped `autoActivate: 'currentSkill'` on its leaves since
+8.7.0. The flat arm now takes the same dial: `skillGraph({ skills, start, steps,
+scopeTools: true })` (fluent: `.build({ scopeTools: true })`) stamps every **wired**
+skill — everything an entry or a step mentions — so a skill's tools reach the LLM only
+while the graph is on it, instead of every skill's tools landing in the always-on
+registry from iteration 1. The default is `false` (today's behavior, byte-identical
+builds) until 10.0.0 flips it. A skill whose author set `autoActivate` explicitly
+always keeps its own setting — the graph level fills a default, it never overrides —
+and a listed-but-unwired skill is not stamped (the graph does not route it, so it does
+not scope it).
+
+```ts
+const graph = skillGraph({
+  skills: [refunds, billing, triage],
+  start: { rules: [{ match: /refund/i, use: 'refunds' }, { when: () => true, use: 'triage' }] },
+  scopeTools: true, // wired skills get autoActivate: 'currentSkill' — tools follow the cursor
+});
+```
+
+The [5-minute quickstart](doc:skill-graph-quickstart) shows the effect end to end;
+`autoActivate` itself is covered in
+[Per-skill tool gating](#per-skill-tool-gating--autoactivate).
+
+### Body-contract checks that wait for the agent — `DeferredBodyContract`
+
+A graph built **without** `knownTools` cannot tell a body's `lokup_order(` typo from a
+baseline tool the agent registers later — the graph builds before `.tool()` runs. So
+instead of warning about what it cannot prove, `.build()` now **defers** the two
+body-contract checks (`body-foreign-tool` / `body-unknown-tool`) and stamps a
+`DeferredBodyContract` note (carrying the graph's `check` mode) in two places that say
+the same thing: on the graph (`graph.deferredBodyContract`) and on each compiled
+skill's own metadata. The per-skill stamp is what makes the note travel: agent build
+collects it from the final injection list and runs those checks exactly once, against
+the union of the agent's registered tools, `read_skill`, every checked skill's own
+tools and any non-graph skill's tools — whichever way the skills arrived,
+`.skillGraph(graph)` **or** `.skills({ list: () => graph.skills })`. One problem is
+reported at one build point, never both: a graph built with an explicit `knownTools`
+runs its checks at graph build (the manual override stays an override) and carries no
+note, and a skill found through both the metadata and the graph note is deduped by id.
+`check: 'off'` stays off at both points, and `graph.checkup()` is unchanged — the
+explicit lint call always runs every check over what it can see. A graph that never
+reaches an agent build defers to nobody by itself — lint it with `graph.checkup()`
+(passing `knownTools` for the baseline names) if it will be consumed outside an Agent.
+
+```ts
+// orders' body says "call lookup_order(id)" — a tool the AGENT registers, not the skill.
+const graph = skillGraph({ skills: [orders], start: 'orders' }); // no knownTools
+graph.deferredBodyContract; // { mode: 'throw' } — the note the agent build reads
+
+const agent = Agent.create({ provider, model })
+  .tool(lookupOrderTool) // the baseline tool the graph could not see
+  .skillGraph(graph) // deferred checks run at .build(), against the full registry
+  .build(); // lookup_order resolves; a `lokup_order(` typo would be reported here
+
+// .skills({ list: () => graph.skills }) is served identically — the note rides
+// each compiled skill's metadata, so the door that never sees the graph object
+// still runs the deferred checks at .build().
+```
+
+The whole batch — data matchers, the rule check-up codes, `scopeTools`, deferred
+body-contract checks — runs end to end in
+[`examples/features/54-skill-graph-front-door.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/54-skill-graph-front-door.ts).
 
 ### Where the graph stands, and why it resets — `CursorMove`
 
@@ -140,6 +266,40 @@ and start the next turn's graph from it.
 can never activate, so in dev mode the agent build now says so — keyed on the
 `READS_ENTRY_SCORES_METADATA_KEY` marker the factory stamps, so a renamed hint is caught
 too.
+
+### Advanced: the fluent builder
+
+`skillGraph()` called with **no argument** returns a fluent builder — the original
+spelling, fully supported and not deprecated. It compiles to the **identical**
+graph as the object form (same nodes, same edges, same triggers), so choosing
+between them is taste, not capability. The docs teach the object form; reach for
+the builder when you are migrating older code or assembling a graph
+programmatically, method by method.
+
+```ts
+// The fluent spelling of the graph from "Declaring the graph" above:
+const graph = skillGraph()
+  .entry(triage)
+  .route(triage, billing, { when: (r) => /refund|charge/i.test(String(r.result)) })
+  .route(triage, tech, { onToolReturn: 'run_diagnostic' })
+  .build({ check: 'throw' });
+```
+
+The mapping is one-to-one:
+
+| object form | fluent builder |
+|---|---|
+| `skills: [...]` | implied — every skill a method mentions is remembered |
+| `start: 'id'` / `{ use }` | `.entry(skill)` |
+| `start: { rules: [{ match \| when, use }] }` | `.entry(skill, { match })` / `.entry(skill, { when })` |
+| `start: { entries, scoredBy / byRelevance }` | `.entry(...)` × n + `.entryBy(scorer)` / `.entryByRelevance(embedder)` |
+| `steps: [{ from, to, when / onToolReturn }]` | `.route(from, to, { when })` / `.route(from, to, { onToolReturn })` |
+| `tree: root` | `.tree(root)` |
+| `check` / `knownTools` / `scopeTools` | the same fields on `.build({ ... })` |
+
+Every law on this page applies to both spellings identically — the union arms,
+the check-up, `match` as data, `scopeTools`, deferred body-contract checks — because
+the object form is compiled *through* the builder: there is one implementation.
 
 ## Per-provider surface selection (`surfaceMode`)
 

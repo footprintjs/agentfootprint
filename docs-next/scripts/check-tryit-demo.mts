@@ -39,7 +39,7 @@ console.log(`[check:tryit] answer: ${result}`);
 
 // ── Skill-graph demo: the builder draws the routing graph the embed shows. It is
 //    static (no run), so the guardrail asserts the compiled graph SHAPE matches
-//    the declared .entry()/.route() calls — declared === drawn.
+//    the declared start/steps wiring — declared === drawn.
 const graph = buildSupportSkillGraph();
 const skillIds = graph.nodes
   .filter((n) => n.kind === 'skill')
@@ -57,3 +57,40 @@ if (!routes.includes('billing') || !routes.includes('tech')) {
 }
 
 console.log('[check:tryit] OK — the skill graph compiled triage → {billing, tech}');
+
+// ── Quickstart demo (skill-graph-quickstart page): rules as data + scopeTools.
+//    Asserts what the page claims: the matchers route real messages, every wired
+//    skill is tool-scoped, and the entry edges carry the serializable match data
+//    the page's mermaid block captions with.
+const { buildQuickstartSkillGraph } = await import('../components/demos/skillGraphQuickstartDemo');
+const qs = buildQuickstartSkillGraph();
+const qsCtx = (userMessage: string) => ({
+  iteration: 1,
+  userMessage,
+  history: [],
+  activatedInjectionIds: [],
+});
+if (qs.nextSkill(qsCtx('I want my money back')) !== 'refunds') {
+  fail('quickstart: "I want my money back" should route to refunds');
+}
+if (qs.nextSkill(qsCtx('why is there a CHARGE on my card')) !== 'billing') {
+  fail('quickstart: keyword "charge" (case-insensitive) should route to billing');
+}
+if (qs.nextSkill(qsCtx('my charger broke')) !== 'triage') {
+  fail('quickstart: whole-word matching — "charger" must NOT match "charge"');
+}
+const unscoped = qs.skills.filter(
+  (s) => (s.metadata as { autoActivate?: string } | undefined)?.autoActivate !== 'currentSkill',
+);
+if (unscoped.length > 0) {
+  fail(`quickstart: scopeTools should stamp every wired skill; unscoped: ${unscoped.map((s) => s.id).join(', ')}`);
+}
+const matchEdges = qs.edges.filter((e) => e.from === null && e.match !== undefined);
+if (matchEdges.length !== 2) {
+  fail(`quickstart: expected 2 entry edges carrying match data, got ${matchEdges.length}`);
+}
+if (!qs.toMermaid().includes('charge, invoice')) {
+  fail('quickstart: toMermaid should caption the keywords entry edge');
+}
+
+console.log('[check:tryit] OK — the quickstart graph routes by data, scopes tools, and captions its edges');

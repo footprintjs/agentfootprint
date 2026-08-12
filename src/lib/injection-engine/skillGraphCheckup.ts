@@ -27,10 +27,13 @@
  * the gate will grant the jump from.
  */
 
+import { compareMatchers, type SkillMatchData } from './skillMatch.js';
+
 /**
  * The compiled trigger kinds this file needs to tell apart. Mirrors
  * `InjectionTrigger['kind']` without importing it — the check-up is pure over
- * strings and must not depend on the engine's types.
+ * strings and must not depend on the engine's types (`skillMatch.ts` is itself
+ * engine-type-free, which is what keeps that law intact here).
  */
 export type CheckupTriggerKind = 'always' | 'rule' | 'on-tool-return' | 'llm-activated';
 
@@ -43,6 +46,16 @@ export type GraphProblemCode =
   | 'dead-entry-step' // 8.7.0 — an entry that can never be the cold-start cursor routes out of itself
   | 'ambiguous-routes'
   | 'self-loop'
+  // The rules front door (SG-A):
+  | 'rule-id-exists' // ERROR — a start rule routes to a skill id that is not in skills[].
+  //   Raised as a BUILD refusal from the object form (a rule naming an unknown id cannot
+  //   compile at all, so it throws under every `check` mode — a graph carrying it can
+  //   never exist for `graph.checkup()` to report on). In the union so the thrown
+  //   message carries a stable code, like every other problem.
+  | 'overlapping-rules' // WARNING — two DATA matchers provably overlap (shared keyword)
+  | 'rules-shadowed-by-order' // WARNING — a later rule provably can never win (identical
+  //   regex earlier / keyword-superset earlier). Both compare only data matchers of the
+  //   same kind; `when` predicates are opaque and are never claimed to have been checked.
   // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency (WARNINGS):
   | 'body-foreign-tool' // body names a tool that belongs to another skill (not callable here)
   | 'body-unknown-tool'; // body has a `tool_name(` reference to a tool that exists nowhere
@@ -67,8 +80,14 @@ export interface GraphCheckup {
 /** One declared entry, in declaration order. */
 export interface CheckupEntry {
   readonly id: string;
-  /** Has a `when` predicate — i.e. it does NOT unconditionally win the cold-start cursor. */
+  /** Has a `when` predicate or a `match` data matcher — i.e. it does NOT
+   *  unconditionally win the cold-start cursor. */
   readonly conditional: boolean;
+  /** The DATA matcher behind the condition, when the rule was declared as data
+   *  (`match:`) rather than code (`when:`). Only rules that carry it can be
+   *  compared (`overlapping-rules` / `rules-shadowed-by-order`) — a `when`
+   *  predicate is opaque, and this file never claims to have checked one. */
+  readonly match?: SkillMatchData;
 }
 
 export interface CheckupInput {
@@ -231,6 +250,11 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
   //
   //    `.entryBy()`/`.entryByRead()` make the menu exclusive by construction, which is
   //    why this is silent under either.
+  //
+  //    An entry that carries a `match` data matcher is conditional exactly like a
+  //    `when` — a deterministic rule-router built from data is a taught shape, not a
+  //    fan-out, so a menu where EVERY entry carries a `when` or a `match` is silent
+  //    here (the callers of this function count both as `conditional`).
   const unconditional = entries.filter((e) => !e.conditional).map((e) => e.id);
   if (!exclusiveEntries && entries.length >= 2 && unconditional.length > 0) {
     problems.push({
@@ -301,7 +325,75 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
     }
   }
 
-  // 6. ambiguous-routes (WARNING) — ≥2 deterministic edges share a source skill with
+  // 6. overlapping-rules + rules-shadowed-by-order (WARNINGS) — pairwise comparison
+  //    of the entries that carry DATA matchers, in declaration order (the order the
+  //    cold-start resolver reads — first match wins).
+  //
+  //    HONESTY BOUNDARY: this compares only what is decidable from the data.
+  //      • identical regex (same source, same runtime flags) → the later rule can
+  //        NEVER be chosen — every message the later would match, the earlier already
+  //        matched (`rules-shadowed-by-order`);
+  //      • earlier keywords ⊇ later keywords (case-insensitive) → same: any message
+  //        containing one of the later rule's keywords contains one of the earlier's
+  //        (matching is any-keyword), so the later never wins (`rules-shadowed-by-order`);
+  //      • two keyword rules sharing ≥1 keyword (neither a superset) → they provably
+  //        overlap on messages carrying the shared keyword; declaration order decides
+  //        those (`overlapping-rules` — a shadowed pair is reported as shadowed only,
+  //        never twice).
+  //    Everything else is left alone and NOT claimed to be clean: two different regex
+  //    sources may still overlap (intersection is not decided here), a regex and a
+  //    keyword list are never compared, and a `when` predicate is opaque code this
+  //    check cannot see. The messages say so.
+  //
+  //    Skipped under exclusive entries for the same reason the fan-out checks are:
+  //    a scorer ranks ALL matching candidates (declaration order does not shadow),
+  //    and `.entryByRead()` lets the model pick.
+  if (!exclusiveEntries) {
+    const withMatch = entries.filter((e) => e.match !== undefined);
+    for (let j = 0; j < withMatch.length; j++) {
+      for (let k = j + 1; k < withMatch.length; k++) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const earlier = withMatch[j]!;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const later = withMatch[k]!;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const verdict = compareMatchers(earlier.match!, later.match!);
+        if (verdict === undefined) continue;
+        if (verdict.relation === 'shadows') {
+          problems.push({
+            kind: 'warning',
+            code: 'rules-shadowed-by-order',
+            message:
+              `Start rule for "${later.id}" can never be chosen: the earlier rule for ` +
+              `"${earlier.id}" ${verdict.why}, and the first matching rule (declaration ` +
+              `order) wins the cold start. Reorder the rules, differentiate the matchers, ` +
+              `or remove one. (Only data matchers of the same kind are compared — \`when\` ` +
+              `predicates are opaque and were NOT checked.)`,
+            skill: later.id,
+            from: earlier.id,
+            to: later.id,
+          });
+        } else {
+          problems.push({
+            kind: 'warning',
+            code: 'overlapping-rules',
+            message:
+              `Start rules for "${earlier.id}" and "${later.id}" can both match one ` +
+              `message: ${verdict.why}. Declaration order decides those messages — ` +
+              `"${earlier.id}" wins. Fine if intended; otherwise differentiate the ` +
+              `matchers or reorder. (Only data matchers of the same kind are compared — ` +
+              `\`when\` predicates are opaque and were NOT checked, and two different ` +
+              `regexes are not compared for overlap.)`,
+            skill: later.id,
+            from: earlier.id,
+            to: later.id,
+          });
+        }
+      }
+    }
+  }
+
+  // 7. ambiguous-routes (WARNING) — ≥2 deterministic edges share a source skill with
   //    no priority field (there is none yet), so the first by declaration order wins.
   const deterministicByFrom = new Map<string, number>();
   for (const r of routes) {
@@ -319,7 +411,7 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
     }
   }
 
-  // 7. self-loop (WARNING) — an edge from a skill back to itself (rarely intended).
+  // 8. self-loop (WARNING) — an edge from a skill back to itself (rarely intended).
   for (const r of routes) {
     if (r.fromId === r.toId) {
       problems.push({

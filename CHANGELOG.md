@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.15.0] - 2026-08-12
+
+**The skill graph's front door, simplified.** Same graph, fewer things to type,
+and the routing table becomes something the library can read, lint, and draw —
+not a bag of opaque functions.
+
+### Added — `scopeTools` on the flat graph (one line, not one per skill)
+
+```ts
+const graph = skillGraph({
+  skills: [billing, shipping, returns],
+  start: { rules: [{ match: /refund|charge/i, use: 'billing' }] },
+  scopeTools: true, // every wired skill's tools appear only while it is active
+});
+```
+
+What previously required `autoActivate: 'currentSkill'` typed on every single
+skill is now one graph-level line. A skill's own explicit `autoActivate` always
+wins — the graph sets a default, never an override. Only *wired* skills (named
+by an entry or a route) are stamped: an unwired skill's tools would otherwise
+never appear at all. With the dial absent or `false`, compiled skills are
+byte-identical to 9.14.0 (pinned by test). On a `tree()` graph the flat-arm
+dial is refused with a pointer to `tree(root, { scopeTools })` — one dial, one
+home. The default stays `false` in 9.x; it flips in 10.0.0.
+
+### Added — matchers as data: `match` beside `when`
+
+```ts
+start: {
+  rules: [
+    { match: /refund|charge/i, use: 'billing' },          // RegExp form
+    { match: { keywords: ['track', 'package'] }, use: 'shipping' }, // keywords form
+    { when: (ctx) => ctx.iteration > 1, use: 'triage' },  // predicates still work
+  ],
+}
+```
+
+A rule now takes `match` (data) or `when` (function) — exactly one; both or
+neither is refused at the type level and at runtime with the fix in the
+message. Keywords are case-insensitive escaped literals (any present matches,
+whole-word at word-character edges — `refund` never fires on `refunds`);
+stateful regex flags (`g`/`y`) are dropped at compile so the same message can
+never alternate answers. Because the matcher is data, it is **drawn**
+(`toMermaid()` captions the entry edge), **stored** (`SkillMatchData` on the
+skill's provenance and the entry edge), and **compared** (below). The union is
+extensible by design — a future `{ intent, examples }` arm lands without
+reshaping.
+
+### Added — three check-up codes for the rules form
+
+- `rule-id-exists` (ERROR): a rule routing to a skill not in `skills[]` refuses
+  to build under every `check` mode, listing all bad ids and the known catalog.
+- `overlapping-rules` (warning): two data matchers provably overlap (a shared
+  keyword) and declaration order decides those messages.
+- `rules-shadowed-by-order` (warning): a later rule provably can never win —
+  an identical regex earlier, or an earlier keyword superset.
+
+The comparisons claim only what data proves: `when` predicates are opaque and
+the messages say they were not checked. And the `multi-entry-fanout` warning no
+longer fires on routers where every entry carries a `when` or `match` —
+deterministic rule-routing is a supported design, not a smell.
+
+### Changed — `knownTools` is now automatic at agent build
+
+A graph built without `knownTools` defers its two body-contract checks
+(`body-foreign-tool`, `body-unknown-tool`) instead of guessing: the deferral
+note travels on each compiled skill's metadata, and `Agent.build()` — the one
+point that sees the full tool registry — runs the checks exactly once, whether
+the graph arrived via `.skillGraph(graph)`, `.skills({ list: () => … })`, or
+`.skill()`. Passing `knownTools` by hand still works and keeps today's
+graph-build-time behavior. `graph.checkup()` is unchanged. ToolProvider tools
+cannot be enumerated at build time — pass those via `knownTools`.
+
+### Docs
+
+The object-literal form is now the canonical taught form (the fluent builder
+remains fully supported). New module README for the skill-graph family
+(`src/lib/injection-engine/README.md`) and a new runnable example
+(`examples/features/54-skill-graph-front-door.ts`).
+
 ## [9.14.0] - 2026-08-12
 
 **A strategy that said so now does so.** `defineMemory({ strategy: { kind:

@@ -69,10 +69,15 @@ import {
   formatCheckup,
   type CheckupTriggerKind,
   type GraphCheckup,
+  type GraphProblem,
 } from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
+import { compileMatch, mermaidMatchCaption, type SkillMatch, type SkillMatchData } from './skillMatch.js';
 export { formatCheckup } from './skillGraphCheckup.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
+// The data-matcher domain (`match:` on start rules) — one module owns the type,
+// the compiler, the comparator and the caption; see ./skillMatch.ts.
+export type { SkillMatch, SkillMatchData } from './skillMatch.js';
 
 /** How `.build({ check })` reacts to the graph check-up. */
 export type GraphCheckMode = 'throw' | 'warn' | 'off';
@@ -99,8 +104,28 @@ export interface BuildOptions {
    * `ToolProvider`). Without them the skill-body contract check reads a body's
    * `lookup_order(id)` as a typo, because the graph only knows the tools its own
    * skills carry. Same field as `checkup({ knownTools })` — see `SkillGraph.checkup`.
+   *
+   * Omitted, the body-contract checks (`body-foreign-tool` / `body-unknown-tool`)
+   * are DEFERRED out of this build pass and run once at Agent build instead, where
+   * the full tool registry exists — see {@link SkillGraph.deferredBodyContract}.
    */
   readonly knownTools?: readonly string[];
+  /**
+   * FLAT graphs: stamp `autoActivate: 'currentSkill'` on every WIRED skill (every
+   * skill an entry or a route mentions), exactly as a decision `.tree()` stamps its
+   * leaves — so a skill's tools reach the LLM only while the graph is on it, instead
+   * of every skill's tools landing in the always-on registry from iteration 1.
+   *
+   * Default `false` — today's additive behavior (10.0.0 flips the default to `true`).
+   * A skill that declared its OWN `autoActivate` in `defineSkill(...)` always keeps
+   * it: this fills the default, it never overrides. A listed-but-unwired skill is
+   * not stamped — the graph does not route it, so the graph does not scope it.
+   *
+   * A decision `.tree()` takes this dial on `.tree(root, { scopeTools })` (object
+   * form: the tree arm's own `scopeTools` field); setting it here alongside a tree
+   * is refused so one dial cannot live in two homes.
+   */
+  readonly scopeTools?: boolean;
 }
 
 /** Options for `graph.checkup()`. */
@@ -117,15 +142,32 @@ export interface CheckupOptions {
   readonly knownTools?: readonly string[];
 }
 
+/**
+ * One start rule: route the turn's start to `use` when the rule matches.
+ * Exactly ONE of `match` (data) / `when` (code) per rule — the union enforces it
+ * at the keystroke and the build refuses it for everyone else. A rule exists to
+ * be conditional; for an unconditional start use `start: 'id'` / `{ use }`.
+ */
+export type SkillStartRule =
+  | {
+      readonly use: string;
+      /** The code form — an opaque predicate over the iteration context. */
+      readonly when: (ctx: InjectionContext) => boolean;
+      readonly match?: never;
+    }
+  | {
+      readonly use: string;
+      /** The data form — comparable, drawable, stored. See {@link SkillMatch}. */
+      readonly match: SkillMatch;
+      readonly when?: never;
+    };
+
 /** Where a turn starts, in the object-literal (flat) form. */
 export type SkillGraphStart =
   | string
   | { readonly use: string }
   | {
-      readonly rules: ReadonlyArray<{
-        readonly when: (ctx: InjectionContext) => boolean;
-        readonly use: string;
-      }>;
+      readonly rules: ReadonlyArray<SkillStartRule>;
     }
   | {
       readonly entries: readonly string[];
@@ -159,9 +201,16 @@ export interface SkillGraphFlatConfig {
   /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
   readonly steps?: readonly SkillGraphStep[];
   readonly tree?: never;
-  /** `tree`-only (there are no leaves to scope here) — typed `never` so the
-   *  contradiction is a compile error, the same way `tree` is on this arm. */
-  readonly scopeTools?: never;
+  /**
+   * Stamp `autoActivate: 'currentSkill'` on every WIRED skill (every skill an
+   * entry or a step mentions), exactly as the tree arm already stamps its leaves —
+   * a skill's tools reach the LLM only while the graph is on it. **Default `false`**
+   * (today's additive behavior — every skill's tools visible from iteration 1);
+   * 10.0.0 flips the default to `true`. A skill whose author set its own
+   * `autoActivate` keeps it: the graph level is a default, never an override.
+   * See {@link BuildOptions.scopeTools}.
+   */
+  readonly scopeTools?: boolean;
   readonly check?: GraphCheckMode;
   /** Baseline agent tool names — see {@link BuildOptions.knownTools}. */
   readonly knownTools?: readonly string[];
@@ -245,6 +294,15 @@ export interface SkillEntryOptions {
    * entry, which is a position in a state machine.
    */
   readonly when?: (ctx: InjectionContext) => boolean;
+  /**
+   * The DATA form of `when` — a declared matcher over the user's message instead
+   * of a predicate (see {@link SkillMatch}): comparable by the check-up, captioned
+   * by `toMermaid()`, stored on the compiled skill's provenance. Same start
+   * semantics as `when` in every other way. At most ONE of `match`/`when` — both
+   * set is refused at build time. Omitting both keeps this an `always` entry,
+   * exactly as before.
+   */
+  readonly match?: SkillMatch;
   readonly label?: string;
 }
 
@@ -281,6 +339,10 @@ export interface SkillEdge {
   readonly to: string;
   readonly kind: SkillEdgeKind;
   readonly label?: string;
+  /** The DATA matcher on an entry edge, when the rule was declared as data
+   *  (`match:`). `toMermaid()` captions the edge with it when no explicit
+   *  `label` was given. */
+  readonly match?: SkillMatchData;
 }
 
 /**
@@ -384,10 +446,36 @@ export interface SkillRouting {
   readonly from?: string;
   /** The compiled trigger kind for a route (`rule` / `on-tool-return`). */
   readonly triggerKind?: string;
+  /** The DATA matcher that routes here (entry only, when declared as `match:`) —
+   *  serializable, so commentary/lens can say WHICH pattern chose the skill. */
+  readonly match?: SkillMatchData;
 }
 
 /** The metadata key carrying a skill's routing provenance. */
 export const SKILL_GRAPH_METADATA_KEY = 'skillGraph' as const;
+
+/**
+ * The note a graph leaves for Agent build when its own build pass DEFERRED the
+ * skill-body ↔ tool-contract checks (`body-foreign-tool` / `body-unknown-tool`) —
+ * see {@link SkillGraph.deferredBodyContract}.
+ */
+export interface DeferredBodyContract {
+  /** The graph's `check` mode — the severity the deferred run respects
+   *  (`'off'` never defers: it stays off at agent build too). */
+  readonly mode: 'throw' | 'warn';
+}
+
+/**
+ * The metadata key carrying the {@link DeferredBodyContract} note on each COMPILED
+ * skill. The graph-level `graph.deferredBodyContract` note names the deferral, but
+ * skills reach an agent through more than one door — `.skillGraph(graph)` sees the
+ * graph, `.skills({ list: () => graph.skills })` sees only the skills — so the note
+ * also rides each skill's own metadata. Agent build collects it from the final
+ * injection list, whichever door the skills came through, and runs the deferred
+ * checks exactly once (skills found by BOTH the metadata and the graph note are
+ * deduped by id).
+ */
+export const SKILL_GRAPH_DEFERRED_CONTRACT_KEY = 'skillGraphDeferredBodyContract' as const;
 
 export interface SkillGraph {
   /** Skills with graph-derived triggers — feed to the Agent (`.skillGraph()` or
@@ -508,6 +596,25 @@ export interface SkillGraph {
    *   if (!report.ok) throw new Error(formatCheckup(report));
    */
   checkup(options?: CheckupOptions): GraphCheckup;
+  /**
+   * Present when this graph's own build pass DEFERRED the skill-body ↔
+   * tool-contract checks (`body-foreign-tool` / `body-unknown-tool`): built
+   * WITHOUT `knownTools`, the graph cannot tell a typo from a baseline tool the
+   * agent registers later — `lookup_order(id)` in a body and `lokup_order(id)`
+   * look identical to it — so instead of reporting what it cannot prove, it
+   * leaves this note and Agent build runs those checks exactly once, against the
+   * agent's full tool registry. The note also rides each compiled skill's own
+   * metadata ({@link SKILL_GRAPH_DEFERRED_CONTRACT_KEY}), so it is honored
+   * whichever way the skills arrive — `.skillGraph(graph)` or
+   * `.skills({ list: () => graph.skills })`.
+   *
+   * Absent when the checks already ran at graph build (`knownTools` was given —
+   * the manual override stays an override) or were switched off (`check: 'off'`);
+   * the agent then never re-runs them, so one problem is reported at one build
+   * point, never both. `graph.checkup()` is unaffected — it always runs every
+   * check over what it can see, and remains the graph-only lint surface.
+   */
+  readonly deferredBodyContract?: DeferredBodyContract;
 }
 
 export interface SkillGraphBuilder {
@@ -557,7 +664,11 @@ export interface SkillGraphBuilder {
 
 interface EntryDecl {
   readonly id: string;
+  /** The condition (compiled from `match` when the rule was declared as data). */
   readonly when?: (ctx: InjectionContext) => boolean;
+  /** The serializable matcher behind `when`, when declared as data — what the
+   *  check-up compares, `toMermaid()` captions, and the provenance stores. */
+  readonly match?: SkillMatchData;
   readonly label?: string;
 }
 interface RouteDecl {
@@ -633,7 +744,28 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   const builder: SkillGraphBuilder = {
     entry(skill, opts) {
       const id = remember(skill);
-      entries.push({ id, when: opts?.when, label: opts?.label });
+      // Exactly one condition per entry: `match` (data) or `when` (code). Both set
+      // is a contradiction — which one starts the turn? — refused rather than
+      // silently ANDed or ORed. (Neither set stays the `always` entry it has
+      // always been; the rules form additionally refuses "neither", because a
+      // rule exists to be conditional — see the config translation below.)
+      if (opts?.when !== undefined && opts?.match !== undefined) {
+        throw new Error(
+          `skillGraph: entry "${id}" sets both \`match\` and \`when\` — an entry takes ` +
+            `exactly one condition. Use \`match\` (a RegExp or { keywords: [...] } over the ` +
+            `user message — comparable and drawable) OR \`when\` (a predicate over the ` +
+            `iteration context). To combine a pattern with extra logic, fold the pattern ` +
+            `into your \`when\` predicate.`,
+        );
+      }
+      const compiled =
+        opts?.match !== undefined ? compileMatch(opts.match, `entry "${id}"`) : undefined;
+      entries.push({
+        id,
+        when: compiled ? compiled.predicate : opts?.when,
+        ...(compiled && { match: compiled.data }),
+        label: opts?.label,
+      });
       return builder;
     },
     route(from, to, opts) {
@@ -689,6 +821,16 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             '.tree() already routes by predicate (the scorer would be ignored).',
         );
       }
+      // One dial, one home: a tree declares tool scoping on `.tree(root, { scopeTools })`
+      // (object form: the tree arm's own field). Accepting it here too would let the two
+      // homes disagree, and only one of them would win — silently.
+      if (treeRoot && opts.scopeTools !== undefined) {
+        throw new Error(
+          'skillGraph: `scopeTools` on build() is the FLAT arm\'s dial. This graph is a ' +
+            '.tree(), which declares tool scoping on .tree(root, { scopeTools }) (object ' +
+            'form: the tree arm\'s own `scopeTools` field) — set it there instead.',
+        );
+      }
       // A tree and the flat entry/route wiring are two ways to declare the same
       // thing, and only ONE of them compiles: the tree branch below never reads
       // `entries` or `routes`. Until 8.4.0 that was silent — the tree won and every
@@ -722,7 +864,16 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       const checkup = (options: CheckupOptions = {}): GraphCheckup => {
         const wiring = checkupGraph({
           skillIds: new Set(skillsById.keys()),
-          entries: entries.map((e) => ({ id: e.id, conditional: e.when !== undefined })),
+          // `conditional` counts a data `match` exactly like a `when` (it compiled
+          // to one), so a rule-router built from matchers is never read as a
+          // fan-out. The match DATA rides along so the pairwise rule checks
+          // (`overlapping-rules` / `rules-shadowed-by-order`) have something they
+          // can honestly compare.
+          entries: entries.map((e) => ({
+            id: e.id,
+            conditional: e.when !== undefined,
+            ...(e.match && { match: e.match }),
+          })),
           routes: routes.map((r) => ({
             fromId: r.fromId,
             toId: r.toId,
@@ -841,6 +992,16 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           supersededEntries = makeSupersededEntries(entries, resolveCursor);
         }
         if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
+        // `scopeTools: true` (flat) — the WIRED skills, i.e. everything an entry or a
+        // route mentions. Stamped exactly as the tree stamps its leaves: a graph-level
+        // DEFAULT (`existingAuto ?? …`), never an override of a skill's own declaration.
+        // A listed-but-unwired skill stays additive — the graph does not route it, so
+        // the graph does not scope it (it remains an OPEN, read_skill-reachable skill).
+        // Default `false` keeps today's bytes; 10.0.0 flips the default.
+        const scopedIds =
+          opts.scopeTools === true
+            ? new Set([...entries.map((e) => e.id), ...routes.flatMap((r) => [r.fromId, r.toId])])
+            : undefined;
         for (const [id, skill] of skillsById) {
           const trigger = deriveTrigger(
             id,
@@ -851,16 +1012,29 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             entryScorer !== undefined || llmReadEntry,
           );
           const routing = routingFor(id, entries, routes);
+          const existingAuto = (skill.metadata as { autoActivate?: string } | undefined)
+            ?.autoActivate;
+          const autoActivate = existingAuto ?? (scopedIds?.has(id) ? 'currentSkill' : undefined);
           skills.push({
             ...skill,
             ...(trigger && { trigger }),
-            metadata: { ...skill.metadata, [SKILL_GRAPH_METADATA_KEY]: routing },
+            metadata: {
+              ...skill.metadata,
+              [SKILL_GRAPH_METADATA_KEY]: routing,
+              ...(autoActivate && { autoActivate }),
+            },
           });
           nodes.push({ id, kind: 'skill', label: id });
         }
         edges.push(
           ...entries.map(
-            (e): SkillEdge => ({ from: null, to: e.id, kind: 'entry', label: e.label }),
+            (e): SkillEdge => ({
+              from: null,
+              to: e.id,
+              kind: 'entry',
+              label: e.label,
+              ...(e.match && { match: e.match }),
+            }),
           ),
           ...routes.map(
             (r): SkillEdge => ({
@@ -882,21 +1056,58 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       // surfaced as a run that entered no skill. An explicit `check: 'warn'` still
       // never throws, so the opt-down survives with its name intact.
       const check = opts.check ?? 'throw';
+      // Without `knownTools`, the body-contract checks (`body-foreign-tool` /
+      // `body-unknown-tool`) cannot tell a typo from a baseline tool the agent
+      // registers later — the graph builds before `.tool()` runs. So this PASS
+      // defers them (reports nothing it cannot prove) and leaves a
+      // `deferredBodyContract` note in TWO places that say the same thing: on the
+      // graph, and on each compiled skill's metadata — because skills reach an
+      // agent through more than one door (`.skillGraph(graph)` sees the graph;
+      // `.skills({ list: () => graph.skills })` sees only the skills). Agent build
+      // collects the note from its final injection list and runs the checks exactly
+      // once against the full tool registry, whichever door was used. With
+      // `knownTools` given, the author supplied the full picture and the checks run
+      // right here, as always — no note anywhere, and the agent never re-runs them
+      // (one problem, one report). `graph.checkup()` is untouched either way: the
+      // explicit lint call always runs every check over what it can see.
+      const deferBodyContract = check !== 'off' && opts.knownTools === undefined;
+      const deferredNote: DeferredBodyContract | undefined = deferBodyContract
+        ? { mode: check as 'throw' | 'warn' }
+        : undefined;
       if (check !== 'off') {
         const result = checkup({ ...(opts.knownTools && { knownTools: opts.knownTools }) });
-        if (check === 'throw' && !result.ok) {
-          throw new Error(`skillGraph: build-time check-up failed:\n${formatCheckup(result)}`);
+        const reported = deferBodyContract
+          ? {
+              ok: result.ok, // body-contract problems are warnings — they never decide `ok`
+              problems: result.problems.filter(
+                (p) => p.code !== 'body-foreign-tool' && p.code !== 'body-unknown-tool',
+              ),
+            }
+          : result;
+        if (check === 'throw' && !reported.ok) {
+          throw new Error(`skillGraph: build-time check-up failed:\n${formatCheckup(reported)}`);
         }
-        if (result.problems.length > 0 && isDevMode()) {
+        if (reported.problems.length > 0 && isDevMode()) {
           // eslint-disable-next-line no-console
-          console.warn(`skillGraph: build-time check-up found problems:\n${formatCheckup(result)}`);
+          console.warn(
+            `skillGraph: build-time check-up found problems:\n${formatCheckup(reported)}`,
+          );
         }
       }
 
       return {
-        skills,
+        // Deferring? The note rides each skill too (dedup at agent build is by id,
+        // so the double stamp can never double-report). No deferral → the exact
+        // same objects as always: zero cost when unused.
+        skills: deferredNote
+          ? skills.map((s) => ({
+              ...s,
+              metadata: { ...s.metadata, [SKILL_GRAPH_DEFERRED_CONTRACT_KEY]: deferredNote },
+            }))
+          : skills,
         edges,
         nodes,
+        ...(deferredNote && { deferredBodyContract: deferredNote }),
         toMermaid: () => renderMermaid(nodes, edges),
         // `nextSkill` is the `.to` PROJECTION of the one resolver, not a second
         // implementation — the two cannot answer differently.
@@ -951,9 +1162,58 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       const start = config.start;
       if (typeof start === 'string') builder.entry(resolve(start));
       else if ('use' in start) builder.entry(resolve(start.use));
-      else if ('rules' in start)
-        for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
-      else {
+      else if ('rules' in start) {
+        // (a) rule-id-exists — validate EVERY rule's target before compiling any of
+        // them, so the refusal lists every bad id at once (not just the first) and
+        // names what IS allowed. An unknown id cannot compile into an entry at all,
+        // so this refuses under every `check` mode — a rule silently dropped under
+        // `check: 'warn'` would be the accepted-and-silently-wrong build.
+        const missing = start.rules
+          .map((r, i) => ({ use: r.use, i }))
+          .filter(({ use }) => !skillsById.has(use));
+        if (missing.length > 0) {
+          const known = [...skillsById.keys()].map((k) => `"${k}"`).join(', ');
+          const problems: GraphProblem[] = missing.map(({ use, i }) => ({
+            kind: 'error',
+            code: 'rule-id-exists',
+            message:
+              `start.rules[${i}] routes to skill "${use}", which is not in skills[]. ` +
+              `Known skill ids: ${known || '(none)'}. Fix the rule's \`use\`, or add the ` +
+              `skill to skills[].`,
+            skill: use,
+          }));
+          throw new Error(
+            `skillGraph: build-time check-up failed:\n${formatCheckup({ ok: false, problems })}`,
+          );
+        }
+        for (const [i, r] of start.rules.entries()) {
+          // Exactly one of `match`/`when` per rule. The type already says so
+          // (`SkillStartRule` is a union with `never` on the other arm); this is the
+          // runtime half, for JavaScript callers and configs assembled through `any`.
+          // "Neither" is refused too — a rule exists to be conditional; the
+          // unconditional start is `start: 'id'` / `{ use }`, and saying so beats
+          // compiling a rule that would swallow every turn.
+          const use = r.use; // read before the narrowing checks — TS collapses the
+          // union to `never` inside the refusal branch (the type says it can't happen;
+          // this is the runtime half for callers the compiler never saw).
+          const both = r.when !== undefined && r.match !== undefined;
+          const neither = r.when === undefined && r.match === undefined;
+          if (both || neither) {
+            throw new Error(
+              `skillGraph: start.rules[${i}] (use: "${use}") ${
+                both ? 'sets both `match` and `when`' : 'sets neither `match` nor `when`'
+              } — a rule takes exactly one condition. Say when it applies with \`match\` ` +
+                `(a RegExp or { keywords: [...] } tested against the user message) or ` +
+                `\`when\` (a predicate over the iteration context). For an unconditional ` +
+                `start, use \`start: '${use}'\` instead of a rule.`,
+            );
+          }
+          builder.entry(resolve(r.use), {
+            ...(r.when && { when: r.when }),
+            ...(r.match !== undefined && { match: r.match }),
+          });
+        }
+      } else {
         for (const id of start.entries) builder.entry(resolve(id));
         // scoredBy (any scorer) > byRelevance (embedder sugar) > entryByRead (LLM picks).
         if (start.scoredBy) builder.entryBy(start.scoredBy);
@@ -971,6 +1231,11 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
     return builder.build({
       check: config.check ?? 'throw',
       ...(config.knownTools && { knownTools: config.knownTools }),
+      // The FLAT arm's tool-scoping dial rides through to the one compiler below.
+      // (The tree arm's `scopeTools` was already handed to `.tree()` above — passing
+      // it here too would trip build()'s one-dial-one-home refusal.)
+      ...(config.tree === undefined &&
+        config.scopeTools !== undefined && { scopeTools: config.scopeTools }),
     });
   }
 
@@ -1495,7 +1760,12 @@ function routingFor(
   routes: readonly RouteDecl[],
 ): SkillRouting {
   const entry = entries.find((e) => e.id === id);
-  if (entry) return { via: 'entry', ...(entry.label && { label: entry.label }) };
+  if (entry)
+    return {
+      via: 'entry',
+      ...(entry.label && { label: entry.label }),
+      ...(entry.match && { match: entry.match }),
+    };
 
   const incoming = routes.filter((r) => r.toId === id && (r.when || r.onToolReturn));
   const first = incoming[0];
@@ -1524,7 +1794,10 @@ function renderMermaid(nodes: readonly SkillNode[], edges: readonly SkillEdge[])
   for (const e of edges) {
     const from = e.from === null ? '__start__' : ref(e.from);
     const arrow = e.kind === 'model' ? '-.->' : '-->'; // model edges dashed
-    const label = e.label ? `|${e.label}|` : '';
+    // An explicit label wins unchanged; a data matcher captions its entry edge
+    // (that is half the point of declaring the rule as data — it can be drawn).
+    const caption = e.label ?? (e.match ? mermaidMatchCaption(e.match) : undefined);
+    const label = caption ? `|${caption}|` : '';
     lines.push(`  ${from} ${arrow}${label} ${ref(e.to)}`);
   }
   return lines.join('\n');

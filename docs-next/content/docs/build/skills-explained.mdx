@@ -283,15 +283,15 @@ No primitive is invented. Every step uses a field the Messages API has always ha
 
 ## Routing between skills — the skill graph
 
-A single skill is one playbook. Real agents have several — a front desk that hands off to billing or to tech support — and you want the handoffs to be **declared and drawable**, not buried in prompt prose. `skillGraph()` is that: a fluent builder where `.entry()` marks where a turn starts and `.route(from, to, { when })` declares a deterministic handoff. The SAME built object feeds the agent (`Agent.create()....skillGraph(graph)`) **and** draws as a graph — declared is drawn.
+A single skill is one playbook. Real agents have several — a front desk that hands off to billing or to tech support — and you want the handoffs to be **declared and drawable**, not buried in prompt prose. `skillGraph({ skills, start, steps })` is that: one object literal where `start` marks where a turn begins and each step `{ from, to, when }` declares a deterministic handoff. The SAME built object feeds the agent (`Agent.create()....skillGraph(graph)`) **and** draws as a graph — declared is drawn. (There is also a fluent builder that compiles to the identical graph — see [the fluent builder](doc:skills#advanced-the-fluent-builder) if you're migrating older code.)
 
-The picture below is built from the exact `skillGraph()` builder shown above it — its boxes and edges are a build product of these `.entry()` / `.route()` calls, not a hand-drawn diagram. Click a skill to see its playbook and the tools it unlocks.
+The picture below is built from the exact `skillGraph({ ... })` shown above it — its boxes and edges are a build product of these `start` / `steps` declarations, not a hand-drawn diagram. Click a skill to see its playbook and the tools it unlocks.
 
 <SkillGraphTryIt>
   <CodeFile path="docs-next/components/demos/skillGraphDemo.ts" region="demo" />
 </SkillGraphTryIt>
 
-Solid edges are the `route()` transitions you declared; dashed edges are skills the model can still reach on its own with `read_skill`. The graph is also the single source of two runtime guarantees: `graph.nextSkill(ctx)` advances the cursor exactly as the drawn routes say, and `graph.reachableSkills(ctx)` is the gate that stops the model from `read_skill`-jumping outside the graph. One object — the agent runs it, the docs draw it.
+Solid edges are the `steps` transitions you declared; dashed edges are skills the model can still reach on its own with `read_skill`. The graph is also the single source of two runtime guarantees: `graph.nextSkill(ctx)` advances the cursor exactly as the drawn routes say, and `graph.reachableSkills(ctx)` is the gate that stops the model from `read_skill`-jumping outside the graph. One object — the agent runs it, the docs draw it.
 
 ## The one-line takeaway
 

@@ -1,0 +1,81 @@
+---
+title: Skill graph in 5 minutes
+description: Three defineSkill calls, one skillGraph({ skills, start }) — routing declared as data, checked at build, and drawn as a picture you can read.
+---
+
+> An agent with several playbooks needs a **front door**: which skill does a turn
+> start in? You could bury that decision in prompt prose or in `if` statements.
+> Declare it instead — as **data** — and the same declaration routes the turn,
+> survives a build-time check-up, and draws itself.
+
+This page is the whole loop: three skills, one graph, and the picture.
+
+## The code
+
+Three `defineSkill` calls and one `skillGraph({ ... })`. Start rules are tried top
+to bottom; the first that matches the user's message wins.
+
+<SkillGraphTryIt demo="quickstart">
+  <CodeFile path="docs-next/components/demos/skillGraphQuickstartDemo.ts" region="demo" title="components/demos/skillGraphQuickstartDemo.ts (region: demo)" />
+</SkillGraphTryIt>
+
+Feed the same object to an agent and the rules above ARE its runtime routing:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .skillGraph(buildQuickstartSkillGraph())
+  .build();
+```
+
+## You can SEE it
+
+`graph.toMermaid()` draws the graph you just declared. This block is its verbatim
+output from a real run — note the entry edges **caption themselves with your
+matchers**, because the rules are data, not opaque code:
+
+```mermaid
+flowchart TD
+  __start__([▶ start])
+  n_refunds["refunds"]
+  n_billing["billing"]
+  n_triage["triage"]
+  __start__ -->|/refund#124;money back/i| n_refunds
+  __start__ -->|charge, invoice| n_billing
+  __start__ --> n_triage
+```
+
+Paste it into a PR description, a README, or [mermaid.live](https://mermaid.live)
+— the routing review IS a picture review. (`#124;` is mermaid's escape for a `|`
+inside an edge label — it renders back as the `|` in your regex.)
+
+## What those lines bought
+
+**Routing by data.** `match` takes a `RegExp` or `{ keywords: [...] }` (keywords
+are case-insensitive, any-of, and whole-word). From the run above:
+
+| user message | lands in | why |
+|---|---|---|
+| "I want my money back" | `refunds` | regex `/refund\|money back/i` |
+| "why is there a CHARGE on my card" | `billing` | keyword `charge`, case-insensitive |
+| "my charger broke" | `triage` | whole-word: `charge` does NOT match "charger" — the catch-all rule takes it |
+
+`when: (ctx) => ...` predicates still work beside `match` (the catch-all above is
+one) — they are the escape hatch for conditions that aren't about the message
+text. Each rule takes exactly one of the two.
+
+**Tools that follow the graph.** `scopeTools: true` stamps every wired skill with
+`autoActivate: 'currentSkill'`, so `process_refund` is offered to the model only
+while the graph is on `refunds` — not on every iteration from the start. The
+default is `false` (today's behavior) until 10.0.0 flips it.
+
+**A check-up you didn't have to write.** Because the rules are data, the build
+checks them: a rule routing to a skill that isn't in `skills[]` refuses to build
+(`rule-id-exists`, listing every bad id and the known catalog), two rules that
+provably overlap or shadow each other get a warning naming both — and skill
+bodies that mention tools are checked against the agent's **real** tool registry
+at `Agent....build()`, automatically.
+
+## Next steps
+
+- [Skills](doc:skills) — `defineSkill` itself, plus the full graph surface: `match` details, `scopeTools`, the check-up codes, `steps` for mid-turn hand-offs
+- [Skills, explained](doc:skills-explained) — why progressive disclosure works, per-provider delivery, and the interactive graph essay

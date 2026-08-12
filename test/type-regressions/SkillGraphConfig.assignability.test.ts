@@ -39,6 +39,23 @@ const _startRules: SkillGraphConfig = {
   skills: [a, b],
   start: { rules: [{ when: (c) => c.iteration === 1, use: 'a' }] },
 };
+/** Rules may be declared as DATA — a RegExp or a keyword list (SG-A). */
+const _startRuleMatchers: SkillGraphConfig = {
+  skills: [a, b],
+  start: {
+    rules: [
+      { match: /refund/i, use: 'a' },
+      { match: { keywords: ['charge', 'billing'] }, use: 'b' },
+    ],
+  },
+};
+/** The flat arm's `scopeTools` is a boolean now (it was `never` before SG-A). */
+const _flatScopeTools: SkillGraphConfig = {
+  skills: [a, b],
+  start: 'a',
+  steps: [{ from: 'a', to: 'b', onToolReturn: 'probe' }],
+  scopeTools: true,
+};
 const _startEntries: SkillGraphConfig = {
   skills: [a, b],
   start: { entries: ['a', 'b'], byRelevance: mockEmbedder() },
@@ -71,6 +88,20 @@ const _treePlusSteps: SkillGraphConfig = {
   tree: decideSkill(() => true, a, b),
   steps: [{ from: 'a', to: 'b' }],
 };
+const _bothMatchAndWhen: SkillGraphConfig = {
+  skills: [a],
+  start: {
+    // @ts-expect-error a rule takes exactly ONE of `match`/`when` — both is refused
+    rules: [{ match: /x/, when: () => true, use: 'a' }],
+  },
+};
+const _neitherMatchNorWhen: SkillGraphConfig = {
+  skills: [a],
+  start: {
+    // @ts-expect-error a rule exists to be conditional — for unconditional use `start: 'a'`
+    rules: [{ use: 'a' }],
+  },
+};
 // ...and the pair of them, at the call site rather than through a variable.
 const _atTheCall = () =>
   // @ts-expect-error `start` and `steps` are the routing `tree` already owns
@@ -92,11 +123,15 @@ describe('SkillGraphConfig — the type refuses what the build refuses', () => {
       _startString,
       _startUse,
       _startRules,
+      _startRuleMatchers,
+      _flatScopeTools,
       _startEntries,
       _stepsOnly,
       _skillsOnly,
       _treePlusStart,
       _treePlusSteps,
+      _bothMatchAndWhen,
+      _neitherMatchNorWhen,
     ];
   });
 });

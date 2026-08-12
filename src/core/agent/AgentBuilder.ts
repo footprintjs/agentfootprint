@@ -29,7 +29,14 @@ import {
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
-import type { CursorMove, EntryScoring } from '../../lib/injection-engine/skillGraph.js';
+import {
+  SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
+  type CursorMove,
+  type DeferredBodyContract,
+  type EntryScoring,
+} from '../../lib/injection-engine/skillGraph.js';
+import { checkSkillContracts, skillToolNames } from '../../lib/injection-engine/skillContract.js';
+import { formatCheckup } from '../../lib/injection-engine/skillGraphCheckup.js';
 import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
@@ -132,6 +139,22 @@ export class AgentBuilder {
    *  is the only shape that draws `predicate` diamonds — so no new field had to be
    *  added to the public `SkillGraph`. Feeds the gate's tree-specific refusal. */
   private skillGraphIsTree = false;
+  /** Captured from `.skillGraph(graph)` — the graph's note that it DEFERRED its
+   *  body-contract checks (built without `knownTools`, it could not tell a typo
+   *  from a baseline tool this agent registers), plus the compiled skills to run
+   *  them over. `build()` runs them exactly once, against the full tool registry.
+   *  This capture is the FALLBACK for a structurally-typed graph whose skills do
+   *  not carry the per-skill note: the primary collection reads
+   *  `SKILL_GRAPH_DEFERRED_CONTRACT_KEY` off each injection's metadata, which is
+   *  how a graph fed through `.skills({ list: () => graph.skills })` — a door
+   *  that never sees the graph object — still gets its deferred checks run.
+   *  Skills found by both are deduped by id: nothing re-runs, nothing
+   *  double-reports. Undefined when the graph already ran them (`knownTools`
+   *  given), switched them off (`check: 'off'`), or predates the note. */
+  private skillGraphDeferredBodyContract?: {
+    readonly mode: 'throw' | 'warn';
+    readonly skills: readonly Injection[];
+  };
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -891,6 +914,14 @@ export class AgentBuilder {
      *  rather than added to `SkillGraph` as a mode field — the shape is already
      *  public, and one fact should not be declared twice. */
     nodes?: ReadonlyArray<{ readonly kind: string }>;
+    /** The graph's note that it deferred its body-contract checks to agent build
+     *  (built without `knownTools` — see `SkillGraph.deferredBodyContract`).
+     *  Optional for forward-compat; absent → the checks already ran at graph build
+     *  (or were off), so this agent never re-runs them. Library-built graphs also
+     *  stamp the note on each compiled skill's metadata, which `build()` prefers —
+     *  this field is the fallback for a structurally-typed graph without the
+     *  per-skill stamps (skills found by both are deduped by id). */
+    deferredBodyContract?: { readonly mode: 'throw' | 'warn' };
   }): this {
     // One agent routes with ONE graph. The second call used to replace the cursor,
     // the reachable set and the entry scorer while the FIRST graph's skills stayed
@@ -929,6 +960,17 @@ export class AgentBuilder {
     // The suppression reporter (8.15.0) — what the cursor law kept off the wire.
     this.skillGraphSupersededEntries = graph.supersededEntries;
     this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
+    // The deferred body-contract note: the graph built without `knownTools`, so its
+    // typo-vs-baseline-tool checks wait for `build()`, where the registry is real.
+    // Library-built graphs also stamp the note on each skill's metadata (that is
+    // what serves the `.skills({ list })` door); this capture is the fallback for
+    // a structurally-typed graph without the stamps — `build()` dedupes by id.
+    if (graph.deferredBodyContract) {
+      this.skillGraphDeferredBodyContract = {
+        mode: graph.deferredBodyContract.mode,
+        skills: graph.skills,
+      };
+    }
     return this;
   }
 
@@ -1760,6 +1802,90 @@ export class AgentBuilder {
     // provider against an injection — so both live here, beside the refusal above.
     warnInertRelevanceHint(injections, this.skillGraphScoreEntries !== undefined);
     warnRedundantSkillScopedTools(this.toolProviderRef, injections);
+    // The skill graph's DEFERRED body-contract checks run HERE — the one build point
+    // that can see the full tool registry. At graph build (without `knownTools`) a
+    // body's `lookup_order(id)` is indistinguishable from a typo, because `.tool()`
+    // has not run yet; the graph said nothing it could not prove and left its note.
+    // The note is collected from the FINAL injection list (each deferred graph skill
+    // carries it in its metadata), so the checks run whichever door the skills came
+    // through — `.skillGraph(graph)` or `.skills({ list: () => graph.skills })`.
+    // The `.skillGraph()` capture is folded in as a fallback for a structurally-typed
+    // graph without per-skill stamps; skills found by both are deduped by id, so one
+    // problem is reported once. The known set checked now: the agent's registered
+    // tool names ∪ `read_skill` (auto-attached whenever a skill exists, so a hand-off
+    // hint naming it is not a typo) ∪ every NON-deferred skill's tool names (they
+    // exist on this agent; calling them nonexistent would be false) — plus, inside
+    // checkSkillContracts, the checked skills' own tools. Runs at most once per built
+    // agent, and never when the graph already ran its checks with an explicit
+    // `knownTools`: one problem, one report. Baseline `ToolProvider` tools are
+    // per-iteration and cannot be enumerated at build time — bodies naming only
+    // provider-delivered tools should pass the names via the graph's `knownTools`.
+    const deferredByMode = new Map<'throw' | 'warn', Injection[]>();
+    const deferredIds = new Set<string>();
+    const collectDeferred = (skill: Injection, mode: 'throw' | 'warn'): void => {
+      if (deferredIds.has(skill.id)) return; // metadata + graph note = ONE check
+      deferredIds.add(skill.id);
+      const group = deferredByMode.get(mode);
+      if (group) group.push(skill);
+      else deferredByMode.set(mode, [skill]);
+    };
+    for (const i of injections) {
+      const note = (i.metadata as { [SKILL_GRAPH_DEFERRED_CONTRACT_KEY]?: DeferredBodyContract })?.[
+        SKILL_GRAPH_DEFERRED_CONTRACT_KEY
+      ];
+      if (note?.mode === 'throw' || note?.mode === 'warn') collectDeferred(i, note.mode);
+    }
+    if (this.skillGraphDeferredBodyContract) {
+      const { mode, skills: graphSkills } = this.skillGraphDeferredBodyContract;
+      for (const s of graphSkills) collectDeferred(s, mode);
+    }
+    if (deferredByMode.size > 0) {
+      // Tools on skills OUTSIDE the deferred set exist on this agent — baseline,
+      // not typos. Tools on deferred skills are added per group by
+      // checkSkillContracts itself (own vs known matters for body-foreign-tool).
+      const baseKnownTools = [
+        ...this.registry.map((entry) => entry.name),
+        'read_skill',
+        ...injections
+          .filter((i) => i.flavor === 'skill' && !deferredIds.has(i.id))
+          .flatMap((s) => skillToolNames(s)),
+      ];
+      // One group per deferring graph's `check` mode — two graphs fed via
+      // `.skills()` may disagree, and each is judged by its OWN declared severity.
+      for (const [mode, group] of deferredByMode) {
+        const groupIds = new Set(group.map((s) => s.id));
+        const knownTools = [
+          ...baseKnownTools,
+          ...[...deferredByMode.values()]
+            .flat()
+            .filter((s) => !groupIds.has(s.id))
+            .flatMap((s) => skillToolNames(s)),
+        ];
+        const problems = checkSkillContracts(group, { knownTools });
+        if (problems.length === 0) continue;
+        const report = { ok: !problems.some((p) => p.kind === 'error'), problems };
+        // Severity per the GRAPH's own check mode. Both contract checks are
+        // warnings today, so `'throw'` and `'warn'` both surface as a dev-mode
+        // warning — but an error-kind problem, should one ever exist, honors
+        // `'throw'` here exactly as it would have at graph build.
+        if (mode === 'throw' && !report.ok) {
+          throw new Error(
+            `Agent.build(): skill-body ↔ tool-contract check-up failed ` +
+              `(deferred from graph build; checked against this agent's full tool ` +
+              `registry):\n${formatCheckup(report)}`,
+          );
+        }
+        if (isDevMode()) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `agentfootprint Agent: skill-graph body-contract check-up (deferred from ` +
+              `graph build; checked here against the agent's full tool registry — pass ` +
+              `knownTools to skillGraph to run it at graph build instead):\n` +
+              formatCheckup(report),
+          );
+        }
+      }
+    }
     const agent = new Agent(
       opts,
       this.systemPromptValue,

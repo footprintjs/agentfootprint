@@ -25,12 +25,20 @@ const Inner = dynamic(() => import('./SkillGraphTryItInner'), {
 });
 
 /**
- * `children` is the server-rendered <CodeFile region="demo"> of skillGraphDemo.ts
- * (the real builder, read at build time). We forward it into the client island as
+ * `children` is the server-rendered <CodeFile region="demo"> of the demo file
+ * (the real code, read at build time). We forward it into the client island as
  * `code` so the shown bytes are the same file the drawn graph is built from.
+ * `demo` picks which single-source demo backs the embed — `'support'` (default,
+ * skillGraphDemo.ts) or `'quickstart'` (skillGraphQuickstartDemo.ts).
  */
-export function SkillGraphTryIt({ children }: { children?: ReactNode }) {
-  return <Inner code={children} />;
+export function SkillGraphTryIt({
+  children,
+  demo,
+}: {
+  children?: ReactNode;
+  demo?: 'support' | 'quickstart';
+}) {
+  return <Inner code={children} demo={demo} />;
 }
 
 export default SkillGraphTryIt;

@@ -4,25 +4,41 @@ import '@xyflow/react/dist/style.css';
 import { useMemo, type ReactNode } from 'react';
 import { SkillGraphFlow } from 'agentfootprint-lens';
 import { buildSupportSkillGraph } from './demos/skillGraphDemo';
+import { buildQuickstartSkillGraph } from './demos/skillGraphQuickstartDemo';
 import { LIGHT_THEME, DARK_THEME, surfaceColors, useIsDark } from './demos/embedTheme';
 
 /**
- * Draws the REAL skill-graph from `buildSupportSkillGraph()` — the same builder
- * shown above (via <CodeFile region="demo">). <SkillGraphFlow> renders the
- * structure the graph already carries (`graph.nodes` / `graph.edges`): skill
- * boxes, the synthetic START chip, solid `route()` edges, and dashed
- * `read_skill`-reachable edges. Click a node to inspect its playbook + tools in
- * the side panel — pulled from the SAME `graph.skills`, not a separate fixture.
+ * Draws a REAL skill-graph — the same code shown above it (via
+ * <CodeFile region="demo">). <SkillGraphFlow> renders the structure the graph
+ * already carries (`graph.nodes` / `graph.edges`): skill boxes, the synthetic
+ * START chip, solid declared edges, and dashed `read_skill`-reachable edges.
+ * Click a node to inspect its playbook + tools in the side panel — pulled from
+ * the SAME `graph.skills`, not a separate fixture.
+ *
+ * `demo` picks which single-source demo file backs the embed; each entry pairs
+ * the builder with the file path shown in the header, so the shown bytes and the
+ * drawn graph can never come from different files.
  */
+
+const DEMOS = {
+  support: { build: buildSupportSkillGraph, file: 'components/demos/skillGraphDemo.ts' },
+  quickstart: {
+    build: buildQuickstartSkillGraph,
+    file: 'components/demos/skillGraphQuickstartDemo.ts',
+  },
+} as const;
 
 interface SkillGraphTryItInnerProps {
   /** Server-rendered <CodeFile region="demo"> of the builder, shown above the graph. */
   readonly code?: ReactNode;
+  /** Which single-source demo backs this embed. Default: the support graph. */
+  readonly demo?: keyof typeof DEMOS;
 }
 
-export default function SkillGraphTryItInner({ code }: SkillGraphTryItInnerProps) {
+export default function SkillGraphTryItInner({ code, demo = 'support' }: SkillGraphTryItInnerProps) {
   const isDark = useIsDark();
-  const graph = useMemo(() => buildSupportSkillGraph(), []);
+  const { build, file } = DEMOS[demo];
+  const graph = useMemo(() => build(), [build]);
   // Map each drawn node back to the skill it represents — the side-panel detail
   // is read straight off `graph.skills` (the compiled artifact), so it can never
   // drift from what the graph draws.
@@ -45,7 +61,7 @@ export default function SkillGraphTryItInner({ code }: SkillGraphTryItInnerProps
           color: c.chip,
         }}
       >
-        <span>components/demos/skillGraphDemo.ts — the exact graph drawn below</span>
+        <span>{file} — the exact graph drawn below</span>
         <span>declared === drawn</span>
       </div>
       <div style={{ marginBottom: 10, maxHeight: 360, overflow: 'auto', borderRadius: 12 }}>{code}</div>
@@ -80,9 +96,18 @@ export default function SkillGraphTryItInner({ code }: SkillGraphTryItInnerProps
         />
       </div>
       <div style={{ fontSize: 13, color: c.chip, marginTop: 8 }}>
-        ↑ Click a skill to see its playbook + the tools it unlocks. Solid edges are{' '}
-        <code>route()</code> transitions; dashed edges are skills the model can reach with{' '}
-        <code>read_skill</code>.
+        {demo === 'quickstart' ? (
+          <>
+            ↑ Click a skill to see its playbook + the tools it unlocks. The edges from START
+            are your start rules — the first that matches the user&apos;s message wins.
+          </>
+        ) : (
+          <>
+            ↑ Click a skill to see its playbook + the tools it unlocks. Solid edges are the{' '}
+            <code>steps</code> you declared; dashed edges are skills the model can reach with{' '}
+            <code>read_skill</code>.
+          </>
+        )}
       </div>
     </div>
   );
