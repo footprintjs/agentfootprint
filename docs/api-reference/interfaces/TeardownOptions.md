@@ -6,7 +6,7 @@
 
 # Interface: TeardownOptions
 
-Defined in: [src/core/toolSessions.ts:92](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolSessions.ts#L92)
+Defined in: [src/core/toolSessions.ts:92](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolSessions.ts#L92)
 
 What a tool says about the cleanup it is registering.
 
@@ -16,7 +16,7 @@ What a tool says about the cleanup it is registering.
 
 > `readonly` `optional` **key?**: `string`
 
-Defined in: [src/core/toolSessions.ts:104](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolSessions.ts#L104)
+Defined in: [src/core/toolSessions.ts:104](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolSessions.ts#L104)
 
 Dedup key within `(tool, scope)`. Omitted → the tool gets one registration
 per scope, which is right for a tool that holds exactly one thing.
@@ -31,7 +31,7 @@ that is wider is a silent latency change.
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/core/toolSessions.ts:110](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolSessions.ts#L110)
+Defined in: [src/core/toolSessions.ts:110](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolSessions.ts#L110)
 
 One free-form fact about what was opened (the language, the browser
  profile). Reported as-is; never a place for user data.
@@ -42,7 +42,7 @@ One free-form fact about what was opened (the language, the browser
 
 > `readonly` `optional` **runnerId?**: `string`
 
-Defined in: [src/core/toolSessions.ts:107](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolSessions.ts#L107)
+Defined in: [src/core/toolSessions.ts:107](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolSessions.ts#L107)
 
 The adapter holding the resource — `CodeRunner.id`, say. Reported so a
  row names its backend instead of only its tool.
@@ -53,7 +53,7 @@ The adapter holding the resource — `CodeRunner.id`, say. Reported so a
 
 > `readonly` `optional` **scope?**: [`TeardownScope`](/agentfootprint/api/generated/type-aliases/TeardownScope.md)
 
-Defined in: [src/core/toolSessions.ts:95](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolSessions.ts#L95)
+Defined in: [src/core/toolSessions.ts:95](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolSessions.ts#L95)
 
 Default `'run'`. Refused by name when the door cannot honour it — see
  [ToolExecutionContext.teardownScopes](/agentfootprint/api/generated/interfaces/ToolExecutionContext.md#teardownscopes).

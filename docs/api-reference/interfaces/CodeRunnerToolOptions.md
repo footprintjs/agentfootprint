@@ -6,7 +6,7 @@
 
 # Interface: CodeRunnerToolOptions
 
-Defined in: [src/core/codeRunnerTool.ts:65](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L65)
+Defined in: [src/core/codeRunnerTool.ts:65](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L65)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/codeRunnerTool.ts:65](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)\<\{ `code`: `string`; \}\>
 
-Defined in: [src/core/codeRunnerTool.ts:95](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L95)
+Defined in: [src/core/codeRunnerTool.ts:95](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L95)
 
 Demand a human check-in before code runs — `'always'`, or a predicate over
  the code string. A pause here does NOT tear the session down.
@@ -25,7 +25,7 @@ Demand a human check-in before code runs — `'always'`, or a predicate over
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:73](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L73)
+Defined in: [src/core/codeRunnerTool.ts:73](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L73)
 
 Description the model sees. A sensible one is composed from `scope` +
  `language` when you do not pass one.
@@ -36,7 +36,7 @@ Description the model sees. A sensible one is composed from `scope` +
 
 > `readonly` `optional` **language?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:87](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L87)
+Defined in: [src/core/codeRunnerTool.ts:87](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L87)
 
 Default language for the code the model writes. Default `'python'`.
 
@@ -46,7 +46,7 @@ Default language for the code the model writes. Default `'python'`.
 
 > `readonly` `optional` **maxOutputChars?**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:90](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L90)
+Defined in: [src/core/codeRunnerTool.ts:90](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L90)
 
 Per-stream ceiling for what reaches the model, in characters. Default 4000.
  Anything cut is STATED in the result, never dropped quietly.
@@ -57,7 +57,7 @@ Per-stream ceiling for what reaches the model, in characters. Default 4000.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:70](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L70)
+Defined in: [src/core/codeRunnerTool.ts:70](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L70)
 
 Tool name the model sees. Default `'run_code'`.
 
@@ -67,7 +67,7 @@ Tool name the model sees. Default `'run_code'`.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/codeRunnerTool.ts:98](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L98)
+Defined in: [src/core/codeRunnerTool.ts:98](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L98)
 
 A credential this tool needs (declare-and-push). Resolved before execute.
  Do NOT cache it past the call: a session outliving a run outlives its token.
@@ -78,7 +78,7 @@ A credential this tool needs (declare-and-push). Resolved before execute.
 
 > `readonly` **runner**: [`CodeRunner`](/agentfootprint/api/generated/interfaces/CodeRunner.md)
 
-Defined in: [src/core/codeRunnerTool.ts:68](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L68)
+Defined in: [src/core/codeRunnerTool.ts:68](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L68)
 
 The backend. `localCodeRunner()` for a dev loop, `agentCoreCodeRunner(...)`
  for a real sandbox — the tool is identical across the swap.
@@ -89,7 +89,7 @@ The backend. `localCodeRunner()` for a dev loop, `agentCoreCodeRunner(...)`
 
 > `readonly` `optional` **scope?**: [`CodeRunnerToolScope`](/agentfootprint/api/generated/type-aliases/CodeRunnerToolScope.md)
 
-Defined in: [src/core/codeRunnerTool.ts:85](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L85)
+Defined in: [src/core/codeRunnerTool.ts:85](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L85)
 
 How long one session lives. Default `'run'` — a turn's worth of work shares
 one interpreter, and nothing outlives the turn.
@@ -107,6 +107,6 @@ session-bound run plus a composition root that calls
 
 > `readonly` `optional` **timeoutMs?**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:92](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/codeRunnerTool.ts#L92)
+Defined in: [src/core/codeRunnerTool.ts:92](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/codeRunnerTool.ts#L92)
 
 Per-execution ceiling handed to the runner.

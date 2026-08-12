@@ -8,7 +8,7 @@
 
 > **OutputSchemaStrategy** = `"instruct"` \| `"tool-forced"`
 
-Defined in: [src/core/outputSchema.ts:88](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/outputSchema.ts#L88)
+Defined in: [src/core/outputSchema.ts:88](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/outputSchema.ts#L88)
 
 How the schema reaches the model.
 

@@ -6,7 +6,7 @@
 
 # Interface: ToolContractProblem
 
-Defined in: [src/core/toolContract.ts:25](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolContract.ts#L25)
+Defined in: [src/core/toolContract.ts:25](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L25)
 
 One contract issue. `kind: 'error'` fails `ok`.
 
@@ -16,7 +16,7 @@ One contract issue. `kind: 'error'` fails `ok`.
 
 > `readonly` **code**: [`ToolContractCode`](/agentfootprint/api/generated/type-aliases/ToolContractCode.md)
 
-Defined in: [src/core/toolContract.ts:27](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolContract.ts#L27)
+Defined in: [src/core/toolContract.ts:27](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L27)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/toolContract.ts:27](https://github.com/footprintjs/agentfo
 
 > `readonly` **kind**: `"error"` \| `"warning"`
 
-Defined in: [src/core/toolContract.ts:26](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolContract.ts#L26)
+Defined in: [src/core/toolContract.ts:26](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L26)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/toolContract.ts:26](https://github.com/footprintjs/agentfo
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/toolContract.ts:29](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolContract.ts#L29)
+Defined in: [src/core/toolContract.ts:29](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L29)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/core/toolContract.ts:29](https://github.com/footprintjs/agentfo
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/toolContract.ts:28](https://github.com/footprintjs/agentfootprint/blob/23dde4a00923eb3de0e6e5e6c26dbb8c0014797f/src/core/toolContract.ts#L28)
+Defined in: [src/core/toolContract.ts:28](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L28)
