@@ -588,7 +588,9 @@ export interface SessionLifecycle {
 export type ConcurrentInvokePolicy = 'reject' | 'enqueue';
 
 /**
- * Options for {@link standingAgent}.
+ * Everything {@link standingAgent} takes EXCEPT which agent answers — that is
+ * the one choice with two shapes, and it lives on
+ * {@link StandingAgentOptions}.
  *
  * Generic in the host's own handle type so composing does not cost you what
  * the adapter told you. `nodeHost` hands back the URL it actually bound —
@@ -596,13 +598,7 @@ export type ConcurrentInvokePolicy = 'reject' | 'enqueue';
  * it through `standingAgent` keeps that, without the port having to know that
  * "a URL" is a thing some adapters have.
  */
-export interface StandingAgentOptions<TH extends HostHandle = HostHandle> {
-  /**
-   * The agent that answers. ONE instance, shared by every session — which is
-   * why the composer runs one request at a time (see
-   * {@link ConcurrentInvokePolicy}).
-   */
-  readonly agent: Agent;
+export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
   /** Where conversations live between requests. */
   readonly sessions: SessionLifecycle;
   /** What carries requests in. */
@@ -653,7 +649,7 @@ export interface StandingAgentOptions<TH extends HostHandle = HostHandle> {
    *   1. installs one listener per signal;
    *   2. on arrival, runs the same `close()` you would have called — the host
    *      stops taking requests, in-flight runs finish, telemetry drains per
-   *      {@link StandingAgentOptions.shutdown};
+   *      {@link StandingAgentBaseOptions.shutdown};
    *   3. removes its own listeners and RE-RAISES the signal, so the process
    *      dies exactly the way the platform expects rather than by an exit code
    *      this library invented.
@@ -666,3 +662,118 @@ export interface StandingAgentOptions<TH extends HostHandle = HostHandle> {
    */
   readonly shutdownOn?: readonly NodeJS.Signals[];
 }
+
+/** How many sessions a `agentFactory` pool holds before it evicts the least
+ *  recently used one. See {@link StandingAgentPoolOptions.maxActiveSessions}. */
+export const DEFAULT_MAX_ACTIVE_SESSIONS = 100;
+
+/**
+ * One shared agent, serving every session — the original shape, and still the
+ * right one for most deployments.
+ *
+ * An `Agent` instance holds per-run state on itself, so one instance can only
+ * be in one run at a time. That is why this shape SERIALIZES globally: not a
+ * tuning choice, a correctness requirement. See
+ * {@link StandingAgentPoolOptions.agentFactory} for the shape that runs
+ * sessions in parallel, and `standingAgent`'s own doc for the full comparison.
+ */
+export interface StandingAgentSharedOptions<TH extends HostHandle = HostHandle>
+  extends StandingAgentBaseOptions<TH> {
+  /**
+   * The agent that answers. ONE instance, shared by every session — which is
+   * why this shape runs one request at a time, globally (see
+   * {@link ConcurrentInvokePolicy} for the separate question of two turns of
+   * the SAME conversation).
+   *
+   * The composer only BORROWS it: `close()` drains its telemetry and leaves it
+   * usable, per {@link StandingAgentBaseOptions.shutdown}.
+   */
+  readonly agent: Agent;
+  /** Refused beside `agent` — see {@link StandingAgentPoolOptions.agentFactory}. */
+  readonly agentFactory?: undefined;
+  /** Meaningless without a pool; refused rather than ignored. */
+  readonly maxActiveSessions?: undefined;
+}
+
+/**
+ * One agent PER ACTIVE SESSION, built on demand — sessions run in parallel
+ * (9.10.0).
+ */
+export interface StandingAgentPoolOptions<TH extends HostHandle = HostHandle>
+  extends StandingAgentBaseOptions<TH> {
+  /** Refused beside `agentFactory` — two spellings of one choice. */
+  readonly agent?: undefined;
+  /**
+   * Build an agent. Called once per session that arrives and is not already in
+   * the pool; the instance it returns serves that session and nobody else.
+   *
+   * ── What it buys ──────────────────────────────────────────────────────────
+   * **Sessions run at the same time.** Two people asking two questions are two
+   * instances and two runs; neither waits for the other. Within one session the
+   * turns still serialize — on that session's own instance — which is the same
+   * correctness rule the shared shape enforces globally, applied where it
+   * actually binds.
+   *
+   * ── What it costs ─────────────────────────────────────────────────────────
+   * An instance per active session: memory, and whatever your agent builds at
+   * construction (a provider client, tool wiring). The pool is bounded by
+   * {@link StandingAgentPoolOptions.maxActiveSessions} and evicts least
+   * recently used, which is invisible to the user because the CONVERSATION
+   * lives in the session store — an evicted session re-hydrates onto a fresh
+   * instance on its next request.
+   *
+   * ── The one law ───────────────────────────────────────────────────────────
+   * **Return a NEW agent every call.** A factory that hands back an instance it
+   * has already handed back is refused BY NAME on the spot: two sessions on one
+   * instance is the exact corruption the pool exists to prevent, and it would
+   * otherwise show up as one user's answer appearing in another user's
+   * conversation with nothing in the recording to say so. Build the agent
+   * INSIDE the factory; do not close over one.
+   *
+   * Instances the factory makes are the composer's, so it stops them — on
+   * eviction, and on `close()` unless
+   * {@link StandingAgentBaseOptions.shutdown} is `'none'`.
+   *
+   * @example
+   *   await standingAgent({
+   *     agentFactory: () => Agent.create({ provider, model }).system('…').build(),
+   *     sessions: sqliteSessions({ file: './sessions.db' }),
+   *     host: nodeHost({ port: 8080 }),
+   *     maxActiveSessions: 200,
+   *   });
+   */
+  readonly agentFactory: () => Agent;
+  /**
+   * How many sessions hold an instance at once. Default
+   * {@link DEFAULT_MAX_ACTIVE_SESSIONS} (100). Must be a positive integer.
+   *
+   * When a new session arrives at a full pool, the least recently used session
+   * that is NOT running is retired: its tool sessions are closed with reason
+   * `'evicted'`, its agent is shut down, and its conversation stays in the
+   * session store. Nothing about that is visible to the person on the other
+   * end — their next message hydrates the same conversation onto a fresh
+   * instance.
+   *
+   * **A running session is never evicted.** If every session in the pool is
+   * busy, the pool grows past this number rather than tearing down a live run:
+   * the bound is on how many idle instances are RETAINED, and losing somebody's
+   * answer to a cache policy is not a trade this composer will make on your
+   * behalf. It comes back under the bound as soon as a run finishes.
+   */
+  readonly maxActiveSessions?: number;
+}
+
+/**
+ * Options for {@link standingAgent} — pick ONE of the two agent shapes.
+ *
+ *  - `{ agent }` — one instance shared by every session, serialized globally.
+ *    See {@link StandingAgentSharedOptions}.
+ *  - `{ agentFactory }` — one instance per active session, sessions in
+ *    parallel. See {@link StandingAgentPoolOptions}.
+ *
+ * Passing both is refused by name at construction: they are two spellings of
+ * the same decision, and which one won would be invisible.
+ */
+export type StandingAgentOptions<TH extends HostHandle = HostHandle> =
+  | StandingAgentSharedOptions<TH>
+  | StandingAgentPoolOptions<TH>;

@@ -84,7 +84,17 @@ All three are real and useful. None of them is the conversation, and confusing t
 
 `identity: { conversationId, tenant?, principal? }` scopes **memory and RAG reads/writes**, and reaches `PermissionChecker.check`, the middleware chains, `ToolProvider.list(ctx)` and the credential provider. It looks exactly like a session handle and is not one: two `run()` calls with the same `conversationId` are still two conversations.
 
-(It does not reach `tool.execute` — `ToolExecutionContext` carries no identity field.)
+Since 9.7.0 it also reaches `tool.execute` as `ctx.identity` — but only when you **passed** one; see the ladder below for why.
+
+#### Where the namespace comes from when you pass none (9.10.0)
+
+Three rungs, in order:
+
+1. **An identity you passed** — `run({ identity })`, `run(input, { identity })`, or the one a continued conversation carries. Always wins.
+2. **The run's `sessionId`, if it has one** → `{ conversationId: sessionId }`. A hosting session *is* a conversation, and `standingAgent` passes the session id on every run and resume — so a served session gets durable per-user memory with **no configuration at all**. Before 9.10.0 this rung did not exist: every turn of a session got rung 3 and a fresh runId, so a registered `.memory()` recalled nothing across the turns of one session.
+3. **Neither** → `{ conversationId: '<runId>' }`, unchanged, so a script that names nobody still gets per-run isolation.
+
+Rung 2 is recorded as `runIdentitySource: 'session'` in the run's state, so a trace can tell a namespace somebody chose from one the library derived. And a synthesized namespace — rung 2 or rung 3 — is **never** published to `tool.execute` as `ctx.identity`: absent keeps meaning "nobody named one". A tool that wants the session has `ctx.sessionId`.
 
 ### Memory is recall, not replay
 
@@ -162,3 +172,20 @@ await standingAgent({
 ```
 
 It hydrates the session, continues it through this page's `continueFrom` door, persists what the run left behind *before* answering, and serves paused runs as a question a later request can answer. See [Hosting](doc:hosting-and-runtime).
+
+**Where does the session id come from?** From the caller. `nodeHost` reads the JSON body's `sessionId` and then the `x-session-id` header — or a cookie it issues itself:
+
+```ts
+// One line in the page, and the header carries it:
+import { browserSessionId } from 'agentfootprint';
+await fetch('/invoke', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-session-id': browserSessionId() },
+  body: JSON.stringify({ input: message }),
+});
+
+// …or no client code at all: the server issues and reads a cookie.
+nodeHost({ port: 8080, sessionCookie: 'af_session' });
+```
+
+A session id is caller data and never authentication — authenticate the caller by your own means, then check they are allowed the session they claimed. **And to serve many people at once**, `standingAgent({ agentFactory })` gives every active session its own agent so their turns run in parallel; see [Concurrency & sessions](doc:hosting-and-runtime).

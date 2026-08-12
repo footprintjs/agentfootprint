@@ -58,6 +58,11 @@
  *     without `node:sqlite` rather than falling back to memory, because a store
  *     that silently forgot everything looks exactly like a new user.
  *   • `standingAgent({ agent, sessions, host, durability? })` — the composer.
+ *     `{ agentFactory }` instead of `{ agent }` gives every ACTIVE SESSION its
+ *     own agent, so sessions run in parallel while each session's turns still
+ *     serialize on its own instance — bounded by `maxActiveSessions`, evicted
+ *     least-recently-used, and invisible when it evicts because the
+ *     conversation lives in the store rather than in the instance.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to
  *     unpack a format this runtime does not know.
  *   • `toPausedEnvelope` / `readPausedRun` — the same for a run that stopped to
@@ -81,8 +86,14 @@
  *   process.on('SIGTERM', () => void handle.close());
  */
 
-export { nodeHost, jsonWire } from './nodeHost.js';
-export type { NodeHost, NodeHostHandle, NodeHostOptions } from './nodeHost.js';
+export { nodeHost, jsonWire, jsonWireWith, DEFAULT_SESSION_HEADER } from './nodeHost.js';
+export type { NodeHost, NodeHostHandle, NodeHostOptions, JsonWireOptions } from './nodeHost.js';
+// `browserSessionId` — the CLIENT half of a session — is deliberately NOT on
+// this barrel. It lives in `./browserSession.ts` beside the server half it
+// pairs with, and is exported from the MAIN barrel instead: everything else in
+// this folder is Node (`node:http` behind a dynamic import, `node:sqlite`
+// behind `createRequire`), and a browser bundle must not have to reach through
+// a Node door to mint a session id.
 
 export { httpHost, headerValue } from './httpHost.js';
 export type {
@@ -113,6 +124,8 @@ export {
   checkEnvelope,
 } from './envelope.js';
 export { standingAgent } from './standingAgent.js';
+
+export { DEFAULT_MAX_ACTIVE_SESSIONS } from './types.js';
 
 export {
   requireCapability,
@@ -146,7 +159,10 @@ export type {
   PausedRunEnvelope,
   PendingAsk,
   SessionLifecycle,
+  StandingAgentBaseOptions,
   StandingAgentOptions,
+  StandingAgentPoolOptions,
+  StandingAgentSharedOptions,
   Unsubscribe,
   WakeReason,
 } from './types.js';

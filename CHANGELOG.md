@@ -7,6 +7,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.10.0] - 2026-08-12
+
+**Multi-user, made easy.** Three things a self-hosted deployment had to build
+itself — who is asking, whose memory is whose, and how two people get answered
+at the same time — are now one option each.
+
+### Added — `standingAgent({ agentFactory })`: one agent per active session
+
+An `Agent` holds per-run state on itself, so one instance can only be in one run
+at a time. `standingAgent` shared ONE instance across every session and
+serialized globally to keep that safe — correct, and a hard ceiling of one
+person at a time per process. The law has not changed; its SCOPE has:
+
+```ts
+await standingAgent({
+  agentFactory: () => Agent.create({ provider, model }).system('…').build(),
+  sessions: sqliteSessions({ file: './sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+  maxActiveSessions: 200,        // default 100
+});
+```
+
+- **Sessions run in parallel.** Each active session gets its own instance from
+  the factory; two people asking two questions are two runs and neither waits.
+  Pinned by a test where both sessions are inside the model call before either
+  returns, and their wall-clock intervals overlap.
+- **One session still serializes** — on its own instance, under the same
+  `onConcurrentInvoke` policy — so the Agent's own `RunInFlightError` never
+  reaches a caller.
+- **Bounded and LRU.** A new session at a full pool retires the least recently
+  used IDLE one: its tool sessions close with the existing `'evicted'` reason
+  (9.7.0's vocabulary — no new event invented), its agent is shut down, and its
+  CONVERSATION stays in the session store. The next request re-hydrates onto a
+  fresh instance and the person never knows.
+- **A running session is never evicted.** The pool grows past the bound rather
+  than ending somebody's turn, and comes back under it when a run finishes.
+- **Anonymous requests share one fallback instance** — there is no conversation
+  to isolate, and an instance per anonymous request would be an instance per
+  request.
+- **`{ agent }` is unchanged, to the byte.** Same global queue, same refusals,
+  same durability wiring; the shared shape is a pool of exactly one lane, so
+  there is one implementation rather than two that can drift.
+- **Two refusals, both by name.** `agent` AND `agentFactory` together is refused
+  at construction (two spellings of one decision, and the winner would be
+  invisible). A factory that returns an instance it has already returned is
+  refused on the spot — that mistake type-checks perfectly and destroys the only
+  property the pool exists for. `maxActiveSessions` without a factory, and a
+  non-positive bound, are refused too. The mutual exclusion is enforced at the
+  TYPE level as well (`StandingAgentSharedOptions` | `StandingAgentPoolOptions`).
+
+### Added — a session IS a conversation: honest memory identity
+
+A run that carries a `sessionId` and **no** `identity` is now scoped to
+`{ conversationId: sessionId }`.
+
+`standingAgent` has passed the session id on every run and resume since 9.4.0,
+so **a served session now gets durable per-user memory with zero
+configuration**. Before this it got the per-run default — `{ conversationId:
+'<runId>' }`, with a fresh runId every turn — which meant a registered
+`.memory()` wrote one namespace per turn and recalled nothing across a
+conversation. The turn always looked right; only the recall was missing.
+
+- An `identity` you pass **always wins**, including the one a continued
+  conversation carries.
+- A run with no session and no identity is **unchanged** — same namespace, same
+  committed keys.
+- The derivation is **recorded, not inferred**: it commits
+  `runIdentitySource: 'session'`, written on that path only, so a trace can tell
+  a namespace somebody chose from one this library derived.
+- It is still **not** published to `tool.execute` as `ctx.identity`. A
+  synthesized namespace is not something anybody named, and "absent" keeps
+  meaning "nobody named one"; a tool that wants the session has `ctx.sessionId`.
+
+### Added — the two halves of "which session is this?"
+
+```ts
+// client (main barrel — browser-safe, zero deps)
+import { browserSessionId } from 'agentfootprint';
+fetch('/invoke', { headers: { 'x-session-id': browserSessionId() }, … });
+
+// server
+nodeHost({ sessionHeader: 'x-conversation' });   // default 'x-session-id'
+nodeHost({ sessionCookie: 'af_session' });       // …or no client code at all
+```
+
+- `browserSessionId({ storageKey? })` mints a UUID once and keeps it in
+  `localStorage`, falling back to memory when storage is missing or throws
+  (private mode). On the MAIN barrel, not `agentfootprint/hosting`: the rest of
+  that door is Node, and a browser bundle must not reach through it.
+- `nodeHost({ sessionHeader })` names the header the adapter has always read.
+  `jsonWireWith({ sessionHeader, sessionCookie })` is the dialect as a factory;
+  `jsonWire` is `jsonWireWith()` and behaves exactly as before.
+- `nodeHost({ sessionCookie })` reads the cookie and, only when the request
+  carried no session at all, issues one: `Path=/; HttpOnly; SameSite=Lax`. No
+  `Secure` flag — this host cannot know whether it is behind TLS, and the
+  docstring says so rather than pretending. A caller that already sent a session
+  is never handed a competing one.
+- `HttpWire.readRequest` may now return `responseHeaders`, which is how a pure
+  wire issues a cookie without touching the socket. `content-type` set there is
+  ignored: the framing (one JSON body vs SSE) is the host's decision.
+
+### Changed — docs
+
+- **Hosting & runtime** gains a **Concurrency & sessions** section: the
+  three-strategy table (platform-per-session · agent pool · process-per-worker),
+  the pool's laws, both session recipes, and the memory-identity ladder.
+- **On-premises** and **AWS** each state where their parallelism comes from —
+  AWS gets it from the platform (a container per session), an on-premises box
+  chooses the pool or a fleet.
+- **Conversations** documents the identity ladder and both session recipes.
+- `redisSessions` is **not built**, and the hosting page says so with the
+  ten-line sketch: `SessionLifecycle` is two methods, and a shipped adapter
+  would have to decide key prefix, TTL and client for everybody.
+- New example: `examples/deploy/multi-user.ts` — two people served at once,
+  proving the overlap in wall clock and that neither saw the other's memory.
+
+
 ## [9.9.0] - 2026-08-12
 
 **A bug report IS the evidence.**

@@ -123,6 +123,27 @@ export interface NodeHostOptions {
     req: import('node:http').IncomingMessage,
     res: import('node:http').ServerResponse,
   ) => void;
+  /**
+   * Which header carries the session id. Default `'x-session-id'` — the header
+   * this adapter has always read, now named so a deployment can change it.
+   *
+   * The pairing on the client side is one line:
+   * `browserSessionId()` from the main barrel mints the id, keeps it, and hands
+   * it back on every call.
+   */
+  readonly sessionHeader?: string;
+  /**
+   * Read the session from a cookie of this name, and ISSUE one (HttpOnly,
+   * SameSite=Lax) when the request carried none — a durable per-browser
+   * conversation with no client code at all.
+   *
+   * Off by default. The trade-offs are real and are stated in full on
+   * {@link JsonWireOptions.sessionCookie} — read them before turning it on;
+   * the short version is that a cookie is browser affinity and never identity,
+   * and that no `Secure` flag is set because this host cannot know whether it
+   * is behind TLS.
+   */
+  readonly sessionCookie?: string;
 }
 
 /**
@@ -137,47 +158,162 @@ export type NodeHost = HttpHost;
 
 const HOST_NAME = 'nodeHost';
 
+/** The header this dialect reads a session id from when nobody says otherwise. */
+export const DEFAULT_SESSION_HEADER = 'x-session-id';
+
+/** What {@link jsonWireWith} lets a deployment re-decide about sessions. */
+export interface JsonWireOptions {
+  /**
+   * Which header carries the session id. Default `'x-session-id'`, matched
+   * case-insensitively (headers reach a wire already lower-cased).
+   *
+   * Change it when something in front of the process already stamps a
+   * conversation id under its own name — a gateway, a CDN, a corporate proxy.
+   * The JSON body's `sessionId` still wins over it, unchanged.
+   */
+  readonly sessionHeader?: string;
+  /**
+   * Read the session from a COOKIE of this name, and issue one when the request
+   * did not carry it. Off by default.
+   *
+   * ── What it buys ─────────────────────────────────────────────────────────
+   * A browser gets a durable conversation with **no client code at all**: the
+   * first request comes back with `Set-Cookie`, and every later request carries
+   * it automatically. Nothing to mint, nothing to store, nothing to remember to
+   * send.
+   *
+   * ── What it costs, stated rather than discovered ─────────────────────────
+   *  - **It is browser affinity, not identity.** The same laws as
+   *    {@link HostRequest.sessionId}: a cookie is client data, anyone can send
+   *    any value, and nothing here signs or verifies it. Authenticate the
+   *    caller by your own means before serving the session they claimed.
+   *  - **No `Secure` flag is set**, because this host cannot know whether it is
+   *    behind TLS — it is routinely terminated at a proxy and answers plain
+   *    HTTP itself. On the public internet, add `Secure` at your proxy or
+   *    terminate TLS here; a session cookie on plain HTTP travels in the clear.
+   *  - `HttpOnly` and `SameSite=Lax` ARE set: script on the page cannot read
+   *    the id, and a cross-site POST does not carry it. `HttpOnly` also means
+   *    your own front-end code cannot read it — if the page needs the id in
+   *    hand, use `browserSessionId()` and the header instead.
+   *  - **It follows the browser, not the person.** One profile is one
+   *    conversation; two devices are two, and a shared machine is one.
+   *  - A caller that already sent a session (body, header, or an existing
+   *    cookie) is never issued a second one — two competing handles for one
+   *    conversation is worse than none.
+   */
+  readonly sessionCookie?: string;
+}
+
 /**
- * This adapter's own JSON dialect: `{ input, sessionId? }` in, `{ output }`
- * out, `{ status: 'ok', uptimeMs }` on the health path.
+ * Build this adapter's JSON dialect: `{ input, sessionId? }` in, `{ output }`
+ * out, `{ status: 'ok', uptimeMs }` on the health path — with the session
+ * plumbing a deployment gets to re-decide.
  *
  * Exported by name so a deployment that has to keep these exact bodies while
  * changing something else about the host reuses them rather than retyping them
  * and getting one field subtly wrong.
  */
-export const jsonWire: HttpWire = {
-  readRequest(facts) {
-    const input = typeof facts.body.input === 'string' ? facts.body.input : '';
-    // sessionId is caller data whichever way it arrives; the body wins so a
-    // caller that sets both is not surprised by which one the server preferred.
-    const fromBody = typeof facts.body.sessionId === 'string' ? facts.body.sessionId : undefined;
-    const sessionId = fromBody ?? facts.headers['x-session-id'];
-    // Read as-is and never coerced: `decision` is a person's answer to whatever
-    // a tool asked, and this dialect does not get to decide what that looks
-    // like. Its PRESENCE is the whole signal.
-    const decision = facts.body.decision;
-    return {
-      input,
-      ...(sessionId !== undefined && { sessionId }),
-      ...(decision !== undefined && { decision }),
-    };
-  },
-  health: (uptimeMs) => ({ status: 'ok', uptimeMs }),
-  output: (output) => ({ output }),
-  failure: (error, code) => ({ error, ...(code !== undefined && { code }) }),
-  chunk: (text) => ({ text }),
-  awaiting: (pending) => ({ awaiting: pending }),
-  readConversation(facts) {
-    // A handshake has no body, so this dialect names the two places a session
-    // id can be: the header a server-side caller sets, and the query a BROWSER
-    // has to use because the WebSocket API gives it no way to set a header.
-    // Header wins, so a caller that sets both is not surprised by which one the
-    // server preferred — the same rule the request dialect uses for body-vs-header.
-    const sessionId =
-      headerValue(facts, 'x-session-id') ?? facts.query.get('sessionId') ?? undefined;
-    return { ...(sessionId !== undefined && sessionId.length > 0 && { sessionId }) };
-  },
-};
+export function jsonWireWith(options: JsonWireOptions = {}): HttpWire {
+  const sessionHeader = options.sessionHeader ?? DEFAULT_SESSION_HEADER;
+  const sessionCookie = options.sessionCookie;
+
+  return {
+    readRequest(facts) {
+      const input = typeof facts.body.input === 'string' ? facts.body.input : '';
+      // sessionId is caller data whichever way it arrives; the body wins so a
+      // caller that sets both is not surprised by which one the server preferred.
+      // The cookie is last, because a caller that named a session explicitly
+      // meant that one — the cookie is what the BROWSER remembered, and the
+      // explicit value is what this request said.
+      const fromBody = typeof facts.body.sessionId === 'string' ? facts.body.sessionId : undefined;
+      const fromHeader = headerValue(facts, sessionHeader);
+      const fromCookie =
+        sessionCookie !== undefined ? cookieValue(facts.headers.cookie, sessionCookie) : undefined;
+      const carried = fromBody ?? fromHeader ?? fromCookie;
+      // Issued ONLY in cookie mode, and only when this request carried no
+      // session at all. A caller holding a session already has a conversation;
+      // handing it a second handle would split it in two.
+      const minted =
+        sessionCookie !== undefined && carried === undefined ? mintSessionId() : undefined;
+      const sessionId = carried ?? minted;
+      // Read as-is and never coerced: `decision` is a person's answer to whatever
+      // a tool asked, and this dialect does not get to decide what that looks
+      // like. Its PRESENCE is the whole signal.
+      const decision = facts.body.decision;
+      return {
+        input,
+        ...(sessionId !== undefined && { sessionId }),
+        ...(decision !== undefined && { decision }),
+        ...(minted !== undefined &&
+          sessionCookie !== undefined && {
+            responseHeaders: { 'set-cookie': sessionCookieHeader(sessionCookie, minted) },
+          }),
+      };
+    },
+    health: (uptimeMs) => ({ status: 'ok', uptimeMs }),
+    output: (output) => ({ output }),
+    failure: (error, code) => ({ error, ...(code !== undefined && { code }) }),
+    chunk: (text) => ({ text }),
+    awaiting: (pending) => ({ awaiting: pending }),
+    readConversation(facts) {
+      // A handshake has no body, so this dialect names the three places a
+      // session id can be: the header a server-side caller sets, the cookie the
+      // browser sends on its own (when cookie mode is on), and the query a
+      // BROWSER has to use because the WebSocket API gives it no way to set a
+      // header. Header wins, so a caller that sets both is not surprised by
+      // which one the server preferred — the same rule the request dialect uses
+      // for body-vs-header.
+      //
+      // Nothing is MINTED here, in either mode: the 101 this door writes is not
+      // a reply a wire composes, so a session issued on a handshake could never
+      // reach the client and would be a conversation nobody could resume.
+      const sessionId =
+        headerValue(facts, sessionHeader) ??
+        (sessionCookie !== undefined
+          ? cookieValue(facts.headers.cookie, sessionCookie)
+          : undefined) ??
+        facts.query.get('sessionId') ??
+        undefined;
+      return { ...(sessionId !== undefined && sessionId.length > 0 && { sessionId }) };
+    },
+  };
+}
+
+/**
+ * This adapter's own JSON dialect with its defaults: the session on
+ * `x-session-id`, no cookie.
+ */
+export const jsonWire: HttpWire = jsonWireWith();
+
+/**
+ * One cookie's value out of a `Cookie` header, or `undefined`.
+ *
+ * Deliberately small: it splits on `;`, takes the first `=`, and trims. It does
+ * not decode, because a session id this library minted is URL-safe and a value
+ * somebody else's system minted is theirs to interpret — guessing at an
+ * encoding is how a session id silently becomes a different string.
+ */
+function cookieValue(header: string | undefined, name: string): string | undefined {
+  if (header === undefined || header.length === 0) return undefined;
+  for (const pair of header.split(';')) {
+    const at = pair.indexOf('=');
+    if (at < 0) continue;
+    if (pair.slice(0, at).trim() !== name) continue;
+    const value = pair.slice(at + 1).trim();
+    return value.length > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
+/** The `Set-Cookie` this dialect issues. See {@link JsonWireOptions.sessionCookie}. */
+function sessionCookieHeader(name: string, value: string): string {
+  return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax`;
+}
+
+/** A session id for a caller that carried none. Node 20+ has global `crypto`. */
+function mintSessionId(): string {
+  return globalThis.crypto.randomUUID();
+}
 
 /**
  * An HTTP host for one handler.
@@ -192,9 +328,18 @@ export const jsonWire: HttpWire = {
  *   await handle.close();
  */
 export function nodeHost(options: NodeHostOptions = {}): NodeHost {
+  // The shared default instance when nothing about sessions was re-decided, so
+  // a host built with no options is the same object graph it always was.
+  const wire =
+    options.sessionHeader === undefined && options.sessionCookie === undefined
+      ? jsonWire
+      : jsonWireWith({
+          ...(options.sessionHeader !== undefined && { sessionHeader: options.sessionHeader }),
+          ...(options.sessionCookie !== undefined && { sessionCookie: options.sessionCookie }),
+        });
   return httpHost({
     name: HOST_NAME,
-    wire: jsonWire,
+    wire,
     // Chosen, not inherited — see the test in this folder that greps for one
     // particular runtime's container-contract path literal.
     invokePath: options.invokePath ?? '/invoke',

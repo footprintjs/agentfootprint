@@ -49,15 +49,18 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/tools.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L126)
+Defined in: [src/core/tools.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L129)
 
 The identity the CALLER supplied — `run({ identity })`, the same tuple
 memory and the permission gate scope on.
 
 **Absent when the caller passed none.** Deliberately NOT the run's internal
 `runIdentity`, which is always populated (it defaults to
-`{ conversationId: '<runId>' }`): handing that to a tool would publish a
-synthesized conversation as if somebody had named one.
+`{ conversationId: '<runId>' }`, or to `{ conversationId: sessionId }` on a
+session-bound run since 9.10.0): handing either of those to a tool would
+publish a SYNTHESIZED conversation as if somebody had named one. A tool
+that wants the session has `ctx.sessionId` for it, which is the fact the
+transport actually delivered.
 
 ***
 
@@ -116,7 +119,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/docs/api/type-aliases/TeardownScope)[]
 
-Defined in: [src/core/tools.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L157)
+Defined in: [src/core/tools.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L160)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -141,7 +144,7 @@ Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L147)
+Defined in: [src/core/tools.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L150)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.

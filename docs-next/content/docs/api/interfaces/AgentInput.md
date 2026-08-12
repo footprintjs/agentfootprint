@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:409](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **continueFrom?**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 
-Defined in: [src/core/agent/types.ts:466](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L466)
+Defined in: [src/core/agent/types.ts:482](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L482)
 
 The conversation this turn continues — an `AgentRunCheckpoint` from
 `agent.checkpoint()`, persisted anywhere and handed back here.
@@ -47,7 +47,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L437)
+Defined in: [src/core/agent/types.ts:453](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L453)
 
 WHO this run is for — the scoping tuple, not a session handle.
 
@@ -60,10 +60,26 @@ the `.toolMiddleware()` / `.messageMiddleware()` chains,
 Since 9.7.0 it also reaches `tool.execute` as `ctx.identity` — but only
 when you PASSED one. The default `{ conversationId: '<runId>' }` below is
 synthesized, and a tool told about a conversation nobody named would key a
-session on a fiction, so `ctx.identity` is absent in that case.
+session on a fiction, so `ctx.identity` is absent in that case. A DERIVED
+identity (the session rule below) is synthesized too, and is absent there
+for the same reason.
 
-Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
-without memory work unchanged.
+**When omitted, one of two defaults applies (9.10.0):**
+
+ - the run carries a `sessionId` (`agent.run(input, { sessionId })`, which
+   is what `standingAgent` passes from every served request) →
+   `{ conversationId: sessionId }`. A hosting session IS a conversation, so
+   a served session gets durable per-user memory with no configuration at
+   all. Before 9.10.0 it got the per-run default below and a fresh runId
+   every turn, which meant a registered `.memory()` recalled nothing across
+   the turns of one session.
+ - no session either → `{ conversationId: '<runId>' }`, unchanged, so
+   agents without memory and scripts that name nobody work exactly as they
+   did.
+
+An identity you pass ALWAYS wins over the derivation — including the one a
+continued conversation carries, so a turn cannot silently re-namespace the
+conversation it is continuing.
 
 **`conversationId` is a namespace key, not a conversation.** Passing the
 same `conversationId` to two `run()` calls does NOT continue the first

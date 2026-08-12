@@ -34,10 +34,23 @@ the check.
 3. **Per-service short sections** — a few sentences each: the adapter's shape,
    its one or two load-bearing options, the link into the capability page, and
    any provider-specific trap (with the fix).
-4. **"What is NOT here"** — a stated list. Absences are facts; an unstated
+4. **"Concurrency & sessions" — a REQUIRED row/section (9.10.0).** State in one
+   short section **where this column's parallelism comes from**, using the
+   three-strategy vocabulary on
+   [Hosting & runtime](../../docs-next/content/docs/infrastructure/hosting-and-runtime.mdx):
+   *platform-per-session* (the runtime isolates sessions for you),
+   *agent pool* (`standingAgent({ agentFactory })` — one agent per active
+   session inside one process), or *process-per-worker* (a fleet, which forces
+   a shared `SessionLifecycle`). Say which one this column gives you and which
+   one you have to build, and name the session store that survives it. It is
+   required because the answer is genuinely different per provider — AgentCore
+   hands you the first, an on-premises box has to choose the second or third —
+   and a reader who assumes the wrong one either pays for isolation twice or
+   serializes their whole deployment without knowing it.
+5. **"What is NOT here"** — a stated list. Absences are facts; an unstated
    absence reads as an oversight and invites a wrong assumption.
-5. **Status table** — every adapter with its honesty rung (vocabulary below).
-6. **Cross-link duties** (the checklist that keeps navs whole):
+6. **Status table** — every adapter with its honesty rung (vocabulary below).
+7. **Cross-link duties** (the checklist that keeps navs whole):
    - a row in `infrastructure/index.mdx`'s decision table where the provider is
      the right answer to a scenario;
    - the Providers group in `infrastructure/meta.json`;

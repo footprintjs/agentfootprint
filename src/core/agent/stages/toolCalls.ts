@@ -180,8 +180,9 @@ export interface ToolCallsHandlerDeps {
    *
    * `identity` here is the CALLER's explicit identity (`Agent.lastRunIdentity`),
    * NOT `scope.runIdentity` — the latter is always populated, defaulting to
-   * `{ conversationId: '<runId>' }`, and publishing that to a tool would present
-   * a synthesized conversation as one somebody named.
+   * `{ conversationId: '<runId>' }` (or, on a session-bound run since 9.10.0,
+   * to `{ conversationId: sessionId }`), and publishing either to a tool would
+   * present a synthesized conversation as one somebody named.
    *
    * @internal
    */

@@ -127,6 +127,20 @@ export interface HttpWire {
      * message, so a wire that never returns it can only ever start new turns.
      */
     readonly decision?: unknown;
+    /**
+     * Headers to put on THIS request's reply, whatever terminal it ends with
+     * (9.10.0).
+     *
+     * It exists for one shape: a dialect that ISSUES the session it just read —
+     * a `Set-Cookie` for a session the caller did not carry. The wire stays
+     * pure either way; it returns a value and this file writes it, the same as
+     * the body shapes beside it.
+     *
+     * They are merged over the reply's own `content-type` (or the SSE headers),
+     * so a dialect cannot accidentally break the framing this host chose:
+     * `content-type` set here is ignored.
+     */
+    readonly responseHeaders?: Readonly<Record<string, string>>;
   };
   /** Body for a health probe. `uptimeMs` is how long this host has been serving. */
   health(uptimeMs: number): unknown;
@@ -778,10 +792,20 @@ async function dispatchOne(
 
   const headers = lowerCasedHeaders(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
-  const { input, sessionId, decision } = wire.readRequest({ body, headers, query });
+  const { input, sessionId, decision, responseHeaders } = wire.readRequest({
+    body,
+    headers,
+    query,
+  });
+  // The dialect's own reply headers — a `Set-Cookie` that issues a session, and
+  // nothing else so far. Stripped of `content-type` because the framing below
+  // is this host's to decide: a dialect that set it would be choosing between
+  // one JSON body and Server-Sent Events on the caller's behalf.
+  const extraHeaders = withoutContentType(responseHeaders);
 
   if (wantsStream) {
     res.writeHead(200, {
+      ...extraHeaders,
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       connection: 'keep-alive',
@@ -815,7 +839,7 @@ async function dispatchOne(
         res.write(encodeSSE('complete', wire.output(output)));
         res.end();
       } else {
-        sendJson(res, 200, wire.output(output));
+        sendJson(res, 200, wire.output(output), extraHeaders);
       }
     },
     awaiting(pending): void {
@@ -840,7 +864,7 @@ async function dispatchOne(
         res.write(encodeSSE('awaiting', payload));
         res.end();
       } else {
-        sendJson(res, AWAITING_STATUS, payload);
+        sendJson(res, AWAITING_STATUS, payload, extraHeaders);
       }
     },
     fail(error: Error): void {
@@ -852,7 +876,12 @@ async function dispatchOne(
         res.write(encodeSSE('error', payload));
         res.end();
       } else {
-        sendJson(res, code !== undefined ? STATUS_BY_CODE[code] ?? 500 : 500, payload);
+        sendJson(
+          res,
+          code !== undefined ? STATUS_BY_CODE[code] ?? 500 : 500,
+          payload,
+          extraHeaders,
+        );
       }
     },
   };
@@ -934,9 +963,33 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json' });
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  extraHeaders?: Readonly<Record<string, string>>,
+): void {
+  res.writeHead(status, { ...extraHeaders, 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * A dialect's reply headers, minus the one it does not get to choose.
+ *
+ * `content-type` is the framing, and the framing is this host's decision — one
+ * JSON body or a stream of SSE frames, picked from what the CALLER asked for. A
+ * wire that set it would be answering that question for every caller at once.
+ */
+function withoutContentType(
+  headers: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (headers === undefined) return undefined;
+  const kept: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'content-type') continue;
+    kept[name] = value;
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**

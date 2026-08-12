@@ -421,10 +421,26 @@ export interface AgentInput {
    * Since 9.7.0 it also reaches `tool.execute` as `ctx.identity` — but only
    * when you PASSED one. The default `{ conversationId: '<runId>' }` below is
    * synthesized, and a tool told about a conversation nobody named would key a
-   * session on a fiction, so `ctx.identity` is absent in that case.
+   * session on a fiction, so `ctx.identity` is absent in that case. A DERIVED
+   * identity (the session rule below) is synthesized too, and is absent there
+   * for the same reason.
    *
-   * Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
-   * without memory work unchanged.
+   * **When omitted, one of two defaults applies (9.10.0):**
+   *
+   *  - the run carries a `sessionId` (`agent.run(input, { sessionId })`, which
+   *    is what `standingAgent` passes from every served request) →
+   *    `{ conversationId: sessionId }`. A hosting session IS a conversation, so
+   *    a served session gets durable per-user memory with no configuration at
+   *    all. Before 9.10.0 it got the per-run default below and a fresh runId
+   *    every turn, which meant a registered `.memory()` recalled nothing across
+   *    the turns of one session.
+   *  - no session either → `{ conversationId: '<runId>' }`, unchanged, so
+   *    agents without memory and scripts that name nobody work exactly as they
+   *    did.
+   *
+   * An identity you pass ALWAYS wins over the derivation — including the one a
+   * continued conversation carries, so a turn cannot silently re-namespace the
+   * conversation it is continuing.
    *
    * **`conversationId` is a namespace key, not a conversation.** Passing the
    * same `conversationId` to two `run()` calls does NOT continue the first
@@ -501,6 +517,21 @@ export interface AgentState {
   // `runIdentity` (not `identity`) so it doesn't collide with the
   // readonly `identity` input arg in scope's typed-args view.
   runIdentity: MemoryIdentity;
+  /**
+   * Where `runIdentity` came from, when it came from somewhere other than the
+   * caller (9.10.0).
+   *
+   * Present ONLY as `'session'`, and only when the run carried a
+   * `sessionId` and no identity at all — the one derivation this library
+   * makes. Absent means the identity is either the caller's own or the
+   * per-run default, which is what every release before 9.10.0 committed, so
+   * a run that is not session-bound writes exactly the keys it always did.
+   *
+   * It is a fact about the RECORD, not a dial: nothing reads it to decide
+   * anything. It exists so a trace can be asked "did anyone actually name this
+   * namespace?" and answer honestly.
+   */
+  runIdentitySource?: 'session';
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];

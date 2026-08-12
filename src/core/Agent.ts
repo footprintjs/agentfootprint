@@ -221,6 +221,12 @@ export interface AgentRunOptions extends RunOptions {
    * built around. `standingAgent` sets this for you from the request's own
    * session id, on both `run()` and `resume()`.
    *
+   * **It also decides the memory namespace when you named no identity
+   * (9.10.0):** a run with a session and no `identity` scopes its memory to
+   * `{ conversationId: sessionId }`, because a hosting session IS a
+   * conversation. An `identity` you pass always wins. See
+   * {@link AgentInput.identity} for the full ladder.
+   *
    * Omit it for an unhosted run. It is never derived, guessed, or defaulted to
    * the runId: an absent session and an invented one are different facts.
    */
@@ -1684,10 +1690,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * `identity` is `lastRunIdentity` — what the CALLER passed — and deliberately
    * NOT `scope.runIdentity`, which is always populated and defaults to
-   * `{ conversationId: '<runId>' }`. Handing a tool a synthesized conversation
-   * as "the identity" would let it key an isolated session on a fiction, and
-   * would make "absent" unrepresentable at exactly the layer that most needs to
-   * see it.
+   * `{ conversationId: '<runId>' }` (or, on a session-bound run since 9.10.0,
+   * to `{ conversationId: sessionId }`). Handing a tool a synthesized
+   * conversation as "the identity" would let it key an isolated session on a
+   * fiction, and would make "absent" unrepresentable at exactly the layer that
+   * most needs to see it. The session-derived namespace is synthesized too, and
+   * is withheld here for that reason — `sessionId` beside it is the fact the
+   * transport really delivered.
    */
   private toolRunFacts(): {
     readonly runId: string;
@@ -2347,6 +2356,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return f;
       },
       getCurrentRunId: () => this.currentRunContext?.runId,
+      // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
+      // it for exactly one rung of the identity ladder — see `seedFrom` — and
+      // an explicit identity outranks it there. Read through an accessor for
+      // the same reason the runId is: the chart is built once, and this
+      // changes every run.
+      getCurrentSessionId: () => this.currentRunContext?.sessionId,
       // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
       // are consulted: they are the ones whose entry ids are turn-stamped, and
       // a corpus (`.rag(...)`, which reads under its own namespace) has no

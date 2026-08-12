@@ -71,6 +71,17 @@ export interface SeedStageDeps {
    */
   readonly getCurrentRunId: () => string | undefined;
   /**
+   * Accessor for this run's hosting session id — `agent.run({ sessionId })`,
+   * which is what `standingAgent` passes from `HostRequest.sessionId` (9.4.0).
+   *
+   * Read by `seedFrom` for ONE purpose: to derive the memory identity when the
+   * caller named no identity at all. See the derivation there for why a session
+   * is the one honest default and why an explicit identity always outranks it.
+   * Returns `undefined` for a run that carries no session, which is every
+   * `agent.run(message)` in a script.
+   */
+  readonly getCurrentSessionId?: () => string | undefined;
+  /**
    * Per-run config resolver from `.configure()`. Seed is where run-level
    * facts are decided AND committed (identity, iteration budget, turn
    * number all land here), so this rides the same commit rather than
@@ -234,12 +245,42 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
     scope.foldedSpans = [...resumeFolded];
   }
 
-  // Default identity uses the runId so multi-run isolation works
-  // without consumer changes; explicit identity (multi-tenant)
-  // overrides via `agent.run({ identity })`.
-  scope.runIdentity = args.identity ?? {
-    conversationId: deps.getCurrentRunId() ?? 'default',
-  };
+  // ── WHO this run is for, and where that answer comes from ────────────
+  //
+  // Three rungs, in this order, and the order is the whole design:
+  //
+  //  1. AN EXPLICIT IDENTITY ALWAYS WINS. `agent.run({ identity })`,
+  //     `run(input, { identity })`, or the identity a continued conversation
+  //     carries — all three arrive here as `args.identity`. Nothing below may
+  //     override it: a caller who named a tenant and a principal has said
+  //     something this library is not entitled to second-guess.
+  //  2. NO IDENTITY BUT A SESSION → `{ conversationId: sessionId }` (9.10.0).
+  //     A hosting session IS a conversation — that is what the id means to the
+  //     person holding it — so a session-bound run reads and writes its memory
+  //     under the session's own namespace and turn two remembers turn one.
+  //     Before this, a served session got `{ conversationId: '<runId>' }` and a
+  //     FRESH runId every turn, so a `.memory()` behind `standingAgent` wrote
+  //     twelve namespaces of one exchange each and recalled nothing. The turn
+  //     always looked right; only the recall was missing.
+  //  3. NEITHER → `{ conversationId: '<runId>' }`, unchanged since 1.x, so a
+  //     script that names nobody still gets per-run isolation.
+  //
+  // The derivation is RECORDED rather than inferred: rung 2 also commits
+  // `runIdentitySource: 'session'`, so a reader of the trace can tell a
+  // namespace the caller chose from one this library derived. It is written on
+  // that path ONLY — a run on rung 1 or rung 3 commits exactly the keys it
+  // always did. And note what does NOT change: `Agent.lastRunIdentity` stays
+  // the CALLER's identity, so a derived namespace never reaches `tool.execute`
+  // as `ctx.identity` and "absent" keeps meaning "nobody named one".
+  const sessionId = deps.getCurrentSessionId?.();
+  if (args.identity !== undefined) {
+    scope.runIdentity = args.identity;
+  } else if (sessionId !== undefined) {
+    scope.runIdentity = { conversationId: sessionId };
+    scope.runIdentitySource = 'session';
+  } else {
+    scope.runIdentity = { conversationId: deps.getCurrentRunId() ?? 'default' };
+  }
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

@@ -120,8 +120,11 @@ export interface ToolExecutionContext {
    *
    * **Absent when the caller passed none.** Deliberately NOT the run's internal
    * `runIdentity`, which is always populated (it defaults to
-   * `{ conversationId: '<runId>' }`): handing that to a tool would publish a
-   * synthesized conversation as if somebody had named one.
+   * `{ conversationId: '<runId>' }`, or to `{ conversationId: sessionId }` on a
+   * session-bound run since 9.10.0): handing either of those to a tool would
+   * publish a SYNTHESIZED conversation as if somebody had named one. A tool
+   * that wants the session has `ctx.sessionId` for it, which is the fact the
+   * transport actually delivered.
    */
   readonly identity?: MemoryIdentity;
 

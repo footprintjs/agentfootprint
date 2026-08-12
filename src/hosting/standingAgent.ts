@@ -51,19 +51,48 @@
  * Resuming a PAUSED run is different in kind: it is not a replay at all — the
  * engine continues from its own checkpoint, and no earlier tool call re-runs.
  *
- * ── Why one run at a time ───────────────────────────────────────────────────
- * An Agent instance holds per-run state on itself, and this composer shares ONE
- * instance across every session. Two runs overlapping on it do not crash —
- * which is precisely the danger. They both finish, and the state the composer
- * reads afterwards belongs to whichever started last, so one session's envelope
- * can end up holding another session's conversation. Nothing in the recording
- * would say so. Runs are therefore serialized, globally, and that is a
- * correctness requirement rather than a tuning choice.
+ * ── Why one run at a time, and where that bound actually is ─────────────────
+ * An Agent instance holds per-run state on itself. Two runs overlapping on ONE
+ * instance do not crash — which is precisely the danger. They both finish, and
+ * the state the composer reads afterwards belongs to whichever started last, so
+ * one session's envelope can end up holding another session's conversation.
+ * Nothing in the recording would say so. **Runs on one instance are therefore
+ * serialized, and that is a correctness requirement rather than a tuning
+ * choice.**
+ *
+ * What CHANGED in 9.10.0 is not that rule but its scope. `{ agent }` hands this
+ * composer one instance to share, so the serialization is global — the shape
+ * every earlier release had, unchanged to the byte. `{ agentFactory }` hands it
+ * a way to MAKE instances, so each session gets its own and the same rule binds
+ * per session: sessions run in parallel, each session's turns queue behind that
+ * session's own instance.
+ *
+ *   standingAgent({ agent })          → one instance,  global queue
+ *   standingAgent({ agentFactory })   → one per session, a queue each
+ *
+ * Everything else is identical between the two: the same stores, the same
+ * durability modes, the same pause/resume contract, the same refusals. The
+ * session store is keyed per session already, which is why the pool can evict a
+ * session's instance without the person on the other end noticing — the
+ * CONVERSATION was never in the instance.
  *
  * `onConcurrentInvoke` is the separate question of what to do when a second
  * turn of the SAME conversation arrives while the first is running: refuse it
- * (default) or queue it. A request for a DIFFERENT session is never refused —
- * there is nothing wrong with it; it simply waits its turn.
+ * (default) or queue it. It means the same thing in both shapes. A request for
+ * a DIFFERENT session is never refused — there is nothing wrong with it; in the
+ * shared shape it waits its turn, and in the pooled shape it does not have to.
+ *
+ * ── The pool, in one paragraph ──────────────────────────────────────────────
+ * One instance per ACTIVE session, built on first sight by the factory, bounded
+ * by `maxActiveSessions` (default 100) and evicted least-recently-used. An
+ * evicted session's agent has its tool sessions closed with reason `'evicted'`
+ * — the 9.7.0 vocabulary, not a new one — and is then shut down; its
+ * conversation stays in the store, so its next request re-hydrates onto a fresh
+ * instance and nothing was lost. A session that is RUNNING is never evicted:
+ * the bound is on retained idle instances, and a cache policy does not get to
+ * end somebody's turn. Requests with NO session share one fallback instance,
+ * because there is no conversation to isolate and an instance per anonymous
+ * request would be an instance per request.
  *
  * Pattern: Composition root. It owns wiring and ordering; it invents no
  * mechanism of its own.
@@ -89,17 +118,71 @@ import type {
   StandingAgentOptions,
   SessionLifecycle,
 } from './types.js';
+import { DEFAULT_MAX_ACTIVE_SESSIONS } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
 
 /**
- * Serve one agent, with per-session conversation memory, on any
+ * The pool key the anonymous fallback instance is held under, and the session
+ * key it can never collide with: a real session id from a transport is a
+ * string somebody sent, and no wire delivers one that starts with `#`… which is
+ * not a guarantee, so it is not relied on — anonymous requests are routed by
+ * ABSENCE of a session id, never by matching this string.
+ */
+const ANONYMOUS_LANE = '#anonymous';
+
+/**
+ * One agent, and everything this composer keeps beside it.
+ *
+ * A lane is the unit of serialization: one queue, one active run, one reply to
+ * emit tokens into. `{ agent }` builds exactly one lane and every session maps
+ * to it — which is what makes that shape's global serialization fall out of the
+ * same code rather than being a second implementation of it. `{ agentFactory }`
+ * builds one per active session plus one for anonymous traffic.
+ *
+ * The listener wiring, the durable writer and the "which reply is live" slot
+ * are all per lane because they are all per INSTANCE: a token event carries no
+ * session, so the only honest way to know which reply it belongs to is to have
+ * subscribed on the agent that produced it.
+ */
+interface Lane {
+  /** How the pool holds it: a session id, or {@link ANONYMOUS_LANE}. */
+  readonly poolKey: string;
+  readonly agent: Agent;
+  /** The FIFO every request on this lane waits behind. Never rejects. */
+  chain: Promise<void>;
+  /** Session keys admitted and not yet started — the `'reject'` collision set. */
+  readonly queued: string[];
+  /** The session key of the run in flight, when there is one. */
+  activeSession?: string;
+  activeRunId?: string;
+  /** The REAL session id of the active run — never the anonymous placeholder. */
+  activeSessionId?: string;
+  activeReply?: HostReply;
+  /** Requests admitted and not yet finished. A lane with work is never evicted. */
+  admitted: number;
+  /** When this lane last took a request — the LRU key. */
+  lastUsedMs: number;
+  writer?: DurableWriter;
+  /** Undo everything this composer attached to the agent. */
+  detach: () => void;
+}
+
+/**
+ * Serve an agent, with per-session conversation memory, on any
  * {@link AgentHost}.
  *
  * Resolves once the host is live. Closing the returned handle closes the host,
- * detaches the listeners this composer added to the agent, and removes its
- * durability wiring.
+ * detaches the listeners this composer added, and removes its durability
+ * wiring.
  *
- * @example
+ * Two shapes, one composer — see the file header for the full comparison:
+ *
+ *  - `{ agent }` — one instance for every session, runs serialized globally.
+ *    Correct, and unchanged from every earlier release.
+ *  - `{ agentFactory }` — one instance per active session, sessions in
+ *    PARALLEL, each session's turns serialized on its own instance.
+ *
+ * @example  One agent, every session
  *   const handle = await standingAgent({
  *     agent,
  *     sessions: memorySessions(),
@@ -108,69 +191,281 @@ import type { Agent, AgentRunOptions } from '../core/Agent.js';
  *     durability: 'sync',
  *   });
  *   process.on('SIGTERM', () => void handle.close());
+ *
+ * @example  One agent per session — they answer at the same time
+ *   const handle = await standingAgent({
+ *     agentFactory: () => Agent.create({ provider, model }).system('…').build(),
+ *     sessions: sqliteSessions({ file: './sessions.db' }),
+ *     host: nodeHost({ port: 8080 }),
+ *     maxActiveSessions: 200,
+ *   });
  */
 export async function standingAgent<TH extends HostHandle>(
   options: StandingAgentOptions<TH>,
 ): Promise<TH> {
-  const { agent, sessions, host } = options;
+  const { sessions, host } = options;
   const policy = options.onConcurrentInvoke ?? 'reject';
   const durability = options.durability ?? 'exit';
+  const sharedAgent = options.agent;
+  const factory = options.agentFactory;
 
-  // Runs are serialized, so at any moment there is at most one active reply and
-  // at most one active run to name in a refusal.
-  let activeReply: HostReply | undefined;
-  let activeRunId: string | undefined;
-  let activeSession: string | undefined;
-  /** The REAL session id of the active run — never the anonymous placeholder. */
-  let activeSessionId: string | undefined;
-  const queued: string[] = [];
-  let chain: Promise<void> = Promise.resolve();
+  // ── Refused at construction, before a socket exists ──────────────────
+  //
+  // Two spellings of one decision, and nothing could make the winner visible
+  // afterwards: an operator reading `{ agent, agentFactory }` in a config would
+  // have no way to know whether their sessions were isolated or not.
+  if (sharedAgent !== undefined && factory !== undefined) {
+    throw new Error(
+      `[hosting] standingAgent was given both 'agent' and 'agentFactory'. They are two ` +
+        `answers to one question — whether sessions SHARE an instance or each get their ` +
+        `own — and honouring either would leave the other silently ignored. Pass 'agent' ` +
+        `for one shared instance (runs serialized globally, the original shape), or ` +
+        `'agentFactory' for one instance per active session (sessions run in parallel).`,
+    );
+  }
+  if (sharedAgent === undefined && factory === undefined) {
+    throw new Error(
+      `[hosting] standingAgent needs something to answer with: pass 'agent' (one instance ` +
+        `shared by every session) or 'agentFactory' (a new instance per active session). ` +
+        `Neither was given, so there is nothing to serve.`,
+    );
+  }
+  // A pool bound with no pool is a caller who believes something untrue about
+  // how their process will behave under load. Named rather than ignored.
+  if (factory === undefined && options.maxActiveSessions !== undefined) {
+    throw new Error(
+      `[hosting] standingAgent was given 'maxActiveSessions' without 'agentFactory'. ` +
+        `With a single shared 'agent' there is no pool to bound — every session already ` +
+        `uses the one instance you passed. Drop it, or switch to 'agentFactory' to get ` +
+        `the per-session pool it describes.`,
+    );
+  }
+  const maxActiveSessions = options.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS;
+  if (factory !== undefined && (!Number.isInteger(maxActiveSessions) || maxActiveSessions < 1)) {
+    throw new Error(
+      `[hosting] standingAgent was given maxActiveSessions: ${String(
+        options.maxActiveSessions,
+      )}. ` +
+        `It is how many sessions may hold an agent at once, so it has to be a positive ` +
+        `integer — a pool that can hold no sessions could never serve one.`,
+    );
+  }
+
+  /** Session id → its lane. Empty and unused in the shared shape. */
+  const pool = new Map<string, Lane>();
+  /**
+   * Every instance the factory has handed over. A WeakSet so a retired agent is
+   * collectable — the check is "have I seen this object", and nothing here
+   * needs to keep it alive to answer that.
+   */
+  const handedOver = new WeakSet<Agent>();
+  /** The single lane of the shared shape, or `undefined` in the pooled one. */
+  const shared = sharedAgent !== undefined ? makeLane(sharedAgent, '#shared') : undefined;
   let anonymous = 0;
 
-  const offTurnStart = agent.on('agentfootprint.agent.turn_start', (event) => {
-    activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
-  });
-  // Tokens reach the caller only if the host streams; `emit` on a host that
-  // does not is a no-op by design, so this needs no capability check.
-  const offToken = agent.on('agentfootprint.stream.token', (event) => {
-    const content = (event as { payload?: { content?: string } }).payload?.content;
-    if (typeof content === 'string' && content.length > 0) activeReply?.emit?.(content);
-  });
+  /**
+   * Attach this composer's wiring to one agent and hand back its lane.
+   *
+   * Everything installed here is undone by `lane.detach()` — on `close()`, and
+   * on eviction. An agent whose lane was detached has nothing of this
+   * composer's left on it.
+   */
+  function makeLane(agent: Agent, poolKey: string): Lane {
+    const lane: Lane = {
+      poolKey,
+      agent,
+      chain: Promise.resolve(),
+      queued: [],
+      admitted: 0,
+      lastUsedMs: Date.now(),
+      detach: () => undefined,
+    };
+    const offTurnStart = agent.on('agentfootprint.agent.turn_start', (event) => {
+      lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
+    });
+    // Tokens reach the caller only if the host streams; `emit` on a host that
+    // does not is a no-op by design, so this needs no capability check. The
+    // subscription is per LANE because a token event names no session — the
+    // agent that produced it is the only thing that identifies whose it is,
+    // and with a pool that is the whole reason two sessions' tokens cannot mix.
+    const offToken = agent.on('agentfootprint.stream.token', (event) => {
+      const content = (event as { payload?: { content?: string } }).payload?.content;
+      if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
+    });
+    // Under 'exit' NOTHING is built: no observer on the agent, no barrier, no
+    // per-commit work. That is what "the default is byte-identical" means here —
+    // not a mode that happens to write once, but wiring that is never installed.
+    const writer: DurableWriter | undefined =
+      durability === 'exit'
+        ? undefined
+        : durableWriter({
+            mode: durability,
+            session: () => lane.activeSessionId,
+            runId: () => lane.activeRunId,
+            write: (sessionId, conversation) =>
+              sessions.persist(sessionId, toEnvelope(conversation)),
+          });
+    const detachWriter = writer ? agent.attach(writer.recorder) : undefined;
+    const uninstallBarrier = writer?.install(agent);
+    lane.writer = writer;
+    lane.detach = (): void => {
+      offTurnStart();
+      offToken();
+      uninstallBarrier?.();
+      detachWriter?.();
+    };
+    return lane;
+  }
 
-  // Under 'exit' NOTHING is built: no observer on the agent, no barrier, no
-  // per-commit work. That is what "the default is byte-identical" means here —
-  // not a mode that happens to write once, but wiring that is never installed.
-  const writer: DurableWriter | undefined =
-    durability === 'exit'
-      ? undefined
-      : durableWriter({
-          mode: durability,
-          session: () => activeSessionId,
-          runId: () => activeRunId,
-          write: (sessionId, conversation) => sessions.persist(sessionId, toEnvelope(conversation)),
-        });
-  const detachWriter = writer ? agent.attach(writer.recorder) : undefined;
-  const uninstallBarrier = writer?.install(agent);
-
-  /** Queue `work` behind everything already waiting, FIFO. */
-  function serialize(sessionKey: string, work: () => Promise<void>): Promise<void> {
-    if (policy === 'reject' && (activeSession === sessionKey || queued.includes(sessionKey))) {
-      return Promise.reject(new ConcurrentRunError(sessionKey, activeRunId));
+  /**
+   * The lane this request runs on.
+   *
+   * Shared shape: always the one lane, so every request queues behind every
+   * other — the global serialization, unchanged. Pooled shape: this session's
+   * lane, built on first sight, with anonymous traffic sharing one.
+   *
+   * SYNCHRONOUS on purpose, and called with no `await` between it and the
+   * `serialize` that admits the request. A gap there would let the pool evict
+   * the very lane the caller is about to run on.
+   */
+  function laneFor(sessionId: string | undefined): Lane {
+    if (shared !== undefined) return shared;
+    const key = sessionId ?? ANONYMOUS_LANE;
+    const held = pool.get(key);
+    if (held !== undefined) {
+      held.lastUsedMs = Date.now();
+      return held;
     }
-    queued.push(sessionKey);
-    const mine = chain.then(async () => {
-      queued.splice(queued.indexOf(sessionKey), 1);
-      activeSession = sessionKey;
+    evictToFit();
+    const built = makeLane(fromFactory(), key);
+    pool.set(key, built);
+    return built;
+  }
+
+  /**
+   * One new agent out of the factory — or a refusal naming what went wrong.
+   *
+   * The repeat-instance check is the load-bearing one. A factory that closes
+   * over a single agent and returns it every time type-checks perfectly and
+   * destroys the only property the pool exists for: two sessions would share
+   * per-run state, both runs would finish, and one person's conversation would
+   * end up holding another person's turn with nothing in the recording to say
+   * so. That is the exact failure the shared shape serializes to avoid, and it
+   * is worth a loud refusal at the moment it becomes possible.
+   */
+  function fromFactory(): Agent {
+    const made = factory?.() as Agent | undefined;
+    if (made === undefined || made === null) {
+      throw new Error(
+        `[hosting] standingAgent's agentFactory returned nothing. It is called once per ` +
+          `active session and must return a NEW Agent each time — build it inside the ` +
+          `factory: agentFactory: () => Agent.create({ provider, model }).build().`,
+      );
+    }
+    if (handedOver.has(made)) {
+      throw new Error(
+        `[hosting] standingAgent's agentFactory returned an Agent it has already returned. ` +
+          `One instance per session is the entire point: an Agent holds per-run state on ` +
+          `itself, so two sessions sharing one would each finish while the composer read ` +
+          `the other's state — one person's conversation quietly holding another's turn. ` +
+          `Build a NEW Agent inside the factory rather than closing over one; if you meant ` +
+          `every session to share a single instance, pass it as 'agent' instead and get ` +
+          `the global serialization that makes it safe.`,
+      );
+    }
+    handedOver.add(made);
+    return made;
+  }
+
+  /**
+   * Make room for one more session, if room is needed.
+   *
+   * Least recently used, and never a lane with work: `admitted` counts requests
+   * that are queued or running, and retiring one of those would abandon a turn
+   * a person is waiting on. When EVERY lane is busy the pool grows past its
+   * bound instead — stated on the option, and the honest trade. It comes back
+   * under the bound as soon as a run finishes and another session arrives.
+   */
+  function evictToFit(): void {
+    while (pool.size >= maxActiveSessions) {
+      let victim: Lane | undefined;
+      for (const lane of pool.values()) {
+        if (lane.admitted > 0) continue;
+        if (victim === undefined || lane.lastUsedMs < victim.lastUsedMs) victim = lane;
+      }
+      if (victim === undefined) return;
+      // Out of the pool FIRST, so a request arriving for that session during
+      // the teardown below builds itself a fresh lane rather than racing one
+      // that is being dismantled.
+      pool.delete(victim.poolKey);
+      void retire(victim);
+    }
+  }
+
+  /**
+   * Retire an evicted lane: detach, close what its tools were holding, stop it.
+   *
+   * The conversation is NOT touched — it is in the session store, which is why
+   * eviction is invisible to the person on the other end. What is torn down is
+   * the instance: tool sessions first, under the `'evicted'` reason the tool
+   * teardown vocabulary already has (9.7.0), so a sandbox or a browser context
+   * this session was holding is released and SAYS which firing site released
+   * it. Then the agent itself, stopped rather than merely drained — nothing can
+   * reach it again, so leaving its timers running would be a leak with no
+   * owner.
+   *
+   * Failures here are swallowed, and this is the only place that happens: the
+   * agent's own event channel already reports a teardown that threw
+   * (`tools.session_close_failed`, with its error class), and failing the
+   * UNRELATED request that happened to trigger the eviction would blame one
+   * person's turn for another session's broken cleanup.
+   */
+  async function retire(lane: Lane): Promise<void> {
+    lane.detach();
+    const sessionId = lane.poolKey === ANONYMOUS_LANE ? undefined : lane.poolKey;
+    try {
+      await lane.agent.closeToolSessions({
+        ...(sessionId !== undefined && { sessionId }),
+        reason: 'evicted',
+      });
+    } catch {
+      // Reported on the agent's own channel; see above.
+    }
+    try {
+      await lane.agent.shutdown({ stop: true });
+    } catch {
+      // Same.
+    }
+  }
+
+  /** Queue `work` behind everything already waiting on this lane, FIFO. */
+  function serialize(lane: Lane, sessionKey: string, work: () => Promise<void>): Promise<void> {
+    if (
+      policy === 'reject' &&
+      (lane.activeSession === sessionKey || lane.queued.includes(sessionKey))
+    ) {
+      return Promise.reject(new ConcurrentRunError(sessionKey, lane.activeRunId));
+    }
+    lane.queued.push(sessionKey);
+    // Admitted from here, so the pool cannot retire this lane out from under a
+    // request that is merely waiting its turn.
+    lane.admitted += 1;
+    lane.lastUsedMs = Date.now();
+    const mine = lane.chain.then(async () => {
+      lane.queued.splice(lane.queued.indexOf(sessionKey), 1);
+      lane.activeSession = sessionKey;
       try {
         await work();
       } finally {
-        activeSession = undefined;
-        activeRunId = undefined;
+        lane.activeSession = undefined;
+        lane.activeRunId = undefined;
+        lane.admitted -= 1;
+        lane.lastUsedMs = Date.now();
       }
     });
     // The chain must never reject, or one failed request would wedge every
     // request behind it.
-    chain = mine.then(
+    lane.chain = mine.then(
       () => undefined,
       () => undefined,
     );
@@ -181,26 +476,31 @@ export async function standingAgent<TH extends HostHandle>(
     const sessionId = request.sessionId;
     // A request with no session has nothing to hydrate and nowhere to persist
     // that the caller could ask for again, so it gets its own key and can never
-    // collide with anyone.
+    // collide with anyone. In the pooled shape those requests still SHARE one
+    // fallback instance — there is no conversation to isolate — and this unique
+    // key is what keeps them from ever refusing each other as a "same session"
+    // collision, which they are not.
     const sessionKey = sessionId ?? `#anonymous-${++anonymous}`;
     try {
-      await serialize(sessionKey, () => answerOne(agent, sessions, request, reply, sessionId));
+      const lane = laneFor(sessionId);
+      await serialize(lane, sessionKey, () => answerOne(lane, sessions, request, reply, sessionId));
     } catch (err) {
       reply.fail(err instanceof Error ? err : new Error(String(err)));
     }
   };
 
   async function answerOne(
-    runner: Agent,
+    lane: Lane,
     store: SessionLifecycle,
     request: HostRequest,
     reply: HostReply,
     sessionId: string | undefined,
   ): Promise<void> {
-    activeReply = reply;
+    const runner = lane.agent;
+    lane.activeReply = reply;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
-    activeSessionId = sessionId;
+    lane.activeSessionId = sessionId;
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
@@ -234,11 +534,14 @@ export async function standingAgent<TH extends HostHandle>(
       //
       // `sessionId` (9.4.0) rides the same bag onto every event this run
       // emits, so a shipped telemetry stream can be asked "what happened in
-      // this conversation?" and not only "what happened in this run?". This is
-      // the only place that knows the answer — the agent is handed a message,
-      // not a session. An ANONYMOUS request has no session and gets no key:
-      // `sessionKey` above is a concurrency latch this host invented, and
-      // stamping it on telemetry would be publishing a fact nobody can join to.
+      // this conversation?" and not only "what happened in this run?". Since
+      // 9.10.0 it also decides the memory namespace when the caller named no
+      // identity — a session IS a conversation, so a served session recalls its
+      // own earlier turns with no configuration. This is the only place that
+      // knows the answer — the agent is handed a message, not a session. An
+      // ANONYMOUS request has no session and gets no key: `sessionKey` above is
+      // a concurrency latch this host invented, and stamping it on telemetry
+      // would be publishing a fact nobody can join to.
       const runOptions: AgentRunOptions | undefined =
         request.signal !== undefined || sessionId !== undefined
           ? {
@@ -258,8 +561,8 @@ export async function standingAgent<TH extends HostHandle>(
           return;
         }
         await deliver(
+          lane,
           await runner.resume(paused.checkpoint, request.decision, runOptions),
-          runner,
           store,
           reply,
           sessionId,
@@ -276,36 +579,37 @@ export async function standingAgent<TH extends HostHandle>(
       const output = prior
         ? await runner.run({ message: request.input, continueFrom: prior }, runOptions)
         : await runner.run({ message: request.input }, runOptions);
-      await deliver(output, runner, store, reply, sessionId);
+      await deliver(lane, output, store, reply, sessionId);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
       // failure is swallowed here and only here: the caller is already being
       // told about the run's error, and replacing it with a storage error would
       // hide the thing that actually went wrong.
-      await writer?.settle().catch(() => undefined);
+      await lane.writer?.settle().catch(() => undefined);
       throw err;
     } finally {
-      activeReply = undefined;
-      activeSessionId = undefined;
+      lane.activeReply = undefined;
+      lane.activeSessionId = undefined;
     }
   }
 
   /** Store what the run left behind, then end the reply with the right terminal. */
   async function deliver(
+    lane: Lane,
     output: unknown,
-    runner: Agent,
     store: SessionLifecycle,
     reply: HostReply,
     sessionId: string | undefined,
   ): Promise<void> {
+    const runner = lane.agent;
     // Mid-run writes settle FIRST. Ordering, not tidiness: an 'async' write
     // still in flight would otherwise land after the terminal envelope and
     // overwrite it — a stored pause quietly demoted back to a conversation,
     // and the question a person was asked gone with it. It also rethrows a
     // store that refused this run's progress, so a broken store fails the
     // request rather than being reported as a clean answer.
-    await writer?.settle();
+    await lane.writer?.settle();
 
     if (isPaused(output)) {
       const pending = describePause(output, sessionId);
@@ -327,12 +631,12 @@ export async function standingAgent<TH extends HostHandle>(
         return;
       } finally {
         // ── OWNERSHIP MOVES HERE ────────────────────────────────────────
-        // A pause belongs to a SESSION, and this composer shares ONE Agent
-        // across every session. The Agent's own pending-question guard
-        // (9.2.0) is right for a script driving one instance and wrong here:
-        // the instance would go on holding session A's question, and session
-        // B's next message — a different conversation, a different person —
-        // would be refused on behalf of an answer B was never asked for.
+        // A pause belongs to a SESSION. In the shared shape one Agent carries
+        // every session, and the Agent's own pending-question guard (9.2.0) is
+        // right for a script driving one instance and wrong here: the instance
+        // would go on holding session A's question, and session B's next
+        // message — a different conversation, a different person — would be
+        // refused on behalf of an answer B was never asked for.
         //
         // Once the pause is in the STORE, the store owns it: a later request
         // for that session carrying `decision` continues it from exactly
@@ -341,6 +645,12 @@ export async function standingAgent<TH extends HostHandle>(
         // On the failure path above it is released for the opposite reason —
         // the question could not be carried at all, and blocking every other
         // session on one nobody can ever answer is strictly worse.
+        //
+        // The pooled shape releases it too, and for a reason of its own: this
+        // session's instance can be EVICTED while the question is outstanding,
+        // and a pause held only in an instance nobody can reach again is a
+        // question nobody could ever answer. The store is the one place it can
+        // survive that, so the store is the only place it is kept.
         runner.abandonPause();
       }
     }
@@ -363,6 +673,12 @@ export async function standingAgent<TH extends HostHandle>(
   // last batch when the server stops is the most common way a shutdown lies
   // about what happened. Draining is safe on an agent this composer only
   // borrowed; RELEASING it is not, so that is opt-in.
+  //
+  // A POOLED instance is not borrowed — this composer made it, and nothing can
+  // reach it once the pool is dropped. So `'flush'` and `'flush-and-stop'` both
+  // stop a pooled agent (drain, then release), because the alternative is
+  // leaving timers running that nobody owns. `'none'` still means what it says:
+  // touch nothing.
   const shutdownMode = options.shutdown ?? 'flush';
   const installedSignals: Array<{ signal: NodeJS.Signals; listener: () => void }> = [];
 
@@ -378,14 +694,22 @@ export async function standingAgent<TH extends HostHandle>(
   function closeOnce(): Promise<void> {
     closing ??= (async () => {
       await handle.close();
-      offTurnStart();
-      offToken();
-      uninstallBarrier?.();
-      detachWriter?.();
-      if (shutdownMode !== 'none') {
-        // `stop: false` under 'flush' — drain without releasing what the
-        // caller still owns.
-        await agent.shutdown({ stop: shutdownMode === 'flush-and-stop' });
+      if (shared !== undefined) {
+        shared.detach();
+        if (shutdownMode !== 'none') {
+          // `stop: false` under 'flush' — drain without releasing what the
+          // caller still owns.
+          await shared.agent.shutdown({ stop: shutdownMode === 'flush-and-stop' });
+        }
+      } else {
+        const lanes = [...pool.values()];
+        pool.clear();
+        for (const lane of lanes) lane.detach();
+        if (shutdownMode !== 'none') {
+          // allSettled, not all: one instance whose exporter refuses to drain
+          // must not strand the drain of every other session's.
+          await Promise.allSettled(lanes.map((lane) => lane.agent.shutdown({ stop: true })));
+        }
       }
       removeSignalListeners();
     })();

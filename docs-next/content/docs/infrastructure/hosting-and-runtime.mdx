@@ -1,6 +1,6 @@
 ---
 title: Hosting & runtime
-description: The ports between an agent and the place it runs — AgentHost, ConversationHost and SessionLifecycle, none of which names a cloud. Plus httpHost/HttpWire for a second HTTP adapter, three reply terminals, three durability modes with stated crash semantics, and the human-in-the-loop resume loop.
+description: The ports between an agent and the place it runs — AgentHost, ConversationHost and SessionLifecycle, none of which names a cloud. Plus httpHost/HttpWire for a second HTTP adapter, three reply terminals, three durability modes with stated crash semantics, the human-in-the-loop resume loop, and the three ways to serve many people at once.
 ---
 
 > **An agent in a script answers once and forgets.** A deployed one has to do
@@ -163,6 +163,8 @@ nodeHost({ invokePath: '/v1/messages', healthPath: '/healthz' })
 ```
 
 `NodeHostOptions` takes `port`, `hostname`, `invokePath`, `healthPath` — plus
+`sessionHeader` / `sessionCookie` for where the session id comes from (see
+[Concurrency & sessions](#which-session-is-this--the-header-the-cookie-and-the-browser)),
 `server`, for when the socket has to be yours, and `onUnhandled`, for when the
 socket stays the host's and the spare routes are yours (both below). Both paths are options
 because a path is a deployment detail — usually dictated by whatever sits in
@@ -753,15 +755,16 @@ thing it composes is worse than no composition:
 > must be idempotent — key on stable call content, not `ctx.toolCallId` (a
 > re-issued call gets a new id).
 
-### One run at a time, and why it is not a tuning knob
+### One run per instance, and why it is not a tuning knob
 
-An `Agent` instance holds per-run state on itself, and this composer shares one
-instance across every session. Two runs overlapping on it do not crash — which
-is precisely the danger. They both finish, and the state read afterwards belongs
-to whichever started last, so one session's envelope can end up holding another
-session's conversation, with nothing in the recording to say so.
+An `Agent` instance holds per-run state on itself. Two runs overlapping on **one
+instance** do not crash — which is precisely the danger. They both finish, and
+the state read afterwards belongs to whichever started last, so one session's
+envelope can end up holding another session's conversation, with nothing in the
+recording to say so.
 
-Runs are therefore serialized globally. That is a correctness requirement.
+Runs on one instance are therefore serialized. That is a correctness
+requirement, and it is what decides the shape of everything below.
 
 `ConcurrentInvokePolicy` is the separate question of what to do when a second
 turn of the *same* conversation arrives while the first is still running:
@@ -773,8 +776,204 @@ turn of the *same* conversation arrives while the first is still running:
 - `'enqueue'` — queue it, FIFO. It starts after the active run has persisted, so
   the second turn sees the first turn's stored state.
 
-**A request for a different session is never refused — it waits its turn.**
-There is nothing wrong with it; it just cannot start yet.
+**A request for a different session is never refused.** With one shared agent it
+waits its turn; with a pool (below) it does not have to wait at all.
+
+## Concurrency & sessions
+
+> **The bound is one run per `Agent` instance.** Every way of serving more than
+> one person at a time is a way of having more than one instance — the only
+> question is who makes them.
+
+Three strategies ship or compose. None of them relaxes the law above; they
+differ in where the instances come from and what that costs.
+
+| Strategy | How | Parallelism | Costs | Choose it when |
+|---|---|---|---|---|
+| **Platform-per-session** | The runtime gives each session its own container/process; you serve one agent in it | The platform's — sessions never meet | Whatever the platform charges per session | You are on a runtime that already isolates sessions (AgentCore Runtime does) |
+| **Agent pool** — `standingAgent({ agentFactory })` | This composer builds one agent per ACTIVE session, bounded and LRU-evicted | Sessions run at the same time; each session's turns serialize on its own instance | One instance per active session: memory, plus whatever your agent builds at construction | One process serves many people and you want them answered concurrently |
+| **Process-per-worker** | N processes behind a load balancer, each with `standingAgent({ agent })` | N at a time, sessions pinned or re-hydrated per request | A process each; a **shared** session store is mandatory | You already run a fleet, or you want failure isolation per worker |
+
+The pool and process-per-worker compose: N workers, each with a pool.
+Process-per-worker needs a session store every worker can read —
+`sqliteSessions` is one machine and one writer, so that shape wants Redis,
+Postgres or DynamoDB behind the two-method port.
+
+### The agent pool — `standingAgent({ agentFactory })`
+
+```ts
+const handle = await standingAgent({
+  agentFactory: () => Agent.create({ provider, model }).system('…').build(),
+  sessions: sqliteSessions({ file: './sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+  maxActiveSessions: 200,          // default 100
+});
+```
+
+That is the whole difference. `{ agent }` keeps today's behaviour exactly —
+one instance, global serialization, correct. `{ agentFactory }` gives every
+active session its own instance:
+
+- **Sessions run in parallel.** Two people asking two questions are two runs,
+  and neither waits.
+- **One session still serializes**, on its own instance, under the same
+  `onConcurrentInvoke` policy. The Agent's own `RunInFlightError` never reaches
+  a caller — the per-session queue keeps a second turn off the instance.
+- **The pool is bounded and LRU.** A new session at a full pool retires the
+  least recently used *idle* one: its tool sessions are closed with reason
+  `'evicted'` (the same vocabulary [tool sessions](doc:tools) already use), its
+  agent is shut down, and **its conversation stays in the store** — so its next
+  request re-hydrates onto a fresh instance and the person never knows.
+- **A running session is never evicted.** If every session in the pool is busy
+  the pool grows past the bound rather than ending somebody's turn; it comes
+  back under as soon as a run finishes.
+- **Anonymous requests share one fallback instance.** There is no conversation
+  to isolate, and an instance per anonymous request would be an instance per
+  request.
+- **Instances the factory made are the composer's**, so `close()` stops them
+  (drain, then release) unless `shutdown: 'none'`.
+
+The option types are exported for the callers who name them: the two shapes are
+`StandingAgentSharedOptions` and `StandingAgentPoolOptions`, both extending
+`StandingAgentBaseOptions` (the store, the host, `onConcurrentInvoke`,
+`durability`, `shutdown`, `shutdownOn` — everything that is the same either
+way), and `StandingAgentOptions` is the union of the two. The default pool bound
+is `DEFAULT_MAX_ACTIVE_SESSIONS` (100), exported so it can be read rather than
+guessed.
+
+Two refusals guard it, both by name:
+
+```
+[hosting] standingAgent was given both 'agent' and 'agentFactory'. They are two
+answers to one question — whether sessions SHARE an instance or each get their
+own — and honouring either would leave the other silently ignored…
+
+[hosting] standingAgent's agentFactory returned an Agent it has already
+returned. One instance per session is the entire point: an Agent holds per-run
+state on itself, so two sessions sharing one would each finish while the
+composer read the other's state — one person's conversation quietly holding
+another's turn…
+```
+
+The second one is the load-bearing one. `agentFactory: () => sharedAgent`
+type-checks perfectly and destroys the only property the pool exists for, so it
+is detected on the spot rather than discovered in production.
+
+### Which session is this? — the header, the cookie, and the browser
+
+`nodeHost` reads the session id from the JSON body's `sessionId`, then the
+`x-session-id` header. Both are options now:
+
+```ts
+nodeHost({ sessionHeader: 'x-conversation' })   // a gateway already stamps one
+nodeHost({ sessionCookie: 'af_session' })       // issue + read a cookie
+```
+
+In a browser, the client half is one line from the main barrel:
+
+```ts
+import { browserSessionId } from 'agentfootprint';
+
+const sessionId = browserSessionId();          // minted once, kept in localStorage
+await fetch('/invoke', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-session-id': sessionId },
+  body: JSON.stringify({ input: message }),
+});
+```
+
+Or with **no client code at all**, using the cookie:
+
+```ts
+// server
+nodeHost({ port: 8080, sessionCookie: 'af_session' });
+// browser
+await fetch('/invoke', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ input: message }),
+  credentials: 'same-origin',
+});
+```
+
+The first request comes back with `Set-Cookie: af_session=…; Path=/; HttpOnly;
+SameSite=Lax` and every later one carries it. A caller that already sent a
+session — by body, header or cookie — is never issued a second one.
+
+The pieces those two options are made of are exported, for the deployments that
+need to reach past the adapter:
+
+| Symbol | Door | What it is |
+|---|---|---|
+| `DEFAULT_SESSION_HEADER` | `agentfootprint/hosting` | `'x-session-id'` — the header `nodeHost` reads when nothing says otherwise |
+| `jsonWireWith(options)` / `JsonWireOptions` | `agentfootprint/hosting` | `nodeHost`'s JSON dialect as a factory: `{ sessionHeader?, sessionCookie? }`. `jsonWire` is `jsonWireWith()`. Hand it to `httpHost({ wire })` when you are keeping these bodies but re-deciding something else |
+| `browserSessionId(options)` / `BrowserSessionIdOptions` | `agentfootprint` (the **main** barrel) | The client half: mints once, keeps it, hands it back. `{ storageKey? }` — two keys are two conversations |
+| `DEFAULT_SESSION_STORAGE_KEY` | `agentfootprint` | `'agentfootprint.sessionId'`, named so a page can clear it deliberately |
+
+`browserSessionId` is on the main barrel rather than `agentfootprint/hosting`
+because the rest of that door is Node — `node:http`, `node:sqlite` — and a
+browser bundle must not have to reach through it to mint a session id. It uses
+`localStorage` (so the conversation survives a reload) and falls back to memory
+when `localStorage` is missing or throws, which private-mode browsers do.
+
+<Callout type="warn" title="A session id is not authentication">
+Both halves are caller data. Anyone who can reach your host can send any string,
+including somebody else's. Authenticate the caller by your own means, then check
+that the authenticated principal is allowed the session they claimed, before you
+serve it. Two more facts worth stating out loud: cookie mode sets **no `Secure`
+flag**, because this host cannot know whether it is behind TLS — add it at your
+proxy or terminate TLS here; and a cookie follows a **browser profile**, so one
+person on two devices is two conversations and a shared machine is one.
+</Callout>
+
+### A session is a conversation — and now a memory namespace
+
+A run that carries a `sessionId` and **no** `identity` is scoped to
+`{ conversationId: sessionId }` (9.10.0). `standingAgent` passes the session id
+on every run and resume, so a `.memory()` registered on the agent recalls that
+session's earlier turns with **zero configuration**.
+
+Before 9.10.0 that run got the per-run default — `{ conversationId: '<runId>' }`
+with a fresh runId every turn — so a twelve-turn session wrote twelve namespaces
+of one exchange each and recalled nothing. The turn always looked right; only the
+recall was missing.
+
+- An `identity` you pass always wins, including the one a continued conversation
+  carries.
+- A run with no session and no identity is **unchanged**.
+- The derivation is recorded as `runIdentitySource: 'session'` in the run's own
+  state, so a trace can tell a namespace somebody chose from one the library
+  derived.
+- It is still **not** published to `tool.execute` as `ctx.identity`: a
+  synthesized namespace is not something anybody named, and tools that want the
+  session have `ctx.sessionId` for it.
+
+See [Conversations](doc:conversations) for the full ladder.
+
+### Many processes — `redisSessions` is not built
+
+`SessionLifecycle` is two methods (`hydrate`, `persist`) plus an optional
+`onWake`. That is the whole contract, and it is deliberately that small so the
+multi-process road is a short one:
+
+```ts
+const redisSessions = (client: Redis): SessionLifecycle => ({
+  async hydrate(sessionId) {
+    const raw = await client.get(`af:${sessionId}`);
+    return raw ? checkEnvelope(JSON.parse(raw), sessionId) : undefined;
+  },
+  async persist(sessionId, envelope) {
+    await client.set(`af:${sessionId}`, JSON.stringify(envelope));
+  },
+});
+```
+
+No `redisSessions` ships. Not an oversight — a shipped adapter has to make
+decisions that belong to your deployment (key prefix, TTL, cluster vs single,
+which client), and every one of them would be wrong for somebody. `checkEnvelope`
+is the part worth borrowing: it validates either stored format and refuses an
+unreadable one by name, which is the half that is easy to get wrong. If a
+field-tested shape emerges, it ships then — with the numbers, not before.
 
 ### A pause is unfinished work, and now it is kept
 
@@ -1039,6 +1238,19 @@ results survived in the store, then holds a human-in-the-loop turn over HTTP end
 to end: `202` with the ask and its receipts, a nudge refused with
 `ERR_AWAITING_DECISION`, and `200` once a decision arrives.
 
+And the multi-user half — two people served at the same time, each remembering
+their own conversation and neither seeing the other's:
+
+<CodeFile path="examples/deploy/multi-user.ts" region="pool" title="examples/deploy/multi-user.ts (region: pool)" />
+
+```bash
+npm run example examples/deploy/multi-user.ts
+```
+
+It has two sessions talk to it concurrently, reports the wall clock for the pair
+in parallel against the same pair in series, and proves each session's recall is
+its own.
+
 ## Status
 
 | Piece | Door | Peer dep | Status |
@@ -1049,6 +1261,9 @@ to end: `202` with the ask and its receipts, a nudge refused with
 | `memorySessions` | `agentfootprint/hosting` | none | Shipped |
 | `sqliteSessions` | `agentfootprint/hosting` | none (`node:sqlite`, Node ≥ 22.5) | Shipped |
 | `standingAgent` + `durability` (`exit` / `async` / `sync`) | `agentfootprint/hosting` | — | Shipped |
+| `standingAgent({ agentFactory })` — per-session agent pool | `agentfootprint/hosting` | — | Shipped (9.10.0); parallelism, eviction→re-hydrate and both refusals pinned by test |
+| `browserSessionId()` (client half) + `nodeHost({ sessionHeader, sessionCookie })` | `agentfootprint` / `agentfootprint/hosting` | none | Shipped (9.10.0) |
+| `redisSessions` | — | — | **Bring-your-own via the port** — two methods; see the sketch above |
 | `agentCoreRuntimeHost` / `agentCoreRuntimeWire` | `agentfootprint/hosting` | none — plain HTTP, no AWS SDK on its path | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket |
 | `agentCoreSessions({ store: 'session-storage' })` | `agentfootprint/hosting` | none (`node:fs`) | Shipped |
 | `agentCoreSessions({ store: 'memory' })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned |

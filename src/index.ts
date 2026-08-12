@@ -415,6 +415,16 @@ export {
   RunCheckpointError,
   type AgentRunCheckpoint,
 } from './core/runCheckpoint.js';
+// 9.10.0 — the CLIENT half of a hosting session: one line in a page that mints
+// a session id, keeps it, and hands it back. Exported from the ROOT rather than
+// from `agentfootprint/hosting` on purpose — the rest of that door is Node
+// (`node:http`, `node:sqlite`) and a browser bundle must not have to reach
+// through it. The server half is `nodeHost({ sessionHeader | sessionCookie })`.
+export {
+  browserSessionId,
+  DEFAULT_SESSION_STORAGE_KEY,
+  type BrowserSessionIdOptions,
+} from './hosting/browserSession.js';
 // 9.6.0 — "the request did not fit" as a typed error the adapters translate
 // from every vendor's wording, carrying the numbers and the fixes. Exported
 // from the ROOT (not `/llm-providers`) because the thing you catch it with is

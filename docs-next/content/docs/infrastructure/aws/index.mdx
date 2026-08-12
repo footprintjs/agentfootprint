@@ -259,6 +259,30 @@ English / Multilingual v3) and declares `maxInputChars` — 32,000 for Titan's
 8,192-token window, 2,000 for Cohere, which batches 96 texts per call. See
 **[Embedders](doc:embedders)**.
 
+## Hosting — where the parallelism comes from
+
+**From the platform.** AgentCore Runtime is session-oriented: the runtime gives
+a session its own container and keeps that container's storage for the life of
+the session, so two sessions are two containers and never meet. That is the
+first row of the [concurrency table](doc:hosting-and-runtime) —
+platform-per-session — and it is why the ordinary AgentCore deployment is
+`standingAgent({ agent })` with one agent inside one container:
+
+```ts
+const handle = await standingAgent({
+  agent,
+  host: agentCoreRuntimeHost(),                              // 0.0.0.0:8080
+  sessions: agentCoreSessions({ store: 'session-storage' }),
+});
+```
+
+The global serialization that shape carries costs nothing here, because there is
+only ever one session in the container to serialize. `{ agentFactory }` — the
+per-session agent pool — is for the other shape: **one process serving many
+sessions**, which is what you have on your own infrastructure or behind your own
+load balancer, not what AgentCore hands you. Using it inside an AgentCore
+container is not wrong, just unnecessary: the pool would hold one entry.
+
 ## What you bridge yourself
 
 agentfootprint is runtime-only, so these are yours:

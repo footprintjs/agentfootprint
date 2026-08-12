@@ -188,6 +188,34 @@ This is the shape the label above refers to. Everything on
 [Hosting & runtime](doc:hosting-and-runtime) applies unchanged — durability
 modes, the resume loop, the `PendingAsk` a person answers.
 
+### Where the parallelism comes from here
+
+**From this process, or from your own fleet.** There is no platform underneath
+an on-premises box handing each session its own container, so serving more than
+one person at a time is a choice you make explicitly:
+
+```ts
+const handle = await standingAgent({
+  agentFactory: () => buildAgent(),        // one agent per ACTIVE session
+  sessions: sqliteSessions({ file: '/var/lib/agent/sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+  maxActiveSessions: 100,
+});
+```
+
+`{ agent }` serves every session from one instance and serializes globally —
+correct, and the right default for an internal tool with a handful of users.
+`{ agentFactory }` runs sessions in parallel inside this one process, bounded
+and LRU-evicted, which is the shape a box with real concurrent users wants.
+
+Scaling past one process is the third row of the
+[concurrency table](doc:hosting-and-runtime): N workers behind your load
+balancer, each with its own pool. That one needs a session store every worker
+can read, and `sqliteSessions` is explicitly **one machine, one writer** — so a
+multi-process deployment on-premises means Redis or Postgres behind the
+two-method `SessionLifecycle` port, which you write (no `redisSessions` ships;
+the sketch is on the hosting page).
+
 ## Code execution — isolation, not a sandbox
 
 ```ts
