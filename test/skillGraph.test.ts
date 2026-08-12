@@ -408,7 +408,7 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
     });
   }
 
-  it("[classic] refused at build since 9.16.0 — the cursor round-trip cannot be mounted on cached slots", () => {
+  it('[classic] refused at build since 9.16.0 — the cursor round-trip cannot be mounted on cached slots', () => {
     const a = skill('a');
     const b = skill('b');
     const graph = skillGraph().entry(a).route(a, b, { onToolReturn: 'probe' }).build();

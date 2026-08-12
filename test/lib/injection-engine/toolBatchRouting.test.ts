@@ -148,7 +148,13 @@ describe('unit: explainNextSkill over a tool batch', () => {
       lastToolResult: { toolName: 'beta', result: 'beta out' },
     });
     expect(move).toEqual({ from: 'a', to: 'c', by: 'route' }); // no conflict key at all
-    expect(g.nextSkill({ ...baseCtx, currentSkillId: 'a', lastToolResult: { toolName: 'beta', result: '' } })).toBe('c');
+    expect(
+      g.nextSkill({
+        ...baseCtx,
+        currentSkillId: 'a',
+        lastToolResult: { toolName: 'beta', result: '' },
+      }),
+    ).toBe('c');
   });
 
   it('empty batch → sticky stay (same as no tool result ever)', () => {
@@ -199,9 +205,9 @@ describe('unit: on-tool-return triggers see the whole batch', () => {
 
   it('toolResultsOf applies exactly that fallback (helper contract)', () => {
     expect(toolResultsOf({ ...baseCtx })).toEqual([]);
-    expect(
-      toolResultsOf({ ...baseCtx, lastToolResult: { toolName: 'a', result: 'r' } }),
-    ).toEqual([{ toolName: 'a', result: 'r' }]);
+    expect(toolResultsOf({ ...baseCtx, lastToolResult: { toolName: 'a', result: 'r' } })).toEqual([
+      { toolName: 'a', result: 'r' },
+    ]);
     const batch = [res('a', 'c1'), res('b', 'c2')];
     expect(toolResultsOf({ ...baseCtx, toolResults: batch })).toBe(batch);
   });
@@ -236,7 +242,9 @@ const captureRouting = () => {
     id: 'capture-routing',
     onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
       if (e.name === 'agentfootprint.context.evaluated') {
-        perIteration.push([...((e.payload?.activeIds as readonly string[] | undefined) ?? [])].sort());
+        perIteration.push(
+          [...((e.payload?.activeIds as readonly string[] | undefined) ?? [])].sort(),
+        );
       }
       if (e.name === 'agentfootprint.skill.route_conflict') {
         conflicts.push(e.payload);
@@ -247,10 +255,7 @@ const captureRouting = () => {
 };
 
 describe('integration: parallel batch through the real Agent loop', () => {
-  const buildAgent = (
-    provider: ReturnType<typeof mock>,
-    graph = twoEdgeGraph(),
-  ) => {
+  const buildAgent = (provider: ReturnType<typeof mock>, graph = twoEdgeGraph()) => {
     const { perIteration, conflicts, recorder } = captureRouting();
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')

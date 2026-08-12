@@ -215,7 +215,11 @@ export interface InjectionContext {
  */
 export function toolResultsOf(
   ctx: InjectionContext,
-): ReadonlyArray<{ readonly toolName: string; readonly result: string; readonly toolCallId?: string }> {
+): ReadonlyArray<{
+  readonly toolName: string;
+  readonly result: string;
+  readonly toolCallId?: string;
+}> {
   return ctx.toolResults ?? (ctx.lastToolResult ? [ctx.lastToolResult] : []);
 }
 

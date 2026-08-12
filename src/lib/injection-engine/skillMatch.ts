@@ -190,8 +190,8 @@ export function mermaidMatchCaption(m: SkillMatchData): string {
     m.kind === 'regex'
       ? `/${m.source}/${m.flags}`
       : m.keywords.length > 3
-        ? `${m.keywords.slice(0, 3).join(', ')}, +${m.keywords.length - 3} more`
-        : m.keywords.join(', ');
+      ? `${m.keywords.slice(0, 3).join(', ')}, +${m.keywords.length - 3} more`
+      : m.keywords.join(', ');
   return raw.replace(/\|/g, '#124;').replace(/"/g, '#quot;');
 }
 

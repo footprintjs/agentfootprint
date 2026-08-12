@@ -73,7 +73,12 @@ import {
   type GraphProblem,
 } from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
-import { compileMatch, mermaidMatchCaption, type SkillMatch, type SkillMatchData } from './skillMatch.js';
+import {
+  compileMatch,
+  mermaidMatchCaption,
+  type SkillMatch,
+  type SkillMatchData,
+} from './skillMatch.js';
 export { formatCheckup } from './skillGraphCheckup.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
 // The data-matcher domain (`match:` on start rules) — one module owns the type,
@@ -862,9 +867,9 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       // homes disagree, and only one of them would win — silently.
       if (treeRoot && opts.scopeTools !== undefined) {
         throw new Error(
-          'skillGraph: `scopeTools` on build() is the FLAT arm\'s dial. This graph is a ' +
+          "skillGraph: `scopeTools` on build() is the FLAT arm's dial. This graph is a " +
             '.tree(), which declares tool scoping on .tree(root, { scopeTools }) (object ' +
-            'form: the tree arm\'s own `scopeTools` field) — set it there instead.',
+            "form: the tree arm's own `scopeTools` field) — set it there instead.",
         );
       }
       // A tree and the flat entry/route wiring are two ways to declare the same

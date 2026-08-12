@@ -286,9 +286,9 @@ describe('match — start rules declared as data', () => {
       .entry(a, { match: { keywords: ['refund'] } })
       .build({ check: 'off' });
     expect(g.nextSkill(ctx({ userMessage: 'refund me' }))).toBe('a');
-    expect(() =>
-      skillGraph().entry(skill('b'), { match: /x/, when: () => true }),
-    ).toThrow(/entry "b" sets both `match` and `when`/);
+    expect(() => skillGraph().entry(skill('b'), { match: /x/, when: () => true })).toThrow(
+      /entry "b" sets both `match` and `when`/,
+    );
   });
 
   it('provenance: the compiled skill and the entry edge both carry the matcher DATA', () => {
@@ -390,8 +390,10 @@ describe('overlapping-rules / rules-shadowed-by-order — only what the data pro
     list: ReadonlyArray<{ id: string; match?: RegExp | { keywords: string[] } }>,
     exclusive = false,
   ) => {
-    const g = skillGraph()
-      .entry(skill(list[0]!.id), list[0]!.match ? { match: list[0]!.match } : undefined);
+    const g = skillGraph().entry(
+      skill(list[0]!.id),
+      list[0]!.match ? { match: list[0]!.match } : undefined,
+    );
     for (const item of list.slice(1)) {
       g.entry(skill(item.id), item.match ? { match: item.match } : undefined);
     }
@@ -450,7 +452,10 @@ describe('overlapping-rules / rules-shadowed-by-order — only what the data pro
   });
 
   it('unit: unlike kinds (regex vs keywords) and opaque `when` predicates are never compared', () => {
-    const mixed = rules([{ id: 'a', match: /refund/ }, { id: 'b', match: { keywords: ['refund'] } }]);
+    const mixed = rules([
+      { id: 'a', match: /refund/ },
+      { id: 'b', match: { keywords: ['refund'] } },
+    ]);
     expect(codesOf(mixed)).not.toContain('overlapping-rules');
     expect(codesOf(mixed)).not.toContain('rules-shadowed-by-order');
 
@@ -532,7 +537,7 @@ describe('deferred body-contract checks — the graph waits for the one build po
     expect(warn.mock.calls.flat().join('\n')).not.toContain('body-unknown-tool');
   });
 
-  it("unit: built WITH knownTools → the checks run at graph build (the override stays an override), no note is left", () => {
+  it('unit: built WITH knownTools → the checks run at graph build (the override stays an override), no note is left', () => {
     enableDevMode();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const g = skillGraph({
@@ -603,10 +608,17 @@ describe('deferred body-contract checks — the graph waits for the one build po
       skills: [bareSkill('s', 'Call lokup_order(id).')],
       start: 's',
     });
-    Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).skillGraph(g).build();
+    Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
+      .skillGraph(g)
+      .build();
     // .skillGraph() supplies BOTH sources — the per-skill metadata and the captured
     // graph-level note. One problem, one report.
-    expect(warn.mock.calls.flat().join('\n').match(/body-unknown-tool/g)).toHaveLength(1);
+    expect(
+      warn.mock.calls
+        .flat()
+        .join('\n')
+        .match(/body-unknown-tool/g),
+    ).toHaveLength(1);
   });
 
   it('functional: graph-only linting is NOT worse — graph.checkup() still reports with what it can see', () => {
@@ -647,7 +659,10 @@ describe('deferred body-contract checks — the graph waits for the one build po
       start: 's',
       knownTools: ['lookup_order'],
     });
-    const graphBuildReports = warn.mock.calls.flat().join('\n').match(/body-unknown-tool/g);
+    const graphBuildReports = warn.mock.calls
+      .flat()
+      .join('\n')
+      .match(/body-unknown-tool/g);
     expect(graphBuildReports).toHaveLength(1); // reported at graph build…
     warn.mockClear();
     Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
@@ -706,7 +721,9 @@ describe('deferred body-contract checks — the graph waits for the one build po
       start: 's',
     });
     expect(() =>
-      Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).skillGraph(g).build(),
+      Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
+        .skillGraph(g)
+        .build(),
     ).not.toThrow(); // contract problems are warnings — 'throw' mode throws only on errors
     expect(warn.mock.calls.flat().join('\n')).not.toContain('body-unknown-tool');
   });
