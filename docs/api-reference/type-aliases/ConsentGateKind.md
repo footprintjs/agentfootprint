@@ -8,7 +8,7 @@
 
 > **ConsentGateKind** = `"checkIn"` \| `"ask"`
 
-Defined in: [src/core/pause.ts:128](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L128)
+Defined in: [src/core/pause.ts:128](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/pause.ts#L128)
 
 The two pause kinds whose answer is a DECISION rather than a value.
 

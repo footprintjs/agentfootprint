@@ -8,7 +8,7 @@
 
 > **CreateProviderOptions** = `object` & `MockProviderOptions` \| `object` & `AnthropicProviderOptions` \| `object` & `OpenAIProviderOptions` \| `object` & `OllamaProviderOptions` \| `object` & `BedrockProviderOptions` \| `object` & `BrowserAnthropicProviderOptions` \| `object` & `BrowserOpenAIProviderOptions`
 
-Defined in: [src/adapters/llm/createProvider.ts:51](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/adapters/llm/createProvider.ts#L51)
+Defined in: [src/adapters/llm/createProvider.ts:51](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/llm/createProvider.ts#L51)
 
 Common subset of options accepted across all built-in providers.
 Provider-specific keys (region for Bedrock, host for Ollama,

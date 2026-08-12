@@ -6,7 +6,7 @@
 
 # Interface: CodeSession
 
-Defined in: [src/adapters/types.ts:778](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/adapters/types.ts#L778)
+Defined in: [src/adapters/types.ts:778](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L778)
 
 One live session. `stop()` is idempotent and tolerates "already gone".
 
@@ -16,7 +16,7 @@ One live session. `stop()` is idempotent and tolerates "already gone".
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:780](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/adapters/types.ts#L780)
+Defined in: [src/adapters/types.ts:780](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L780)
 
 The backend's own id for this session, when it has one.
 
@@ -26,7 +26,7 @@ The backend's own id for this session, when it has one.
 
 > **execute**(`req`): `Promise`\<[`CodeResult`](/agentfootprint/api/generated/interfaces/CodeResult.md)\>
 
-Defined in: [src/adapters/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/adapters/types.ts#L781)
+Defined in: [src/adapters/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L781)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/adapters/types.ts:781](https://github.com/footprintjs/agentfoot
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:794](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/adapters/types.ts#L794)
+Defined in: [src/adapters/types.ts:794](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L794)
 
 Release the session.
 

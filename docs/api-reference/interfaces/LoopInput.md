@@ -6,7 +6,7 @@
 
 # Interface: LoopInput
 
-Defined in: [src/core-flow/Loop.ts:61](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Loop.ts#L61)
+Defined in: [src/core-flow/Loop.ts:61](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Loop.ts#L61)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/core-flow/Loop.ts:61](https://github.com/footprintjs/agentfootp
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Loop.ts:62](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Loop.ts#L62)
+Defined in: [src/core-flow/Loop.ts:62](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Loop.ts#L62)

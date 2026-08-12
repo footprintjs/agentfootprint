@@ -6,7 +6,7 @@
 
 # Interface: ParallelBranchOptions
 
-Defined in: [src/core-flow/Parallel.ts:131](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Parallel.ts#L131)
+Defined in: [src/core-flow/Parallel.ts:131](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Parallel.ts#L131)
 
 Options bag accepted by `ParallelBuilder.branch()` for per-method
 overrides. Backwards-compatible with the legacy
@@ -19,7 +19,7 @@ string it's still treated as `name`.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core-flow/Parallel.ts:135](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Parallel.ts#L135)
+Defined in: [src/core-flow/Parallel.ts:135](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Parallel.ts#L135)
 
 Per-method translator override. See `BranchEntry.groupTranslator`.
 
@@ -29,7 +29,7 @@ Per-method translator override. See `BranchEntry.groupTranslator`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:133](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Parallel.ts#L133)
+Defined in: [src/core-flow/Parallel.ts:133](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Parallel.ts#L133)
 
 Human-friendly name for this branch. Default: the branch id.
 
@@ -39,7 +39,7 @@ Human-friendly name for this branch. Default: the branch id.
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: [src/core-flow/Parallel.ts:173](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core-flow/Parallel.ts#L173)
+Defined in: [src/core-flow/Parallel.ts:173](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Parallel.ts#L173)
 
 Mark this branch as REQUIRED: its failure rejects the whole Parallel
 run — even under a tolerant `.mergeOutcomesWithFn()` merge — with an

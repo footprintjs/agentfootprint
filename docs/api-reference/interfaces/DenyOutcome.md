@@ -6,7 +6,7 @@
 
 # Interface: DenyOutcome
 
-Defined in: [src/core/agent/middleware/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L99)
+Defined in: [src/core/agent/middleware/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/agent/middleware/types.ts#L99)
 
 Refuse the call. For a tool, `reason` reaches the model verbatim as the
 tool result and the run continues — a denial is data the agent can adapt
@@ -19,7 +19,7 @@ to, not a crash. For a message, `reason` surfaces as a
 
 > `readonly` **kind**: `"deny"`
 
-Defined in: [src/core/agent/middleware/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L100)
+Defined in: [src/core/agent/middleware/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/agent/middleware/types.ts#L100)
 
 ***
 
@@ -27,4 +27,4 @@ Defined in: [src/core/agent/middleware/types.ts:100](https://github.com/footprin
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/middleware/types.ts#L101)
+Defined in: [src/core/agent/middleware/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/agent/middleware/types.ts#L101)

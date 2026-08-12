@@ -8,7 +8,7 @@
 
 > **TeardownScope** = `"call"` \| `"run"` \| `"session"` \| `"shutdown"`
 
-Defined in: [src/core/toolSessions.ts:80](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/toolSessions.ts#L80)
+Defined in: [src/core/toolSessions.ts:80](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/toolSessions.ts#L80)
 
 How long a registered cleanup is allowed to live.
 

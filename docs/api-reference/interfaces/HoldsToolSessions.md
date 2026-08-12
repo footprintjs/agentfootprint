@@ -6,7 +6,7 @@
 
 # Interface: HoldsToolSessions
 
-Defined in: [src/core/codeRunnerTool.ts:118](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/codeRunnerTool.ts#L118)
+Defined in: [src/core/codeRunnerTool.ts:118](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/codeRunnerTool.ts#L118)
 
 A `Tool` that holds live sessions, keyed by isolation key.
 
@@ -16,4 +16,4 @@ A `Tool` that holds live sessions, keyed by isolation key.
 
 > `readonly` **\[TOOL\_SESSIONS\]**: `ReadonlyMap`\<`string`, [`CodeSession`](/agentfootprint/api/generated/interfaces/CodeSession.md)\>
 
-Defined in: [src/core/codeRunnerTool.ts:119](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/codeRunnerTool.ts#L119)
+Defined in: [src/core/codeRunnerTool.ts:119](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/codeRunnerTool.ts#L119)

@@ -8,7 +8,7 @@
 
 > **isPaused**\<`T`\>(`result`): `result is RunnerPauseOutcome`
 
-Defined in: [src/core/pause.ts:71](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/pause.ts#L71)
+Defined in: [src/core/pause.ts:71](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/pause.ts#L71)
 
 Type guard — discriminates `RunnerPauseOutcome` from a normal `TOut`.
 

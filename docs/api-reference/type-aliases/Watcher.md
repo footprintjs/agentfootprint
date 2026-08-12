@@ -8,7 +8,7 @@
 
 > **Watcher** = [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)
 
-Defined in: [src/core/agent/watch.ts:61](https://github.com/footprintjs/agentfootprint/blob/24f3a16bbef9acd26a5962541c0f75306264a97a/src/core/agent/watch.ts#L61)
+Defined in: [src/core/agent/watch.ts:61](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/agent/watch.ts#L61)
 
 Anything that can watch a run.
 
