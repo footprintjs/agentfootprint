@@ -6,7 +6,7 @@
 
 # Interface: CheckInStats
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:65](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/CheckInRecorder.ts#L65)
+Defined in: [src/recorders/core/CheckInRecorder.ts:65](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/CheckInRecorder.ts#L65)
 
 Roll-up counts across a run (or the recorder's lifetime).
 
@@ -16,7 +16,7 @@ Roll-up counts across a run (or the recorder's lifetime).
 
 > `readonly` **approved**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:67](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/CheckInRecorder.ts#L67)
+Defined in: [src/recorders/core/CheckInRecorder.ts:67](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/CheckInRecorder.ts#L67)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:67](https://github.com/footpr
 
 > `readonly` **declined**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/CheckInRecorder.ts#L68)
+Defined in: [src/recorders/core/CheckInRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/CheckInRecorder.ts#L68)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:68](https://github.com/footpr
 
 > `readonly` **pending**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:70](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/CheckInRecorder.ts#L70)
+Defined in: [src/recorders/core/CheckInRecorder.ts:70](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/CheckInRecorder.ts#L70)
 
 Asks with no decision yet (paused, awaiting a human).
 
@@ -42,4 +42,4 @@ Asks with no decision yet (paused, awaiting a human).
 
 > `readonly` **requested**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:66](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/CheckInRecorder.ts#L66)
+Defined in: [src/recorders/core/CheckInRecorder.ts:66](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/CheckInRecorder.ts#L66)

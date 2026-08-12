@@ -6,7 +6,7 @@
 
 # Interface: DefineToolOptions\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:206](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L206)
+Defined in: [src/core/tools.ts:206](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L206)
 
 Convenience input for `defineTool` — flatter than `Tool` itself.
 Consumers describe the tool inline; the helper assembles `schema`.
@@ -31,7 +31,7 @@ properties: {} }` or omit and we'll default to that.
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/agentfootprint/api/generated/type-aliases/ToolCapability.md)[]
 
-Defined in: [src/core/tools.ts:218](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L218)
+Defined in: [src/core/tools.ts:218](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L218)
 
 Declare what this tool touches (see [Tool.capabilities](/agentfootprint/api/generated/interfaces/Tool.md#capabilities)). Consulted
  only when the configured checker declares it governs them.
@@ -42,7 +42,7 @@ Declare what this tool touches (see [Tool.capabilities](/agentfootprint/api/gene
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)\<`TArgs`\>
 
-Defined in: [src/core/tools.ts:215](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L215)
+Defined in: [src/core/tools.ts:215](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L215)
 
 Demand a human check-in before this tool runs (see [Tool.checkIn](/agentfootprint/api/generated/interfaces/Tool.md#checkin)).
  `'always'` or a `(args, ctx) => boolean` predicate.
@@ -53,7 +53,7 @@ Demand a human check-in before this tool runs (see [Tool.checkIn](/agentfootprin
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/tools.ts:208](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L208)
+Defined in: [src/core/tools.ts:208](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L208)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: [src/core/tools.ts:208](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/tools.ts:209](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L209)
+Defined in: [src/core/tools.ts:209](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L209)
 
 ***
 
@@ -69,7 +69,7 @@ Defined in: [src/core/tools.ts:209](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/tools.ts:207](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L207)
+Defined in: [src/core/tools.ts:207](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L207)
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/core/tools.ts:207](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:212](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L212)
+Defined in: [src/core/tools.ts:212](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L212)
 
 Declare a credential this tool needs (declare-and-push). Resolved by the
  framework before `execute` and injected as `ctx.credential`.
@@ -88,7 +88,7 @@ Declare a credential this tool needs (declare-and-push). Resolved by the
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:219](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/tools.ts#L219)
+Defined in: [src/core/tools.ts:219](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L219)
 
 #### Parameters
 

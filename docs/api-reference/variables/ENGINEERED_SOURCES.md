@@ -8,7 +8,7 @@
 
 > `const` **ENGINEERED\_SOURCES**: `ReadonlySet`\<`ContextSource`\>
 
-Defined in: [src/recorders/core/contextEngineering.ts:67](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/recorders/core/contextEngineering.ts#L67)
+Defined in: [src/recorders/core/contextEngineering.ts:67](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/contextEngineering.ts#L67)
 
 Public set of "engineered" sources — the context-engineering
 primitives that consumers configure (RAG, Skills, Memory,

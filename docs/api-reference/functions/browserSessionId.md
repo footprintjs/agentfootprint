@@ -8,7 +8,7 @@
 
 > **browserSessionId**(`options?`): `string`
 
-Defined in: [src/hosting/browserSession.ts:107](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/hosting/browserSession.ts#L107)
+Defined in: [src/hosting/browserSession.ts:107](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/hosting/browserSession.ts#L107)
 
 The conversation this browser is having with your agent: minted once, kept,
 and handed back on every later call.

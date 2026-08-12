@@ -6,7 +6,7 @@
 
 # Class: RunInFlightError
 
-Defined in: [src/core/conversation.ts:58](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/conversation.ts#L58)
+Defined in: [src/core/conversation.ts:58](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/conversation.ts#L58)
 
 Thrown when `run()` / `resume()` is called on a runner that is already
 running.
@@ -36,7 +36,7 @@ await Promise.all([agentA.run({ message: 'a' }), agentB.run({ message: 'b' })]);
 
 > **new RunInFlightError**(`door`, `agentId`, `activeRunId`): `RunInFlightError`
 
-Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/conversation.ts#L65)
+Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/conversation.ts#L65)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfo
 
 > `readonly` **activeRunId**: `string`
 
-Defined in: [src/core/conversation.ts:63](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/conversation.ts#L63)
+Defined in: [src/core/conversation.ts:63](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/conversation.ts#L63)
 
 The run already in flight, so a log line can be joined to its trace.
 
@@ -76,7 +76,7 @@ The run already in flight, so a log line can be joined to its trace.
 
 > `readonly` **agentId**: `string`
 
-Defined in: [src/core/conversation.ts:61](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/conversation.ts#L61)
+Defined in: [src/core/conversation.ts:61](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/conversation.ts#L61)
 
 The runner that is busy, by its configured id.
 
@@ -98,7 +98,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RUN_IN_FLIGHT"`
 
-Defined in: [src/core/conversation.ts:59](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/conversation.ts#L59)
+Defined in: [src/core/conversation.ts:59](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/conversation.ts#L59)
 
 ***
 
