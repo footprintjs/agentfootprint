@@ -89,6 +89,33 @@ implement `addEvent`, the adapter falls back to flattened
 `${eventName}.${key}` attributes — degraded (last-write-wins) but never silently
 dropped.
 
+### Google Cloud — the same adapter, pointed at `telemetry.googleapis.com`
+
+Google's Telemetry API accepts **standard OTLP**, and Google's own migration guide
+recommends moving *off* the Cloud Trace exporter because its proprietary transform
+can lose data. So there is no `googleCloudTracer()` factory and there is not going
+to be one: it would construct a `TracerProvider` from packages you install either
+way and attach a `GoogleAuth` header — about twenty lines of wiring behind four new
+optional peer dependencies. `otelObservability()` already takes the tracer.
+
+```ts
+const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+const exporter = new OTLPTraceExporter({
+  url: 'https://telemetry.googleapis.com',      // regional: telemetry.<REGION>.rep.googleapis.com
+  credentials: credentials.createSsl(),
+  headers: await (await auth.getClient()).getRequestHeaders(),
+});
+```
+
+plus `OTEL_RESOURCE_ATTRIBUTES=gcp.project_id=<PROJECT_ID>` and
+`OTEL_EXPORTER_OTLP_HEADERS=x-goog-user-project=<PROJECT_ID>`. Google's console
+renders the GenAI views from the **OpenTelemetry GenAI semantic conventions** —
+the same `gen_ai.*` attributes this adapter already emits — once you opt in with
+`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`. There is no
+auto-instrumentation for `@google/genai` on npm, so agentfootprint's own provider
+hooks are the instrumentation. Full copy-paste recipe:
+[Google Cloud & Gemini](doc:google-cloud).
+
 <Callout type="warn" title="fileObservability rotates ONE generation, and nothing is bounded on the way out">
 `maxBytes` renames the file to `<path>.1` — replacing any previous `.1` — and
 starts fresh. No `.2`, no compression, no schedule, no cross-process
@@ -275,6 +302,7 @@ time rather than at freeze time.
 | `consoleObservability`, `auditExport` / `verifyAuditBundle` | `agentfootprint/observe` | Shipped — no vendor SDK |
 | `fileObservability` | `agentfootprint/observe` | 9.8.0 — contract-shaped and tested; awaiting field use |
 | `otelObservability` | `agentfootprint/observe` | Shipped — BYO tracer |
+| Cloud Trace / Cloud Logging via `otelObservability` + OTLP | `agentfootprint/observe` | **9.13.0** — a documented recipe, not a new adapter |
 | `cloudwatchObservability`, `agentcoreObservability`, `xrayObservability` | `agentfootprint/observe` | Shipped; contract-mapped and injection-tested, command names pinned |
 | `detach` delivery, `tier`, `sampleRate` | — | Shipped |
 | `recordRun` + `{ dims, norm }` embedding summary | `agentfootprint/observe` | Shipped |
@@ -290,3 +318,4 @@ time rather than at freeze time.
 - [Exporters: AgentCore & OTEL](doc:exporters) — step-by-step wiring for both
 - [Offline replay](doc:offline-replay) — what a recording is for
 - [AWS & Bedrock AgentCore](doc:aws) — the worked provider
+- [Google Cloud & Gemini](doc:google-cloud) — the OTLP recipe in full, and the rest of that column

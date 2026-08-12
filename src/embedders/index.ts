@@ -12,12 +12,17 @@
  *                       v3 (the model id picks the body shape); credentials
  *                       come from the AWS chain, so no key option at all.
  *                       peer dep: @aws-sdk/client-bedrock-runtime.
+ *   geminiEmbedder()  — hosted on Google; Vertex (project + Application
+ *                       Default Credentials) or the Gemini API (one key), the
+ *                       same two doors as `gemini()`. Matryoshka sizes, real
+ *                       task types, and it REFUSES a vector the service admits
+ *                       it clipped. peer dep: @google/genai.
  *   localEmbedder()   — on-device sentence-transformer; no key; offline after a
  *                       one-time model fetch. peer dep: @huggingface/transformers.
  *   staticEmbedder()  — pure-JS Model2Vec static vectors; no key, no network
  *                       (weights bundled). peer dep: @yarflam/potion-base-8m.
  *
- * All four satisfy the same `Embedder` shape, so they drop into
+ * All five satisfy the same `Embedder` shape, so they drop into
  * `toolChoiceRecorder({ embedder })` / `semanticPipeline({ embedder })` etc.
  * unchanged. Dimensions differ per model — never mix two in one store.
  *
@@ -44,6 +49,10 @@
 export type { Embedder } from '../memory/embedding/types.js';
 import type { Embedder } from '../memory/embedding/types.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
+import {
+  resolveGoogleGenAIClient,
+  type GoogleGenAIConnectionOptions,
+} from '../adapters/llm/googleGenAI.js';
 
 // ---------------------------------------------------------------------------
 // OpenAI (hosted) — no extra dependency, just a fetch + an API key.
@@ -811,6 +820,430 @@ function describeShape(value: unknown): string {
     return keys.length === 0 ? 'an object with no keys' : `an object with keys: ${keys.join(', ')}`;
   }
   return typeof value;
+}
+
+// ---------------------------------------------------------------------------
+// Google Gemini embeddings (hosted) — Vertex or the Gemini API, one SDK.
+// ---------------------------------------------------------------------------
+
+/**
+ * The slice of `@google/genai` {@link geminiEmbedder} uses — one method.
+ *
+ * Structural, so the real `GoogleGenAI`, a client shared with `gemini()`, or a
+ * `{ models: { embedContent } }` double all satisfy it without this package
+ * taking a hard type dependency on the optional peer. The double is what the
+ * Google pin injects.
+ */
+export interface GeminiEmbedClientLike {
+  readonly models: {
+    embedContent(params: GeminiEmbedParams): Promise<GeminiEmbedResponse>;
+  };
+}
+
+/** `EmbedContentParameters`, narrowed to what this adapter sends. */
+export interface GeminiEmbedParams {
+  readonly model: string;
+  readonly contents: readonly string[];
+  readonly config?: {
+    readonly taskType?: string;
+    readonly outputDimensionality?: number;
+    readonly abortSignal?: AbortSignal;
+  };
+}
+
+/** `EmbedContentResponse`, narrowed to what this adapter reads. */
+export interface GeminiEmbedResponse {
+  readonly embeddings?: readonly {
+    readonly values?: readonly number[];
+    /**
+     * Present on Vertex. `truncated: true` is the service TELLING us it clipped
+     * the input — the one signal that turns the silent half of
+     * {@link Embedder.maxInputChars} into something an adapter can act on.
+     */
+    readonly statistics?: { readonly truncated?: boolean; readonly tokenCount?: number };
+  }[];
+}
+
+/**
+ * Gemini's `task_type` — a real parameter, not a hint.
+ *
+ * `RETRIEVAL_QUERY` and `RETRIEVAL_DOCUMENT` embed a question and a passage
+ * into deliberately different projections that are MEANT to be compared with
+ * each other, so using one value for both halves is a measurable loss of
+ * retrieval quality. The rest are separate objectives; mixing them in one store
+ * is mixing spaces.
+ */
+export type GeminiEmbeddingTaskType =
+  | 'RETRIEVAL_QUERY'
+  | 'RETRIEVAL_DOCUMENT'
+  | 'SEMANTIC_SIMILARITY'
+  | 'CLASSIFICATION'
+  | 'CLUSTERING'
+  | 'CODE_RETRIEVAL_QUERY'
+  | 'QUESTION_ANSWERING'
+  | 'FACT_VERIFICATION';
+
+/** What this adapter does when the service says it clipped the input. */
+export type GeminiTruncationPolicy = 'refuse' | 'allow';
+
+export interface GeminiEmbedderOptions extends GoogleGenAIConnectionOptions {
+  /**
+   * Embedding model id. Default `'gemini-embedding-001'`.
+   *
+   * Two are known by name (see {@link GEMINI_EMBEDDING_MODELS}); anything else
+   * is a model this library has never met, so pass `dimensions` with it — its
+   * vector length is not something this can know, and a wrong `.dimensions`
+   * corrupts a vector store in silence.
+   */
+  readonly model?: string;
+  /**
+   * Vector length to request (`outputDimensionality`).
+   *
+   * Both known models are Matryoshka models: they emit 3072 numbers and can be
+   * asked for fewer, and the shorter vector is a genuinely usable embedding
+   * rather than a slice of a longer one. The value is SENT to the model AND
+   * reported as `.dimensions`, so the two can never disagree. Google recommends
+   * 768, 1536 or 3072; any length up to the model's native size is accepted.
+   *
+   * Required for a model outside {@link GEMINI_EMBEDDING_MODELS}.
+   *
+   * Note for stores that rank by DOT PRODUCT or euclidean distance: Google's
+   * shortened vectors are not re-normalised, and Google recommends normalising
+   * them yourself. Nothing in this library needs it — `cosineSimilarity`
+   * divides by both magnitudes — so this adapter returns the model's numbers
+   * unchanged rather than quietly rescaling what you store.
+   */
+  readonly dimensions?: number;
+  /**
+   * Pin `task_type` instead of deriving it from the call.
+   *
+   * Unset — the default — `embed()` sends `RETRIEVAL_QUERY` and `embedBatch()`
+   * sends `RETRIEVAL_DOCUMENT`, because that is what this library's own two
+   * call sites are: retrieval embeds ONE question (`loadRelevant`), indexing
+   * embeds MANY passages (`indexDocuments`, `embedMessages`). Pin it when your
+   * own code uses the two calls differently, or when the objective is
+   * classification or clustering rather than search.
+   *
+   * Refused by name on a model that does not take the parameter.
+   */
+  readonly taskType?: GeminiEmbeddingTaskType;
+  /**
+   * What to do when the service reports it CLIPPED the input. Default
+   * `'refuse'`.
+   *
+   * Over-long input is not rejected by Gemini — it is silently truncated, and a
+   * full-looking vector comes back for the opening of the passage. An indexer
+   * then stores the whole chunk as the passage and the clipped vector as its
+   * index, so retrieval cannot find text that is visibly present in the passage
+   * it later serves. Nothing throws, nothing scores zero; the corpus is quietly,
+   * partially indexed.
+   *
+   * `.maxInputChars` exists to stop that BEFORE the call, and it is an
+   * assumption (see {@link CHARS_PER_TOKEN}) — dense text tokenises tighter.
+   * `statistics.truncated` is the service saying it happened anyway, and this
+   * adapter is the only thing that sees it. `'refuse'` turns it into an error
+   * naming the fix; `'allow'` returns the clipped vector, which is what every
+   * library that does not look at the field already does.
+   *
+   * Detection depends on the service RETURNING `statistics` — Vertex does. When
+   * it is absent this adapter cannot tell, and says so here rather than
+   * implying a guarantee.
+   */
+  readonly onTruncation?: GeminiTruncationPolicy;
+  /**
+   * The longest input this model reads whole, in CHARACTERS
+   * ({@link Embedder.maxInputChars}). Declared for every known model from its
+   * documented token window; this option is how a model this library does not
+   * know states its own. An explicit value always wins.
+   */
+  readonly maxInputChars?: number;
+  /** @internal Test injection — skips the SDK require entirely. */
+  readonly _client?: GeminiEmbedClientLike;
+}
+
+/** Everything this library knows about ONE Gemini embedding model. */
+interface GeminiEmbeddingModelFacts {
+  /** Native output size — what `.dimensions` reports when nothing is asked for. */
+  readonly dimensions: number;
+  /** Documented input window, in TOKENS, converted at {@link CHARS_PER_TOKEN}. */
+  readonly maxInputTokens: number;
+  /** Does it take `task_type` at all? */
+  readonly supportsTaskType: boolean;
+}
+
+/**
+ * The Gemini embedding models this library knows by name.
+ *
+ * **`gemini-embedding-001`** — text only, 3072 dimensions, a **2,048-token**
+ * input window, and the full `task_type` vocabulary. It is the default because
+ * this library's two call sites are a query and a passage, and the query /
+ * document task types are exactly that distinction.
+ *
+ * **`gemini-embedding-2`** — natively multimodal, 3072 dimensions, an
+ * **8,192-token** text window, and **no `task_type` parameter at all**: Google
+ * replaced it with task instructions written into the prompt. That difference
+ * is why the field is a per-model fact here rather than a constant — asked for
+ * on the model that does not take it, `task_type` is a request field the
+ * service will reject, and this adapter refuses first with the reason.
+ *
+ * A model outside this table has a length this library cannot know and must
+ * state its own — the same rule `openaiEmbedder` and `bedrockEmbedder` apply,
+ * for the same reason.
+ */
+const GEMINI_EMBEDDING_MODELS: Readonly<Record<string, GeminiEmbeddingModelFacts>> = {
+  'gemini-embedding-001': { dimensions: 3072, maxInputTokens: 2048, supportsTaskType: true },
+  'gemini-embedding-2': { dimensions: 3072, maxInputTokens: 8192, supportsTaskType: false },
+};
+
+/**
+ * How many texts Gemini embeds in ONE `embedContent` call: **one**.
+ *
+ * Not a conservative choice — the documented limit. `gemini-embedding-001`
+ * accepts exactly one input text per request, and libraries that assumed
+ * otherwise (batching 96 or 250 instances the way an OpenAI or Titan client
+ * would) send an oversized request that the service rejects on every batch
+ * bigger than a single text. `embedBatch` is therefore N sequential calls, and
+ * says so rather than looking like a batch that is secretly a loop.
+ */
+const GEMINI_MAX_TEXTS_PER_CALL = 1;
+
+/**
+ * Google's hosted embeddings, through `models.embedContent` — on Vertex or on
+ * the Gemini API.
+ *
+ * The door is chosen exactly as `gemini()` chooses it: `{ project, location }`
+ * is Vertex with Application Default Credentials, `{ apiKey }` is the Gemini
+ * API, and neither is guessed. One `GoogleGenAI` client serves both this and
+ * the LLM provider, so an app that talks to both can build the client once and
+ * pass it as `_client`.
+ *
+ * ── Why the id carries the DIMENSION COUNT ───────────────────────────────
+ * `'gemini:<model>:<dims>'`, for the reason `bedrockEmbedder` gives at length:
+ * `MemoryEntry.embeddingModel` stores the id ALONE and it is the only thing
+ * `SearchOptions.embedderId` filters on. One model id at 768 and the same model
+ * id at 3072 are different embedding spaces, so an id without the size cannot
+ * tell them apart — and neither can the size alone, since both known models are
+ * 3072 natively.
+ *
+ * The `taskType` is deliberately NOT in the id, matching `bedrockEmbedder`'s
+ * treatment of Cohere's `input_type`: the default query/document pair is ONE
+ * space by construction (the two projections exist to be compared with each
+ * other), and a pinned value pins both call sites at once, so the store stays
+ * self-consistent either way.
+ *
+ * ── The input ceiling, and the service telling on itself (9.1.0) ─────────
+ * `.maxInputChars` is per MODEL, from its documented token window at the stated
+ * {@link CHARS_PER_TOKEN} assumption: **8,000** for `gemini-embedding-001`
+ * (2,048 tokens) and **32,000** for `gemini-embedding-2` (8,192). A quarter of
+ * the newer model's window is not a rounding difference — it is the whole
+ * reason the ceiling is per-model. Past the ceiling Gemini CLIPS rather than
+ * refuses, so `onTruncation` decides what happens when the response admits it.
+ *
+ * @throws if `model` is unknown and `dimensions` was not supplied; if
+ *         `dimensions` exceeds what the model can produce; if `taskType` is set
+ *         on a model that takes none; if neither a project nor an API key is
+ *         resolvable; or if `@google/genai` is not installed and no `_client`
+ *         was passed.
+ *
+ * @example
+ * ```ts
+ * import { geminiEmbedder } from 'agentfootprint/providers';
+ * import { sqliteVectorStore } from 'agentfootprint/memory';
+ * import { indexFolder } from 'agentfootprint/rag';
+ *
+ * const embedder = geminiEmbedder({ project: 'my-project', dimensions: 768 });
+ * await indexFolder('./docs', { to: sqliteVectorStore({ file: './corpus.db' }), embedder });
+ * ```
+ *
+ * @example  The Gemini API door, and a store that must never hold a clipped vector
+ * ```ts
+ * const embedder = geminiEmbedder({
+ *   apiKey: process.env.GEMINI_API_KEY,
+ *   onTruncation: 'refuse', // the default — stated here because it is the point
+ * });
+ * ```
+ */
+export function geminiEmbedder(options: GeminiEmbedderOptions = {}): Embedder {
+  const model = options.model ?? 'gemini-embedding-001';
+  const facts = GEMINI_EMBEDDING_MODELS[model];
+  const requested = options.dimensions;
+  const dimensions = requested ?? facts?.dimensions;
+  if (dimensions === undefined) {
+    throw new Error(
+      `geminiEmbedder: unknown model '${model}' — its vector length is not something this ` +
+        `library can know, and reporting a wrong .dimensions silently corrupts a vector store. ` +
+        `Pass { dimensions } with the length that model returns.`,
+    );
+  }
+  if (requested !== undefined && (!Number.isInteger(requested) || requested < 1)) {
+    throw new Error(
+      `geminiEmbedder: \`dimensions\` must be a positive whole number — received ` +
+        `${String(requested)}.`,
+    );
+  }
+  if (requested !== undefined && facts !== undefined && requested > facts.dimensions) {
+    throw new Error(
+      `geminiEmbedder: '${model}' produces at most ${facts.dimensions} dimensions — received ` +
+        `${String(requested)}. Asking for more would be reported as .dimensions and never be ` +
+        `the length that comes back.`,
+    );
+  }
+  if (options.taskType !== undefined && facts !== undefined && !facts.supportsTaskType) {
+    throw new Error(
+      `geminiEmbedder: '${model}' takes no \`task_type\` — Google replaced the parameter with ` +
+        `task instructions written into the text itself on this model. Drop \`taskType\` and ` +
+        `prefix your input (for example "task: search result | query: …"), or use ` +
+        `'gemini-embedding-001', which does take it.`,
+    );
+  }
+  const sendTaskType = facts?.supportsTaskType ?? true;
+  const maxInputChars = options.maxInputChars ?? charsFor(facts?.maxInputTokens);
+  const onTruncation: GeminiTruncationPolicy = options.onTruncation ?? 'refuse';
+
+  let client: GeminiEmbedClientLike | undefined;
+  const connect = (): GeminiEmbedClientLike => {
+    client ??= resolveGoogleGenAIClient<GeminiEmbedClientLike>(
+      options,
+      'geminiEmbedder',
+      options._client,
+    );
+    return client;
+  };
+
+  /**
+   * ONE `embedContent` round-trip, carrying however many texts the model takes
+   * ({@link GEMINI_MAX_TEXTS_PER_CALL}) — one, today. Written as a slice rather
+   * than a single string so that the day Google raises the limit is a
+   * one-number change here and nowhere else.
+   */
+  async function embedChunk(
+    texts: readonly string[],
+    taskType: GeminiEmbeddingTaskType,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
+    const config = {
+      ...(sendTaskType && { taskType: options.taskType ?? taskType }),
+      ...(requested !== undefined && { outputDimensionality: requested }),
+      ...(signal && { abortSignal: signal }),
+    };
+    const response = await connect().models.embedContent({
+      model,
+      contents: [...texts],
+      ...(Object.keys(config).length > 0 && { config }),
+    });
+    return readGeminiEmbeddings(response, model, dimensions, texts, onTruncation);
+  }
+
+  /** The calls one batch becomes, in order, one chunk at a time. */
+  async function embedAll(
+    texts: readonly string[],
+    taskType: GeminiEmbeddingTaskType,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
+    const out: number[][] = [];
+    for (let i = 0; i < texts.length; i += GEMINI_MAX_TEXTS_PER_CALL) {
+      signal?.throwIfAborted();
+      out.push(
+        ...(await embedChunk(texts.slice(i, i + GEMINI_MAX_TEXTS_PER_CALL), taskType, signal)),
+      );
+    }
+    return out;
+  }
+
+  return {
+    dimensions,
+    // The embedding SPACE, size included — see the note above.
+    id: `gemini:${model}:${dimensions}`,
+    // Spread, so a model this factory does not know declares NO ceiling rather
+    // than one it cannot stand behind.
+    ...(maxInputChars !== undefined && { maxInputChars }),
+    async embed({ text, signal }) {
+      // ONE text is this library's query shape (`loadRelevant` embeds the
+      // question).
+      return (await embedChunk([text], 'RETRIEVAL_QUERY', signal))[0] as number[];
+    },
+    async embedBatch({ texts, signal }) {
+      // MANY texts is this library's document shape, and Gemini embeds a
+      // document into a different place from a query on purpose.
+      //
+      // Sequential rather than parallel: callers of this path are usually
+      // indexing a whole corpus, and `indexCorpus` already fans out over
+      // batches with its own bounded parallelism and retry. Racing N more
+      // requests inside one of those branches is how a corpus index meets a
+      // throttling error. The abort is checked between calls as well as passed
+      // into each one.
+      return embedAll(texts, 'RETRIEVAL_DOCUMENT', signal);
+    },
+  };
+}
+
+/**
+ * Read the vectors out of an `embedContent` response — and refuse everything
+ * else by name.
+ *
+ * Four refusals, each for a failure that would otherwise be silent:
+ *   • a count that disagrees with the texts sent — vectors are paired with
+ *     texts by POSITION, so a short answer does not lose one passage, it
+ *     re-labels every later one;
+ *   • no readable `values` — an embedder that returns `[]` writes a row a store
+ *     will never rank, which is indistinguishable from "the corpus does not
+ *     mention that";
+ *   • a length that disagrees with the declared `.dimensions` — the number a
+ *     vector store fingerprints on;
+ *   • `statistics.truncated` under `onTruncation: 'refuse'` — the service
+ *     saying it indexed the opening of the passage and threw the rest away.
+ */
+function readGeminiEmbeddings(
+  response: GeminiEmbedResponse,
+  model: string,
+  dimensions: number,
+  texts: readonly string[],
+  onTruncation: GeminiTruncationPolicy,
+): number[][] {
+  const rows = response.embeddings;
+  if (!Array.isArray(rows) || rows.length !== texts.length) {
+    throw new Error(
+      `geminiEmbedder: '${model}' was sent ${texts.length} text(s) and answered with ` +
+        `${Array.isArray(rows) ? rows.length : describeShape(response)} — vectors are paired ` +
+        `with texts by POSITION, so a mismatched answer would attach every later vector to the ` +
+        `wrong passage, and the corpus would rank confidently and wrongly forever.`,
+    );
+  }
+
+  return rows.map((row, index) => {
+    const values = row?.values;
+    if (!Array.isArray(values) || !values.every((n) => typeof n === 'number')) {
+      throw new Error(
+        `geminiEmbedder: '${model}' returned no \`embeddings[${index}].values\` array. The ` +
+          `service answered with ${describeShape(response)}, which this adapter cannot read — ` +
+          `check that the model id names an EMBEDDING model.`,
+      );
+    }
+    if (values.length !== dimensions) {
+      throw new Error(
+        `geminiEmbedder: '${model}' answered with a ${values.length}-number vector while this ` +
+          `embedder reports .dimensions ${dimensions}. A store fingerprints on the reported ` +
+          `number, so writing this vector would make the store's own record of its shape a lie. ` +
+          `Pass { dimensions: ${values.length} } if that is the size you meant.`,
+      );
+    }
+    if (row?.statistics?.truncated === true && onTruncation === 'refuse') {
+      const chars = (texts[index] ?? '').length;
+      throw new Error(
+        `geminiEmbedder: '${model}' CLIPPED this input — it reported ` +
+          `\`statistics.truncated\`, so the vector represents only the opening of the ` +
+          `${chars.toLocaleString('en-US')}-character text it was given. Storing it would ` +
+          `index a passage by a prefix of itself, and retrieval would then fail to find words ` +
+          `the passage visibly contains.\n` +
+          `  Fix 1 — cut smaller: pass \`maxChunkChars\` to the indexer (it wins over this ` +
+          `embedder's declared .maxInputChars, which is a characters-per-token ASSUMPTION and ` +
+          `is optimistic for code, tables and CJK).\n` +
+          `  Fix 2 — \`onTruncation: 'allow'\` if a prefix embedding is genuinely what you ` +
+          `want. The vector is returned unchanged; only this refusal goes away.`,
+      );
+    }
+    return [...values];
+  });
 }
 
 // ---------------------------------------------------------------------------

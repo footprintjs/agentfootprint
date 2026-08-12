@@ -98,6 +98,32 @@ describe('asContextWindowExceeded — unit', () => {
     expect(translated?.limitTokens).toBe(200_000);
   });
 
+  it("reads Gemini's sentence, which says the same thing in the other word order", () => {
+    // The existing "exceeds the maximum … input tokens" pattern does NOT match
+    // this — Google puts the count first — which is why 9.13.0 added its own.
+    const translated = asContextWindowExceeded(
+      apiError(
+        'The input token count (1200293) exceeds the maximum number of tokens allowed ' +
+          '(1048576).',
+        { status: 400 },
+      ),
+      { provider: 'gemini' },
+    );
+    expect(translated?.actualTokens).toBe(1_200_293);
+    expect(translated?.limitTokens).toBe(1_048_576);
+    expect(translated?.provider).toBe('gemini');
+  });
+
+  it('reads the half Gemini stated when it ships the first parenthesis EMPTY', () => {
+    const translated = asContextWindowExceeded(
+      apiError('The input token count () exceeds the maximum number of tokens allowed (131072).'),
+      { provider: 'gemini' },
+    );
+    expect(translated?.limitTokens).toBe(131_072);
+    // Absent rather than invented — nothing fabricates the number Google omitted.
+    expect(translated?.actualTokens).toBeUndefined();
+  });
+
   it('finds the sentence nested in `error.message` (SDK envelope)', () => {
     const nested = Object.assign(new Error('Request failed'), {
       status: 400,

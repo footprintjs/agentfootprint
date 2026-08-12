@@ -340,10 +340,17 @@ deployment that owns its own machines — a local model instead of Bedrock,
 instead of AgentCore sessions, `fileObservability` instead of CloudWatch,
 `vaultCredentials` instead of AgentCore Identity.
 
+**[Google Cloud & Gemini](doc:google-cloud)** is the third column: `gemini()`
+instead of `bedrock()`, `geminiEmbedder()` instead of `bedrockEmbedder()`, and
+`otelObservability()` over standard OTLP instead of CloudWatch. It is a younger
+column and says so — two adapters ship, and every other boundary names the port
+that fills it plus the reason it is not an adapter yet.
+
 ## Next steps
 
 - **[AgentCore: step by step](doc:agentcore-setup)** — mock-first, then one adapter at a time.
 - **[On-premises & self-hosted](doc:on-premises)** — the same services, filled without a cloud account.
+- **[Google Cloud & Gemini](doc:google-cloud)** — the third column, filled the same way.
 - **[AgentCore adapters](doc:agentcore-adapters)** — runtime, sessions, policy, gateway.
 - **[AgentCore Memory](doc:agentcore)** — the memory-store deep dive.
 - **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.

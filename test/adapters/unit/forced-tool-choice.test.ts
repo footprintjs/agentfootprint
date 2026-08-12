@@ -18,6 +18,7 @@ import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { openai } from '../../../src/adapters/llm/OpenAIProvider.js';
 import { ollama } from '../../../src/adapters/llm/OllamaProvider.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
+import { gemini, type GeminiGenerateParams } from '../../../src/adapters/llm/GeminiProvider.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
@@ -164,6 +165,37 @@ describe('Bedrock — forced tool choice on the wire', () => {
       bedrock({ _client: fake.client as never, _commands: fake.Commands as never })
         .carriesForcedToolChoice,
     ).toBe(true);
+  });
+});
+
+// ─── Gemini ────────────────────────────────────────────────────────
+
+describe('Gemini — forced tool choice on the wire', () => {
+  function fakeGemini(recorder: { params: GeminiGenerateParams[] }) {
+    return {
+      models: {
+        async generateContent(params: GeminiGenerateParams) {
+          recorder.params.push(params);
+          return { candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: 'STOP' }] };
+        },
+        async generateContentStream() {
+          throw new Error('not used here');
+        },
+      },
+    };
+  }
+
+  it("sends functionCallingConfig = { mode: 'ANY', allowedFunctionNames: [name] }", async () => {
+    const recorder = { params: [] as GeminiGenerateParams[] };
+    await gemini({ _client: fakeGemini(recorder) as never }).complete(FORCED);
+    expect(recorder.params[0]?.config?.toolConfig).toEqual({
+      functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['respond_with_schema'] },
+    });
+  });
+
+  it('declares the capability on BOTH doors — the same field serves each', () => {
+    const recorder = { params: [] as GeminiGenerateParams[] };
+    expect(gemini({ _client: fakeGemini(recorder) as never }).carriesForcedToolChoice).toBe(true);
   });
 });
 

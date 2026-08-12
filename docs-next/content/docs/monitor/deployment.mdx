@@ -11,7 +11,7 @@ If you developed against the [mocks-first stack](doc:quick-start), the deploymen
 
 | Boundary | Dev (mock) | Prod (one-line swap) |
 |---|---|---|
-| LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` |
+| LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` · `gemini({...})` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (on the roadmap) |
 | Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (both from `agentfootprint/memory`) |
 | MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |

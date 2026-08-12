@@ -1,0 +1,272 @@
+---
+title: Gemini
+description: gemini() — Google's models through the native @google/genai SDK, on Vertex or the Gemini API. Honest cached- and thinking-token counts, JSON Schema tools with no OpenAPI translation, and a forced single tool that is actually forced.
+---
+
+> `gemini()` is the native adapter for Google's models. Two doors — **Vertex** (a
+> project and Application Default Credentials) and the **Gemini API** (one key) —
+> one adapter, and the agent code above it is identical to the code you run against
+> Claude, GPT or a local model.
+
+```ts
+import { Agent } from 'agentfootprint';
+import { gemini } from 'agentfootprint/providers';
+
+const agent = Agent.create({
+  provider: gemini({ project: 'my-project', location: 'us-central1' }),
+  model: 'gemini',
+})
+  .tool(weatherTool)
+  .build();
+```
+
+```bash
+npm install @google/genai
+```
+
+That is the only peer dependency, and it is lazily required — importing
+`agentfootprint/providers` loads no Google code until you call the factory.
+
+## The two doors
+
+| You have | Call | What authenticates |
+|---|---|---|
+| A Google Cloud project | `gemini({ project, location })` | **Application Default Credentials** — `GOOGLE_APPLICATION_CREDENTIALS`, your gcloud user credentials, or the metadata server on GCE / Cloud Run |
+| An AI Studio key | `gemini({ apiKey })` | The key. No cloud project involved |
+
+Neither is inferred from thin air. A project (option or `GOOGLE_CLOUD_PROJECT`)
+selects Vertex; otherwise a key (option, `GEMINI_API_KEY` or `GOOGLE_API_KEY`)
+selects the Gemini API; and configuring **neither** is refused at construction:
+
+```
+gemini: no Google project and no API key — this factory cannot tell which service you
+meant, and the SDK would warn on stderr, construct anyway, and fail on the first call
+with something that reads like a network problem.
+  Vertex:      gemini({ project: "my-project", location: "us-central1" }) — or set …
+  Gemini API:  gemini({ apiKey: process.env.GEMINI_API_KEY }) — or set GEMINI_API_KEY.
+  Tests:       gemini({ _client }) with a { models: { … } } double — no SDK, no network.
+```
+
+An empty environment variable (`GOOGLE_CLOUD_PROJECT=`) reads as absent, because a
+variable set to nothing is not a setting — it is how a project comes to be
+"present" and unusable.
+
+<Callout type="warn" title="The API version is v1beta1 by default, and that is the SDK's choice">
+`@google/genai` 2.16.0 dials **`v1beta1` on Vertex** and **`v1beta` on the Gemini
+API** unless you say otherwise. Pass `apiVersion: 'v1'` to overrule it. Both
+defaults are asserted against the installed package by the
+[Google surface pin](doc:google-cloud), so a change in the SDK reaches you as a
+failing test rather than as a different endpoint.
+</Callout>
+
+### Options
+
+| Option | Meaning |
+|---|---|
+| `project`, `location` | The Vertex door. `location` defaults to `global` (the multi-region endpoint) |
+| `apiKey` | The Gemini API door |
+| `vertexai` | Force the door instead of inferring it |
+| `apiVersion` | Pin the API version — see above |
+| `googleAuthOptions` | `GoogleAuthOptions` for Vertex: a key file, scopes, or an `AuthClient` you built (workload identity federation, impersonation) |
+| `defaultModel` | Model used when the request says `'gemini'`. Default `gemini-2.5-flash` |
+| `defaultMaxTokens` | `maxOutputTokens` when the request does not set one |
+
+## What maps to what
+
+| agentfootprint | Gemini |
+|---|---|
+| `systemPrompt` | `config.systemInstruction` — a top-level field, **outside** the turn list |
+| `messages` `user` | `{ role: 'user', parts: [{ text }] }` |
+| `messages` `assistant` | `{ role: 'model', parts: [{ text }, { functionCall }] }` |
+| `messages` `tool` | a `functionResponse` part inside a **user** turn; consecutive results coalesce into one turn |
+| `tools` | `functionDeclarations[].parametersJsonSchema` — JSON Schema, untranslated |
+| `toolChoice` | `toolConfig.functionCallingConfig = { mode: 'ANY', allowedFunctionNames: [name] }` |
+| `temperature`, `maxTokens`, `stop`, `signal` | `temperature`, `maxOutputTokens`, `stopSequences`, `abortSignal` |
+| `thinking.budget` | `thinkingConfig.thinkingBudget` |
+| `usage.input` / `.output` | `usageMetadata.promptTokenCount` / `.candidatesTokenCount` |
+| `usage.cacheRead` | `usageMetadata.cachedContentTokenCount` |
+| `usage.thinking` | `usageMetadata.thoughtsTokenCount` |
+| `stopReason` | `candidates[0].finishReason`, mapped conservatively — see below |
+| `providerRef` | `responseId` |
+
+### `carriesInMessages` is `['user', 'assistant']`
+
+Gemini takes the system prompt as a field outside the turn list, exactly as
+Anthropic does — so this is an **Anthropic-family wire**, not an OpenAI-family one.
+A `slot: 'messages'` injection with `role: 'system'` is refused at run start,
+naming this provider, rather than being recorded as delivered and silently dropped.
+See [Instructions](doc:instructions).
+
+### Tools go over as JSON Schema, untranslated
+
+`FunctionDeclaration` has two mutually exclusive parameter fields: `parameters`,
+which takes an **OpenAPI** subset, and `parametersJsonSchema`, which takes JSON
+Schema. This adapter sends only the second, so `$ref`, `oneOf`,
+`additionalProperties` and `nullable` mean what your schema says they mean. The
+OpenAI-compatible endpoint offers only the first, which is the quiet divergence
+that makes a model ignore half your constraints without anything going wrong.
+
+### A forced tool choice that really is forced
+
+`carriesForcedToolChoice` is `true`, on both doors:
+`.outputSchema(parser, { strategy: 'tool-forced' })` becomes `mode: 'ANY'` plus a
+single `allowedFunctionNames` entry, which constrains the model to answer through
+exactly that function. Nothing is sent on a request that carries no tools — a tool
+choice naming a function the request does not carry is a request that cannot be
+served. See [Output schema](doc:output-schema).
+
+### Stop reasons, mapped only where the mapping is unmistakable
+
+`STOP` → `stop`, `MAX_TOKENS` → `max_tokens`, and `SAFETY` / `PROHIBITED_CONTENT` /
+`BLOCKLIST` / `SPII` → `content_filter`. Everything else — `RECITATION`,
+`MALFORMED_FUNCTION_CALL`, `TOO_MANY_TOOL_CALLS`, and anything Google adds later —
+**passes through in Google's own spelling**, because mapping it onto the nearest
+word would be this adapter answering on the model's behalf.
+
+One correction is made deliberately: **Gemini has no `tool_use` finish reason** — a
+turn that asks for a function still finishes `STOP` — so the presence of function
+calls is what produces `stopReason: 'tool_use'`. `ollama()` makes the same
+correction on its wire, for the same reason.
+
+### Tool-call ids are sometimes invented, and never sent back
+
+`FunctionCall.id` is optional on Gemini's wire and Vertex routinely omits it, while
+`LLMResponse.toolCalls[].id` is not optional — the agent matches a tool *result*
+back to its call by id. So when Google sends no id the adapter invents one
+(`gemini-call-1`, in call order, per provider instance). Inventing it is safe;
+**sending it back is not**, so an invented id is never written into a
+`functionResponse`. Gemini matches a response to its call by NAME, which is the
+field that is always present.
+
+## Streaming
+
+```ts
+for await (const chunk of provider.stream!(request)) {
+  if (!chunk.done) process.stdout.write(chunk.content);
+  else console.log(chunk.response?.usage);
+}
+```
+
+Text deltas arrive as they are produced; the terminal chunk carries the
+authoritative `LLMResponse` with the accumulated function calls, the finish reason
+and the usage.
+
+<Callout type="warn" title="If a stream reports no usage, this adapter reports zero — not an estimate">
+Gemini puts `usageMetadata` on the chunk that closes the stream, whose candidate
+carries no new text; the adapter reads it before any content guard, which is the
+bug that made streamed turns bill as zero on two other adapters before this one.
+If a stream carries **no** usage at all, `input` and `output` are `0` and stay `0`.
+`models.countTokens` exists and is deliberately never called: it answers what a
+request *tokenises to*, not what the call was *billed for*, and a plausible number
+in the right range is worse than a zero somebody can see. Same law as `openai()`
+and `ollama()`.
+</Callout>
+
+## Thinking
+
+`.thinking({ budget })` becomes `thinkingConfig.thinkingBudget`, and
+`usage.thinking` comes back from `thoughtsTokenCount` as its own number — which is
+the concrete reason to prefer this adapter over the OpenAI-compatible endpoint,
+whose documented response has no such field.
+
+**Thought summaries are not requested.** `includeThoughts` is deliberately left
+unset, so no `rawThinking` is produced: Gemini's thought parts carry a
+`thoughtSignature` that must be echoed byte-exact on the following turn, and there
+is no Gemini `ThinkingHandler` in this release to normalize and round-trip them.
+Asking for content nothing can carry back would be a leak, not a feature. A thought
+part that arrives anyway is kept out of the visible answer on both the streaming
+and non-streaming paths.
+
+## When it goes wrong
+
+- **Over-long request** — Google says *"The input token count (1200293) exceeds the
+  maximum number of tokens allowed (1048576)."* That leaves this adapter as a
+  typed `ContextWindowExceededError` carrying both numbers and the three fixes in
+  the order they are worth trying, exactly as the OpenAI and Anthropic sentences
+  do. See [Error handling](doc:error-handling).
+- **Anything else** — a `GeminiProviderError` prefixed `[gemini]`, keeping the HTTP
+  `status` the SDK attached so a retry policy still classifies it correctly.
+- **Your API key never appears in either.** The adapter redacts the one secret it
+  holds from the message, the stack and the wrapped cause — narrowly, by exact
+  string, never by guessing what a key looks like. A thrown provider error reaches
+  the model as a tool result *and* the commit log *and* every observability sink,
+  so one interpolation would be a leak to all of them.
+
+## Honest limits
+
+- **Text only.** `LLMMessage.content` is a string, so no images, audio, video or
+  generated media in either direction.
+- **No grounding tools.** Google Search, code execution, URL context, Google Maps
+  and the SDK's `mcpToTool` bridge are not exposed; `tools` carries function
+  declarations only.
+- **No native structured output.** `responseJsonSchema` is not sent — use
+  `.outputSchema(...)`, which goes over as a forced tool, a shape this adapter does
+  carry.
+- **No context-cache creation.** `usage.cacheRead` is reported when Google reports
+  it, but creating a cache is a separate `caches.create` call this adapter does not
+  make — so `cacheWrite` is always undefined.
+- **Status: contract-shaped and tested; awaiting field use.** Built against
+  `@google/genai` 2.16.0 and pinned by a surface test that checks the method names
+  *and the API version* against the really-installed package. It has not yet
+  answered a request from Google in a real project.
+
+## The OpenAI-compatible endpoint, and why it is not the path
+
+Google publishes an OpenAI-compatible endpoint, and `openai({ baseURL, apiKey })`
+does reach it. It is a good way to try something in ten seconds and a poor way to
+ship, for four reasons this library can point at:
+
+| Concern | On the compat endpoint | On `gemini()` |
+|---|---|---|
+| Auth lifetime | An OAuth token that **expires after an hour**, with no refresh home in `OpenAIProviderOptions` | ADC refreshes itself; a Gemini API key does not expire |
+| Tool schemas | `function.parameters` is **OpenAPI**, so `$ref` / `oneOf` / `additionalProperties` diverge silently | `parametersJsonSchema` — your schema, untranslated |
+| Unknown parameters | **Ignored**, not refused | The adapter sends only fields the wire has |
+| Cached / thinking tokens | Absent from the documented response, so `usage.cacheRead` and `usage.thinking` can only be undefined | Reported as their own numbers |
+
+The forced-tool-choice case is already handled correctly by construction:
+`openai()` declares `carriesForcedToolChoice: false` behind any custom `baseURL`,
+so `strategy: 'tool-forced'` refuses at run start rather than sending a field that
+server may ignore.
+
+## Types
+
+All on `agentfootprint/providers`.
+
+| Type | What it is |
+|---|---|
+| `GeminiProviderOptions` | the factory's options — the connection half plus `defaultModel`, `defaultMaxTokens`, `_client` |
+| `GoogleGenAIConnectionOptions` | the connection half alone (`project`, `location`, `apiKey`, `vertexai`, `apiVersion`, `googleAuthOptions`), shared with `geminiEmbedder()` so both factories take the same two doors |
+| `GeminiClientLike` | the `{ models: … }` shape `_client` accepts — a real `GoogleGenAI`, a client shared with the rest of your app, or a test double |
+| `GeminiModelsLike` | the `models` namespace narrowed to the two operations this adapter calls |
+| `GeminiGenerateParams` · `GeminiGenerateConfig` | what goes on the wire: the model, the turn list, and the config block |
+| `GeminiGenerateResponse` · `GeminiCandidate` · `GeminiUsageMetadata` | what comes back: candidates, their finish reason, and the token counts |
+| `GeminiContent` · `GeminiPart` | one turn and one part — the shapes the mapping table above produces |
+| `GeminiFunctionDeclaration` | a tool as Gemini takes it, with `parametersJsonSchema` |
+
+They are exported so you can type a double without importing `@google/genai`:
+
+```ts
+import { gemini, type GeminiClientLike } from 'agentfootprint/providers';
+
+const double: GeminiClientLike = {
+  models: {
+    generateContent: async () => ({
+      candidates: [{ content: { parts: [{ text: 'scripted' }] }, finishReason: 'STOP' }],
+    }),
+    generateContentStream: async () =>
+      (async function* () {
+        yield { candidates: [{ content: { parts: [{ text: 'scripted' }] } }] };
+      })(),
+  },
+};
+
+const provider = gemini({ _client: double }); // no SDK, no network, no credentials
+```
+
+## Next steps
+
+- **[Google Cloud & Gemini](doc:google-cloud)** — the provider column: every Google service, its port, and its honest status.
+- **[Embedders](doc:embedders)** — `geminiEmbedder()`, the same two doors.
+- **[Output schema](doc:output-schema)** — `strategy: 'tool-forced'`, which this provider carries.
+- **[Instructions](doc:instructions)** — what `carriesInMessages` refuses, and why.
+- **[Custom provider](doc:custom-provider)** — the two-method contract this adapter implements.

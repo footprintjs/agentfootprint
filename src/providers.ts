@@ -17,6 +17,7 @@
  *   • `ollama` / `OllamaProvider` — local models, free, no API key
  *   • `anthropic` / `AnthropicProvider` — real provider (Claude)
  *   • `openai` / `OpenAIProvider` — real provider (GPT)
+ *   • `gemini` / `GeminiProvider` — Gemini on Vertex or the Gemini API
  *   • `bedrock`, `azureOpenai`, and the `browser*` variants
  *
  * The ladder these are FOR: `mock()` while you shape the logic →
@@ -66,6 +67,24 @@ export {
   BedrockProvider,
   type BedrockProviderOptions,
 } from './adapters/llm/BedrockProvider.js';
+
+export {
+  gemini,
+  GeminiProvider,
+  type GeminiProviderOptions,
+  type GeminiClientLike,
+  type GeminiModelsLike,
+  type GeminiGenerateParams,
+  type GeminiGenerateConfig,
+  type GeminiGenerateResponse,
+  type GeminiUsageMetadata,
+  type GeminiCandidate,
+  type GeminiContent,
+  type GeminiPart,
+  type GeminiFunctionDeclaration,
+} from './adapters/llm/GeminiProvider.js';
+
+export type { GoogleGenAIConnectionOptions } from './adapters/llm/googleGenAI.js';
 
 export {
   browserAnthropic,

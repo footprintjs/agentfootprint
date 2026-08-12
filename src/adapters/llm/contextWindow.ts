@@ -119,6 +119,8 @@ export function isContextWindowExceeded(err: unknown): err is ContextWindowExcee
  *                 195000 + 8192 > 200000
  *   bedrock       Input is too long for requested model.
  *   bedrock       (ValidationException carrying either anthropic phrase)
+ *   gemini        The input token count (1200293) exceeds the maximum number
+ *                 of tokens allowed (1048576).
  */
 const CONTEXT_PHRASES: readonly RegExp[] = [
   /context_length_exceeded/i,
@@ -132,6 +134,11 @@ const CONTEXT_PHRASES: readonly RegExp[] = [
   // OUTPUT `max_tokens` cap, which has a different fix — and a pattern that
   // cannot tell those apart sends callers to the wrong one.
   /exceeds? the maximum (?:allowed )?(?:number of )?input tokens/i,
+  // gemini (9.13.0) — the same claim with the words in the other order, which
+  // is why the pattern above does not catch it. "INPUT token count" is what
+  // keeps it off a `max_tokens` validation error, and Google spells a rate
+  // limit "quota exceeded", so there is no overlap with throttling either.
+  /input token count[^.]{0,80}exceeds the maximum number of tokens allowed/i,
 ];
 
 /** `"272,000"` → `272000`; anything unparseable → undefined. */
@@ -160,6 +167,23 @@ function readNumbers(text: string): { limitTokens?: number; actualTokens?: numbe
     return {
       ...(input !== undefined && output !== undefined && { actualTokens: input + output }),
       ...(num(sum[3]) !== undefined && { limitTokens: num(sum[3]) }),
+    };
+  }
+
+  // gemini: "The input token count (1200293) exceeds the maximum number of
+  // tokens allowed (1048576)." Both parentheses are matched loosely because
+  // Google sometimes ships the first one EMPTY — `num('')` is undefined, so a
+  // half-stated sentence yields the half it stated rather than nothing.
+  const geminiPair =
+    /input token count\s*\(([\d,_]*)\)\s*exceeds the maximum number of tokens allowed\s*\(([\d,_]*)\)/i.exec(
+      text,
+    );
+  if (geminiPair) {
+    const actual = num(geminiPair[1]);
+    const limit = num(geminiPair[2]);
+    return {
+      ...(actual !== undefined && { actualTokens: actual }),
+      ...(limit !== undefined && { limitTokens: limit }),
     };
   }
 

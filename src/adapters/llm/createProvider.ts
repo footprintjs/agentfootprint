@@ -26,6 +26,7 @@ import { anthropic, type AnthropicProviderOptions } from './AnthropicProvider.js
 import { openai, azureOpenai, type OpenAIProviderOptions } from './OpenAIProvider.js';
 import { ollama, type OllamaProviderOptions } from './OllamaProvider.js';
 import { bedrock, type BedrockProviderOptions } from './BedrockProvider.js';
+import { gemini, type GeminiProviderOptions } from './GeminiProvider.js';
 import {
   browserAnthropic,
   type BrowserAnthropicProviderOptions,
@@ -39,6 +40,7 @@ export type ProviderKind =
   | 'openai'
   | 'ollama'
   | 'bedrock'
+  | 'gemini'
   | 'browser-anthropic'
   | 'browser-openai';
 
@@ -54,6 +56,7 @@ export type CreateProviderOptions =
   | ({ readonly kind: 'openai' } & OpenAIProviderOptions)
   | ({ readonly kind: 'ollama' } & OllamaProviderOptions)
   | ({ readonly kind: 'bedrock' } & BedrockProviderOptions)
+  | ({ readonly kind: 'gemini' } & GeminiProviderOptions)
   | ({ readonly kind: 'browser-anthropic' } & BrowserAnthropicProviderOptions)
   | ({ readonly kind: 'browser-openai' } & BrowserOpenAIProviderOptions);
 
@@ -72,6 +75,8 @@ export function createProvider(options: CreateProviderOptions): LLMProvider {
       return ollama(options);
     case 'bedrock':
       return bedrock(options);
+    case 'gemini':
+      return gemini(options);
     case 'browser-anthropic':
       return browserAnthropic(options);
     case 'browser-openai':

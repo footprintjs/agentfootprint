@@ -41,12 +41,14 @@
     "anthropic",
     "openai",
     "aws-bedrock",
+    "gemini",
     "ollama",
     "custom-provider",
     "---[Cloud]Run it somewhere---",
     "[Infrastructure: ports & adapters](/docs/infrastructure)",
     "[Memory stores](/docs/infrastructure/memory-and-stores)",
     "[AWS & Bedrock AgentCore](/docs/infrastructure/aws)",
+    "[Google Cloud & Gemini](/docs/infrastructure/google-cloud)",
     "[On-premises](/docs/infrastructure/on-premises)"
   ]
 }

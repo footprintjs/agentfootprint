@@ -1,0 +1,400 @@
+---
+title: Google Cloud & Gemini
+description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, and a Cloud Trace recipe over standard OTLP — plus every other boundary with the port that fills it and the honest reason it is not an adapter yet.
+---
+
+Google's agent platform is mid-rename and mid-replacement, so this page says what
+each thing is called **today** and what actually has a Node surface. agentfootprint
+is **framework-side**: it ships adapters for the data-plane pieces and fills
+everything else through a [port](doc:infrastructure) you can implement in an
+afternoon. You bring the project, the credentials and the runtime.
+
+<Callout type="info" title="The names changed under everyone">
+**Vertex AI Agent Builder** is now **Gemini Enterprise Agent Platform**;
+**Agent Engine** is now **Agent Runtime**; **Vector Search 2.0** is now
+**Agent Retrieval**. The *API* resource is still spelled `reasoningEngines` — the
+wire kept the old name. Where this page and a Google doc disagree on a product
+name, the API is the one that has not moved.
+</Callout>
+
+<Callout type="warn" title="One SDK is dead, and it is the one most search results point at">
+`@google-cloud/vertexai` announced its own removal for **2025-06-24**; that date
+has passed. Nothing here builds on it. The live SDK is **`@google/genai`**, and it
+is the only Google package agentfootprint loads.
+</Callout>
+
+## Service → adapter map
+
+Every row: what it is called, which adapter fills it, which door exports it, which
+peer dependency it lazily requires, what it covers — and what it does **not**.
+
+| Google service | Adapter | Door | Peer dep | Ops covered | Status | Capability page |
+|---|---|---|---|---|---|---|
+| **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **9.13.0** — contract-shaped and tested; awaiting field use | [Gemini](doc:gemini) |
+| **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **9.13.0** — contract-shaped and tested; awaiting field use | [Embedders](doc:embedders) |
+| **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | Shipped — the adapter is the existing one; the Google wiring is documented below | [Observability sinks](doc:observability-sinks) |
+| **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | 🟡 Should work unchanged; **whether the gateway demands a client certificate is unverified** | [Tools & gateways](doc:tools-and-gateways) |
+| **Agent Runtime Sessions** | — | `agentfootprint/hosting` | — | — | 🔴 Bring-your-own via `SessionLifecycle` (**two methods**) — see below | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Agent Runtime Memory Bank** | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — and read the ranking warning below first | [Memory & stores](doc:memory-and-stores) |
+| **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 Not shipped — blocked on one live probe; run on Cloud Run with `httpHost` meanwhile | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Vector Search** (v1 `Index` / `IndexEndpoint`) | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — needs a deployed IndexEndpoint, so there is no cheap path to verify one | [Memory & stores](doc:memory-and-stores) |
+| **Identity** (ADC, workload identity federation, impersonation) | — (the SDK reads ADC itself) | `agentfootprint/security` | — | — | 🔴 Bring-your-own via `CredentialProvider` (**one method**) | [Identity & credentials](doc:identity-and-credentials) |
+| **Agent Identity auth manager** (3-legged OAuth, API-key vault) | — | — | — | — | ⏸️ **Parked** — Preview with no Node surface as of 2026-08-12 | — |
+| **Agent Retrieval** (ex-Vector Search 2.0) | — | — | — | — | ⏸️ **Parked** — no Node SDK published as of 2026-08-12 | — |
+| **Vertex AI Extensions** | — | — | — | — | ⛔ Deprecated 2026-05-26, shutdown after 2026-11-26. Do not build on it | — |
+| **Model Armor / Semantic Governance** | — | — | — | — | ⛔ **No adapter, deliberately** — enforced at the Gateway, in front of your process | [Governance & policy](doc:governance-and-policy) |
+| **Control plane** (every `Create*`) | — | — | — | — | 🔴 Bridge it yourself — `googleapis`, gcloud or Terraform | — |
+
+<Callout type="warn" title="What “contract-shaped and tested; awaiting field use” means here">
+Both 9.13.0 adapters are built against `@google/genai` 2.16.0 with their calls
+exercised through an injected `_client` seam, plus a **surface pin** that checks
+the method names — and the API version — against the really-installed package on
+every test run. Neither has yet answered a request from Google in a real project.
+That is an honest rung, and it is the one they are on. **No adapter on this page —
+and none anywhere on this site — is described as *verified in a production field
+deployment*.**
+</Callout>
+
+## The surface pin, and the version nobody states
+
+Every Google adapter's calls are pinned by test in
+`test/adapters/google/googlePin.ts`, with a completeness assertion that fails the
+build for any `src/**` file loading a Google package without a row. It carries the
+AWS pin's dispatch and reality checks, plus one Google needs and AWS does not:
+
+**The API-version assertion.** `@google/genai` 2.16.0 defaults to **`v1beta1` on
+Vertex** and **`v1beta` on the Gemini API** — *not* `v1`. That is the SDK's choice,
+not a setting, and it is exactly the kind of fact a provider page gets wrong: an
+adapter that says "GA, v1" while the client dials `v1beta1` compiles, passes, and
+calls somewhere else. The registry records the version each door resolves to and
+the test asks the installed package, so a change arrives as a red test.
+
+```ts
+import { gemini } from 'agentfootprint/providers';
+
+// Leave it unset and you get the SDK's default (v1beta1 on Vertex) — knowingly.
+const pinned = gemini({ project: 'my-project', location: 'us-central1', apiVersion: 'v1' });
+```
+
+Two more mechanical differences from the AWS pin, both deliberate:
+
+- **The packages ARE devDependencies.** The AWS SDKs are kept uninstalled so six
+  adapters can prove their missing-peer-dep refusals by real absence — which makes
+  the AWS reality check vacuous in CI. Google is mid-rebrand and its Node surface
+  lags its Python one, so version drift is precisely where the bugs live: the
+  reality and version assertions have to actually *run*. The missing-peer-dep
+  refusals are proved by stubbing module resolution instead.
+- **The reality check enumerates the INSTANCE, not just the prototype.**
+  `@google/genai` assigns `generateContent`, `generateContentStream` and
+  `embedContent` as instance fields; only `countTokens` is a prototype method. A
+  prototype-only check would call three of our four pinned methods missing.
+
+## Gemini — the native provider
+
+```ts
+import { Agent } from 'agentfootprint';
+import { gemini } from 'agentfootprint/providers';
+
+// Vertex: credentials come from Application Default Credentials.
+const provider = gemini({ project: process.env.GOOGLE_CLOUD_PROJECT!, location: 'us-central1' });
+
+// …or the Gemini API (AI Studio): one key, no cloud project.
+const studio = gemini({ apiKey: process.env.GEMINI_API_KEY! });
+
+const agent = Agent.create({ provider, model: 'gemini' }).tool(weatherTool).build();
+```
+
+Two doors, one adapter, and neither is guessed: a project selects Vertex, a key
+selects the Gemini API, and configuring neither is refused at construction naming
+both. The deep dive — the mapping table, the tool-call id rule, the honest
+streaming-usage law — is on **[Gemini](doc:gemini)**.
+
+<Callout type="warn" title="The OpenAI-compatible endpoint is a demo path, and this page says so">
+Google publishes an OpenAI-compatible endpoint, and `openai({ baseURL, apiKey })`
+does reach it. It is not a supported production path here, for four stated
+reasons: its bearer token **expires after an hour** with no refresh home in
+`OpenAIProviderOptions`; its tool `parameters` field is **OpenAPI, not JSON
+Schema**, so `$ref` / `oneOf` / `additionalProperties` diverge silently;
+unsupported parameters are **ignored rather than refused**; and its documented
+response carries **no cached- or reasoning-token counts**, so `usage.cacheRead`
+and `usage.thinking` can only ever be undefined behind it. `gemini()` answers all
+four. Use the compat endpoint to try something in ten seconds, not to ship.
+</Callout>
+
+## Gemini embeddings
+
+```ts
+import { geminiEmbedder } from 'agentfootprint/providers';
+import { sqliteVectorStore } from 'agentfootprint/memory';
+import { indexFolder } from 'agentfootprint/rag';
+
+const embedder = geminiEmbedder({ project: 'my-project', dimensions: 768 });
+await indexFolder('./docs', { to: sqliteVectorStore({ file: './corpus.db' }), embedder });
+```
+
+`gemini-embedding-001` by default: 3072 dimensions, shortenable to any size you
+ask for (Matryoshka), a **2,048-token** input window, and the real `task_type`
+vocabulary — `embed()` sends `RETRIEVAL_QUERY`, `embedBatch()` sends
+`RETRIEVAL_DOCUMENT`, because that is what this library's two call sites are.
+`gemini-embedding-2` is also known by name: an **8,192-token** window and **no
+`task_type` at all**, which is refused by name rather than sent and ignored.
+
+Two traps this adapter turns into refusals:
+
+- **One text per request.** `gemini-embedding-001` accepts exactly one input, so
+  `embedBatch` is N sequential calls. Libraries that batched it like an OpenAI
+  client send oversized requests that fail on every batch of more than one.
+- **Silent truncation.** Over the window Gemini does not refuse — it **clips**, and
+  a full-looking vector comes back for the opening of the passage. The response's
+  `statistics.truncated` is the service admitting it, and `onTruncation: 'refuse'`
+  (the default) turns that into an error naming the fix, so a passage is never
+  indexed by a prefix of itself. `'allow'` is there for when a prefix embedding is
+  genuinely what you want.
+
+Full rows and the shared `maxInputChars` machinery: **[Embedders](doc:embedders)**.
+
+## Telemetry — standard OTLP, and no factory
+
+Google's Telemetry API accepts **standard OTLP**, and Google's own migration guide
+recommends moving *off* the Cloud Trace exporter because its proprietary transform
+can lose data. `otelObservability()` already takes a tracer you built, so pointing
+agentfootprint at Cloud Trace is consumer wiring.
+
+<Callout type="info" title="Why there is no googleCloudTracer() factory">
+It was designed and then not built. Such a factory would construct an OTel
+`TracerProvider` from packages **you** have to install either way
+(`@opentelemetry/sdk-trace-node`, an OTLP exporter, `@grpc/grpc-js`) and attach a
+`GoogleAuth` header — about twenty lines of wiring behind four new optional peer
+dependencies, each of which would need its own pin row and its own version-drift
+story. A convenience that restates `npm install` is not worth the surface. The
+recipe below is the whole thing; copy it.
+</Callout>
+
+```bash
+npm install @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-grpc \
+  @grpc/grpc-js google-auth-library
+```
+
+```ts
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { credentials } from '@grpc/grpc-js';
+import { GoogleAuth } from 'google-auth-library';
+import { otelObservability } from 'agentfootprint/observe';
+
+const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+const client = await auth.getClient();
+
+const provider = new NodeTracerProvider();
+provider.addSpanProcessor(
+  new BatchSpanProcessor(
+    new OTLPTraceExporter({
+      url: 'https://telemetry.googleapis.com',            // regional: telemetry.<REGION>.rep.googleapis.com
+      credentials: credentials.createSsl(),
+      headers: await client.getRequestHeaders(),
+    }),
+  ),
+);
+provider.register();
+
+agent.enable.observability({
+  strategy: otelObservability({ serviceName: 'my-agent', tracer: provider.getTracer('agentfootprint') }),
+});
+```
+
+Two environment variables complete it, and both are Google's own instructions:
+
+```bash
+OTEL_RESOURCE_ATTRIBUTES=gcp.project_id=<PROJECT_ID>
+OTEL_EXPORTER_OTLP_HEADERS=x-goog-user-project=<PROJECT_ID>
+```
+
+And two Google reads only if you opt in — they are what makes its console render
+the GenAI views rather than plain spans:
+
+```bash
+OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental
+OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY
+```
+
+<Callout title="Our attribute names are the ones Google's console is looking for">
+`otelObservability({ genAiSemconvNames: true })` emits the OpenTelemetry **GenAI
+semantic conventions**, and Google's agent-observability dashboards are keyed on
+exactly those — sessions, turns, token usage, tool latency. There is no
+auto-instrumentation for `@google/genai` on npm, so **our provider hooks are the
+instrumentation**: the events you get are the ones the library already records,
+not a second parallel trace.
+</Callout>
+
+The port, the composition and delivery axes, and what each sink drops:
+**[Observability sinks](doc:observability-sinks)**.
+
+## Concurrency & sessions — where the parallelism comes from
+
+**From your process, not from the platform.** This column has no
+platform-per-session row today: Agent Runtime *is* session-oriented, but
+agentfootprint ships no host adapter for it (see below), so a Google deployment
+runs on Cloud Run, GKE or a VM — one process serving many sessions. That is the
+second and third rows of the [concurrency table](doc:hosting-and-runtime), and you
+have to pick one:
+
+- **Agent pool** — `standingAgent({ agentFactory })`, one agent per active session
+  inside one process, bounded by `maxActiveSessions`. The right default on Cloud
+  Run, where one container serves many callers concurrently. `{ agent }` (a single
+  shared agent) serializes every session behind one lock, which is correct on a
+  platform that gives each session its own container and wrong here.
+- **Process per worker** — a Cloud Run service scaled past one instance, which
+  **forces a shared `SessionLifecycle`**: two requests in one conversation can land
+  on different instances, and an in-process or on-disk session store will not find
+  the conversation.
+
+**And the session store that survives it is yours to bring.** `sqliteSessions`
+survives a restart on ONE instance with a persistent disk — fine for a single-
+instance service, wrong the moment you scale out. `memorySessions` is for tests.
+There is no Google `SessionLifecycle` adapter in 9.13.0, so a multi-instance
+deployment implements the port over Firestore, Memorystore or Agent Runtime
+Sessions. It is **two methods** — `hydrate(sessionId)` and
+`persist(sessionId, envelope)` — over a JSON blob:
+
+```ts
+import type { SessionLifecycle } from 'agentfootprint/hosting';
+
+const firestoreSessions = (db: Firestore): SessionLifecycle => ({
+  async hydrate(sessionId) {
+    const doc = await db.collection('agent-sessions').doc(sessionId).get();
+    return doc.exists ? (doc.data()!.envelope as never) : undefined;
+  },
+  async persist(sessionId, envelope) {
+    await db.collection('agent-sessions').doc(sessionId).set({ envelope, updatedAt: Date.now() });
+  },
+});
+```
+
+<Callout type="info" title="If you use Google's own Sessions, two facts shape the adapter">
+`Session.userId` is **required on create**, and our port only knows a `sessionId` —
+so an adapter needs a `userId` resolver in its factory options. And sessions live
+*under* a `reasoningEngine`: `projects/*/locations/*/reasoningEngines/{id}/sessions`,
+so you must create an Agent Runtime resource even if you never deploy code to it.
+The upside is real: `sessionState` is an arbitrary JSON `Struct`, which is exactly
+the shape of a checkpoint envelope, and a per-write `ttl` gives a sliding
+expiry for free.
+</Callout>
+
+## Memory Bank — read this before writing anything into it
+
+Not shipped, and the reason is worth stating because it is the same lesson the AWS
+column already paid for once. Memory Bank's `retrieveMemories` takes **text**,
+embeds and ranks server-side, and returns Google's **LLM-extracted `fact` strings**
+— never the entries you wrote. Any adapter must therefore declare
+`supportsVectorSearch: false` and `ranksBy: 'server-text'`, and refuse by name when
+`SearchOptions.text` is absent. Three further traps, all silent:
+
+- **The score is a Euclidean distance — lower is closer.** Our `ScoredEntry.score`
+  is a cosine similarity, where **higher** is closer. Passed through unconverted,
+  retrieval returns the *least* relevant memories with a confident-looking number
+  in the right range.
+- **`scope` is an exact match and immutable after write.** A retrieval with a
+  partial scope returns nothing, not a superset — so the scope convention has to be
+  decided before the first write or the bank is poisoned permanently.
+- **No optimistic concurrency.** `Memory` has no etag, so `putIfVersion` has no
+  primitive behind it, and neither do `seen` / `recordSignature` / `feedback`.
+
+The port, and the seven stores that do fill it: **[Memory & stores](doc:memory-and-stores)**.
+
+## Hosting — one contradiction, one probe
+
+Agent Runtime's container contract is small and fully documented: listen on
+`0.0.0.0:8080`, implement `POST /api/reasoning_engine` taking
+`{ class_method, input }` and answering `{ output }`, plus
+`POST /api/stream_reasoning_engine` answering NDJSON. That is a near-exact fit for
+the `AgentHost` port, and it is roughly the same shape `agentCoreRuntimeHost()`
+already implements for AWS.
+
+It is not shipped because **Google's own documentation contradicts itself** on
+whether a Node container can be deployed at all: the deploy page says "Agent
+Runtime deployment only supports Python", while the runtime-contract page says to
+build your container "in the programming language and server framework of your
+choice" and ships a Node-20 build script. Designing an adapter on top of an
+unresolved contradiction is how three AWS adapters once shipped calling operations
+that did not exist. **One live probe settles it** — a thirty-line Node container
+implementing the unary route — and the adapter follows the answer, not the guess.
+
+Meanwhile, Cloud Run is the ordinary path and needs nothing new:
+
+```ts
+import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agentFactory: () => buildAgent(),                    // one agent per active session
+  host: nodeHost({ port: Number(process.env.PORT ?? 8080) }),
+  sessions: sqliteSessions({ file: '/data/sessions.db' }), // single instance only — see above
+});
+```
+
+## Governance — enforced at the Gateway, not here
+
+There is nothing to attach, and that is a finding rather than a gap. Agent Gateway
+terminates and routes traffic, parses MCP requests to extract tool attributes for
+authorization, and layers Model Armor and Semantic Governance *in front of* your
+process; access to anything not in the Agent Registry is denied by default. A
+denial therefore arrives as an **MCP error on the tool call**, lands in the loop as
+that tool's result, and the model reads it and adapts.
+
+This is architecturally identical to AgentCore, where `agentCorePolicy` was retired
+in 9.4.0 for dispatching an operation that does not exist. **No `SecurityStrategy`
+adapter will be built for Google either.** For rules you own, use
+`PermissionPolicy.fromRoles(...)` or the `.toolMiddleware()` chain —
+[Governance & policy](doc:governance-and-policy).
+
+## What is NOT here
+
+Absences are facts, so here they are stated rather than discovered:
+
+- **No `googleCloudTracer()` factory** — a docs recipe instead, argued above.
+- **No Google `SessionLifecycle`, `MemoryStore` or `CredentialProvider` adapter.**
+  All three ports are open and small; two of the three need a live account to
+  verify honestly, which is why they are not shipped as claims.
+- **No Agent Runtime host adapter**, pending the Node-deployability probe.
+- **No control plane.** Creating a `reasoningEngine`, a memory bank, an index or a
+  gateway is `googleapis` / gcloud / Terraform. agentfootprint is runtime-only.
+- **No multi-modal input**, no thought summaries, and no grounding tools (Google
+  Search, code execution, URL context, `mcpToTool`) on `gemini()` — text in, text
+  and function calls out.
+- **No `@google-cloud/vertexai`, ever.** It is past its own removal date.
+- **No Agent Retrieval and no Agent Identity auth manager**, both parked with dates
+  above. They are re-checked before any release that widens this column.
+- **No pricing table for Gemini models.** Cost reporting uses the token counts
+  Google returns; the per-token rates are yours to configure.
+
+## Status
+
+| Piece | Door | Status |
+|---|---|---|
+| `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
+| `geminiEmbedder()` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
+| The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages |
+| `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
+| Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | Shipped — the adapter is the existing one; this page is the wiring |
+| Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | Shipped adapters; **client-certificate requirement unverified** |
+| `SessionLifecycle`, `MemoryStore`, `CredentialProvider` on Google backends | — | Bring-your-own via the port (two methods, several, one) |
+| Agent Runtime hosting | — | Not shipped — gated on one live probe |
+| Agent Retrieval · Agent Identity auth manager | — | Parked 2026-08-12 — no Node surface |
+| `SecurityStrategy` for Model Armor / Semantic Governance | — | **Will not be built** — gateway-enforced, no data-plane call |
+
+## Other providers
+
+Google Cloud is one column, not the pattern. Every port on this page is filled by
+something else somewhere else and the agent code does not change between them:
+**[AWS & Bedrock AgentCore](doc:aws)** is the same map for AgentCore's managed
+primitives, and **[On-premises & self-hosted](doc:on-premises)** is the same map
+for a deployment that owns its own machines — a local model instead of Gemini,
+`sqliteVectorStore` instead of Vector Search, `fileObservability` instead of Cloud
+Trace.
+
+## Next steps
+
+- **[Gemini](doc:gemini)** — the provider in full: the mapping table, the two doors, the honest limits.
+- **[Embedders](doc:embedders)** — `geminiEmbedder` beside the other four, and the input-ceiling machinery.
+- **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.
+- **[Hosting & runtime](doc:hosting-and-runtime)** — the concurrency table and the `SessionLifecycle` port.
+- **[Observability sinks](doc:observability-sinks)** — the port the OTLP recipe feeds.

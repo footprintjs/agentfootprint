@@ -16,6 +16,7 @@
     "observability-sinks",
     "---[Plug]Providers---",
     "aws",
+    "google-cloud",
     "on-premises"
   ]
 }

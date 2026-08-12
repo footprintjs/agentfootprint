@@ -84,6 +84,8 @@ Start from what you are trying to do, not from which cloud you are on.
 | One role to see a **smaller skill catalog** | `PermissionPolicy.fromRoles(…, { skills })` | The row leaves the `read_skill` menu AND the activation is refused, from one rule |
 | A **ceiling on one tool result** | `Agent.create({ maxToolResultChars })` | Over the cap the model reads a marker that names the size and says to narrow the request — opt-in, because a default would silently modify results |
 | **Events beside your runtime telemetry** | `agentcoreObservability()` / `cloudwatchObservability()` / `otelObservability()` | The typed event stream, shipped in the shape that platform already reads |
+| **Gemini's own numbers** — cached and reasoning tokens as separate line items, and tools that stay JSON Schema | `gemini({ project, location })` (or `{ apiKey }`) | The native SDK reports `cachedContentTokenCount` and `thoughtsTokenCount`, and takes `parametersJsonSchema` untranslated. Google's OpenAI-compatible endpoint has none of that, and its token expires hourly |
+| **Traces in Cloud Trace** | `otelObservability()` pointed at `telemetry.googleapis.com` | Google accepts standard OTLP and recommends it over their own exporter; our `gen_ai.*` attributes are what their console renders |
 | **Telemetry where there is no collector to ship to** | `fileObservability({ path })` | NDJSON on a local disk, one line per event — the format every log shipper already reads, and zero dependencies |
 | **Tokens out of the vault you already run** | `vaultCredentials({ address })` | KV v2 over Vault's own HTTP API — no SDK, and the token never reaches an error message |
 | **Two sinks at once** | `composeObservability([a, b])` | One strategy that fans out; `flush` and `stop` reach both |
@@ -144,6 +146,7 @@ OpenAI-compatible gateway — and not any single adapter's feature list.
 ## Providers
 
 - **[AWS & Bedrock AgentCore](doc:aws)** — the first worked provider: every service, its adapter, its door, its peer dependency, and its honest status.
+- **[Google Cloud & Gemini](doc:google-cloud)** — the third column: the native Gemini provider and Gemini embeddings ship, Cloud Trace is a recipe over standard OTLP, and every other boundary names the port that fills it and the reason it is not an adapter yet.
 - **[On-premises & self-hosted](doc:on-premises)** — the column for a deployment that owns its own machines: local models, stores on your disk, NDJSON telemetry, your vault. There is no `onPremises()` adapter, because on-premises is the absence of a vendor rather than one more of them.
 
 More clouds plug in the same way — each is a set of adapters behind the same

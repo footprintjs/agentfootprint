@@ -1,13 +1,13 @@
 ---
 title: Embedders
-description: openaiEmbedder, bedrockEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
+description: openaiEmbedder, bedrockEmbedder, geminiEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
 ---
 
-> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/providers` is where the four real ones live.
+> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/providers` is where the five real ones live.
 
-## The four
+## The five
 
-All four satisfy the same `Embedder` contract, so they are interchangeable at
+All five satisfy the same `Embedder` contract, so they are interchangeable at
 the call site. What differs is what they need from you, where they can run, and
 what they cost.
 
@@ -15,6 +15,7 @@ what they cost.
 |---|---|---|---|---|
 | `openaiEmbedder()` | an OpenAI API key | none (plain `fetch`) | **yes** | per token, billed by OpenAI; every text you embed leaves your machine |
 | `bedrockEmbedder()` | AWS credentials (the normal chain) | `@aws-sdk/client-bedrock-runtime` | **no** — Node only | per token, billed by AWS; stays inside your AWS account and region |
+| `geminiEmbedder()` | a Google project (ADC) **or** a Gemini API key | `@google/genai` | **no** — Node only | per token, billed by Google |
 | `localEmbedder()` | nothing | `@huggingface/transformers` | **yes**, with `backend` (see below) | free; ~27 MiB downloaded on first use, then cached |
 | `staticEmbedder()` | nothing | `@yarflam/potion-base-8m` | **no** — Node only | free; ~30 MB on disk after install, no network at all |
 
@@ -178,6 +179,86 @@ calls rather than a batch discount that does not exist. `indexCorpus` already
 fans out over batches with bounded parallelism and retry, so a corpus index is
 still parallel where it counts.
 
+## `geminiEmbedder()` — hosted on Google
+
+Google's embeddings through `models.embedContent`, on the same two doors as
+[`gemini()`](doc:gemini): a **project** (credentials from Application Default
+Credentials) or a **Gemini API key**. Neither is guessed, and configuring neither
+is refused by name.
+
+```ts
+import { geminiEmbedder } from 'agentfootprint/providers';
+
+const vertex = geminiEmbedder({ project: 'my-project', location: 'us-central1' });
+const studio = geminiEmbedder({ apiKey: process.env.GEMINI_API_KEY! });
+```
+
+Two models are known by name, and the difference between them is why the input
+ceiling is per-model rather than per-vendor:
+
+| model | dimensions | input window | `task_type` |
+|---|---|---|---|
+| `gemini-embedding-001` (default) | 3072, shortenable | **2,048 tokens** (`maxInputChars` 8000) | the full vocabulary |
+| `gemini-embedding-2` | 3072, shortenable | **8,192 tokens** (`maxInputChars` 32000) | **none** — Google replaced it with task instructions written into the text |
+
+```ts
+geminiEmbedder({ dimensions: 768 });                       // Matryoshka: a real 768-dim space
+geminiEmbedder({ model: 'gemini-embedding-2' });            // four times the window, no task types
+geminiEmbedder({ model: 'gemini-embedding-99', dimensions: 512 }); // unknown: state the size
+```
+
+Asking for a size the model cannot produce, or a `taskType` on the model that takes
+none, is refused at construction — a wrong `.dimensions` is what a vector store
+fingerprints on, and a rejected request field is a call that was never going to work.
+
+### `task_type`, and the two defaults
+
+`RETRIEVAL_QUERY` and `RETRIEVAL_DOCUMENT` embed a question and a passage into
+deliberately different projections that are *meant* to be compared with each other,
+so using one value for both halves is a measurable loss of retrieval quality. This
+library's two call sites are exactly that distinction, so the default follows it:
+`embed()` sends `RETRIEVAL_QUERY` (retrieval embeds one question),
+`embedBatch()` sends `RETRIEVAL_DOCUMENT` (indexing embeds many passages). Pin
+`taskType` when your own code uses the two calls differently, or when the objective
+is classification or clustering rather than search — a pinned value applies to both,
+so the store stays self-consistent either way.
+
+Like `bedrockEmbedder`, the id carries the size — `gemini:gemini-embedding-001:768`
+— because one model id at two sizes is two embedding spaces and `embeddingModel`
+stores the id alone.
+
+### Types
+
+`GeminiEmbedderOptions` is the factory's options — the two-door connection half
+(shared as `GoogleGenAIConnectionOptions` with [`gemini()`](doc:gemini)) plus
+`model`, `dimensions`, `taskType`, `onTruncation`, `maxInputChars` and `_client`.
+`GeminiEmbeddingTaskType` is the eight-value `task_type` union and
+`GeminiTruncationPolicy` is `'refuse' | 'allow'`. `GeminiEmbedClientLike`,
+`GeminiEmbedParams` and `GeminiEmbedResponse` describe the one-method surface the
+`_client` seam accepts, so a test double can be typed without importing
+`@google/genai`.
+
+### One text per request, and a refusal when the service clips
+
+`gemini-embedding-001` accepts **exactly one** input text per call, so `embedBatch`
+is honestly N sequential calls rather than a batch discount that does not exist.
+(Libraries that batched it like an OpenAI client send oversized requests that fail
+on every batch of more than one.)
+
+And this is the one embedder that can *catch* the silent-truncation failure the
+section below describes, because Vertex reports `statistics.truncated` when it
+clipped:
+
+```ts
+geminiEmbedder({ onTruncation: 'refuse' }); // the default
+```
+
+Over the ceiling, the refusal names the character length that was sent and both
+fixes — a smaller `maxChunkChars`, or `onTruncation: 'allow'` if a prefix embedding
+is genuinely what you want. Detection depends on the service *returning*
+`statistics`; when it is absent this adapter cannot tell, and says so rather than
+implying a guarantee.
+
 ## `localEmbedder()` — on your device
 
 A sentence-transformer (`Xenova/all-MiniLM-L6-v2`, 384 dimensions) run through
@@ -247,7 +328,9 @@ Static vectors are weaker than a real transformer on paraphrases. Use them where
 `openaiEmbedder()` works in a browser as-is: it is a `fetch`, nothing to bundle.
 (Your key would be in the page, so this belongs in a prototype, not production.)
 `bedrockEmbedder()` does not: it needs the AWS SDK and AWS credentials, neither
-of which belongs in a page.
+of which belongs in a page. Neither does `geminiEmbedder()` — `@google/genai`
+declares `node` engines and the Vertex door reads Application Default Credentials,
+which a browser has no equivalent for.
 
 `localEmbedder()` needs one extra step. To keep `@huggingface/transformers`
 optional, agentfootprint imports it through a **variable specifier** — and a
@@ -310,6 +393,7 @@ the unit a splitter cuts in:
 | `localEmbedder()` | `2000` | measured: the default model's 512-wordpiece-token cliff (~1,800–2,000 characters) |
 | `openaiEmbedder()` | `32000` | the documented 8,191-token window, at 4 characters a token |
 | `bedrockEmbedder()` | `32000` (Titan) · `2000` (Cohere v3) | each model's documented window — 8,192 tokens and 512 — at the same conversion |
+| `geminiEmbedder()` | `8000` (`gemini-embedding-001`) · `32000` (`gemini-embedding-2`) | 2,048 and 8,192 tokens, at the same conversion |
 | `staticEmbedder()` | `1000000` | no transformer, so no context window — nothing is ever clipped |
 | `mockEmbedder()` | `1000000` | reads every character in a loop |
 
@@ -376,3 +460,4 @@ const myEmbedder: Embedder = {
 - [Semantic retrieval](doc:semantic-retrieval) — where the embedder is actually used
 - [RAG](doc:rag) — document-corpus retrieval built on it
 - [Memory stores](doc:memory-and-stores) — which stores can hold vectors
+- [Google Cloud & Gemini](doc:google-cloud) — the provider column `geminiEmbedder()` belongs to

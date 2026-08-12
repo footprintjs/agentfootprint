@@ -7,6 +7,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.13.0] - 2026-08-12
+
+**The third provider column opens, and it opens with the two adapters that can be
+built honestly today.** Google Cloud joins AWS and on-premises as a documented
+column. What ships is `gemini()` — a native `LLMProvider` over `@google/genai`,
+not a `baseURL` on the OpenAI one — plus `geminiEmbedder()`, plus a pin that
+checks its own claims against the really-installed SDK. What does not ship says
+why, with a date.
+
+### Added — `gemini()`: the native provider, on both of Google's doors
+
+```ts
+import { gemini } from 'agentfootprint/providers';
+
+const vertex = gemini({ project: 'my-project', location: 'us-central1' }); // ADC
+const studio = gemini({ apiKey: process.env.GEMINI_API_KEY! });            // one key
+```
+
+Two doors, one adapter, and neither is guessed: a project selects Vertex, a key
+selects the Gemini API, and configuring **neither** is refused at construction
+naming both — because the SDK's own behaviour in that case is to warn on stderr,
+construct anyway, and fail on the first call with something that reads like a
+network problem. An empty environment variable reads as absent.
+
+Four things this adapter can do that `openai({ baseURL })` against Google's
+OpenAI-compatible endpoint cannot, and they are the whole reason it exists:
+
+- **Honest cached and reasoning tokens.** `usage.cacheRead` ←
+  `usageMetadata.cachedContentTokenCount` and `usage.thinking` ←
+  `thoughtsTokenCount`, each its own number. The compat endpoint's documented
+  response has neither field, so a cost dashboard behind it can only ever show a
+  total.
+- **Tools stay JSON Schema.** `FunctionDeclaration.parametersJsonSchema` takes
+  your schema untranslated. The compat endpoint's `function.parameters` is an
+  **OpenAPI** subset, where `$ref`, `oneOf` and `additionalProperties` mean
+  something else or nothing — a divergence you discover from a model that ignored
+  half your constraints.
+- **`carriesForcedToolChoice: true`, earned.** `toolConfig.functionCallingConfig`
+  with `mode: 'ANY'` and one `allowedFunctionNames` entry really does constrain
+  the answer to that function, on both doors — so
+  `.outputSchema(parser, { strategy: 'tool-forced' })` works rather than refusing.
+- **Auth that does not expire in an hour.** ADC refreshes itself; the compat
+  endpoint takes an OAuth bearer with a 60-minute life and no refresh home in
+  `OpenAIProviderOptions`.
+
+Also on the wire: `systemInstruction` as a top-level field, which makes this an
+**Anthropic-family wire** — `carriesInMessages` is `['user', 'assistant']`, so a
+`slot: 'messages'` injection with `role: 'system'` is refused at run start rather
+than silently dropped; `thinkingConfig.thinkingBudget` from `.thinking({ budget })`;
+`abortSignal` threaded; `stopSequences`, `temperature` and `maxOutputTokens`.
+
+Three decisions worth reading before you rely on them:
+
+- **Tool-call ids are sometimes invented, and never sent back.**
+  `FunctionCall.id` is optional on Gemini's wire and Vertex routinely omits it,
+  while the agent matches a tool result to its call BY id — so an absent id is
+  synthesized (`gemini-call-N`, in call order, per provider instance, the
+  `ollama()` precedent). Sending an invented id back would be a
+  `functionResponse.id` the service never issued, so it is stripped on the return
+  trip; Gemini matches by NAME, which is always present.
+- **No thought summaries are requested.** `usage.thinking` is reported, but
+  `includeThoughts` is deliberately unset: Gemini's thought parts carry a
+  `thoughtSignature` that must be echoed byte-exact on the next turn, and there is
+  no Gemini `ThinkingHandler` in this release to round-trip them. Asking for
+  content nothing can carry back would be a leak, not a feature. A thought part
+  that arrives anyway is kept out of the visible answer on both paths.
+- **A stream that reports no usage reports ZERO, never an estimate.**
+  `models.countTokens` is on the namespace, is not called, and is named in the pin
+  as not called: it answers what a request *tokenises to*, not what the call was
+  *billed for*. Same law as `openai()` and `ollama()`. (Usage is read off the
+  closing chunk BEFORE any content guard — the bug that made streamed turns bill
+  as zero on two earlier adapters.)
+
+Stop reasons are mapped only where the mapping is unmistakable — `STOP`,
+`MAX_TOKENS`, and the four safety refusals — and everything else passes through in
+Google's own spelling. Gemini has **no `tool_use` finish reason**, so the presence
+of function calls is what produces one.
+
+### Added — `geminiEmbedder()`
+
+```ts
+import { geminiEmbedder } from 'agentfootprint/providers';
+
+const embedder = geminiEmbedder({ project: 'my-project', dimensions: 768 });
+```
+
+The same two doors, over `models.embedContent`. `gemini-embedding-001` by default
+(3072 dimensions, Matryoshka-shortenable, a 2,048-token window, the full
+`task_type` vocabulary) and `gemini-embedding-2` known by name (an 8,192-token
+window and **no** `task_type`, which is refused rather than sent and ignored).
+`embed()` sends `RETRIEVAL_QUERY` and `embedBatch()` sends `RETRIEVAL_DOCUMENT`,
+because that is what this library's two call sites are — the `bedrockEmbedder`
+Cohere lesson, applied. The id carries the size (`gemini:gemini-embedding-001:768`)
+for the reason `bedrockEmbedder`'s does: one model id at two sizes is two embedding
+spaces, and `embeddingModel` stores the id alone.
+
+Two Google-specific traps became refusals:
+
+- **One text per request.** `gemini-embedding-001` accepts exactly one input, so
+  `embedBatch` is honestly N sequential calls. Libraries that batched it like an
+  OpenAI client send oversized requests that fail on every batch of more than one.
+- **`onTruncation: 'refuse'` is the default.** Over its window Gemini does not
+  refuse — it clips, and a full-looking vector comes back for the opening of the
+  passage, which is the exact failure `maxInputChars` was added for in 9.1.0. This
+  is the first embedder whose backend TELLS us (`statistics.truncated`), and it
+  turns that into an error naming the text's length and both fixes, so a passage is
+  never indexed by a prefix of itself. `'allow'` is there when a prefix embedding
+  is genuinely what you want.
+
+### Added — the Google surface pin, and the assertion AWS never needed
+
+`test/adapters/google/googlePin.ts` carries the AWS pin's dispatch, reality and
+completeness assertions, re-aimed at method-based clients — plus a third that is
+new and load-bearing.
+
+- **API-VERSION reality.** `@google/genai` 2.16.0 defaults to **`v1beta1` on
+  Vertex** and **`v1beta` on the Gemini API** — not `v1`. An adapter or a docs page
+  claiming "GA, v1" while the client dials `v1beta1` is the 9.4.0 bug class in a new
+  costume: it compiles, it passes, and the calls go somewhere else. The registry
+  records the version each door resolves to and the test asks the installed
+  package. `apiVersion` is the option that overrules it.
+- **Method-name reality enumerates the INSTANCE, not just the prototype.**
+  `@google/genai` assigns `generateContent`, `generateContentStream` and
+  `embedContent` as instance fields; only `countTokens` is a prototype method. A
+  prototype-only check — the shape the AWS pin would have suggested — would report
+  three of our four pinned methods as missing.
+- **`@google/genai` and `google-auth-library` are REAL devDependencies**, unlike
+  the AWS SDKs. That trade is deliberate and reversed on purpose: AWS keeps its
+  SDKs uninstalled so six adapters prove their missing-peer-dep refusals by real
+  absence, which makes the AWS reality check vacuous in CI. Google is mid-rebrand
+  and its Node surface lags, so version drift is where the bugs live and the
+  reality checks have to actually run. The missing-peer-dep refusals are proved by
+  stubbing module resolution instead.
+- **One row is `documentedOnly`.** The Cloud Trace recipe on the new provider page
+  tells readers to call `GoogleAuth.getClient` / `getAccessToken` /
+  `getRequestHeaders`, so those names are a claim this package makes about someone
+  else's library. It is reality-checked and never dispatched — a claim in prose is
+  not a weaker claim than one in code.
+
+### Added — Gemini's over-long-request sentence joins the typed error
+
+`ContextWindowExceededError` (9.6.0) now translates *"The input token count
+(1200293) exceeds the maximum number of tokens allowed (1048576)."* — a word order
+the existing patterns did not match — and reads both numbers out of it, including
+the case where Google ships the first parenthesis empty. Detection stays
+conservative: "INPUT token count" is what keeps it off a `max_tokens` validation
+error, and Google spells a rate limit "quota exceeded".
+
+### Added — Google Cloud as a documented provider column
+
+`docs/infrastructure/google-cloud.mdx` is the third column, and it states what is
+NOT there as plainly as what is: the service map, the surface pin, the required
+concurrency-and-sessions section, and a status row per boundary.
+
+- **Cloud Trace is a recipe, not a factory.** `googleCloudTracer()` was designed
+  and then not built: Google's Telemetry API accepts **standard OTLP** (and Google
+  recommends it over their own exporter), `otelObservability()` already takes the
+  tracer, and a factory would be twenty lines of wiring behind four new optional
+  peer dependencies — each needing its own pin row and version-drift story. The
+  page ships the complete copy-paste recipe instead, including the two
+  `OTEL_SEMCONV_STABILITY_OPT_IN` environment variables that make Google's own
+  console render our `gen_ai.*` attributes as GenAI views.
+- **Named absences, with dates.** Agent Retrieval (ex-Vector Search 2.0) and the
+  Agent Identity auth manager are **parked as of 2026-08-12** — no Node SDK
+  published for either. Vertex AI Extensions is deprecated (shutdown after
+  2026-11-26). `@google-cloud/vertexai` is past its own removal date and nothing
+  here builds on it.
+- **Agent Runtime hosting is gated on one live probe.** Google's deploy page says
+  "only supports Python" while its runtime-contract page says any language and
+  ships a Node build script. Designing on an unresolved contradiction is how three
+  AWS adapters once shipped calling operations that did not exist. Cloud Run with
+  `httpHost` needs nothing new meanwhile.
+- **No `SecurityStrategy` for Model Armor or Semantic Governance**, and that is a
+  finding rather than a gap: Google enforces policy at the Gateway, in front of the
+  process, exactly as AgentCore does — the architecture that retired
+  `agentCorePolicy` in 9.4.0.
+- **Memory Bank carries three silent-wrongness vectors** and the page names them
+  before anybody writes an adapter: it returns LLM-extracted facts rather than your
+  entries, its score is a **Euclidean distance where lower is closer** against our
+  cosine contract where higher is, and `scope` is an exact match that is
+  **immutable after write**.
+
+### Changed
+
+- `createProvider({ kind: 'gemini' })` joins the by-name factory; `ProviderKind`
+  gains a member (additive).
+- `@google/genai` joins `peerDependencies` as **optional** — installing
+  agentfootprint installs nothing, and the SDK is lazily required on first use.
+- A `gemini()` error never prints the API key it was constructed with. The
+  redaction is narrow by design — the exact string you passed, removed from the
+  message, the stack and the wrapped cause — and is not a heuristic scrubber:
+  a thrown provider error reaches the model as a tool result *and* the commit log
+  *and* every observability sink, so one interpolation would leak to all of them.
+
 ## [9.12.0] - 2026-08-12
 
 **The per-user identity chain, both ends.** 9.11.0 put `EventMeta.principal` on
