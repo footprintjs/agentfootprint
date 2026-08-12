@@ -8,7 +8,7 @@
 
 > **ResilienceReport** = \{ `fallback`: `string`; `kind`: `"fell-back"`; `primary`: `string`; `reason`: `string`; \} \| \{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; \} \| \{ `attempt`: `number`; `kind`: `"recovered"`; `totalDurationMs`: `number`; \}
 
-Defined in: [src/adapters/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/adapters/types.ts#L316)
+Defined in: [src/adapters/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/adapters/types.ts#L316)
 
 v7.8 — what a resilience decorator DID during one provider call.
 

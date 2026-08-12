@@ -6,7 +6,7 @@
 
 # Interface: OutputSchemaParser\<T\>
 
-Defined in: [src/core/outputSchema.ts:62](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/outputSchema.ts#L62)
+Defined in: [src/core/outputSchema.ts:62](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/outputSchema.ts#L62)
 
 Minimum shape any validation library must expose to satisfy
 `outputSchema`. Covers Zod (`schema.parse`), Valibot
@@ -29,7 +29,7 @@ diagnostic event).
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/core/outputSchema.ts:71](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/outputSchema.ts#L71)
+Defined in: [src/core/outputSchema.ts:71](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/outputSchema.ts#L71)
 
 Human-readable description of the output shape. Used by
 `outputSchema` to auto-build the system-prompt instruction when
@@ -43,7 +43,7 @@ hand-written parsers.
 
 > **parse**(`value`): `T`
 
-Defined in: [src/core/outputSchema.ts:63](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/outputSchema.ts#L63)
+Defined in: [src/core/outputSchema.ts:63](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/outputSchema.ts#L63)
 
 #### Parameters
 

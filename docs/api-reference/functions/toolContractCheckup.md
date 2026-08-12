@@ -8,7 +8,7 @@
 
 > **toolContractCheckup**(`agentTools`, `serverCatalog`): [`ToolContractCheckup`](/agentfootprint/api/generated/interfaces/ToolContractCheckup.md)
 
-Defined in: [src/core/toolContract.ts:70](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/toolContract.ts#L70)
+Defined in: [src/core/toolContract.ts:70](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/toolContract.ts#L70)
 
 Diff an agent's tools against a server's tool catalog. Pure + deterministic.
 

@@ -6,7 +6,7 @@
 
 # Interface: ToolExecutionContext
 
-Defined in: [src/core/tools.ts:69](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L69)
+Defined in: [src/core/tools.ts:69](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L69)
 
 Runtime context passed to tool.execute().
 
@@ -16,7 +16,7 @@ Runtime context passed to tool.execute().
 
 > `readonly` `optional` **credential?**: `Credential`
 
-Defined in: [src/core/tools.ts:88](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L88)
+Defined in: [src/core/tools.ts:88](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L88)
 
 The credential resolved for this tool's declared `needs` (declare-and-push).
  Present only when the tool declared a need and it resolved successfully.
@@ -27,7 +27,7 @@ The credential resolved for this tool's declared `needs` (declare-and-push).
 
 > `readonly` **credentials**: `CredentialProvider`
 
-Defined in: [src/core/tools.ts:82](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L82)
+Defined in: [src/core/tools.ts:82](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L82)
 
 The bound credential provider — the PULL escape hatch for dynamic needs.
 Always present: when none is attached it's a fail-closed provider that
@@ -40,7 +40,7 @@ declarative `needs` + `ctx.credential` for the common case.
 
 > `readonly` **hasCredentials**: `boolean`
 
-Defined in: [src/core/tools.ts:85](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L85)
+Defined in: [src/core/tools.ts:85](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L85)
 
 True when a real provider is attached. Branch on this for intentional
  degraded (no-credential) mode instead of relying on `undefined`.
@@ -51,15 +51,18 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/tools.ts:126](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L126)
+Defined in: [src/core/tools.ts:129](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L129)
 
 The identity the CALLER supplied — `run({ identity })`, the same tuple
 memory and the permission gate scope on.
 
 **Absent when the caller passed none.** Deliberately NOT the run's internal
 `runIdentity`, which is always populated (it defaults to
-`{ conversationId: '<runId>' }`): handing that to a tool would publish a
-synthesized conversation as if somebody had named one.
+`{ conversationId: '<runId>' }`, or to `{ conversationId: sessionId }` on a
+session-bound run since 9.10.0): handing either of those to a tool would
+publish a SYNTHESIZED conversation as if somebody had named one. A tool
+that wants the session has `ctx.sessionId` for it, which is the fact the
+transport actually delivered.
 
 ***
 
@@ -67,7 +70,7 @@ synthesized conversation as if somebody had named one.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/tools.ts:73](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L73)
+Defined in: [src/core/tools.ts:73](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L73)
 
 Current iteration number of the ReAct loop.
 
@@ -77,7 +80,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/core/tools.ts:103](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L103)
+Defined in: [src/core/tools.ts:103](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L103)
 
 The run this call belongs to.
 
@@ -91,7 +94,7 @@ fabricate a run that never existed. Branch on the absence.
 
 > `readonly` `optional` **sessionId?**: `string`
 
-Defined in: [src/core/tools.ts:115](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L115)
+Defined in: [src/core/tools.ts:115](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L115)
 
 The hosting conversation this run is bound to, when it is bound to one —
 `HostRequest.sessionId`, threaded through `agent.run({ sessionId })`.
@@ -108,7 +111,7 @@ alone — compose it with tenant and principal via [toolSessionKey](/agentfootpr
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/tools.ts:75](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L75)
+Defined in: [src/core/tools.ts:75](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L75)
 
 Abort signal propagated from run({ env: { signal } }).
 
@@ -118,7 +121,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/agentfootprint/api/generated/type-aliases/TeardownScope.md)[]
 
-Defined in: [src/core/tools.ts:157](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L157)
+Defined in: [src/core/tools.ts:160](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L160)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -133,7 +136,7 @@ needs to know it is talking to a door that has no runs BEFORE it opens one.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/tools.ts:71](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L71)
+Defined in: [src/core/tools.ts:71](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L71)
 
 Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
@@ -143,7 +146,7 @@ Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:147](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/tools.ts#L147)
+Defined in: [src/core/tools.ts:150](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/tools.ts#L150)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.

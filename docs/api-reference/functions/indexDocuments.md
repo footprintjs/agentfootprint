@@ -8,7 +8,7 @@
 
 > **indexDocuments**(`store`, `embedder`, `documents`, `options?`): `Promise`\<`number`\>
 
-Defined in: [src/lib/rag/indexDocuments.ts:188](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/lib/rag/indexDocuments.ts#L188)
+Defined in: [src/lib/rag/indexDocuments.ts:188](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/lib/rag/indexDocuments.ts#L188)
 
 Embed + persist documents. Returns the count actually indexed
 (skips duplicates if the store rejects them). Throws on embedder

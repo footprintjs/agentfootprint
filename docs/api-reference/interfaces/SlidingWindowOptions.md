@@ -6,7 +6,7 @@
 
 # Interface: SlidingWindowOptions
 
-Defined in: [src/core/agent/window/types.ts:368](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/agent/window/types.ts#L368)
+Defined in: [src/core/agent/window/types.ts:368](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/window/types.ts#L368)
 
 What `slidingWindow({...})` accepts.
 
@@ -24,7 +24,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > `readonly` **keepRecentTurns**: `number`
 
-Defined in: [src/core/agent/window/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/a076ce4729494fbee32b8a5fe7f46f567fa9fbe9/src/core/agent/window/types.ts#L376)
+Defined in: [src/core/agent/window/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/e9ad2ae7d4f6e95b31cc59d0c258cbf2c46ef350/src/core/agent/window/types.ts#L376)
 
 How many of the most recent turns stay in the window. Everything older is
 dropped — unless it refuses by name.
