@@ -4,8 +4,13 @@
  * Composes Layer 2-3 stages into two flowchart subflows that the wire
  * layer mounts inside the agent's main flowchart:
  *
- *   READ  :  LoadRecent → PickByBudget → FormatDefault
+ *   READ  :  LoadRecent → [Summarize] → [FilterByDecay] → PickByBudget →
+ *            FormatDefault
  *   WRITE :  WriteMessages
+ *
+ * The two bracketed stages are compiled only when their config is present
+ * (`summarize`, `decay`) — an absent option means an absent stage, never a
+ * stage that runs and does nothing.
  *
  * Why this particular composition?
  *   - Load-then-pick-then-format matches the cognitive sequence:
@@ -51,6 +56,7 @@ import { flowChart } from 'footprintjs';
 
 import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
 import { filterByDecay, type FilterByDecayConfig } from '../stages/filterByDecay.js';
+import { summarize, type SummarizeConfig } from '../stages/summarize.js';
 import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
 import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
 import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages.js';
@@ -117,6 +123,28 @@ export interface DefaultPipelineConfig {
   readonly decay?: FilterByDecayConfig;
 
   /**
+   * Compress what falls out of the verbatim tail (9.14.0). When present, a
+   * `Summarize` stage is composed directly after the load: the oldest loaded
+   * entries become ONE summary entry written back to this same store, and
+   * recall becomes `[summary, ...recent verbatim]`.
+   *
+   * The stage's `store` and `ttlMs` are filled from THIS config — the summary
+   * lands in the same namespace as the turns it stands for, and under the same
+   * retention window, because a summary that outlived the messages it
+   * compressed is the leak `writeTtlMs` exists to prevent.
+   *
+   * Absent — the historical behaviour — means no summarize stage is compiled
+   * at all, not a summarize stage that never fires. What is not in the chart
+   * cannot cost anything or appear in the narrative.
+   *
+   * `defineMemory({ strategy: { kind: MEMORY_STRATEGIES.SUMMARIZE, recent,
+   * llm, model } })` is the door most consumers use; this is the same thing,
+   * spelled at the pipeline level so it composes with `loadCount` and the
+   * budget knobs.
+   */
+  readonly summarize?: Omit<SummarizeConfig, 'store' | 'ttlMs'>;
+
+  /**
    * Override for the formatter's header text. Omit to use the default
    * "Relevant context from prior conversations..." phrasing.
    */
@@ -153,14 +181,29 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     ...(config.writeTtlMs !== undefined && { ttlMs: config.writeTtlMs }),
   };
 
-  // Compose: LoadRecent → [FilterByDecay] → [PickDecider → skip-empty |
-  //          skip-no-budget | pick] → Format
+  // Compose: LoadRecent → [Summarize] → [FilterByDecay] → [PickDecider →
+  //          skip-empty | skip-no-budget | pick] → Format
   // pickByBudget is a builder-extension — it appends a decider + 3
   // branches to the pipeline so "why did / didn't we inject memory?" is
   // answerable via FlowRecorder.onDecision evidence, not just emit events.
   let readBuilder = flowChart<MemoryState>('LoadRecent', loadRecent(loadConfig), 'load-recent', {
     description: 'Read N most-recent entries from storage into scope.loaded',
   });
+  if (config.summarize !== undefined) {
+    // Directly after the load, and before every stage that trims: decay and
+    // the budget picker both decide against what recall CONTAINS, and what
+    // recall contains is not settled until the fold has happened.
+    readBuilder = readBuilder.addFunction(
+      'Summarize',
+      summarize({
+        ...config.summarize,
+        store: config.store,
+        ...(config.writeTtlMs !== undefined && { ttlMs: config.writeTtlMs }),
+      }),
+      'summarize',
+      'Fold entries older than the verbatim tail into one stored summary entry',
+    );
+  }
   if (config.decay !== undefined) {
     // Before the picker: what has faded is not a budget question, and the
     // budget is better spent on entries that are still worth something.

@@ -555,8 +555,11 @@ export class AgentBuilder {
    * instance also ends the shared per-instance state (cursors, rate-limit
    * buckets, keep-alive pools) that made this pairing bite in the first place.
    *
-   * Checked at BOTH doors. `.compaction({...})` and `.window(summarizeOldest({...}))`
-   * are the same policy, and a rule that only one of them enforces is advice.
+   * Checked at every door that can set one. `.compaction({...})` and
+   * `.window(summarizeOldest({...}))` are the same policy, and since 9.14.0
+   * `.memory(defineMemory({ strategy: { kind: 'summarize', llm, model } }))`
+   * is a third — a memory that folds recall makes the same un-decorated call
+   * against the same pairing. A rule that only some doors enforce is advice.
    */
   private assertSummarizerIsNotTheAgentItself(
     billing: { readonly provider: LLMProvider; readonly model: string } | undefined,
@@ -572,9 +575,10 @@ export class AgentBuilder {
         `decorator and the cache; the summarizer's call runs through none of them — one ` +
         `attempt, no fallback, no cache. A difference nobody typed is the kind this library ` +
         `refuses.\n` +
-        `Fix, one word: give the summarizer its OWN instance — \`summarizer: anthropic()\` ` +
-        `rather than the variable you passed to Agent.create. That also stops the two roles ` +
-        `sharing per-instance state. Or name a different (usually cheaper) model.`,
+        `Fix, one word: give the summarizer its OWN instance — \`anthropic()\` written again ` +
+        `(as \`summarizer\` on a window strategy, as \`llm\` on a summarize memory) rather than ` +
+        `the variable you passed to Agent.create. That also stops the two roles sharing ` +
+        `per-instance state. Or name a different (usually cheaper) model.`,
     );
   }
 
@@ -997,6 +1001,14 @@ export class AgentBuilder {
           'to keep its scope key (`memoryInjection_${id}`) collision-free.',
       );
     }
+    // A memory that calls a model on your behalf — today that is the
+    // `summarize` strategy — is held to the same separate-instance rule as
+    // `.compaction()`. `defineMemory` cannot make this check: it has never
+    // heard of an agent. It declares the billing, this reads it (9.14.0).
+    this.assertSummarizerIsNotTheAgentItself(
+      definition.billing,
+      `Agent.memory('${definition.id}')`,
+    );
     this.memoryList.push(definition);
     return this;
   }

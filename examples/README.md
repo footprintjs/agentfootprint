@@ -193,7 +193,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 |---|---|---|---|
 | 01 | [`01-window-strategy.ts`](memory/01-window-strategy.ts) | Window strategy — last N turns (short-term, rule-based) | Sliding window over recent conversation. Cheap (no LLM, no embeddings)  |
 | 02 | [`02-budget-strategy.ts`](memory/02-budget-strategy.ts) | Budget strategy — fit-to-tokens (decider-based) | Token-aware memory selection. Picks the most-recent entries that  |
-| 03 | [`03-summarize-strategy.ts`](memory/03-summarize-strategy.ts) | Summarize strategy — LLM compresses older turns | Long-conversation compaction: keep recent N turns raw, summarize  |
+| 03 | [`03-summarize-strategy.ts`](memory/03-summarize-strategy.ts) | Summarize strategy — one call folds older turns, and it is stored | Long-conversation compaction: keep the most recent entries raw, fold  |
 | 04 | [`04-topK-strategy.ts`](memory/04-topK-strategy.ts) | Top-K strategy — semantic retrieval (relevance, not recency) | Vector retrieval: embed the user query, return top-K cosine-similar  |
 | 05 | [`05-extract-strategy.ts`](memory/05-extract-strategy.ts) | Extract strategy — LLM distills facts/beats on write | Smart-write: an extractor (pattern-based or LLM-backed) pulls  |
 | 06 | [`06-causal-snapshot.ts`](memory/06-causal-snapshot.ts) | Causal memory — store footprintjs snapshots, replay decisions | The differentiator: persist past run snapshots tagged with the  |

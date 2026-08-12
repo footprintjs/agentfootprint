@@ -356,7 +356,7 @@ The 4 memory **types**:
 - `CAUSAL` — footprintjs decision-evidence snapshots ⭐
 
 The 7 **strategies**:
-- `WINDOW` (rule, last N) · `BUDGET` (decider, fit-to-tokens) · `SUMMARIZE` (LLM compresses older)
+- `WINDOW` (rule, last N) · `BUDGET` (decider, fit-to-tokens) · `SUMMARIZE` (one LLM call folds the older entries; the summary is stored, so a span is paid for once — needs `llm` + `model`)
 - `TOP_K` (score-threshold) · `EXTRACT` (LLM distills on write)
 - `DECAY` (recency-weighted, planned) · `HYBRID` (compose multiple)
 
@@ -546,7 +546,8 @@ One builder call mounts ONE skill that, when the user asks a why-question, unloc
 | Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
 | Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
 | Old memories should stop coming back | `defineMemory({ type: EPISODIC, strategy: DECAY, halfLifeMs })` |
-| Long conversation overflows context | `.compaction({ summarizer, model })` on the Agent (memory's `SUMMARIZE` does not compress yet — `listMemoryStrategies()` says so) |
+| Long conversation overflows the live window | `.compaction({ summarizer, model })` on the Agent |
+| Stored recall outgrew its window | `defineMemory({ type: EPISODIC, strategy: { kind: SUMMARIZE, recent, size, llm, model } })` — folds the older entries into one stored summary; originals kept |
 | Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
 | Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |
 

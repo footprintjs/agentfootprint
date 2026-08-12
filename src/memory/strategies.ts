@@ -62,11 +62,18 @@ import type { MemoryStore } from './store/index.js';
  *                        `search()` at all).
  *   - `'llm'`          — a chat provider the strategy calls on the host's
  *                        behalf.
+ *   - `'model'`        — the model id that provider is called WITH. Its own
+ *                        requirement rather than part of `'llm'`, because a
+ *                        deployment can hold a provider and still have no
+ *                        answer for which model compression should run on —
+ *                        and a library that picked one for you would be
+ *                        picking your invoice (9.14.0).
  */
 export type MemoryStrategyRequirement =
   | 'embedder'
   | 'vector-store'
   | 'llm'
+  | 'model'
   | (string & Record<never, never>);
 
 /**
@@ -107,12 +114,13 @@ const BUDGET: MemoryStrategyInfo = Object.freeze({
 const SUMMARIZE: MemoryStrategyInfo = Object.freeze({
   kind: MEMORY_STRATEGIES.SUMMARIZE,
   description:
-    'Names a cheap LLM to compress older turns while the most recent `recent` turns stay ' +
-    'raw. HONEST CAVEAT (9.5.0): the compression stage exists but is not composed into the ' +
-    'pipeline `defineMemory` builds, so what runs today is the last `recent` entries, ' +
-    'verbatim — the `llm` is required and not yet called. Until it is wired, ' +
-    '`.compaction({ summarizer, model })` on the Agent is the summarizer that does run.',
-  requirements: Object.freeze(['llm'] as const),
+    'Compresses what falls out of the verbatim tail: the most recent `recent` entries stay raw ' +
+    'and everything older is folded by ONE call to the named cheap model. The summary is ' +
+    'WRITTEN BACK to the store, so a span is paid for once rather than once per turn, and the ' +
+    'originals are kept — they are excluded from recall by the summary, not deleted. Costs a ' +
+    'model call: name the `model` explicitly, and give the summarizer its own provider ' +
+    'instance. (`.compaction()` on the Agent is this same move applied to the LIVE window.)',
+  requirements: Object.freeze(['llm', 'model'] as const),
   types: Object.freeze([MEMORY_TYPES.EPISODIC]),
 });
 
@@ -205,7 +213,7 @@ export function memoryStrategyInfo(kind: string): MemoryStrategyInfo | undefined
 const EXAMPLE: Readonly<Record<MemoryStrategyKind, string>> = Object.freeze({
   [MEMORY_STRATEGIES.WINDOW]: `{ kind: 'window', size: 20 }`,
   [MEMORY_STRATEGIES.BUDGET]: `{ kind: 'budget', maxEntries: 20 }`,
-  [MEMORY_STRATEGIES.SUMMARIZE]: `{ kind: 'summarize', recent: 5, llm }`,
+  [MEMORY_STRATEGIES.SUMMARIZE]: `{ kind: 'summarize', recent: 6, llm, model: 'claude-haiku-4-5' }`,
   [MEMORY_STRATEGIES.TOP_K]: `{ kind: 'topK', topK: 3, embedder }`,
   [MEMORY_STRATEGIES.EXTRACT]: `{ kind: 'extract', extractor: 'pattern' }`,
   [MEMORY_STRATEGIES.DECAY]: `{ kind: 'decay', halfLifeMs: 86_400_000 }`,
@@ -375,7 +383,11 @@ function isSatisfied(
 ): boolean {
   // Read through a structural shape: the union's arms declare each other's
   // fields as `never`, so the union itself cannot be asked these questions.
-  const s = strategy as { readonly embedder?: unknown; readonly llm?: unknown };
+  const s = strategy as {
+    readonly embedder?: unknown;
+    readonly llm?: unknown;
+    readonly model?: unknown;
+  };
   switch (requirement) {
     case 'embedder':
       // The one exemption, and it is a fact about the STORE: a backend that
@@ -390,6 +402,8 @@ function isSatisfied(
       return typeof store.search === 'function';
     case 'llm':
       return s.llm !== undefined;
+    case 'model':
+      return typeof s.model === 'string' && s.model.trim() !== '';
     default:
       // A requirement this library does not know how to check is not a
       // requirement it may fail the caller over.
@@ -433,11 +447,24 @@ function missingRequirement(
       );
     case 'llm':
       return (
-        `${site}: ${where} names an \`llm\` and none was passed.\n` +
+        `${site}: ${where} names an \`llm\` and none was passed — nothing would write the ` +
+        `summary.\n` +
         declared +
-        `  Fix:  pass \`llm\` on the strategy — a cheap model is the point of it.\n` +
-        `  Or:   use \`{ kind: 'window', size: <recent> }\`, which needs nothing, and which is ` +
-        `what this strategy's read path does today (its compression stage is not yet wired).`
+        `  Fix:  pass \`llm\` on the strategy, with its own provider instance — a cheap model ` +
+        `is the point of it.\n` +
+        `  Or:   use \`{ kind: 'window', size: <recent> }\`, which keeps the last N entries ` +
+        `verbatim, needs nothing, and costs nothing.`
+      );
+    case 'model':
+      return (
+        `${site}: ${where} needs a \`model\` — the id its \`llm\` is called with — and none was ` +
+        `passed.\n` +
+        declared +
+        `  There is no fall back to the agent's own model: the same provider family would ` +
+        `quietly bill your MAIN model for compression, and a different vendor would be sent a ` +
+        `model id it has never heard of.\n` +
+        `  Fix:  \`model: 'claude-haiku-4-5'\` — or whatever your summarizer's cheap model is ` +
+        `called.`
       );
     default:
       return (

@@ -355,9 +355,10 @@ plus an identity-scoped store.
 
 - **TYPE (4):** `episodic` (raw messages) · `semantic` (facts or embedded msgs) · `narrative`
   (story beats) · **`causal`** (footprintjs snapshots — the differentiator). Type gates legal strategies.
-- **STRATEGY (7):** `window` · `budget` · `summarize` (loads `recent` raw — its compression stage is
-  NOT composed in; the `llm` is required and never called) · `topK` · `extract` · `decay` (wired
-  9.5.0 — age half-life, EPISODIC only) · `hybrid`. No-LLM ones are free; topK needs an embedder +
+- **STRATEGY (7):** `window` · `budget` · `summarize` (wired 9.14.0 — keeps `recent` raw, folds
+  everything older with ONE call to the named `model`, and WRITES the summary back so a span is
+  paid for once; the originals stay, excluded by the summary's coverage) · `topK` · `extract` ·
+  `decay` (wired 9.5.0 — age half-life, EPISODIC only) · `hybrid`. No-LLM ones are free; topK needs an embedder +
   a store that can `search()`. `listMemoryStrategies()` is this list machine-readable, with the
   requirement of each — and `defineMemory` refuses at build when one is missing.
 - **STORE:** `MemoryStore` interface (get/put/list/delete/seen/feedback/forget, optional `search`).
@@ -381,7 +382,7 @@ narrative. `exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
 > consumes it into the prompt — there is no merge stage. Writes persist correctly; reads don't reach
 > the LLM in the current chart. (`buildDynamicAgentChart` threads the key through the boundary, so it
 > preserves — not worsens — this behavior.) Also: causal `decisions`/`toolCalls` are written empty
-> (TODO), `COMMITS` projection falls back to decisions, `SUMMARIZE` never calls its `llm`,
+> (TODO), `COMMITS` projection falls back to decisions,
 > `HYBRID`-episodic uses only the first sub-strategy, topK/causal threshold is strict (no
 > below-threshold fallback). (`DECAY` threw when this was written; wired in 9.5.0.)
 
@@ -569,9 +570,8 @@ checkpoint,pauseData}`. `agent.resume(checkpoint,input)` continues; the handler'
 - **Causal memory `decisions`/`toolCalls` written empty** — replay capability architecturally ready,
   not yet populated from the live FlowRecorder. `COMMITS` projection falls back to decisions.
 - **Cache `recentHitRate` not written back** — CacheGate hit-rate rule can't auto-fire (v2.7).
-- **`SUMMARIZE` never calls its `llm`** — the compression stage is composed into no pipeline, so the
-  strategy loads the last `recent` turns like `WINDOW` (declared in `listMemoryStrategies()`);
-  **`HYBRID`-episodic** uses only the first sub-strategy. (`DECAY` used to throw — wired in 9.5.0.)
+- **`HYBRID`-episodic uses only the first sub-strategy.** (`SUMMARIZE` used to call nothing —
+  wired in 9.14.0, one call per span, written back. `DECAY` used to throw — wired in 9.5.0.)
 - **Bedrock streaming yields empty toolCalls** — tool-using Bedrock agents must use `complete()`.
 - **MapReduce shard runners don't wire recorders** — LLM events inside shards don't reach the outer dispatcher.
 

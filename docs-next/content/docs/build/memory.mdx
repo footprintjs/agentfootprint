@@ -35,14 +35,22 @@ Causal memory is the differentiator. Other libraries' memory remembers what was 
 |---|---|---|
 | `WINDOW` | Last N entries (rule, no LLM, no embeddings) | Free |
 | `BUDGET` | Fit-to-tokens via decider | Free |
-| `SUMMARIZE` | Keeps the last `recent` turns raw — see the caveat below | Free today; the `llm` is required and not yet called |
+| `SUMMARIZE` | Keeps the last `recent` entries raw, folds everything older into one stored summary | One `llm` call **per span**, not per turn — the summary is written back |
 | `TOP_K` | Score-threshold semantic retrieval | Embedding call per query |
 | `EXTRACT` | LLM distills structured facts on write | One LLM call per write |
 | `DECAY` | Drops entries that have faded on a half-life | Free — a timestamp and an exponent |
 | `HYBRID` | Compose multiple strategies | Sum of constituents |
 
-<Callout type="warn" title="SUMMARIZE does not compress yet">
-`defineMemory({ strategy: { kind: SUMMARIZE, recent, llm } })` builds a pipeline that loads the last `recent` turns and stops — the compression stage exists in the source but is composed into nothing, so the `llm` you pass is never called. It is still **required**, and `listMemoryStrategies()` reports the caveat in the strategy's own description rather than leaving you to discover it from a token bill that never arrives. For compaction that does run, reach for [`.compaction({ summarizer, model })`](doc:window-strategies) on the Agent.
+<Callout type="info" title="How SUMMARIZE spends your money (9.14.0)">
+`defineMemory({ strategy: { kind: SUMMARIZE, recent, size, llm, model } })` loads `size` entries, keeps the newest `recent` verbatim, and folds the rest with **one** call to `model`. The summary is then **written back to the same store** under `msg-summary-{fromTurn}-{toTurn}`, so the next turn reads it instead of buying it again — a span is compressed once in the life of a conversation.
+
+Three things follow, and they are the whole design:
+
+- **The originals are kept.** A summary is a claim *about* the conversation; the entries it covers stay in the store and are excluded from recall by the summary's coverage metadata. Delete the summary and recall is verbatim again.
+- **`model` is required, with no fallback to the agent's model** — the same law [`.compaction()`](doc:window-strategies) has enforced since 8.14.0. `Agent.memory()` additionally refuses a summarizer that is the agent's own provider *instance* at the agent's own model.
+- **A broken summarizer degrades to `WINDOW`, loudly** — one warning, one `memory.strategy_applied` event, and recall proceeds verbatim. A summary that comes back no shorter than the span it would replace is refused and latched, so the same question is not bought twice.
+
+`.compaction({ summarizer, model })` on the Agent is this same move applied to the **live window** rather than to recall; the two compose.
 </Callout>
 
 A `WINDOW` strategy on an Episodic store keeps the last N messages; on Semantic / Narrative it keeps the last N facts / beats. **Causal is the exception** — it supports only `TOP_K` (semantic match), never `WINDOW` (see the Causal section below). Mix and match the rest.

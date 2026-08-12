@@ -57,7 +57,12 @@ function satisfiedStrategy(kind: string): Strategy {
     case MEMORY_STRATEGIES.BUDGET:
       return { kind: MEMORY_STRATEGIES.BUDGET, reserveTokens: 256 };
     case MEMORY_STRATEGIES.SUMMARIZE:
-      return { kind: MEMORY_STRATEGIES.SUMMARIZE, recent: 5, llm: mock({ reply: 'summary' }) };
+      return {
+        kind: MEMORY_STRATEGIES.SUMMARIZE,
+        recent: 5,
+        llm: mock({ reply: 'summary' }),
+        model: 'mock-haiku',
+      };
     case MEMORY_STRATEGIES.TOP_K:
       return { kind: MEMORY_STRATEGIES.TOP_K, topK: 3, embedder: mockEmbedder() };
     case MEMORY_STRATEGIES.EXTRACT:
@@ -115,7 +120,10 @@ describe('listMemoryStrategies — unit', () => {
     const req = (kind: string) => memoryStrategyInfo(kind)?.requirements;
     expect(req(MEMORY_STRATEGIES.WINDOW)).toEqual([]);
     expect(req(MEMORY_STRATEGIES.BUDGET)).toEqual([]);
-    expect(req(MEMORY_STRATEGIES.SUMMARIZE)).toEqual(['llm']);
+    // `model` joined `llm` in 9.14.0 — the strategy calls a model now, and a
+    // host that holds a provider may still have no answer for which model
+    // compression should run on. Two requirements, checked separately.
+    expect(req(MEMORY_STRATEGIES.SUMMARIZE)).toEqual(['llm', 'model']);
     expect(req(MEMORY_STRATEGIES.TOP_K)).toEqual(['embedder', 'vector-store']);
     expect(req(MEMORY_STRATEGIES.EXTRACT)).toEqual([]);
     expect(req(MEMORY_STRATEGIES.DECAY)).toEqual([]);
@@ -144,12 +152,17 @@ describe('listMemoryStrategies — consumer scenarios', () => {
     expect(offerable).toContain('topK');
   });
 
-  it('the descriptions say what a picker needs to say — including the summarize caveat', () => {
+  it('the summarize description says what it DOES, and carries no caveat (9.14.0)', () => {
     const summarize = memoryStrategyInfo(MEMORY_STRATEGIES.SUMMARIZE);
-    // The compression stage is not composed into the pipeline defineMemory
-    // builds. A picker that offered this as working compaction would lie.
-    expect(summarize?.description).toMatch(/not (yet )?(composed|called|wired)/i);
-    expect(summarize?.description).toMatch(/compaction/);
+    // Through 9.13.0 this description carried an HONEST CAVEAT: the stage
+    // existed and was composed into nothing, so the `llm` was required and
+    // never called. The wiring landed; the caveat must not outlive it, in
+    // either direction — a picker reading this offers real compression now.
+    expect(summarize?.description).not.toMatch(/not (yet )?(composed|called|wired)/i);
+    expect(summarize?.description).not.toMatch(/caveat/i);
+    expect(summarize?.description).toMatch(/written back/i);
+    expect(summarize?.description).toMatch(/originals are kept/i);
+    expect(summarize?.description).toMatch(/model/);
   });
 });
 

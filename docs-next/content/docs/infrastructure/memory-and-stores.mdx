@@ -208,7 +208,7 @@ refuses at **build** when a declared requirement is absent — including inside 
 | `EXTRACT` | — (`extractor: 'llm'` additionally needs `llm`) | semantic, narrative | You want structured facts or narrative beats distilled on the **write** side |
 | `TOP_K` | `embedder`, `vector-store` | semantic, causal | Similarity recall above a threshold — and strictly: when nothing clears it, nothing is injected |
 | `HYBRID` | — (each sub-strategy carries its own) | episodic, semantic, narrative | Several rules on one store |
-| `SUMMARIZE` | `llm` | episodic | See the caveat below |
+| `SUMMARIZE` | `llm`, `model` | episodic | Recall outgrew the window: keep the newest `recent` verbatim, fold the rest with one call, and store the summary so the call is paid once |
 
 Offer only what a deployment can run:
 
@@ -225,13 +225,21 @@ const offerable = listMemoryStrategies().filter(
 `memoryStrategyInfo(kind)` returns one descriptor, or `undefined` for a string
 that is not a strategy at all.
 
-<Callout type="warn" title="SUMMARIZE says its own caveat out loud (9.5.0)">
-The compression stage exists but is **not composed into the pipeline
-`defineMemory` builds**, so what runs today is the last `recent` entries,
-verbatim — the `llm` is required and not yet called. Until it is wired,
-`.compaction({ summarizer, model })` on the Agent is the summarizer that does
-run. That sentence lives in the strategy's own `description`, so a picker
-rendering `listMemoryStrategies()` shows it to the person choosing.
+<Callout type="info" title="SUMMARIZE declares TWO requirements (9.14.0)">
+`llm` **and** `model`. They are separate because a deployment can hold a
+provider and still have no answer for which model compression should run on —
+and a library that picked one for you would be picking your invoice. There is
+no fallback to the agent's own model, and `Agent.memory()` refuses a summarizer
+that is the agent's own provider *instance* at the agent's own model.
+
+What the strategy does with them: keep the newest `recent` entries verbatim,
+fold everything older into one summary entry, and **write that entry back to
+this store** under `msg-summary-{fromTurn}-{toTurn}` — so a span costs one call
+in the life of the conversation, not one per turn. The folded originals are not
+deleted; they are excluded from recall by the summary's coverage metadata, and
+they age out under the same TTL they always had. Through 9.13.0 this strategy
+required an `llm` and never called it; the description in
+`listMemoryStrategies()` said so, and now says what it does instead.
 </Callout>
 
 ### Axis B — the service's own extraction, targeted by opaque ids

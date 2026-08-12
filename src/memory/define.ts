@@ -28,6 +28,8 @@
  * @see ./pipeline/*.ts          for the existing pipeline factories this dispatches to
  */
 
+import type { LLMProvider } from '../adapters/types.js';
+
 import { refuseAsRole } from './asRoleRefusal.js';
 import { assertStrategyRequirements, assertStrategyShape } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
@@ -76,7 +78,7 @@ import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.j
  * | --------- | ------------- | ------------------------ |
  * | EPISODIC  | WINDOW        | defaultPipeline          |
  * | EPISODIC  | BUDGET        | defaultPipeline          |
- * | EPISODIC  | SUMMARIZE     | defaultPipeline (the compression stage is NOT composed in yet — see `listMemoryStrategies()`) |
+ * | EPISODIC  | SUMMARIZE     | defaultPipeline + summarize stage (one call per span, written back) |
  * | EPISODIC  | DECAY         | defaultPipeline + filterByDecay stage |
  * | SEMANTIC  | TOP_K         | semanticPipeline         |
  * | SEMANTIC  | EXTRACT       | factPipeline             |
@@ -109,6 +111,8 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
   // in its log, and nothing to disable later by accident.
   const write = options.readOnly === true ? undefined : pipeline.write;
 
+  const billing = summarizerBilling(options);
+
   const definition: MemoryDefinition = {
     id: options.id,
     ...(options.description !== undefined && { description: options.description }),
@@ -120,6 +124,10 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
     // is a key, not a label (see MemoryDefinition.store).
     store: options.store,
     timing: options.timing ?? MEMORY_TIMING.TURN_START,
+    // Declared so `Agent.memory()` can refuse a summarizer that is the agent's
+    // own instance at the agent's own model — a check only the builder can
+    // make. See `MemoryDefinition.billing`.
+    ...(billing !== undefined && { billing }),
     ...(options.redact !== undefined && { redact: options.redact }),
     ...(options.corpus !== undefined && { corpus: options.corpus }),
     ...(options.flavor !== undefined && { flavor: options.flavor }),
@@ -226,20 +234,36 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
     }
 
     case MEMORY_STRATEGIES.SUMMARIZE: {
-      // WHAT THIS ACTUALLY DOES, as of 9.5.0: loads the last `recent` turns
-      // and stops. The `summarize` stage exists (stages/summarize.ts) and is
-      // composed into NOTHING — the comment that used to sit here said the
-      // wire helpers add it "when the strategy carries an `llm`", and they
-      // never have. Verified by counting calls: eight turns through this
-      // pipeline with a counting provider, zero `complete()` calls.
-      //   It is left as-is rather than half-wired because the compressor
-      // needs things this strategy does not carry (a model name, cost
-      // accounting, the separate-instance law `.compaction()` enforces), and
-      // the Agent already has that door. `listMemoryStrategies()` says so in
-      // the strategy's own description so a reader learns it from the
-      // library rather than from a token bill.
+      // Wired in 9.14.0. Through 9.13.0 this arm built `defaultPipeline({
+      // loadCount: recent })` — the last `recent` entries, verbatim, with the
+      // `summarize` stage composed into nothing and the required `llm` never
+      // called. Eight turns through it with a counting provider made zero
+      // `complete()` calls. What it needed before it could be wired was
+      // exactly what this arm now demands: a named model, and a summary that
+      // is written back so the call is paid once instead of once per recall.
       const sum = s as SummarizeStrategy;
-      const config: DefaultPipelineConfig = { store: options.store, loadCount: sum.recent };
+      const size = sum.size ?? DEFAULT_SUMMARIZE_WINDOW;
+      requireSummarizeConfig(options, sum, size);
+      const config: DefaultPipelineConfig = {
+        store: options.store,
+        loadCount: size,
+        summarize: {
+          llm: sum.llm,
+          model: sum.model,
+          preserveRecent: sum.recent,
+          // The window filling IS the trigger: recall cannot grow past
+          // `size`, so "the pool is full and there is material older than the
+          // tail" is the moment compression starts being worth its call.
+          triggerMinEntries: size,
+          // Never spend a call to fold less than the tail kept verbatim. The
+          // stage's own floor is 2 (don't "compress" one entry); this is the
+          // cost policy on top of it, and it is what stops a saturated window
+          // from folding two entries every turn forever.
+          minFoldEntries: Math.max(2, sum.recent),
+          strategyId: options.id,
+          ...(sum.systemPrompt !== undefined && { systemPrompt: sum.systemPrompt }),
+        },
+      };
       return defaultPipeline(config);
     }
 
@@ -304,6 +328,100 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
       void _exhaustive;
       throw new Error(`defineMemory: unknown strategy kind`);
     }
+  }
+}
+
+/**
+ * The `{ provider, model }` this memory's own model calls bill to, or
+ * `undefined` for the six strategies that make none.
+ *
+ * Only SUMMARIZE calls a model on the host's behalf ON EVERY RUN. EXTRACT with
+ * `extractor: 'llm'` also holds a provider, and is deliberately NOT declared
+ * here: it carries no `model` at all (its extractors compose their own
+ * request), so there is no second half to compare and the refusal this feeds
+ * would have nothing to say.
+ */
+function summarizerBilling(
+  options: DefineMemoryOptions,
+): { readonly provider: LLMProvider; readonly model: string } | undefined {
+  type Shape = { readonly kind?: string; readonly llm?: LLMProvider; readonly model?: string };
+  const written = options.strategy as Shape & { readonly strategies?: readonly Shape[] };
+  // A hybrid builds its FIRST sub-strategy (buildEpisodicPipeline), so that is
+  // the one whose summarizer would run and the one the refusal must see.
+  const strategy =
+    written?.kind === MEMORY_STRATEGIES.HYBRID ? written.strategies?.[0] : (written as Shape);
+  if (strategy?.kind !== MEMORY_STRATEGIES.SUMMARIZE) return undefined;
+  if (strategy.llm === undefined || typeof strategy.model !== 'string') return undefined;
+  return { provider: strategy.llm, model: strategy.model };
+}
+
+/**
+ * How much history a SUMMARIZE memory loads per turn when the strategy does
+ * not say. Not a new number: it is `loadRecent`'s own default, which every
+ * other EPISODIC pipeline has used since 2.x.
+ */
+const DEFAULT_SUMMARIZE_WINDOW = 20;
+
+/**
+ * The four things a SUMMARIZE memory is refused for — an unnamed `model`, a
+ * `recent` that is not a positive integer, a verbatim tail as large as the
+ * window, and `readOnly` — each at BUILD and each naming the line that fixes
+ * it.
+ *
+ * The `llm` itself is not checked here — `assertStrategyRequirements` declares
+ * and enforces that one for every strategy, and saying it twice would mean two
+ * messages for one mistake.
+ */
+function requireSummarizeConfig(
+  options: DefineEpisodicOptions,
+  strategy: SummarizeStrategy,
+  size: number,
+): void {
+  const id = options.id;
+  // No summarizer at all is not a `model` problem, and saying so here would
+  // pre-empt the backstop's better sentence with a worse one. Let
+  // `assertStrategyRequirements` name the `llm` — it is the thing missing.
+  if (strategy.llm === undefined) return;
+  if (typeof strategy.model !== 'string' || strategy.model.trim() === '') {
+    throw new Error(
+      `defineMemory[${id}]: SUMMARIZE needs a \`model\` — the id the summarizer is called ` +
+        `with — and none was passed.\n` +
+        `  It used to default to whatever the agent ran, and that default had no correct case: ` +
+        `the same provider family quietly billed your MAIN model for every fold (the one thing ` +
+        `naming a cheap summarizer exists to prevent), and a different vendor was sent a model ` +
+        `id it has never heard of, mid-conversation, on a paid run.\n` +
+        `  Fix:  \`strategy: { kind: 'summarize', recent: ${strategy.recent}, llm, ` +
+        `model: 'claude-haiku-4-5' }\` — or whatever your summarizer's cheap model is called.`,
+    );
+  }
+  if (!Number.isInteger(strategy.recent) || strategy.recent < 1) {
+    throw new Error(
+      `defineMemory[${id}]: SUMMARIZE needs \`recent\` to be an integer >= 1 — how many of the ` +
+        `newest entries stay verbatim — and got \`${String(strategy.recent)}\`.\n` +
+        `  Keeping zero verbatim would hand the model a summary of a conversation and none of ` +
+        `the conversation, including the turn it is answering.`,
+    );
+  }
+  if (strategy.recent >= size) {
+    throw new Error(
+      `defineMemory[${id}]: SUMMARIZE keeps \`recent: ${strategy.recent}\` entries verbatim out ` +
+        `of a \`size: ${size}\` window, so nothing older than the verbatim tail is ever loaded ` +
+        `and the summarizer would never have anything to fold — a paid dependency wired to a ` +
+        `stage that cannot fire.\n` +
+        `  Fix:  raise \`size\` (how much history to load per turn, default ` +
+        `${DEFAULT_SUMMARIZE_WINDOW}) above \`recent\`, e.g. \`size: ${strategy.recent * 4}\`.\n` +
+        `  Or:   this is \`{ kind: 'window', size: ${strategy.recent} }\`, which costs nothing.`,
+    );
+  }
+  if (options.readOnly === true) {
+    throw new Error(
+      `defineMemory[${id}]: SUMMARIZE cannot be \`readOnly\`. The two options contradict each ` +
+        `other: \`readOnly\` says nothing this memory sees is ever stored back, and SUMMARIZE's ` +
+        `cost model IS the store — the summary is written under ` +
+        `\`msg-summary-{from}-{to}\` so a span is compressed once instead of once per turn.\n` +
+        `  Fix:  drop \`readOnly\`, or use \`{ kind: 'window', size: ${size} }\` for a memory ` +
+        `that only ever reads.`,
+    );
   }
 }
 

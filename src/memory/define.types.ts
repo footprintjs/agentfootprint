@@ -157,16 +157,64 @@ export interface BudgetStrategy {
 }
 
 /**
- * Summarize — when the conversation grows long, an LLM compresses older
- * turns into a paragraph; recent N turns stay raw. The standard answer
- * to "long conversations blow context."
+ * Summarize — when recall grows long, one LLM call compresses the older
+ * entries into a summary that is STORED, while the most recent `recent`
+ * entries stay raw. The standard answer to "long conversations blow context".
+ *
+ * Wired in 9.14.0. Through 9.13.0 this type existed, `llm` was required, and
+ * the pipeline `defineMemory` built loaded the last `recent` entries and
+ * stopped — a strategy that named a summarizer and never called it. What runs
+ * now:
+ *
+ *   1. load up to `size` entries (default 20);
+ *   2. keep the last `recent` verbatim, seam rounded outward to a whole turn;
+ *   3. fold everything older into ONE summary entry — one call, over the span;
+ *   4. WRITE that entry back to the same store under
+ *      `msg-summary-{fromTurn}-{toTurn}`, so the next turn reads it instead of
+ *      paying for it again;
+ *   5. recall is `[summary, ...recent verbatim]`.
+ *
+ * The folded originals are NOT deleted. They stay in the store and are
+ * excluded from recall by the summary's coverage metadata — delete the
+ * summary entry and recall is verbatim again.
  */
 export interface SummarizeStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.SUMMARIZE;
-  /** Keep this many most-recent turns uncompressed. */
+  /**
+   * Keep this many most-recent entries uncompressed. The seam is rounded
+   * outward to a whole turn, so a question is never summarized while its
+   * answer stays raw.
+   */
   readonly recent: number;
+  /**
+   * How much history to load per turn — the pool the fold is taken from.
+   * Default 20 (`loadRecent`'s own default). Must be greater than `recent`:
+   * a window no larger than the verbatim tail never has anything older to
+   * compress, which is `window` with a summarizer bolted on.
+   */
+  readonly size?: number;
   /** LLM that does the compression — recommend a cheap model (haiku). */
   readonly llm: LLMProvider;
+  /**
+   * Which model `llm` is called with. REQUIRED (9.14.0), and there is no
+   * fall back to the agent's own model — the same law `.compaction()` has
+   * enforced since 8.14.0. A default here had no correct case: the same
+   * provider family quietly bills your MAIN model for compression, and a
+   * different vendor is sent a model id it has never heard of.
+   *
+   * `Agent.memory()` additionally refuses a summarizer that is the agent's own
+   * provider INSTANCE at the agent's own model: those two calls look identical
+   * and are not — the agent's runs through reliability, decorators and the
+   * cache, and this one runs through none of them.
+   */
+  readonly model: string;
+  /**
+   * Override the instruction the summarizer is given (the transcript
+   * delimiters and the authored label on the stored summary stay the
+   * library's). Use it for domain summaries: "preserve every refund-related
+   * number".
+   */
+  readonly systemPrompt?: string;
 }
 
 /**
@@ -377,6 +425,24 @@ export interface MemoryDefinition<T = unknown> {
   // system. A definition field that no run consults is a claim the
   // recording cannot back, so it is gone along with the option that fed
   // it. See `./asRoleRefusal.ts`.
+
+  /**
+   * What this memory's OWN LLM work bills to (9.14.0) — present only for a
+   * strategy that calls a model on the host's behalf, which today is
+   * `SUMMARIZE`.
+   *
+   * Carried in the open for one reason: `Agent.memory()` is where the agent's
+   * own provider and model are known, and it refuses a summarizer that is that
+   * exact instance at that exact model (the 8.14.0 rule `.compaction()` and
+   * `.window()` already enforce). `defineMemory` cannot make that check — it
+   * has never heard of an agent — so it declares the billing and the builder
+   * checks it. Same field name and same shape as `WindowStrategy.billing`, so
+   * one refusal serves both.
+   */
+  readonly billing?: {
+    readonly provider: LLMProvider;
+    readonly model: string;
+  };
 
   /** Reserved for a future release — patterns to redact before write. */
   readonly redact?: MemoryRedactionPolicy;

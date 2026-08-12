@@ -157,6 +157,9 @@ describe('defineMemory — consumer scenarios', () => {
         recent: 6,
         // Mock LLM placeholder — real usage passes an LLMProvider
         llm: { name: 'mock', complete: async () => ({ content: 'summary' }) } as never,
+        // Required since 9.14.0: the summarizer names its own model, and
+        // there is no fall back to the agent's.
+        model: 'mock-haiku',
       },
       store: new InMemoryStore(),
     });
@@ -489,6 +492,7 @@ describe('defineMemory — ROI', () => {
           name: 'haiku',
           complete: async () => ({ content: 'summary text' }),
         } as never,
+        model: 'claude-haiku-4-5',
       },
       store: new InMemoryStore(),
     });

@@ -7,6 +7,157 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.14.0] - 2026-08-12
+
+**A strategy that said so now does so.** `defineMemory({ strategy: { kind:
+SUMMARIZE } })` has required an `llm` since it existed and never called one: the
+compression stage sat in `src/memory/stages/summarize.ts` composed into no
+pipeline, so `EPISODIC × SUMMARIZE` behaved as `WINDOW(recent)` — eight turns
+through it with a counting provider made **zero** `complete()` calls. 9.5.0
+wrote that fact down honestly, in `listMemoryStrategies()`, the docs table,
+MENTAL_MODEL.md, AGENTS.md and the factory arm. This release deletes all five
+sentences by making them false.
+
+### Added — SUMMARIZE compresses, once per span, and keeps the originals
+
+```ts
+const memory = defineMemory({
+  id: 'long-chat',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: {
+    kind: MEMORY_STRATEGIES.SUMMARIZE,
+    recent: 6,                  // the 6 newest entries stay verbatim
+    size: 20,                   // how much history to load per turn
+    llm: anthropic(),           // its OWN instance, not the agent's
+    model: 'claude-haiku-4-5',  // named explicitly — no fallback
+  },
+  store,
+});
+```
+
+What runs, per turn: load `size` entries, keep the newest `recent` verbatim
+(seam rounded outward to a whole turn, so a question is never folded away from
+its answer), fold everything older with **one** call to `model`, and **write the
+summary back to the same store** under `msg-summary-{fromTurn}-{toTurn}`. Recall
+becomes `[summary, ...recent verbatim]`. Because the summary is stored, a span is
+compressed **once in the life of a conversation** rather than once per recall —
+that write-back is the entire cost model, and it survives a fresh `Agent` (or a
+fresh process) per turn, because the store is what remembers.
+
+**The folded originals are never deleted.** They stay in the store byte-identical
+and are excluded from recall by the summary's coverage metadata
+(`metadata.summarizes.coveredIds`) and by nothing else — delete the summary entry
+and the next recall is verbatim again. A summary is a claim ABOUT the
+conversation, the same law `.compaction()` follows in the live window.
+
+### Added — the summarizer names its model, and may not be the agent itself
+
+`model` is **required** on the strategy, with no `?? agentModel` fallback: the
+8.14.0 `.compaction()` law, applied to the second door that spends money on your
+behalf. The deleted default had no correct case — the same provider family
+quietly bills your MAIN model for compression, and a different vendor is sent a
+model id it has never heard of, mid-conversation, on a paid run.
+
+`Agent.memory()` now also refuses a summarizer that is the agent's own provider
+**instance** at the agent's own model (the narrow 8.14.0 rule; a *second
+instance* of the same vendor at the same model is allowed and sometimes right).
+`defineMemory` cannot make that check — it has never heard of an agent — so a
+`MemoryDefinition` now declares `billing: { provider, model }` and the builder
+reads it, the same field and shape `WindowStrategy.billing` already used. One
+refusal, three doors.
+
+Two more refusals at build, both naming the line that fixes them: `recent >=
+size` (a verbatim tail as large as the window means nothing older is ever
+loaded, so the summarizer could never fire — a paid dependency wired to a stage
+that cannot run), and `readOnly: true` (the write-back IS the cost model, so
+"nothing is ever stored back" and SUMMARIZE contradict each other).
+
+`listMemoryStrategies()` reports `requirements: ['llm', 'model']`. They are two
+requirements rather than one because a deployment can hold a provider and still
+have no answer for which model compression should run on — and a library that
+picked one would be picking your invoice.
+
+### Added — three ways it declines, all of them out loud
+
+Every one emits the existing `agentfootprint.memory.strategy_applied` with a
+reason a reader can act on, plus the model and the token usage the call
+reported. **Not `cost.tick`** — the USD channel needs a `pricingTable` and the
+run's cumulative counters, both of which live on the Agent's scope, and a memory
+pipeline is a subflow with neither; a tick reading `estimatedUsd: 0` would be a
+cheaper-looking lie than saying nothing, so the tokens ride the memory event and
+the fold is never silent:
+
+- **not worth a call** — fewer foldable entries than the floor. No call, no
+  change. (`defineMemory` sets the floor to the size of the verbatim tail: never
+  fold less than you keep.)
+- **summarizer failed** — one `console.warn` per stage instance, one event, and
+  recall proceeds **VERBATIM**. A broken compressor degrades this strategy to
+  `window`; it does not fail the turn. (Through 9.13.0 the stage re-threw. A
+  memory that cannot recall because its optional compressor is down is a worse
+  answer than an uncompressed one.)
+- **replacement-not-smaller** — the summary plus its authored label is no shorter
+  than the span it would replace, so the fold is dropped and the span is
+  **latched** by its own entry ids: the same question is not bought twice. A span
+  that has GROWN is a different key and is asked again, on purpose (the 8.14.0
+  latch, same reasoning, same shape).
+
+Prompt-injection boundary, both directions, as `.compaction()` has it: going out,
+the span is rendered as DATA between delimiters the authored instruction names;
+coming back, the summary is appended after an authored label the library wrote,
+so an entry always says in the library's own words and first that what follows is
+a model's claim and that the originals are retained.
+
+### Changed — behaviour worth knowing before you upgrade
+
+- `EPISODIC × SUMMARIZE` now makes LLM calls where it previously made none. It is
+  the same config shape plus a required `model`, so an existing definition
+  fails at `defineMemory` (naming the fix) rather than silently starting to spend.
+- The `summarize` stage's `llm` accepts an `LLMProvider` (+ `model`) as well as
+  the 2.x `(messages) => Promise<string>` callback. The callback keeps its exact
+  contract; passing `model` with a callback is refused, since nothing would read
+  it. The provider form is what reports token usage to the event.
+- A summary entry is filed at the time of the **material it stands for** —
+  strictly one millisecond after the newest entry it covers — not at the time of
+  the fold. Order depends on it (a claim about turns 1–7 stamped `now` sorts
+  after turn 12 and reads as if it happened last), and so does correctness: being
+  strictly newer than everything it covers is what guarantees a recency-limited
+  load can never admit a covered original while dropping the summary that
+  excludes it. Anchoring on the tie instead lets a page boundary separate them,
+  and the span is then folded a second time under an overlapping id — found by
+  the end-to-end probe, and pinned by test.
+- A write TTL applies to the summary on the **span's** clock, so a retention
+  window ("delete chat history after 30 days") expires the summary with the turns
+  it compressed instead of days after them. Decay scores it by the same age, so a
+  summary of last month fades on last month's schedule rather than passing as
+  fresh.
+- `defaultPipeline` takes a `summarize` config and composes a `Summarize` stage
+  directly after the load — before decay and before the budget picker, because
+  both decide against what recall CONTAINS. Absent config means an absent stage,
+  never a stage that runs and does nothing (the `decay` precedent).
+
+### Removed — the caveat, everywhere it was written
+
+The 9.5.0 honest-caveat text is gone from `listMemoryStrategies()`'s description,
+the `missingRequirement('llm')` refusal, the `defineMemory` dispatch table and
+arm comment, `docs/MENTAL_MODEL.md` (§7, the latent-gap block and §14),
+`docs-next` (`build/memory.mdx`, `infrastructure/memory-and-stores.mdx`) and
+`AGENTS.md`. A test now asserts the description does NOT carry it, in both
+directions — a caveat that outlives the gap is the same kind of lie as a gap that
+outlives its caveat.
+
+### Tests + example
+
+`test/memory/summarize-wired.test.ts` is the 9.5.0 probe with its assertion
+inverted (8 turns, counting provider, `complete()` calls > 0), plus: the summary
+lands in the store under its deterministic id, covered originals are excluded
+from recall AND still present, the recent turns survive verbatim, no two folds
+ever cover the same entry, a fresh Agent per turn keeps the same books, the loud
+degradation, and every refusal. `test/memory/stages/summarize.test.ts` grew to 31
+tests across the 7 patterns. `examples/memory/03-summarize-strategy.md` and its
+runnable example — which passed a summarizer that never ran — now assert that it
+did, that the summary was stored, and that every summarized-away original is
+still in the store.
+
 ## [9.13.0] - 2026-08-12
 
 **The third provider column opens, and it opens with the two adapters that can be
