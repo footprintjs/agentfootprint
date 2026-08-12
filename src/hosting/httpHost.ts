@@ -122,6 +122,16 @@ export interface HttpWire {
     readonly input: string;
     readonly sessionId?: string;
     /**
+     * The end user this request is for, when this dialect has a place the
+     * transport puts one (9.12.0). Lands on {@link HostRequest.userId}, whose
+     * note says what it is worth and what it is not.
+     *
+     * Optional, and a dialect with no such place returns nothing — the honest
+     * answer for a wire whose transport never carried a user. Deriving one from
+     * the session id would be this file inventing an actor.
+     */
+    readonly userId?: string;
+    /**
      * A person's answer to an outstanding question, when this request carries
      * one. Its presence is what makes a request a RESUME rather than a new
      * message, so a wire that never returns it can only ever start new turns.
@@ -792,7 +802,7 @@ async function dispatchOne(
 
   const headers = lowerCasedHeaders(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
-  const { input, sessionId, decision, responseHeaders } = wire.readRequest({
+  const { input, sessionId, userId, decision, responseHeaders } = wire.readRequest({
     body,
     headers,
     query,
@@ -891,6 +901,7 @@ async function dispatchOne(
       {
         input,
         ...(sessionId !== undefined && { sessionId }),
+        ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
         headers,
         signal: controller.signal,

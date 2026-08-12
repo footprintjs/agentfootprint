@@ -28,7 +28,10 @@
  * and the caller's conversation arrives in the
  * `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header rather than in the body,
  * which is the one thing paths-and-bodies configuration alone could not
- * express before this release.
+ * express before this release. Its sibling
+ * `X-Amzn-Bedrock-AgentCore-Runtime-User-Id` carries WHO is calling (9.12.0) —
+ * two headers, two different facts, and the second is why a served run can name
+ * an actor in its audit trail without anybody configuring one.
  *
  * ── The second door ──────────────────────────────────────────────────────────
  * `/ws` is this runtime's answer for a caller that cannot host an inbound
@@ -95,6 +98,31 @@ const RUNTIME_PORT = 8080;
  * front of the container is free to re-case them.
  */
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
+/**
+ * The header the runtime puts the caller's END USER in — the second half of
+ * "who is this request for", and the documented inbound source for per-user
+ * identity (9.12.0).
+ *
+ * **Both names are the SDK's, not a guess.** `InvokeAgentRuntimeRequest` binds
+ * `runtimeSessionId` to {@link SESSION_HEADER} and `runtimeUserId` to this one,
+ * and the SDK describes this one as "an identifier for the end user making the
+ * request… passed through to the runtime container" — which is what makes the
+ * container's side of it this adapter's business. Verified against a real
+ * install of `@aws-sdk/client-bedrock-agentcore` before this shipped.
+ *
+ * Matched case-insensitively, through the same `headerValue` the session uses,
+ * for the same reason: a proxy in front of the container re-cases freely, and
+ * two header readers that disagree about casing is how one door sees a user the
+ * other cannot.
+ *
+ * **What it is worth, plainly.** The runtime passes this through from its front
+ * door, so its trustworthiness is that door's inbound-auth configuration — with
+ * JWT auth in front, it is the authenticated caller; on a container somebody
+ * exposed directly, it is a string anyone can send. It is read HERE and nowhere
+ * else for exactly that reason: the generic JSON wire has no such door in front
+ * of it, so it reads no such header.
+ */
+const USER_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-User-Id';
 /**
  * What the `/ws` door caps, as the runtime imposes it — **32KB per frame and a
  * 15-minute idle timeout.**
@@ -262,6 +290,12 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
       // caller-adjacent data, not identity — the port says so and it is just as
       // true here.
       const sessionId = headerValue(facts, SESSION_HEADER);
+      // WHO the request is for — the other header the runtime forwards, and a
+      // different fact from the session beside it: a session is a thread, this
+      // is a person. Read as-is and absent when absent; the runtime sends it
+      // only when the caller supplied one, and deriving a user from a session
+      // id would put a thread's name in the actor's place.
+      const userId = headerValue(facts, USER_HEADER);
       // A person's answer to a run that stopped to ask. Read as-is: what a
       // decision looks like is the tool author's business, not this dialect's.
       // Without it a deployment here could start turns but never finish one
@@ -270,6 +304,7 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
       return {
         input,
         ...(sessionId !== undefined && { sessionId }),
+        ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
       };
     },

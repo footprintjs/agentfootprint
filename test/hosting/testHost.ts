@@ -36,6 +36,8 @@ export interface InProcessHost extends AgentHost {
   deliver(request: {
     readonly input: string;
     readonly sessionId?: string;
+    /** WHO the transport says is calling (9.12.0). */
+    readonly userId?: string;
     /** A person's answer to an outstanding ask — makes this a resume. */
     readonly decision?: unknown;
     readonly headers?: Readonly<Record<string, string>>;
@@ -103,6 +105,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
             {
               input: request.input,
               ...(request.sessionId !== undefined && { sessionId: request.sessionId }),
+              ...(request.userId !== undefined && { userId: request.userId }),
               ...(request.decision !== undefined && { decision: request.decision }),
               ...(request.headers !== undefined && { headers: request.headers }),
             },

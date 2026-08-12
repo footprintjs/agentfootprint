@@ -85,8 +85,20 @@ A port shaped around one provider's request envelope stops being a port and
 becomes that provider's SDK with extra steps — and every adapter after the
 first pays for the shortcut. So the ports speak only the vocabulary every
 transport already has. A `HostRequest` carries an `input`, an optional
-`sessionId`, `headers` and a `signal`. A `HostReply` has `complete`, `emit` and
-`fail`. A `HostHandler` is a function from one to the other, and `HostHandle`
+`sessionId`, an optional `userId`, `headers` and a `signal`. A `HostReply` has
+`complete`, `emit` and `fail`.
+
+`userId` (9.12.0) is the one field worth a sentence of its own, because it is
+the one a reader is most likely to confuse with the field beside it: a
+`sessionId` is a **thread** and a `userId` is a **person**, and an audit trail
+that reports the first where the second belongs names the wrong party. Only a
+wire whose transport actually authenticates the caller fills it in — the
+AgentCore Runtime adapter reads it from the header that runtime forwards; the
+generic JSON wire reads no such header, because on a container anybody can POST
+to, a header is a string anybody can send. When it is there, `standingAgent`
+makes it the run's `identity.principal`, which is what puts a real person on
+`EventMeta.principal` and in `ctx.identity`. When it is not, nothing is
+invented. A `HostHandler` is a function from one to the other, and `HostHandle`
 has exactly one method, `close()`. That is the whole surface.
 
 Everything specific to *where* you deploy lives in the adapter for that place.

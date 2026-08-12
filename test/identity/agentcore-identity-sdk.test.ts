@@ -24,6 +24,7 @@ import {
   agentCoreIdentity,
   type BedrockAgentCoreIdentitySdkModule,
 } from '../../src/adapters/identity/agentcore.js';
+import { isCredentialIssued } from '../../src/identity/types.js';
 
 interface Sent {
   readonly command: string;
@@ -55,6 +56,7 @@ function fakeSdk(answers: Record<string, unknown> = {}) {
     } as unknown as BedrockAgentCoreIdentitySdkModule['BedrockAgentCoreClient'],
     GetResourceOauth2TokenCommand: command('GetResourceOauth2TokenCommand'),
     GetWorkloadAccessTokenForUserIdCommand: command('GetWorkloadAccessTokenForUserIdCommand'),
+    GetWorkloadAccessTokenForJWTCommand: command('GetWorkloadAccessTokenForJWTCommand'),
   };
   const constructed: { region?: string }[] = [];
   return { module, sent, constructed };
@@ -184,6 +186,174 @@ describe('agentCoreIdentity — per-user workload scoping via the shim', () => {
     ).rejects.toThrow(/workloadAccessToken/);
   });
 });
+
+// ── the JWT exchange: proof rather than assertion (9.12.0) ──────────
+
+describe('agentCoreIdentity — exchanging the user’s own JWT', () => {
+  it('exchanges (workloadName, userToken) first, then vends with what came back', async () => {
+    const { module, sent } = fakeSdk({
+      GetWorkloadAccessTokenForJWTCommand: { workloadAccessToken: 'workload-and-user' },
+      GetResourceOauth2TokenCommand: { accessToken: 't' },
+    });
+    const result = await agentCoreIdentity({
+      workloadName: 'my-agent',
+      workloadIdentityToken: 'the-static-one',
+      _sdk: module,
+    }).getCredential({ service: 's', mode: 'user', userToken: 'jwt.from.the.idp' });
+
+    expect(sent.map((s) => s.command)).toEqual([
+      'GetWorkloadAccessTokenForJWTCommand',
+      'GetResourceOauth2TokenCommand',
+    ]);
+    // `userToken` is the SDK's own field name — no rename between the port and
+    // the wire, which is one fewer place for a shape to drift.
+    expect(sent[0]?.input).toEqual({ workloadName: 'my-agent', userToken: 'jwt.from.the.idp' });
+    expect(sent[1]?.input['workloadIdentityToken']).toBe('workload-and-user');
+    // Nothing else about vending changed: the same credential, through the same
+    // machinery, out of the same result branch.
+    expect(result).toMatchObject({ status: 'issued' });
+    expect(isCredentialIssued(result) && result.credential.toHeaders()).toEqual({
+      authorization: 'Bearer t',
+    });
+  });
+
+  it('the JWT wins over the userId path — proof beats an assertion about the same person', async () => {
+    const { module, sent } = fakeSdk({
+      GetWorkloadAccessTokenForJWTCommand: { workloadAccessToken: 'from-jwt' },
+      GetWorkloadAccessTokenForUserIdCommand: { workloadAccessToken: 'from-assertion' },
+      GetResourceOauth2TokenCommand: { accessToken: 't' },
+    });
+    await agentCoreIdentity({ workloadName: 'my-agent', _sdk: module }).getCredential({
+      service: 's',
+      mode: 'user',
+      identity: { principal: 'ada' },
+      userToken: 'jwt',
+    });
+    expect(sent.map((s) => s.command)).not.toContain('GetWorkloadAccessTokenForUserIdCommand');
+    expect(sent[1]?.input['workloadIdentityToken']).toBe('from-jwt');
+  });
+
+  it('a request without one is untouched — the mode rides the REQUEST, not the provider', async () => {
+    const provider = agentCoreIdentity({ workloadName: 'my-agent', workloadIdentityToken: 'wit' });
+    const withJwt = fakeSdk({
+      GetWorkloadAccessTokenForJWTCommand: { workloadAccessToken: 'exchanged' },
+      GetResourceOauth2TokenCommand: { accessToken: 't' },
+    });
+    const without = fakeSdk({ GetResourceOauth2TokenCommand: { accessToken: 't' } });
+
+    // One provider, two requests, two different paths — because the token
+    // belongs to the caller, not to the configuration.
+    await agentCoreIdentity({ ...jwtOptions(withJwt.module) }).getCredential({
+      service: 's',
+      mode: 'user',
+      userToken: 'jwt',
+    });
+    await agentCoreIdentity({ ...jwtOptions(without.module) }).getCredential({
+      service: 's',
+      mode: 'machine',
+    });
+
+    expect(withJwt.sent.map((s) => s.command)).toContain('GetWorkloadAccessTokenForJWTCommand');
+    expect(without.sent.map((s) => s.command)).toEqual(['GetResourceOauth2TokenCommand']);
+    expect(without.sent[0]?.input['workloadIdentityToken']).toBe('wit');
+    expect(provider.id).toBe('agentcore-identity');
+  });
+
+  it('`requireUserToken` refuses a delegated request with no JWT — and never touches M2M', async () => {
+    const { module, sent } = fakeSdk({ GetResourceOauth2TokenCommand: { accessToken: 't' } });
+    const provider = agentCoreIdentity({
+      workloadName: 'my-agent',
+      workloadIdentityToken: 'wit',
+      requireUserToken: true,
+      _sdk: module,
+    });
+
+    const failure = await provider.getCredential({ service: 'github', mode: 'user' }).then(
+      () => '',
+      (err: Error) => err.message,
+    );
+    expect(failure).toContain('requireUserToken');
+    expect(failure).toContain('userToken');
+    expect(failure).toContain("'github'");
+    // A refusal is not a call.
+    expect(sent).toEqual([]);
+
+    // M2M has no user to prove, so the flag has nothing to say about it.
+    await expect(
+      provider.getCredential({ service: 'github', mode: 'machine' }),
+    ).resolves.toMatchObject({ status: 'issued' });
+  });
+
+  it('refuses a JWT on a machine request rather than ignoring it', async () => {
+    const { module, sent } = fakeSdk({ GetResourceOauth2TokenCommand: { accessToken: 't' } });
+    const failure = await agentCoreIdentity({ workloadName: 'w', _sdk: module })
+      .getCredential({ service: 's', mode: 'machine', userToken: 'jwt' })
+      .then(
+        () => '',
+        (err: Error) => err.message,
+      );
+    expect(failure).toMatch(/M2M/);
+    expect(failure).toContain("mode: 'user'");
+    expect(sent).toEqual([]);
+  });
+
+  it('refuses a JWT with no `workloadName` to exchange it against', async () => {
+    const { module, sent } = fakeSdk({ GetResourceOauth2TokenCommand: { accessToken: 't' } });
+    const failure = await agentCoreIdentity({ workloadIdentityToken: 'wit', _sdk: module })
+      .getCredential({ service: 's', mode: 'user', userToken: 'jwt' })
+      .then(
+        () => '',
+        (err: Error) => err.message,
+      );
+    expect(failure).toContain('workloadName');
+    // The whole point: it did NOT quietly vend at workload level.
+    expect(sent).toEqual([]);
+  });
+
+  it('describes a malformed exchange response by its SHAPE, never its content', async () => {
+    const { module } = fakeSdk({
+      // What a shape drift looks like from here: fields came back, none of them
+      // the one this adapter needs — and one of them is a token.
+      GetWorkloadAccessTokenForJWTCommand: {
+        accessToken: 'A-TOKEN-THAT-MUST-NOT-BE-PRINTED',
+        expiresIn: 3600,
+      },
+      GetResourceOauth2TokenCommand: { accessToken: 't' },
+    });
+    const failure = await agentCoreIdentity({ workloadName: 'w', _sdk: module })
+      .getCredential({ service: 's', mode: 'user', userToken: 'jwt' })
+      .then(
+        () => '',
+        (err: Error) => err.message,
+      );
+    expect(failure).toContain('GetWorkloadAccessTokenForJWT');
+    expect(failure).toContain('workloadAccessToken');
+    // The shape: how many fields, and what they are called.
+    expect(failure).toContain('2 field(s)');
+    expect(failure).toContain('accessToken, expiresIn');
+    // The content: never.
+    expect(failure).not.toContain('A-TOKEN-THAT-MUST-NOT-BE-PRINTED');
+    expect(failure).not.toContain('3600');
+  });
+
+  it('an injected `_client` that cannot exchange is named, not worked around', async () => {
+    const failure = await agentCoreIdentity({
+      workloadName: 'w',
+      _client: { getResourceOauth2Token: async () => ({ accessToken: 't' }) },
+    })
+      .getCredential({ service: 's', mode: 'user', userToken: 'jwt' })
+      .then(
+        () => '',
+        (err: Error) => err.message,
+      );
+    expect(failure).toContain('getWorkloadAccessTokenForJWT');
+  });
+});
+
+/** The same provider options twice over, with a different fake module each. */
+function jwtOptions(module: BedrockAgentCoreIdentitySdkModule) {
+  return { workloadName: 'my-agent', workloadIdentityToken: 'wit', _sdk: module } as const;
+}
 
 // ── refusals — each one names the thing to fix ──────────────────────
 

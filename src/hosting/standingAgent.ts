@@ -120,6 +120,7 @@ import type {
 } from './types.js';
 import { DEFAULT_MAX_ACTIVE_SESSIONS } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 
 /**
  * The pool key the anonymous fallback instance is held under, and the session
@@ -542,11 +543,27 @@ export async function standingAgent<TH extends HostHandle>(
       // ANONYMOUS request has no session and gets no key: `sessionKey` above is
       // a concurrency latch this host invented, and stamping it on telemetry
       // would be publishing a fact nobody can join to.
+      //
+      // `identity` (9.12.0) is the WHO beside that WHICH-conversation: a
+      // transport that named the end user gets a principal on the run, which is
+      // what puts a real person in `EventMeta.principal`, in `ctx.identity`
+      // inside a tool, and in the identity a credential provider scopes its
+      // token vault on — the whole chain, from the front door to the downstream
+      // API, without anybody configuring it. See `identityForRequest` for what
+      // each field is composed from and why. A transport that named nobody
+      // produces `undefined` here and every earlier release's behaviour is
+      // unchanged.
+      const identity = identityForRequest(
+        request.userId,
+        sessionId,
+        prior?.identity ?? paused?.conversation.identity,
+      );
       const runOptions: AgentRunOptions | undefined =
-        request.signal !== undefined || sessionId !== undefined
+        request.signal !== undefined || sessionId !== undefined || identity !== undefined
           ? {
               ...(request.signal !== undefined && { env: { signal: request.signal } }),
               ...(sessionId !== undefined && { sessionId }),
+              ...(identity !== undefined && { identity }),
             }
           : undefined;
 
@@ -738,6 +755,59 @@ export async function standingAgent<TH extends HostHandle>(
     ...handle,
     close: closeOnce,
   } as TH;
+}
+
+/**
+ * WHO this request is for, when the transport said (9.12.0) — and `undefined`
+ * when it did not, which leaves every earlier release's behaviour untouched to
+ * the byte.
+ *
+ * The composition, field by field, because each one has a different rightful
+ * source:
+ *
+ *  - `principal` — {@link HostRequest.userId}, the fact THIS request carried.
+ *    It is the only field the transport supplies and the only one this function
+ *    ever introduces.
+ *  - `conversationId` — the namespace the conversation already runs in, else
+ *    the session id. Composed with the 9.10.0 derivation rather than replacing
+ *    it: a session IS a conversation, and moving a live conversation's
+ *    namespace because a header appeared would lose its memory mid-thread.
+ *  - `tenant` — whatever the stored identity carried. No transport field
+ *    supplies one, so there is nothing here to override it with.
+ *
+ * **Why the header wins on `principal` specifically.** Every other field
+ * belongs to the conversation and survives untouched; the actor belongs to the
+ * request. Before this release `standingAgent` named no identity at all, so the
+ * only principal a stored conversation can realistically carry is one an
+ * EARLIER turn of this same mechanism put there — and preferring it would pin a
+ * whole session to whoever spoke first, which is precisely the audit trail that
+ * "looks complete and names the wrong party".
+ *
+ * **Nothing is invented.** With no session and no stored conversation there is
+ * no conversation to name, and this returns `undefined` rather than fabricating
+ * one; the id still reaches a custom handler on `HostRequest`. The managed
+ * runtimes that forward a user require a session id on the same call, so that
+ * gap is a guard rather than the shape this exists for.
+ *
+ * One consequence worth stating: naming an identity here takes the run off the
+ * 9.10.0 derived rung, so `runIdentitySource: 'session'` is not written on this
+ * path. The namespace is identical either way — the marker distinguishes a
+ * namespace the caller chose from one the library derived, and on this path the
+ * caller did choose.
+ */
+function identityForRequest(
+  userId: string | undefined,
+  sessionId: string | undefined,
+  stored: MemoryIdentity | undefined,
+): MemoryIdentity | undefined {
+  if (userId === undefined) return undefined;
+  const conversationId = stored?.conversationId ?? sessionId;
+  if (conversationId === undefined) return undefined;
+  return {
+    conversationId,
+    ...(stored?.tenant !== undefined && { tenant: stored.tenant }),
+    principal: userId,
+  };
 }
 
 /**

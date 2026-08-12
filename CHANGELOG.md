@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.12.0] - 2026-08-12
+
+**The per-user identity chain, both ends.** 9.11.0 put `EventMeta.principal` on
+every event of a run whose caller named an identity — and then a served agent had
+no way to name anybody, so the actor half of every hosted audit trail was empty by
+construction. Two gaps closed here join the ends: the runtime's own header on the
+way in, and the user's own token on the way out. Both are opt-in by
+construction — a request that names nobody behaves exactly as it did in 9.11.0.
+
+### Added — `GetWorkloadAccessTokenForJWT`: proof, where there was only an assertion
+
+An agent that authenticated a real person could pass a userId **string**
+downstream. AWS took its word for it. Now it can pass what the person's identity
+provider signed:
+
+```ts
+const credentials = agentCoreIdentity({
+  region: 'us-west-2',
+  workloadName: 'workflow_assistant_agent',
+  requireUserToken: true,             // optional — refuse a delegated call with no proof
+});
+
+// inside a tool
+await ctx.credentials.getCredential({ service: 'google', mode: 'user', userToken: callersJwt });
+```
+
+- **`CredentialRequest.userToken`** is the new port field, and it rides the
+  **request** rather than the provider: the person calling is per call, and a JWT
+  in a provider's construction options would be one user's live session serving
+  everybody. Its presence selects the exchange — a proof that arrived is never
+  downgraded to an assertion, even when an `identity` is beside it.
+- **Nothing downstream changed.** `GetWorkloadAccessTokenForJWT` answers with the
+  same `workloadAccessToken` the by-userId exchange does, so it feeds the same
+  `GetResourceOauth2Token` call, the same `Credential`, the same `toHeaders()`.
+  The vault entry at the end belongs to the *person* rather than to the agent,
+  which is what makes revoking their access actually revoke it.
+- **Verified against the real SDK before it shipped**, names and shapes both:
+  `{ workloadName, userToken }` in, `{ workloadAccessToken }` out. It joins the
+  command-name pin, taking `agentCoreIdentity` to **three of AgentCore Identity's
+  six data-plane operations** — the docs name the other three and say they are not
+  covered.
+- **`requireUserToken`** is the deployment-level opt-in for a front door that
+  really does authenticate everybody: a `mode: 'user'` request with no
+  `userToken` is refused by name instead of quietly falling back to something
+  weaker. `mode: 'machine'` is never affected — M2M has no user to prove.
+- **Refusals that teach, in both directions**: a JWT with no `workloadName` to
+  exchange it against, a JWT on an M2M request, and an injected `_client` that
+  cannot exchange are each named with the fix rather than resolved by guessing.
+- **The framework does not thread the JWT for you, on purpose.** The only routes
+  from your door to a tool are tracked scope and the run input, and both flow to
+  the commit log, the recorders and every observability exporter. A tool captures
+  it at the door in its own closure.
+
+### Fixed — a token in an SDK error message
+
+The new secrecy suite found a leak on the path it was written to guard, and the
+fix covers every command this adapter dispatches, not only the new one.
+
+- AWS clients report transport and validation failures by **echoing request
+  detail into the message**. Every input this adapter sends is a secret — the
+  user's JWT into the exchange, a workload access token into the vend — so a
+  failed call handed the caller a message with a live token in it, and a
+  `getCredential` message is read by the model, emitted on
+  `agentfootprint.credential.failed`, and kept by every sink attached to it.
+- A failed SDK call now keeps its exception **name** (`AccessDeniedException`,
+  `ThrottlingException`, …) and HTTP status, and loses its text. The original is
+  deliberately not attached as `cause`, which would travel with it into every
+  serializer that walks own properties.
+- A malformed exchange response is described by its **shape** — how many fields
+  came back and what they are called — never by its content, because every field
+  of a token-exchange response is a token. One shared refusal now covers both
+  exchanges.
+
+### Added — `HostRequest.userId`: WHO, beside which conversation
+
+`agentCoreRuntimeWire` reads `X-Amzn-Bedrock-AgentCore-Runtime-User-Id` — the
+header that runtime forwards from its front door, spelled the way the SDK spells
+it (`InvokeAgentRuntimeRequest.runtimeUserId` binds to exactly this name, as
+`runtimeSessionId` binds to the session header beside it). Matched
+case-insensitively, through the same helper.
+
+- **A session is a thread; a user is a person.** They are two fields because they
+  are two facts, and an audit trail that reports the first where the second
+  belongs names the wrong party. No wire derives one from the other.
+- **`standingAgent` composes it into the run's identity**: the principal comes
+  from this request, the conversation id from the conversation already in play
+  (else the session — the 9.10.0 derivation, composed rather than replaced), and
+  the tenant from whatever the stored conversation carried, since no transport
+  field supplies one. With 9.11.0's actor-in-meta that puts a real person on every
+  event, in `ctx.identity` inside a tool, and in the identity a credential
+  provider scopes its vault on — the whole chain, unconfigured.
+- **Turn two reports turn two's caller.** Preferring a stored principal would pin
+  a whole session to whoever spoke first; a turn that names nobody continues the
+  conversation's own identity, which is 9.2.0's rule and not a new one.
+- **The generic wire reads no such header, and a test asserts it doesn't.** The
+  header is worth reading where a front door sets it; on a container you expose
+  directly it is a string anybody can send. Absent stays absent everywhere: with
+  no session and no stored conversation there is no conversation to name, and
+  nothing is fabricated to carry a principal.
+- The ports still name no vendor — the header name lives in the adapter, and the
+  existing grep-for-vendor-names guardrail proves it.
+
+Status, plainly: both halves are **contract-shaped and tested** — the JWT
+exchange against the installed SDK's own request/response shapes, the header
+mapping over a real socket — and **awaiting field use**. No live account has
+exercised the exchange path yet, and no page on the site says otherwise.
+
 ## [9.11.0] - 2026-08-12
 
 **The enterprise batch.** An external enterprise-readiness review asked four

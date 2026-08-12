@@ -45,6 +45,14 @@ const VENDOR_TOKEN = 'your_oauth_token_here';
 const VENDOR_BASE64URL = 'eW91cl9vYXV0aF90b2tlbl9oZXJl';
 
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
+/**
+ * The runtime's OTHER identity header (9.12.0), spelled the way the SDK spells
+ * it: `InvokeAgentRuntimeRequest.runtimeUserId` binds to this name, exactly as
+ * `runtimeSessionId` binds to the one above. Written out rather than derived,
+ * for the same reason `VENDOR_TOKEN` is: these tests must fail if AWS's
+ * spelling moves, not merely if ours agrees with itself.
+ */
+const USER_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-User-Id';
 
 const open: HostHandle[] = [];
 /** Servers and sockets the TEST owns, for the attached-host scenario below. */
@@ -245,6 +253,84 @@ describe('agentCoreRuntimeHost — the session header', () => {
     });
     await post(base, { prompt: 'x' }, { 'X-Tenant': 'acme' });
     expect(seen?.['x-tenant']).toBe('acme');
+  });
+});
+
+// ── integration: the user header — WHO, beside WHICH conversation ───
+
+describe('agentCoreRuntimeHost — the user header (9.12.0)', () => {
+  /** Echo both identity facts, so a mapping bug in either is visible. */
+  const echoBoth: HostHandler = (request, reply) =>
+    reply.complete(`session=${request.sessionId ?? 'none'}|user=${request.userId ?? 'none'}`);
+
+  it('reads the end user from the runtime header', async () => {
+    const base = await serving(echoBoth);
+    const res = await post(
+      base,
+      { prompt: 'x' },
+      { [SESSION_HEADER]: 'conv-7', [USER_HEADER]: 'alice@acme.test' },
+    );
+    expect(await res.json()).toMatchObject({ response: 'session=conv-7|user=alice@acme.test' });
+  });
+
+  it.each([
+    ['exact', USER_HEADER],
+    ['lower', USER_HEADER.toLowerCase()],
+    ['upper', USER_HEADER.toUpperCase()],
+    ['mixed', 'x-amzn-BEDROCK-agentcore-Runtime-User-Id'],
+  ])('matches the header case-insensitively (%s)', async (_label, header) => {
+    const base = await serving(echoBoth);
+    const res = await post(base, { prompt: 'x' }, { [header]: 'cased-user' });
+    expect(await res.json()).toMatchObject({ response: 'session=none|user=cased-user' });
+  });
+
+  it('absent when absent — and a session is never read as a user', async () => {
+    const base = await serving(echoBoth);
+    // The trap this pins: a session id is a thread and a user is a person, and
+    // a wire that filled the second from the first would name the wrong party
+    // in every audit trail it fed.
+    const res = await post(base, { prompt: 'x' }, { [SESSION_HEADER]: 'conv-7' });
+    expect(await res.json()).toMatchObject({ response: 'session=conv-7|user=none' });
+  });
+
+  it('an empty header value is no user, not an empty-string user', async () => {
+    const base = await serving(echoBoth);
+    const res = await post(base, { prompt: 'x' }, { [USER_HEADER]: '' });
+    expect(await res.json()).toMatchObject({ response: 'session=none|user=none' });
+  });
+
+  it('a userId in the BODY is ignored — this contract puts it in the header', async () => {
+    const base = await serving(echoBoth);
+    const res = await post(base, { prompt: 'x', userId: 'from-body' });
+    expect(await res.json()).toMatchObject({ response: 'session=none|user=none' });
+  });
+
+  it('the GENERIC wire reads no such header — a plain container is not AgentCore', async () => {
+    // The whole containment: this header is worth reading because the AgentCore
+    // front door sets it. On a container anybody can POST to, it is a string
+    // anybody can send, and `nodeHost`'s JSON dialect must not promote one.
+    const handle = await nodeHost({ port: 0, hostname: '127.0.0.1' }).serve(echoBoth);
+    open.push(handle);
+    const res = await fetch(`${(handle as NodeHostHandle).url}/invoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', [USER_HEADER]: 'mallory' },
+      body: JSON.stringify({ input: 'x' }),
+    });
+    expect(await res.json()).toMatchObject({ output: 'session=none|user=none' });
+  });
+
+  it('the wire returns it as its own field, and only when it was sent', () => {
+    const wire = agentCoreRuntimeWire();
+    expect(
+      wire.readRequest({
+        body: { prompt: 'hi' },
+        headers: { 'x-amzn-bedrock-agentcore-runtime-user-id': 'ada' },
+        query: new URLSearchParams(),
+      }),
+    ).toEqual({ input: 'hi', userId: 'ada' });
+    expect(
+      wire.readRequest({ body: { prompt: 'hi' }, headers: {}, query: new URLSearchParams() }),
+    ).toEqual({ input: 'hi' });
   });
 });
 

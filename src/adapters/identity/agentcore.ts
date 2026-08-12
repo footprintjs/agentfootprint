@@ -10,6 +10,8 @@
  *   - request.mode 'machine' → `M2M`; 'user' → `USER_FEDERATION`
  *   - request.service        → the configured OAuth2 credential-provider name
  *   - request.identity       → (per-request workload identity scoping; see below)
+ *   - request.userToken      → the user's own JWT, exchanged for a user-scoped
+ *                              workload token before vending (9.12.0; see below)
  *   - a returned access token → `{ status: 'issued', credential: bearer(token) }`
  *   - a returned auth URL     → `{ status: 'authorization-required' }` (3LO consent)
  *
@@ -18,20 +20,49 @@
  *
  * **Per-request identity forwarding (workload identity scoping).**
  * `GetResourceOauth2Token` carries NO user/tenant field — in AgentCore the
- * user identity is bound EARLIER, at workload-token acquisition:
- * `GetWorkloadAccessTokenForUserId(workloadName, userId)` returns a workload
- * access token scoped to that user, and AgentCore keys its token vault + 3LO
- * grants per (workload, user). So this adapter forwards `req.identity` (the
- * `runIdentity` that the agent threads through `getCredential`) by resolving a
- * per-user workload token first, then vending with it. Engages only when ALL of:
- *   - `req.mode === 'user'` (USER_FEDERATION — M2M is the workload's own identity),
- *   - a userId derives from `req.identity` (default `identity.principal`;
- *     override via `userIdFor`), and
- *   - `options.workloadName` is configured (the opt-in).
- * Otherwise the static `options.workloadIdentityToken` flows exactly as before.
+ * user identity is bound EARLIER, at workload-token acquisition. There are two
+ * ways to bind it, and this adapter dispatches both:
+ *
+ *   `GetWorkloadAccessTokenForUserId(workloadName, userId)` — the ASSERTION.
+ *     The agent says who the user is; AWS takes its word for it and returns a
+ *     workload token keyed to that (workload, user).
+ *   `GetWorkloadAccessTokenForJWT(workloadName, userToken)` — the PROOF (9.12.0).
+ *     The agent hands over the token the user's own identity provider signed,
+ *     and gets back "an opaque token representing the identity of both the
+ *     workload and the user" (the service's own words for the response).
+ *
+ * Either way the answer is a `workloadAccessToken`, and it flows into
+ * `GetResourceOauth2Token`'s `workloadIdentityToken` unchanged — which is why
+ * the second one needed no new credential path, no new result branch and no
+ * change to `toHeaders()`. AgentCore keys its token vault + 3LO grants per
+ * (workload, user), so the whole point of resolving either is that the vault
+ * entry belongs to the person rather than to the agent.
+ *
+ * **The JWT rides the REQUEST.** `req.userToken` is per call, because the
+ * person calling is per call; a JWT in this provider's construction options
+ * would be one user's session serving everybody. Presence is what selects the
+ * exchange — a proof that arrived is never downgraded to an assertion — and
+ * `requireUserToken` turns "no JWT on a `mode: 'user'` request" from a quiet
+ * fallback into a refusal, for a deployment where every user IS authenticated.
+ *
+ * The ladder, in order, for one `getCredential(req)`:
+ *   1. `req.userToken` present → exchange it (needs `workloadName`; `mode: 'user'`).
+ *   2. else a userId derives from `req.identity` (default `identity.principal`;
+ *      override via `userIdFor`) on a `mode: 'user'` request, and
+ *      `options.workloadName` is configured → the by-userId exchange.
+ *   3. else the static `options.workloadIdentityToken` flows exactly as before.
+ *
  * `tenant` has no native AgentCore field and is NOT forwarded by default —
  * tenant isolation derives from the workload identity itself (per-tenant
  * workloads), or encode it via `userIdFor` (e.g. `${tenant}:${principal}`).
+ *
+ * **Secrecy.** The inbound JWT and the exchanged workload token are secrets of
+ * equal weight, and neither appears in anything this file throws. A failed
+ * exchange is described by the SHAPE of the response — how many fields it
+ * carried and what they are called — never by its content, because every field
+ * of a token-exchange response is a token. A thrown message reaches the LLM as
+ * a tool result AND rides `agentfootprint.credential.failed`, so an error that
+ * quotes the response has published the user's session to both at once.
  *
  * ── How this talks to the SDK (9.4.0 — read this before editing) ────────────
  * Through **`client.send(new SomeCommand(input))`**, never through a method on
@@ -92,6 +123,14 @@ export interface AgentCoreIdentityClientLike {
     readonly workloadName: string;
     readonly userId: string;
   }): Promise<{ readonly workloadAccessToken?: string }>;
+  /** Optional — required only when a request carries `userToken`. Exchanges the
+   *  user's OWN IdP-issued JWT for a workload access token representing both the
+   *  workload and the user. Same answer shape as the by-userId exchange, which
+   *  is why both feed the same `workloadIdentityToken`. */
+  getWorkloadAccessTokenForJWT?(input: {
+    readonly workloadName: string;
+    readonly userToken: string;
+  }): Promise<{ readonly workloadAccessToken?: string }>;
 }
 
 export interface AgentCoreIdentityOptions {
@@ -101,11 +140,28 @@ export interface AgentCoreIdentityOptions {
    *  workload token is resolved (see `workloadName`). */
   readonly workloadIdentityToken?: string;
   /** The AgentCore workload identity name — the OPT-IN for per-request identity
-   *  scoping. When set, `mode: 'user'` requests carrying `req.identity` resolve a
-   *  per-user workload access token via `GetWorkloadAccessTokenForUserId(workloadName,
-   *  userId)` before vending, so AgentCore's token vault + 3LO grants are keyed per
-   *  (workload, user) instead of per workload. Omit → today's static-token behavior. */
+   *  scoping, and the one option BOTH exchanges need. When set, a `mode: 'user'`
+   *  request resolves a per-user workload access token before vending — from
+   *  `req.userToken` via `GetWorkloadAccessTokenForJWT` when the user's own JWT
+   *  arrived, otherwise from `req.identity` via `GetWorkloadAccessTokenForUserId`
+   *  — so AgentCore's token vault + 3LO grants are keyed per (workload, user)
+   *  instead of per workload. Omit → today's static-token behavior. */
   readonly workloadName?: string;
+  /**
+   * Refuse a `mode: 'user'` request that carries no `req.userToken` (9.12.0),
+   * instead of falling back to the by-userId exchange or the static token.
+   *
+   * The opt-in for a deployment where the front door really does authenticate
+   * every person — an AgentCore Runtime behind JWT inbound auth, an API gateway
+   * that validates a bearer token. There, a delegated request with no proof
+   * attached is a wiring bug, and the failure it causes without this flag is the
+   * quiet kind: a token gets vended, the call succeeds, and it was scoped to the
+   * agent (or to a user id the agent asserted) rather than to the person.
+   *
+   * `mode: 'machine'` is never affected — M2M is the workload's own identity and
+   * has no user to prove.
+   */
+  readonly requireUserToken?: boolean;
   /** Map `req.identity` → the AgentCore `userId`. Default: `identity.principal`.
    *  `tenant` has no native AgentCore field — encode it here if you need
    *  tenant-scoped vault entries (e.g. ``({ tenant, principal }) =>
@@ -132,6 +188,71 @@ export interface BedrockAgentCoreIdentitySdkModule {
   };
   readonly GetResourceOauth2TokenCommand?: new (input: unknown) => unknown;
   readonly GetWorkloadAccessTokenForUserIdCommand?: new (input: unknown) => unknown;
+  readonly GetWorkloadAccessTokenForJWTCommand?: new (input: unknown) => unknown;
+}
+
+/**
+ * Re-raise a failed SDK call **without its text** (9.12.0).
+ *
+ * Every input this adapter sends is a secret: the user's JWT goes into
+ * `GetWorkloadAccessTokenForJWT`, a workload access token goes into
+ * `GetResourceOauth2Token`. AWS clients report transport and validation
+ * failures by echoing request detail into the message — which is how a live
+ * user session ends up in a string that this library then hands to the LLM as
+ * a tool result and emits on `agentfootprint.credential.failed`. One echo, and
+ * it is in the conversation, the commit log, the narrative and every sink.
+ *
+ * So the text does not come through. What does is the part that is both safe
+ * and actionable: which operation failed, the exception's NAME (AWS models
+ * them — `AccessDeniedException`, `ResourceNotFoundException`,
+ * `ThrottlingException`, `UnauthorizedException`, `ValidationException`) and
+ * the HTTP status. That is the same trade the Vault adapter makes, and it is
+ * the same reason.
+ *
+ * **The original is deliberately not attached as `cause`.** A cause travels
+ * with the error into every serializer that walks own properties, which would
+ * undo the whole of this in one `JSON.stringify`.
+ *
+ * An injected `_client` never reaches here: it owns its own mapping, and its
+ * own secrecy with it — the same law this file already states for field names.
+ */
+function sdkFailure(command: string, err: unknown): Error {
+  const e = err as { name?: unknown; $metadata?: { httpStatusCode?: unknown } } | null;
+  const name = typeof e?.name === 'string' && e.name.length > 0 ? e.name : 'an unnamed failure';
+  const status = e?.$metadata?.httpStatusCode;
+  return new Error(
+    `agentCoreIdentity: ${command} failed — ${name}` +
+      (typeof status === 'number' ? ` (HTTP ${status})` : '') +
+      ".\n  The SDK's own message is withheld: this request carried a token, and AWS clients " +
+      'echo request detail into failure text. Check CloudWatch for the full exception.',
+  );
+}
+
+/**
+ * Read the exchanged workload token, or refuse **by shape**.
+ *
+ * Shared by both exchanges so there is one refusal to read and one rule about
+ * what may be said: field NAMES and a count, never a value. Every field of a
+ * token-exchange response is a token, and this message travels to the model, to
+ * `agentfootprint.credential.failed` and to every log sink attached to it. An
+ * operator debugging a malformed answer needs to know which fields came back,
+ * which is exactly the part that is safe to print.
+ */
+function requireWorkloadAccessToken(
+  response: { readonly workloadAccessToken?: string } | null | undefined,
+  operation: string,
+): string {
+  const token = response?.workloadAccessToken;
+  if (typeof token === 'string' && token.length > 0) return token;
+  const fields = response && typeof response === 'object' ? Object.keys(response) : [];
+  throw new Error(
+    `agentCoreIdentity: ${operation} returned no usable workloadAccessToken, so there is no ` +
+      'user-scoped workload token to vend with — refusing rather than falling back to a ' +
+      'workload-level one.\n' +
+      `  The response carried ${fields.length} field(s)` +
+      (fields.length > 0 ? `: ${fields.join(', ')}.` : '.') +
+      '\n  Values are withheld on purpose: every field of a token-exchange response is a secret.',
+  );
 }
 
 /**
@@ -182,7 +303,11 @@ function createIdentityClient(options: AgentCoreIdentityOptions): AgentCoreIdent
           'Upgrade the SDK, or pass `_client` with your own mapping.',
       );
     }
-    return sdk.send(new Ctor(input));
+    try {
+      return await sdk.send(new Ctor(input));
+    } catch (err) {
+      throw sdkFailure(name, err);
+    }
   };
 
   return {
@@ -216,17 +341,39 @@ function createIdentityClient(options: AgentCoreIdentityOptions): AgentCoreIdent
         ...(r?.sessionUri !== undefined && { sessionId: r.sessionUri }),
       };
     },
+    // ── The two workload-token exchanges ──────────────────────────────
+    //
+    // Both answer `{ workloadAccessToken }` and nothing else, so unlike
+    // `getResourceOauth2Token` above there is no field to rename — and both
+    // hand the response back AS RECEIVED rather than narrowed to that one
+    // field. That is deliberate: when the field is missing,
+    // `requireWorkloadAccessToken` refuses by describing the response's SHAPE,
+    // and a shim that had already thrown the other field names away would leave
+    // it describing an empty object — the least useful message available, on
+    // the one path where the operator has nothing else to go on.
     async getWorkloadAccessTokenForUserId(input) {
-      const r = (await send(
-        mod.GetWorkloadAccessTokenForUserIdCommand,
-        'GetWorkloadAccessTokenForUserIdCommand',
-        input,
-      )) as { workloadAccessToken?: string } | null;
-      return {
-        ...(r?.workloadAccessToken !== undefined && {
-          workloadAccessToken: r.workloadAccessToken,
-        }),
-      };
+      return (
+        ((await send(
+          mod.GetWorkloadAccessTokenForUserIdCommand,
+          'GetWorkloadAccessTokenForUserIdCommand',
+          input,
+        )) as { workloadAccessToken?: string } | null) ?? {}
+      );
+    },
+    async getWorkloadAccessTokenForJWT(input) {
+      // `GetWorkloadAccessTokenForJWTRequest` is `{ workloadName, userToken }`,
+      // both required, and the response is `{ workloadAccessToken }` — verified
+      // against a real install of @aws-sdk/client-bedrock-agentcore before this
+      // shipped, the same way the code-interpreter shapes were. `userToken` is
+      // the SDK's own name for the user's IdP-issued OAuth2 token, so the
+      // adapter and the wire agree without a rename.
+      return (
+        ((await send(
+          mod.GetWorkloadAccessTokenForJWTCommand,
+          'GetWorkloadAccessTokenForJWTCommand',
+          input,
+        )) as { workloadAccessToken?: string } | null) ?? {}
+      );
     },
   };
 }
@@ -248,14 +395,69 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
   const userIdFor = options.userIdFor ?? defaultUserIdFor;
 
   // Per-request identity forwarding (workload identity scoping) — see module
-  // header. `GetResourceOauth2Token` has no user field; the user is bound at
-  // workload-token acquisition, so a `mode: 'user'` request carrying an
-  // identity exchanges (workloadName, userId) for a USER-SCOPED workload token
-  // and vends with that. Requires `workloadName` (the opt-in); without it the
-  // static `workloadIdentityToken` flows unchanged (pre-forwarding behavior).
+  // header for the ladder and why both exchanges answer the same question.
+  // `GetResourceOauth2Token` has no user field; the user is bound at
+  // workload-token acquisition, so a `mode: 'user'` request resolves a
+  // USER-SCOPED workload token first and vends with that. Both exchanges
+  // require `workloadName` (the opt-in); with neither engaged the static
+  // `workloadIdentityToken` flows unchanged (pre-forwarding behavior).
   const resolveWorkloadToken = async (req: CredentialRequest): Promise<string | undefined> => {
-    const userId =
-      req.mode === 'user' && req.identity !== undefined ? userIdFor(req.identity) : undefined;
+    const delegated = req.mode === 'user';
+
+    if (req.userToken !== undefined) {
+      if (!delegated) {
+        // A user's signed token on a request that asks for the WORKLOAD's own
+        // identity. Vending M2M while holding somebody's proof is the exact
+        // silent downgrade this whole path exists to close, so it is named
+        // rather than resolved one way or the other.
+        throw new Error(
+          "agentCoreIdentity: a `userToken` arrived on a `mode: 'machine'` request. M2M is the " +
+            "workload's own identity — there is no user to act on behalf of, and the token " +
+            "would be ignored.\n  Declare `mode: 'user'` to exchange it, or drop the token.",
+        );
+      }
+      if (!options.workloadName) {
+        throw new Error(
+          'agentCoreIdentity: a `userToken` arrived but no `workloadName` is configured, so ' +
+            'there is nothing to exchange it against — and vending at workload level would ' +
+            "hand back a token scoped to the AGENT while holding the user's proof.\n" +
+            '  Configure `workloadName` (your AgentCore workload identity), or stop sending ' +
+            '`userToken`.',
+        );
+      }
+      const c = getClient();
+      if (typeof c.getWorkloadAccessTokenForJWT !== 'function') {
+        // The SDK-backed client always implements this, so reaching here means
+        // an injected `_client` that does not.
+        throw new Error(
+          'agentCoreIdentity: a `userToken` arrived, but the injected `_client` has no ' +
+            'getWorkloadAccessTokenForJWT. Implement it, or stop sending `userToken`.',
+        );
+      }
+      return requireWorkloadAccessToken(
+        await c.getWorkloadAccessTokenForJWT({
+          workloadName: options.workloadName,
+          userToken: req.userToken,
+        }),
+        'GetWorkloadAccessTokenForJWT',
+      );
+    }
+
+    if (options.requireUserToken === true && delegated) {
+      // The deployment said every delegated request is authenticated. One that
+      // is not is a wiring bug, and the only alternative to saying so is to
+      // vend something weaker and let it succeed.
+      throw new Error(
+        "agentCoreIdentity: `requireUserToken` is set, but this `mode: 'user'` request for " +
+          `'${req.service}' carried no \`userToken\`.\n` +
+          "  Pass the caller's own IdP token as `getCredential({ …, userToken })` — inside " +
+          'AgentCore Runtime behind JWT inbound auth it is the bearer token the front door ' +
+          'validated.\n' +
+          '  Or drop `requireUserToken` to fall back to the by-userId exchange.',
+      );
+    }
+
+    const userId = delegated && req.identity !== undefined ? userIdFor(req.identity) : undefined;
     if (userId === undefined || !options.workloadName) return options.workloadIdentityToken;
 
     const c = getClient();
@@ -269,17 +471,10 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
           'or drop `workloadName` to vend with the static `workloadIdentityToken`.',
       );
     }
-    const res = await c.getWorkloadAccessTokenForUserId({
-      workloadName: options.workloadName,
-      userId,
-    });
-    if (!res.workloadAccessToken) {
-      throw new Error(
-        'agentCoreIdentity: GetWorkloadAccessTokenForUserId returned no workloadAccessToken ' +
-          'for per-user scoped vending.',
-      );
-    }
-    return res.workloadAccessToken;
+    return requireWorkloadAccessToken(
+      await c.getWorkloadAccessTokenForUserId({ workloadName: options.workloadName, userId }),
+      'GetWorkloadAccessTokenForUserId',
+    );
   };
 
   return {

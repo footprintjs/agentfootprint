@@ -34,6 +34,36 @@ export interface CredentialRequest {
   readonly mode?: 'machine' | 'user';
   /** The principal/tenant the token is for (the agent + end-user identity). */
   readonly identity?: { readonly principal?: string; readonly tenant?: string };
+  /**
+   * The end user's OWN token — the JWT their identity provider issued them,
+   * as it arrived at your door (9.12.0).
+   *
+   * **The difference between an assertion and a proof.** `identity.principal`
+   * is a string this process wrote down: an agent that really did authenticate
+   * a person can say so, and a provider has to take its word for it. This is
+   * the artifact the IdP signed, so a provider that can verify it — AWS
+   * AgentCore Identity exchanges it for a workload token scoped to *that
+   * user* — vends on the strength of the user's own credential rather than on
+   * the agent's claim about them.
+   *
+   * **Per REQUEST, never per provider.** A token belongs to the person calling
+   * right now, so it rides here beside `service` and `mode`, not in the
+   * provider's construction options where one value would serve everybody.
+   *
+   * **SECRET, and deliberately not threaded through the framework.** The
+   * declare-and-push path (`ctx.credentials`) does not fill this in: the only
+   * places a JWT could travel from the door to a tool are tracked scope and
+   * the run input, and both flow to the commit log, the recorders and every
+   * observability exporter. A tool that needs it captures it at the door in its
+   * own closure and passes it here. See the security invariant at the top of
+   * this file — it applies to this field with the same force as to a vended
+   * credential, and a provider that echoes it into an error message has leaked
+   * the user's session to the model.
+   *
+   * Providers that cannot use one MUST ignore it (never echo it, never log it);
+   * `staticTokens` does exactly that.
+   */
+  readonly userToken?: string;
   /** Force a fresh authorization, bypassing any cached/refresh token. */
   readonly forceReauth?: boolean;
 }

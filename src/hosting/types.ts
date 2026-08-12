@@ -90,6 +90,30 @@ export interface HostRequest {
    */
   readonly sessionId?: string;
   /**
+   * WHO the transport says is calling — the end user's id, exactly as the
+   * transport declared it (9.12.0).
+   *
+   * A different fact from {@link sessionId} beside it, and the difference is
+   * the whole reason it is a second field: a session is a THREAD and this is a
+   * PERSON. One conversation belongs to one user; one user has many
+   * conversations; and an audit trail that reports the thread where the actor
+   * belongs names the wrong party in a way nobody can see from the outside.
+   *
+   * **Absent when absent.** No wire derives it from the session id, from the
+   * body, or from anything else — a request that carried no user is a request
+   * with no `userId`, and inventing one would be worse than reporting none.
+   *
+   * **How much it is worth is the transport's answer, not this port's.** A
+   * managed runtime whose front door authenticates the caller and forwards the
+   * result is a transport whose wire can fill this in, and its adapter does. A
+   * container you expose directly is not: a header there is a string anybody
+   * can send, and the generic JSON wire therefore reads none — a wire that
+   * promoted one to "who did this" would hand every caller the ability to sign
+   * somebody else's name. Which is which is decided in the adapter, by whoever
+   * knows what stands in front of it.
+   */
+  readonly userId?: string;
+  /**
    * Transport headers with lower-cased names, as delivered. Present so a
    * handler can map its own conventions (a correlation id, a tenant) without
    * the port having to guess which ones matter.

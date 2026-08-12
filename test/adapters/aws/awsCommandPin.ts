@@ -76,7 +76,21 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
     sources: ['src/adapters/identity/agentcore.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
     client: 'BedrockAgentCoreClient',
-    commands: ['GetResourceOauth2TokenCommand', 'GetWorkloadAccessTokenForUserIdCommand'],
+    commands: [
+      'GetResourceOauth2TokenCommand',
+      'GetWorkloadAccessTokenForUserIdCommand',
+      'GetWorkloadAccessTokenForJWTCommand',
+    ],
+    note:
+      'The JWT exchange (9.12.0) was verified against a real install of 3.1108.0 before it ' +
+      'shipped, names AND shapes: `GetWorkloadAccessTokenForJWTRequest` is ' +
+      "`{ workloadName, userToken }` — both required, `userToken` being the service's own " +
+      "name for the token the user's IdP issued — and the response is ` { workloadAccessToken }`, " +
+      'described by the service as "an opaque token representing the identity of both the ' +
+      'workload and the user". That is the same field the by-userId exchange answers with, ' +
+      "which is why both feed `GetResourceOauth2Token`'s `workloadIdentityToken` unchanged. " +
+      "Three of AgentCore Identity's six data-plane operations are covered; " +
+      'GetWorkloadAccessToken, GetResourceApiKey and CompleteResourceTokenAuth are not.',
   },
   {
     adapter: 'AgentCoreStore',

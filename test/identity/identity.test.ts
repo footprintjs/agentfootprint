@@ -299,7 +299,9 @@ describe('identity — per-request identity forwarding (agentCoreIdentity)', () 
         mode: 'user',
         identity: { principal: 'alice' },
       }),
-    ).rejects.toThrow(/no workloadAccessToken/);
+      // 9.12.0: one shared refusal for both exchanges, describing the response
+      // by its SHAPE — the field count here is the honest "nothing came back".
+    ).rejects.toThrow(/no usable workloadAccessToken[\s\S]*0 field\(s\)/);
   });
 
   it('END-TO-END: agent.run({ identity }) → declare-and-push threads it → AgentCore receives userId', async () => {

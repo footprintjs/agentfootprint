@@ -32,8 +32,9 @@ status honestly is.
 |---|---|---|---|---|---|---|
 | **AgentCore Memory** | `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | `CreateEvent`, `ListEvents`, `DeleteEvent`, `RetrieveMemoryRecords` | Shipped; contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
 | **Bedrock Agents memory** (prior generation) | `BedrockAgentMemory` — a **reader**, not a store | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agent-runtime` | `GetAgentMemory`, `DeleteAgentMemory` | Shipped; contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
-| **AgentCore Identity** | `agentCoreIdentity` | `agentfootprint/security` | `@aws-sdk/client-bedrock-agentcore` | `GetWorkloadAccessTokenForUserId`, `GetResourceOauth2Token` | Shipped; contract-mapped and injection-tested | [Identity & credentials](doc:identity-and-credentials) |
+| **AgentCore Identity** | `agentCoreIdentity` | `agentfootprint/security` | `@aws-sdk/client-bedrock-agentcore` | `GetWorkloadAccessTokenForJWT`, `GetWorkloadAccessTokenForUserId`, `GetResourceOauth2Token` — **3 of the 6** Identity data-plane operations | Shipped; contract-mapped and injection-tested. The JWT exchange (9.12.0) is contract-shaped and tested; awaiting field use | [Identity & credentials](doc:identity-and-credentials) |
 | **AgentCore Runtime** (hosting) | `agentCoreRuntimeHost`, `agentCoreRuntimeWire` | `agentfootprint/hosting` | **none** — plain HTTP | — | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket | [Hosting & runtime](doc:hosting-and-runtime) |
+| **AgentCore Runtime** (per-user identity) | `agentCoreRuntimeWire` reads `X-Amzn-Bedrock-AgentCore-Runtime-User-Id` → `HostRequest.userId` → the run's `identity.principal` | `agentfootprint/hosting` | **none** — a header | — | Shipped (9.12.0) — **really verified**: the header mapping is asserted over a real socket, and the generic wire is asserted NOT to read it | [Identity & credentials](doc:identity-and-credentials) |
 | **AgentCore Runtime** (sessions) | `agentCoreSessions({ store })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` — **only** for `store: 'memory'` | `CreateEvent`, `ListEvents` | Shipped; the file mode uses `node:fs` only | [Hosting & runtime](doc:hosting-and-runtime) |
 | **AgentCore Gateway** | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | — (MCP over Streamable HTTP) | Shipped | [Tools & gateways](doc:tools-and-gateways) |
 | **AgentCore Observability** | `agentcoreObservability` | `agentfootprint/observe` | `@aws-sdk/client-cloudwatch-logs` | `CreateLogStream`, `PutLogEvents` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
@@ -144,6 +145,15 @@ Resolves `GetWorkloadAccessTokenForUserId` / `GetResourceOauth2Token` at runtime
 from dev static credentials to managed AgentCore identity is this one line — **no tool-code
 change**. Provisioning the providers (`CreateWorkloadIdentity`, `CreateOauth2CredentialProvider`)
 is control-plane → SDK / CDK.
+
+Since 9.12.0 a third operation joins them: pass the caller's own IdP token on the
+request — `getCredential({ service, mode: 'user', userToken })` — and the adapter
+exchanges it through `GetWorkloadAccessTokenForJWT` before vending, so the vault
+entry belongs to the *person* rather than to the agent. That is the outbound half
+of per-user identity; the inbound half is
+`X-Amzn-Bedrock-AgentCore-Runtime-User-Id`, which `agentCoreRuntimeWire` reads
+and `standingAgent` turns into the run's principal. Both halves, with the flow
+diagram: **[Identity & credentials](doc:identity-and-credentials)**.
 
 Two facts worth carrying into a deployment: this adapter reports **no `expiresAt`**
 (`GetResourceOauth2TokenResponse` has no expiry field, so there is nothing honest to report),

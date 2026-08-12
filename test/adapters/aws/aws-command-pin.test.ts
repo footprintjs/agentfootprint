@@ -117,6 +117,40 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     expect(result.status).toBe('issued');
   });
 
+  it('agentCoreIdentity — a user JWT exchanges through GetWorkloadAccessTokenForJWT, then vends', async () => {
+    const row = pin('agentCoreIdentity');
+    const sdk = fakeSdk(row, {
+      GetWorkloadAccessTokenForJWTCommand: { workloadAccessToken: 'both-workload-and-user' },
+      GetResourceOauth2TokenCommand: { accessToken: 'tok' },
+    });
+    const result = await agentCoreIdentity({
+      workloadName: 'my-agent',
+      workloadIdentityToken: 'the-static-one',
+      _sdk: sdk.module,
+    }).getCredential({
+      service: 'github',
+      mode: 'user',
+      // The proof, not the assertion: an identity is here too, and the JWT
+      // still wins — an agent that holds the user's own token must not fall
+      // back to telling AWS who it thinks they are.
+      identity: { principal: 'ada' },
+      userToken: 'eyJhbGciOi.THE-USERS-OWN-JWT.sig',
+    });
+
+    expect(sdk.names()).toEqual([
+      'GetWorkloadAccessTokenForJWTCommand',
+      'GetResourceOauth2TokenCommand',
+    ]);
+    expect(sdk.sent[0]?.input).toEqual({
+      workloadName: 'my-agent',
+      userToken: 'eyJhbGciOi.THE-USERS-OWN-JWT.sig',
+    });
+    // And the exchanged token is what it vends WITH — over both the static one
+    // and anything the by-userId path would have produced.
+    expect(sdk.sent[1]?.input['workloadIdentityToken']).toBe('both-workload-and-user');
+    expect(result.status).toBe('issued');
+  });
+
   it('agentCoreIdentity — the SESSION id comes off `sessionUri`, which is what the wire calls it', async () => {
     const row = pin('agentCoreIdentity');
     const sdk = fakeSdk(row, {
