@@ -46,6 +46,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   Agent,
+  codeRunnerTool,
   defineTool,
   LLMCall,
   NoConversationError,
@@ -55,7 +56,8 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { pauseHere } from '../../src/core/pause.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
+import type { CodeResult, CodeRunner, LLMRequest } from '../../src/adapters/types.js';
 
 const SRC = join(__dirname, '..', '..', 'src');
 const read = (relative: string): string => readFileSync(join(SRC, relative), 'utf8');
@@ -349,6 +351,93 @@ describe('silent success — timing', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. CONFIGURATION — a setting that was accepted and dropped
 // ─────────────────────────────────────────────────────────────────────────────
+
+describe('silent success — a tool result that was quietly cut (9.7.0)', () => {
+  /**
+   * The class, in one sentence: the model reasons over a fragment of a table
+   * believing it has the table.
+   *
+   * `codeRunnerTool` exists so big DATA is computed outside the context window
+   * instead of pasted into it — the motivating failure being a real production
+   * request of 879,073 tokens. A runner that quietly slices its own output to
+   * fit is the same bug wearing a different hat, and there is no way for the
+   * model to notice: a cut string is a valid string.
+   */
+  const runnerAnswering = (result: Partial<CodeResult>): CodeRunner => ({
+    id: 'pinned-runner',
+    start: () =>
+      Promise.resolve({
+        id: 's1',
+        execute: () => Promise.resolve({ ok: true, stdout: '', stderr: '', ...result }),
+        stop: () => Promise.resolve(),
+      }),
+  });
+
+  const runCode = (result: Partial<CodeResult>, maxOutputChars?: number): Promise<string> =>
+    codeRunnerTool({
+      runner: runnerAnswering(result),
+      ...(maxOutputChars !== undefined && { maxOutputChars }),
+    }).execute(
+      { code: 'x' },
+      {
+        toolCallId: 'c1',
+        iteration: 0,
+        credentials: unconfiguredCredentialProvider(),
+        hasCredentials: false,
+        runId: 'r1',
+        teardownScopes: ['call', 'run', 'session', 'shutdown'],
+        onTeardown: () => {},
+      },
+    );
+
+  it('ADAPTED: a cut the TOOL makes is stated in the bytes the model reads', async () => {
+    const out = await runCode({ stdout: 'x'.repeat(500) }, 20);
+    expect(out).toContain('[truncated: showing 20 of 500 characters');
+  });
+
+  it('ADAPTED: a cut the RUNNER already made is stated too — it is not laundered', async () => {
+    // The result FITS the tool's own ceiling, so the tool has nothing to cut.
+    // Passing it through unmarked would present a 90,000-character answer's
+    // first fragment as the whole answer.
+    const out = await runCode({
+      stdout: 'fits fine',
+      truncated: { stdout: true, ofChars: 90_000 },
+    });
+    expect(out).toContain('[truncated:');
+  });
+
+  it('ACCEPTED: output that fits carries no marker — a false alarm teaches nothing either', async () => {
+    expect(await runCode({ stdout: 'all of it' })).toBe('all of it');
+  });
+
+  it('STATED: the port says why truncation must be reported, and the source still says it', () => {
+    // A stated behaviour whose statement was deleted is back to being a silent
+    // success, and only this second assertion catches that.
+    expect(read('adapters/types.ts')).toContain('An unstated slice is a silent success.');
+    expect(read('core/codeRunnerTool.ts')).toContain('TRUNCATION IS ALWAYS STATED');
+  });
+
+  it('REFUSED: a session-scoped runner at a door with no session, rather than a silent narrowing', async () => {
+    const tool = codeRunnerTool({ runner: runnerAnswering({}), scope: 'session' });
+    // The two silent alternatives are both worse than a throw: widening the key
+    // hands one sandbox to two people, and narrowing it multiplies start-up
+    // cost by ~30 with nothing to show for it.
+    await expect(
+      tool.execute(
+        { code: 'x' },
+        {
+          toolCallId: 'c1',
+          iteration: 0,
+          credentials: unconfiguredCredentialProvider(),
+          hasCredentials: false,
+          runId: 'r1',
+          teardownScopes: ['call', 'run', 'session', 'shutdown'],
+          onTeardown: () => {},
+        },
+      ),
+    ).rejects.toThrow(/needs a hosting session/);
+  });
+});
 
 describe('silent success — configuration', () => {
   it('REFUSED: .system() twice on an Agent, naming what to use instead', () => {

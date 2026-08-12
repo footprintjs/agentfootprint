@@ -445,6 +445,26 @@ export type {
   DefineToolOptions,
 } from './core/tools.js';
 export { defineTool, assertValidToolName, warnIfInvalidToolName } from './core/tools.js';
+// Tool sessions (9.7.0) — the identity a tool holds a session under, and the
+// end-signal that releases it. The KEY DERIVATION is exported because it is the
+// isolation boundary: one implementation, or two that disagree.
+export {
+  toolSessionKey,
+  hashSessionKey,
+  ToolTeardownTimeoutError,
+  TOOL_TEARDOWN_TIMEOUT_MS,
+  type TeardownScope,
+  type TeardownReason,
+  type TeardownOptions,
+} from './core/toolSessions.js';
+export {
+  codeRunnerTool,
+  toolSessionsOf,
+  TOOL_SESSIONS,
+  type CodeRunnerToolOptions,
+  type CodeRunnerToolScope,
+  type HoldsToolSessions,
+} from './core/codeRunnerTool.js';
 export {
   toolContractCheckup,
   formatToolContractCheckup,

@@ -2,26 +2,26 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-11",
+  "recordedAt": "2026-08-12",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1390,
-    "declaredEvents": 73,
-    "eventSource": "src/events/registry.ts:542"
+    "declaredSymbols": 1413,
+    "declaredEvents": 77,
+    "eventSource": "src/events/registry.ts:566"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 523,
+      "documented-never-exercised": 547,
       "exercised-undocumented": 35,
       "undocumented-unexercised": 584,
       "site-code-sample-only": 23,
-      "written-but-not-published": 125,
+      "written-but-not-published": 124,
       "ok": 100
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 12,
+      "documented-never-exercised": 16,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 5,
@@ -434,7 +434,6 @@
     "ParallelInput",
     "ParallelOptions",
     "ParallelOutput",
-    "Payloads",
     "PermissionDecision",
     "PermissionPolicyOptions",
     "PermissionRecorderOptions",

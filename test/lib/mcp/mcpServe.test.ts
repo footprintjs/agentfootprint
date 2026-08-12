@@ -16,7 +16,7 @@ import { mcpServe } from '../../../src/tool-providers/index.js';
 import { PermissionPolicy } from '../../../src/security/index.js';
 import { staticTokens } from '../../../src/identity.js';
 import type { McpCallToolRequest, McpSdkServer } from '../../../src/lib/mcp/types.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool, ToolExecutionContext } from '../../../src/core/tools.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Mock SDK server ──────────────────────────────────────────────
@@ -666,6 +666,109 @@ describe('mcpServe — the governance chain (7.18)', () => {
     // Including `undefined`, which is not `{}` — a chain nobody configured
     // must not quietly normalise the client's payload.
     expect(seen).toEqual([{ a: 1 }, undefined]);
+  });
+});
+
+describe('mcpServe — the tool-session contract at a door with no run (9.7.0)', () => {
+  /** Serve one tool and hand back what its ctx looked like. */
+  async function ctxOf(
+    tool: Parameters<typeof mcpServe>[0][number],
+  ): Promise<{ seen: ToolExecutionContext[]; call: MockServer['call'] }> {
+    const server = makeMockServer();
+    await mcpServe([tool], { _server: server });
+    return { seen: [], call: server.call.bind(server) };
+  }
+
+  it('LAW: no runId, no sessionId, no identity — a served call is one call, not a turn', async () => {
+    const seen: ToolExecutionContext[] = [];
+    const probe = defineTool({
+      name: 'probe',
+      description: 'records its context',
+      execute: (_a, ctx) => {
+        seen.push(ctx);
+        return 'ok';
+      },
+    });
+    const { call } = await ctxOf(probe);
+    await call('probe', {});
+
+    // Minting a synthetic run id so the field could be non-optional would tell
+    // a tool it is part of a run that does not exist — and a session keyed on
+    // it would be shared by every client that reached this server.
+    expect(seen[0]).not.toHaveProperty('runId');
+    expect(seen[0]).not.toHaveProperty('sessionId');
+    expect(seen[0]).not.toHaveProperty('identity');
+  });
+
+  it("LAW: teardownScopes is exactly ['call'] — the one scope this door can honour", async () => {
+    const seen: ToolExecutionContext[] = [];
+    const probe = defineTool({
+      name: 'probe',
+      description: 'records its context',
+      execute: (_a, ctx) => {
+        seen.push(ctx);
+        return 'ok';
+      },
+    });
+    const { call } = await ctxOf(probe);
+    await call('probe', {});
+
+    expect(seen[0]?.teardownScopes).toEqual(['call']);
+  });
+
+  it("LAW: a 'call' cleanup really fires when the served call settles", async () => {
+    const cleanup = vi.fn();
+    const holder = defineTool({
+      name: 'holder',
+      description: 'opens something for the call',
+      execute: (_a, ctx) => {
+        ctx.onTeardown?.(cleanup, { scope: 'call', key: 'k' });
+        return 'held';
+      },
+    });
+    const { call } = await ctxOf(holder);
+    await call('holder', {});
+
+    // A declared capability that never fires is worse than one never declared.
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('LAW: a cleanup fires even when the served tool THREW', async () => {
+    const cleanup = vi.fn();
+    const breaker = defineTool({
+      name: 'breaker',
+      description: 'opens then fails',
+      execute: (_a, ctx) => {
+        ctx.onTeardown?.(cleanup, { scope: 'call', key: 'k' });
+        throw new Error('half-done');
+      },
+    });
+    const { call } = await ctxOf(breaker);
+    const result = await call('breaker', {});
+
+    expect(result.isError).toBe(true);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('LAW: a longer-lived scope is REFUSED by name, not accepted and never fired', async () => {
+    let refusal: string | undefined;
+    const greedy = defineTool({
+      name: 'greedy',
+      description: 'wants a run-scoped session at a door with no runs',
+      execute: (_a, ctx) => {
+        try {
+          ctx.onTeardown?.(() => {}, { scope: 'run', key: 'k' });
+        } catch (err) {
+          refusal = (err as Error).message;
+        }
+        return 'ok';
+      },
+    });
+    const { call } = await ctxOf(greedy);
+    await call('greedy', {});
+
+    expect(refusal).toMatch(/not honoured over mcpServe/);
+    expect(refusal).toMatch(/there is no run and no session here to end/);
   });
 });
 

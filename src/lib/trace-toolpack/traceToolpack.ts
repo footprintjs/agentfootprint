@@ -1915,12 +1915,28 @@ function buildReadNarrative(narrative: readonly string[]): Tool {
 
 // ── Scripted/offline invocation (the auditor pattern) ─────────────────────
 
-/** Minimal offline ToolExecutionContext — trace tools never use credentials. */
+/**
+ * Minimal offline ToolExecutionContext — trace tools never use credentials.
+ *
+ * `teardownScopes: []` is a STATEMENT, not an omission (9.7.0): nothing fires
+ * here, ever. There is no run, no session and no dispatch loop to settle a call
+ * against — this context exists so a toolpack tool can be invoked from a script.
+ * A tool that reads the empty list knows not to open anything it would need
+ * closed; a tool that calls `onTeardown` anyway is refused by name rather than
+ * having its cleanup silently filed where nothing will run it.
+ */
 const OFFLINE_CONTEXT: ToolExecutionContext = {
   toolCallId: 'trace-toolpack-offline',
   iteration: 0,
   credentials: unconfiguredCredentialProvider(),
   hasCredentials: false,
+  teardownScopes: [],
+  onTeardown: () => {
+    throw new Error(
+      'callTraceTool: onTeardown is not honoured offline — `ctx.teardownScopes` is empty, ' +
+        'so no scope would ever fire. Run this tool inside an Agent if it holds a session.',
+    );
+  },
 };
 
 /**

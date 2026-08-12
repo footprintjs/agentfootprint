@@ -176,6 +176,148 @@ real tool runs; decline and it becomes a denial the model reads.
 The full table, with the exact strings the model sees, is on
 [Governance & policy](doc:governance-and-policy).
 
+## CodeRunner — compute data outside the window
+
+Every port above answers "where does a tool come from". This one answers a
+different question: **where does the DATA go.**
+
+A tool whose honest answer is 40,000 rows has not given the model data. It has
+spent the context window. The motivating failure is measured, not hypothetical —
+a production request of **879,073 tokens**, almost all of it one tool result
+pasted into the prompt. Since 9.6.0 that shape at least fails by name
+(`ContextWindowExceededError`) instead of as an opaque vendor 400. `CodeRunner`
+is the other half of the answer: not failing better, but not needing to.
+
+> **Summarize prose, compute data.** Prose is what a summary is FOR. Data is not:
+> the model should write the aggregation, the runner should hold the rows, and
+> what comes back should be the finding.
+
+### The port
+
+```ts
+interface CodeRunner {
+  readonly id: string;
+  start(req: { key: string; language?: string; signal?: AbortSignal }): Promise<CodeSession>;
+}
+interface CodeSession {
+  readonly id: string;
+  execute(req: { code: string; language?: string; timeoutMs?: number }): Promise<CodeResult>;
+  stop(): Promise<void>;
+}
+```
+
+`CodeResult` is `{ ok, stdout, stderr, exitCode?, artifacts?, truncated? }`.
+`truncated` is the load-bearing field: **an unstated slice is a silent success.**
+A runner that quietly cuts its own output to fit is the same context-window bug
+wearing a different hat, and the model would reason over a fragment of a table
+believing it had the table.
+
+`start({ key })` takes the ISOLATION key the caller derived. An adapter may use
+it to name the remote session; it must never widen it.
+
+### The adapters
+
+| Adapter | Door | Peer dep | What it really is |
+|---|---|---|---|
+| `localCodeRunner` | `agentfootprint/providers` | none | A child process on your machine. **Isolation, not a sandbox.** |
+| `agentCoreCodeRunner` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-agentcore` | AWS Bedrock AgentCore Code Interpreter — a real managed sandbox. |
+
+**`localCodeRunner` is named honestly, not modestly.** A `node:child_process`
+subprocess gives you a separate process and heap, kill-on-timeout, no inherited
+stdin, and an environment allowlist (`process.env` is *not* inherited — only
+`PATH`, so the OS can find the interpreter, and you can override even that). It
+does **not** give you a filesystem jail, a network jail, or CPU/memory limits.
+
+So: a dev loop, a trusted-input pipeline, a machine you would be relaxed about a
+shell script running on. Not arbitrary model-written code from untrusted users.
+For that, put a real sandbox behind the same port and keep the tool identical.
+
+In-process `eval` / `node:vm` is **refused outright**. Node documents `vm` as not
+a security mechanism, so shipping it as one would be theater: the same code
+reaching the same globals, wearing a word that makes a reader stop checking. The
+library teaches refusals for things that are *wrong* and honest names for things
+that are merely *limited*.
+
+A `CodeSession` is what `start()` hands back — `execute()` and `stop()`, where
+`stop()` must tolerate a session the far side already reaped, because an idle
+timeout is the reality on every managed backend. Each adapter's options bag is
+`LocalCodeRunnerOptions` and `AgentCoreCodeRunnerOptions` respectively; the AWS
+one also exports `AgentCoreCodeClientLike` (the operation-semantic seam you can
+inject a whole client through, via `_client`), `AgentCoreInvokeAnswer` (one
+invocation already drained of its event stream) and
+`BedrockAgentCoreCodeSdkModule` (the `_sdk` test seam every AWS adapter here
+carries).
+
+`agentCoreCodeRunner` dispatches `StartCodeInterpreterSessionCommand`,
+`InvokeCodeInterpreterCommand` and `StopCodeInterpreterSessionCommand` through
+`client.send(new Command(...))` — never a method on the client, which is the
+9.4.0 law. Two shapes worth knowing because guessing them is how this class of
+bug ships: `Invoke` answers with an **event stream** (`response.stream`), and
+seven of its nine union members are modelled *exceptions* rather than results —
+folding one in as empty output would report a clean run that "printed nothing"
+at the exact moment you needed the word `AccessDenied`. All three names are
+pinned in `test/adapters/aws/awsCommandPin.ts` and verified against a real
+install.
+
+### The tool
+
+```ts
+import { Agent, codeRunnerTool } from 'agentfootprint';
+import { localCodeRunner } from 'agentfootprint/providers';
+
+const agent = Agent.create({ provider })
+  .tool(codeRunnerTool({ runner: localCodeRunner(), language: 'javascript' }))
+  .build();
+```
+
+`scope` decides how long one interpreter lives — `'call'` (fresh each time),
+`'run'` (one per turn, the default), or `'session'` (one per hosted
+conversation, so variables and files persist between turns). It holds one
+session per isolation key, reuses it across calls, and registers its own
+teardown; see [Tool sessions](doc:tools#tool-sessions--holding-something-across-calls)
+for the key grammar and the firing matrix.
+
+Ask for a scope the door cannot honour and it **refuses by name**. It never
+quietly narrows or widens: widening hands one sandbox to two people, and
+narrowing multiplies start-up cost with nothing to show for it.
+
+Worked end to end, with the payoff, the isolation and the events printed:
+`examples/features/52-run-code.ts`.
+
+### Why it is a plain tool — and what the chart form buys you
+
+`codeRunnerTool` is deliberately a **plain `Tool`, not a chart.** It is one
+operation, and — more decisively — the session it holds *outlives any single
+invocation*. A per-invocation chart could not hold it: the chart ends when the
+call ends, and the whole point is that the interpreter does not.
+
+Its evidence therefore lives at the **tool boundary**, where a plain tool's
+evidence belongs. `inspect_tool_call` reaches the code that was sent, the stdout
+and stderr that came back, and whether anything was truncated; the four
+`tools.session_*` events put the session *lifecycle* on the record beside it —
+which key, how many calls shared it, when and why it closed.
+
+The **chart form is composition, not a different tool.** When the thing you are
+building is a multi-step procedure — fetch → generate code → execute → validate
+— build it as a footprintjs chart with the runner used inside a stage, and wrap
+that chart with `flowchartAsTool({ keepRecord: true })`:
+
+```ts
+const analysis = flowChart<AnalysisState>('analysis')
+  .start('fetch', (s) => { s.rows = await warehouse.query(s.sql); })
+  .addFunction('generate', (s) => { s.code = await writeAggregation(s.rows); })
+  .addFunction('execute', (s) => { s.out = (await session.execute({ code: s.code })).stdout; })
+  .addFunction('validate', (s) => { s.ok = looksLikeANumber(s.out); })
+  .build();
+
+const analyze = flowchartAsTool({ chart: analysis, name: 'analyze', keepRecord: true });
+```
+
+Now the 8.17.0 descent applies in full: `inspect_tool_run` walks *through* the
+tool boundary to the inner stage that ran the code, so "why is this number
+wrong?" resolves to a stage rather than to a tool call. Same runner, same port —
+the difference is whether the work has steps worth naming.
+
 ## Serving tools, not only consuming them
 
 `mcpServe` turns an agentfootprint agent's governed tools into an MCP server, so
@@ -195,6 +337,9 @@ executing ungoverned. See [Serve tools over MCP](doc:mcp-serve).
 | `mockMcpClient` | `agentfootprint/providers` | none | Shipped — offline tests |
 | `mcpServe` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` (optional) | Shipped |
 | `staticTools` / `gatedTools` / `skillScopedTools` | `agentfootprint/providers` | — | Shipped |
+| `CodeRunner` / `codeRunnerTool` | `agentfootprint` (main) | — | Shipped 9.7.0 |
+| `localCodeRunner` | `agentfootprint/providers` | none | Shipped 9.7.0 — isolation, not a sandbox |
+| `agentCoreCodeRunner` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-agentcore` (optional) | Shipped 9.7.0 |
 
 ## Next
 
@@ -202,3 +347,4 @@ executing ungoverned. See [Serve tools over MCP](doc:mcp-serve).
 - [Governance & policy](doc:governance-and-policy) — who is allowed to say no
 - [Identity & credentials](doc:identity-and-credentials) — what the gateway vends
 - [AWS & Bedrock AgentCore](doc:aws) — a Gateway as one worked provider
+- [Tool sessions](doc:tools#tool-sessions--holding-something-across-calls) — the key grammar, the teardown contract, and who says a session ended

@@ -32,6 +32,7 @@ import {
   s3VectorsStore,
 } from '../../../src/memory-providers.js';
 import { agentCoreSessions } from '../../../src/adapters/hosting/agentcore.js';
+import { agentCoreCodeRunner } from '../../../src/adapters/code/agentcore.js';
 import { cloudwatchObservability } from '../../../src/adapters/observability/cloudwatch.js';
 import { xrayObservability } from '../../../src/adapters/observability/xray.js';
 import { bedrockEmbedder } from '../../../src/embedders/index.js';
@@ -162,6 +163,72 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     } as never);
     await sessions.hydrate('c-1');
     expect(sdk.names()).toEqual(['CreateEventCommand', 'ListEventsCommand']);
+  });
+
+  it('agentCoreCodeRunner — Start, Invoke, Stop, and the answer comes off the STREAM', async () => {
+    const row = pin('agentCoreCodeRunner');
+    const sdk = fakeSdk(row, {
+      StartCodeInterpreterSessionCommand: { sessionId: 'ci-1' },
+      // The shape verified against the real SDK: an event stream whose members
+      // are `{ result }` or a modelled exception — never a `body`.
+      InvokeCodeInterpreterCommand: {
+        sessionId: 'ci-1',
+        stream: (async function* () {
+          yield {
+            result: {
+              structuredContent: { stdout: '42\n', stderr: '', exitCode: 0 },
+              content: [{ type: 'text', text: 'ignored when structuredContent is present' }],
+            },
+          };
+        })(),
+      },
+      StopCodeInterpreterSessionCommand: { sessionId: 'ci-1' },
+    });
+    const runner = agentCoreCodeRunner({
+      identifier: 'aws.codeinterpreter.v1',
+      _sdk: sdk.module,
+    });
+    const session = await runner.start({ key: 't=acme/p=ada/r=run-1' });
+    const result = await session.execute({ code: 'print(6*7)', language: 'python' });
+    await session.stop();
+
+    expect(sdk.names()).toEqual([
+      'StartCodeInterpreterSessionCommand',
+      'InvokeCodeInterpreterCommand',
+      'StopCodeInterpreterSessionCommand',
+    ]);
+    expect(result).toMatchObject({ ok: true, stdout: '42\n', exitCode: 0 });
+    // Stop takes the SESSION ID, not a URI — the other thing the design could
+    // only guess at before the SDK was installed.
+    const stop = sdk.sent[2]?.input as { sessionId?: string; codeInterpreterIdentifier?: string };
+    expect(stop).toEqual({
+      sessionId: 'ci-1',
+      codeInterpreterIdentifier: 'aws.codeinterpreter.v1',
+    });
+    // `executeCode` is the service's own tool name; `arguments` is where the
+    // code rides. Getting either wrong is a ValidationException in somebody's
+    // account, weeks later.
+    const invoke = sdk.sent[1]?.input as { name?: string; arguments?: { code?: string } };
+    expect(invoke.name).toBe('executeCode');
+    expect(invoke.arguments?.code).toBe('print(6*7)');
+  });
+
+  it('agentCoreCodeRunner — a modelled exception ON the stream raises BY NAME', async () => {
+    const row = pin('agentCoreCodeRunner');
+    const sdk = fakeSdk(row, {
+      StartCodeInterpreterSessionCommand: { sessionId: 'ci-2' },
+      InvokeCodeInterpreterCommand: {
+        stream: (async function* () {
+          yield { accessDeniedException: { message: 'not authorized to invoke' } };
+        })(),
+      },
+    });
+    const runner = agentCoreCodeRunner({ identifier: 'ci', _sdk: sdk.module });
+    const session = await runner.start({ key: 'k' });
+    // Seven of the union's nine members are exceptions. Folding one in as empty
+    // output would report a clean run that "printed nothing" — the silent
+    // success this whole class of bug wears.
+    await expect(session.execute({ code: 'x' })).rejects.toThrow(/accessDeniedException/);
   });
 
   it('BedrockAgentMemory — GetAgentMemory to read, DeleteAgentMemory to forget', async () => {

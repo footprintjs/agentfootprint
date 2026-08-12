@@ -7,6 +7,193 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.7.0] - 2026-08-11
+
+**Tools have somewhere to hold a session.**
+
+`ToolExecutionContext` was six fields and none of them said WHO or WHICH RUN, and
+a `Tool` had no end-signal at all. So a tool backed by a session service — a
+managed code interpreter, a headless browser, a leased connection: Start →
+Invoke ×N → Stop — could only pay session start-up on every single call, or hold
+the session in a module-level map.
+
+The second option is the one people take, and it is an isolation failure rather
+than a performance trick. A `Tool` is a singleton: built once, shared by every
+run and every session the process serves. In a standing agent, the session in
+its closure is shared too, so person B gets person A's files, environment and
+half-run state. No test with one user shows you this.
+
+Everything needed to fix it already existed within one object-hop of the
+dispatch site. What was missing was the wire, and any signal a tool could be
+handed that said "this is over".
+
+### Added — run/session identity on `ToolExecutionContext`
+
+Three optional fields, sourced from what the engine already stamps:
+
+| field | source | absent when |
+|---|---|---|
+| `ctx.runId` | the run in flight | there is no run — a call served over `mcpServe` is one call, not a turn |
+| `ctx.sessionId` | `run({ sessionId })` ← `HostRequest.sessionId` | the run is not session-bound |
+| `ctx.identity` | the identity the CALLER passed | the caller passed none |
+
+Every one is **absent rather than invented**, which is the 9.4.0 rule applied one
+layer down. `ctx.identity` is deliberately *not* the run's internal
+`runIdentity`: that is always populated, defaulting to
+`{ conversationId: '<runId>' }`, and handing a tool a synthesized conversation as
+"the identity" would let it isolate a live sandbox on a fiction.
+
+`toolSessionKey(ctx, scope)` is exported because the derivation IS the isolation
+boundary — one implementation, or two that disagree:
+
+```
+session →  t=<tenant|_>/p=<principal|_>/s=<sessionId>     requires sessionId
+run     →  t=<tenant|_>/p=<principal|_>/r=<runId>         requires runId
+call    →  c=<toolCallId>                                 always available
+```
+
+**A `sessionId` alone never keys a live session.** The hosting port already said
+why in its own words: it is caller data, and anyone who can reach the host can
+put any string there, including someone else's.
+
+### Added — a real teardown contract
+
+`ctx.onTeardown(cleanup, { scope, key })`. Not `Tool.dispose()` (a singleton
+cannot dispose one caller's session) and not a lifecycle port the consumer wires
+(the tool that knows the key is the one that cannot reach it). Execute time is
+the only moment the key and the resource are both in hand.
+
+`ctx.teardownScopes` is a FACT to branch on, exactly like `hasCredentials` — a
+tool that wants a run-scoped session needs to know it is at a door with no runs
+BEFORE it opens one. Asking for a scope a door cannot honour throws, naming the
+door.
+
+| scope | fires |
+|---|---|
+| `'call'` | when `tool.execute` settles — resolve **or** throw. Every door, including `mcpServe`. |
+| `'run'` | at a run terminal that is **not a pause**. |
+| `'session'` | `agent.closeToolSessions({ sessionId })`. |
+| `'shutdown'` | `agent.shutdown()`. |
+
+Seven laws, each pinned: at most once ever · idempotent by `(tool, scope, key)`
+with the FIRST registration winning (it holds the live handle) · reverse
+registration order · bounded by `toolTeardownTimeoutMs` (default 5s, because
+teardown is on the SIGTERM path) · never throws into the run and never silent ·
+tolerates "already gone" · nothing live is ever persisted into a checkpoint.
+
+**A pause is not a terminal.** `'run'` teardown deliberately does not hang off
+`finally`, which also runs on both pause shapes. A `checkIn` on a code
+interpreter stops the run so a person can approve the code; tearing the sandbox
+down there destroys the exact state the resume needs, and it fails *quietly* — as
+a resumed run that "just re-ran everything". An error IS a terminal.
+
+### Added — `agent.closeToolSessions({ sessionId })`
+
+The mechanism is the library's; the **timing is your composition root's**.
+Nothing here can know when a request/reply session is over: a `HostRequest`
+carries a `sessionId` and no end, `SessionLifecycle` stays `hydrate`/`persist` by
+design, and managed backends do not tell you either — an idle timeout is the
+reality. Guessing would tear down a live sandbox mid-conversation.
+
+On the conversation door it is one line, now shipped in
+`examples/deploy/echo-conversation.ts`:
+
+```ts
+conversation.onClose(() => void agent.closeToolSessions({ sessionId }));
+```
+
+Never calling it is survivable, not silent: a lazy idle sweep (no timers — a
+library that installs an interval keeps your process alive), a bounded live count
+that evicts the coldest, and `shutdown()`.
+
+### Changed — `shutdown({ stop: false })` now closes tool sessions
+
+**Behaviour change, stated loudly.** `stop` governs BORROWED strategies: a host
+shutting down without owning the agent it was handed drains telemetry without
+releasing what the caller still holds. A tool session is not borrowed — this
+runtime opened it, on behalf of runs it executed, and nobody else holds a handle
+to close it. Leaving it open under `{ stop: false }` would leak every sandbox on
+`standingAgent`'s DEFAULT (`shutdown: 'flush'`) path.
+
+Nothing live is cut: by the time a composer reaches shutdown its host is closed
+and in-flight runs have finished. And it stays true to "the agent itself remains
+usable afterwards" — the next run opens a fresh session, exactly as the first one
+did. If you were relying on `{ stop: false }` to keep a tool's session alive
+across a shutdown, hold it yourself and register `'shutdown'`-free cleanup.
+
+**Behaviour change, second one:** a tool that registers teardown now has it
+FIRED where previously nothing did. That is the feature; it is named here because
+a `close()` that never used to run now runs.
+
+### Added — four typed events
+
+`agentfootprint.tools.session_started` · `_reused` (with `calls`) · `_closed`
+(with `reason`: `call-end` · `run-end` · `session-end` · `shutdown` · `idle` ·
+`evicted`) · `_close_failed` (with `errorClass`). 73 typed events → **77**.
+
+They ride the EXISTING `agentfootprint.tools.` prefix, which is the compat gift:
+`toolsRecorder` already bridges the whole prefix and the wildcard arm already
+exists, so a new domain would have re-opened the two-part trap 9.4.0 spent a
+release climbing out of.
+
+`session_started` / `_reused` fire inside `tool.execute` and carry the real
+`tool-calls#N` stage. `session_closed` / `_close_failed` fire after the last
+stage committed and carry a STATED pseudo-stage, `tool-teardown#0`, built with
+`buildEventMeta` from the run context — never `minimalMeta()`, which hardcodes
+`runId: 'consumer-scope'` and would make a teardown unjoinable to the run that
+opened the session.
+
+Payloads carry a `keyHash`, never the key: the key composes tenant, principal and
+`sessionId`, and publishing it would put a user identifier into every exporter's
+payload.
+
+### Added — `CodeRunner`, and the first consumer that proves the contract
+
+**Summarize prose, compute data.** A tool whose honest answer is 40,000 rows has
+not given the model data; it has spent the context window — the failure 9.6.0
+named (`ContextWindowExceededError`, from a real 879,073-token request) is the
+one this makes unnecessary. The model writes the aggregation, the runner holds
+the rows, and what comes back is the finding.
+
+- **`CodeRunner` / `CodeSession` / `CodeResult`** (main barrel) — Start →
+  Execute ×N → Stop. `CodeResult.truncated` is load-bearing doctrine: **an
+  unstated slice is a silent success**, pinned in
+  `test/api-conformance/silent-success.test.ts`.
+- **`localCodeRunner()`** (`agentfootprint/providers`) — a child process, and
+  the name says what it is. **Isolation, not a sandbox**: separate process and
+  heap, kill-on-timeout, no inherited stdin, an env ALLOWLIST (`process.env` is
+  not inherited — only `PATH`, so the OS can find the interpreter). No filesystem
+  jail, no network jail, no CPU/memory limit. In-process `eval` / `node:vm` is
+  refused outright — Node documents `vm` as not a security mechanism, and
+  shipping it as one is theater.
+- **`agentCoreCodeRunner({ region, identifier })`** (`agentfootprint/providers`)
+  — AWS Bedrock AgentCore Code Interpreter, a real managed sandbox behind the
+  same port. Dispatches `StartCodeInterpreterSessionCommand`,
+  `InvokeCodeInterpreterCommand`, `StopCodeInterpreterSessionCommand` via
+  `client.send(new Command(...))`, pinned in `test/adapters/aws/awsCommandPin.ts`
+  and **verified against a real install of the SDK before shipping** — including
+  two shapes a design could only have guessed at: `Invoke` answers with an EVENT
+  STREAM, and seven of its nine union members are modelled *exceptions* (folded
+  in as empty output, an `AccessDenied` would have reported a clean run that
+  "printed nothing"), and `Stop` takes the session id, not a URI.
+- **`codeRunnerTool({ runner, scope })`** (main barrel) — holds one session per
+  isolation key, reuses it across calls, registers its own teardown. Degradation
+  is REFUSED, never silent: a wider key is the cross-binding bug, a narrower one
+  is a hidden ~30× latency change.
+
+Worked end to end in `examples/features/52-run-code.ts`.
+
+### Compatibility
+
+All additive. `ToolExecutionContext` gains three optional data fields and two
+optional members — every existing tool compiles and behaves identically, and one
+that ignores them pays nothing. `Tool` and `defineTool` are unchanged: session
+behaviour is a FACTORY, not a Tool-shape change. `SessionLifecycle`,
+`HostRequest`, `HostReply` and `AgentHost` are untouched. No new subpath.
+
+An agent whose tools never register a cleanup never allocates a teardown tier;
+its run terminals are one `undefined` check.
+
 ## [9.6.0] - 2026-08-11
 
 **Three findings from one production blowup — an 879,073-token request against

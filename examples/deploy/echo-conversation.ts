@@ -80,6 +80,23 @@ function answerFrames(agent: Agent, maxFrameBytes: number) {
     conversation.onClose((why: ConversationClose) => {
       // 'far-side' they hung up · 'host' we closed · 'transport' it broke.
       console.error(`[conversation] ${who} ended: ${why.by}${why.reason ? ` — ${why.reason}` : ''}`);
+      // THE ONE LINE that ends a session's tool sessions (9.7.0).
+      //
+      // A tool holding a `scope: 'session'` resource — a code interpreter, a
+      // browser context — keeps it across the TURNS of one conversation. The
+      // library cannot know when the conversation is over: a `HostRequest`
+      // carries a sessionId and no end, `SessionLifecycle` is hydrate/persist by
+      // design, and AWS itself does not tell you (an idle timeout is the
+      // reality). Guessing would tear down a live sandbox mid-conversation.
+      //
+      // This door DOES know. `onClose` is the boundary, so the composition root
+      // — which already owns the shape of the process — says when. Same
+      // doctrine as `shutdownOn`: the mechanism is the library's, the timing is
+      // yours. Not calling it is survivable (idle sweep, LRU bound, shutdown)
+      // but this is the moment that is actually true.
+      if (conversation.sessionId !== undefined) {
+        void agent.closeToolSessions({ sessionId: conversation.sessionId });
+      }
     });
 
     conversation.onFrame((frame) => {

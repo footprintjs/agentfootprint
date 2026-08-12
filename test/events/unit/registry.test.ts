@@ -94,7 +94,11 @@ describe('event registry — names + exhaustiveness', () => {
     //     accepted that a declared edge then outranked; see CHANGELOG.)
     //    (agent.output_contract_unmet added with 8.18.0 — the answer this run
     //     hands back does not satisfy its own outputSchema; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(73);
+    //    (tools.session_started / session_reused / session_closed /
+    //     session_close_failed added with 9.7.0 — a tool that holds a session
+    //     (a code interpreter, a browser) now has a teardown contract, and
+    //     these four are what it leaves behind; see CHANGELOG 9.7.0.)
+    expect(ALL_EVENT_TYPES.length).toBe(77);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

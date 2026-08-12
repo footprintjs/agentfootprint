@@ -51,6 +51,7 @@ import {
   type LocalObservabilityOptions,
 } from '../recorders/observability/localObservability.js';
 import type { EnableNamespace, Runner } from './runner.js';
+import type { TeardownReason, ToolSessionTier } from './toolSessions.js';
 
 let _runIdSeq = 0;
 
@@ -635,6 +636,21 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       // Flush everything before stopping anything — a strategy two handles
       // share must not be stopped while the other still has data to ship.
       await Promise.allSettled(handles.map((handle) => handle.flush()));
+      // TOOL SESSIONS CLOSE ON EITHER SETTING (9.7.0) — including
+      // `{ stop: false }`, and this is a deliberate asymmetry worth reading.
+      //
+      // `stop` governs BORROWED strategies: a host that is shutting down but
+      // does not own the agent it was handed drains without releasing what the
+      // caller still has. A tool session is not borrowed. THIS runtime opened
+      // it, on behalf of runs it executed, and nobody else holds a handle to
+      // close it — so `{ stop: false }` leaving it open would not be politeness,
+      // it would be a leaked sandbox on `standingAgent`'s DEFAULT path.
+      //
+      // Nothing live is cut: by the time a composer reaches here its host is
+      // closed and in-flight runs have finished. And it stays true to
+      // "the agent itself remains usable afterwards" — the next run opens a
+      // fresh session, exactly as the first one did.
+      await this.toolSessionTier?.fireShutdown();
       if (!shouldStop) return;
       for (const handle of handles) {
         handle.stop();
@@ -644,6 +660,62 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       this.shutdownInFlight = undefined;
     });
     return this.shutdownInFlight;
+  }
+
+  // ─── Tool sessions (9.7.0) ─────────────────────────────────────
+
+  /**
+   * The teardown tier for tools that hold sessions, built on FIRST
+   * registration and `undefined` until then.
+   *
+   * Only a runner that dispatches tools ever sets it — today that is `Agent`.
+   * A `Sequence` or a `Loop` has no tool-dispatch loop, so its tier stays
+   * absent and every terminal here is one `undefined` check.
+   *
+   * @internal
+   */
+  protected toolSessionTier: ToolSessionTier | undefined;
+
+  /**
+   * End the tool sessions held for one hosting session.
+   *
+   * **The mechanism is the library's; the TIMING is yours.** Nothing in this
+   * package can know when a request/reply session is over — a `HostRequest`
+   * carries a `sessionId` and no end, `SessionLifecycle` is `hydrate`/`persist`
+   * by design (a TTL, a scan or a delete is the STORE's own API, not a demand
+   * this port makes of every store that will ever implement it), and AWS itself
+   * does not tell you: an idle timeout is the reality. Guessing a boundary here
+   * would tear down a live sandbox mid-conversation.
+   *
+   * So the composition root, which already owns the shape of the process, says
+   * when — the same doctrine that stops `shutdownOn` from grabbing signals by
+   * default. On the conversation door that is one line:
+   *
+   * ```ts
+   * conversation.onClose(() => void agent.closeToolSessions({ sessionId }));
+   * ```
+   *
+   * A request/reply deployment that knows its own boundary — a logout, a job
+   * finishing, a cart abandoned — calls the same method.
+   *
+   * Never calling it is survivable, not silent: sessions idle out on the tier's
+   * lazy sweep, a bounded live count evicts the coldest, and `shutdown()` takes
+   * whatever is left.
+   *
+   * @returns how many cleanups ran. `0` when this runner holds none — a
+   *   composition, or an agent whose tools never opened anything.
+   *
+   * @example
+   *   host.onSessionEnd(async (sessionId) => {
+   *     const closed = await agent.closeToolSessions({ sessionId });
+   *     log.info({ sessionId, closed }, 'tool sessions released');
+   *   });
+   */
+  async closeToolSessions(
+    options: { readonly sessionId?: string; readonly reason?: TeardownReason } = {},
+  ): Promise<number> {
+    if (!this.toolSessionTier) return 0;
+    return this.toolSessionTier.fireSession(options.sessionId, options.reason ?? 'session-end');
   }
 
   readonly enable: EnableNamespace = {

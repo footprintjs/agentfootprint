@@ -63,9 +63,167 @@ The other direction is [`mcpServe(tools)`](doc:mcp-serve) — expose the tools y
 
 When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](doc:error-handling) for the typed error contract + retry decorators.
 
+## Tool sessions — holding something across calls
+
+Some tools are not one operation. A managed code interpreter, a headless
+browser, a leased database connection: they are **Start → Invoke ×N → Stop**,
+and the middle is where all the value is. Starting a fresh session per call can
+cost seconds; keeping one in a module-level variable is fast and wrong.
+
+> **Why it is wrong.** A `Tool` is a singleton — built once, shared by every run
+> and every session your process serves. A session held in its closure is
+> therefore shared too. In a standing agent, person B gets person A's files,
+> environment and half-run state. That is not a memory leak; it is an isolation
+> failure that no test with one user will ever show you.
+
+Since 9.7.0 the context carries what a tool needs to do this properly.
+
+### What `ctx` tells you
+
+| field | is | absent when |
+|---|---|---|
+| `ctx.runId` | the run this call belongs to | there is no run — a call served over `mcpServe` is one call, not a turn |
+| `ctx.sessionId` | the hosting conversation, when bound to one | the run is not session-bound |
+| `ctx.identity` | the identity the CALLER passed | the caller passed none |
+| `ctx.teardownScopes` | which scopes this door can honour | never — `[]` means none will ever fire |
+
+Every one is **absent rather than invented** when the fact is absent. That is
+load-bearing: a session keyed on a fabricated id is shared by everyone who gets
+the same fabrication.
+
+`ctx.identity` is specifically what the caller passed, not the run's internal
+`runIdentity` — that one always exists (it defaults to
+`{ conversationId: '<runId>' }`), and handing a synthesized conversation to a
+tool as "the identity" would let it isolate on a fiction.
+
+### Derive the key, register the cleanup
+
+```ts
+import { defineTool, toolSessionKey } from 'agentfootprint';
+
+const query = defineTool<{ sql: string }, string>({
+  name: 'query',
+  description: 'Run SQL against the analytics warehouse',
+  execute: async ({ sql }, ctx) => {
+    const key = toolSessionKey(ctx, 'run');
+    if (!key) throw new Error("query: this door has no run — build with scope 'call'");
+
+    let session = live.get(key);
+    if (!session) {
+      session = await warehouse.connect();
+      live.set(key, session);
+    }
+    // Registering on EVERY call is the intended shape: the first cleanup wins
+    // (it holds the handle) and the repeat refreshes liveness.
+    ctx.onTeardown?.(() => { live.delete(key); return session.close(); }, { scope: 'run', key });
+
+    return session.run(sql);
+  },
+});
+```
+
+`toolSessionKey` is exported because the derivation **is** the isolation
+boundary — one implementation, or two that disagree:
+
+```
+session →  t=<tenant|_>/p=<principal|_>/s=<sessionId>     requires sessionId
+run     →  t=<tenant|_>/p=<principal|_>/r=<runId>         requires runId
+call    →  c=<toolCallId>                                 always available
+```
+
+**A `sessionId` alone never keys a live session.** It is caller data: anyone who
+can reach your host can put any string there, including someone else's. Tenant
+and principal are in the key whenever they exist — and a deployment that has no
+principal is thereby *stating* it is single-principal rather than assuming it.
+
+When the facts a scope needs are missing, `toolSessionKey` returns `undefined`
+rather than guessing, and you refuse. Do not silently narrow or widen: widening
+is the cross-binding bug, and narrowing is a hidden 30× latency change nobody
+sees until the bill.
+
+### When teardown fires
+
+| scope | fires | available at |
+|---|---|---|
+| `'call'` | when `execute` settles — resolve **or** throw | every door, including `mcpServe` |
+| `'run'` | when the turn reaches a terminal that is **not a pause** | any run |
+| `'session'` | when you call `agent.closeToolSessions({ sessionId })` | any door |
+| `'shutdown'` | `agent.shutdown()` — **including `{ stop: false }`** | always |
+
+**A pause is not a terminal.** A `checkIn` on a consequential tool stops the run
+so a person can decide; tearing down there destroys the state the resume needs,
+and it fails *quietly* — as a resumed run that "just re-ran everything". Both
+pause shapes are skipped. An error, by contrast, *is* a terminal: nobody is
+coming back, and a resource held by a crashed run is the clearest kind of leak.
+
+`shutdown({ stop: false })` closing tool sessions is deliberate. `stop` governs
+*borrowed* strategies — telemetry a host was handed and does not own. A session
+is not borrowed: this runtime opened it, and nobody else holds a handle to close
+it. Draining without closing would leak every sandbox on `standingAgent`'s
+default path.
+
+### Who says a session ended
+
+Nothing in this library can know when a *request/reply* session is over. A
+`HostRequest` carries a `sessionId` and no end; `SessionLifecycle` is
+`hydrate`/`persist` by design; and managed backends do not tell you either — an
+idle timeout is the reality. So the mechanism is the library's and the **timing
+is your composition root's**, the same doctrine that stops `shutdownOn` from
+grabbing signals by default. On the conversation door it is one line:
+
+```ts
+conversation.onClose(() => void agent.closeToolSessions({ sessionId }));
+```
+
+Never calling it is survivable, not silent: sessions idle out on a lazy sweep
+(no timers — a library that installs an interval keeps your process alive), a
+bounded live count evicts the coldest, and `shutdown()` takes the rest.
+
+### The record it leaves
+
+Four events on the existing `agentfootprint.tools.` stream:
+`agentfootprint.tools.session_started`, `agentfootprint.tools.session_reused`
+(with `calls` — how many calls have shared one start-up, which is the payoff
+measured), `agentfootprint.tools.session_closed` (with `reason`), and
+`agentfootprint.tools.session_close_failed` (with `errorClass`). Teardown never throws into your run — but
+it is never silent either, and that last one is the difference: a vendor `Stop`
+that failed leaves something you are still paying for.
+
+Payloads carry a `keyHash`, never the key: the key composes tenant, principal
+and `sessionId`, and publishing it would put a user identifier into every
+exporter's payload.
+
+A ready-made tool that does all of this — `codeRunnerTool` — is in
+[Tools and gateways](doc:tools-and-gateways#coderunner--compute-data-outside-the-window).
+
+### The names
+
+Everything here is on the main barrel.
+
+| Name | What it is |
+|---|---|
+| `TeardownScope` | The four scopes: `'call'` · `'run'` · `'session'` · `'shutdown'`. |
+| `TeardownOptions` | The second argument to `ctx.onTeardown` — `scope`, `key`, and the optional `runnerId` / `label` that ride the events. |
+| `TeardownReason` | Why a cleanup ran, as reported on `session_closed`: `call-end` · `run-end` · `session-end` · `shutdown` · `idle` · `evicted`. |
+| `toolSessionKey(ctx, scope)` | The one key derivation. `undefined` when the scope's facts are absent. |
+| `hashSessionKey(key)` | The digest the events carry. SHA-256 (12 hex chars) where `node:crypto` resolves, FNV-1a in a browser bundle — never reversible to the key. |
+| `TOOL_TEARDOWN_TIMEOUT_MS` | The 5000ms default behind `AgentOptions.toolTeardownTimeoutMs`. |
+| `ToolTeardownTimeoutError` | Raised inside the tier when a cleanup outruns its budget; surfaces as `errorClass` on `session_close_failed`, never into your run. |
+| `agent.closeToolSessions({ sessionId, reason })` | Ends `'session'`-scoped cleanups. Answers how many ran; `0` on a runner that holds none. |
+
+For `codeRunnerTool` specifically: `CodeRunnerToolOptions` is its options bag,
+`CodeRunnerToolScope` is the `'call' | 'run' | 'session'` subset it accepts
+(`'shutdown'` is when everything goes, not a thing to key one session on), and
+`toolSessionsOf(tool)` reads the live-session map back for a test or an
+inspector. That map rides the tool under the `TOOL_SESSIONS` registry symbol
+(the shape `HoldsToolSessions` describes) — invisible to the LLM and to `Tool`'s
+own shape, and a *different* symbol from `flowchartAsTool`'s inner-record
+registry, so one tool can carry both.
+
 ## Anti-patterns
 
-- Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` (`{ toolCallId, iteration, signal? }`) — use `ctx.signal` to honor cancellation, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)
+- Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)
+- Don't hold a session in a module-level map. It looks like a cache and behaves like one right up until two people use your agent at once. See [Tool sessions](#tool-sessions--holding-something-across-calls) below.
 - Don't put validation logic in `execute` for things JSON Schema can express (`type`, `required`, `enum`). The LLM honors well-formed schemas; redundant runtime checks are noise.
 - Don't make tool descriptions ambiguous. "Get data" is bad. "Look up an order by ID; returns status + amount" is good. The LLM picks tools by description.
 
@@ -77,3 +235,4 @@ When `execute` throws, the framework catches it, reports it to the LLM as a tool
 - [Tool providers](doc:tool-providers) — dynamic per-iteration tool catalogs (`staticTools`, `gatedTools`, `skillScopedTools`)
 - [Skills, explained](doc:skills-explained) — LLM-activated tool bundles
 - [Permission gating](doc:security) — restrict which tools an agent can call
+- [Tools and gateways](doc:tools-and-gateways) — the `CodeRunner` port, `localCodeRunner`, and AgentCore Code Interpreter

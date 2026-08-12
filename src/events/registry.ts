@@ -87,6 +87,10 @@ import type {
   ToolsDiscoveryCompletedPayload,
   ToolsDiscoveryFailedPayload,
   ToolsShadowedPayload,
+  ToolsSessionStartedPayload,
+  ToolsSessionReusedPayload,
+  ToolsSessionClosedPayload,
+  ToolsSessionCloseFailedPayload,
   ToolsOfferedPayload,
   ToolStartPayload,
   ValidationArgsInvalidPayload,
@@ -150,6 +154,10 @@ export const EVENT_NAMES = {
     discoveryCompleted: 'agentfootprint.tools.discovery_completed',
     discoveryFailed: 'agentfootprint.tools.discovery_failed',
     shadowed: 'agentfootprint.tools.shadowed',
+    sessionStarted: 'agentfootprint.tools.session_started',
+    sessionReused: 'agentfootprint.tools.session_reused',
+    sessionClosed: 'agentfootprint.tools.session_closed',
+    sessionCloseFailed: 'agentfootprint.tools.session_close_failed',
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
@@ -390,6 +398,22 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tools.shadowed',
     ToolsShadowedPayload
   >;
+  'agentfootprint.tools.session_started': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.session_started',
+    ToolsSessionStartedPayload
+  >;
+  'agentfootprint.tools.session_reused': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.session_reused',
+    ToolsSessionReusedPayload
+  >;
+  'agentfootprint.tools.session_closed': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.session_closed',
+    ToolsSessionClosedPayload
+  >;
+  'agentfootprint.tools.session_close_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.session_close_failed',
+    ToolsSessionCloseFailedPayload
+  >;
   // skill
   'agentfootprint.skill.activated': AgentfootprintEventEnvelope<
     'agentfootprint.skill.activated',
@@ -582,6 +606,10 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.discovery_completed',
   'agentfootprint.tools.discovery_failed',
   'agentfootprint.tools.shadowed',
+  'agentfootprint.tools.session_started',
+  'agentfootprint.tools.session_reused',
+  'agentfootprint.tools.session_closed',
+  'agentfootprint.tools.session_close_failed',
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',

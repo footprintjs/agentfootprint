@@ -35,7 +35,12 @@ import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
 import { SUBFLOW_IDS } from '../conventions.js';
-import { DecisionRequiredError, pauseDemandsDecision, type RunnerPauseOutcome } from './pause.js';
+import {
+  DecisionRequiredError,
+  isPaused,
+  pauseDemandsDecision,
+  type RunnerPauseOutcome,
+} from './pause.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -66,6 +71,25 @@ import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
+import {
+  ToolSessionTier,
+  TOOL_TEARDOWN_TIMEOUT_MS,
+  type ToolSessionReport,
+} from './toolSessions.js';
+import { buildEventMeta } from '../bridge/eventMeta.js';
+import type { AgentfootprintEventMap } from '../events/registry.js';
+
+/**
+ * The pseudo-stage a tool-teardown event is stamped with.
+ *
+ * `session_closed` and `session_close_failed` fire after the run's last stage
+ * has committed — there is no runtimeStageId to inherit, and inventing one that
+ * looked like a real stage would put a fictitious node in every consumer's step
+ * strip. This says plainly where it came from, the way `'<stageId>#paused'`
+ * does at the pause boundary. Their two siblings, `session_started` and
+ * `session_reused`, happen inside a real stage and carry its real id.
+ */
+const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
@@ -459,6 +483,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  conversation to the id of the one run that started it. */
   private lastRunIdentity?: MemoryIdentity;
 
+  /** How long ONE tool teardown may take before the runner stops waiting.
+   *  See `AgentOptions.toolTeardownTimeoutMs`. */
+  private readonly toolTeardownTimeoutMs: number;
+
   /** The run in flight, by id — the whole of the one-turn-at-a-time guard.
    *  Set before the executor is built and cleared in `finally`, so a run that
    *  throws does not leave the agent permanently refusing. */
@@ -679,6 +707,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // 8.6.0 — default `'pause'`: consent is work waiting on a person, and the
     // model is the one party that cannot click a link.
     this.onAuthorizationRequired = opts.onAuthorizationRequired ?? 'pause';
+    // 9.7.0 — teardown is on the SIGTERM path, so it is bounded by default.
+    this.toolTeardownTimeoutMs = opts.toolTeardownTimeoutMs ?? TOOL_TEARDOWN_TIMEOUT_MS;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
     //   - thinkingHandlerValue === undefined → auto-wire by provider.name
@@ -1021,8 +1051,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       this.recordPendingQuestion(finalized);
+      await this.endRunToolSessions(finalized);
       return finalized;
     } catch (cause) {
+      // A THROWN pause is still a pause — see `endRunToolSessions`.
+      await this.endRunToolSessions(cause);
       // Wrap recoverable errors with the last-known-good checkpoint.
       // Don't wrap intentional terminal signals — let them propagate as
       // their typed shapes so callers can `instanceof` them:
@@ -1377,10 +1410,43 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The question this resume answered is settled; a resume that paused
       // AGAIN has asked a new one, and that one is outstanding from here.
       this.recordPendingQuestion(finalized);
+      await this.endRunToolSessions(finalized);
       return finalized;
+    } catch (cause) {
+      await this.endRunToolSessions(cause);
+      throw cause;
     } finally {
       this.inFlightRunId = undefined;
     }
+  }
+
+  /**
+   * Fire `'run'`-scoped tool teardown — IF this run really ended.
+   *
+   * **Not on `finally`, and that is the whole point.** `finally` runs on every
+   * exit including a pause, and a pause exits TWO ways: a returned
+   * `RunnerPauseOutcome` and a thrown `PauseSignal`. A check-in on a
+   * code-interpreter call pauses the run so a person can approve the code —
+   * tearing the sandbox down there destroys the exact state the resume needs,
+   * and it fails QUIETLY, as a resumed run that "just re-ran everything".
+   * Both shapes are discriminated here and both are skipped.
+   *
+   * An error IS a terminal: the run is over, nobody is coming back, and a
+   * sandbox held by a run that crashed is the clearest kind of leak. Only a
+   * pause survives.
+   *
+   * Fired for the TURN, not for `currentRunContext.runId` — `resume()` mints a
+   * fresh run id, so a pause and its resume are one turn across two runs, and
+   * filtering on the id would leave everything a paused turn opened alive
+   * forever. See `ToolSessionTier.fireRun`.
+   *
+   * @param outcome what `run()`/`resume()` is about to return, or about to throw.
+   */
+  private async endRunToolSessions(outcome: unknown): Promise<void> {
+    if (!this.toolSessionTier) return;
+    if (isPaused(outcome)) return;
+    if (outcome instanceof Error && outcome.name === 'PauseSignal') return;
+    await this.toolSessionTier.fireRun();
   }
 
   /**
@@ -1610,6 +1676,81 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * An open pick ACTIVATES but never moves the cursor — see the tool-calls gate.
    * Computed once per chart build; the injection list is fixed at construction.
    */
+  /**
+   * The identity facts this run hands `tool.execute` (9.7.0).
+   *
+   * Read through an ACCESSOR from the chart (see `ToolCallsHandlerDeps.currentRun`)
+   * because the chart is built once and this changes every run.
+   *
+   * `identity` is `lastRunIdentity` — what the CALLER passed — and deliberately
+   * NOT `scope.runIdentity`, which is always populated and defaults to
+   * `{ conversationId: '<runId>' }`. Handing a tool a synthesized conversation
+   * as "the identity" would let it key an isolated session on a fiction, and
+   * would make "absent" unrepresentable at exactly the layer that most needs to
+   * see it.
+   */
+  private toolRunFacts(): {
+    readonly runId: string;
+    readonly sessionId?: string;
+    readonly identity?: MemoryIdentity;
+  } {
+    return {
+      runId: this.currentRunContext.runId,
+      ...(this.currentRunContext.sessionId !== undefined && {
+        sessionId: this.currentRunContext.sessionId,
+      }),
+      ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
+    };
+  }
+
+  /**
+   * The teardown tier, built on FIRST registration.
+   *
+   * An agent whose tools never hold a session never allocates one, and its
+   * terminals stay a single `undefined` check.
+   */
+  private toolSessions(): ToolSessionTier {
+    if (!this.toolSessionTier) {
+      this.toolSessionTier = new ToolSessionTier({
+        timeoutMs: this.toolTeardownTimeoutMs,
+        report: (report) => this.emitToolSessionReport(report),
+      });
+    }
+    return this.toolSessionTier;
+  }
+
+  /**
+   * Turn one TEARDOWN report into a typed `agentfootprint.tools.session_*` event.
+   *
+   * Only the two closing events come through here. A start and a reuse happen
+   * inside `tool.execute`, where the dispatch loop still holds the scope, so
+   * those ride the ordinary emit channel and carry the stage they really
+   * happened in. These two fire after the run's last stage committed, and this
+   * is the one place that has to answer "from where?" without a stage to point
+   * at.
+   *
+   * **Built with `buildEventMeta`, never `minimalMeta()`.** `minimalMeta()`
+   * hardcodes `runId: 'consumer-scope'`, and a teardown event stamped that way
+   * cannot be joined to the run that OPENED the session — the exact
+   * unjoinability 9.4.0 spent a release fixing for credential events. So the
+   * meta comes from `currentRunContext`, with a STATED pseudo-stage, the same
+   * move as the `'<stageId>#paused'` stamp at the pause boundary.
+   */
+  private emitToolSessionReport(report: ToolSessionReport): void {
+    const type =
+      report.kind === 'closed'
+        ? 'agentfootprint.tools.session_closed'
+        : 'agentfootprint.tools.session_close_failed';
+    const dispatcher = this.getDispatcher();
+    if (!dispatcher.hasListenersFor(type)) return;
+    const { kind: _kind, ...payload } = report;
+    dispatcher.dispatch({
+      type,
+      payload,
+      meta: buildEventMeta({ runtimeStageId: TOOL_TEARDOWN_STAGE_ID }, this.currentRunContext),
+    } as unknown as AgentfootprintEventMap[typeof type]);
+  }
+
   private openSkillIds(): readonly string[] {
     return this.injections
       .filter(
@@ -2384,6 +2525,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // later, so a direct field read here would be stale forever. Answers
       // `undefined` — no await, no microtask — until one is installed.
       awaitDurable: () => pendingDurableWrite(this),
+      // 9.7.0 — run/session identity and the teardown registrar. BOTH are
+      // accessors for the reason `awaitDurable` is one: the chart is built once
+      // at construction, and a captured value would be run #1's forever. The
+      // tier one is lazy on top of that — an agent whose tools hold no sessions
+      // never allocates it.
+      currentRun: () => this.toolRunFacts(),
+      toolSessions: () => this.toolSessions(),
       // 8.6.0 — what a run does when a declared credential needs 3LO consent.
       onAuthorizationRequired: this.onAuthorizationRequired,
       // The `'tell-model'` consent record travels OFF tracked state (a tracked

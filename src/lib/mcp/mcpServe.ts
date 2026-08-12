@@ -57,6 +57,7 @@
 import type { ServerResponse } from 'node:http';
 
 import type { Tool, ToolExecutionContext } from '../../core/tools.js';
+import { ToolSessionTier, type TeardownScope } from '../../core/toolSessions.js';
 import type { Credential, CredentialProvider } from '../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
 import type {
@@ -175,7 +176,18 @@ export async function mcpServe(
       });
       if ('blocked' in ctx) return toolError(ctx.blocked);
 
-      const result = await tool.execute(args as never, ctx.context);
+      // `'call'` is the ONLY scope this door can honour, and it honours it for
+      // real: the cleanups a served call registers run when that call settles,
+      // resolve or throw. There is no run and no session out here to hang a
+      // longer-lived one on — `buildExecutionContext` says so in
+      // `teardownScopes`, and asking for anything else is refused by name
+      // rather than accepted and quietly never fired.
+      let result: unknown;
+      try {
+        result = await tool.execute(args as never, ctx.context);
+      } finally {
+        await ctx.endCall();
+      }
 
       // The after-tool moment, on the same shared walker and therefore under the
       // same laws: backwards through the chain, a transform declares itself, a
@@ -317,7 +329,7 @@ async function buildExecutionContext(
     readonly hasCredentials: boolean;
     readonly signal?: AbortSignal;
   },
-): Promise<{ context: ToolExecutionContext } | { blocked: string }> {
+): Promise<{ context: ToolExecutionContext; endCall: () => Promise<void> } | { blocked: string }> {
   const { credentials, hasCredentials, signal } = wiring;
   let credential: Credential | undefined;
   const need = tool.needs;
@@ -347,6 +359,9 @@ async function buildExecutionContext(
     }
     credential = resolved.credential;
   }
+  // One tier per served call. It exists only if the tool registers something;
+  // an ordinary tool costs one object allocation and no firing.
+  const sessions = new ToolSessionTier();
   return {
     context: {
       toolCallId,
@@ -357,9 +372,32 @@ async function buildExecutionContext(
       hasCredentials,
       ...(signal && { signal }),
       ...(credential && { credential }),
+      // No `runId`, no `sessionId`, no `identity` — and that ABSENCE is the
+      // fact (9.7.0). A served call is one call, not a turn in a conversation;
+      // minting a run id here so the field could be non-optional would tell a
+      // tool it is part of a run that does not exist, and a session-scoped
+      // sandbox keyed on it would be shared by every client that reached this
+      // server.
+      teardownScopes: MCP_TEARDOWN_SCOPES,
+      onTeardown: (cleanup, options) => {
+        const scope = options?.scope ?? 'run';
+        if (scope !== 'call') {
+          throw new Error(
+            `tool '${tool.schema.name}': onTeardown scope '${scope}' is not honoured over ` +
+              'mcpServe. A served call is one call — there is no run and no session here to ' +
+              "end. Read `ctx.teardownScopes` (it says ['call']) and use scope: 'call', or " +
+              'run this tool inside an Agent.',
+          );
+        }
+        sessions.register({ tool: tool.schema.name, toolCallId }, cleanup, options);
+      },
     },
+    endCall: () => sessions.fireCall(toolCallId),
   };
 }
+
+/** The one scope a served call can honour. See `buildExecutionContext`. */
+const MCP_TEARDOWN_SCOPES: readonly TeardownScope[] = ['call'];
 
 // ─── Result mapping ────────────────────────────────────────────────
 

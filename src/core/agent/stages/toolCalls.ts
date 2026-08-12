@@ -63,7 +63,9 @@ import {
   type CheckInDecision,
 } from '../../checkin.js';
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
-import type { Tool } from '../../tools.js';
+import type { Tool, ToolExecutionContext } from '../../tools.js';
+import type { MemoryIdentity } from '../../../memory/identity/types.js';
+import type { TeardownOptions, TeardownScope, ToolSessionTier } from '../../toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
@@ -169,6 +171,35 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly awaitDurable?: () => Promise<void> | undefined;
+  /**
+   * The identity facts THIS run carries, for `ToolExecutionContext` (9.7.0).
+   *
+   * An ACCESSOR, for the same reason `awaitDurable` is one: the chart is built
+   * ONCE at construction and these change per run, so a captured value would be
+   * run #1's forever. Read once per dispatch loop, beside `scope.runIdentity`.
+   *
+   * `identity` here is the CALLER's explicit identity (`Agent.lastRunIdentity`),
+   * NOT `scope.runIdentity` — the latter is always populated, defaulting to
+   * `{ conversationId: '<runId>' }`, and publishing that to a tool would present
+   * a synthesized conversation as one somebody named.
+   *
+   * @internal
+   */
+  readonly currentRun?: () => {
+    readonly runId: string;
+    readonly sessionId?: string;
+    readonly identity?: MemoryIdentity;
+  };
+  /**
+   * The runner's teardown tier, created on first use (9.7.0).
+   *
+   * An accessor for the same reason as `currentRun`, and lazy for a second one:
+   * an agent whose tools never register a cleanup must not pay for a tier, so
+   * the Agent builds one the first time a tool asks.
+   *
+   * @internal
+   */
+  readonly toolSessions?: () => ToolSessionTier;
   /**
    * What to do when a tool's DECLARED credential needs 3LO consent (8.6.0).
    * Default `'pause'`. See `AgentOptions.onAuthorizationRequired`.
@@ -340,6 +371,101 @@ export function buildToolCallsHandler(
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
   const hasCredentials = deps.credentialProvider !== undefined;
+
+  /**
+   * Every teardown scope an Agent run can honour (9.7.0).
+   *
+   * All four are real here and each has a firing site: `'call'` in this loop,
+   * `'run'` at `Agent.run`'s non-pause terminals, `'session'` at
+   * `agent.closeToolSessions(...)`, `'shutdown'` at `agent.shutdown()`. A door
+   * that cannot honour one declares a shorter list rather than accepting the
+   * registration and never firing it.
+   */
+  const AGENT_TEARDOWN_SCOPES: readonly TeardownScope[] = ['call', 'run', 'session', 'shutdown'];
+
+  /**
+   * The identity + teardown half of a `ToolExecutionContext`.
+   *
+   * Built per call, from the run accessor rather than from a captured value.
+   * Every field is ABSENT when the fact is absent: a tool branching on
+   * `ctx.sessionId` must be able to tell "not session-bound" from "bound to
+   * something I made up".
+   */
+  const sessionContext = (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    toolCallId: string,
+  ): Pick<
+    ToolExecutionContext,
+    'runId' | 'sessionId' | 'identity' | 'onTeardown' | 'teardownScopes'
+  > => {
+    const facts = deps.currentRun?.();
+    return {
+      ...(facts?.runId !== undefined && { runId: facts.runId }),
+      ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
+      ...(facts?.identity !== undefined && { identity: facts.identity }),
+      teardownScopes: AGENT_TEARDOWN_SCOPES,
+      onTeardown: (cleanup: () => void | Promise<void>, options?: TeardownOptions): void => {
+        const scopeAsked = options?.scope ?? 'run';
+        if (!AGENT_TEARDOWN_SCOPES.includes(scopeAsked)) {
+          // Named, not swallowed: an accepted registration that can never fire
+          // is a leaked resource wearing the shape of a tidy one.
+          throw new Error(
+            `tool '${toolName}': onTeardown scope '${scopeAsked}' is not honoured here. ` +
+              `This door supports: ${AGENT_TEARDOWN_SCOPES.join(', ')}. ` +
+              'Read `ctx.teardownScopes` and pick one of those.',
+          );
+        }
+        const tier = deps.toolSessions?.();
+        if (!tier) return;
+        const filed = tier.register(
+          {
+            tool: toolName,
+            toolCallId,
+            ...(facts?.runId !== undefined && { runId: facts.runId }),
+            ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
+          },
+          cleanup,
+          options,
+        );
+        // Emitted HERE, not from the tier, because here there is still a stage
+        // to be stamped with: a start and a reuse happen inside `tool.execute`,
+        // so they ride the ordinary scope channel and carry the real
+        // `runtimeStageId`. Only the CLOSE fires after the last stage
+        // committed, and only that one wears the `tool-teardown#0` pseudo-stage.
+        //
+        // `keyHash`, never the key: the key composes tenant, principal and the
+        // hosting sessionId, and publishing it would put a user identifier into
+        // every exporter's payload.
+        typedEmit(
+          scope,
+          filed.outcome === 'started'
+            ? 'agentfootprint.tools.session_started'
+            : 'agentfootprint.tools.session_reused',
+          {
+            tool: toolName,
+            scope: scopeAsked,
+            keyHash: filed.keyHash,
+            ...(options?.runnerId !== undefined && { runnerId: options.runnerId }),
+            ...(options?.label !== undefined && { label: options.label }),
+            ...(filed.outcome === 'reused' && { calls: filed.calls }),
+          },
+        );
+      },
+    };
+  };
+
+  /**
+   * Fire the `'call'`-scoped cleanups this tool call registered.
+   *
+   * Runs when `execute` SETTLES — resolve or throw — because a tool that threw
+   * halfway may well have opened the thing it was about to close. Deliberately
+   * NOT on the pause path: a paused call has not settled, it is waiting for a
+   * person, and its resources are exactly what the resume needs.
+   */
+  const endCall = async (toolCallId: string): Promise<void> => {
+    await deps.toolSessions?.().fireCall(toolCallId);
+  };
 
   /**
    * The conversation the check-in gate judges — the run history with a synthetic
@@ -533,9 +659,14 @@ export function buildToolCallsHandler(
         credentials: reportingCredentials(credentials, scope, toolName),
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
+        ...sessionContext(scope, toolName, toolCallId),
       });
+      await endCall(toolCallId);
       return { result, executed: true };
     } catch (err) {
+      // Settled by throwing is still settled — a tool that opened a session and
+      // then failed must not keep it.
+      await endCall(toolCallId);
       if (isPauseRequest(err)) {
         return {
           result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
@@ -997,9 +1128,15 @@ export function buildToolCallsHandler(
                 credentials: reportingCredentials(credentials, scope, tc.name),
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
+                ...sessionContext(scope, tc.name, tc.id),
               });
+              await endCall(tc.id);
             } catch (err) {
               if (isPauseRequest(err)) {
+                // A pause has NOT settled this call — it is waiting for a
+                // person, and the resources it opened are what the resume
+                // needs. No `'call'` teardown here, deliberately.
+                //
                 // Commit partial state so resume() can find history intact.
                 scope.history = newHistory;
                 scope.pausedToolCallId = tc.id;
@@ -1019,6 +1156,9 @@ export function buildToolCallsHandler(
                     : { data: err.data }),
                 };
               }
+              // A tool that threw still RAN, and may have opened the thing it
+              // was about to close.
+              await endCall(tc.id);
               error = true;
               result = err instanceof Error ? err.message : String(err);
             }

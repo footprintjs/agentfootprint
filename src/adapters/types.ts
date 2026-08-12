@@ -632,3 +632,95 @@ export interface PricingTable {
   /** USD per ONE token for the given model+kind. */
   pricePerToken(model: string, kind: TokenKind): number;
 }
+
+// ─── Code Runner (9.7.0) ────────────────────────────────────────────
+
+/**
+ * A service that runs code in an isolated session — a managed code
+ * interpreter, a container pool, a subprocess.
+ *
+ * **The shape is Start → Execute ×N → Stop**, because that is what every real
+ * one is, and the middle is the part a framework has to make possible. Paying
+ * session start-up on every call is the honest cheap version; holding the
+ * session in a module-level map is the fast version that hands one live sandbox
+ * to whoever calls next. `ctx.onTeardown` + {@link ToolExecutionContext.runId}
+ * are what let a tool do neither.
+ *
+ * ── Why this port exists at all: "summarize prose, compute data" ────────────
+ * A tool that returns 40MB of rows does not need a bigger context window; it
+ * needs to not put the rows in one. The motivating failure is a real production
+ * request of 879,073 tokens — a tool result pasted straight into the prompt.
+ * With a code runner, the model writes the aggregation, the RUNNER holds the
+ * data, and what comes back is the answer. Prose gets summarized; data gets
+ * computed. `CodeResult.truncated` exists so the second half of that promise
+ * cannot quietly break.
+ *
+ * Implement it for your own backend; ship it to `codeRunnerTool({ runner })`.
+ */
+export interface CodeRunner {
+  /** Stable id — reported on every `agentfootprint.tools.session_*` event so a
+   *  row names its backend, not just its tool. */
+  readonly id: string;
+  /**
+   * Open a session.
+   *
+   * `key` is the ISOLATION key the caller derived (see `toolSessionKey`). An
+   * adapter may use it to name the remote session; it must never widen it.
+   */
+  start(req: {
+    readonly key: string;
+    readonly language?: string;
+    readonly signal?: AbortSignal;
+  }): Promise<CodeSession>;
+}
+
+/** One live session. `stop()` is idempotent and tolerates "already gone". */
+export interface CodeSession {
+  /** The backend's own id for this session, when it has one. */
+  readonly id: string;
+  execute(req: {
+    readonly code: string;
+    readonly language?: string;
+    readonly timeoutMs?: number;
+    readonly signal?: AbortSignal;
+  }): Promise<CodeResult>;
+  /**
+   * Release the session.
+   *
+   * Must tolerate a session the far side already reaped — an idle timeout is
+   * the reality on every managed backend, and a `Stop` on a dead session is a
+   * no-op, not an error.
+   */
+  stop(): Promise<void>;
+}
+
+/** What one execution produced. */
+export interface CodeResult {
+  /** Did the code run to completion without an error exit? */
+  readonly ok: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode?: number;
+  /** Files the run produced, described rather than inlined — the whole point is
+   *  that big data does not enter the window. */
+  readonly artifacts?: readonly {
+    readonly name: string;
+    readonly bytes: number;
+    readonly uri?: string;
+  }[];
+  /**
+   * Present IFF output was cut, and then it says by how much.
+   *
+   * Load-bearing, not politeness. A runner exists so big data is computed
+   * outside the context window instead of pasted into it; a runner that
+   * quietly slices its own output to fit is the same bug wearing a different
+   * hat, and the model would go on to reason over a truncated table it was
+   * never told was truncated. An unstated slice is a silent success.
+   */
+  readonly truncated?: {
+    readonly stdout?: boolean;
+    readonly stderr?: boolean;
+    /** The pre-truncation length, in characters, of whichever stream was cut. */
+    readonly ofChars?: number;
+  };
+}

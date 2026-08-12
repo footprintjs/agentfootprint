@@ -155,6 +155,23 @@ export interface AgentOptions {
    */
   readonly toolArgValidation?: ToolArgValidationMode;
   /**
+   * How long ONE tool teardown may take before the runner stops waiting
+   * (default 5000ms). See `ctx.onTeardown`.
+   *
+   * Bounded because teardown sits on the SIGTERM path: an unbounded vendor
+   * `Stop()` turns a container stop into a thirty-second wait for SIGKILL, and
+   * a shutdown that hangs is indistinguishable from one that crashed. When the
+   * budget runs out the cleanup is ABANDONED, not cancelled — there is nothing
+   * to cancel a vendor's in-flight call with — and
+   * `agentfootprint.tools.session_close_failed` fires with
+   * `errorClass: 'ToolTeardownTimeoutError'`, because a session that may still
+   * be live is a fact somebody is paying for.
+   *
+   * Raise it for a backend whose `Stop` is genuinely slow; lower it for a
+   * latency-critical shutdown where an abandoned session is the cheaper loss.
+   */
+  readonly toolTeardownTimeoutMs?: number;
+  /**
    * Read-tracking policy for the snapshot's per-stage read view
    * (footprintjs `StageSnapshot.stageReads`) — the observability-cost
    * lever for LONG runs. Forwarded to the Agent's internal
@@ -399,8 +416,12 @@ export interface AgentInput {
    * memory + RAG namespacing (`.memory()` / `.rag()` isolate reads and
    * writes per tenant + principal + conversation), `PermissionChecker.check`,
    * the `.toolMiddleware()` / `.messageMiddleware()` chains,
-   * `ToolProvider.list(ctx)`, and the credential provider. It does NOT reach
-   * `tool.execute` — `ToolExecutionContext` carries no identity field.
+   * `ToolProvider.list(ctx)`, and the credential provider.
+   *
+   * Since 9.7.0 it also reaches `tool.execute` as `ctx.identity` — but only
+   * when you PASSED one. The default `{ conversationId: '<runId>' }` below is
+   * synthesized, and a tool told about a conversation nobody named would key a
+   * session on a fiction, so `ctx.identity` is absent in that case.
    *
    * Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
    * without memory work unchanged.

@@ -98,6 +98,25 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
     commands: ['CreateEventCommand', 'ListEventsCommand'],
   },
   {
+    adapter: 'agentCoreCodeRunner',
+    sources: ['src/adapters/code/agentcore.ts'],
+    sdkPackage: '@aws-sdk/client-bedrock-agentcore',
+    client: 'BedrockAgentCoreClient',
+    commands: [
+      'StartCodeInterpreterSessionCommand',
+      'InvokeCodeInterpreterCommand',
+      'StopCodeInterpreterSessionCommand',
+    ],
+    note:
+      'Verified against a real install of 3.1108.0 before this adapter shipped (9.7.0) — the ' +
+      'three names, and three SHAPES the design could only guess at: Invoke answers with ' +
+      '`stream: AsyncIterable<CodeInterpreterStreamOutput>` (an event stream, NOT a body, and ' +
+      'seven of its nine union members are modelled EXCEPTIONS); Stop takes ' +
+      '`{ codeInterpreterIdentifier, sessionId }` (the id, not a URI); and the payload lands ' +
+      'as `result.structuredContent { stdout, stderr, exitCode }`. Assertion (2) re-checks the ' +
+      'names wherever the peer dep is installed.',
+  },
+  {
     adapter: 'agentCorePolicy (retired 9.4.0)',
     sources: ['src/adapters/security/agentcore.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
