@@ -8,7 +8,7 @@
 
 > **isInjectionKey**(`key`): `key is InjectionKey`
 
-Defined in: [src/conventions.ts:372](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/conventions.ts#L372)
+Defined in: [src/conventions.ts:372](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/conventions.ts#L372)
 
 True when a scope key is any of the known injection keys.
 

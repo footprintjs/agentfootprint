@@ -8,7 +8,7 @@
 
 > **pauseDemandsDecision**(`pauseData`): [`ConsentGate`](/agentfootprint/api/generated/interfaces/ConsentGate.md) \| `undefined`
 
-Defined in: [src/core/pause.ts:154](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core/pause.ts#L154)
+Defined in: [src/core/pause.ts:154](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/pause.ts#L154)
 
 Read a pause payload and say whether answering it requires a
 `CheckInDecision` — and if so, which gate is outstanding.

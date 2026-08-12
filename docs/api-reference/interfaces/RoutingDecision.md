@@ -6,7 +6,7 @@
 
 # Interface: RoutingDecision
 
-Defined in: [src/patterns/LlmRouter.ts:121](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmRouter.ts#L121)
+Defined in: [src/patterns/LlmRouter.ts:121](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmRouter.ts#L121)
 
 The router's answer for one turn.
 
@@ -19,7 +19,7 @@ the swarm halts. `agentId` present = hand `message` to that agent next.
 
 > `readonly` `optional` **agentId?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:131](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmRouter.ts#L131)
+Defined in: [src/patterns/LlmRouter.ts:131](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmRouter.ts#L131)
 
 The chosen agent id, verbatim as the model wrote it (trimmed).
 Absent when the router decided the work is done.
@@ -35,7 +35,7 @@ Rewriting it would hide a real routing failure.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:133](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmRouter.ts#L133)
+Defined in: [src/patterns/LlmRouter.ts:133](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmRouter.ts#L133)
 
 What the next agent — or the user, on a halt — should see.
 
@@ -45,7 +45,7 @@ What the next agent — or the user, on a halt — should see.
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:139](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmRouter.ts#L139)
+Defined in: [src/patterns/LlmRouter.ts:139](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmRouter.ts#L139)
 
 The model's one-sentence justification. TRACE ONLY: it is recorded on
 the decision and on the `route_decided` event, and is never written

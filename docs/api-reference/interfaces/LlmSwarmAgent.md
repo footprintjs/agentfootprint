@@ -6,7 +6,7 @@
 
 # Interface: LlmSwarmAgent
 
-Defined in: [src/patterns/LlmSwarm.ts:62](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmSwarm.ts#L62)
+Defined in: [src/patterns/LlmSwarm.ts:62](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmSwarm.ts#L62)
 
 A swarm member as the LLM router sees it: the runner that handles a
 turn, plus the `description` that becomes its line in the router's
@@ -23,7 +23,7 @@ the model reads are the same list.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/patterns/LlmSwarm.ts:65](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/LlmSwarm.ts#L65)
+Defined in: [src/patterns/LlmSwarm.ts:65](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/LlmSwarm.ts#L65)
 
 What this agent handles, in the model's language. Required here:
  an agent with no description is invisible to the router.
@@ -34,7 +34,7 @@ What this agent handles, in the model's language. Required here:
 
 > `readonly` **id**: `string`
 
-Defined in: [src/patterns/Swarm.ts:28](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/Swarm.ts#L28)
+Defined in: [src/patterns/Swarm.ts:28](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/Swarm.ts#L28)
 
 Stable id used in events + routing decisions.
 
@@ -48,7 +48,7 @@ Stable id used in events + routing decisions.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/Swarm.ts:30](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/Swarm.ts#L30)
+Defined in: [src/patterns/Swarm.ts:30](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/Swarm.ts#L30)
 
 Display name for topology / narrative.
 
@@ -62,7 +62,7 @@ Display name for topology / narrative.
 
 > `readonly` **runner**: [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/Swarm.ts:32](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/Swarm.ts#L32)
+Defined in: [src/patterns/Swarm.ts:32](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/Swarm.ts#L32)
 
 The runner that handles a turn when selected.
 

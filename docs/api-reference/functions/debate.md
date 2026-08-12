@@ -8,7 +8,7 @@
 
 > **debate**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/Debate.ts:43](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/patterns/Debate.ts#L43)
+Defined in: [src/patterns/Debate.ts:43](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/patterns/Debate.ts#L43)
 
 Build a Debate Runner. One debate "round" = Proposer → Critic. After
 N rounds, the Judge sees the final exchange and renders the verdict.

@@ -8,7 +8,7 @@
 
 > **defineTool**\<`TArgs`, `TResult`\>(`options`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`TArgs`, `TResult`\>
 
-Defined in: [src/core/tools.ts:192](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core/tools.ts#L192)
+Defined in: [src/core/tools.ts:263](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/tools.ts#L263)
 
 ## Type Parameters
 

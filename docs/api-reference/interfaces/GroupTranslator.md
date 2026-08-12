@@ -6,7 +6,7 @@
 
 # Interface: GroupTranslator()\<T\>
 
-Defined in: [src/core/translator.ts:97](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core/translator.ts#L97)
+Defined in: [src/core/translator.ts:97](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/translator.ts#L97)
 
 The consumer-supplied translator. Pure function — no async, no
 side effects expected. Runs ONCE per composition at the moment
@@ -25,7 +25,7 @@ anything. agentfootprint stays UI-agnostic.
 
 > **GroupTranslator**(`group`): `T`
 
-Defined in: [src/core/translator.ts:98](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/core/translator.ts#L98)
+Defined in: [src/core/translator.ts:98](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/core/translator.ts#L98)
 
 The consumer-supplied translator. Pure function — no async, no
 side effects expected. Runs ONCE per composition at the moment

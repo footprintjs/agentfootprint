@@ -6,7 +6,7 @@
 
 # Interface: CheckInRequestRecord
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:46](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/CheckInRecorder.ts#L46)
+Defined in: [src/recorders/core/CheckInRecorder.ts:46](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/recorders/core/CheckInRecorder.ts#L46)
 
 One captured check-in ask.
 
@@ -16,7 +16,7 @@ One captured check-in ask.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:49](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/CheckInRecorder.ts#L49)
+Defined in: [src/recorders/core/CheckInRecorder.ts:49](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/recorders/core/CheckInRecorder.ts#L49)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:49](https://github.com/footpr
 
 > `readonly` **request**: [`CheckInRequest`](/agentfootprint/api/generated/interfaces/CheckInRequest.md)
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:51](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/CheckInRecorder.ts#L51)
+Defined in: [src/recorders/core/CheckInRecorder.ts:51](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/recorders/core/CheckInRecorder.ts#L51)
 
 The typed ask + evidence pack.
 
@@ -34,7 +34,7 @@ The typed ask + evidence pack.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:48](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/CheckInRecorder.ts#L48)
+Defined in: [src/recorders/core/CheckInRecorder.ts:48](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/recorders/core/CheckInRecorder.ts#L48)
 
 ***
 
@@ -42,4 +42,4 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:48](https://github.com/footpr
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:47](https://github.com/footprintjs/agentfootprint/blob/a056409d5d117d220bc61985a6eed33349eeca8f/src/recorders/core/CheckInRecorder.ts#L47)
+Defined in: [src/recorders/core/CheckInRecorder.ts:47](https://github.com/footprintjs/agentfootprint/blob/32e104eb37eda8e9e784e72e32543ab6d97d2318/src/recorders/core/CheckInRecorder.ts#L47)
