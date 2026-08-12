@@ -377,6 +377,23 @@ function argsForPausedCall(
 /**
  * Build the pausable tool-call handler for the agent's chart.
  */
+/**
+ * Append one landed result to the iteration's tool-result batch (9.16.0).
+ *
+ * The execute path resets `scope.toolResults` before its dispatch loop and
+ * appends per call; the four RESUME paths go through here instead — the
+ * paused iteration's partial batch (every sibling that ran before the pause)
+ * is already committed on scope, and the answered call joins it in call
+ * order rather than erasing it. Spread first: a TypedScope array read is a
+ * live proxy view, and the batch must stay plain data.
+ */
+function appendBatchResult(
+  scope: TypedScope<AgentState>,
+  entry: { toolName: string; result: string; toolCallId: string },
+): void {
+  scope.toolResults = [...(scope.toolResults ?? []), entry];
+}
+
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
@@ -792,6 +809,15 @@ export function buildToolCallsHandler(
       // moved it. Written only for skill-graph agents (the gate is what makes a
       // pick "validated"); a plain read_skill agent never sees this key.
       if (deps.allowedSkillIds) scope.pendingSkillPick = undefined;
+
+      // ── The iteration's tool-result batch, in call order (9.16.0) ────
+      // Reset here, appended beside every `lastToolResult` write — each entry
+      // stamped as its result lands, so a pause mid-batch commits exactly the
+      // results that really happened (the resume paths APPEND the answered
+      // call to this same array). `lastToolResult` stays the last entry;
+      // `on-tool-return` triggers and skill-graph routes read the batch.
+      const batchResults: { toolName: string; result: string; toolCallId: string }[] = [];
+      scope.toolResults = [];
 
       // Capture run identity from scope for the enriched permission ctx.
       // Same value the Tools slot passes to ToolProvider.list(ctx) so the
@@ -1412,8 +1438,14 @@ export function buildToolCallsHandler(
         //
         // (1) `lastToolResult` drives `on-tool-return` Injection
         //     triggers — the InjectionEngine's NEXT pass will see
-        //     this and activate any matching Instructions.
+        //     this and activate any matching Instructions. Since
+        //     9.16.0 the WHOLE batch rides `toolResults` beside it
+        //     (call order preserved), so an earlier parallel call's
+        //     routing implication is no longer overwritten by a
+        //     later sibling's.
         scope.lastToolResult = { toolName: tc.name, result: resultStr };
+        batchResults.push({ toolName: tc.name, result: resultStr, toolCallId: tc.id });
+        scope.toolResults = [...batchResults];
 
         // (2) `read_skill` is the auto-attached activation tool.
         //     When the LLM calls it with a valid Skill id, append
@@ -1679,6 +1711,7 @@ export function buildToolCallsHandler(
         ];
         scope.history = askHistory;
         scope.lastToolResult = { toolName, result: askResultStr };
+        appendBatchResult(scope, { toolName, result: askResultStr, toolCallId });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: askCapped.result,
@@ -1778,6 +1811,7 @@ export function buildToolCallsHandler(
         scope.history = decisionHistory;
         // Drives `on-tool-return` triggers, same as the execute path.
         scope.lastToolResult = { toolName, result: decisionResultStr };
+        appendBatchResult(scope, { toolName, result: decisionResultStr, toolCallId });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: decisionCapped.result,
@@ -1855,6 +1889,7 @@ export function buildToolCallsHandler(
         ];
         scope.history = consentHistory;
         scope.lastToolResult = { toolName, result: consentResultStr };
+        appendBatchResult(scope, { toolName, result: consentResultStr, toolCallId });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: consentCapped.result,
@@ -1943,6 +1978,7 @@ export function buildToolCallsHandler(
       scope.history = newHistory;
       // Drives `on-tool-return` triggers, same as every other dispatch path.
       scope.lastToolResult = { toolName, result: resultStr };
+      appendBatchResult(scope, { toolName, result: resultStr, toolCallId });
 
       typedEmit(scope, 'agentfootprint.stream.tool_end', {
         toolCallId,

@@ -154,7 +154,9 @@ defineInstruction({
 
 Fires after a specific tool returns, before the next LLM call. The
 "Dynamic ReAct" pattern — tool results steer the next iteration's
-prompt.
+prompt. Since 9.16.0 the trigger matches against EVERY result of a
+parallel tool batch (`ctx.toolResults`, call order), not only the last
+call; `ctx.lastToolResult` remains the batch's last entry.
 
 ```typescript
 const piiPolicy = defineInstruction({
@@ -223,14 +225,15 @@ defineSkill({
      ▼ (if tools requested)
 ┌────────────────┐
 │  Tool Exec     │  agent intercepts read_skill, sets
-│                │  scope.activatedInjectionIds, scope.lastToolResult
+│                │  scope.activatedInjectionIds, scope.lastToolResult,
+│                │  scope.toolResults (the whole batch, call order)
 └────┬───────────┘
      │
      │ — next iteration —
      │
      ▼
    loop ↑    InjectionEngine runs AGAIN with updated state
-            (new lastToolResult, new activatedInjectionIds, new history)
+            (new toolResults batch, new activatedInjectionIds, new history)
             → activeInjections[] is DIFFERENT now → slots recompose
 ```
 

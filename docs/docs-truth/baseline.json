@@ -5,23 +5,23 @@
   "recordedAt": "2026-08-12",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1485,
-    "declaredEvents": 77,
-    "eventSource": "src/events/registry.ts:566"
+    "declaredSymbols": 1493,
+    "declaredEvents": 78,
+    "eventSource": "src/events/registry.ts:572"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 623,
+      "documented-never-exercised": 627,
       "exercised-undocumented": 35,
-      "undocumented-unexercised": 583,
+      "undocumented-unexercised": 587,
       "site-code-sample-only": 21,
       "written-but-not-published": 123,
       "ok": 100
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 16,
+      "documented-never-exercised": 17,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 6,
@@ -483,6 +483,8 @@
     "RootCauseHop",
     "RootCauseNote",
     "RootCausePath",
+    "RouteBatchConflict",
+    "RouteBatchOutcome",
     "RouteHop",
     "RouteOutcome",
     "RouteRecorderHandle",
@@ -501,6 +503,7 @@
     "RunStepRecorderOptions",
     "RunStepTransition",
     "SHIPPED_THINKING_HANDLERS",
+    "SKILL_GRAPH_DEFERRED_CONTRACT_KEY",
     "SKILL_GRAPH_METADATA_KEY",
     "SaysWhatNotWhenRuleOptions",
     "ScoreContrastiveInfluenceArgs",
@@ -793,6 +796,7 @@
     "toBacktrackTrace",
     "toolContractCheckup",
     "toolLineageRecorder",
+    "toolResultsOf",
     "toolsRecorder",
     "traceToStepGraph",
     "traceToolpack",

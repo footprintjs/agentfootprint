@@ -344,13 +344,14 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
     return { perIteration, recorder };
   };
 
-  // 'dynamic' (default) and 'classic' share the flat chart (buildAgentChart) — its
-  // mappers; 'dynamic-grouped' is the grouped chart (buildDynamicAgentChart) with
-  // the extra sf-llm-call boundary. All three carry the cursor in the Injection
-  // Engine (which runs every iteration in every mode, before any slot caching), so
-  // the activeIds assertion is on the cursor mechanism, independent of the classic
-  // slot-cache footgun.
-  const MODES = ['dynamic', 'classic', 'dynamic-grouped'] as const;
+  // 'dynamic' is the flat chart (buildAgentChart) — its mappers;
+  // 'dynamic-grouped' is the grouped chart (buildDynamicAgentChart) with the
+  // extra sf-llm-call boundary. Both carry the cursor in the Injection Engine.
+  // 'classic' used to ride this loop (it shares the flat chart) but since
+  // 9.16.0 `.skillGraph()` REFUSES classic at build — the cursor advanced
+  // while the cached slots never carried the result to the model — so the
+  // combination is pinned as a refusal below instead of as behavior.
+  const MODES = ['dynamic', 'dynamic-grouped'] as const;
 
   for (const reactMode of MODES) {
     it(`[${reactMode}] a route fires only after its from-gated tool returns`, async () => {
@@ -406,6 +407,17 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
       expect(perIteration[0]).toEqual(['d']);
     });
   }
+
+  it("[classic] refused at build since 9.16.0 — the cursor round-trip cannot be mounted on cached slots", () => {
+    const a = skill('a');
+    const b = skill('b');
+    const graph = skillGraph().entry(a).route(a, b, { onToolReturn: 'probe' }).build();
+    expect(() =>
+      Agent.create({ provider: callThenStop(), model: 'mock', reactMode: 'classic' })
+        .tool(probe)
+        .skillGraph(graph),
+    ).toThrow(/classic/);
+  });
 });
 
 describe('skillGraph — toMermaid (declared === drawn)', () => {

@@ -71,7 +71,7 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 71 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 78 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -98,7 +98,11 @@ describe('event registry — names + exhaustiveness', () => {
     //     session_close_failed added with 9.7.0 — a tool that holds a session
     //     (a code interpreter, a browser) now has a teardown contract, and
     //     these four are what it leaves behind; see CHANGELOG 9.7.0.)
-    expect(ALL_EVENT_TYPES.length).toBe(77);
+    //    (skill.route_conflict added with 9.16.0 — two results of ONE parallel
+    //     tool batch matched skill-graph edges to different targets; the first
+    //     in call order won the cursor and the suppressed hops are reported
+    //     instead of silently dropped.)
+    expect(ALL_EVENT_TYPES.length).toBe(78);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

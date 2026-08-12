@@ -10,6 +10,16 @@
  * and callable from iteration 1 unless the Skill sets
  * `autoActivate: 'currentSkill'` — see that option.
  *
+ * **Activation lifetime: the rest of the turn.** Once the model picks a
+ * skill with `read_skill`, the activation lasts until the turn ends — every
+ * later iteration of that `run()` keeps the body active, and there is no
+ * mid-turn deactivation (nothing removes an id from
+ * `ctx.activatedInjectionIds`; the next `run()` starts clean). This is
+ * deliberate: the cache layer's skill history and the context ledger both
+ * lean on the cumulative property. A skill that should stop applying
+ * mid-turn is a `rule` trigger or a `skillGraph()` route, not a read_skill
+ * pick.
+ *
  * Produces an `Injection` with:
  *   - flavor: `'skill'`
  *   - trigger: `{ kind: 'llm-activated', viaToolName: 'read_skill' }`
@@ -32,6 +42,7 @@
  *   });
  */
 
+import { isDevMode } from 'footprintjs';
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
@@ -72,17 +83,21 @@ export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
  * When (if ever) to re-deliver a Skill's body in long-running runs.
  *
  * Even on providers with strong system-prompt adherence, attention to
- * the system slot decays past long contexts. `refreshPolicy` re-injects
- * the body via tool result past a token threshold so the LLM sees it
- * fresh again.
+ * the system slot decays past long contexts. `refreshPolicy` was declared
+ * to re-inject the body via tool result past a token threshold so the LLM
+ * sees it fresh again.
  *
- * **Status: declared, not yet wired.** `defineSkill` stores what you pass
- * on `skill.metadata.refreshPolicy`, and nothing in the engine reads it —
- * no re-injection happens today, on any version. The field is typed and
- * non-breaking so a Skill can record the intent, but do not count on the
- * behavior until this note says the hook shipped. If you need a body
- * re-surfaced in a long run, deliver it yourself (e.g. `surfaceMode:
- * 'both'`, so every `read_skill` call returns the body afresh).
+ * @deprecated **DEPRECATED-pending-steps (9.16.0) — stored, never read, and
+ * it will stay that way.** `defineSkill` records what you pass on
+ * `skill.metadata.refreshPolicy` and nothing in the engine has ever read it:
+ * no re-injection happens today, on any version. The hook is superseded by a
+ * planned steps-as-data feature, which will own re-delivery declaratively —
+ * this field will NOT be wired up in the meantime, and will be removed in the
+ * next major after steps ship. The field stays accepted (additive-only law)
+ * so existing declarations keep compiling; dev mode warns once per process
+ * when one is set. If you need a body re-surfaced in a long run today,
+ * deliver it yourself (e.g. `surfaceMode: 'both'`, so every `read_skill`
+ * call returns the body afresh).
  */
 export interface RefreshPolicy {
   /**
@@ -122,8 +137,10 @@ export interface DefineSkillOptions {
    * Intent to re-deliver the body past a token threshold, to defend
    * against long-context attention decay. Default: undefined.
    *
-   * Recorded on the Skill's metadata and NOT yet acted on by the engine —
-   * see `RefreshPolicy` before you rely on it.
+   * @deprecated DEPRECATED-pending-steps (9.16.0): recorded on the Skill's
+   * metadata, never acted on by the engine, and superseded by a planned
+   * steps-as-data feature — it will not be wired up. Dev mode warns once per
+   * process when set. See `RefreshPolicy` for what to do instead today.
    */
   readonly refreshPolicy?: RefreshPolicy;
   /**
@@ -226,6 +243,28 @@ function assertNoViaToolName(where: string, opts: object): void {
   );
 }
 
+/** One warn per process for the deprecated `refreshPolicy` — the field is
+ *  accepted (additive-only law) but a declaration that does nothing should
+ *  say so ONCE, not on every skill of a 40-skill catalog. */
+let warnedRefreshPolicyDeprecated = false;
+
+/**
+ * The dev-mode deprecation warn for `refreshPolicy` (9.16.0). Named, not
+ * inlined, so the once-flag and the message live beside each other.
+ */
+function warnRefreshPolicyDeprecated(skillId: string): void {
+  if (warnedRefreshPolicyDeprecated || !isDevMode()) return;
+  warnedRefreshPolicyDeprecated = true;
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint defineSkill('${skillId}'): \`refreshPolicy\` is DEPRECATED-pending-steps — ` +
+      'it is stored on skill.metadata and nothing in the engine reads it, so NO re-injection ' +
+      'happens. It is superseded by a planned steps-as-data feature and will not be wired up. ' +
+      "To re-surface a body in a long run today, use surfaceMode: 'both' (read_skill returns " +
+      'the body afresh) or deliver it yourself. This warning fires once per process.',
+  );
+}
+
 export function defineSkill(opts: DefineSkillOptions): Injection {
   if (!opts.id || opts.id.trim().length === 0) {
     throw new Error('defineSkill: `id` is required and must be non-empty.');
@@ -239,6 +278,7 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     throw new Error(`defineSkill(${opts.id}): \`body\` is required.`);
   }
   assertNoViaToolName(`defineSkill(${opts.id})`, opts);
+  if (opts.refreshPolicy) warnRefreshPolicyDeprecated(opts.id);
   return Object.freeze({
     id: opts.id,
     description: opts.description,

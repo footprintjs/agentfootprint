@@ -40,7 +40,12 @@ The LLM's tool-call to `read_skill({ id: 'billing' })` is the activation event. 
 3. Starts offering `billing.tools` in the tool list for the rest of the turn — but only if `billing` set `autoActivate: 'currentSkill'`. Without it those tools were already in the registry before the LLM asked, and this step changes nothing
 4. Emits `agentfootprint.skill.activated` for observability
 
-The skill stays active until the agent run ends. The next `agent.run()` starts fresh.
+The skill stays active until the agent run ends — there is **no mid-turn
+deactivation**: nothing removes an id from the activated set once `read_skill`
+added it, and an unrelated tool turn later in the run does not end it. The next
+`agent.run()` starts fresh. If a body should stop applying mid-turn, that is a
+`rule` trigger (`activeWhen`) or a `skillGraph()` route — conditions re-evaluated
+every iteration — not a `read_skill` pick.
 
 ### Inside a skill graph, the pick also MOVES the graph
 
@@ -58,6 +63,35 @@ wins** — an author's deterministic route is never overridden by a model guess 
 and the run emits `agentfootprint.skill.reroute_superseded` with
 `{ volunteeredId, wonId, fromSkillId, iteration }` so the pick that was dropped is
 on the record rather than silently forgotten.
+
+### Parallel tool batches route on EVERY call, in call order (9.16.0)
+
+When the model calls several tools in one message, **every** result of that
+batch drives routing — evaluated in call order. Per result, edges are tried in
+declaration order (the same tiebreak as always); across results, the first one
+that matches an edge wins the cursor move. Before 9.16.0 only the *last* call
+of a batch was consulted, so the same two calls routed differently depending on
+their order in the message.
+
+If two results of one batch match edges to **different** targets, the first
+still wins — and the run emits `agentfootprint.skill.route_conflict` with
+`{ winner, losers: [{ toolCallId, toolName, target }] }`, so the hop the run did
+*not* take is on the record rather than silently dropped. Same-target matches
+are not a conflict, and a single-tool iteration behaves exactly as before.
+
+```ts
+agent.on('agentfootprint.skill.route_conflict', (e) => {
+  console.warn(
+    `batch conflict on iteration ${e.payload.iteration}: ` +
+      `${e.payload.winner.toolName} → ${e.payload.winner.target} won; ` +
+      e.payload.losers.map((l) => `${l.toolName} → ${l.target}`).join(', ') +
+      ' suppressed',
+  );
+});
+```
+
+Rule predicates that want the whole batch can read `ctx.toolResults` (call
+order, `toolCallId` included) — `ctx.lastToolResult` remains the last entry.
 
 <Callout type="info">
 Before 8.3.0 an accepted pick was reported to the model as activated and then
@@ -382,7 +416,14 @@ defineSkill({
 });
 ```
 
-Re-injects the body via tool result past a token threshold. The field is reserved + typed today — the engine ignores it until the long-context refresh hook is implemented, so specifying `refreshPolicy` is non-breaking.
+**DEPRECATED-pending-steps (9.16.0).** The field is stored on
+`skill.metadata.refreshPolicy` and nothing in the engine has ever read it — no
+re-injection happens. It is superseded by a planned steps-as-data feature and
+will **not** be wired up in the meantime; it stays accepted so existing
+declarations keep compiling (dev mode warns once per process when one is set),
+and it will be removed in the next major after steps ship. To re-surface a body
+in a long run today, use `surfaceMode: 'both'` — every `read_skill` call
+returns the body afresh, recency-first.
 
 ## SkillRegistry — centralized governance
 

@@ -19,6 +19,11 @@ export type {
 // POJO projection — used by slot subflows + advanced consumers
 export { projectActiveInjection } from './types.js';
 
+// The iteration's tool-result batch with the singular fallback applied
+// (9.16.0) — the one reader `rule` predicates should use to see every call of
+// a parallel batch, not only the last (`ctx.toolResults ?? [ctx.lastToolResult]`).
+export { toolResultsOf } from './types.js';
+
 // Engine
 export { evaluateInjections } from './evaluator.js';
 export {
@@ -95,6 +100,10 @@ export {
   // a public method returns it; without it a consumer cannot name what they receive.
   type CursorMove,
   type CursorMoveCause,
+  // 9.16.0 — `CursorMove.conflict`: a parallel batch matched edges to different
+  // targets; first in call order won, the suppressed hops are on the record.
+  type RouteBatchConflict,
+  type RouteBatchOutcome,
   type EntryScore,
   type EntryScoring,
   type SkillGraphConfig,

@@ -774,7 +774,7 @@ export interface ValidationArgsInvalidPayload {
   readonly enforced: boolean;
 }
 
-// skill.* (2)
+// skill.* (5)
 export interface SkillActivatedPayload {
   readonly skillId: string;
   readonly reason: 'autoActivate' | 'read_skill_result' | 'manual';
@@ -822,6 +822,42 @@ export interface SkillRejectedPayload {
   readonly allowed: readonly string[];
   /** The ReAct iteration the rejection fired on. */
   readonly iteration: number;
+}
+
+/**
+ * Fired when two or more tool results of ONE parallel batch matched skill-graph
+ * edges to DIFFERENT targets (9.16.0). The first match in call order wins the
+ * cursor move; every later result matching another target is suppressed — and
+ * reported here so the record explains the hop the run did not take. Before
+ * 9.16.0 there was no conflict to report because there was no batch: only the
+ * LAST call of a batch was consulted, and the earlier calls' routing
+ * implications were silently dropped.
+ *
+ * Not fired for same-target matches (they all asked for the move that
+ * happened), nor for batches where only one result matched. Distinct from
+ * `skill.reroute_superseded`, which reports a declared edge outranking a
+ * `read_skill` pick — this one is edge-vs-edge, inside one batch.
+ */
+export interface SkillRouteConflictPayload {
+  /** The ReAct iteration whose evaluation resolved the batch. */
+  readonly iteration: number;
+  /** The cursor the winning hop started from. */
+  readonly fromSkillId?: string;
+  /** The call-order-first match — the one that moved the cursor. */
+  readonly winner: {
+    /** The provider's tool_use id for the winning call, when known. */
+    readonly toolCallId?: string;
+    readonly toolName: string;
+    /** The skill the cursor moved to. */
+    readonly target: string;
+  };
+  /** Later matches to other targets, in call order — the suppressed hops. */
+  readonly losers: ReadonlyArray<{
+    readonly toolCallId?: string;
+    readonly toolName: string;
+    /** The skill this result would have routed to. */
+    readonly target: string;
+  }>;
 }
 
 // permission.* (4)

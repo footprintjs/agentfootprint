@@ -206,6 +206,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         userMessage: parent.userMessage as string | undefined,
         history: parent.history as readonly LLMMessage[] | undefined,
         lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
+        // The WHOLE batch, in call order (9.16.0) — crossed into sf-llm-call by
+        // the outer boundary below, same as lastToolResult.
+        toolResults: parent.toolResults as
+          | ReadonlyArray<{ toolName: string; result: string; toolCallId: string }>
+          | undefined,
         activatedInjectionIds:
           (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
         // Last turn's per-slot active set for the engine's Delta stage. In the
@@ -475,6 +480,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           recentHitRate: p.recentHitRate,
           activatedInjectionIds: p.activatedInjectionIds,
           lastToolResult: p.lastToolResult,
+          // The iteration's whole tool batch (9.16.0) — same direct
+          // cross-iteration read as lastToolResult, of which it is the plural.
+          toolResults: p.toolResults,
           // Skill-graph cursor carried into sf-llm-call (like activatedInjectionIds
           // / lastToolResult — a direct cross-iteration read, not a prior* alias).
           currentSkillId: p.currentSkillId,

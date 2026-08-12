@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.16.0] - 2026-08-12
+
+**Parallel tool batches stop lying to the router, and a combination that could
+never be honored now says so at build time.**
+
+### Fixed — batch routing
+
+Before this release, when a turn's tool batch came back with more than one
+result, only the **last** tool call in the batch drove skill-graph routing and
+`onToolReturn`. Two identical parallel calls could route to different skills
+depending only on where each one happened to land in the message — an
+ordering bug with no error, no log line, just a silently different cursor.
+
+- Every result in the batch now routes, in call order. The first match wins
+  the cursor; the loop still stops there (a router picks one skill per turn).
+- A later result that would have matched a **different** skill is suppressed,
+  not silently dropped — it emits `agentfootprint.skill.route_conflict`:
+
+  ```ts
+  {
+    winner:  { toolCallId, toolName, target },
+    losers:  [{ toolCallId, toolName, target }],
+  }
+  ```
+
+  On the record, so a trace answers "why didn't the second call route?"
+  instead of leaving the reader to guess.
+- Single-tool iterations are byte-identical to 9.15.0 — this only changes
+  behavior when a batch actually contains more than one result.
+- New `AgentState.toolResults` / `InjectionContext.toolResults`: the full
+  batch, in call order, each entry carrying its `toolCallId`. `lastToolResult`
+  is unchanged (it is now defined as the last entry of `toolResults`). Rule
+  `when` predicates can read `ctx.toolResults` directly via the new
+  `toolResultsOf(ctx)` helper.
+
+### Added — build-time teaching refusal: classic + a skill graph
+
+`reactMode: 'classic'` caches the system prompt and tool list after turn 1.
+Wiring a `.skillGraph(...)` onto a classic agent meant the graph would still
+route and the trace would still show an activation — but the model never saw
+the newly-active skill's prompt or tools, because the slot it would have
+changed was already frozen. The configuration *looked* like it worked and
+didn't.
+
+`Agent.build()` now refuses this combination outright, naming both the
+problem and the fix:
+
+```
+AgentBuilder.skillGraph: reactMode 'classic' cannot honor a skill graph.
+Classic caches the system prompt and tools after turn 1, so a route-driven
+activation would move the cursor and the trace but never reach the model.
+Use reactMode: 'dynamic' or 'dynamic-grouped', or drop .skillGraph(...) and
+compose the always-on skills you need directly.
+```
+
+Classic without a graph is unaffected, and so is a turn-1-only composed set
+of always-on skills. This was previously only a dev-mode console warning;
+the docs already said not to do this. Now the build says it too.
+
+### Deprecated — `refreshPolicy` on `defineSkill`
+
+`refreshPolicy` has been accepted and stored since it was added, and never
+read by anything — it did not do what its name promised. It is now marked
+`@deprecated` and triggers a one-time dev-mode warning naming the
+replacement direction (a coming steps-as-data feature) when set. It will be
+removed in the next major.
+
+### Verified & pinned
+
+Two lifecycle questions settled with end-to-end probes rather than left as
+folklore:
+
+- An open skill picked via `read_skill` stays active until the turn ends —
+  by design, and now documented as a test rather than tribal knowledge.
+- The batch-order routing bug above has a repro that fails on the old
+  behavior and passes on the fix, so it cannot silently come back.
+
 ## [9.15.0] - 2026-08-12
 
 **The skill graph's front door, simplified.** Same graph, fewer things to type,

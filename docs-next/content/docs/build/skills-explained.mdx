@@ -4,7 +4,7 @@ description: Skills are context engineering for instructions — abstracted so y
 ---
 
 <Aside type="note" title="What ships today">
-Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. Per-mode runtime dispatch is live: `surfaceMode: 'tool-only'` now suppresses the body from the system slot and delivers it via the `read_skill` tool result; `'both'` does both. The one field still reserved is `refreshPolicy` — the option is typed and non-breaking today, but the long-context re-injection hook is not yet wired into the engine.
+Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. Per-mode runtime dispatch is live: `surfaceMode: 'tool-only'` now suppresses the body from the system slot and delivers it via the `read_skill` tool result; `'both'` does both. The one field that never got wired is `refreshPolicy` — DEPRECATED-pending-steps as of 9.16.0: it is stored and never read, a planned steps-as-data feature supersedes it, and dev mode warns once when it is set. Use `surfaceMode: 'both'` to re-surface a body today.
 </Aside>
 
 ## In one line
@@ -200,7 +200,7 @@ defineSkill({
 });
 ```
 
-Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the body as a fresh tool result past a token threshold. The API surface is shipped today; the runtime hook is still reserved (the engine accepts but ignores `refreshPolicy` until the long-context attention work lands) — so specifying it today is non-breaking.
+Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-injecting the body as a fresh tool result past a token threshold is the *idea* — but the hook never shipped, and it now never will in this form: `refreshPolicy` is **DEPRECATED-pending-steps** (9.16.0). The engine stores the field and ignores it; a planned steps-as-data feature owns re-delivery instead; dev mode warns once per process when the field is set. Today, `surfaceMode: 'both'` is the working way to re-surface a body (every `read_skill` call returns it afresh, recency-first).
 
 ### 4. Auto-generated loader tools + centralized governance
 
@@ -275,8 +275,8 @@ User turn arrives
 └────────────────────────────────────────────────────────┘
          │
          ▼
-  [ reserved: after N tokens, refreshPolicy re-injects ]
-  [ the body into a fresh tool_result breadcrumb        ]
+  [ deprecated-pending-steps: refreshPolicy never wired; ]
+  [ a steps-as-data feature will own re-delivery instead ]
 ```
 
 No primitive is invented. Every step uses a field the Messages API has always had. The library's work is packaging — putting the right descriptions in the right surface for the right provider, with recency guarantees where provider training can't carry them.

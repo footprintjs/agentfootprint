@@ -759,8 +759,16 @@ export interface AgentState {
   /** IDs of LLM-activated Skills the LLM has activated this turn
    *  (via the `read_skill` tool). InjectionEngine matches by id. */
   activatedInjectionIds: readonly string[];
-  /** Most recent tool result — drives `on-tool-return` triggers. */
+  /** Most recent tool result — the LAST entry of `toolResults`. Kept for
+   *  every existing reader (context-bisect's proximate-tool key among them);
+   *  batch-aware routing reads `toolResults`. */
   lastToolResult?: { toolName: string; result: string };
+  /** EVERY tool result of the current iteration's batch, in call order
+   *  (9.16.0) — reset when tool dispatch starts, appended as each result
+   *  lands (a pause mid-batch commits the partial batch; resume appends the
+   *  answered call). Drives `on-tool-return` triggers and skill-graph routes
+   *  so a parallel batch routes on all its calls, not only the last. */
+  toolResults?: ReadonlyArray<{ toolName: string; result: string; toolCallId: string }>;
   /** The `Deliver` stage's record for THIS iteration: which messages-slot
    *  injections entered the window, and which were held back with the
    *  sentence saying why. Overwritten per iteration (the commit log keeps

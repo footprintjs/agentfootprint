@@ -13,14 +13,20 @@
  *   • `rule`               → predicate runs against `ctx`. Errors are
  *                            caught + reported in `skipped`; never
  *                            propagate. Run never crashes.
- *   • `on-tool-return`     → active when `ctx.lastToolResult.toolName`
- *                            matches `trigger.toolName` (string equal
- *                            or regex test).
+ *   • `on-tool-return`     → active when ANY tool result of the previous
+ *                            iteration's batch (`toolResultsOf(ctx)` —
+ *                            `ctx.toolResults`, falling back to the
+ *                            singular `ctx.lastToolResult`) has a
+ *                            `toolName` matching `trigger.toolName`
+ *                            (string equal or regex test). Before 9.16.0
+ *                            only the LAST call of a parallel batch was
+ *                            consulted — earlier calls were dropped.
  *   • `llm-activated`      → active when the Injection's `id` is in
  *                            `ctx.activatedInjectionIds` (the LLM
  *                            previously called `viaToolName(<id>)`).
  */
 
+import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionEvaluation } from './types.js';
 
 export function evaluateInjections(
@@ -54,10 +60,12 @@ export function evaluateInjections(
         break;
       }
       case 'on-tool-return': {
-        const toolName = ctx.lastToolResult?.toolName;
-        if (!toolName) break;
-        const matches =
-          typeof t.toolName === 'string' ? t.toolName === toolName : t.toolName.test(toolName);
+        // The WHOLE batch, in call order (9.16.0) — a trigger fires when any
+        // call of the previous iteration returned from the named tool, not
+        // only when that tool happened to be last in a parallel batch.
+        const matches = toolResultsOf(ctx).some((r) =>
+          typeof t.toolName === 'string' ? t.toolName === r.toolName : t.toolName.test(r.toolName),
+        );
         if (matches) active.push(inj);
         break;
       }

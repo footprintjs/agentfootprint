@@ -44,6 +44,7 @@
  *         userMessage: parent.userMessage,
  *         history: parent.history,
  *         lastToolResult: parent.lastToolResult,
+ *         toolResults: parent.toolResults, // the whole batch, in call order
  *         activatedInjectionIds: parent.activatedInjectionIds ?? [],
  *         priorActiveByslot: parent.activeByslot ?? EMPTY_ACTIVE_BY_SLOT,
  *       }),
@@ -151,6 +152,11 @@ interface InjectionEngineArgs {
   userMessage?: string;
   history?: InjectionContext['history'];
   lastToolResult?: InjectionContext['lastToolResult'];
+  /** The previous iteration's WHOLE tool batch, in call order (9.16.0) —
+   *  `lastToolResult` is its last entry. Carried by the mount mappers so
+   *  `on-tool-return` triggers and route edges see every call, not only the
+   *  last one of a parallel batch. */
+  toolResults?: InjectionContext['toolResults'];
   activatedInjectionIds?: readonly string[];
   /** Last turn's per-slot active set, carried by the mount mappers. */
   priorActiveByslot?: ActiveBySlot;
@@ -232,6 +238,7 @@ function makeEvaluateStage(
       userMessage: args.userMessage ?? '',
       history: args.history ?? [],
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
+      ...(args.toolResults && { toolResults: args.toolResults }),
       activatedInjectionIds: args.activatedInjectionIds ?? [],
       ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
       ...(args.pendingSkillPick !== undefined && { pendingSkillPick: args.pendingSkillPick }),
@@ -253,6 +260,22 @@ function makeEvaluateStage(
     const cursor = move ? move.to : nextSkill ? nextSkill(ctx) : undefined;
     if (routes) {
       scope.$setValue('nextSkillCursor', cursor);
+    }
+
+    // A parallel batch whose results matched edges to DIFFERENT targets
+    // (9.16.0). The resolver already decided the hop — first match in call
+    // order won — and reported the suppression on the move; here it goes on
+    // the record as its own typed event, stamped the iteration it happened.
+    // Silent-drop was the pre-9.16.0 behavior this replaces: earlier calls of
+    // a batch simply never routed. POJO copies, because event payloads must
+    // be detached plain data.
+    if (move?.conflict) {
+      typedEmit(scope, 'agentfootprint.skill.route_conflict', {
+        iteration: ctx.iteration,
+        ...(ctx.currentSkillId !== undefined && { fromSkillId: ctx.currentSkillId }),
+        winner: { ...move.conflict.winner },
+        losers: move.conflict.losers.map((l) => ({ ...l })),
+      });
     }
 
     const evaluation = evaluateInjections(injections, ctx);

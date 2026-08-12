@@ -330,32 +330,24 @@ describe('read_skill offer — performance', () => {
   });
 });
 
-// ─── 7. ROI — the classic-mode fallback stays honest ─────────────
+// ─── 7. ROI — classic + a graph is refused at build (9.16.0) ─────
 
 describe("read_skill offer — reactMode 'classic'", () => {
-  it('keeps the FULL catalog, because the slot is cached at turn 1', async () => {
+  it('the classic-fallback menu can no longer arise from .skillGraph(): the combination is a build-time teaching refusal', () => {
     const provider = mock({ respond: () => ({ content: 'done', toolCalls: [] }) });
-    const seen: string[] = [];
-    const agent = Agent.create({ provider, model: 'mock', maxIterations: 2, reactMode: 'classic' })
-      .system('s')
-      .skillGraph(graph())
-      .watch({
-        id: 'w',
-        onEmit: (e: { name: string; payload: Record<string, unknown> }) => {
-          if (e.name === 'agentfootprint.context.evaluated')
-            seen.push(String((e.payload.activeIds as string[]).join(',')));
-        },
-      })
-      .build();
-    await agent.run({ message: 'go' });
-    // A cursor-scoped menu would freeze at the turn-1 cursor and keep advertising it
-    // for the rest of the run — a worse lie than the honest full catalog. The
-    // fallback is documented and warned about in dev mode.
-    const tools = agent.getLastSnapshot()?.sharedState as {
-      dynamicToolSchemas?: ReadonlyArray<{ name: string; description: string }>;
-    };
-    const rs = (tools.dynamicToolSchemas ?? []).find((x) => x.name === 'read_skill');
-    expect(rs?.description).toContain('Available skills:');
-    expect(rs?.description).not.toContain('Reachable from here:');
+    // Until 9.16.0 this combination built: the menu degraded to the honest
+    // full catalog and dev mode warned. The degrade existed because the
+    // combination was ALLOWED — and it was allowed while being un-honorable
+    // (classic caches the system-prompt/tools slots after turn 1, so graph
+    // routing advanced the trace but never the wire). It is now refused
+    // outright at `.skillGraph()`, the same law as `.selfExplain()` under
+    // classic. The full-catalog fallback in Agent.readSkillOfferFor stays in
+    // place as defense for any future door that hands a reachable-set to a
+    // classic agent.
+    expect(() =>
+      Agent.create({ provider, model: 'mock', maxIterations: 2, reactMode: 'classic' })
+        .system('s')
+        .skillGraph(graph()),
+    ).toThrow(/classic/);
   });
 });

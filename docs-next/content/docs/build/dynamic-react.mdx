@@ -106,7 +106,16 @@ The LLM activates `billing` via `read_skill('billing')` → next iteration's too
 
 ### 3. Length guardrails
 
-The loop runs long → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over the read-only `InjectionContext` (`iteration` / `history` / `lastToolResult` / `userMessage` / `activatedInjectionIds`); no separate management subsystem needed.
+The loop runs long → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over the read-only `InjectionContext` (`iteration` / `history` / `lastToolResult` / `toolResults` / `userMessage` / `activatedInjectionIds`); no separate management subsystem needed.
+
+<Callout type="info">
+**Parallel batches (9.16.0).** When the model calls several tools in one
+message, `on-tool-return` triggers match against **every** result of that batch
+— not only the last call, which was the pre-9.16.0 behavior. A predicate that
+wants the whole batch reads `ctx.toolResults` (call order, `toolCallId`
+included); `ctx.lastToolResult` remains the last entry, so existing predicates
+keep working unchanged.
+</Callout>
 
 ```ts
 defineInstruction({

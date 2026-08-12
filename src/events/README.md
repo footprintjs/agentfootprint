@@ -7,7 +7,7 @@ The stable public event contract and the central dispatcher that routes events t
 ```
 events/
 ├── types.ts         Shared value objects (EventMeta, ContextSlot, ContextSource, …)
-├── payloads.ts      47 payload interfaces (one per registered event)
+├── payloads.ts      payload interfaces (one per registered event — 78 as of 9.16.0; the count is pinned by test/events/unit/registry.test.ts)
 ├── registry.ts      EVENT_NAMES + AgentfootprintEventMap + ALL_EVENT_TYPES
 └── dispatcher.ts    EventDispatcher + .on / .off / .once + wildcards
 ```
@@ -18,11 +18,11 @@ events/
 
 Every event implements `AgentfootprintEventEnvelope<type, payload>`. Consumers subscribe by exact type; TypeScript narrows the payload automatically. No hand-parsed strings, no shape drift.
 
-Trade-off: the 47 event-type names are a **closed set** — new domain events require adding to `registry.ts` + a corresponding payload in `payloads.ts`. That's intentional. The registry IS the contract; keeping it in one file makes breakage reviewable in one diff.
+Trade-off: the event-type names are a **closed set** — new domain events require adding to `registry.ts` + a corresponding payload in `payloads.ts`. That's intentional. The registry IS the contract; keeping it in one file makes breakage reviewable in one diff.
 
 ### Decision 2: Three-segment dotted names: `agentfootprint.<domain>.<action>`
 
-Low cardinality (~47 names total). Low cardinality is a hard requirement for observability systems (OTEL, Datadog, Prometheus) — they index by name, so explosive name growth kills them. High-cardinality fields live in the payload.
+Low cardinality (~78 names total). Low cardinality is a hard requirement for observability systems (OTEL, Datadog, Prometheus) — they index by name, so explosive name growth kills them. High-cardinality fields live in the payload.
 
 ### Decision 3: Central dispatcher, NOT DOM-style bubbling
 

@@ -60,6 +60,7 @@
 
 import { isDevMode } from 'footprintjs';
 
+import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';
 import type { EntryScore, EntryScoring, EntryScorer } from './entryScorer.js';
@@ -396,6 +397,35 @@ function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
  */
 export type CursorMoveCause = 'entry' | 'route' | 'model-pick' | 'stay' | 'none';
 
+/**
+ * One tool result's routing implication inside a parallel batch (9.16.0) —
+ * which call it was, and the edge target it matched. Named by
+ * `skill.route_conflict` as the winner or a suppressed loser.
+ */
+export interface RouteBatchOutcome {
+  /** The provider's tool_use id for the call. Absent only for a context that
+   *  supplied the singular `lastToolResult` (which can never conflict). */
+  readonly toolCallId?: string;
+  /** The tool whose result matched an edge. */
+  readonly toolName: string;
+  /** The edge target that result routed to. */
+  readonly target: string;
+}
+
+/**
+ * Two or more results of ONE parallel batch matched edges to DIFFERENT
+ * targets (9.16.0). The first in call order wins the cursor; the rest are
+ * suppressed — and reported here rather than silently dropped, so the record
+ * explains the hop the run did NOT take. Same-target matches are not a
+ * conflict (they all asked for the move that happened).
+ */
+export interface RouteBatchConflict {
+  /** The call-order-first match — the one that moved the cursor. */
+  readonly winner: RouteBatchOutcome;
+  /** Later matches to other targets, in call order, that did not move it. */
+  readonly losers: readonly RouteBatchOutcome[];
+}
+
 /** The cursor resolver's full answer: where, and by which clause. */
 export interface CursorMove {
   /** The cursor after this iteration (what `nextSkill` returns). */
@@ -404,6 +434,10 @@ export interface CursorMove {
   readonly from?: string;
   /** The winning clause. */
   readonly by: CursorMoveCause;
+  /** Present only when `by: 'route'` resolved a parallel batch whose results
+   *  matched edges to different targets — the suppression, on the record.
+   *  The Evaluate stage emits it as `agentfootprint.skill.route_conflict`. */
+  readonly conflict?: RouteBatchConflict;
 }
 
 /** A node in the drawn graph — a `predicate` diamond or a `skill` box. */
@@ -493,7 +527,9 @@ export interface SkillGraph {
    * Returns the skill id the graph should be *in* after this iteration:
    *   • cold start (`ctx.currentSkillId` unset) → the first matching `entry`,
    *     else the entry the model picked with `read_skill`;
-   *   • a `from`-gated route whose predicate matches `ctx.lastToolResult` → its target;
+   *   • a `from`-gated route whose predicate matches a result of the previous
+   *     iteration's tool batch (`ctx.toolResults`, in call order; falls back to
+   *     the singular `ctx.lastToolResult`) → its target;
    *   • else the model's `read_skill` pick (`ctx.pendingSkillPick`), which the
    *     runtime sets only after the reachability gate accepted it;
    *   • otherwise the current cursor unchanged (sticky stay).
@@ -1302,14 +1338,17 @@ function makeScoreEntries(
   };
 }
 
-/** Does a single route edge fire for this context? Reads the previous
- *  iteration's tool result; `onToolReturn` matches the tool NAME, `when` runs
- *  the predicate over the result. No match (and no tool result) → false. */
-function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
-  const ltr = ctx.lastToolResult;
-  if (!ltr) return false;
-  if (r.onToolReturn) return toolMatcher(r.onToolReturn)(ltr.toolName);
-  return r.when ? r.when(ltr) : false;
+/** Does a single route edge fire for ONE tool result of the batch?
+ *  `onToolReturn` matches the tool NAME, `when` runs the predicate over the
+ *  result (same `{ toolName, result }` shape it has always received). The
+ *  caller walks the batch in call order (9.16.0) — before that, only
+ *  `ctx.lastToolResult` was ever offered here. */
+function routeMatches(
+  r: RouteDecl,
+  res: { readonly toolName: string; readonly result: string },
+): boolean {
+  if (r.onToolReturn) return toolMatcher(r.onToolReturn)(res.toolName);
+  return r.when ? r.when(res) : false;
 }
 
 /**
@@ -1320,7 +1359,10 @@ function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
  *     (an `always`-entry — no `when` — matches unconditionally), else the entry
  *     the MODEL picked with `read_skill` (see "the model's pick" below);
  *   • a `from`-gated route (`fromId === currentSkillId`) whose predicate matches
- *     `lastToolResult`, first by declaration order → its target (the transition);
+ *     a result of the iteration's tool batch — results in call order, edges per
+ *     result in declaration order; the first result with a match wins, later
+ *     results matching OTHER targets are reported as `conflict` (9.16.0) →
+ *     its target (the transition);
  *   • else the model's pick, when the read_skill gate accepted one this turn;
  *   • otherwise the current cursor unchanged (sticky stay).
  *
@@ -1384,18 +1426,53 @@ function makeResolveCursor(
       }
       return { by: 'none' };
     }
-    // D1 — transition: first from-gated deterministic edge that fires. Wins over
-    // a same-turn model pick (the author's declared edge is never overridden) —
-    // INCLUDING when both name the same target, which is why the cause is decided
-    // here and not inferred downstream from the destination.
-    for (const r of routes) {
-      if (r.fromId !== cur) continue;
-      if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
-      try {
-        if (routeMatches(r, ctx)) return { ...from, to: r.toId, by: 'route' };
-      } catch (err) {
-        warnMatcherThrew(`route ${r.fromId}→${r.toId}`, err);
+    // D1 — transition: the whole tool batch, in CALL order (9.16.0). Per
+    // result, the first from-gated deterministic edge in DECLARATION order
+    // that fires names that result's target; the first RESULT with a target
+    // wins the cursor. Two orders, two jobs: declaration order is the
+    // author's tiebreak when one result could match several edges (the D1
+    // law, unchanged), call order is the run's tiebreak across results —
+    // the tool that returned first routed first. Before 9.16.0 only the
+    // LAST call of a batch was consulted, so identical batches routed
+    // differently depending on call order (the 9.15.0 L1 probe). A later
+    // result matching a DIFFERENT target is suppressed AND reported on the
+    // move (`conflict`), never silently dropped; a batch of one is
+    // byte-identical to the old singular walk. D1 still wins over a
+    // same-turn model pick — INCLUDING when both name the same target,
+    // which is why the cause is decided here and not inferred downstream
+    // from the destination.
+    let winner: RouteBatchOutcome | undefined;
+    let losers: RouteBatchOutcome[] | undefined;
+    for (const res of toolResultsOf(ctx)) {
+      let target: string | undefined;
+      for (const r of routes) {
+        if (r.fromId !== cur) continue;
+        if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
+        try {
+          if (routeMatches(r, res)) {
+            target = r.toId;
+            break;
+          }
+        } catch (err) {
+          warnMatcherThrew(`route ${r.fromId}→${r.toId}`, err);
+        }
       }
+      if (target === undefined) continue;
+      const outcome: RouteBatchOutcome = {
+        ...(res.toolCallId !== undefined && { toolCallId: res.toolCallId }),
+        toolName: res.toolName,
+        target,
+      };
+      if (winner === undefined) winner = outcome;
+      else if (target !== winner.target) (losers ??= []).push(outcome);
+    }
+    if (winner !== undefined) {
+      return {
+        ...from,
+        to: winner.target,
+        by: 'route',
+        ...(losers !== undefined && { conflict: { winner, losers } }),
+      };
     }
     // D2 — the validated volunteer: no declared edge fired, so the model's own
     // (already gated) pick moves the cursor. A pick of the CURRENT skill is a

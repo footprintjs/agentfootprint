@@ -120,13 +120,33 @@ export interface InjectionContext {
   }>;
   /**
    * The most recent tool result, if the previous iteration ended in a
-   * tool call. Used both by `rule` predicates and by `on-tool-return`
-   * trigger evaluation.
+   * tool call. Used by `rule` predicates; `on-tool-return` triggers and
+   * skill-graph routes read the full batch (`toolResults`) and fall back
+   * to this when only the singular was provided. When the model called
+   * several tools in one message this is the LAST of them — read
+   * `toolResults` when the whole batch matters.
    */
   readonly lastToolResult?: {
     readonly toolName: string;
     readonly result: string;
   };
+  /**
+   * EVERY tool result of the previous iteration's batch, in call order
+   * (9.16.0). When the model calls several tools in one message, each
+   * result lands here as it happens — so `on-tool-return` triggers and
+   * skill-graph routes evaluate the whole batch instead of only the last
+   * call (`lastToolResult` === the last entry). A batch of one behaves
+   * byte-identically to the singular. Absent on iteration 1 and for
+   * contexts built by callers that only supply `lastToolResult` — use
+   * {@link toolResultsOf} to read the batch with that fallback applied.
+   */
+  readonly toolResults?: ReadonlyArray<{
+    readonly toolName: string;
+    readonly result: string;
+    /** The provider's tool_use id for this call — names the exact call in
+     *  `skill.route_conflict`. Absent for singular-fallback entries. */
+    readonly toolCallId?: string;
+  }>;
   /**
    * IDs of LLM-activated injections that the LLM has activated this
    * turn (via their `viaToolName` tool call). Engine includes them
@@ -184,6 +204,21 @@ export interface InjectionContext {
   readonly entryScorer?: string;
 }
 
+/**
+ * The iteration's tool-result batch, in call order — with the singular
+ * fallback applied (9.16.0). THE one reader for batch-aware evaluation:
+ * `ctx.toolResults` when the runtime supplied it, else `[ctx.lastToolResult]`
+ * for contexts built by callers that only know the singular, else `[]`.
+ * Both the evaluator's `on-tool-return` arm and the skill-graph cursor
+ * resolver go through here, so the two can never disagree about what the
+ * batch was.
+ */
+export function toolResultsOf(
+  ctx: InjectionContext,
+): ReadonlyArray<{ readonly toolName: string; readonly result: string; readonly toolCallId?: string }> {
+  return ctx.toolResults ?? (ctx.lastToolResult ? [ctx.lastToolResult] : []);
+}
+
 // ─── The primitive ─────────────────────────────────────────────────
 
 /**
@@ -228,7 +263,9 @@ export interface Injection {
    *   - `surfaceMode` (Skill) — `'auto' | 'system-prompt' | 'tool-only' | 'both'`
    *   - `autoActivate` (Skill) — `'currentSkill'`, the tool gate
    *   - `cache` (any flavor) — the cache directive
-   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`; stored, not yet read
+   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`; DEPRECATED-pending-steps:
+   *     stored, never read, and staying that way — a planned steps-as-data
+   *     feature supersedes it (see `RefreshPolicy`'s docstring)
    */
   readonly metadata?: Readonly<Record<string, unknown>>;
 }

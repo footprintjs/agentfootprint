@@ -923,6 +923,27 @@ export class AgentBuilder {
      *  per-skill stamps (skills found by both are deduped by id). */
     deferredBodyContract?: { readonly mode: 'throw' | 'warn' };
   }): this {
+    // Classic ReAct caches the system-prompt and tools slots after turn 1 (the
+    // Context selector's `includeStatic`), while the injection engine — the loop
+    // target — keeps running every iteration. A graph mounted on that mode
+    // ADVANCES: routes fire, the cursor moves, `context.evaluated` honestly
+    // reports skills activating — and none of it ever reaches the model,
+    // because the slots that would carry the activated body and unlocked tools
+    // were composed once and never again. Config that lies. Refused at build
+    // (9.16.0), like `.selfExplain()` under classic and for the same caching
+    // reason; `reactMode` is fixed at `Agent.create`, so this check is
+    // order-safe wherever `.skillGraph()` appears in the chain.
+    if (this.opts.reactMode === 'classic') {
+      throw new Error(
+        "AgentBuilder.skillGraph: reactMode 'classic' cannot honor a skill graph. " +
+          'Classic caches the system-prompt and tools slots after turn 1, so a route-driven ' +
+          "activation moves the cursor and shows up in the trace but the activated skill's " +
+          'body and tools never reach the model — the run would record routing that the wire ' +
+          "never saw. Use the default 'dynamic' mode (or 'dynamic-grouped'), which recomposes " +
+          'the slots every iteration. Classic remains fine WITHOUT a graph: a fixed system ' +
+          'prompt, fixed tools, and always-on steering all compose on turn 1 and stay valid.',
+      );
+    }
     // One agent routes with ONE graph. The second call used to replace the cursor,
     // the reachable set and the entry scorer while the FIRST graph's skills stayed
     // registered and active — so graph 1's route targets could never activate again
