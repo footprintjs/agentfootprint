@@ -7,6 +7,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.11.0] - 2026-08-12
+
+**The enterprise batch.** An external enterprise-readiness review asked four
+questions of this library. Three of them turned out to be right, and the fourth
+turned out to be a misreading worth correcting in public. Everything shipped here
+is **opt-in by construction** — no existing agent composes a different prompt,
+refuses a call it used to allow, or emits a field it did not before.
+
+### Added — `maxToolResultChars`: a ceiling on ONE tool result
+
+```ts
+Agent.create({ provider, model, maxToolResultChars: 20_000 })
+```
+
+Over the cap, the result is **replaced** by a marker that tells the model what
+happened and what to do about it:
+
+```json
+{
+  "truncated": true,
+  "reason": "orders_export returned 812431 chars, over the 20000-char cap. Narrow the request and call again.",
+  "head": "id,customer,total\n1001,…"
+}
+```
+
+- **The marker IS the result.** It is what the model reads on the `role: 'tool'`
+  message AND what `agentfootprint.stream.tool_end` carries — so a run that
+  capped an 800KB result does not then ship that same 800KB to a log sink, and a
+  trace shows the truncation instead of hiding it.
+- **`head` is verbatim and proportional.** It gets whatever the cap has left
+  after the sentence explaining it, so the serialized marker stays inside the cap
+  and a bigger cap buys a bigger head. When the cap cannot afford its own
+  explanation, `head` is dropped rather than the explanation — a lesson truncated
+  in half teaches nothing, which is the failure this exists to prevent.
+- **Every dispatch path is measured**: the ordinary loop, a resumed middleware
+  `ask`, a check-in decision, a credential-consent resume, and a `pauseHere`
+  answer a person typed.
+- **It composes, and replaces nothing.** A tool's own paging keeps working,
+  `CodeResult.truncated` still means what it means, and an `onToolResult`
+  middleware that summarizes runs FIRST — the cap measures what the chain
+  produced. When big tool DATA is normal rather than accidental, the answer is
+  still the `CodeRunner` port ("summarize prose, compute data"), not a bigger cap.
+- **No default, and there will not be one.** A default would silently modify tool
+  results, and a tool that returns 200KB is doing what somebody wrote it to do.
+  Omitted, results are never measured and never replaced. `0` is not "off" — it
+  is refused at construction, naming the value and pointing at the omission.
+- Read it with the exported `isTruncatedToolResult(value)` guard.
+
+### Added — WHO the run was for, on every event
+
+`EventMeta.principal` and `EventMeta.tenant` (9.11.0) join `sessionId` (9.4.0) on
+every event's meta. The stream has always said *what* happened and *when*; this
+is the *who*, and the three together are an audit record rather than a debug log.
+
+```ts
+await agent.run(message, {
+  identity: { tenant: 'acme', principal: 'alice@acme.test', conversationId },
+});
+```
+
+- **Stamped only from an identity a caller NAMED** — `run({ identity })` or
+  `run(input, { identity })`, the same tuple memory and the permission gate scope
+  on. Never from the run's internal identity, which is always populated and
+  defaults to `{ conversationId: '<runId>' }` (or, since 9.10.0, to
+  `{ conversationId: sessionId }` on a session-bound run).
+- **A conversation id is not an actor.** A session-derived run leaves both keys
+  ABSENT. `sessionId` is caller data — anyone who can reach the host can send any
+  string, including somebody else's — and promoting it to "who did this" would
+  produce an audit trail that looks complete and names the wrong party.
+- **`conversationId` is deliberately not carried.** It is a thread, not a person,
+  and `sessionId` beside it is the fact the transport delivered.
+- **Which sinks carry it, checked rather than assumed.** `fileObservability`,
+  `cloudwatchObservability`, `agentcoreObservability` and `auditExport` serialize
+  the whole envelope and inherit it for free — in `auditExport`'s case *inside*
+  the hash chain, so editing who breaks the same verification as editing what.
+  `otelObservability` maps signals onto spans rather than serializing, so the
+  actor is PLACED there: `agentfootprint.principal.id` /
+  `agentfootprint.tenant.id` on the `invoke_agent` run span. `xrayObservability`
+  does not map it, and the docs say so rather than implying a coverage it lacks.
+
+### Added — capability enforcement, where both sides speak
+
+`PermissionRequest.capability` has carried five values since v2.4. Until now
+**only `'tool_call'` was ever sent**: every construction site passed it, and
+`PermissionPolicy` read the field only as a fallback target id that a tool call
+never reaches. Four fifths of the vocabulary was defined and dead.
+
+It is enforced now, under one rule — **a tool DECLARES what it touches, a checker
+DECLARES what it governs, and enforcement happens where both speak**:
+
+```ts
+const fetchInvoice = defineTool({ …, capabilities: ['external_net', 'user_data'] });
+
+const policy = PermissionPolicy.fromRoles(roles, 'support', {
+  capabilities: { support: ['user_data'] },   // external_net is not listed → denied
+});
+```
+
+- **`Tool.capabilities`** (`'memory_read' | 'memory_write' | 'external_net' |
+  'user_data'`) is a declaration, never an inference. A tool's reach is not
+  knowable from its name, schema or description, and guessing would rest a policy
+  decision on a heuristic.
+- **`PermissionChecker.governs`** is an optional, feature-detected member —
+  **absence is NO**. A checker written before 9.11.0 is asked exactly what it was
+  always asked. `checkerGoverns(checker, capability)` is exported so a custom
+  checker's tests can assert the same answer the framework will get.
+- **`PermissionPolicy.fromRoles(roles, role, { capabilities, skills })`** derives
+  its own `governs` from the rules, so "unconfigured" and "never asked" cannot
+  drift apart. Configuring capability rules for any role means the policy governs
+  all four — governing only what some role listed would let an unlisted
+  capability pass unasked.
+- **Said plainly instead of implied: the memory pipeline is NOT gated by this
+  port.** No recall or write stage builds a `PermissionRequest`, so
+  `'memory_read'` / `'memory_write'` reach a checker only for a TOOL that declared
+  them. Memory isolation is `MemoryIdentity` scoping — a different mechanism, not
+  this one under another name.
+
+### Added — per-role skill-catalog visibility
+
+The same composition, applied to the skill catalog. A checker that declares it
+governs `'skill_read'` is asked about each skill, target `skill:<id>`:
+
+```ts
+PermissionPolicy.fromRoles(roles, 'support', {
+  skills: { support: ['refunds', 'lookup'], hr: ['payroll'] },
+});
+```
+
+- A refused skill's row **disappears** from the `read_skill` menu the model reads,
+  and activating it anyway is refused with the policy's own message — one rule,
+  both ends, so the menu and the verdict cannot disagree.
+- The refusal lands **before `execute`**, so a `surfaceMode: 'tool-only'` skill's
+  body is never even computed.
+- **Hidden means unnamed.** The graph offer lists unreachable skills as "not
+  reachable from here" because a cursor can move; a hidden skill is about *who is
+  asking*, and naming it would tell one role about another role's capabilities.
+- **The enum stays the full catalog.** `toolArgValidation` runs before the gate,
+  so narrowing it would turn a policy refusal into a generic schema error and the
+  model would never read the policy's own message — the reasoning 8.5.0 recorded
+  for the graph offer, applied again.
+- `skillTarget(id)` / `skillIdFromTarget(target)` / `SKILL_TARGET_PREFIX` are
+  exported from `agentfootprint/security` so a custom checker spells the target
+  exactly as the agent produces it. Scope: this governs the `read_skill` surface
+  the Agent mounts; a `list_skills` tool you register yourself is your own catalog.
+
+### Documentation — the sqlite "50,000 chunk ceiling" is guidance, not a limit
+
+The review read `sqliteVectorStore`'s documented ceiling as an enforced cap. It
+is not, and nothing changed in code because nothing needed to: **no counter, no
+refusal at 50,000, no deliberate degradation** — chunk 50,001 is stored and
+searched exactly like chunk 3. The number is the point on the measured curve
+where this implementation stops being obviously the right tool, published so the
+decision is yours and dated rather than discovered in production. The docstring
+and the capability page now say that in as many words, and list what the store
+really does refuse.
+
+### Documentation
+
+Every item above lands on its capability page under the provider-column template
+— [Governance & policy](https://footprintjs.github.io/agentfootprint/docs/infrastructure/governance-and-policy),
+[Identity & credentials](https://footprintjs.github.io/agentfootprint/docs/infrastructure/identity-and-credentials),
+[Observability sinks](https://footprintjs.github.io/agentfootprint/docs/infrastructure/observability-sinks),
+[Tools & gateways](https://footprintjs.github.io/agentfootprint/docs/infrastructure/tools-and-gateways) —
+plus a new decision-table row ("audit who did what") on the Infrastructure index.
+The actor-in-events row appears **identically** on both provider pages, AWS and
+on-premises, because it is the same field and the same rule on both columns.
+
 ## [9.10.0] - 2026-08-12
 
 **Multi-user, made easy.** Three things a self-hosted deployment had to build

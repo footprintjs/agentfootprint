@@ -68,7 +68,7 @@ Start from what you are trying to do, not from which cloud you are on.
 | You need… | Reach for | Why that one |
 |---|---|---|
 | A **fixed corpus** on a runtime with no disk (serverless, edge, immutable image) | `staticVectorStore(bundle)` — or `s3VectorsStore` if it must change without a redeploy | The bundle is plain JSON built where the credentials live; S3 Vectors is durable object storage with a native index |
-| A **durable corpus** on one machine | `sqliteVectorStore({ file })` | Node's built-in `node:sqlite` — nothing to install, exact cosine, survives a restart. Documented ceiling: 50,000 chunks |
+| A **durable corpus** on one machine | `sqliteVectorStore({ file })` | Node's built-in `node:sqlite` — nothing to install, exact cosine, survives a restart. Documented ceiling: 50,000 chunks (guidance from measurements, not an enforced limit) |
 | A corpus **beside your own data** | `pgVectorStore` | Inherits the backups, failover, access control and migrations you already run |
 | **Conversation memory** in production | `AgentCoreStore` or `RedisStore` via `defineMemory({ store })` | Managed event log, or sub-ms hot reads with TTL. Neither ranks your vectors — see the ranking axis |
 | **Conversations to survive a restart** | `sqliteSessions({ file })` as `SessionLifecycle` | Conversations *and* paused runs in one table, zero dependencies |
@@ -78,6 +78,10 @@ Start from what you are trying to do, not from which cloud you are on.
 | A **signed** request (SigV4, DPoP, HMAC) | `McpHttpTransport.fetch` — your own function | A signature is computed *from* the request, so it cannot be decided at connect time |
 | **Consent and spend gates** before a consequential action | `checkIn` on the tool + a `CredentialProvider`; `ask` in `.toolMiddleware()` | A pause puts the exact operation in front of a person, with its evidence pack |
 | A **role allowlist** you own | `PermissionPolicy.fromRoles(roles, activeRole)` | In-process, fail-closed, refusal-as-data — the model reads a bracketed denial it can adapt to |
+| To **audit who did what** | `run({ identity })` + any envelope-serializing sink | `EventMeta.principal` / `.tenant` ride every event of the run — stamped only from an identity a caller NAMED, absent otherwise |
+| To govern what a tool **touches**, not just its name | `Tool.capabilities` + `PermissionPolicy.fromRoles(…, { capabilities })` | Enforced where both sides declare it; the framework never guesses a tool's reach |
+| One role to see a **smaller skill catalog** | `PermissionPolicy.fromRoles(…, { skills })` | The row leaves the `read_skill` menu AND the activation is refused, from one rule |
+| A **ceiling on one tool result** | `Agent.create({ maxToolResultChars })` | Over the cap the model reads a marker that names the size and says to narrow the request — opt-in, because a default would silently modify results |
 | **Events beside your runtime telemetry** | `agentcoreObservability()` / `cloudwatchObservability()` / `otelObservability()` | The typed event stream, shipped in the shape that platform already reads |
 | **Telemetry where there is no collector to ship to** | `fileObservability({ path })` | NDJSON on a local disk, one line per event — the format every log shipper already reads, and zero dependencies |
 | **Tokens out of the vault you already run** | `vaultCredentials({ address })` | KV v2 over Vault's own HTTP API — no SDK, and the token never reaches an error message |

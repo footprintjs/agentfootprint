@@ -16,6 +16,7 @@ import type {
   LLMProviderName,
   ToolProtocol,
 } from './types.js';
+import type { PermissionCapability } from '../adapters/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 
@@ -825,7 +826,10 @@ export interface SkillRejectedPayload {
 
 // permission.* (4)
 export interface PermissionCheckPayload {
-  readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
+  /** 9.11.0 — the shared vocabulary, so the event cannot drift from the
+   *  request. `'skill_read'` joined it when skill activation became something
+   *  a policy can refuse. */
+  readonly capability: PermissionCapability;
   readonly actor: string;
   readonly target?: string;
   readonly result: 'allow' | 'deny' | 'halt' | 'gate_open';

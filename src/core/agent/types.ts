@@ -155,6 +155,47 @@ export interface AgentOptions {
    */
   readonly toolArgValidation?: ToolArgValidationMode;
   /**
+   * The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
+   * is no default, and there will not be one.**
+   *
+   * Over the cap, the result is REPLACED by a marker that names the tool, the
+   * size, the cap, and the one action that helps — and carries the first
+   * characters of the real answer verbatim:
+   *
+   * ```json
+   * { "truncated": true,
+   *   "reason": "orders_export returned 812431 chars, over the 20000-char cap. Narrow the request and call again.",
+   *   "head": "id,customer,total\n1001,…" }
+   * ```
+   *
+   * The marker IS the result. It is what the model reads on the `role: 'tool'`
+   * message AND what `agentfootprint.stream.tool_end` carries — so a run that
+   * capped a 800KB result does not then ship that same 800KB to an event sink,
+   * and a trace shows the truncation instead of hiding it. `head` gets whatever
+   * the cap has left after the sentence explaining it, so a bigger cap buys a
+   * proportionally bigger head.
+   *
+   * **Why no default.** A default would silently modify tool results: a tool
+   * that returns 200KB of rows is doing what somebody wrote it to do, and a
+   * framework that quietly replaced that the first time it ran would be lying
+   * to the app about its own tool. Omitted, results are never measured and
+   * never replaced — byte-identical to every earlier release.
+   *
+   * It composes with, and never replaces, what a tool already does: a tool with
+   * its own paging keeps it, `CodeResult.truncated` still means what it means,
+   * and an `onToolResult` middleware that summarizes runs FIRST — the cap
+   * measures what the chain produced. It is the last-resort net, not the plan.
+   * When big tool DATA is the norm rather than the accident, the answer is the
+   * `CodeRunner` port ("summarize prose, compute data"), not a bigger cap.
+   *
+   * Refused at construction for a non-positive or non-integer value: `0` is not
+   * "off" — omitting the option is.
+   *
+   * @example a support agent whose search tool can return a whole knowledge base
+   *   Agent.create({ provider, model, maxToolResultChars: 20_000 })
+   */
+  readonly maxToolResultChars?: number;
+  /**
    * How long ONE tool teardown may take before the runner stops waiting
    * (default 5000ms). See `ctx.onTeardown`.
    *

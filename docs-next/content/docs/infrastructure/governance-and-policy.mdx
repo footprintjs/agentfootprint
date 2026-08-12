@@ -10,7 +10,8 @@ points, they live at different layers, and only three of them are yours.
 | Where | Decides | Vocabulary | Runs |
 |---|---|---|---|
 | **Visibility** — `ToolProvider` / `gatedTools` | What the model is *offered* | a boolean predicate | per tool, per iteration |
-| **Permission gate** — `PermissionChecker` | Whether a call *executes* | `allow` / `deny` / `halt` / `gate_open` | per tool call, before `execute` |
+| **Visibility** — `PermissionChecker` + skills (9.11.0) | Which **skills** the model is offered | `allow` / `deny` on `skill:<id>` | per skill, per iteration |
+| **Permission gate** — `PermissionChecker` | Whether a call *executes* | `allow` / `deny` / `halt` / `gate_open` | per tool call, before `execute`; plus once per DECLARED capability |
 | **Middleware chain** — `.toolMiddleware()` | Whether it executes, with what args, and whether a person is asked first | `allow` / `deny` / `ask` | per tool call, after the gate |
 | **Upstream** — a gateway in front of the tool | Whether the request ever reaches your process | the gateway's own | before you see it |
 
@@ -22,9 +23,18 @@ The gate decides what the model is *shown*; the checker decides what actually
 For a single tool call:
 
 ```text
-permission → MIDDLEWARE CHAIN → arg validation → check-in → credentials
-           → execute → THE CHAIN AGAIN, BACKWARDS (onToolResult)
+permission (tool_call, then each DECLARED capability the checker governs)
+           → MIDDLEWARE CHAIN → arg validation → skill gate (read_skill only)
+           → check-in → credentials → execute
+           → THE CHAIN AGAIN, BACKWARDS (onToolResult) → the result ceiling
 ```
+
+Both 9.11.0 steps sit where they do for a reason. Capability checks are part of
+the **gate**, so an existing `PermissionChecker` still decides before any
+middleware runs. The skill gate is after arg validation — so the id it judges is
+the one that will actually run, a middleware may have rewritten it — and before
+`execute`, so a refused skill's body is never computed. Neither step exists
+unless both sides declared it.
 
 ## 1. `PermissionPolicy.fromRoles` — the in-process rule you own
 
@@ -92,6 +102,110 @@ on the typed event's `rationale`.
 **A denial is visible in history but was never dispatched.** The framework writes
 `SYNTHETIC_DENY_PREFIX` (`'[permission denied:'`) on synthetic results, so
 `extractSequence` can report what actually ran rather than what was attempted.
+
+### Capabilities: what the vocabulary enforces, and what it does not (9.11.0)
+
+`PermissionRequest.capability` has carried five values since v2.4 —
+`'tool_call'`, `'memory_read'`, `'memory_write'`, `'external_net'`,
+`'user_data'`. Until 9.11.0 **only the first was ever sent**. Every construction
+site in the library passed `'tool_call'`, and `PermissionPolicy` read the field
+only as a fallback target id, which a tool call never reaches. Four fifths of the
+vocabulary was defined and dead.
+
+It is enforced now, and the rule is deliberately narrow:
+
+> **Enforced when both sides speak.** A tool DECLARES what it touches; a checker
+> DECLARES what it governs. Either side silent and nothing extra is asked,
+> nothing extra is refused — byte-identical to every earlier release.
+
+```ts
+const fetchInvoice = defineTool({
+  name: 'fetch_invoice',
+  description: 'Fetch an invoice PDF from the billing service',
+  capabilities: ['external_net', 'user_data'],       // the tool's half
+  inputSchema: { /* … */ },
+  execute: async ({ id }, ctx) => { /* … */ },
+});
+
+const policy = PermissionPolicy.fromRoles(
+  { support: ['fetch_invoice'], admin: ['fetch_invoice', 'delete_invoice'] },
+  'support',
+  { capabilities: { support: ['user_data'] } },      // the policy's half
+);
+```
+
+`fetch_invoice` passes the tool allowlist, then the gate asks once per declared
+capability. `'user_data'` is listed for `support`; `'external_net'` is not, so the
+call is refused and the model reads the policy's rationale. Configuring
+`capabilities` for **any** role makes the policy declare it governs all four —
+governing only what some role happened to list would let an unlisted capability
+pass unasked, which is a fail-open hole in a fail-closed primitive.
+
+Three types name this vocabulary, and the split between them is the point.
+`ToolCapability` is the four things a tool can honestly say about itself
+(`'memory_read'`, `'memory_write'`, `'external_net'`, `'user_data'`).
+`PermissionCapability` is the full set a request may carry — those four plus
+`'tool_call'` and `'skill_read'`, which are the framework's own words for "a tool
+was dispatched" and "a skill was activated" and are therefore not something a
+tool declares. `PermissionPolicyRules` is the optional third argument to
+`fromRoles` (`{ capabilities?, skills? }`), whose `skills` map has type
+`RoleIdRules` — role → the ids that role may reach. Ask the framework's own
+question with `checkerGoverns(checker, capability)`.
+
+Two things stated plainly, because the alternative is a governance story that
+quietly stops being true:
+
+**The framework never classifies a tool.** A tool's capabilities are not knowable
+from its name, its schema or its description. Guessing would rest a policy
+decision on a heuristic, so an undeclared tool is asked about nothing.
+
+**The memory pipeline is NOT gated by this port.** No recall or write stage
+builds a `PermissionRequest`, so `'memory_read'` / `'memory_write'` reach a
+checker only for a TOOL that declared them. What isolates memory is
+`MemoryIdentity` — tenant / principal / conversation scoping on the store — which
+is a different mechanism, not this one under another name.
+
+### Per-role skill visibility (9.11.0)
+
+The same composition, applied to the skill catalog. When a checker declares it
+governs `'skill_read'`, the agent asks it about each skill — target
+`skill:<id>`, one owner for the spelling (`skillTarget(id)` /
+`skillIdFromTarget(target)` over the `SKILL_TARGET_PREFIX` constant, all on
+`agentfootprint/security`):
+
+```ts
+const policy = PermissionPolicy.fromRoles(roles, 'support', {
+  skills: { support: ['refunds', 'lookup'], hr: ['payroll'] },
+});
+```
+
+A refused skill is governed at **both** ends of one rule:
+
+- its row **disappears** from the `read_skill` menu the model reads;
+- activating it anyway is refused with the policy's own message
+  (`Skill 'payroll' is not available to the 'support' role.`), before `execute`
+  runs — so a `surfaceMode: 'tool-only'` skill's body is never even computed.
+
+Three design points worth the ink:
+
+**Hidden means unnamed.** The skill-graph offer lists unreachable skills as
+"not reachable from here", because a cursor can move and naming them lets the
+model route in one step. A hidden skill is about *who is asking*: no cursor move
+makes it available, and naming it would tell one role about another role's
+capabilities. So it appears in neither section.
+
+**The enum stays the full catalog.** `toolArgValidation` defaults to `'enforce'`
+and runs *before* the gate, so narrowing the enum would turn a policy refusal
+into a generic schema error and the model would never read the policy's own
+message — the same reasoning 8.5.0 recorded for the graph offer.
+
+**Opt-in on both sides, again.** A `PermissionPolicy` built without `skills`
+declares no `governs`, so nothing is asked and every skill stays visible. This
+matters: a skill target is not a tool name, so a fail-closed allowlist asked
+about `skill:refunds` would hide an entire catalogue nobody asked to hide.
+Scope note: this governs the `read_skill` surface the Agent mounts. A
+`list_skills` tool you register yourself (from `SkillRegistry.toTools()`) is your
+own catalog — the gate governs its *dispatch* by tool name, not its contents.
 
 ### `halt` vs `deny`
 
@@ -186,6 +300,8 @@ For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
 | Keep a tool out of the model's sight in this context | `gatedTools(inner, predicate)` | Cheaper than refusing it later, and it never appears in the prompt |
 | Enforce a role allowlist you control | `PermissionPolicy.fromRoles` | Data-driven, fail-closed, one object for both surfaces |
 | Enforce a rule that depends on the *arguments* | `.toolMiddleware()` with `deny` | The gate sees the tool; the chain sees the call |
+| Govern what a tool **touches**, not just its name | `Tool.capabilities` + `PermissionPolicy.fromRoles(…, { capabilities })` | Enforced where both sides declare; the framework never guesses a tool's reach |
+| Show one role a smaller **skill** catalog | `PermissionPolicy.fromRoles(…, { skills })` | The row disappears from the menu AND the activation is refused, from one rule |
 | Rewrite arguments or scrub a result | `.toolMiddleware()` with `allow({ value })` | The only layer allowed to transform — and still not to answer |
 | Require a person before a consequential action | `ask`, or `checkIn` on the tool | `ask` suspends the run with the exact operation; `checkIn` adds the evidence pack |
 | End the run rather than continue after a refusal | a checker returning `halt` | Continuing would itself be the incident |
@@ -199,6 +315,10 @@ For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
 | `halt` + `PolicyHaltError`, `SYNTHETIC_DENY_PREFIX`, `extractSequence` | `agentfootprint/security` | Shipped |
 | `.toolMiddleware()` / `.messageMiddleware()`, `allow` / `deny` / `ask` | `agentfootprint` | Shipped |
 | `gatedTools` / `skillScopedTools` visibility layer | `agentfootprint/providers` | Shipped |
+| `Tool.capabilities` + `PermissionChecker.governs` + `checkerGoverns` | `agentfootprint` / `agentfootprint/security` | Shipped (9.11.0) |
+| `PermissionPolicy` capability rules + skill rules | `agentfootprint/security` | Shipped (9.11.0) |
+| `skill:<id>` target convention (`skillTarget` / `skillIdFromTarget`) | `agentfootprint/security` | Shipped (9.11.0) |
+| Permission gating of the **memory pipeline** | — | Not built; memory is isolated by `MemoryIdentity` instead |
 | Gateway-enforced policy | — | Not a data-plane call; nothing to attach |
 | `agentCorePolicy` | `agentfootprint/security` | **Retired 9.4.0** — refuses at construction |
 
@@ -209,3 +329,4 @@ For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
 - [Security](doc:security) — the three surfaces end to end
 - [Tools & gateways](doc:tools-and-gateways) — where a remote tool comes from
 - [Identity & credentials](doc:identity-and-credentials) — the other half of the question
+- [Observability sinks](doc:observability-sinks) — who the run was for, on every event

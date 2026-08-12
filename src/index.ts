@@ -378,6 +378,11 @@ export type { ObserverDrainResult, ObserverStats } from 'footprintjs';
 // (The validator itself is internal; the payload ships as
 // Payloads.ValidationArgsInvalidPayload.)
 export type { ToolArgValidationMode } from './core/agent/toolArgsValidation.js';
+// 9.11.0 — the opt-in tool-result ceiling (`AgentOptions.maxToolResultChars`).
+// The marker is what a consumer reads off `stream.tool_end.result` and off the
+// `role: 'tool'` message, so the shape AND the guard are public; the measuring
+// helper stays internal to dispatch.
+export { isTruncatedToolResult, type TruncatedToolResult } from './core/agent/toolResultCap.js';
 // #18/#14 — snapshot read-tracking: the mode for AgentOptions.readTracking
 // (re-exported from footprintjs so Agent consumers don't need a direct
 // footprintjs import to type the option).

@@ -69,17 +69,38 @@ export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefi
  * being asked to choose from a menu the library knew it would reject.
  */
 export interface ReadSkillOffer {
-  /** Ids the gate will grant from the current cursor. */
-  readonly grantable: readonly string[];
+  /**
+   * Ids the gate will grant from the current cursor. Omit when there is no
+   * graph — then the description is the plain catalog it has always been,
+   * minus anything {@link ReadSkillOffer.hiddenIds} removes.
+   */
+  readonly grantable?: readonly string[];
   /** Say the rest are refusable rather than hiding them. Hiding a skill it can see
    *  in `list_skills` (and in the enum) would just move the confusion; naming the
    *  boundary lets the model route around it in one step instead of guessing. */
   readonly showRefusable?: boolean;
+  /**
+   * Ids removed from the description ENTIRELY — not listed as reachable, not
+   * listed as refusable, not named at all (9.11.0).
+   *
+   * The opposite treatment from the graph's `shut` set above, and deliberately
+   * so. A graph refusal is about WHERE THE CURSOR IS: the skill exists for this
+   * caller, it is simply not reachable from here, so naming it lets the model
+   * route to it in one step. A hidden skill is about WHO IS ASKING: no cursor
+   * move makes it available, and naming it would tell a role about a capability
+   * it will never be allowed to use — leaking the shape of somebody else's
+   * permissions into this model's prompt.
+   *
+   * The ENUM keeps the full catalog either way (see below). Narrowing it would
+   * turn a policy refusal into a generic schema error, and the model would
+   * never read the policy's own message.
+   */
+  readonly hiddenIds?: readonly string[];
 }
 
 /** Compose the tool description: one catalog, or the offer split in two. */
 function describeOffer(
-  skills: readonly Injection[],
+  allSkills: readonly Injection[],
   line: (s: Injection) => string,
   fullCatalog: string,
   offer?: ReadSkillOffer,
@@ -89,6 +110,20 @@ function describeOffer(
     `gated tools become available on the next call.`;
   if (!offer) {
     return `Activate a skill for the next iteration. Available skills:\n${fullCatalog}\n\n${tail}`;
+  }
+  // Hidden first, so nothing below can name one — the graph split, the
+  // "not reachable" list and the plain catalog all read from this.
+  const hidden = new Set(offer.hiddenIds ?? []);
+  const skills = hidden.size > 0 ? allSkills.filter((s) => !hidden.has(s.id)) : allSkills;
+  if (offer.grantable === undefined) {
+    // No graph — the plain catalog, filtered. A role with nothing left is told
+    // plainly rather than handed an empty list to interpret.
+    return skills.length === 0
+      ? `Activate a skill for the next iteration. No skills are available to you — ` +
+          `answer without one, or say what you are unable to do.\n\n${tail}`
+      : `Activate a skill for the next iteration. Available skills:\n${skills
+          .map(line)
+          .join('\n')}\n\n${tail}`;
   }
   const grantable = new Set(offer.grantable);
   const open = skills.filter((s) => grantable.has(s.id));

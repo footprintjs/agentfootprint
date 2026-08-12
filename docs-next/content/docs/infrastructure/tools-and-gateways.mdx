@@ -176,6 +176,54 @@ real tool runs; decline and it becomes a denial the model reads.
 The full table, with the exact strings the model sees, is on
 [Governance & policy](doc:governance-and-policy).
 
+## Axis 4 — the ceiling on ONE result (9.11.0)
+
+`maxToolResultChars` on `Agent.create({ … })` is the last-resort net under
+everything below: a hard character ceiling on a single tool result.
+
+```ts
+Agent.create({ provider, model, maxToolResultChars: 20_000 })
+```
+
+Over the cap, the result is **replaced** by a marker that names the tool, the
+size, the cap, and the one move that helps — carrying the first characters of the
+real answer verbatim:
+
+```json
+{
+  "truncated": true,
+  "reason": "orders_export returned 812431 chars, over the 20000-char cap. Narrow the request and call again.",
+  "head": "id,customer,total\n1001,…"
+}
+```
+
+**The marker IS the result.** It is what the model reads on the `role: 'tool'`
+message *and* what `agentfootprint.stream.tool_end` carries — so a run that
+capped an 800KB result does not then ship that same 800KB to a log sink, and the
+trace shows the truncation instead of hiding it. `head` gets whatever the cap has
+left after the sentence explaining it, so a bigger cap buys a proportionally
+bigger head. The shape is `TruncatedToolResult`, and `isTruncatedToolResult(value)`
+is the exported guard that narrows to it.
+
+<Callout type="warn" title="Opt-in, with no default — and that is the design">
+A default here would silently modify tool results. A tool returning 200KB of rows
+is doing what somebody wrote it to do, and a framework that quietly replaced that
+the first time it ran would be lying to the app about its own tool. Omit the
+option and results are never measured and never replaced, byte-identical to every
+earlier release. `0` is **not** "off": it is refused at construction, because a
+cap that cannot cap anything is a configuration mistake, not a switch.
+</Callout>
+
+It **composes with** what already runs, and replaces none of it: a tool's own
+paging keeps working, `CodeResult.truncated` still means what it means, and an
+`onToolResult` middleware that summarizes runs FIRST — the cap measures what the
+chain produced. Every dispatch path is covered: the ordinary loop, a resumed
+`ask`, a check-in decision, a credential-consent resume, and a `pauseHere` answer
+a person typed.
+
+And when big tool DATA is the normal case rather than the accident, the cap is
+the wrong tool for it — the next section is.
+
 ## CodeRunner — compute data outside the window
 
 Every port above answers "where does a tool come from". This one answers a
@@ -340,6 +388,8 @@ executing ungoverned. See [Serve tools over MCP](doc:mcp-serve).
 | `CodeRunner` / `codeRunnerTool` | `agentfootprint` (main) | — | Shipped 9.7.0 |
 | `localCodeRunner` | `agentfootprint/providers` | none | Shipped 9.7.0 — isolation, not a sandbox |
 | `agentCoreCodeRunner` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-agentcore` (optional) | Shipped 9.7.0 |
+| `maxToolResultChars` + `isTruncatedToolResult` | `agentfootprint` (main) | — | Shipped 9.11.0 — opt-in, no default |
+| `Tool.capabilities` declaration | `agentfootprint` (main) | — | Shipped 9.11.0 — enforced when a checker governs it |
 
 ## Next
 

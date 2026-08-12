@@ -335,6 +335,16 @@ Measured on Node 22.16, Apple silicon, median of five queries:
 
 **The documented ceiling is 50,000 chunks.** Below it every query is under 100 ms at every shipped embedder and the matrix is under ~300 MB. It degrades linearly to about 100,000. Above that, move to a managed vector database — `MemoryStore` is the seam and nothing else in your code changes. For scale intuition: 50,000 chunks at ~1,000 characters is roughly 50 MB of text, on the order of 25,000 pages.
 
+<Callout type="info" title="A recommendation, not an enforced limit">
+Nothing in the store counts chunks, refuses a write at 50,000, or degrades on
+purpose past it — chunk 50,001 is stored and searched exactly like chunk 3. The
+number is where the measured curve stops making this obviously the right tool,
+published so the decision is yours and dated rather than discovered in
+production. What the store *does* refuse is named above and below: a missing
+`node:sqlite`, an unreadable file, a schema mismatch, `':memory:'`, and an
+embedder-fingerprint conflict.
+</Callout>
+
 <Callout>
 **Hydration is the number to plan around, not the query.** Steady-state search is fast everywhere in that table; reading the vectors off disk the FIRST time is what costs. Left lazy, that bill lands on whoever asks the first question after a deploy. `store.warm(identity)` moves it somewhere you chose. Smaller vectors are dramatically cheaper here — 384 dimensions hydrates 100,000 chunks in under a second — which is one more reason a 384-dimension embedder is the better default for a corpus this size.
 </Callout>

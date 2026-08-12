@@ -120,6 +120,8 @@ import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
+import { checkerGoverns } from '../adapters/types.js';
+import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
 import type { CursorMove, EntryScoring } from '../lib/injection-engine/skillGraph.js';
@@ -164,6 +166,7 @@ import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types
 import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
+import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
 import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
@@ -329,6 +332,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly contextBudget?: AgentOptions['contextBudget'];
   private readonly permissionChecker?: PermissionChecker;
   private readonly toolArgValidation?: ToolArgValidationMode;
+  /** The opt-in tool-result ceiling in characters (9.11.0). Absent → results
+   *  are never measured. See {@link AgentOptions.maxToolResultChars}. */
+  private readonly maxToolResultChars?: number;
   /** Resolved check-in config (evidence-carrying human consent). Always
    *  present — defaults to `standard` evidence + the lexical scorer, so a tool
    *  that declares `checkIn` works even without a `.checkIn()` builder call. */
@@ -652,6 +658,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
+    // The tool-result ceiling (9.11.0). Refused HERE, naming the value, rather
+    // than at the first tool call of the first run — a dial that cannot cap
+    // anything is a configuration mistake, not a runtime condition.
+    assertMaxToolResultChars('Agent', opts.maxToolResultChars);
+    if (opts.maxToolResultChars !== undefined) this.maxToolResultChars = opts.maxToolResultChars;
     // Resolve check-in config once. Always present (default: standard evidence
     // + lexical scorer) so a `checkIn`-declaring tool works even without a
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
@@ -1783,22 +1794,34 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * Two guards:
    *
-   *   • no graph → `undefined`. A plain `read_skill` agent has no cursor and no
-   *     gate; every registered skill really is reachable, and the tool keeps its
-   *     byte-identical description.
-   *   • `reactMode: 'classic'` → `undefined`, plus a dev-mode warning. Classic
-   *     composes the tools slot on turn 1 ONLY (see the Context selector's
-   *     `includeStatic`), so a cursor-scoped menu would freeze at the cold-start
-   *     cursor and keep advertising it for the rest of the run — a worse lie than
-   *     the honest full catalog. `.selfExplain()` refuses under classic for exactly
-   *     this caching reason; here the full catalog is a correct fallback, so this
-   *     warns instead of refusing.
+   *   • no graph AND no per-role skill visibility → `undefined`. A plain
+   *     `read_skill` agent has no cursor and no gate; every registered skill
+   *     really is reachable, and the tool keeps its byte-identical description.
+   *   • `reactMode: 'classic'` → `undefined` for the GRAPH menu, plus a dev-mode
+   *     warning. Classic composes the tools slot on turn 1 ONLY (see the Context
+   *     selector's `includeStatic`), so a cursor-scoped menu would freeze at the
+   *     cold-start cursor and keep advertising it for the rest of the run — a
+   *     worse lie than the honest full catalog. `.selfExplain()` refuses under
+   *     classic for exactly this caching reason; here the full catalog is a
+   *     correct fallback, so this warns instead of refusing.
+   *
+   * Per-role VISIBILITY (9.11.0) survives classic, and that is not an
+   * inconsistency: a cursor moves every iteration, but who is asking does not
+   * change inside one run. A filter computed on turn 1 is still exactly right
+   * on turn 9.
    */
-  private readSkillOfferFor(): ((currentSkillId?: string) => LLMToolSchema) | undefined {
-    if (!this.skillGraphReachable) return undefined;
+  private readSkillOfferFor():
+    | ((args: {
+        readonly currentSkillId?: string;
+        readonly hiddenSkillIds?: readonly string[];
+      }) => LLMToolSchema)
+    | undefined {
     const skills = this.injections.filter((i) => i.flavor === 'skill');
     if (skills.length === 0) return undefined;
-    if (this.reactMode === 'classic') {
+    const filtersByRole = this.governsSkillVisibility();
+    if (!this.skillGraphReachable && !filtersByRole) return undefined;
+    let graphMenu = this.skillGraphReachable;
+    if (graphMenu && this.reactMode === 'classic') {
       if (isDevMode()) {
         // eslint-disable-next-line no-console
         console.warn(
@@ -1809,15 +1832,80 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             "mode (or 'dynamic-grouped') for a cursor-tracking menu.",
         );
       }
-      return undefined;
+      graphMenu = undefined;
+      if (!filtersByRole) return undefined;
     }
     const open = this.openSkillIds();
-    const reachable = this.skillGraphReachable;
-    return (currentSkillId?: string) => {
-      const grantable = [...new Set([...reachable(currentSkillId), ...open])];
+    const reachable = graphMenu;
+    return (args) => {
+      const grantable = reachable
+        ? [...new Set([...reachable(args.currentSkillId), ...open])]
+        : undefined;
       // Non-null: `skills` is non-empty, so the builder always returns a tool.
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      return buildReadSkillTool(skills, { grantable })!.schema;
+      return buildReadSkillTool(skills, {
+        ...(grantable !== undefined && { grantable }),
+        ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
+      })!.schema;
+    };
+  }
+
+  /**
+   * Does the configured checker ask to decide which skills this caller sees?
+   * (9.11.0)
+   *
+   * Absence is NO — see `PermissionChecker.governs`. This is the ONE switch:
+   * false and the menu, the resolver and the activation gate are all inert, so
+   * an agent with a checker that predates 9.11.0 composes the same prompt it
+   * always did.
+   */
+  private governsSkillVisibility(): boolean {
+    return checkerGoverns(this.permissionChecker, 'skill_read');
+  }
+
+  /**
+   * Which skills the caller's role may NOT see, asked once per iteration
+   * (9.11.0).
+   *
+   * Per iteration rather than per run because the checker is a port: a
+   * hub-backed one can legitimately answer differently as a grant is revoked
+   * mid-conversation, and caching the first answer would keep a withdrawn skill
+   * on the menu for the rest of the run. The cost is one `check()` per skill per
+   * iteration, paid only by agents that opted in.
+   *
+   * A skill is hidden when the checker returns anything other than `'allow'` /
+   * `'gate_open'` — and when the checker THROWS, which is the fail-closed half:
+   * a policy that did not answer did not say yes, and the same sentence governs
+   * the tool gate.
+   */
+  private hiddenSkillIdsNow(): (() => Promise<readonly string[]>) | undefined {
+    if (!this.governsSkillVisibility()) return undefined;
+    const checker = this.permissionChecker;
+    const skillIds = this.injections.filter((i) => i.flavor === 'skill').map((i) => i.id);
+    if (!checker || skillIds.length === 0) return undefined;
+    return async (): Promise<readonly string[]> => {
+      const identity = this.lastRunIdentity;
+      const hidden: string[] = [];
+      for (const id of skillIds) {
+        let allowed = false;
+        try {
+          const decision = await checker.check({
+            capability: 'skill_read',
+            actor: 'agent',
+            target: skillTarget(id),
+            ...(identity !== undefined && { identity }),
+          });
+          allowed = decision.result === 'allow' || decision.result === 'gate_open';
+        } catch {
+          // Fail closed. The refusal the model would read is the dispatch
+          // gate's job; here the only decision is whether to advertise a skill
+          // whose policy is unreachable, and advertising it would be a menu
+          // built on a question nobody answered.
+          allowed = false;
+        }
+        if (!allowed) hidden.push(id);
+      }
+      return hidden;
     };
   }
 
@@ -1893,6 +1981,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     const sessionId = runOptions?.sessionId;
+    // The actor, for every event this run emits (9.11.0).
+    //
+    // `lastRunIdentity` is what the CALLER passed and nothing else — `run()`
+    // sets it from `input.identity ?? options.identity ?? the conversation's`
+    // before this method is reached, and it stays undefined when nobody named
+    // one. `resume()` does not set it, so an explicit identity handed to
+    // `resume(cp, input, { identity })` is honoured here and a bare resume
+    // inherits whatever the run it continues was for.
+    //
+    // NOT `scope.runIdentity`: that one is always populated and defaults to
+    // `{ conversationId: '<runId>' }` (or, since 9.10.0, to the sessionId on a
+    // session-bound run). Stamping either as the principal would publish a
+    // synthesized conversation as an actor — and a caller-supplied session id
+    // is exactly the string an auditor must not read as "who did this".
+    // `conversationId` is deliberately not carried: it is a thread, not a
+    // person, and `sessionId` beside it is the fact the transport delivered.
+    const actor = runOptions?.identity ?? this.lastRunIdentity;
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -1902,6 +2007,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Session identity rides beside runId, not instead of it: one session
       // produces many runs, and an event needs to say which of each it is.
       ...(sessionId !== undefined && { sessionId }),
+      ...(actor?.principal !== undefined && { principal: actor.principal }),
+      ...(actor?.tenant !== undefined && { tenant: actor.tenant }),
     };
 
     // Reuse the cached chart built at constructor time.
@@ -2446,11 +2553,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // so concurrent runs don't share state.
     const providerToolCache: ProviderToolCache = { current: [] };
     const readSkillFor = this.readSkillOfferFor();
+    const hiddenSkillIds = this.hiddenSkillIdsNow();
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(readSkillFor && { readSkillFor }),
+      ...(hiddenSkillIds && { hiddenSkillIds }),
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
     });
 
@@ -2522,6 +2631,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
       ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
+      ...(this.maxToolResultChars !== undefined && {
+        maxToolResultChars: this.maxToolResultChars,
+      }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
       ...(this.skillGraphReachable && {

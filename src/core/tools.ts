@@ -9,7 +9,7 @@
 
 import { isDevMode } from 'footprintjs';
 
-import type { LLMToolSchema } from '../adapters/types.js';
+import type { LLMToolSchema, ToolCapability } from '../adapters/types.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { CheckInDemand } from './checkin.js';
@@ -62,6 +62,32 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * when it is genuinely relaying another source's tool.
    */
   readonly source?: string;
+  /**
+   * What this tool touches, DECLARED by whoever wrote it (9.11.0).
+   *
+   * The framework never infers this. A tool's capabilities are not knowable
+   * from its name, its schema or its description, and classifying them by guess
+   * would rest a policy decision on a heuristic — so a tool that says nothing
+   * gets nothing asked about it, exactly as before.
+   *
+   * **Enforced when both sides speak.** When a tool declares a capability AND
+   * the configured `PermissionChecker` declares it `governs` that capability,
+   * the dispatch loop asks once per declared capability, right after the
+   * `'tool_call'` check allows — `check({ capability: 'external_net', target:
+   * '<tool name>' })`. Either side silent → not asked, not refused. A denial
+   * lands like every other refusal in the loop: the tool does not run and the
+   * model reads a result it can adapt to.
+   *
+   * @example a tool the operator wants governed as a network egress
+   *   defineTool({
+   *     name: 'fetch_invoice',
+   *     description: 'Fetch an invoice PDF from the billing service',
+   *     capabilities: ['external_net', 'user_data'],
+   *     inputSchema: { … },
+   *     execute: async ({ id }) => …,
+   *   });
+   */
+  readonly capabilities?: readonly ToolCapability[];
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -187,6 +213,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Demand a human check-in before this tool runs (see {@link Tool.checkIn}).
    *  `'always'` or a `(args, ctx) => boolean` predicate. */
   readonly checkIn?: CheckInDemand<TArgs>;
+  /** Declare what this tool touches (see {@link Tool.capabilities}). Consulted
+   *  only when the configured checker declares it governs them. */
+  readonly capabilities?: readonly ToolCapability[];
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -277,6 +306,9 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     // The call-site predicate is typed to TArgs; the stored Tool keeps the
     // non-generic shape so it widens into `Tool[]` registries.
     ...(options.checkIn !== undefined && { checkIn: options.checkIn as CheckInDemand }),
+    // Copied verbatim, never inferred — an empty array is a tool that declared
+    // it touches nothing, which is a different statement from saying nothing.
+    ...(options.capabilities !== undefined && { capabilities: options.capabilities }),
     execute: options.execute,
   };
 }

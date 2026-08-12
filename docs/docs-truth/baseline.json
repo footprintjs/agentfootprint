@@ -5,17 +5,17 @@
   "recordedAt": "2026-08-12",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1418,
+    "declaredSymbols": 1464,
     "declaredEvents": 77,
     "eventSource": "src/events/registry.ts:566"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 553,
+      "documented-never-exercised": 600,
       "exercised-undocumented": 35,
       "undocumented-unexercised": 584,
-      "site-code-sample-only": 22,
+      "site-code-sample-only": 21,
       "written-but-not-published": 124,
       "ok": 100
     },
@@ -436,7 +436,6 @@
     "PermissionDecision",
     "PermissionPolicyOptions",
     "PermissionRecorderOptions",
-    "PermissionRequest",
     "PickByBudgetConfig",
     "PieceKind",
     "PolicyHaltContext",

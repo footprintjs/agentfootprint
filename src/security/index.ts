@@ -48,7 +48,12 @@
  */
 
 export { PermissionPolicy } from './PermissionPolicy.js';
-export type { RoleAllowlist, PermissionPolicyOptions } from './PermissionPolicy.js';
+export type {
+  RoleAllowlist,
+  RoleIdRules,
+  PermissionPolicyOptions,
+  PermissionPolicyRules,
+} from './PermissionPolicy.js';
 
 export { PolicyHaltError } from './PolicyHaltError.js';
 export type { PolicyHaltContext } from './PolicyHaltError.js';
@@ -57,6 +62,10 @@ export { extractSequence, SYNTHETIC_DENY_PREFIX } from './extractSequence.js';
 export type { ExtractSequenceOptions } from './extractSequence.js';
 
 export { redactThinkingBlocks, REDACTED_PLACEHOLDER } from './thinkingRedaction.js';
+
+// The `skill:<id>` target convention (9.11.0) — one owner, so a custom checker
+// spells a skill target exactly as the agent produces it.
+export { SKILL_TARGET_PREFIX, skillTarget, skillIdFromTarget } from './skillTarget.js';
 
 // RETIRED in 9.4.0. `agentCorePolicy()` dispatched a command that does not
 // exist in `@aws-sdk/client-bedrock-agentcore`, because AgentCore has no
@@ -78,9 +87,15 @@ export {
 // adapters subpath directly. PermissionPolicy itself is a Strategy
 // over these interfaces.
 export type {
+  PermissionCapability,
   PermissionChecker,
   PermissionRequest,
   PermissionDecision,
   ToolCallEntry,
+  ToolCapability,
   ToolResultContent,
 } from '../adapters/types.js';
+// The one question the dispatch loop asks a checker before sending it anything
+// beyond `'tool_call'`. Exported so a custom checker's own tests can assert the
+// same answer the framework will get.
+export { checkerGoverns } from '../adapters/types.js';

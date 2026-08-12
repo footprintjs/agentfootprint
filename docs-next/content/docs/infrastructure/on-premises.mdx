@@ -63,6 +63,9 @@ working in one.
 | **Tools — a local process** | `mcpClient({ transport: { command } })` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | Shipped |
 | **Tools — an internal MCP server** | `mcpClient({ transport: { url } })` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | Shipped |
 | **Policy** | `PermissionPolicy.fromRoles(...)` | `agentfootprint/security` | none | Shipped — in-process, fail-closed |
+| **Policy — capabilities & per-role skills** | `PermissionPolicy.fromRoles(…, { capabilities, skills })` + `Tool.capabilities` | `agentfootprint/security` | none | **New in 9.11.0** — enforced where both sides declare |
+| **Actor on every event** (`EventMeta.principal` / `.tenant`) | `run({ identity })` — no adapter | `agentfootprint` (main) | none | **New in 9.11.0** — identical on both provider columns |
+| **Ceiling on one tool result** | `Agent.create({ maxToolResultChars })` | `agentfootprint` (main) | none | **New in 9.11.0** — opt-in, no default |
 
 <Callout type="warn" title="What the status labels mean on this page">
 **Shipped** means it works and is tested.
@@ -313,6 +316,29 @@ For a tamper-evident record rather than a dashboard, `auditExport()` hash-chains
 every event and `verifyAuditBundle` names the exact record that broke. Full port
 detail: [Observability sinks](doc:observability-sinks).
 
+### Who the run was for (9.11.0)
+
+`run({ identity })` puts the caller's `principal` and `tenant` on **every event**
+of the run (`EventMeta.principal` / `EventMeta.tenant`), which is what turns the
+stream into a who → what → when audit record.
+
+```ts
+await agent.run(message, {
+  sessionId,
+  identity: { tenant: 'acme', principal: 'alice@acme.test', conversationId },
+});
+```
+
+**This is column-independent** — the same field, the same rule, the same code
+path on AWS and on your own machines. The only difference between the columns is
+which sink is reading it, and the envelope-serializing sinks
+(`agentcoreObservability`, `cloudwatchObservability`, `fileObservability`,
+`auditExport`) all carry it without knowing it exists. `otelObservability` places
+it deliberately as two `agentfootprint.*` span attributes (`principal.id` and
+`tenant.id`) on the run span; `xrayObservability` does not map it. Stamped only from an identity
+a caller NAMED — never from a `sessionId`, never invented. Detail:
+[Observability sinks](doc:observability-sinks).
+
 ## Credentials — your vault, read over its own HTTP API
 
 `staticTokens` is the dev provider and is genuinely enough for a small fixed set
@@ -415,6 +441,10 @@ Honest gaps, so nobody discovers them at integration time:
   mount are yours.
 - **No secret-manager adapter besides Vault**, and Vault only in its V1 shape
   above. Everything else is the `CredentialProvider` port — one method.
+- **No permission gating of the memory pipeline.** `PermissionRequest` carries
+  `memory_read` / `memory_write`, and since 9.11.0 they are enforced for a TOOL
+  that declares them — but no memory stage builds a permission request. Memory is
+  isolated by `MemoryIdentity` scoping, which is a different mechanism.
 - **No metrics exporter.** `ObservabilityCapabilities` has a `metrics` flag and
   no shipped strategy sets it; counters come from the event stream, or from your
   OTel pipeline downstream of `otelObservability`.
@@ -439,6 +469,9 @@ Honest gaps, so nobody discovers them at integration time:
 | `staticTokens`, the `CredentialProvider` port | Shipped |
 | `vaultCredentials` (token auth, KV v2, no leases) | **9.8.0** — contract-shaped and tested; awaiting field use |
 | `mcpClient` stdio + Streamable HTTP, `mcpServe` | Shipped |
+| `EventMeta.principal` / `.tenant` from `run({ identity })` | **9.11.0** — Shipped; the same field and rule as the AWS column |
+| `PermissionPolicy` capability + skill rules, `Tool.capabilities` | **9.11.0** — Shipped; enforced where both sides declare |
+| `maxToolResultChars` + `isTruncatedToolResult` | **9.11.0** — Shipped; opt-in, no default |
 
 ## Next
 

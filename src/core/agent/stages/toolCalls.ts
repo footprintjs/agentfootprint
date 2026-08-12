@@ -44,10 +44,16 @@
  */
 
 import type { PausableHandler, TypedScope } from 'footprintjs';
-import type { LLMMessage, PermissionChecker } from '../../../adapters/types.js';
+import type {
+  LLMMessage,
+  PermissionCapability,
+  PermissionChecker,
+} from '../../../adapters/types.js';
+import { checkerGoverns } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
+import { skillTarget } from '../../../security/skillTarget.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
@@ -76,6 +82,7 @@ import {
   type ToolArgValidationMode,
 } from '../toolArgsValidation.js';
 import { safeStringify } from '../validators.js';
+import { capToolResult } from '../toolResultCap.js';
 import type { AgentState } from '../types.js';
 
 export interface ToolCallsHandlerDeps {
@@ -107,6 +114,17 @@ export interface ToolCallsHandlerDeps {
    *  mismatch rejects the call with a model-visible retry message.
    *  'warn' emits the event but executes anyway; 'off' skips validation. */
   readonly toolArgValidation?: ToolArgValidationMode;
+  /**
+   * The opt-in ceiling on ONE tool result, in characters (9.11.0).
+   *
+   * Undefined — the ordinary case — means results are never measured and never
+   * replaced, which is what every release before 9.11.0 did. Set, and EVERY
+   * result on EVERY dispatch path in this handler is measured against it; over
+   * the cap, the result the model reads and the result
+   * `agentfootprint.stream.tool_end` carries are both the marker. See
+   * `../toolResultCap.ts` for the shape and why it is opt-in.
+   */
+  readonly maxToolResultChars?: number;
   /**
    * Skill-graph read_skill GATE (`graph.reachableSkills`). When present, a
    * `read_skill('id')` whose `id` is not reachable from the current cursor is
@@ -372,6 +390,39 @@ export function buildToolCallsHandler(
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
   const hasCredentials = deps.credentialProvider !== undefined;
+
+  /**
+   * The tool-result ceiling, applied at the ONE place a result leaves dispatch.
+   *
+   * Both channels are measured SEPARATELY and on purpose. `result` is the
+   * tool's own truth and is what `stream.tool_end` reports; `modelResult` is
+   * what an `onToolResult` rule let the model read, and a rule that summarized
+   * a huge result down to a paragraph should not then be told it was
+   * truncated. Measuring each against the same cap keeps every channel honest
+   * about what IT is carrying — and stops a capped run from shipping the very
+   * payload it capped to an event sink.
+   *
+   * Absent cap → both values come back by reference, so an agent that did not
+   * ask for a ceiling is byte-identical.
+   */
+  const capResults = (
+    toolName: string,
+    values: { readonly result: unknown; readonly modelResult: unknown },
+  ): { readonly result: unknown; readonly modelResult: unknown } => {
+    const max = deps.maxToolResultChars;
+    if (max === undefined) return values;
+    const result = capToolResult(values.result, { toolName, maxChars: max }).value;
+    return {
+      result,
+      // One marker when the two channels carry one value — the common case, and
+      // the one where two distinct objects would be a difference with no fact
+      // behind it.
+      modelResult:
+        values.modelResult === values.result
+          ? result
+          : capToolResult(values.modelResult, { toolName, maxChars: max }).value,
+    };
+  };
 
   /**
    * Every teardown scope an Agent run can honour (9.7.0).
@@ -880,6 +931,92 @@ export function buildToolCallsHandler(
               `what you are unable to do.]`;
           }
         }
+        /**
+         * Ask the checker about ONE capability beyond `'tool_call'`, and apply
+         * the verdict exactly as the gate above applies its own (9.11.0).
+         *
+         * Called only when BOTH sides declared the capability, so a checker
+         * that never opted in is never asked and never has to answer a
+         * question it was not written for. `sequence` is deliberately absent —
+         * the port says it is empty for non-`tool_call` capabilities, and the
+         * in-flight tool sequence is not evidence about a capability.
+         */
+        const askCapability = async (
+          capability: PermissionCapability,
+          target: string,
+          genericHaltText: string,
+        ): Promise<void> => {
+          if (!permissionChecker) return;
+          try {
+            const decision = await permissionChecker.check({
+              capability,
+              actor: 'agent',
+              target,
+              context: callArgs,
+              history: newHistory,
+              iteration,
+              ...(runIdentity && { identity: runIdentity }),
+              ...(env.signal && { signal: env.signal }),
+            });
+            typedEmit(scope, 'agentfootprint.permission.check', {
+              capability,
+              actor: 'agent',
+              target,
+              result: decision.result,
+              ...(decision.policyRuleId !== undefined && { policyRuleId: decision.policyRuleId }),
+              ...(decision.rationale !== undefined && { rationale: decision.rationale }),
+              ...(decision.reason !== undefined && { reason: decision.reason }),
+            });
+            if (decision.result === 'deny') {
+              denied = true;
+              result = decision.tellLLM ?? `[permission denied: ${decision.rationale ?? 'policy'}]`;
+            } else if (decision.result === 'halt') {
+              denied = true;
+              // Same reasoning as the tool_call halt: `reason` is a telemetry
+              // tag and teaching the model the rule space is not a service.
+              const tellLLM = decision.tellLLM ?? genericHaltText;
+              result = tellLLM;
+              haltContext = {
+                reason: decision.reason ?? decision.rationale ?? 'policy-halt',
+                tellLLM,
+                ...(permissionChecker.name && { checkerId: permissionChecker.name }),
+              };
+            }
+          } catch (permErr) {
+            // Fail closed, and say so terminally — the 9.4.0 lesson applies
+            // whole: an operator's outage text reads as weather to a model.
+            denied = true;
+            const msg = permErr instanceof Error ? permErr.message : String(permErr);
+            typedEmit(scope, 'agentfootprint.permission.check', {
+              capability,
+              actor: 'agent',
+              target,
+              result: 'deny',
+              rationale: `permission-checker threw: ${msg}`,
+            });
+            result =
+              `[permission denied: Tool '${tc.name}' could not be authorized. This will not ` +
+              `change during this run — do not call it again. Continue without it, or say ` +
+              `what you are unable to do.]`;
+          }
+        };
+        // ── Declared tool capabilities (9.11.0) ──────────────────────────
+        // Beside the tool_call gate, at the same layer and before any
+        // middleware, so an existing checker still decides first. Asked once
+        // per capability the TOOL declared and the CHECKER governs — either
+        // side silent and this loop does not run at all, which is why an agent
+        // that has not opted in is byte-identical.
+        if (!denied && permissionChecker && tool?.capabilities) {
+          for (const capability of tool.capabilities) {
+            if (denied) break;
+            if (!checkerGoverns(permissionChecker, capability)) continue;
+            await askCapability(
+              capability,
+              tc.name,
+              `Tool '${tc.name}' is not available in this context.`,
+            );
+          }
+        }
         // ── The middleware chain ─────────────────────────────────────────
         // Walked only for a call the permission gate let through, so an
         // existing checker keeps deciding first and a denial there costs
@@ -952,6 +1089,34 @@ export function buildToolCallsHandler(
               error = true;
               result = formatToolArgIssues(tc.name, verdict.issues);
             }
+          }
+        }
+        // ── Skill-activation gate (9.11.0) ───────────────────────────────
+        // `read_skill` activating a skill the policy hides for this role. The
+        // menu the model reads was already filtered (the Tools slot asks the
+        // same checker the same question), so this is the second half of one
+        // rule rather than a second rule: a model that guessed a hidden id, or
+        // remembered one from an earlier turn, reads the policy's own message.
+        //
+        // Ordered AFTER arg validation so the id judged is the one that will
+        // actually run — a middleware may have rewritten it — and BEFORE
+        // check-in, credentials and execute, so a refused skill's body is
+        // never even computed (`surfaceMode: 'tool-only'` returns it from
+        // `execute`). Off entirely unless the checker declares it governs
+        // `'skill_read'`.
+        if (
+          !denied &&
+          !argsRejected &&
+          tc.name === 'read_skill' &&
+          checkerGoverns(permissionChecker, 'skill_read')
+        ) {
+          const requestedSkillId = (callArgs as { id?: unknown }).id;
+          if (typeof requestedSkillId === 'string' && requestedSkillId.length > 0) {
+            await askCapability(
+              'skill_read',
+              skillTarget(requestedSkillId),
+              `Skill '${requestedSkillId}' is not available in this context.`,
+            );
           }
         }
         // ── Check-in gate (evidence-carrying human consent) ──────────────
@@ -1207,7 +1372,7 @@ export function buildToolCallsHandler(
         // Last thing before the result becomes history, and only for a call
         // that ran. `modelResult` is what the model reads; `result` stays the
         // truth about the tool and is what `stream.tool_end` reports.
-        const modelResult = executed
+        const rawModelResult = executed
           ? await afterMoment(scope, {
               ...(tool && { tool }),
               toolName: tc.name,
@@ -1221,11 +1386,16 @@ export function buildToolCallsHandler(
               ...(env.signal && { signal: env.signal }),
             })
           : result;
+        // The ceiling, last — after the tool, after the chain. A rule that
+        // already summarized a huge result is measured on what it produced, so
+        // the cap composes with governance rather than pre-empting it.
+        const capped = capResults(tc.name, { result, modelResult: rawModelResult });
+        const modelResult = capped.modelResult;
 
         const durationMs = Date.now() - startMs;
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId: tc.id,
-          result,
+          result: capped.result,
           durationMs,
           ...(error === true && { error: true }),
         });
@@ -1499,6 +1669,8 @@ export function buildToolCallsHandler(
         // `modelResult` is only set where the after-tool moment ran; everywhere
         // else the two are the same value.
         if (modelResult === undefined) modelResult = result;
+        const askCapped = capResults(toolName, { result, modelResult });
+        modelResult = askCapped.modelResult;
         const askResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         const askHistory: LLMMessage[] = [
@@ -1509,7 +1681,7 @@ export function buildToolCallsHandler(
         scope.lastToolResult = { toolName, result: askResultStr };
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
-          result,
+          result: askCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
         });
@@ -1595,6 +1767,8 @@ export function buildToolCallsHandler(
         }
 
         if (modelResult === undefined) modelResult = result;
+        const decisionCapped = capResults(toolName, { result, modelResult });
+        modelResult = decisionCapped.modelResult;
         const decisionResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         const decisionHistory: LLMMessage[] = [
@@ -1606,7 +1780,7 @@ export function buildToolCallsHandler(
         scope.lastToolResult = { toolName, result: decisionResultStr };
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
-          result,
+          result: decisionCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
         });
@@ -1671,6 +1845,8 @@ export function buildToolCallsHandler(
           });
         }
         if (modelResult === undefined) modelResult = result;
+        const consentCapped = capResults(toolName, { result, modelResult });
+        modelResult = consentCapped.modelResult;
         const consentResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         const consentHistory: LLMMessage[] = [
@@ -1681,7 +1857,7 @@ export function buildToolCallsHandler(
         scope.lastToolResult = { toolName, result: consentResultStr };
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
-          result,
+          result: consentCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
         });
@@ -1732,7 +1908,7 @@ export function buildToolCallsHandler(
       const tool = lookupTool(toolName);
       const args = argsForPausedCall(scope, toolCallId);
       // No `error` flag: a human's answer is not a tool failure.
-      const modelResult = await afterMoment(scope, {
+      const rawPauseResult = await afterMoment(scope, {
         ...(tool && { tool }),
         toolName,
         toolCallId,
@@ -1749,6 +1925,11 @@ export function buildToolCallsHandler(
         }),
         ...(env.signal && { signal: env.signal }),
       });
+      // A person's answer is measured too. The cap is about what one turn can
+      // afford to carry, and a pasted transcript costs a window exactly as much
+      // as a tool's rows do.
+      const pauseCapped = capResults(toolName, { result: input, modelResult: rawPauseResult });
+      const modelResult = pauseCapped.modelResult;
       const resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const newHistory: LLMMessage[] = [
         ...(scope.history as readonly LLMMessage[]),
@@ -1766,8 +1947,9 @@ export function buildToolCallsHandler(
       typedEmit(scope, 'agentfootprint.stream.tool_end', {
         toolCallId,
         // The REAL value the pause returned, not what a rule let the model read
-        // — the same split the other four paths keep.
-        result: input,
+        // — the same split the other four paths keep. Capped when a ceiling is
+        // configured, because the marker IS the result on every channel.
+        result: pauseCapped.result,
         durationMs: Date.now() - startMs,
       });
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {

@@ -43,6 +43,7 @@ status honestly is.
 | **S3 Vectors** | `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | `GetIndex`, `PutVectors`, `QueryVectors`, `GetVectors`, `ListVectors`, `DeleteVectors` | Shipped (9.3.0); contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
 | **Bedrock models** | `bedrock()` — Converse, model-agnostic | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `Converse`, `ConverseStream` | Shipped | [AWS Bedrock](doc:aws-bedrock) |
 | **Bedrock embeddings** | `bedrockEmbedder()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `InvokeModel` | Shipped | [Embedders](doc:embedders) |
+| **Actor on every event** (`EventMeta.principal` / `.tenant`) | `run({ identity })` — no adapter | `agentfootprint` (main) | none | — | Shipped (9.11.0); **identical on both provider columns** | [Observability sinks](doc:observability-sinks) |
 | **Control plane** (all `Create*`) | — | — | — | — | 🔴 Bridge it yourself — AWS SDK or CDK | — |
 | **Code Interpreter / Browser** | — | — | — | — | 🔴 Bridge it — wrap as a `defineTool` or an MCP tool | [Tools](doc:tools) |
 
@@ -209,6 +210,29 @@ Ships the typed `AgentfootprintEvent` stream to CloudWatch in AgentCore's GenAI-
 schema. `otelObservability()` / `cloudwatchObservability()` / `xrayObservability()` are the
 other adapters behind the same port. Full step-by-step (AgentCore Observability **and** OTEL,
 multi-exporter, detach): **[Exporters: AgentCore & OTEL](doc:exporters)**.
+
+### Who the run was for (9.11.0)
+
+`run({ identity })` puts the caller's `principal` and `tenant` on **every event**
+of the run (`EventMeta.principal` / `EventMeta.tenant`), which is what turns the
+stream into a who → what → when audit record.
+
+```ts
+await agent.run(message, {
+  sessionId,
+  identity: { tenant: 'acme', principal: 'alice@acme.test', conversationId },
+});
+```
+
+**This is column-independent** — the same field, the same rule, the same code
+path on AWS and on your own machines. The only difference between the columns is
+which sink is reading it, and the envelope-serializing sinks
+(`agentcoreObservability`, `cloudwatchObservability`, `fileObservability`,
+`auditExport`) all carry it without knowing it exists. `otelObservability` places
+it deliberately as two `agentfootprint.*` span attributes (`principal.id` and
+`tenant.id`) on the run span; `xrayObservability` does not map it. Stamped only from an identity
+a caller NAMED — never from a `sessionId`, never invented. Detail:
+[Observability sinks](doc:observability-sinks).
 
 ## S3 Vectors — a corpus you can add to without a redeploy
 

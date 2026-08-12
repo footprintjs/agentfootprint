@@ -49,6 +49,13 @@ export interface RunContext {
   /** The hosting conversation this run belongs to, when it belongs to one
    *  (9.4.0). Absent for an unhosted or anonymous run — never fabricated. */
   readonly sessionId?: string;
+  /** WHO the caller NAMED for this run (9.11.0) — from an explicit
+   *  `run({ identity })` only, never from the synthesized `runIdentity` and
+   *  never derived from a session. Absent for an anonymous run. */
+  readonly principal?: string;
+  /** The tenant the caller NAMED for this run (9.11.0). Same rule as
+   *  {@link RunContext.principal}. */
+  readonly tenant?: string;
 }
 
 /**
@@ -89,6 +96,11 @@ export function buildEventMeta(
     // Present only when the run really is session-bound. An absent key and an
     // empty string are different facts, and only one of them is honest.
     ...(run.sessionId !== undefined && { sessionId: run.sessionId }),
+    // The actor half of the audit wire (9.11.0). Same rule, one layer up: the
+    // runner only ever puts an EXPLICIT identity on the run context, so there
+    // is nothing to filter here — an absent key means nobody named one.
+    ...(run.principal !== undefined && { principal: run.principal }),
+    ...(run.tenant !== undefined && { tenant: run.tenant }),
   };
 }
 

@@ -188,6 +188,58 @@ session id. It is **never derived, guessed, or defaulted to the runId**: an
 anonymous request has no session, and an absent key and an invented one are
 different facts. Worked example: [Exporters](doc:exporters).
 
+## Who the run was for — the audit wire (9.11.0)
+
+The stream has always said **what** happened and **when**. `EventMeta.principal`
+and `EventMeta.tenant` are the **who**, and together the three are an audit
+record rather than a debug log.
+
+```ts
+await agent.run(message, { identity: { tenant: 'acme', principal: 'alice@acme.test', conversationId } });
+```
+
+Every event of that run carries `meta.principal` and `meta.tenant`.
+
+**They are stamped only from an identity a caller NAMED** — `run({ identity })`
+or `run(input, { identity })`, the same tuple memory and the permission gate
+scope on. Three things deliberately do **not** produce them:
+
+| Situation | `principal` / `tenant` |
+|---|---|
+| `run(msg, { identity: { tenant, principal, conversationId } })` | Stamped |
+| `run(msg, { sessionId })` — the session-derived default | **Absent** |
+| `run(msg)` — anonymous | **Absent** |
+
+<Callout type="warn" title="A conversation id is not an actor">
+The run's internal identity is always populated: it defaults to
+`{ conversationId: '<runId>' }`, or since 9.10.0 to `{ conversationId: sessionId }`
+on a session-bound run. Neither is a person. A `sessionId` in particular is
+caller-supplied — anyone who can reach the host can send any string, including
+somebody else's — so promoting it to "who did this" would produce an audit trail
+that looks complete and names the wrong party. Absent is the honest answer, and
+absent is what the meta says.
+</Callout>
+
+### Which sinks carry it
+
+Two kinds of adapter, and the difference decides the answer:
+
+| Sink | Carries the actor | Why |
+|---|---|---|
+| `fileObservability` | ✅ automatically | One `JSON.stringify(event)` per line — the whole envelope |
+| `cloudwatchObservability` | ✅ automatically | The log message is the serialized envelope |
+| `agentcoreObservability` | ✅ automatically | The same builder as CloudWatch |
+| `auditExport` | ✅ automatically | The meta rides the record, so the actor is **inside the hash chain** — editing *who* breaks the same verification as editing *what* |
+| `otelObservability` | ✅ placed deliberately | two `agentfootprint.*` span attributes — `principal.id` and `tenant.id` — on the `invoke_agent` run span |
+| `xrayObservability` | ✖ not mapped | Segment-mapping like OTel, but no attribute is placed. Said plainly rather than implied |
+
+An envelope-serializing sink inherits any new meta field for free; a
+span-mapping one does not, and a doc that assumed otherwise would have been
+wrong about two of the six. OTel uses `agentfootprint.*` names rather than
+`enduser.id`: the semantic convention for that attribute has moved once already,
+and quietly claiming a convention we do not track is worse than a name that says
+whose field it is.
+
 ## What a recording keeps
 
 `recordRun(runner, options?)` produces the canonical `Recording` —
@@ -227,9 +279,13 @@ time rather than at freeze time.
 | `detach` delivery, `tier`, `sampleRate` | — | Shipped |
 | `recordRun` + `{ dims, norm }` embedding summary | `agentfootprint/observe` | Shipped |
 | `EventMeta.sessionId` | `agentfootprint/events` | Shipped (9.4.0) |
+| `EventMeta.principal` / `EventMeta.tenant` | `agentfootprint/events` | Shipped (9.11.0) — explicit identity only |
+| Actor on `otelObservability` run spans | `agentfootprint/observe` | Shipped (9.11.0) |
+| Actor on `xrayObservability` segments | — | Not mapped |
 
 ## Next
 
+- [Identity & credentials](doc:identity-and-credentials) — where the actor on the wire comes from
 - [Observability](doc:observability) — the event taxonomy and the three workflows
 - [Exporters: AgentCore & OTEL](doc:exporters) — step-by-step wiring for both
 - [Offline replay](doc:offline-replay) — what a recording is for

@@ -67,7 +67,26 @@ export interface ToolsSlotConfig {
    * Substituted by NAME in Compose, so dispatch is untouched: the tool-calls handler
    * resolves executables from `registryByName`, never from the schema list.
    */
-  readonly readSkillFor?: (currentSkillId?: string) => LLMToolSchema;
+  readonly readSkillFor?: (args: {
+    readonly currentSkillId?: string;
+    readonly hiddenSkillIds?: readonly string[];
+  }) => LLMToolSchema;
+  /**
+   * Which skills the caller's role may NOT see this run (9.11.0).
+   *
+   * Resolved in the async Discover stage and read by the sync Compose stage —
+   * the same shape `providerToolCache` uses, and for the same reason: a
+   * `PermissionChecker` may be async (a Redis lookup, a hub call) and Compose
+   * is pure. Set only when a checker declares it governs `'skill_read'`; then
+   * every hidden skill's row disappears from the `read_skill` menu, and the
+   * dispatch loop refuses the activation with the policy's own message.
+   *
+   * Its errors are NOT swallowed: a visibility resolver that throws leaves the
+   * iteration to the same reliability rules a failed `ToolProvider.list` does,
+   * because composing a menu from a policy that did not answer is exactly the
+   * fail-open this feature exists to prevent.
+   */
+  readonly hiddenSkillIds?: () => Promise<readonly string[]> | readonly string[];
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
@@ -92,6 +111,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
   const providerToolCache = config.providerToolCache;
+  const hiddenSkillIdsFor = config.hiddenSkillIds;
+  // Written by Discover (async), read by Compose (sync) — see the config note.
+  //
+  // Chart-scoped, and the chart is built ONCE at Agent construction — so this
+  // outlives a run. It is never stale at READ time because Discover always runs
+  // before Compose in the same slot and overwrites it every iteration; and it
+  // cannot cross callers because one Agent runs one turn at a time (and
+  // `standingAgent({ agentFactory })` gives each session its own instance, and
+  // therefore its own chart and its own closure).
+  let hiddenSkillIds: readonly string[] = [];
   // Dedup latch for the human-facing warning, scoped to THIS built chart:
   // a 20-iteration ReAct loop must not print 20 identical warnings. The
   // typed `context.budget_pressure` event still fires every iteration and
@@ -118,6 +147,13 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Sync providers still pay zero microtask overhead — the dynamic
   // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
+    // Per-role skill visibility (9.11.0), resolved on the ONE stage in this
+    // slot that is allowed to await. Before the provider block so an agent
+    // with skills but no `toolProvider` still gets its filter.
+    if (hiddenSkillIdsFor) {
+      const asked = hiddenSkillIdsFor();
+      hiddenSkillIds = asked instanceof Promise ? await asked : asked;
+    }
     if (!toolProvider) return; // No-op fast path: keeps trace shape consistent.
 
     const args = scope.$getArgs<{ iteration?: number }>();
@@ -203,7 +239,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // parent before this slot mounts — the same value the read_skill gate will read
     // when the model answers. Substituted by name so nothing else in the list moves.
     const tools = readSkillFor
-      ? staticTools.map((t) => (t.name === 'read_skill' ? readSkillFor(args.currentSkillId) : t))
+      ? staticTools.map((t) =>
+          t.name === 'read_skill'
+            ? readSkillFor({
+                ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
+                ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
+              })
+            : t,
+        )
       : staticTools;
 
     const injections: InjectionRecord[] = tools.map((t, i) => {

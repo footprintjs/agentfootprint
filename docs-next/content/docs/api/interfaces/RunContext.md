@@ -36,6 +36,18 @@ Defined in: [src/bridge/eventMeta.ts:48](https://github.com/footprintjs/agentfoo
 
 ***
 
+### principal?
+
+> `readonly` `optional` **principal?**: `string`
+
+Defined in: [src/bridge/eventMeta.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/bridge/eventMeta.ts#L55)
+
+WHO the caller NAMED for this run (9.11.0) — from an explicit
+ `run({ identity })` only, never from the synthesized `runIdentity` and
+ never derived from a session. Absent for an anonymous run.
+
+***
+
 ### runId
 
 > `readonly` **runId**: `string`
@@ -64,6 +76,17 @@ Defined in: [src/bridge/eventMeta.ts:51](https://github.com/footprintjs/agentfoo
 
 The hosting conversation this run belongs to, when it belongs to one
  (9.4.0). Absent for an unhosted or anonymous run — never fabricated.
+
+***
+
+### tenant?
+
+> `readonly` `optional` **tenant?**: `string`
+
+Defined in: [src/bridge/eventMeta.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/bridge/eventMeta.ts#L58)
+
+The tenant the caller NAMED for this run (9.11.0). Same rule as
+ [RunContext.principal](/docs/api/interfaces/RunContext#principal).
 
 ***
 

@@ -25,6 +25,42 @@ One executable tool the Agent can call.
 
 ## Properties
 
+### capabilities?
+
+> `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/docs/api/type-aliases/ToolCapability)[]
+
+Defined in: [src/core/tools.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L90)
+
+What this tool touches, DECLARED by whoever wrote it (9.11.0).
+
+The framework never infers this. A tool's capabilities are not knowable
+from its name, its schema or its description, and classifying them by guess
+would rest a policy decision on a heuristic — so a tool that says nothing
+gets nothing asked about it, exactly as before.
+
+**Enforced when both sides speak.** When a tool declares a capability AND
+the configured `PermissionChecker` declares it `governs` that capability,
+the dispatch loop asks once per declared capability, right after the
+`'tool_call'` check allows — `check({ capability: 'external_net', target:
+'<tool name>' })`. Either side silent → not asked, not refused. A denial
+lands like every other refusal in the loop: the tool does not run and the
+model reads a result it can adapt to.
+
+#### Example
+
+```ts
+a tool the operator wants governed as a network egress
+  defineTool({
+    name: 'fetch_invoice',
+    description: 'Fetch an invoice PDF from the billing service',
+    capabilities: ['external_net', 'user_data'],
+    inputSchema: { … },
+    execute: async ({ id }) => …,
+  });
+```
+
+***
+
 ### checkIn?
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)
@@ -94,7 +130,7 @@ when it is genuinely relaying another source's tool.
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L65)
+Defined in: [src/core/tools.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L91)
 
 #### Parameters
 

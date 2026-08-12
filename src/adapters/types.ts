@@ -540,9 +540,62 @@ export interface ToolCallEntry {
   readonly providerId?: string;
 }
 
+/**
+ * What a tool DECLARES it touches (9.11.0).
+ *
+ * The four values a tool can honestly say about itself. Deliberately a subset
+ * of {@link PermissionCapability}: `'tool_call'` is the framework's own word for
+ * "a tool was dispatched" and `'skill_read'` is the framework's word for "a
+ * skill was activated" — neither is something a tool declares about its own
+ * behaviour.
+ *
+ * **The framework never infers these.** A tool's capabilities are not knowable
+ * from its name, its schema or its description; classifying them by guess would
+ * put a policy decision on a heuristic. Declared or absent — see `Tool.capabilities`.
+ */
+export type ToolCapability = 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
+
+/**
+ * The full vocabulary a {@link PermissionRequest} can carry.
+ *
+ * ## What is actually ENFORCED, said plainly
+ *
+ * `'tool_call'` has been enforced since v2.4: every tool dispatch asks the
+ * checker before `tool.execute`. The rest are enforced **only when both sides
+ * speak** (9.11.0):
+ *
+ * - a tool DECLARES `Tool.capabilities`, and
+ * - the checker DECLARES {@link PermissionChecker.governs}.
+ *
+ * With either side silent, nothing extra is asked and nothing extra is refused
+ * — byte-identical to every earlier release. This is deliberate: a framework
+ * that started sending `'memory_write'` to existing fail-closed allowlists would
+ * deny work those deployments have always permitted.
+ *
+ * **What is still NOT gated by this port, and is not pretended to be:** the
+ * agent's own memory pipeline. Recall and write stages are scoped by
+ * `MemoryIdentity` (tenant / principal / conversation), which is a
+ * different mechanism from a permission check, and no memory stage builds a
+ * `PermissionRequest`. So `'memory_read'` / `'memory_write'` reach a checker
+ * only for a TOOL that declared them.
+ */
+export type PermissionCapability = ToolCapability | 'tool_call' | 'skill_read';
+
 export interface PermissionRequest {
-  readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
+  /**
+   * What kind of operation is being asked about. See
+   * {@link PermissionCapability} for which values the framework actually sends
+   * and when.
+   */
+  readonly capability: PermissionCapability;
   readonly actor: string;
+  /**
+   * What is being asked about, in the vocabulary of the capability:
+   *
+   * - `'tool_call'` and every {@link ToolCapability} — the TOOL NAME.
+   * - `'skill_read'` — `skill:<id>` (9.11.0). Prefixed so a skill and a tool of
+   *   the same name are two different subjects to a policy that lists ids.
+   */
   readonly target?: string;
   readonly context?: Readonly<Record<string, unknown>>;
   /**
@@ -621,6 +674,53 @@ export interface PermissionDecision {
 export interface PermissionChecker {
   readonly name: string;
   check(request: PermissionRequest): Promise<PermissionDecision> | PermissionDecision;
+  /**
+   * Which capabilities BEYOND `'tool_call'` this checker asks to be consulted
+   * about (9.11.0). Optional and feature-detected — **absence is NO**.
+   *
+   * `'tool_call'` is always asked and needs no declaration. Everything else is
+   * asked only when it appears here AND the other side declares it too:
+   *
+   * - a {@link ToolCapability} — asked once per declared capability, per
+   *   dispatch of a tool whose `Tool.capabilities` names it, right after
+   *   the `'tool_call'` check allows.
+   * - `'skill_read'` — asked once per skill when the `read_skill` menu is
+   *   composed (a refused skill's row disappears from what the model is
+   *   offered) and again when the model activates one (a refused activation
+   *   lands as the policy's own message, which the model reads and adapts to).
+   *
+   * The reason this exists rather than "just send everything": a checker
+   * written before these values were sent is fail-closed by design, and would
+   * deny a capability it has no rule for. Silence keeps such a checker doing
+   * exactly what it does today. Declare it and the framework starts asking.
+   *
+   * @example a checker that also governs which skills a role may activate
+   *   const checker: PermissionChecker = {
+   *     name: 'my-policy',
+   *     governs: ['skill_read'],
+   *     check: (req) =>
+   *       req.capability === 'skill_read' && req.target === 'skill:payroll'
+   *         ? { result: 'deny', rationale: 'payroll is HR-only' }
+   *         : { result: 'allow' },
+   *   };
+   */
+  readonly governs?: readonly PermissionCapability[];
+}
+
+/**
+ * Does this checker ask to be consulted about `capability`? (9.11.0)
+ *
+ * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
+ * declaration. Everything else is true only when the checker named it.
+ * Absence is NO.
+ */
+export function checkerGoverns(
+  checker: PermissionChecker | undefined,
+  capability: PermissionCapability,
+): boolean {
+  if (!checker) return false;
+  if (capability === 'tool_call') return true;
+  return checker.governs?.includes(capability) === true;
 }
 
 // ─── Pricing Table ──────────────────────────────────────────────────

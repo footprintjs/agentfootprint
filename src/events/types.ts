@@ -113,6 +113,33 @@ export interface EventMeta {
    * through; anyone else sets it with `run({ ... }, { sessionId })`.
    */
   readonly sessionId?: string;
+  /**
+   * WHO this run is for — the principal the caller NAMED (9.11.0).
+   *
+   * This is the actor half of an audit record. The event stream has always
+   * carried *what* happened and *when*; `principal` and {@link tenant} are what
+   * make it a who→what→when wire, and they ride on the meta for the same reason
+   * `sessionId` does: nothing downstream can reconstruct them from the payloads.
+   *
+   * **Stamped ONLY from an explicit identity** — `agent.run(input, { identity })`
+   * or `run({ message, identity })`, the same tuple memory and the permission
+   * gate scope on. Never from the run's internal `runIdentity`, which is always
+   * populated and defaults to `{ conversationId: '<runId>' }` (or, on a
+   * session-bound run since 9.10.0, to `{ conversationId: sessionId }`).
+   *
+   * **A conversation id is not an actor.** Deriving a principal from a session
+   * would put a caller-supplied string — anyone who can reach the host can send
+   * any one — into the field an auditor reads as "who did this". Absent is the
+   * honest answer for an anonymous run, and absent is what it says.
+   */
+  readonly principal?: string;
+  /**
+   * The organization / workspace / account boundary this run is for (9.11.0).
+   *
+   * Same rule as {@link principal} in every respect: explicit identity only,
+   * never synthesized, absent for a single-tenant or anonymous run.
+   */
+  readonly tenant?: string;
 }
 
 /** Discriminated-union envelope every event implements. */

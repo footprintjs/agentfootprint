@@ -42,6 +42,16 @@
  * intuition: 50,000 chunks at ~1,000 characters is roughly 50 MB of text, on
  * the order of 25,000 pages.
  *
+ * **It is a RECOMMENDATION, not an enforced limit, and the difference matters
+ * when you are planning.** Nothing in this store counts chunks, refuses a write
+ * at 50,000, or degrades on purpose past it: chunk 50,001 is stored and searched
+ * exactly like chunk 3. The number is the point on the measured curve where this
+ * implementation stops being obviously the right tool — published so the
+ * decision is yours and dated, rather than discovered in production. The refusals
+ * this store DOES enforce are named on the constructor: a missing `node:sqlite`,
+ * an unreadable file, a schema-identity or schema-version mismatch, `':memory:'`,
+ * and an embedder-fingerprint conflict.
+ *
  * **Hydration is the number to plan around, not the query.** Steady-state
  * search is fast everywhere in that table; reading the vectors off disk the
  * FIRST time is what costs, and at 50,000 × 1536 it is 5.7 seconds. Paid

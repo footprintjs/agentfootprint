@@ -732,6 +732,15 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
           // a run is one turn, not a conversation/session — agentfootprint
           // has no session primitive yet, and mislabeling would corrupt
           // backends' session grouping.
+          // WHO the run is for (9.11.0). This adapter maps selected signals
+          // onto spans rather than serializing the envelope — unlike the
+          // file / CloudWatch / AgentCore sinks, which write
+          // `JSON.stringify(event)` and inherit every meta field for free — so
+          // the actor has to be placed deliberately or it would not appear at
+          // all. Own namespace, not `enduser.id`: the semconv name for this has
+          // moved once already, and quietly claiming a convention we do not
+          // track is worse than a name that says whose field it is.
+          const actor = (event as { meta?: { principal?: string; tenant?: string } }).meta;
           turnState.root = pushSpan(
             turnState,
             genAiNames ? `invoke_agent ${opts.serviceName}` : opts.serviceName,
@@ -741,6 +750,12 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
               'gen_ai.agent.name': opts.serviceName,
               'agentfootprint.run.id': runId,
               ...(typeof turnIndex === 'number' && { 'agentfootprint.turn.index': turnIndex }),
+              // Absent when nobody named one — an anonymous run gets no
+              // attribute rather than an empty string.
+              ...(actor?.principal !== undefined && {
+                'agentfootprint.principal.id': actor.principal,
+              }),
+              ...(actor?.tenant !== undefined && { 'agentfootprint.tenant.id': actor.tenant }),
             },
           );
         }
