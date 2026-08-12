@@ -6,7 +6,7 @@
 
 # Interface: LLMMessage
 
-Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L21)
+Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L21)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:21](https://github.com/footprintjs/agentfootp
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L23)
+Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L23)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/adapters/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L84)
+Defined in: [src/adapters/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L84)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -52,7 +52,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/adapters/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L104)
+Defined in: [src/adapters/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L104)
 
 v7.21 — WHO let this message into the window.
 
@@ -102,7 +102,7 @@ The injection's description, when it had one.
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L22)
+Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L22)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/adapters/types.ts:60](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L60)
+Defined in: [src/adapters/types.ts:60](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L60)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -136,7 +136,7 @@ Empty array OR undefined when no thinking is present (most calls).
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/adapters/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L25)
+Defined in: [src/adapters/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L25)
 
 For `role: 'tool'` — the tool_use id this result corresponds to.
 
@@ -146,7 +146,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L36)
+Defined in: [src/adapters/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L36)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -161,6 +161,6 @@ Empty array on text-only turns; undefined for non-assistant roles.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/adapters/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/adapters/types.ts#L27)
+Defined in: [src/adapters/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/adapters/types.ts#L27)
 
 For `role: 'tool'` — the tool name this result corresponds to.

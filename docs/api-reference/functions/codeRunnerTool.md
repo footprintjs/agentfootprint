@@ -8,7 +8,7 @@
 
 > **codeRunnerTool**(`options`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/agentfootprint/api/generated/interfaces/HoldsToolSessions.md)
 
-Defined in: [src/core/codeRunnerTool.ts:129](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/codeRunnerTool.ts#L129)
+Defined in: [src/core/codeRunnerTool.ts:129](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/codeRunnerTool.ts#L129)
 
 ## Parameters
 

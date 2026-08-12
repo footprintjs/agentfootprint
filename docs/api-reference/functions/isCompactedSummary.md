@@ -8,7 +8,7 @@
 
 > **isCompactedSummary**(`msg`): `boolean`
 
-Defined in: [src/core/agent/window/summarize.ts:124](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core/agent/window/summarize.ts#L124)
+Defined in: [src/core/agent/window/summarize.ts:124](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core/agent/window/summarize.ts#L124)
 
 True when this message is a frame a previous fold wrote.
 

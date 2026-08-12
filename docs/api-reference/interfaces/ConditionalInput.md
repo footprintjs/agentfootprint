@@ -6,7 +6,7 @@
 
 # Interface: ConditionalInput
 
-Defined in: [src/core-flow/Conditional.ts:58](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Conditional.ts#L58)
+Defined in: [src/core-flow/Conditional.ts:58](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core-flow/Conditional.ts#L58)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/core-flow/Conditional.ts:58](https://github.com/footprintjs/age
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:59](https://github.com/footprintjs/agentfootprint/blob/ab9c1736d633ec17bc3f32da618fe0e46deae0c2/src/core-flow/Conditional.ts#L59)
+Defined in: [src/core-flow/Conditional.ts:59](https://github.com/footprintjs/agentfootprint/blob/be5638d33f96d88c50c8291cfa2f28b6eeda5398/src/core-flow/Conditional.ts#L59)
