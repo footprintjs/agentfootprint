@@ -3,9 +3,11 @@
  *
  * The claim-check store: shapes + the five-verb port (`types`), the ref
  * grammar (`naming`), the payload laws (`payload`), the eviction law
- * (`retention`), the shared put pipeline (`minting`), three adapters, and
- * the `ctx.artifacts` capability (`capability`). See README.md in this
- * folder for the one-job map and the import direction.
+ * (`retention`), the shared put pipeline (`minting`), three adapters, the
+ * `ctx.artifacts` capability (`capability`) — and the Phase-2 data legs:
+ * ref arguments at dispatch (`wants`), the hand-to-the-screen verb
+ * (`present`), and the placement threshold (`placement`). See README.md in
+ * this folder for the one-job map and the import direction.
  */
 
 export {
@@ -55,3 +57,26 @@ export {
   type ToolArtifactPutInput,
   type ToolArtifacts,
 } from './capability.js';
+export {
+  assertToolWants,
+  resolveToolWants,
+  wantsNeedsStoreRefusal,
+  type ToolWants,
+  type WantsRefusal,
+  type WantsResolution,
+} from './wants.js';
+export {
+  PRESENT_TOOL_NAME,
+  presentArtifact,
+  type PresentOutcome,
+  type PresentSnapshot,
+  type PresentedResult,
+} from './present.js';
+export {
+  assertArtifactPlacement,
+  isPlacedToolResult,
+  placedResultKind,
+  placedToolResult,
+  type ArtifactPlacement,
+  type PlacedToolResult,
+} from './placement.js';

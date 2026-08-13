@@ -802,11 +802,27 @@ export interface CodeResult {
   readonly stderr: string;
   readonly exitCode?: number;
   /** Files the run produced, described rather than inlined — the whole point is
-   *  that big data does not enter the window. */
+   *  that big data does not enter the window. All fields beyond the original
+   *  `{ name, bytes, uri? }` are ADDITIVE (9.22.0) and honest about absence:
+   *  a runner that only knows the file exists states exactly what it always
+   *  did.
+   *
+   *  `data` is the in-band payload, present ONLY when the adapter can hand
+   *  the bytes back (a local runner reading its own working directory, a
+   *  managed sandbox that returns file contents). When a store is attached,
+   *  `codeRunnerTool` mints every data-carrying entry into the artifact
+   *  store and the model's result names the ref — entries without `data`
+   *  stay described-only, because minting needs bytes and inventing them is
+   *  worse than stating the gap. `mediaType` is the adapter's own statement
+   *  when it knows one; `ref` is stamped by whoever minted the file into an
+   *  artifact store (today: `codeRunnerTool`'s mint-on-output). */
   readonly artifacts?: readonly {
     readonly name: string;
     readonly bytes: number;
     readonly uri?: string;
+    readonly mediaType?: string;
+    readonly data?: string | Uint8Array;
+    readonly ref?: string;
   }[];
   /**
    * Present IFF output was cut, and then it says by how much.

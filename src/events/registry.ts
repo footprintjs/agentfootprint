@@ -107,6 +107,7 @@ import type {
   ArtifactResolvedPayload,
   ArtifactExpiredPayload,
   ArtifactRefusedPayload,
+  ArtifactPresentedPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -243,6 +244,7 @@ export const EVENT_NAMES = {
     resolved: 'agentfootprint.artifacts.resolved',
     expired: 'agentfootprint.artifacts.expired',
     refused: 'agentfootprint.artifacts.refused',
+    presented: 'agentfootprint.artifacts.presented',
   },
 } as const;
 
@@ -626,6 +628,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.artifacts.refused',
     ArtifactRefusedPayload
   >;
+  'agentfootprint.artifacts.presented': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.presented',
+    ArtifactPresentedPayload
+  >;
 }
 
 /** Union of every typed event. Consumers use this for exhaustive `switch`. */
@@ -728,4 +734,5 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.artifacts.resolved',
   'agentfootprint.artifacts.expired',
   'agentfootprint.artifacts.refused',
+  'agentfootprint.artifacts.presented',
 ] as const;

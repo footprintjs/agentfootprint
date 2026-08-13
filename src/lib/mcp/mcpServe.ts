@@ -61,6 +61,7 @@ import { ToolSessionTier, type TeardownScope } from '../../core/toolSessions.js'
 import type { Credential, CredentialProvider } from '../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
 import { unconfiguredArtifacts } from '../../artifacts/capability.js';
+import { wantsNeedsStoreRefusal } from '../../artifacts/wants.js';
 import type {
   McpCallToolRequest,
   McpHttpServeTransport,
@@ -168,6 +169,15 @@ export async function mcpServe(
         // A served call nobody transformed reaches `execute` as the exact value
         // the client sent — including `undefined`, which is not `{}`.
         if (verdict.args !== proposed) args = verdict.args;
+      }
+
+      // A tool that declares artifact arguments (`wants`, 9.22.0) cannot be
+      // served here: this door has no artifact store, so its refs could never
+      // resolve — and running it with the raw ref STRING where it expects
+      // resolved data would be accepted-and-silently-wrong. Refused by name,
+      // before credentials, like every other thing this door cannot honour.
+      if (tool.wants !== undefined) {
+        return toolError(wantsNeedsStoreRefusal(tool.schema.name, tool.wants));
       }
 
       const ctx = await buildExecutionContext(tool, toolCallId, {

@@ -119,7 +119,12 @@ describe('event registry — names + exhaustiveness', () => {
     //     the record; a verb refused — no store, missing-or-expired,
     //     unknown parent, digest mismatch — and said why. Meta only, never
     //     payload bytes.)
-    expect(ALL_EVENT_TYPES.length).toBe(89);
+    //    (artifacts.presented added with 9.22.0 — the model handed a ref to
+    //     the screen: present({ref, as}) resolved under scope, and the
+    //     description snapshot {kind, mediaType, bytes, label} rode both the
+    //     event and the tool result, so a reloaded transcript re-draws the
+    //     pane or states honestly why it can't.)
+    expect(ALL_EVENT_TYPES.length).toBe(90);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

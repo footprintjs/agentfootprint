@@ -374,6 +374,62 @@ at `defineTool` — `maxChars` must be a positive whole number, and a `narrowBy:
 that could suggest nothing is refused too (omit the field to say "no suggestions");
 `assertResultCeiling` is exported for hand-built `Tool` objects.
 
+With an [artifact store](doc:artifacts) attached there is a third dial in the
+family: the **placement threshold** (`artifacts: { store, placement: {
+maxInlineChars } }`) — over it, the result is checked into the store and the model
+reads a claim ticket. The stated precedence: the tool's `resultCeiling` first, then
+placement, then `maxToolResultChars` last (which then measures the ticket).
+
+## `wants` — artifact refs as tool arguments (9.22.0)
+
+The [`needs`](doc:identity) precedent applied to data. A tool declares which of its
+arguments are claim tickets and what artifact `kind` each must redeem to; the model
+passes the ~26-char `art_…` ref STRING; and at dispatch — before credentials,
+before `execute` — the framework redeems the ref under the run's own scope and
+kind-checks the meta. The handler receives the **resolved data** in `args` and the
+tickets on `ctx.wanted`:
+
+```ts
+const transformReport = defineTool<{ dataset: string }, string>({
+  name: 'transform_report',
+  description: 'Aggregate a stored dataset. Pass the art_… ref from get_data.',
+  inputSchema: {
+    type: 'object',
+    properties: { dataset: { type: 'string' } }, // the model speaks the REF
+    required: ['dataset'],
+  },
+  wants: { dataset: 'dataset/rows' },            // …and the framework redeems it
+  execute: async (args, ctx) => {
+    const rows = args.dataset as unknown as Row[]; // the DATA, already resolved
+    const ticket = ctx.wanted?.dataset;            // the ArtifactMeta behind it
+    return `total: ${total(rows)} (from ${ticket?.ref})`;
+  },
+});
+```
+
+What the framework guarantees:
+
+- **A stale, unknown, or wrong-kind ref never reaches the tool.** The call is not
+  executed; the model reads a teaching refusal that **lists the live refs of the
+  wanted kind in scope** — correction by naming what *can* resolve. On the record:
+  `agentfootprint.artifacts.refused` with `op: 'dispatch'`; successful resolution
+  rides `artifacts.resolved` (`via: 'get'`).
+- **Every dispatch door resolves alike** — the inline batch and every resumed
+  dispatch. Scope is the run's own (tenant/principal/conversation): a ref minted in
+  another session resolves to nothing here.
+- **Declared honestly or refused at `defineTool`:** each `wants` argument must
+  exist in `inputSchema.properties` as `type: 'string'` (`assertToolWants` is
+  exported for hand-built `Tool` objects). An agent with a statically registered
+  `wants` tool and no store refuses at **build**; `mcpServe` refuses `wants` tools
+  by name (that door has no store).
+- **Zero-cost when unused.** No `wants` = nothing resolved, `ctx.wanted` absent,
+  byte-identical dispatch.
+
+The full worked example — placement mints a 48k-row result, the ref rides a `wants`
+argument, `present` hands the chart to the screen — is on the
+[Artifacts page](doc:artifacts) and runnable as
+[`examples/features/57-artifact-data-flow.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/57-artifact-data-flow.ts).
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

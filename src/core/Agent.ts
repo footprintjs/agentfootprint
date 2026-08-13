@@ -51,6 +51,7 @@ import type {
 } from '../adapters/types.js';
 import type { CredentialProvider } from '../identity/types.js';
 import type { ArtifactStore } from '../artifacts/types.js';
+import { assertArtifactPlacement, type ArtifactPlacement } from '../artifacts/placement.js';
 import type { AuthorizationRequiredMode } from '../identity/consent.js';
 import { CredentialConsentRequiredError } from '../identity/CredentialConsentRequiredError.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -160,6 +161,7 @@ import {
   validateToolNameUniqueness,
 } from './agent/validators.js';
 import type {
+  AgentArtifactsOptions,
   AgentInput,
   AgentOptions,
   AgentOutput,
@@ -195,6 +197,7 @@ export { AgentBuilder };
 // working while implementation gradually moves into `./agent/*`.
 // Public types canonically live in `./agent/types.ts` (v2.11.1).
 export type {
+  AgentArtifactsOptions,
   AgentInput,
   AgentOptions,
   AgentOutput,
@@ -405,6 +408,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The claim-check store (9.21.0). When set, every tool's `ctx.artifacts`
    *  is this store bound to the run's scope. See AgentOptions.artifacts. */
   private readonly artifactStore?: ArtifactStore;
+  /** The placement threshold (9.22.0) — the operator's ref-ing dial from the
+   *  object form of AgentOptions.artifacts. Only ever set beside a store. */
+  private readonly artifactPlacement?: ArtifactPlacement;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -751,8 +757,32 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
     // competing one through, so "one per agent" is a fact of the type rather
-    // than a runtime check.
-    if (opts.artifacts) this.artifactStore = opts.artifacts;
+    // than a runtime check. Since 9.22.0 the option also takes the object
+    // form `{ store, placement? }` — normalized HERE so every downstream
+    // reader keeps seeing exactly one store and one optional dial.
+    if (opts.artifacts) {
+      if ('store' in opts.artifacts) {
+        // The object form. A shape with `placement` but no store cannot be
+        // SPELLED in TypeScript, but plain JavaScript can hand us one — and a
+        // threshold with nowhere to put what it catches is configuration
+        // that lies, so it is refused by name rather than half-read.
+        if (opts.artifacts.store === undefined || opts.artifacts.store === null) {
+          throw new Error(
+            'Agent: artifacts was passed in its object form without a `store`. The placement ' +
+              'threshold refs results INTO the store, so it cannot exist without one — pass ' +
+              '`artifacts: { store: inMemoryArtifacts(), placement: { maxInlineChars } }` (or ' +
+              'fileArtifacts / sqliteArtifacts / any ArtifactStore), or drop `artifacts`.',
+          );
+        }
+        assertArtifactPlacement('Agent', opts.artifacts.placement);
+        this.artifactStore = opts.artifacts.store;
+        if (opts.artifacts.placement !== undefined) {
+          this.artifactPlacement = opts.artifacts.placement;
+        }
+      } else {
+        this.artifactStore = opts.artifacts;
+      }
+    }
     // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
     // read at exactly one place — the tool-dispatch loop, AFTER
     // `credentials.getCredential` came back `authorization-required`. With no
@@ -2621,10 +2651,33 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     });
 
     // Tool registry composition extracted to ./agent/buildToolRegistry.ts.
-    // Composes static .tool() registry + auto-attached read_skill +
+    // Composes static .tool() registry + auto-attached read_skill (+ the
+    // auto-attached `present` tool when a store is attached, 9.22.0) +
     // skill-supplied tools (with autoActivate scoping); validates
     // name uniqueness; produces the dispatch map.
-    const { registryByName, toolSchemas } = buildToolRegistry(registry, this.injections);
+    const { registryByName, toolSchemas } = buildToolRegistry(registry, this.injections, {
+      hasArtifactStore: artifactStore !== undefined,
+    });
+    // A statically registered tool that declares `wants` on an agent with no
+    // store is configuration that lies: every call would be refused at
+    // dispatch for a gap only the operator can close. Refused at BUILD,
+    // naming the tool (provider-served tools are only met at dispatch — the
+    // dispatch-time refusal covers those).
+    if (artifactStore === undefined) {
+      for (const [toolName, registered] of registryByName) {
+        if (registered.wants !== undefined) {
+          throw new Error(
+            `Agent: tool '${toolName}' declares artifact arguments (wants: ` +
+              `{ ${Object.entries(registered.wants)
+                .map(([arg, kind]) => `${arg}: '${kind}'`)
+                .join(', ')} }) but no artifact store is attached, so its refs could never ` +
+              `resolve and every call would be refused. Pass \`artifacts\` to Agent.create ` +
+              `(inMemoryArtifacts(), fileArtifacts({ directory }), sqliteArtifacts({ file }), ` +
+              `or any ArtifactStore), or drop the tool's \`wants\`.`,
+          );
+        }
+      }
+    }
     // Late-bind toolSchemas into the seed stage's deps (the factory was
     // built earlier with a getter; this resolves the actual value).
     toolSchemasResolved = toolSchemas;
@@ -2821,6 +2874,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
       // event can fire (zero-cost-when-unused).
       ...(artifactStore && { artifactStore }),
+      // The placement threshold (9.22.0) — only ever set beside a store (the
+      // option's own shape enforces it). Absent → results are never measured
+      // against it and never placed.
+      ...(this.artifactPlacement !== undefined && { placement: this.artifactPlacement }),
       ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
       ...(this.maxToolResultChars !== undefined && {
         maxToolResultChars: this.maxToolResultChars,

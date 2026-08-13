@@ -3,10 +3,12 @@
 **One job:** let a tool check a payload into a governed store and hand the
 model a ~26-char claim ticket (`art_…`), so data stops riding the
 conversation. The model routes tickets; a later tool redeems them under the
-run's own scope. Phase 1 of the reference architecture: THE STORE — the port,
-three adapters, the `ctx.artifacts` capability, and the typed events. (Ref
-tool-args at dispatch, the `present` tool, the placement threshold, FE
-rendering and typed HITL are later phases and deliberately absent.)
+run's own scope. Phase 1 (9.21.0) shipped THE STORE — the port, three
+adapters, the `ctx.artifacts` capability, the typed events. Phase 2 (9.22.0)
+ships THE DATA LEGS — ref arguments at dispatch (`wants`), the `present`
+tool, the placement threshold, and the store behind `CodeResult.artifacts`.
+(FE render-by-ref, typed HITL and S3/GCS adapters are later phases and
+deliberately absent.)
 
 ## The laws (each has one owner)
 
@@ -20,7 +22,10 @@ rendering and typed HITL are later phases and deliberately absent.)
 | `inMemoryArtifacts.ts` | Map-backed; ALWAYS bounded + drop-counting (the innerRunRecords laws); LRU eviction, reads refresh recency. |
 | `fileArtifacts.ts` | directory-backed; scope-partitioned percent-encoded paths (structurally traversal-proof, asserted anyway); one legible JSON envelope per artifact; budget evictions oldest-first (stated — a directory has no cheap read-recency). |
 | `sqliteArtifacts.ts` | one SQLite file, `sqliteSessions` law for law (lazy `node:sqlite`, WAL read-back, STRICT tables, schema-identity/version refusals, `':memory:'` refused). The durable pairing beside `sqliteSessions`. |
-| `capability.ts` | `ctx.artifacts` — the five verbs with scope PRE-BOUND by the framework (a tool can never widen it), fail-closed when no store is attached (`unconfiguredCredentialProvider` law), reporting facts to a neutral sink. |
+| `capability.ts` | `ctx.artifacts` — the five verbs with scope PRE-BOUND by the framework (a tool can never widen it), fail-closed when no store is attached (`unconfiguredCredentialProvider` law), reporting facts to a neutral sink. Also owns the event vocabularies: `ArtifactOp` gained `'dispatch'` (the framework's own door — wants/present refusals at dispatch) and `ArtifactRefusalReason` gained `'kind-mismatch'` in 9.22.0. |
+| `wants.ts` | ref ARGUMENTS at dispatch (Leg 1): `assertToolWants` (defineTool-time — a wants-arg must exist in `inputSchema.properties` as a string), `resolveToolWants` (the one resolver every dispatch door calls BEFORE credentials: get under scope, kind-check exact-match, ALL args judged before answering), and the teaching refusals that list the LIVE refs of the wanted kind (the innerRunRecords law — correct by naming what CAN resolve; listing bounded at 10 shown / 200 scanned). `wantsNeedsStoreRefusal` serves doors that meet the tool only at dispatch; the Agent refuses static wants-tools with no store at BUILD. |
+| `present.ts` | the hand-to-the-screen verb (Leg 2), PURE half: `PRESENT_TOOL_NAME`, `presentArtifact` (head — never get — under scope; miss = teaching refusal listing live refs), and the `PresentedResult`/`PresentSnapshot` shapes. The result the model reads IS the description snapshot (`{presented, ref, as, snapshot:{kind, mediaType, bytes, label}}` as JSON), so a reloaded transcript re-draws the pane or states honestly why it can't. `as` is stored as DATA — the component registry that would validate it is Phase 3. The tool SHELL (placeholder the stage overwrites — the skip_step pattern) is `core/agent/presentTool.ts`; the stage emits `artifacts.presented`. |
+| `placement.ts` | the placement threshold (Leg 3), PURE half: the `ArtifactPlacement` dial (`{ maxInlineChars }` on the object form `Agent.create({ artifacts: { store, placement } })` — placement cannot be SPELLED without a store), `placedResultKind` = `tool-result/<toolName>` (the honest kind vocabulary a consumer wants or presents), and `placedToolResult` — the ONE-shape substitute (`{placed: true, ref, kind, mediaType, bytes, reason}`, the TruncatedToolResult law). Precedence, stated once: tool `resultCeiling` FIRST (author's refusal), placement second (operator's ref-ing, judged on what the after-tool chain let through), `maxToolResultChars` truncation net LAST (then measures the ticket). The stored payload is the EXACT text the model would have read. A placed result is a ticket, not a refusal: effects are judged and steps advance. |
 
 ## Import direction
 
@@ -50,3 +55,37 @@ never the reverse.
   the absence reads as a decision, not an omission.
 - **Events carry meta only** — payload bytes never enter an event, a
   recorder, or an exporter.
+
+## Phase-2 decisions worth remembering (9.22.0)
+
+- **`wants` resolution order**: permission → middleware → arg validation
+  (judges the REF string the model spoke) → check-in (a human approves the
+  ticket, never 6 MB of evidence) → **wants** (never acquire credentials for
+  a call that won't run) → credentials → execute. Same law at every door:
+  the batch loop, all four resume paths (via `resolveCredentialAndExecute`),
+  and `mcpServe` (which refuses wants-tools by name — no store there).
+- **Kind check is exact string equality.** No wildcards, no hierarchy in
+  this phase; `'dataset/rows'` matches only `'dataset/rows'`.
+- **`ctx.wanted` is absent when nothing resolved** — absent and empty are
+  different facts.
+- **`present` misses set `error: true`** on the call: the model holds no
+  presentation, `tool_end` says so, and a procedure step whose tool
+  presented nothing does not advance. A PLACED result is the opposite — a
+  ticket, not a refusal — so placement never touches those flags.
+- **Placement judges the MODEL channel** (post-chain). When both channels
+  carry one value — the common case — both become the ticket, so an event
+  sink is never shipped the payload the window was spared. A
+  chain-transformed `result` keeps its own truth and meets the truncation
+  net as before. A `put` the store refuses (whole-budget overflow) falls
+  back to today's path, stated on the record + a dev warn — never a throw
+  out of a run whose tool succeeded.
+- **The code leg mints ON OUTPUT only** (Leg 4). `CodeResult.artifacts`
+  entries additively gained `mediaType? / data? / ref?`; `codeRunnerTool`
+  mints entries that carry `data` in-band (kind `file/<ext>` from the
+  producer's own filename, mediaType from the adapter's statement, a
+  well-known-extension table, or the payload's JS shape) and the rendered
+  line names the ref. **Staging-in is deliberately absent, stated:** the
+  `CodeSession` port's only input is the code string, and pushing megabytes
+  through `python3 -c` argv would hit OS argument limits in
+  language-specific quoting — declared input refs for code wait for a
+  session file-write verb on the port.

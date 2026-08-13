@@ -11,6 +11,8 @@ import { isDevMode } from 'footprintjs';
 
 import type { LLMToolSchema, ToolCapability } from '../adapters/types.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
+import type { ArtifactMeta } from '../artifacts/types.js';
+import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { CheckInDemand } from './checkin.js';
@@ -30,6 +32,26 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
    *  LLM never sees or fills it. */
   readonly needs?: CredentialNeed;
+  /**
+   * Declared artifact ARGUMENTS (9.22.0) — argument name → the artifact
+   * `kind` it must resolve to (e.g. `wants: { dataset: 'dataset/rows' }`).
+   *
+   * The `needs` precedent applied to data: the MODEL passes the ~26-char
+   * `art_…` ref as the argument (declare it `type: 'string'` in
+   * `inputSchema`), and at dispatch — BEFORE `execute` — the framework
+   * redeems it under the run's own scope and kind-checks the meta. The
+   * handler receives the RESOLVED DATA in `args` (and the claim tickets on
+   * `ctx.wanted`); a stale, unknown, or wrong-kind ref never reaches the
+   * tool — the model reads a teaching refusal listing the live refs of the
+   * wanted kind. Resolution rides `agentfootprint.artifacts.resolved`;
+   * refusals ride `artifacts.refused` with `op: 'dispatch'`.
+   *
+   * Requires an attached store: an Agent refuses at BUILD when a statically
+   * registered tool declares `wants` with no `artifacts` configured (config
+   * that lies otherwise); other dispatch doors refuse at dispatch, by name.
+   * Omitted → byte-identical behavior (nothing resolved, nothing measured).
+   */
+  readonly wants?: ToolWants;
   /**
    * Declarative demand for a human check-in BEFORE this tool runs — consent
    * for a consequential action, with an evidence pack riding the ask.
@@ -197,6 +219,14 @@ export interface ToolExecutionContext {
   /** True when a real artifact store is attached. Branch on this for an
    *  intentional no-store (degraded) mode instead of catching the refusal. */
   readonly hasArtifacts: boolean;
+  /**
+   * The claim tickets behind this call's resolved `wants` arguments (9.22.0)
+   * — argument name → the `ArtifactMeta` whose data replaced the ref in
+   * `args`. Present ONLY when the tool declared `wants` and at least one
+   * declared argument resolved; absent otherwise (absent and empty are
+   * different facts). The data itself is already in `args`.
+   */
+  readonly wanted?: Readonly<Record<string, ArtifactMeta>>;
   /** The credential resolved for this tool's declared `needs` (declare-and-push).
    *  Present only when the tool declared a need and it resolved successfully. */
   readonly credential?: Credential;
@@ -298,6 +328,10 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Declare a credential this tool needs (declare-and-push). Resolved by the
    *  framework before `execute` and injected as `ctx.credential`. */
   readonly needs?: CredentialNeed;
+  /** Declare artifact arguments: arg name → required artifact kind (see
+   *  {@link Tool.wants}). The model passes the `art_…` ref; the framework
+   *  resolves it before `execute` and the handler reads the data. */
+  readonly wants?: ToolWants;
   /** Demand a human check-in before this tool runs (see {@link Tool.checkIn}).
    *  `'always'` or a `(args, ctx) => boolean` predicate. */
   readonly checkIn?: CheckInDemand<TArgs>;
@@ -390,6 +424,15 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // A ceiling that cannot cap fails HERE, naming the tool — not at the first
   // oversized result of the first run.
   assertResultCeiling(options.name, options.resultCeiling);
+  // A wants-arg the schema never offers (or offers as a non-string) fails
+  // HERE too, naming the argument — not as a ref that never arrives. Judged
+  // against the RESOLVED schema: an omitted inputSchema defaults to empty
+  // properties, which offers no argument for any ref to arrive through.
+  assertToolWants(
+    options.name,
+    options.wants,
+    options.inputSchema ?? { type: 'object', properties: {} },
+  );
   return {
     schema: {
       name: options.name,
@@ -397,6 +440,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
       inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
     },
     ...(options.needs && { needs: options.needs }),
+    ...(options.wants !== undefined && { wants: options.wants }),
     // The call-site predicate is typed to TArgs; the stored Tool keeps the
     // non-generic shape so it widens into `Tool[]` registries.
     ...(options.checkIn !== undefined && { checkIn: options.checkIn as CheckInDemand }),

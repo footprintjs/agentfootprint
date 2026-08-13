@@ -45,6 +45,8 @@ import {
 } from '../../lib/injection-engine/skillSteps.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
+import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
+import { buildPresentTool } from './presentTool.js';
 import { warnIfInvalidToolName, type Tool, type ToolRegistryEntry } from '../tools.js';
 
 export interface ToolRegistryArtifacts {
@@ -62,6 +64,17 @@ export interface ToolRegistryArtifacts {
   readonly toolSchemas: readonly LLMToolSchema[];
 }
 
+/** The build facts that gate auto-attached tools beyond skills (9.22.0). */
+export interface BuildToolRegistryOptions {
+  /**
+   * Is an artifact store attached to this agent? Gates the `present`
+   * auto-attach (the `read_skill` seam): true reserves the name and adds the
+   * tool; false — the default — changes not one byte, so a storeless agent
+   * may keep its own `present`.
+   */
+  readonly hasArtifactStore?: boolean;
+}
+
 /**
  * Compose the augmented tool registry from the static `.tool()`
  * registry + the agent's injections (skills only). Throws on tool-
@@ -70,6 +83,7 @@ export interface ToolRegistryArtifacts {
 export function buildToolRegistry(
   registry: readonly ToolRegistryEntry[],
   injections: readonly Injection[],
+  options: BuildToolRegistryOptions = {},
 ): ToolRegistryArtifacts {
   const skills = injections.filter((i) => i.flavor === 'skill');
 
@@ -118,9 +132,40 @@ export function buildToolRegistry(
       ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }]
       : [];
+
+  // ── `present` — the hand-to-the-screen tool (9.22.0) ────────────────
+  // Auto-attached as a FULL citizen (schema offered + dispatchable) ONLY
+  // when a store is attached — the read_skill seam. The name is reserved
+  // the moment the store is: a consumer tool already holding 'present'
+  // would silently win the dispatch map and the model's presentations
+  // would run somebody else's function — accepted-and-silently-wrong, so
+  // it is refused by name (the skip_step law). Without a store, nothing
+  // here runs and a consumer's own 'present' is nobody's business.
+  const presentEntries: readonly ToolRegistryEntry[] = [];
+  if (options.hasArtifactStore === true) {
+    const holders = [
+      ...registry.map((e) => e.name),
+      ...skillToolEntries.map((e) => e.name),
+      ...sharedSkillTools.keys(),
+    ];
+    if (holders.includes(PRESENT_TOOL_NAME)) {
+      throw new Error(
+        `Agent: tool name '${PRESENT_TOOL_NAME}' is reserved when an artifact store is ` +
+          `attached — the framework auto-attaches the hand-to-the-screen tool under that ` +
+          `name, and a same-named tool would silently take over the model's presentations. ` +
+          `Rename your tool, or drop the \`artifacts\` store.`,
+      );
+    }
+    (presentEntries as ToolRegistryEntry[]).push({
+      name: PRESENT_TOOL_NAME,
+      tool: buildPresentTool(),
+    });
+  }
+
   const augmentedRegistry: readonly ToolRegistryEntry[] = [
     ...registry,
     ...readSkillEntries,
+    ...presentEntries,
     ...skillToolEntries,
   ];
 

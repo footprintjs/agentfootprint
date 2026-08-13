@@ -172,7 +172,8 @@ export function codeRunnerTool(
         ...(options.timeoutMs !== undefined && { timeoutMs: options.timeoutMs }),
         ...(ctx.signal && { signal: ctx.signal }),
       });
-      return render(result, maxOutputChars);
+      const minted = await mintProducedFiles(result, ctx);
+      return render(result, maxOutputChars, minted);
     },
   });
 
@@ -274,6 +275,92 @@ function describe(scope: CodeRunnerToolScope, language: string): string {
   );
 }
 
+// ── Mint-on-output (9.22.0): the store behind `CodeResult.artifacts` ────────
+//
+// When a store is attached, every file the run handed back IN-BAND
+// (`artifact.data` — see `CodeResult`) is checked into the artifact store
+// under the run's own scope, and the rendered line names the ref, so the
+// model can route the file — pass it to a `wants`-tool, `present` it —
+// instead of asking for its contents. Entries without `data` stay
+// described-only: minting needs bytes, and a described file whose bytes never
+// left the sandbox is a fact, not a failure. Zero-cost: no store, or no
+// in-band files, and not one line here runs.
+//
+// STAGING-IN IS DELIBERATELY ABSENT (the honest cut, stated): the
+// `CodeSession` port's only input is the code string — pushing a resolved
+// artifact payload through it would mean inlining megabytes into an argv
+// (`python3 -c …` has OS argument limits) in language-specific quoting.
+// Declared input refs for code sessions wait for a session file-write verb
+// on the port; until then the model routes refs BETWEEN tools, and code
+// output flows INTO the store.
+
+/** `report.csv` → `file/csv`; extensionless → `file`. The kind vocabulary a
+ *  code-produced file is minted under — derived from the producer's OWN
+ *  stated name, deterministically, never sniffed from content. */
+function kindOfFile(name: string): string {
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  return ext.length > 0 ? `file/${ext}` : 'file';
+}
+
+/** The honest well-known-extension table. Unknown extensions fall back on
+ *  what the payload's own JS shape proves: text for a string, opaque bytes
+ *  for a Uint8Array. */
+const MEDIA_TYPE_BY_EXT: Readonly<Record<string, string>> = {
+  json: 'application/json',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  html: 'text/html',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  pdf: 'application/pdf',
+};
+
+function mediaTypeOfFile(name: string, data: string | Uint8Array): string {
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  return (
+    MEDIA_TYPE_BY_EXT[ext] ?? (typeof data === 'string' ? 'text/plain' : 'application/octet-stream')
+  );
+}
+
+/** What one entry's mint came to — a ref, or the stated failure. */
+type FileMintOutcome = { readonly ref: string } | { readonly failed: string };
+
+/**
+ * Mint every in-band file into the store. Per-entry failures are CONTAINED
+ * and stated in the rendered line (the code ran; a full store must not turn
+ * its success into a throw) — the store's own `artifacts.refused` event has
+ * already put the reason on the record.
+ */
+async function mintProducedFiles(
+  result: CodeResult,
+  ctx: ToolExecutionContext,
+): Promise<ReadonlyMap<string, FileMintOutcome>> {
+  const outcomes = new Map<string, FileMintOutcome>();
+  if (!ctx.hasArtifacts) return outcomes;
+  for (const artifact of result.artifacts ?? []) {
+    if (artifact.data === undefined) continue;
+    try {
+      const meta = await ctx.artifacts.put({
+        kind: kindOfFile(artifact.name),
+        mediaType: artifact.mediaType ?? mediaTypeOfFile(artifact.name, artifact.data),
+        data: artifact.data,
+        label: artifact.name,
+      });
+      outcomes.set(artifact.name, { ref: meta.ref });
+    } catch (err) {
+      outcomes.set(artifact.name, {
+        failed: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return outcomes;
+}
+
 /**
  * Render a `CodeResult` for the model.
  *
@@ -282,7 +369,11 @@ function describe(scope: CodeRunnerToolScope, language: string): string {
  * table. The marker is deliberately plain text in the result body, not
  * metadata, because the result body is the only channel the model reads.
  */
-function render(result: CodeResult, maxOutputChars: number): string {
+function render(
+  result: CodeResult,
+  maxOutputChars: number,
+  minted?: ReadonlyMap<string, FileMintOutcome>,
+): string {
   const parts: string[] = [];
   const stdout = clip(result.stdout, maxOutputChars, result.truncated?.stdout === true);
   const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
@@ -295,9 +386,22 @@ function render(result: CodeResult, maxOutputChars: number): string {
     );
   }
   for (const artifact of result.artifacts ?? []) {
+    const outcome = minted?.get(artifact.name);
+    // A ref the RUNNER already stamped is honored; one this tool minted wins
+    // freshness (both name the same bytes when both exist).
+    const ref = outcome !== undefined && 'ref' in outcome ? outcome.ref : artifact.ref;
     parts.push(
       `[artifact: ${artifact.name}, ${artifact.bytes} bytes${
         artifact.uri ? `, ${artifact.uri}` : ''
+      }${
+        ref !== undefined
+          ? `, stored as ${ref} (${kindOfFile(artifact.name)}) — route this ref: pass it to a ` +
+            `tool that wants it, or present it`
+          : ''
+      }${
+        outcome !== undefined && 'failed' in outcome
+          ? `, artifact-store mint failed: ${outcome.failed}`
+          : ''
       }]`,
     );
   }

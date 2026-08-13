@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.22.0] - 2026-08-13
+
+**The model routes claim tickets: tools receive resolved data, screens
+receive described refs, and six megabytes of freight costs two metadata
+lines.**
+
+### Added — ref arguments (`wants`)
+
+```ts
+defineTool({
+  name: 'summarize',
+  wants: { dataset: 'dataset/rows' },
+  execute: async (args, ctx) => { /* args.dataset is the RESOLVED DATA */ },
+});
+```
+
+The model passes a ref string; dispatch resolves it under the run's own
+scope and kind-checks it BEFORE the tool runs. The handler receives the
+data — never the ticket — plus the meta on `ctx.wanted`. A stale,
+unknown, or wrong-kind ref never reaches the tool: the model reads a
+teaching refusal listing the live refs of that kind in its own scope, so
+the correction is what to pass, not a retry of the same dead ref.
+
+### Added — the `present` tool
+
+Auto-attached only when a store is attached. `present({ ref, as, label })`
+verifies the ref and returns a description snapshot — `{ kind,
+mediaType, bytes, label }` — INSIDE the tool result. The claim ticket
+describes the parcel, so a conversation reloaded after the artifact has
+expired can still render an honest placeholder from history. New typed
+event `agentfootprint.artifacts.presented`. The model never serializes
+what the screen will show.
+
+### Added — the placement threshold
+
+```ts
+Agent.create({ artifacts: { store, placement: { maxInlineChars: 10000 } } });
+```
+
+A tool result over the threshold is checked into the store (kind
+`tool-result/<toolName>`, the exact displaced text) and the model
+receives the ticket: ref + meta + how to consume it. Ceiling precedence,
+stated and pinned: the tool's own `resultCeiling` (the author's refusal)
+first, placement second, the agent-level truncation net last. A placed
+result is a ticket, not a refusal — it still advances steps and keeps
+its declared effects.
+
+### Added — code results join the store
+
+Files a code run produces are minted into the same store — deterministic
+`file/<ext>` kinds, origin stamped — and `CodeResult.artifacts` entries
+gain a `ref`. Staging refs INTO code sessions is deferred and stated as
+such.
+
+### Security
+
+Every new door is scope-locked: another session's ref resolves to
+nothing, and refusal listings name only the caller's own live refs.
+
+### Zero-cost when unused
+
+Pinned on all four legs — no `wants`, no `present`, no `placement`, no
+code-result minting, and behavior is byte-identical to 9.21.0.
+
+This is Phase 2 of the reference-architecture work, the data legs, on
+top of the artifact store shipped in 9.21.0.
+
 ## [9.21.0] - 2026-08-13
 
 **Data stops riding the conversation: the artifact store — a tool checks

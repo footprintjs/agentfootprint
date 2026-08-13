@@ -879,6 +879,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 **Operability**
 - Provider-agnostic prompt caching — declarative per-injection, per-iteration marker recomputation
+- Artifacts (the claim check) — tools check data into a governed store (`ctx.artifacts`; in-memory / file / SQLite) and the model routes ~26-char tickets instead of hauling payloads: `wants` resolves ref arguments at dispatch with teaching refusals, the placement threshold (`artifacts: { store, placement }`) auto-refs oversized tool results, and the auto-attached `present` tool hands a ref to the screen with a durable description snapshot — every mint / resolve / refusal / presentation a typed event
 - Human-in-the-loop pause / resume — a tool calls `pauseHere(...)` (or `askHuman(...)`); `isPaused(result)` hands you a JSON-serializable checkpoint, and `agent.resume(checkpoint, input)` continues hours later on a different server
 - Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
 - 60+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`

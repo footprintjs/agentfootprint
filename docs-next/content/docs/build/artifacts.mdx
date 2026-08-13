@@ -1,6 +1,6 @@
 ---
 title: Artifacts
-description: The claim-check store — a tool checks data in and hands the model a ~26-char ticket. ctx.artifacts (shaped like ctx.credentials), three adapters, scope-isolated resolution, typed lifecycle events.
+description: The claim-check store and the data legs — tools check data in and the model routes ~26-char tickets. ctx.artifacts, wants (refs as tool arguments), the present tool, the placement threshold, typed lifecycle events.
 ---
 
 > A production agent once hauled **879,073 tokens** through its context window because two tools needed the same data and the only road between them ran through the model. The model read six megabytes it never needed, paraphrased it (imperfectly) back out, and the bill arrived anyway. Enterprise messaging solved this decades ago and named the law the **claim check**: the expensive channel carries a ticket plus enough description to decide — the payload never rides the channel. Your context window is the most expensive channel you own. Artifacts are that law, built in.
@@ -49,6 +49,104 @@ const agent = Agent.create({ provider, model, artifacts: inMemoryArtifacts() })
 The model routes the ticket (`art_h7Kq…`) between tools. The window spent on six megabytes of freight: two metadata lines. That is the whole feature; everything below is the law behind it.
 
 Runnable version: [`examples/features/56-artifacts.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/56-artifacts.ts) — mint in one tool, redeem in another, a derived artifact, and expiry stating itself.
+
+## The data legs (9.22.0) — refs the model routes, not just holds
+
+The store alone still leaves the model doing the redeeming by hand (`ctx.artifacts.get` inside the tool). Three legs make the ref a first-class citizen of dispatch itself.
+
+### `wants` — refs as tool arguments, resolved before execute
+
+A tool declares which arguments are claim tickets, and what kind they must redeem to:
+
+```ts
+import { Agent, defineTool, inMemoryArtifacts } from 'agentfootprint';
+
+// 1. get_data returns 48,000 rows. It doesn't even call the store —
+//    the placement threshold (below) checks the result in for it, as
+//    kind 'tool-result/get_data', and the model reads the ticket.
+const getData = defineTool({
+  name: 'get_data',
+  description: 'Fetch the Q3 sales rows (large).',
+  execute: () => Array.from({ length: 48_000 }, (_, i) => ({ order: i, amount: (i % 97) + 1 })),
+});
+
+// 2. transform_report DECLARES its ref argument. The model passes the
+//    art_… STRING; the framework resolves it at dispatch — the handler
+//    receives the DATA, and the claim ticket rides ctx.wanted.
+const transformReport = defineTool<{ dataset: string }, string>({
+  name: 'transform_report',
+  description: 'Aggregate a stored dataset. Pass the art_… ref from get_data.',
+  inputSchema: {
+    type: 'object',
+    properties: { dataset: { type: 'string' } },
+    required: ['dataset'],
+  },
+  wants: { dataset: 'tool-result/get_data' },
+  execute: async (args, ctx) => {
+    const rows = JSON.parse(args.dataset) as ReadonlyArray<{ amount: number }>; // the data, already redeemed
+    const meta = ctx.wanted?.dataset; // the ticket (ArtifactMeta)
+    return `total: ${rows.reduce((s, r) => s + r.amount, 0)} (from ${meta?.ref})`;
+  },
+});
+
+const agent = Agent.create({
+  provider,
+  model,
+  artifacts: { store: inMemoryArtifacts(), placement: { maxInlineChars: 2_000 } },
+})
+  .tool(getData)
+  .tool(transformReport)
+  .build();
+```
+
+The declaration's shape is the exported `ToolWants` type — `Readonly<Record<argName, kind>>`. The law, verb for verb the `needs` (credentials) precedent:
+
+- **Resolution happens at dispatch, before `execute`, before credentials** — a call whose data cannot be delivered never acquires a secret and never runs.
+- **A stale, unknown, or wrong-kind ref never reaches the tool.** The model reads a teaching refusal that **lists the live refs of the wanted kind in scope** — correction by naming what *can* resolve, never just what can't. On the record: `agentfootprint.artifacts.refused` with `op: 'dispatch'` (reason `missing-or-expired`, `kind-mismatch`, `invalid-input`, or `no-store`); successful resolution rides the existing `artifacts.resolved` (`via: 'get'`).
+- **Kind check is exact.** `'dataset/rows'` matches only `'dataset/rows'` — no wildcards, no hierarchy.
+- **Declared honestly or refused at `defineTool`:** a `wants` argument must exist in `inputSchema.properties` and be `type: 'string'` (the model speaks the ref, never the bytes). An agent with a statically registered `wants` tool and **no store** refuses at build — configuration that lies otherwise. `mcpServe` refuses `wants` tools by name (no store at that door).
+- **Zero-cost:** a tool without `wants` takes the exact path it always took, and `ctx.wanted` is absent (absent ≠ empty).
+
+### The placement threshold — oversized results become tickets automatically
+
+The object form of the option (the exported `AgentArtifactsOptions` — `{ store, placement? }`) carries the operator's dial, an `ArtifactPlacement`: `artifacts: { store, placement: { maxInlineChars: N } }`. Any tool result whose finalized text exceeds N is checked into the store as kind `tool-result/<toolName>` — the exported `placedResultKind(toolName)` composes that vocabulary, so a `wants` declaration can name it without spelling the prefix — with label `<toolName> result` (the payload is the **exact text the model would have read**), and every channel — history, `stream.tool_end`, recorders — carries the one-shape `PlacedToolResult` substitute instead:
+
+```json
+{ "placed": true, "ref": "art_h7Kq…", "kind": "tool-result/get_data",
+  "mediaType": "application/json", "bytes": 5000000,
+  "reason": "get_data returned 5000000 chars, over the 2000-char placement threshold, so the full result was stored as artifact 'art_h7Kq…' … Route the ref: pass it to a tool whose argument wants 'tool-result/get_data', or call present({ ref, as: … })." }
+```
+
+Branch on `.placed` (`isPlacedToolResult`); the decision is never silent — the mint lands as `artifacts.minted` with `origin: { runId, toolCallId }`.
+
+**Precedence with the other two ceilings, stated and tested:**
+
+1. the tool's own [`resultCeiling`](doc:tools) (the *author's* refusal) is judged first, at the execute boundary — a refused result is short, so placement never sees the payload;
+2. **placement** (the *operator's* ref-ing) is judged next, on what the after-tool governance chain let through;
+3. the agent-level `maxToolResultChars` truncation net runs last — with placement on, it measures the ticket and should rarely fire.
+
+A placed result is a **ticket, not a refusal**: declared [tool effects](doc:tools) are still judged and procedure steps advance normally — the result arrived; it just travels by reference. Errored/denied/refused calls are never placed (`tool-result/<name>` must never claim an error is the tool's result). Placement cannot be spelled without a store — the option's own shape refuses it.
+
+### `present` — hand a ref to the screen, with a durable snapshot
+
+When a store is attached, the framework auto-attaches one more tool (the `read_skill` seam — the name is the exported `PRESENT_TOOL_NAME` constant, and it is reserved exactly then): `present({ ref, as, label? })`. It `head`s the ref under the run's scope — never `get`; the screen pays for bytes later, under its own identity — and the result the model (and the transcript) keeps is a `PresentedResult` carrying the **description snapshot** (a `PresentSnapshot`):
+
+```json
+{ "presented": true, "ref": "art_9mTw…", "as": "bar-chart",
+  "snapshot": { "kind": "chart/spec", "mediaType": "application/json",
+                "bytes": 41210, "label": "Q3 sales by region" } }
+```
+
+- `as` is consumer vocabulary (`'bar-chart'`, `'table'`, `'image'`…) — **stored as data**, deliberately unvalidated: the component registry that would check it is the frontend phase.
+- The snapshot lives **inside the tool result** — the one thing provider message history keeps typed and durable — so a conversation reloaded after the artifact expired can still render an honest placeholder from history alone: *"Chart — 'Q3 sales by region' (bar-chart, 41 KB) — expired; re-run to regenerate."* Never a blank pane.
+- A miss is a teaching refusal listing the live refs in scope, `error: true` on the call, and `artifacts.refused` (`op: 'dispatch'`) on the record. A hit emits the typed **`agentfootprint.artifacts.presented`** `{ ref, as, snapshot }`.
+- The model never serializes what the screen will show.
+
+### The code leg — `CodeResult.artifacts` gets the store behind it
+
+With a store attached, files a [code run](doc:tools) hands back **in-band** (`CodeResult.artifacts[].data` — an additive field an adapter fills when it can return the bytes) are minted under the run's scope — kind `file/<ext>` from the producer's own filename, mediaType from the adapter's statement, a well-known-extension table, or the payload's shape — and the rendered result names the ref (`[artifact: report.csv, 29 bytes, stored as art_… (file/csv) — route this ref…]`). Entries without `data` stay described-only, exactly as before. **Staging-in is deliberately absent this phase:** the `CodeSession` port's only input is the code string, and declared input refs for code sessions wait for a session file-write verb on the port — mint-on-output ships now, stated.
+
+Runnable version of the whole flow: [`examples/features/57-artifact-data-flow.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/57-artifact-data-flow.ts) — placement mints the 48k-row result, the ref rides a `wants` argument, and `present` finishes with the snapshot, end-to-end on the mock provider.
 
 ## `ctx.artifacts` — shaped exactly like `ctx.credentials`
 
@@ -111,14 +209,15 @@ sqliteArtifacts({ file: './data/artifacts.db' })// one SQLite file — pairs wit
 
 ## The lifecycle, on the record
 
-Four typed events (domain wildcard: `agent.on('agentfootprint.artifacts.*', …)`):
+Five typed events (domain wildcard: `agent.on('agentfootprint.artifacts.*', …)`):
 
 | event | payload | fires when |
 |---|---|---|
-| `agentfootprint.artifacts.minted` | `ArtifactMintedPayload` — ref, kind, bytes, origin, parents | a tool checked a payload in |
-| `agentfootprint.artifacts.resolved` | `ArtifactResolvedPayload` — ref, `via: 'head' \| 'get'` | a ticket was redeemed |
+| `agentfootprint.artifacts.minted` | `ArtifactMintedPayload` — ref, kind, bytes, origin, parents | a tool checked a payload in (or placement did it for one) |
+| `agentfootprint.artifacts.resolved` | `ArtifactResolvedPayload` — ref, `via: 'head' \| 'get'` | a ticket was redeemed — by a tool, or by dispatch resolving a `wants` argument |
 | `agentfootprint.artifacts.expired` | `ArtifactExpiredPayload` — ref, reason (ttl / max-bytes / max-count) | retention swept one |
-| `agentfootprint.artifacts.refused` | `ArtifactRefusedPayload` — op, reason, ref? | a verb refused — no store, missing-or-expired, unknown parent, digest mismatch, invalid input |
+| `agentfootprint.artifacts.refused` | `ArtifactRefusedPayload` — op, reason, ref? | a verb refused — no store, missing-or-expired, unknown parent, digest mismatch, invalid input, kind mismatch; `op: 'dispatch'` marks the framework's own door (wants / present) |
+| `agentfootprint.artifacts.presented` | `ArtifactPresentedPayload` — ref, `as`, snapshot | the model handed a ref to the screen |
 
 This is what separates the store from plain "where are the bytes" systems: every mint, hop and refusal lands on the **same causal record** as the rest of the run, so "where did this number come from?" is a query, not an archaeology dig.
 
@@ -126,6 +225,6 @@ For custom wiring outside the Agent (your own harness, tests), the binding layer
 
 ## Decisions worth knowing
 
-- **One store per agent**, attached at construction (`Agent.create({ ..., artifacts })`) — there is no second door, so "one per agent" is a fact of the type.
+- **One store per agent**, attached at construction (`Agent.create({ ..., artifacts })` — bare store, or `{ store, placement }`) — there is no second door, so "one per agent" is a fact of the type.
 - **No snapshot coupling.** `getSnapshot()` is unchanged; the store's own accounting is `list` plus the adapters' counters. Stated so the absence reads as a decision.
-- **Refs in tool arguments, resolution at dispatch, the `present` tool, placement thresholds, S3/GCS adapters and streaming are later phases** — this page is the store.
+- **Frontend render-by-ref (the component registry that validates `as`), typed HITL payloads, S3/GCS adapters, streaming, and staging refs INTO code sessions are later phases** — this page is the store and the data legs.

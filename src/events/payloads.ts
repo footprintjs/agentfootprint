@@ -1685,7 +1685,11 @@ export interface ArtifactExpiredPayload {
  *  is the fail-closed capability teaching how to attach a store;
  *  `missing-or-expired` keeps the API's deliberate ambiguity while the record
  *  still shows a resolve that found nothing; `digest-mismatch` is integrity
- *  refusing to deliver corrupt bytes as whole. */
+ *  refusing to deliver corrupt bytes as whole. Since 9.22.0, `op: 'dispatch'`
+ *  is the framework's own door: a tool's declared `wants` argument (or a
+ *  `present` call) that could not be delivered — the tool did not run and the
+ *  model read a teaching refusal listing what CAN resolve
+ *  (`kind-mismatch` names a ref that resolved to the wrong kind). */
 export interface ArtifactRefusedPayload {
   readonly op: ArtifactOp;
   readonly reason: ArtifactRefusalReason;
@@ -1694,4 +1698,27 @@ export interface ArtifactRefusedPayload {
   readonly detail?: string;
   /** The tool whose call was refused. */
   readonly tool: string;
+}
+
+/** The model handed an artifact to the screen (9.22.0): `present({ ref, as,
+ *  label? })` resolved under the run's scope. `snapshot` is the description
+ *  the claim ticket carries at speak time — `{ kind, mediaType, bytes,
+ *  label }` — the same snapshot stored INSIDE the tool result so a reloaded
+ *  conversation can render an honest placeholder after the artifact expired.
+ *  `as` is the model's consumer vocabulary ('bar-chart', 'table', …), stored
+ *  as data — the component registry that would validate it is a later phase.
+ *  Meta only, never the payload: the screen redeems the ref itself, under
+ *  its own identity. */
+export interface ArtifactPresentedPayload {
+  readonly ref: string;
+  readonly as: string;
+  readonly snapshot: {
+    readonly kind: string;
+    readonly mediaType: string;
+    readonly bytes: number;
+    readonly label?: string;
+  };
+  /** The presenting call — the join to the trace. */
+  readonly toolCallId: string;
+  readonly iteration: number;
 }

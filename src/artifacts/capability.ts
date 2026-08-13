@@ -58,8 +58,12 @@ export interface ToolArtifacts {
 
 // ─── The facts this door reports ─────────────────────────────────────
 
-/** Which verb a refusal happened on. */
-export type ArtifactOp = 'put' | 'head' | 'get' | 'delete' | 'list';
+/** Which door a refusal happened at — the five verbs, plus `'dispatch'`:
+ *  the framework's own resolution of a tool's declared `wants` (and the
+ *  `present` tool's argument checks) BEFORE execute. Not a sixth store verb
+ *  — a dispatch refusal is the tool-calls stage declining to run a tool
+ *  whose declared data could not be delivered. */
+export type ArtifactOp = 'put' | 'head' | 'get' | 'delete' | 'list' | 'dispatch';
 
 /** Why a verb refused (or answered "no data" on the record). */
 export type ArtifactRefusalReason =
@@ -67,7 +71,10 @@ export type ArtifactRefusalReason =
   | 'missing-or-expired'
   | 'unknown-parent'
   | 'digest-mismatch'
-  | 'invalid-input';
+  | 'invalid-input'
+  /** A `wants` ref resolved, but to the wrong kind — the wrong parcel for
+   *  this ticket window (dispatch resolution only). */
+  | 'kind-mismatch';
 
 /** One thing that happened at this door — meta only, never payloads. */
 export type ArtifactEventFact =

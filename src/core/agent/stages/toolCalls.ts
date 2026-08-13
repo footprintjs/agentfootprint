@@ -65,7 +65,14 @@ import {
   type ArtifactEventFact,
   type ToolArtifacts,
 } from '../../../artifacts/capability.js';
-import type { ArtifactStore } from '../../../artifacts/types.js';
+import type { ArtifactMeta, ArtifactScope, ArtifactStore } from '../../../artifacts/types.js';
+import { resolveToolWants, wantsNeedsStoreRefusal } from '../../../artifacts/wants.js';
+import { PRESENT_TOOL_NAME, presentArtifact } from '../../../artifacts/present.js';
+import {
+  placedResultKind,
+  placedToolResult,
+  type ArtifactPlacement,
+} from '../../../artifacts/placement.js';
 import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
@@ -154,6 +161,17 @@ export interface ToolCallsHandlerDeps {
    * byte-identical behavior and events (zero-cost-when-unused).
    */
   readonly artifactStore?: ArtifactStore;
+  /**
+   * The placement threshold (9.22.0) — the operator's ref-ing dial. When set
+   * (only ever beside `artifactStore`; the Agent option's shape enforces it),
+   * every finalized tool result on every dispatch path is measured, and one
+   * whose text exceeds `maxInlineChars` is checked into the store (kind
+   * `tool-result/<toolName>`) with the model reading the claim ticket
+   * instead. Judged AFTER the tool's own `resultCeiling` and the after-tool
+   * chain, BEFORE the `maxToolResultChars` truncation net. Undefined — the
+   * default — and results are never measured against it (zero-cost).
+   */
+  readonly placement?: ArtifactPlacement;
   /** Tool-args validation mode (#9). Default 'enforce': LLM-produced args
    *  are checked against the tool's `inputSchema` BEFORE dispatch; a
    *  mismatch rejects the call with a model-visible retry message.
@@ -1156,18 +1174,206 @@ export function buildToolCallsHandler(
     if (store === undefined) {
       return { artifacts: unconfiguredArtifacts(onEvent), hasArtifacts: false };
     }
-    const identity = scope.runIdentity;
-    const runScope = {
-      conversationId: identity.conversationId,
-      ...(identity.tenant !== undefined && { tenant: identity.tenant }),
-      ...(identity.principal !== undefined && { principal: identity.principal }),
-    };
     const facts = deps.currentRun?.();
-    const artifacts: ToolArtifacts = bindArtifacts(store, runScope, {
+    const artifacts: ToolArtifacts = bindArtifacts(store, runScopeOf(scope), {
       origin: { ...(facts?.runId !== undefined && { runId: facts.runId }), toolCallId },
       onEvent,
     });
     return { artifacts, hasArtifacts: true };
+  };
+
+  /**
+   * The run's artifact scope — `scope.runIdentity`, detached to a plain
+   * object so no store or resolver ever holds a live scope proxy. ONE
+   * composition shared by the capability binding, `wants` resolution,
+   * `present`, and placement: four doors, one isolation rule, no drift.
+   */
+  const runScopeOf = (scope: TypedScope<AgentState>): ArtifactScope => {
+    const identity = scope.runIdentity;
+    return {
+      conversationId: identity.conversationId,
+      ...(identity.tenant !== undefined && { tenant: identity.tenant }),
+      ...(identity.principal !== undefined && { principal: identity.principal }),
+    };
+  };
+
+  // ── Ref ARGUMENTS at dispatch (9.22.0, Leg 1) — ONE resolver, every door ──
+  // The batch loop and `resolveCredentialAndExecute` (the resume paths) both
+  // dispatch tools; each calls this BEFORE credential resolution — never
+  // acquire credentials for a call that won't run — so a declared ref is
+  // judged identically whichever door the call came through. Success rides
+  // the existing `artifacts.resolved` (one event per resolved argument);
+  // refusals ride `artifacts.refused` with `op: 'dispatch'`, and the tool is
+  // NOT executed — the model reads the teaching refusal instead.
+
+  const resolveWantsAtDispatch = async (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    wants: NonNullable<Tool['wants']>,
+    args: ToolArgs,
+  ): Promise<
+    | {
+        readonly ok: true;
+        readonly args: ToolArgs;
+        readonly wanted?: Readonly<Record<string, ArtifactMeta>>;
+      }
+    | { readonly ok: false; readonly refusal: string }
+  > => {
+    const store = deps.artifactStore;
+    if (store === undefined) {
+      // Statically registered tools are refused at BUILD; this serves the
+      // doors that only meet the tool at dispatch (provider-served tools).
+      typedEmit(scope, 'agentfootprint.artifacts.refused', {
+        op: 'dispatch',
+        reason: 'no-store',
+        detail: `tool '${toolName}' declares wants but no artifact store is attached`,
+        tool: toolName,
+      });
+      return { ok: false, refusal: wantsNeedsStoreRefusal(toolName, wants) };
+    }
+    const verdict = await resolveToolWants(store, runScopeOf(scope), toolName, wants, args);
+    if (!verdict.ok) {
+      for (const refusal of verdict.refusals) {
+        typedEmit(scope, 'agentfootprint.artifacts.refused', {
+          op: 'dispatch',
+          reason: refusal.reason,
+          ...(refusal.ref !== undefined && { ref: refusal.ref }),
+          detail: refusal.detail,
+          tool: toolName,
+        });
+      }
+      return { ok: false, refusal: verdict.refusal };
+    }
+    for (const { meta } of verdict.resolved) {
+      typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+        ref: meta.ref,
+        via: 'get',
+        kind: meta.kind,
+        bytes: meta.bytes,
+        tool: toolName,
+      });
+    }
+    return {
+      ok: true,
+      args: verdict.args,
+      // Absent when nothing resolved (no declared arg was passed): absent
+      // and empty are different facts, and `ctx.wanted` keeps them apart.
+      ...(verdict.resolved.length > 0 && { wanted: verdict.wanted }),
+    };
+  };
+
+  // ── The `present` tool's authoritative result (9.22.0, Leg 2) ──────────
+  // The skip_step pattern: the auto-attached placeholder ran; the stage —
+  // which owns the scope, the store and the emit channel — OVERWRITES its
+  // result with the description snapshot (or the teaching refusal), so
+  // governance rules and the caps compose over what the model will read.
+
+  const applyPresent = async (
+    scope: TypedScope<AgentState>,
+    call: {
+      readonly args: Readonly<Record<string, unknown>>;
+      readonly toolCallId: string;
+      readonly iteration: number;
+    },
+  ): Promise<{ readonly ok: boolean; readonly text: string }> => {
+    const store = deps.artifactStore;
+    if (store === undefined) {
+      // Unreachable through the Agent (the tool is only attached beside a
+      // store) — kept for the same reason the placeholder text exists.
+      return {
+        ok: false,
+        text: 'present has no artifact store behind it here; nothing was presented.',
+      };
+    }
+    const outcome = await presentArtifact(store, runScopeOf(scope), call.args);
+    if (!outcome.ok) {
+      typedEmit(scope, 'agentfootprint.artifacts.refused', {
+        op: 'dispatch',
+        reason: outcome.missedRef !== undefined ? 'missing-or-expired' : 'invalid-input',
+        ...(outcome.missedRef !== undefined && { ref: outcome.missedRef }),
+        detail: outcome.refusal,
+        tool: PRESENT_TOOL_NAME,
+      });
+      return { ok: false, text: outcome.refusal };
+    }
+    const { ref, as, snapshot } = outcome.result;
+    typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+      ref,
+      via: 'head',
+      kind: snapshot.kind,
+      bytes: snapshot.bytes,
+      tool: PRESENT_TOOL_NAME,
+    });
+    typedEmit(scope, 'agentfootprint.artifacts.presented', {
+      ref,
+      as,
+      snapshot: { ...snapshot },
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+    });
+    // The snapshot lives INSIDE the tool result — the one thing provider
+    // history keeps typed and durable — so a reloaded conversation can
+    // re-draw the pane, or state honestly why it can't.
+    return { ok: true, text: safeStringify(outcome.result) };
+  };
+
+  // ── The placement threshold (9.22.0, Leg 3) — ONE judge, every door ────
+  // Called beside every `capResults` site, on the FINALIZED values (after
+  // the tool's own resultCeiling, after the after-tool chain) and before the
+  // truncation net — the stated precedence: author's refusal first, then the
+  // operator's ref-ing, then the last-resort net (which then measures the
+  // ticket). A placed result is a TICKET, not a refusal: the caller's
+  // effects/step bookkeeping proceeds exactly as if the payload had landed.
+
+  const placeResults = async (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    values: { readonly result: unknown; readonly modelResult: unknown },
+    eligible: boolean,
+  ): Promise<{ readonly result: unknown; readonly modelResult: unknown }> => {
+    const placement = deps.placement;
+    if (placement === undefined || deps.artifactStore === undefined || !eligible) return values;
+    const text =
+      typeof values.modelResult === 'string'
+        ? values.modelResult
+        : safeStringify(values.modelResult);
+    if (text.length <= placement.maxInlineChars) return values;
+    const bound = toolArtifacts(scope, call.toolName, call.toolCallId);
+    let meta: ArtifactMeta;
+    try {
+      // The payload stored is the EXACT text the model would have read —
+      // byte-faithful, so a consumer redeems precisely what was displaced.
+      // `mediaType` states what that text is: a JSON serialization when the
+      // tool returned a value, plain text when it returned a string.
+      meta = await bound.artifacts.put({
+        kind: placedResultKind(call.toolName),
+        mediaType: typeof values.modelResult === 'string' ? 'text/plain' : 'application/json',
+        data: text,
+        label: `${call.toolName} result`,
+      });
+    } catch (err) {
+      // The store could not take it (a payload over the whole scope budget,
+      // say). The refusal is already on the record via the capability sink;
+      // the honest fallback is today's path — the truncation net still
+      // measures what placement could not lift. Named in dev mode.
+      if (isDevMode()) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `agentfootprint placement: tool '${call.toolName}' result (${text.length} chars) ` +
+            `exceeded the ${placement.maxInlineChars}-char threshold but could not be ` +
+            `stored: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return values;
+    }
+    const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
+    return {
+      // One ticket when the two channels carry one value — the capResults
+      // law. A chain-transformed `result` keeps its own truth and meets the
+      // truncation net below, exactly as before.
+      result: values.result === values.modelResult ? substitute : values.result,
+      modelResult: substitute,
+    };
   };
 
   /**
@@ -1318,6 +1524,17 @@ export function buildToolCallsHandler(
     ceilingRefused?: true;
   }> => {
     if (!tool) return { result: `Unknown tool: ${toolName}`, error: true };
+    // Declared artifact arguments (9.22.0) — the same resolution the batch
+    // loop applies, at this door: a resumed call's refs are judged exactly
+    // as an inline call's, BEFORE credentials, and a refusal means the tool
+    // does not run.
+    let wantedMeta: Readonly<Record<string, ArtifactMeta>> | undefined;
+    if (tool.wants !== undefined) {
+      const resolution = await resolveWantsAtDispatch(scope, toolName, tool.wants, args);
+      if (!resolution.ok) return { result: resolution.refusal, error: true };
+      args = resolution.args;
+      wantedMeta = resolution.wanted;
+    }
     const runIdentity = scope.runIdentity as
       | { tenant?: string; principal?: string; conversationId: string }
       | undefined;
@@ -1390,6 +1607,7 @@ export function buildToolCallsHandler(
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
         ...toolArtifacts(scope, toolName, toolCallId),
+        ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...sessionContext(scope, toolName, toolCallId),
       });
       await endCall(toolCallId);
@@ -1933,6 +2151,28 @@ export function buildToolCallsHandler(
           }
         }
         if (!denied && !argsRejected) {
+          // ── Declared artifact arguments (9.22.0) ──────────────────────
+          // The `needs` precedent applied to data: resolve the tool's
+          // declared `wants` refs BEFORE credential resolution (never
+          // acquire credentials for a call that won't run) and BEFORE
+          // execute — a stale/unknown/wrong-kind ref never reaches the
+          // tool; the model reads a teaching refusal listing the live refs
+          // of the wanted kind. On success `callArgs` carries the RESOLVED
+          // DATA and `ctx.wanted` the claim tickets. Tools without `wants`
+          // take the exact path they always took.
+          let wantedMeta: Readonly<Record<string, ArtifactMeta>> | undefined;
+          let wantsBlocked = false;
+          if (tool?.wants !== undefined) {
+            const resolution = await resolveWantsAtDispatch(scope, tc.name, tool.wants, callArgs);
+            if (resolution.ok) {
+              callArgs = resolution.args;
+              wantedMeta = resolution.wanted;
+            } else {
+              wantsBlocked = true;
+              error = true;
+              result = resolution.refusal;
+            }
+          }
           // Declare-and-push: resolve the tool's declared credential BEFORE
           // invoking, and inject it as ctx.credential. On consent-required or
           // failure, surface the reason to the LLM (tool result) + emit; the
@@ -1940,7 +2180,7 @@ export function buildToolCallsHandler(
           // throws is surfaced, not retried).
           let resolvedCredential: Credential | undefined;
           let credentialBlocked = false;
-          const need = tool?.needs;
+          const need = wantsBlocked ? undefined : tool?.needs;
           if (need) {
             typedEmit(scope, 'agentfootprint.credential.requested', {
               service: need.credential,
@@ -2033,7 +2273,7 @@ export function buildToolCallsHandler(
               result = `credential error for '${need.credential}': ${reason}`;
             }
           }
-          if (!credentialBlocked) {
+          if (!credentialBlocked && !wantsBlocked) {
             try {
               if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
               // Set BEFORE the await: a tool that throws has still run, and a
@@ -2048,6 +2288,7 @@ export function buildToolCallsHandler(
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
                 ...toolArtifacts(scope, tc.name, tc.id),
+                ...(wantedMeta !== undefined && { wanted: wantedMeta }),
                 ...sessionContext(scope, tc.name, tc.id),
               });
               // The typed effects channel (9.19.0): a recognized envelope is
@@ -2204,6 +2445,23 @@ export function buildToolCallsHandler(
           result = applySkipStep(scope, { args: callArgs, toolCallId: tc.id, iteration });
         }
 
+        // ── present bookkeeping (9.22.0) ───────────────────────────────
+        // Same mechanism as skip_step: the auto-attached placeholder ran;
+        // the stage overwrites its result with the description snapshot (or
+        // the teaching refusal) BEFORE the after-tool moment, so governance
+        // and the caps compose over what the model will actually read. A
+        // miss is an errored call: the model holds no presentation, and a
+        // procedure step whose tool presented nothing must not advance.
+        if (deps.artifactStore && tc.name === PRESENT_TOOL_NAME && executed && !error && !denied) {
+          const presented = await applyPresent(scope, {
+            args: callArgs,
+            toolCallId: tc.id,
+            iteration,
+          });
+          result = presented.text;
+          if (!presented.ok) error = true;
+        }
+
         // ── The after-tool moment ────────────────────────────────────────
         // Last thing before the result becomes history, and only for a call
         // that ran. `modelResult` is what the model reads; `result` stays the
@@ -2222,10 +2480,24 @@ export function buildToolCallsHandler(
               ...(env.signal && { signal: env.signal }),
             })
           : result;
+        // Placement next (9.22.0) — the operator's ref-ing, judged on what
+        // the chain let through (a rule that already summarized a huge
+        // result is measured on what it produced, the same reasoning as the
+        // cap). Over the threshold, the payload is checked into the store
+        // and BOTH channels carry the ticket; the truncation net below then
+        // measures the ticket. A refused/denied/errored call is never
+        // placed: a refusal is already short, and 'tool-result/<name>' must
+        // never claim an error is the tool's result.
+        const placedValues = await placeResults(
+          scope,
+          { toolName: tc.name, toolCallId: tc.id, iteration },
+          { result, modelResult: rawModelResult },
+          executed && !error && !denied && !ceilingRefused,
+        );
         // The ceiling, last — after the tool, after the chain. A rule that
         // already summarized a huge result is measured on what it produced, so
         // the cap composes with governance rather than pre-empting it.
-        const capped = capResults(tc.name, { result, modelResult: rawModelResult });
+        const capped = capResults(tc.name, placedValues);
         const modelResult = capped.modelResult;
 
         const durationMs = Date.now() - startMs;
@@ -2568,6 +2840,22 @@ export function buildToolCallsHandler(
             if (deps.stepPlanFor && toolName === SKIP_STEP_TOOL_NAME && stepToolRan) {
               result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
             }
+            // present behind a middleware ask, approved (9.22.0): same
+            // overwrite the batch loop applies — the snapshot (or refusal)
+            // replaces the placeholder before the chain's last word. A miss
+            // is an errored call here too.
+            if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
+              const presented = await applyPresent(scope, {
+                args: rest.args,
+                toolCallId,
+                iteration,
+              });
+              result = presented.text;
+              if (!presented.ok) {
+                error = true;
+                stepToolRan = false;
+              }
+            }
             // The tool ran on this side of the pause, so the chain gets its
             // last word here too — a rule about results cannot be skipped by
             // routing a call through a human.
@@ -2591,7 +2879,16 @@ export function buildToolCallsHandler(
         // `modelResult` is only set where the after-tool moment ran; everywhere
         // else the two are the same value.
         if (modelResult === undefined) modelResult = result;
-        const askCapped = capResults(toolName, { result, modelResult });
+        // Placement then the truncation net — the batch loop's precedence,
+        // kept on this door (a resumed result is as placeable as an inline
+        // one; `stepToolRan` is exactly "ran clean").
+        const askPlaced = await placeResults(
+          scope,
+          { toolName, toolCallId, iteration },
+          { result, modelResult },
+          stepToolRan,
+        );
+        const askCapped = capResults(toolName, askPlaced);
         modelResult = askCapped.modelResult;
         let askResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
@@ -2728,7 +3025,14 @@ export function buildToolCallsHandler(
         }
 
         if (modelResult === undefined) modelResult = result;
-        const decisionCapped = capResults(toolName, { result, modelResult });
+        // Placement then the truncation net — the batch loop's precedence.
+        const decisionPlaced = await placeResults(
+          scope,
+          { toolName, toolCallId, iteration },
+          { result, modelResult },
+          stepToolRan,
+        );
+        const decisionCapped = capResults(toolName, decisionPlaced);
         modelResult = decisionCapped.modelResult;
         let decisionResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
@@ -2834,7 +3138,14 @@ export function buildToolCallsHandler(
           });
         }
         if (modelResult === undefined) modelResult = result;
-        const consentCapped = capResults(toolName, { result, modelResult });
+        // Placement then the truncation net — the batch loop's precedence.
+        const consentPlaced = await placeResults(
+          scope,
+          { toolName, toolCallId, iteration },
+          { result, modelResult },
+          dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true,
+        );
+        const consentCapped = capResults(toolName, consentPlaced);
         modelResult = consentCapped.modelResult;
         let consentResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
@@ -2952,8 +3263,17 @@ export function buildToolCallsHandler(
       });
       // A person's answer is measured too. The cap is about what one turn can
       // afford to carry, and a pasted transcript costs a window exactly as much
-      // as a tool's rows do.
-      const pauseCapped = capResults(toolName, { result: input, modelResult: rawPauseResult });
+      // as a tool's rows do — which is also why PLACEMENT judges it: the
+      // handler's contract makes the answer the tool's result, so a pasted
+      // 500KB transcript is checked in as `tool-result/<tool>` and the model
+      // routes the ticket.
+      const pausePlaced = await placeResults(
+        scope,
+        { toolName, toolCallId, iteration },
+        { result: input, modelResult: rawPauseResult },
+        true,
+      );
+      const pauseCapped = capResults(toolName, pausePlaced);
       const modelResult = pauseCapped.modelResult;
       let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):

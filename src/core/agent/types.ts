@@ -29,6 +29,7 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { ArtifactStore } from '../../artifacts/types.js';
+import type { ArtifactPlacement } from '../../artifacts/placement.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
@@ -58,6 +59,27 @@ export type ObserverDeliveryOptions = Omit<AttachRecorderOptions, 'delivery'>;
  * vocabulary; it does not export the alias), so the two can never drift.
  */
 export type WriteProvenanceMode = NonNullable<FlowChartExecutorOptions['writeProvenance']>;
+
+/**
+ * The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
+ * operator dials. `placement` cannot be spelled without `store` — a
+ * threshold with nowhere to put what it catches would be configuration that
+ * lies, and the shape refuses it before a runtime check has to.
+ */
+export interface AgentArtifactsOptions {
+  /** The claim-check store — same seam as the bare `ArtifactStore` form. */
+  readonly store: ArtifactStore;
+  /**
+   * The placement threshold. A tool result whose finalized text exceeds
+   * `maxInlineChars` is checked into the store (kind
+   * `tool-result/<toolName>`) and the model reads the claim ticket instead.
+   * Judged AFTER the tool's own `resultCeiling` (the author's refusal comes
+   * first) and BEFORE the agent-level `maxToolResultChars` truncation net
+   * (which then measures the ticket, so it should rarely fire). Omitted →
+   * results are never measured and never placed, exactly as before.
+   */
+  readonly placement?: ArtifactPlacement;
+}
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -286,12 +308,20 @@ export interface AgentOptions {
    * `inMemoryArtifacts()`, `fileArtifacts({ directory })`,
    * `sqliteArtifacts({ file })` — or any `ArtifactStore`.
    *
+   * Since 9.22.0 the store also switches on the data legs: tools may declare
+   * `wants` (ref arguments resolved at dispatch), the `present` tool is
+   * auto-attached, and — via the object form — the operator may set the
+   * placement threshold: `artifacts: { store, placement: { maxInlineChars } }`
+   * checks any tool result over the threshold into the store and hands the
+   * model the claim ticket instead ({@link AgentArtifactsOptions}). The bare
+   * `ArtifactStore` form stays exactly what it was: the store, no placement.
+   *
    * Unset — the default — the agent is byte-identical to earlier releases:
-   * no events, no state, and `ctx.artifacts` is a fail-closed capability whose
-   * every method throws a teaching refusal naming this option
-   * (`ctx.hasArtifacts` is the fact to branch on).
+   * no events, no state, no `present` tool, and `ctx.artifacts` is a
+   * fail-closed capability whose every method throws a teaching refusal
+   * naming this option (`ctx.hasArtifacts` is the fact to branch on).
    */
-  readonly artifacts?: ArtifactStore;
+  readonly artifacts?: ArtifactStore | AgentArtifactsOptions;
   /**
    * What the run does when a tool's DECLARED credential (`needs: { credential }`)
    * comes back `authorization-required` — a person has to click a consent link

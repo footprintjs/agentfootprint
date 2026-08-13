@@ -315,6 +315,7 @@ export {
 export {
   Agent,
   AgentBuilder,
+  type AgentArtifactsOptions,
   type AgentInput,
   type AgentOptions,
   type AgentOutput,
@@ -574,6 +575,23 @@ export {
   type SweptArtifact,
   type ToolArtifactPutInput,
   type ToolArtifacts,
+} from './artifacts/index.js';
+// Artifacts, the data legs (9.22.0) — refs the model ROUTES: `wants` (ref
+// arguments resolved at dispatch, the declare-and-push precedent applied to
+// data), the auto-attached `present` tool (hand a ref to the screen with a
+// description snapshot the transcript keeps), and the placement threshold
+// (`artifacts: { store, placement }` — oversized results become claim
+// tickets). All zero-cost without a store.
+export {
+  assertToolWants,
+  isPlacedToolResult,
+  placedResultKind,
+  PRESENT_TOOL_NAME,
+  type ArtifactPlacement,
+  type PlacedToolResult,
+  type PresentedResult,
+  type PresentSnapshot,
+  type ToolWants,
 } from './artifacts/index.js';
 
 // Slot subflow builders are intentionally NOT exported. They are
