@@ -10,7 +10,11 @@
  * Two routes: `POST /invoke` takes `{ input, sessionId?, decision? }` and
  * answers `{ output }` — or `{ awaiting }` with a **202** when the run stopped
  * to ask a person something, which a later `POST` carrying `decision` continues;
- * `GET /health` answers `{ status: 'ok' }`. Both paths are
+ * `GET /health` answers `{ status: 'ok' }`. The same `POST` also carries the
+ * artifact wire operations (9.23.0): `{ op: 'artifact-head', ref, sessionId }`
+ * answers `{ artifact: { ref, meta } }` and `{ op: 'artifact-get', … }` adds
+ * `data` — a screen redeeming a claim ticket under the same session identity
+ * the conversation's own requests present. Both paths are
  * options, because the paths are the part most likely to be dictated to you by
  * whatever is in front of the process — a load balancer, a container contract,
  * a colleague's convention. A path is a deployment detail, so it is a knob
@@ -47,6 +51,7 @@
  * throws does. `types.ts` knows none of it either way.
  */
 
+import { artifactWireBody, readArtifactWireOp } from './artifactWire.js';
 import {
   headerValue,
   httpHost,
@@ -240,10 +245,18 @@ export function jsonWireWith(options: JsonWireOptions = {}): HttpWire {
       // a tool asked, and this dialect does not get to decide what that looks
       // like. Its PRESENCE is the whole signal.
       const decision = facts.body.decision;
+      // The artifact wire operations (9.23.0): a body naming `op` redeems a
+      // claim ticket instead of starting a turn. One reader owns the grammar;
+      // an op this dialect does not speak refuses there rather than quietly
+      // becoming a conversation turn. The session rides body/header/cookie
+      // above, exactly as every other request's does — the resolution is
+      // governed by that same session identity.
+      const artifact = readArtifactWireOp(facts.body);
       return {
         input,
         ...(sessionId !== undefined && { sessionId }),
         ...(decision !== undefined && { decision }),
+        ...(artifact !== undefined && { artifact }),
         ...(minted !== undefined &&
           sessionCookie !== undefined && {
             responseHeaders: { 'set-cookie': sessionCookieHeader(sessionCookie, minted) },
@@ -255,6 +268,7 @@ export function jsonWireWith(options: JsonWireOptions = {}): HttpWire {
     failure: (error, code) => ({ error, ...(code !== undefined && { code }) }),
     chunk: (text) => ({ text }),
     awaiting: (pending) => ({ awaiting: pending }),
+    artifact: (result) => artifactWireBody(result),
     readConversation(facts) {
       // A handshake has no body, so this dialect names the three places a
       // session id can be: the header a server-side caller sets, the cookie the

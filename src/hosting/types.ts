@@ -27,6 +27,7 @@ import type { CheckInRequest } from '../core/checkin.js';
 import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
+import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 
 export type { Unsubscribe };
 
@@ -114,6 +115,22 @@ export interface HostRequest {
    */
   readonly userId?: string;
   /**
+   * An artifact operation this request carries INSTEAD of a message (9.23.0)
+   * — `head` (the claim ticket's metadata) or `get` (metadata + payload), for
+   * one ref.
+   *
+   * Its PRESENCE is the discriminant, exactly as {@link decision}'s is: a
+   * request carrying `artifact` redeems a ticket and never starts or resumes
+   * a run — `input` and `decision` do not ride it. A handler that serves
+   * artifacts answers with {@link HostReply.artifact}; a handler that does
+   * not should refuse it by name rather than treat it as a message, because a
+   * redemption silently answered by a model turn is a caller told nothing and
+   * billed anyway. `standingAgent` answers it: the ref is resolved against
+   * the serving agent's store under the requesting session's
+   * identity-composed scope — exactly the scope the run's own tools used.
+   */
+  readonly artifact?: ArtifactWireRequest;
+  /**
    * Transport headers with lower-cased names, as delivered. Present so a
    * handler can map its own conventions (a correlation id, a tenant) without
    * the port having to guess which ones matter.
@@ -125,14 +142,18 @@ export interface HostRequest {
 
 /**
  * The one reply a request gets. Exactly one of {@link HostReply.complete},
- * {@link HostReply.awaiting} or {@link HostReply.fail} ends it; a second call is
- * ignored rather than allowed to corrupt the wire.
+ * {@link HostReply.awaiting}, {@link HostReply.artifact} or
+ * {@link HostReply.fail} ends it; a second call is ignored rather than allowed
+ * to corrupt the wire.
  *
- * Three terminals, because a run has three ends and only three: it answered, it
- * stopped to ask a person something, or it failed. Before `'flowchart-v1'` there
- * was nowhere to keep a paused run, so the middle one was delivered through
- * `fail` — an error standing in for unfinished work. It is a terminal of its own
- * now, and a pause is never reported as a failure again.
+ * Three terminals for a RUN, because a run has three ends and only three: it
+ * answered, it stopped to ask a person something, or it failed. Before
+ * `'flowchart-v1'` there was nowhere to keep a paused run, so the middle one
+ * was delivered through `fail` — an error standing in for unfinished work. It
+ * is a terminal of its own now, and a pause is never reported as a failure
+ * again. The fourth terminal ends a request that never was a run:
+ * {@link HostRequest.artifact} redeems a claim ticket, and `artifact(...)` is
+ * how the resolved ticket comes back.
  */
 export interface HostReply {
   /** Deliver the final answer and end the reply. */
@@ -155,6 +176,20 @@ export interface HostReply {
    * the pause is never lost merely because the wire could not describe it.
    */
   awaiting?(pending: PendingAsk): void;
+  /**
+   * End the reply with a **resolved artifact** (9.23.0): the metadata for a
+   * `head`, metadata + payload for a `get`. The terminal a request carrying
+   * {@link HostRequest.artifact} ends through when the ref resolved; a ref
+   * that did not resolve ends through `fail` with the one indistinguishable
+   * not-found refusal.
+   *
+   * Optional on the TYPE for the same reason {@link HostReply.awaiting} is: a
+   * minimal adapter need not implement it, and every shipped adapter does.
+   * When it is absent the composer ends the reply with a named refusal
+   * (`ArtifactNotCarriedError`) instead — the resolution is not lost quietly
+   * merely because the wire could not describe it.
+   */
+  artifact?(result: ArtifactWireResult): void;
   /**
    * A piece of the answer, as it is produced.
    *
@@ -566,12 +601,18 @@ export type DurabilityMode = 'exit' | 'async' | 'sync';
  *  - `'invoke'` — a request arrived for that session.
  *  - `'resume'` — that request carries a person's decision for a run which
  *    paused earlier.
+ *  - `'artifact'` — that request redeems an artifact ref, and the session's
+ *    stored identity is needed to compose the scope it resolves under. Fired
+ *    only when the resolution actually reads the store (a request carrying a
+ *    `userId`); a session-only resolution composes its scope from the request
+ *    alone and wakes nothing.
  *
- * `'resume'` was absent until 7.19 because nothing could produce it: naming
- * reasons nothing fires would be an interface describing a system that does not
- * exist. Something produces it now.
+ * `'resume'` was absent until 7.19, and `'artifact'` until 9.23, because
+ * nothing could produce them: naming reasons nothing fires would be an
+ * interface describing a system that does not exist. Something produces each
+ * of them now.
  */
-export type WakeReason = 'invoke' | 'resume';
+export type WakeReason = 'invoke' | 'resume' | 'artifact';
 
 /**
  * The port: where a conversation lives between requests.

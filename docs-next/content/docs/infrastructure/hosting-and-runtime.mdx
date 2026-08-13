@@ -55,10 +55,10 @@ Three ports, one composer, and one seam for writing your own HTTP adapter:
 (`ConversationHost` is the newest and has [its own section](#a-door-that-stays-open--serveconversations)
 — skip to it if the caller you have to serve cannot be *called*.)
 
-### The reply has exactly three terminals
+### The reply's terminals
 
 `HostReply` ends exactly once, and a second call is ignored rather than allowed
-to corrupt the wire:
+to corrupt the wire. A **run** has three ends and only three:
 
 | Terminal | Meaning | Never |
 |---|---|---|
@@ -66,13 +66,18 @@ to corrupt the wire:
 | `awaiting(pending)` | It stopped to ask a person something. The paused run is stored; a later request carrying `decision` continues it | **not** a failure — an adapter mapping this onto a 5xx, an error counter or a dead-letter queue is telling every dashboard it feeds something untrue |
 | `fail(error)` | It broke | — |
 
-`awaiting` and `emit` are optional **on the type** so a minimal adapter need not
-implement them; every shipped adapter does. When `awaiting` is absent the
-composer still **stores** the paused run — the store is not the transport's
-business — and ends the reply with a named refusal instead, so a pause is never
-lost merely because the wire could not describe it. That refusal is
-[`ERR_PAUSE_NOT_CARRIED`](#a-pause-the-wire-could-not-describe), and it is the
-smallest complete example of how these ports are written.
+The fourth terminal, `artifact(result)`, ends a request that never was a run: a
+screen [redeeming a claim ticket](#redeeming-claim-tickets--artifact-head--artifact-get)
+by ref (9.23.0).
+
+`awaiting`, `artifact` and `emit` are optional **on the type** so a minimal
+adapter need not implement them; every shipped adapter does. When `awaiting` is
+absent the composer still **stores** the paused run — the store is not the
+transport's business — and ends the reply with a named refusal instead, so a
+pause is never lost merely because the wire could not describe it. That refusal
+is [`ERR_PAUSE_NOT_CARRIED`](#a-pause-the-wire-could-not-describe), and it is
+the smallest complete example of how these ports are written (`artifact` gets
+the same treatment: absent ⇒ `ERR_ARTIFACT_NOT_CARRIED`, named, never silence).
 
 <CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
 
@@ -1091,6 +1096,104 @@ one of those sessions **refuses it by name** — which is the unknown-format law
 working exactly as designed, loudly rather than silently. Drain or roll forward
 rather than running both versions against one store.
 </Callout>
+
+## Redeeming claim tickets — `artifact-head` / `artifact-get`
+
+The [artifact store](/docs/build/artifacts) taught tools and the model to route
+refs instead of hauling data, and `present({ ref, as })` hands one to the
+screen. This is the screen's half (9.23.0): **two wire operations on the same
+invoke path**, so a frontend can redeem the ticket — describe it first, then
+pay for the bytes.
+
+```ts
+// the run minted art_h7Kq… and the model presented it; now the screen asks:
+await fetch(`${url}/invoke`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ op: 'artifact-head', ref: 'art_h7Kq…', sessionId }),
+});
+// → 200 { artifact: { ref, meta } }        meta = { kind, mediaType, bytes, label?, … }
+
+// pick the registered component from meta.kind, then:
+//    { op: 'artifact-get', ref, sessionId }
+// → 200 { artifact: { ref, meta, data } }  render it
+```
+
+`head` **is** the render-by-ref decision: the screen picks a renderer from
+`kind` and `bytes` without downloading anything. `get` pays for the payload.
+There is deliberately **no put, no delete and no `list` on the wire** — a
+screen redeems tickets, it does not mint or sweep, and a wire `list` would let
+a caller *enumerate* a scope. Possession of the ref is the entitlement, and
+even that only under the right identity:
+
+### One isolation rule, re-composed — never a second one
+
+A ref is redeemed under **exactly the scope the run's tools minted it in**.
+`standingAgent` composes the resolution scope from the request the same way it
+composes the run's identity: a session-only request resolves under the
+session's own namespace; a request whose transport carries a `userId` (the
+managed-runtime wires do; the generic `jsonWire` deliberately reads none)
+resolves under the identity tuple — same session presented with a different
+identity is a different scope. The store then answers a wrong scope the way it
+always has: **"no data", never a distinguishable error.**
+
+So the wire's not-found is ONE shape — `404`, `code: 'ERR_ARTIFACT_NOT_FOUND'`
+— for missing, expired and another-session's alike, byte-identical but for the
+ref itself. Anything distinguishable would let a caller probe scopes it does
+not own. There is no bare-ref mode: an artifact op with no session at all is
+refused (`400`, `ERR_ARTIFACT_SESSION_REQUIRED`) — an id in a log or a bug
+report opens nothing, ever.
+
+That not-found is also what a **reloaded conversation** renders honestly: walk
+the transcript for `present` results, `artifact-head` each ref under the
+session's identity — live refs re-draw, and an expired one renders its stated
+absence *from the description snapshot the `present` result already carries*
+("Chart — 'Q3 sales by region' (bar-chart, 41 KB) — expired; re-run to
+regenerate"). Never a blank pane.
+
+### The refusals, each naming its fix
+
+| Reply | Status | When |
+|---|---|---|
+| `{ artifact: { ref, meta } }` | 200 | `artifact-head` resolved |
+| `{ artifact: { ref, meta, data } }` | 200 | `artifact-get` resolved |
+| `ERR_ARTIFACT_NOT_FOUND` | 404 | missing, expired, or another scope's — deliberately indistinguishable |
+| `ERR_ARTIFACT_SESSION_REQUIRED` | 400 | the op named no session |
+| `ERR_INVALID_WIRE_OP` | 400 | an `op` this host does not speak, or a known op without `ref`. **A body that named an `op` never falls through to a model turn** — a typo'd redemption silently becoming a billed conversation turn is the failure this refusal exists to prevent |
+| `ERR_NO_ARTIFACT_STORE` | 501 | the serving agent has no store — the refusal names the attach: `Agent.create({ …, artifacts })` |
+| `ERR_ARTIFACT_NOT_CARRIED` | 501 | the ref resolved but this host/wire cannot describe the result (`reply.artifact` / the wire's `artifact` body shape is missing) |
+
+Each row throws a named class exported from `agentfootprint/hosting`, carrying
+the same `code` shown above for an adapter that would rather catch by class
+than by string: `ArtifactSessionRequiredError`, `NoArtifactStoreError`,
+`ArtifactNotFoundError`, `ArtifactNotCarriedError`. The op grammar itself is
+`readArtifactWireOp`/`artifactWireBody` plus the pieces a custom dialect reads
+and returns — the wire spellings `ARTIFACT_HEAD_OP`/`ARTIFACT_GET_OP`, and the
+port-side `ArtifactWireRequest`/`ArtifactWireResult` types.
+
+Three more facts worth knowing:
+
+- **A redemption is not a turn.** It never starts, resumes, queues behind, or
+  is refused as a run — a screen describing a chart while the model is
+  mid-turn is served immediately, and a session *awaiting a decision* still
+  redeems (history reload re-draws panes while the question is outstanding).
+- **On the record, once.** Every wire redemption rides the *existing*
+  `agentfootprint.artifacts.resolved` / `artifacts.refused` events on the
+  serving agent — with no `tool` field, because the redeemer was the hosting
+  door, not a tool. The raw store emits nothing, so there is exactly one
+  emission per fact.
+- **No reply redaction exists to bypass, stated plainly.** The hosting layer
+  applies no redaction to replies today — `complete(output)` carries the
+  agent's words verbatim, and artifact `data` passes the same boundary.
+  Redaction in this library governs the *trace* (recorders), not host replies;
+  what governs this door is the identity-scoped resolution above.
+
+Custom `HttpWire` dialects join in with the shared grammar rather than
+re-deriving it: `readArtifactWireOp(facts.body)` in `readRequest` (unknown ops
+refuse there, as `InvalidWireOpError`), and `artifactWireBody(result)` as the
+`artifact` body shape — exactly how the two shipped dialects do it. The
+AgentCore runtime wire carries both ops with its own `status: 'success'`
+envelope beside the standard body.
 
 ## `durability` — how often progress becomes crash-survivable
 

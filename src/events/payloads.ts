@@ -1664,8 +1664,12 @@ export interface ArtifactResolvedPayload {
   readonly via: 'head' | 'get';
   readonly kind: string;
   readonly bytes: number;
-  /** The tool that redeemed it. */
-  readonly tool: string;
+  /** The tool that redeemed it. ABSENT when the redemption came through the
+   *  hosting door instead of a tool (9.23.0) — a screen resolving
+   *  `artifact-head` / `artifact-get` over the wire, under the requesting
+   *  session's identity. Stamping a phantom tool name there would be a
+   *  dashboard grouping by an actor that does not exist. */
+  readonly tool?: string;
 }
 
 /** An artifact left the store without its owner asking — the calendar (ttl)
@@ -1696,8 +1700,12 @@ export interface ArtifactRefusedPayload {
   readonly ref?: string;
   /** The refusal sentence, when one was thrown. */
   readonly detail?: string;
-  /** The tool whose call was refused. */
-  readonly tool: string;
+  /** The tool whose call was refused. ABSENT when the refusal answered the
+   *  hosting door instead of a tool (9.23.0) — a wire resolution that found
+   *  nothing (`missing-or-expired`: the one indistinguishable answer for
+   *  missing, expired and another-session's alike) or reached an agent with
+   *  no store (`no-store`). */
+  readonly tool?: string;
 }
 
 /** The model handed an artifact to the screen (9.22.0): `present({ ref, as,

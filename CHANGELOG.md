@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.23.0] - 2026-08-13
+
+**The screen redeems claim tickets: artifact resolution joins the hosting
+wire, scoped to the session that asks.**
+
+### Added — two wire operations on the existing invoke path
+
+```ts
+{ op: 'artifact-head', ref }  // → meta
+{ op: 'artifact-get',  ref }  // → meta + data
+```
+
+Resolved under the requesting session's identity-composed scope — exactly
+the scope the run's own tools used. A ref from another session, the wrong
+identity, an expired artifact, and a never-minted ref all return one
+indistinguishable 404 (`ERR_ARTIFACT_NOT_FOUND`) — pinned byte-identical.
+
+### Added — port surface
+
+`HostRequest.artifact` + a fourth `HostReply` terminal, `artifact(result)`
+(with a named not-carried fallback, `ERR_ARTIFACT_NOT_CARRIED`). Both
+shipped wire dialects carry the ops; the grammar has one owner
+(`artifactWire`) exported for custom dialects. `Agent.getArtifactStore()`
+is the composer door.
+
+### Read-only by design
+
+No put, delete or list over the wire — a screen redeems tickets, it does
+not mint, sweep, or ENUMERATE a scope. Citable.
+
+### Teaching refusals
+
+No store attached → 501 naming `Agent.create({ artifacts })`. No session →
+400 (there is no bare-ref mode). Malformed op → 400. An op-carrying body
+never falls through to a model turn.
+
+### Behavior note (recorded honestly)
+
+A legacy invoke body that carried a top-level `op` field previously fell
+through to a model turn; it now answers 400 `ERR_INVALID_WIRE_OP`. `op` is
+reserved on the invoke path from this release.
+
+### Events
+
+Wire redemptions ride the existing `agentfootprint.artifacts.resolved` /
+`.refused` events exactly once; the `tool` field is now honestly optional
+— the redeemer was the hosting door.
+
 ## [9.22.0] - 2026-08-13
 
 **The model routes claim tickets: tools receive resolved data, screens

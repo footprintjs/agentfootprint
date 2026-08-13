@@ -8,9 +8,9 @@
  * what the caller asked for.
  *
  * Everything a deployment target gets to re-decide is an {@link HttpWire}: the
- * two paths, and the five JSON shapes — how a request names its input and its
- * session, and what a health probe, a completion, a failure and a streamed
- * piece look like on the wire.
+ * two paths, and the JSON body shapes — how a request names its input and its
+ * session, and what a health probe, a completion, a failure, a streamed piece,
+ * a pending question and a resolved artifact look like on the wire.
  *
  * ── Why this file exists ─────────────────────────────────────────────────────
  * `nodeHost` shipped first and hard-coded its own dialect: `{ input }` in,
@@ -71,7 +71,8 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 import { encodeSSE } from '../stream.js';
-import { HostClosedError } from './errors.js';
+import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+import { ArtifactNotCarriedError, HostClosedError, InvalidWireOpError } from './errors.js';
 import { lowerCasedHeaders } from './headers.js';
 import type {
   AgentHost,
@@ -138,6 +139,16 @@ export interface HttpWire {
      */
     readonly decision?: unknown;
     /**
+     * An artifact operation this request carries instead of a message
+     * (9.23.0). Read it with `readArtifactWireOp(facts.body)` — the one owner
+     * of the `{ op: 'artifact-head' | 'artifact-get', ref }` grammar — rather
+     * than re-deriving the op names per dialect. A dialect that never returns
+     * it simply cannot serve artifact resolution; a dialect that DOES must
+     * also implement {@link HttpWire.artifact}, or every resolved ref answers
+     * with the named not-carried refusal.
+     */
+    readonly artifact?: ArtifactWireRequest;
+    /**
      * Headers to put on THIS request's reply, whatever terminal it ends with
      * (9.10.0).
      *
@@ -170,6 +181,18 @@ export interface HttpWire {
    * either way.
    */
   awaiting?(pending: PendingAsk): unknown;
+  /**
+   * Body for a RESOLVED artifact operation (9.23.0) — the metadata for a
+   * `head`, metadata + payload for a `get`. Compose it with
+   * `artifactWireBody(result)` (both shipped dialects do) so clients read one
+   * shape; add dialect envelope fields beside it when the deployment's
+   * contract demands them.
+   *
+   * Optional exactly as `awaiting` is: a wire without it keeps compiling, and
+   * a resolved ref on such a wire is answered with the named
+   * `ArtifactNotCarriedError` refusal instead of an improvised body.
+   */
+  artifact?(result: ArtifactWireResult): unknown;
   /**
    * Pull the port's vocabulary out of one conversation handshake — the session
    * this conversation claims, any header mapping this dialect performs, and the
@@ -376,6 +399,15 @@ export interface HttpHost extends AgentHost, ConversationHost {
  * consistent state and it is the REQUEST that is wrong — it answered a consent
  * gate with a value instead of a decision. Nothing ran and the pause is still
  * there, so the same caller can send the right shape and continue.
+ *
+ * The artifact rows (9.23.0) follow the same reading. The two 400s are
+ * requests the same caller can fix (a malformed wire op; an op with no
+ * session). `ERR_ARTIFACT_NOT_FOUND` is 404 — the honest HTTP word for "no
+ * data at this name", and deliberately ONE status for missing, expired and
+ * another-session's alike, so the wire teaches a caller nothing about scopes
+ * it does not own. The two 501s are deployments that cannot do this at all —
+ * an agent without a store, a wire without the body shape — which no retry
+ * and no different request will change.
  */
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_HOST_CLOSED: 503,
@@ -384,6 +416,11 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_AWAITING_DECISION: 409,
   ERR_NO_PENDING_ASK: 409,
   ERR_DECISION_REQUIRED: 400,
+  ERR_INVALID_WIRE_OP: 400,
+  ERR_ARTIFACT_SESSION_REQUIRED: 400,
+  ERR_ARTIFACT_NOT_FOUND: 404,
+  ERR_NO_ARTIFACT_STORE: 501,
+  ERR_ARTIFACT_NOT_CARRIED: 501,
 };
 
 /**
@@ -695,7 +732,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           return;
         }
 
-        const served = serveOne(req, res, handler, wire);
+        const served = serveOne(req, res, handler, wire, name);
         inFlight.add(served);
         // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
@@ -772,9 +809,10 @@ async function serveOne(
   res: ServerResponse,
   handler: HostHandler,
   wire: HttpWire,
+  hostName: string,
 ): Promise<void> {
   try {
-    await dispatchOne(req, res, handler, wire);
+    await dispatchOne(req, res, handler, wire, hostName);
   } catch (err) {
     // Everything inside answers its own failures; anything that got past them
     // — a dialect that threw, a body that would not stringify — is still this
@@ -788,6 +826,7 @@ async function dispatchOne(
   res: ServerResponse,
   handler: HostHandler,
   wire: HttpWire,
+  hostName: string,
 ): Promise<void> {
   const wantsStream = (req.headers.accept ?? '').includes('text/event-stream');
   const controller = new AbortController();
@@ -802,11 +841,22 @@ async function dispatchOne(
 
   const headers = lowerCasedHeaders(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
-  const { input, sessionId, userId, decision, responseHeaders } = wire.readRequest({
-    body,
-    headers,
-    query,
-  });
+  let read: ReturnType<HttpWire['readRequest']>;
+  try {
+    read = wire.readRequest({ body, headers, query });
+  } catch (err) {
+    // A body that NAMED a wire operation this dialect does not speak — or
+    // named one and left out what it needs. The request is what is wrong, so
+    // it gets its own 400 with the teaching refusal, and never falls through
+    // to a model turn. Anything else a dialect throws stays what it always
+    // was: this request's 500, via serveOne's catch.
+    if (err instanceof InvalidWireOpError) {
+      sendJson(res, STATUS_BY_CODE[err.code] ?? 400, wire.failure(err.message, err.code));
+      return;
+    }
+    throw err;
+  }
+  const { input, sessionId, userId, decision, artifact, responseHeaders } = read;
   // The dialect's own reply headers — a `Set-Cookie` that issues a session, and
   // nothing else so far. Stripped of `content-type` because the framing below
   // is this host's to decide: a dialect that set it would be choosing between
@@ -850,6 +900,25 @@ async function dispatchOne(
         res.end();
       } else {
         sendJson(res, 200, wire.output(output), extraHeaders);
+      }
+    },
+    artifact(result): void {
+      if (settled) return;
+      // A wire that cannot describe an artifact result must not answer 200
+      // with an improvised body — a shape no client was written against is a
+      // blank pane with extra steps. The named refusal says what resolved and
+      // why this wire could not carry it.
+      if (!wire.artifact) {
+        reply.fail(new ArtifactNotCarriedError(result.ref, hostName));
+        return;
+      }
+      settled = true;
+      const payload = wire.artifact(result);
+      if (wantsStream) {
+        res.write(encodeSSE('artifact', payload));
+        res.end();
+      } else {
+        sendJson(res, 200, payload, extraHeaders);
       }
     },
     awaiting(pending): void {
@@ -903,6 +972,7 @@ async function dispatchOne(
         ...(sessionId !== undefined && { sessionId }),
         ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
+        ...(artifact !== undefined && { artifact }),
         headers,
         signal: controller.signal,
       },

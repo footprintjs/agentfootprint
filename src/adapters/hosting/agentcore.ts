@@ -71,6 +71,7 @@
  * importing this module costs zero peer-dep load.
  */
 
+import { artifactWireBody, readArtifactWireOp } from '../../hosting/artifactWire.js';
 import { checkEnvelope } from '../../hosting/envelope.js';
 import { headerValue, httpHost } from '../../hosting/httpHost.js';
 import type {
@@ -301,11 +302,17 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
       // Without it a deployment here could start turns but never finish one
       // that asked a question.
       const decision = facts.body.decision;
+      // The artifact wire operations (9.23.0). The runtime passes the payload
+      // through verbatim — the CALLER picks the fields — so the shared
+      // `{ op, ref }` grammar reads here exactly as it does on `jsonWire`,
+      // and a screen behind this runtime redeems tickets the same way.
+      const artifact = readArtifactWireOp(facts.body);
       return {
         input,
         ...(sessionId !== undefined && { sessionId }),
         ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
+        ...(artifact !== undefined && { artifact }),
       };
     },
     // The runtime polls this to decide whether the container is ready and
@@ -326,6 +333,9 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
     // 'success' nor 'error' because it is neither: the run stopped to ask a
     // person, it is stored, and a later call carrying `decision` finishes it.
     awaiting: (pending) => ({ awaiting: pending, status: 'awaiting' }),
+    // A resolved claim ticket: the standard body, plus this dialect's own
+    // `status` beside it — the same envelope rule its other replies follow.
+    artifact: (result) => ({ ...artifactWireBody(result), status: 'success' }),
     readConversation: readAgentCoreConversation,
   };
 }

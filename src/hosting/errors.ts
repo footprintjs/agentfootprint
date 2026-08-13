@@ -256,6 +256,136 @@ export class FrameTooLargeError extends Error {
 }
 
 /**
+ * Thrown when a request body names a wire operation this host does not speak,
+ * or names one and leaves out what it needs (an artifact op without a `ref`).
+ *
+ * The law it enforces: **a body that named an `op` never falls through to a
+ * model turn.** A caller who typo'd `'artifact-head'` and silently got a
+ * conversation turn — with the ref as garbage input — would be told nothing
+ * and billed anyway, which is the accepted-and-silently-wrong failure this
+ * refusal exists to prevent. Adapters answer it as that request's 400: the
+ * request is what is wrong, and the same caller can send the right shape.
+ */
+export class InvalidWireOpError extends Error {
+  readonly code = 'ERR_INVALID_WIRE_OP' as const;
+
+  constructor(detail: string) {
+    super(`[hosting] ${detail}`);
+    this.name = 'InvalidWireOpError';
+  }
+}
+
+/**
+ * Thrown when an artifact operation arrives with no session id.
+ *
+ * Artifact resolution is governed by the requesting session's identity —
+ * a ref is redeemed under exactly the scope the run's tools minted it in, and
+ * a request that names no session presents no scope to resolve under. (A run
+ * served without a session scopes its artifacts to its own runId, which no
+ * later request can name — so there is genuinely nothing this request could
+ * ever redeem.) There is deliberately no bare-ref mode: an id alone opens
+ * nothing, ever.
+ */
+export class ArtifactSessionRequiredError extends Error {
+  readonly code = 'ERR_ARTIFACT_SESSION_REQUIRED' as const;
+
+  constructor(op: 'head' | 'get') {
+    super(
+      `[hosting] artifact-${op} needs the session whose run minted the ref: refs resolve ` +
+        `under the requesting session's identity-composed scope, and this request named no ` +
+        `session. Send sessionId the same way the conversation's own requests do — in the ` +
+        `body, the session header, or the session cookie. There is no bare-ref mode: a ref ` +
+        `alone opens nothing.`,
+    );
+    this.name = 'ArtifactSessionRequiredError';
+  }
+}
+
+/**
+ * Thrown when an artifact operation arrives and the agent serving this
+ * session has no artifact store attached.
+ *
+ * The teaching refusal of the fail-closed capability (`ctx.artifacts` with no
+ * store), spoken at the hosting door: it names the attach rather than
+ * answering "not found" — a deployment gap and a missing ref are different
+ * facts, and only one of them is the operator's to fix.
+ */
+export class NoArtifactStoreError extends Error {
+  readonly code = 'ERR_NO_ARTIFACT_STORE' as const;
+
+  constructor(op: 'head' | 'get') {
+    super(
+      `[hosting] artifact-${op} has no artifact store behind it: the agent serving this ` +
+        `session was built without one, so no ref could ever resolve here. Pass ` +
+        `\`artifacts\` to Agent.create({ ..., artifacts }) — inMemoryArtifacts() for an ` +
+        `in-process store, fileArtifacts({ directory }) or sqliteArtifacts({ file }) for ` +
+        `one that survives a restart — and the wire operations answer from it.`,
+    );
+    this.name = 'NoArtifactStoreError';
+  }
+}
+
+/**
+ * Thrown when a ref does not resolve for the requesting session — missing,
+ * expired, or minted under a scope this session's identity does not compose.
+ *
+ * **Deliberately one shape for all three.** Distinguishing "never existed"
+ * from "another session's" would let a caller probe scopes it does not own;
+ * the store already answers a wrong scope with "no data" rather than a
+ * cross-tenant error, and this refusal keeps that ambiguity on the wire.
+ * The screen renders a stated absence in place — the `present` result's
+ * description snapshot exists exactly so an expired pane can still say what
+ * is gone.
+ */
+export class ArtifactNotFoundError extends Error {
+  readonly code = 'ERR_ARTIFACT_NOT_FOUND' as const;
+  /** The ref that did not resolve. */
+  readonly ref: string;
+
+  constructor(ref: string) {
+    super(
+      `[hosting] artifact '${ref}' does not resolve for this session — missing, expired, ` +
+        `swept, or never stored under this session's scope. Render its stated absence in ` +
+        `place (a present(...) result carries a description snapshot for exactly this ` +
+        `moment); re-run to regenerate the data.`,
+    );
+    this.name = 'ArtifactNotFoundError';
+    this.ref = ref;
+  }
+}
+
+/**
+ * Raised when an artifact RESOLVED and the reply cannot describe it — a host
+ * without {@link HostReply.artifact}, or an `HttpWire` dialect without an
+ * `artifact` body shape.
+ *
+ * The `PauseNotCarriedError` shape, for the other optional terminal: the
+ * resolution itself succeeded and nothing about the store is wrong — it is
+ * THIS REPLY that has no vocabulary for the answer. Named rather than
+ * improvised, because an adapter inventing a body shape on the spot would be
+ * a body no client was written against.
+ */
+export class ArtifactNotCarriedError extends Error {
+  readonly code = 'ERR_ARTIFACT_NOT_CARRIED' as const;
+  /** The ref that resolved but could not be delivered. */
+  readonly ref: string;
+
+  constructor(ref: string, hostName?: string) {
+    super(
+      `[hosting] artifact '${ref}' resolved, but ` +
+        (hostName !== undefined
+          ? `the '${hostName}' host's wire has no artifact() body shape, `
+          : `this host does not implement reply.artifact(), `) +
+        `so the result cannot be described on this wire. Nothing is wrong with the ` +
+        `artifact — serve on an adapter that carries artifact results (nodeHost does), or ` +
+        `add the artifact body shape to the dialect.`,
+    );
+    this.name = 'ArtifactNotCarriedError';
+    this.ref = ref;
+  }
+}
+
+/**
  * An already-computed preview, so {@link UnreadableEnvelopeError.withSession}
  * can copy a refusal without being handed the stored bytes a second time. Not
  * exported: nothing outside this file should be able to hand-write a preview.

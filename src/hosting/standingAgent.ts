@@ -98,13 +98,19 @@
  * mechanism of its own.
  */
 
+import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
 import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import { readEnvelope, readPausedRun, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
+  ArtifactNotCarriedError,
+  ArtifactNotFoundError,
+  ArtifactSessionRequiredError,
   AwaitingDecisionError,
   ConcurrentRunError,
+  NoArtifactStoreError,
   NoPendingAskError,
   PauseNotCarriedError,
   UnreadableEnvelopeError,
@@ -474,6 +480,21 @@ export async function standingAgent<TH extends HostHandle>(
   }
 
   const handler = async (request: HostRequest, reply: HostReply): Promise<void> => {
+    // ── A claim-ticket redemption is not a turn ────────────────────────
+    // Its presence is the discriminant, exactly as `decision`'s is one line
+    // down: a request carrying `artifact` redeems a ref and never starts,
+    // queues behind, or is refused as, a run. Read-only against the store, so
+    // it deliberately bypasses the lane's serialization — a screen describing
+    // a chart while the model is mid-turn must not be refused as a
+    // "concurrent run", and must not make the turn wait either.
+    if (request.artifact !== undefined) {
+      try {
+        await answerArtifact(request.artifact, request, reply);
+      } catch (err) {
+        reply.fail(err instanceof Error ? err : new Error(String(err)));
+      }
+      return;
+    }
     const sessionId = request.sessionId;
     // A request with no session has nothing to hydrate and nowhere to persist
     // that the caller could ask for again, so it gets its own key and can never
@@ -489,6 +510,120 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(err instanceof Error ? err : new Error(String(err)));
     }
   };
+
+  /**
+   * Redeem one claim ticket for the screen: `artifact-head` (metadata — the
+   * render-by-ref decision) or `artifact-get` (metadata + payload), against
+   * the store of the agent that serves this session.
+   *
+   * ── The scope is the run's own, re-composed — one isolation rule ────────
+   * A ref is redeemed under EXACTLY the scope the run's tools minted it in:
+   * `identityForRequest(userId, sessionId, storedIdentity)` when the request
+   * names a user — the same call, on the same inputs, that composed the run's
+   * identity — else the session rung `{ conversationId: sessionId }` (what
+   * seed derives for an identity-less served run). No new spelling exists to
+   * drift. The stored identity is read only when a `userId` arrived (it is
+   * the only rung that needs the stored tenant/conversation tuple), through
+   * the same wake → hydrate → refuse-unreadable steps a turn takes.
+   *
+   * A ref from another session — or a right session presented with the wrong
+   * identity — composes a different tuple, and the store answers a wrong
+   * tuple with "no data", never with a distinguishable error. So the wire's
+   * not-found is ONE shape for missing, expired and foreign alike:
+   * {@link ArtifactNotFoundError}, byte-identical but for the ref itself.
+   *
+   * ── On the record, once ─────────────────────────────────────────────────
+   * Resolution rides the existing `artifacts.resolved` / `artifacts.refused`
+   * events through the capability's own fact sink (the raw store emits
+   * nothing, so binding is the ONE emitter — no double-emit), delivered on
+   * the serving agent's dispatcher with no `tool` field: the redeemer was the
+   * hosting door, and a phantom tool name would be an actor that does not
+   * exist.
+   *
+   * Zero-cost when unused: an agent without a store answers with the teaching
+   * refusal naming the attach, and nothing else in the composer changes.
+   */
+  async function answerArtifact(
+    op: ArtifactWireRequest,
+    request: HostRequest,
+    reply: HostReply,
+  ): Promise<void> {
+    const sessionId = request.sessionId;
+    if (sessionId === undefined) {
+      // An anonymous run scopes its artifacts to its own runId — a name no
+      // later request can present — so there is genuinely nothing a
+      // session-less redemption could ever resolve. Taught, not 404'd: this
+      // is a caller gap, not a missing ref.
+      reply.fail(new ArtifactSessionRequiredError(op.op));
+      return;
+    }
+    const lane = laneFor(sessionId);
+    // Admitted for the duration: a lane with work is never evicted, and a
+    // resolution mid-flight is work — retiring the instance under it would
+    // tear down the very store being read.
+    lane.admitted += 1;
+    try {
+      const store = lane.agent.getArtifactStore();
+      if (store === undefined) {
+        // The fail-closed law at the wire: the refusal lands on the record
+        // (`no-store`, the same reason `ctx.artifacts` teaches with) and the
+        // reply names the attach.
+        emitArtifactFact(lane.agent, {
+          type: 'refused',
+          op: op.op,
+          reason: 'no-store',
+          ref: op.ref,
+        });
+        reply.fail(new NoArtifactStoreError(op.op));
+        return;
+      }
+      let stored: MemoryIdentity | undefined;
+      if (request.userId !== undefined) {
+        await sessions.onWake?.(sessionId, 'artifact');
+        try {
+          const envelope = await sessions.hydrate(sessionId);
+          if (envelope !== undefined) {
+            stored =
+              envelope.format === 'flowchart-v1'
+                ? readPausedRun(envelope).conversation.identity
+                : readEnvelope(envelope).identity;
+          }
+        } catch (err) {
+          // The same law as a turn: an unreadable stored conversation is a
+          // different fact from an absent one, and only one of them is safe
+          // to compose a scope from.
+          throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
+        }
+      }
+      const scope: MemoryIdentity = identityForRequest(request.userId, sessionId, stored) ?? {
+        conversationId: sessionId,
+      };
+      const bound = bindArtifacts(store, scope, {
+        onEvent: (fact) => emitArtifactFact(lane.agent, fact),
+      });
+      if (op.op === 'head') {
+        const meta = await bound.head(op.ref);
+        if (meta === null) {
+          reply.fail(new ArtifactNotFoundError(op.ref));
+          return;
+        }
+        deliverArtifact(reply, { op: 'head', ref: op.ref, meta });
+      } else {
+        // A digest mismatch throws here (ArtifactIntegrityError) rather than
+        // returning corrupt bytes as whole — it propagates to the handler's
+        // catch as this request's failure, already on the record via the sink.
+        const record = await bound.get(op.ref);
+        if (record === null) {
+          reply.fail(new ArtifactNotFoundError(op.ref));
+          return;
+        }
+        deliverArtifact(reply, { op: 'get', ref: op.ref, meta: record.meta, data: record.data });
+      }
+    } finally {
+      lane.admitted -= 1;
+      lane.lastUsedMs = Date.now();
+    }
+  }
 
   async function answerOne(
     lane: Lane,
@@ -808,6 +943,58 @@ function identityForRequest(
     ...(stored?.tenant !== undefined && { tenant: stored.tenant }),
     principal: userId,
   };
+}
+
+/**
+ * End the reply with a resolved artifact — through the terminal built for it
+ * when the host has one, and through the named refusal when it does not.
+ *
+ * The `awaiting` fallback law, applied to the other optional terminal: a host
+ * that cannot describe the result must say so by name rather than deliver an
+ * improvised shape or nothing. The resolution itself already happened and is
+ * already on the record either way.
+ */
+function deliverArtifact(reply: HostReply, result: ArtifactWireResult): void {
+  if (reply.artifact) {
+    reply.artifact(result);
+    return;
+  }
+  reply.fail(new ArtifactNotCarriedError(result.ref));
+}
+
+/**
+ * Put one capability fact on the serving agent's typed record — the wire
+ * door's adapter onto the SAME `artifacts.resolved` / `artifacts.refused`
+ * events every tool redemption rides, minus the `tool` field (the redeemer
+ * was the hosting door, and payloads never carry an actor that does not
+ * exist).
+ *
+ * `minted` and `expired` have no arm because a read-only door cannot produce
+ * them — only `put` does, and the wire deliberately has no put. Dropped when
+ * nobody listens (the dispatcher's own fast path), so an unobserved agent
+ * pays one listener check per fact and nothing more.
+ */
+function emitArtifactFact(agent: Agent, fact: ArtifactEventFact): void {
+  switch (fact.type) {
+    case 'resolved':
+      agent.emit('agentfootprint.artifacts.resolved', {
+        ref: fact.ref,
+        via: fact.via,
+        kind: fact.kind,
+        bytes: fact.bytes,
+      });
+      return;
+    case 'refused':
+      agent.emit('agentfootprint.artifacts.refused', {
+        op: fact.op,
+        reason: fact.reason,
+        ...(fact.ref !== undefined && { ref: fact.ref }),
+        ...(fact.detail !== undefined && { detail: fact.detail }),
+      });
+      return;
+    default:
+      return;
+  }
 }
 
 /**

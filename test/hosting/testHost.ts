@@ -14,6 +14,7 @@
 import { HostClosedError } from '../../src/hosting/index.js';
 import type {
   AgentHost,
+  ArtifactWireRequest,
   HostCapability,
   HostHandle,
   HostHandler,
@@ -40,6 +41,10 @@ export interface InProcessHost extends AgentHost {
     readonly userId?: string;
     /** A person's answer to an outstanding ask — makes this a resume. */
     readonly decision?: unknown;
+    /** An artifact operation (9.23.0). This MINIMAL host deliberately does
+     *  not implement `reply.artifact`, so delivering one exercises the
+     *  composer's named not-carried refusal. */
+    readonly artifact?: ArtifactWireRequest;
     readonly headers?: Readonly<Record<string, string>>;
   }): Promise<DeliveredReply>;
 }
@@ -107,6 +112,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
               ...(request.sessionId !== undefined && { sessionId: request.sessionId }),
               ...(request.userId !== undefined && { userId: request.userId }),
               ...(request.decision !== undefined && { decision: request.decision }),
+              ...(request.artifact !== undefined && { artifact: request.artifact }),
               ...(request.headers !== undefined && { headers: request.headers }),
             },
             reply,

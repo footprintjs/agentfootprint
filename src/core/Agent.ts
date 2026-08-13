@@ -856,6 +856,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
+   * The artifact store this agent was built with, or `undefined` when none
+   * was attached (9.23.0).
+   *
+   * For COMPOSERS that resolve refs on the agent's behalf — the hosting
+   * layer's `artifact-head` / `artifact-get` wire operations redeem a
+   * screen's claim tickets against exactly this store. It is the store, not
+   * a scope-bound capability: whoever calls it owns composing the resolution
+   * scope (the hosting layer composes the requesting session's identity, the
+   * same tuple the run's own tools resolved under). Tools never touch this —
+   * `ctx.artifacts` is already bound to the run's scope, and that remains
+   * their only door.
+   */
+  getArtifactStore(): ArtifactStore | undefined {
+    return this.artifactStore;
+  }
+
+  /**
    * The footprintjs `RuntimeSnapshot` from the most recent `run()` /
    * `resume()`. Feeds Lens's Trace tab (ExplainableShell `runtimeSnapshot`
    * prop) so consumers can scrub the execution timeline post-run without

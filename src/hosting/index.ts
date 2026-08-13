@@ -137,7 +137,26 @@ export {
   UnreadableEnvelopeError,
   ConversationClosedError,
   FrameTooLargeError,
+  InvalidWireOpError,
+  ArtifactSessionRequiredError,
+  NoArtifactStoreError,
+  ArtifactNotFoundError,
+  ArtifactNotCarriedError,
 } from './errors.js';
+
+// The artifact wire operations (9.23.0) — the screen's half of render-by-ref:
+// `{ op: 'artifact-head' | 'artifact-get', ref }` on the invoke path redeems
+// a claim ticket under the requesting session's identity-composed scope.
+// The grammar has ONE owner; a custom HttpWire dialect reads the ops with
+// `readArtifactWireOp` and answers with `artifactWireBody`, exactly as the
+// two shipped dialects do.
+export {
+  readArtifactWireOp,
+  artifactWireBody,
+  ARTIFACT_HEAD_OP,
+  ARTIFACT_GET_OP,
+} from './artifactWire.js';
+export type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 
 export type {
   AgentHost,
