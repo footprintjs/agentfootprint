@@ -525,6 +525,56 @@ export {
   type ToolContractCode,
   type ServerToolEntry,
 } from './core/toolContract.js';
+// Artifacts (9.21.0) — the claim-check store: a tool checks a payload in and
+// hands the model a ~26-char claim ticket; the model routes tickets instead
+// of hauling data; a later tool redeems them under the run's own scope
+// (`ctx.artifacts`, shaped exactly like `ctx.credentials`). Wired via
+// `Agent.create({ ..., artifacts })`. On the MAIN barrel because the door is
+// an AgentOptions port and the tool capability lives on ToolExecutionContext
+// — both main-barrel citizens; the durable adapters load `node:fs` /
+// `node:sqlite` lazily at CONSTRUCTION (the sqliteSessions law), so a browser
+// bundle walking this barrel never sees them.
+export {
+  ARTIFACT_REF_PREFIX,
+  ArtifactIntegrityError,
+  bindArtifacts,
+  DEFAULT_IN_MEMORY_ARTIFACT_RETENTION,
+  fileArtifacts,
+  inMemoryArtifacts,
+  InvalidArtifactError,
+  isArtifactRef,
+  mintArtifactRef,
+  sqliteArtifacts,
+  unconfiguredArtifacts,
+  UnknownParentRefError,
+  UnreadableArtifactFileError,
+  UnreadableArtifactStoreError,
+  type ArtifactEventFact,
+  type ArtifactEventSink,
+  type ArtifactListOptions,
+  type ArtifactListResult,
+  type ArtifactMeta,
+  type ArtifactOp,
+  type ArtifactOrigin,
+  type ArtifactPutResult,
+  type ArtifactRecord,
+  type ArtifactRef,
+  type ArtifactRefusalReason,
+  type ArtifactRetention,
+  type ArtifactScope,
+  type ArtifactStore,
+  type ArtifactSweepReason,
+  type BindArtifactsOptions,
+  type FileArtifactsOptions,
+  type InMemoryArtifacts,
+  type InMemoryArtifactsOptions,
+  type PutArtifactInput,
+  type SqliteArtifacts,
+  type SqliteArtifactsOptions,
+  type SweptArtifact,
+  type ToolArtifactPutInput,
+  type ToolArtifacts,
+} from './artifacts/index.js';
 
 // Slot subflow builders are intentionally NOT exported. They are
 // internal helpers used only by `Agent.buildChart()` and

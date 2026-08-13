@@ -49,6 +49,88 @@ const FOLDER_ORDER = [
 // Folders to skip entirely (helpers, config-only, non-example dirs).
 const SKIP_FOLDERS = new Set(['helpers']);
 
+/**
+ * One example number = ONE example. A duplicate number makes "run example
+ * N" ambiguous, and every doc link that names a number inherits the
+ * ambiguity — so the generator REFUSES to emit a table containing one, in
+ * --check mode AND in regenerate mode (writing the ambiguous table would be
+ * accepted-and-silently-wrong; features/21-artifacts.ts shipped two "| 21 |"
+ * rows this way while --check stayed green).
+ *
+ * The entries below are the collisions that were ALREADY COMMITTED when this
+ * refusal landed; renumbering them now would break shipped GitHub links.
+ * This list only ever SHRINKS: fixing one of these means renaming the file
+ * AND deleting its rows here (a stale row is itself refused). Never add to it.
+ */
+const GRANDFATHERED_COLLISIONS = new Set([
+  'features/06-detached-observability.ts',
+  'features/06-flowchart-boundary-payloads.ts',
+  'features/06-status-subpath.ts',
+  'features/06-tool-args-validation.ts',
+  'observability/13-context-error-finders.ts',
+  'observability/13-per-loop-trajectory.ts',
+]);
+
+/**
+ * Refuse duplicate example numbers with a teaching message: name the
+ * colliding files and the folder's next free number, so the fix is
+ * mechanical. Also refuse a STALE grandfather row, so the debt ledger
+ * above cannot outlive the debt it documents.
+ */
+function assertUniqueNumbers(folders) {
+  const problems = [];
+  const justifiedGrandfathers = new Set();
+
+  for (const folder of folders) {
+    const files = listExampleFiles(join(EXAMPLES_DIR, folder));
+    const byNumber = new Map();
+    let maxNumber = 0;
+    for (const file of files) {
+      const m = /^(\d+)/.exec(file);
+      if (!m) continue;
+      maxNumber = Math.max(maxNumber, Number(m[1]));
+      const group = byNumber.get(m[1]) ?? [];
+      group.push(file);
+      byNumber.set(m[1], group);
+    }
+    for (const [number, group] of byNumber) {
+      if (group.length < 2) continue;
+      const rels = group.map((f) => `${folder}/${f}`);
+      const grandfathered = rels.filter((rel) => GRANDFATHERED_COLLISIONS.has(rel));
+      for (const rel of grandfathered) justifiedGrandfathers.add(rel);
+      if (grandfathered.length === rels.length) continue; // committed debt, ledgered above
+      problems.push(
+        `  examples/${folder}/ — number ${number} names ${group.length} examples:\n` +
+          group.map((f) => `    ${f}`).join('\n') +
+          `\n  Next free number in ${folder}/: ${maxNumber + 1}`,
+      );
+    }
+  }
+
+  if (problems.length > 0) {
+    process.stderr.write(
+      `\n[FAIL] Duplicate example numbers — one number must name ONE example.\n\n` +
+        problems.join('\n\n') +
+        `\n\n  Rename the NEW file to the folder's next free number, update any\n` +
+        `  doc links that point at it, then re-run:\n` +
+        `    npm run examples:readme\n\n`,
+    );
+    process.exit(1);
+  }
+
+  const stale = [...GRANDFATHERED_COLLISIONS].filter((rel) => !justifiedGrandfathers.has(rel));
+  if (stale.length > 0) {
+    process.stderr.write(
+      `\n[FAIL] Stale GRANDFATHERED_COLLISIONS entries — the collision each\n` +
+        `documented is gone:\n` +
+        stale.map((rel) => `    ${rel}`).join('\n') +
+        `\n  Delete these rows from scripts/generate-examples-readme.mjs.\n` +
+        `  The list only shrinks.\n\n`,
+    );
+    process.exit(1);
+  }
+}
+
 function listExampleFolders() {
   return readdirSync(EXAMPLES_DIR)
     .filter((name) => {
@@ -166,6 +248,7 @@ function renderFolderTable(folder, files) {
 
 function generate() {
   const folders = listExampleFolders();
+  assertUniqueNumbers(folders);
   const ordered = [
     ...FOLDER_ORDER.map((f) => f.dir).filter((d) => folders.includes(d)),
     ...folders

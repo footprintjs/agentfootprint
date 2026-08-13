@@ -1,0 +1,131 @@
+---
+title: Artifacts
+description: The claim-check store — a tool checks data in and hands the model a ~26-char ticket. ctx.artifacts (shaped like ctx.credentials), three adapters, scope-isolated resolution, typed lifecycle events.
+---
+
+> A production agent once hauled **879,073 tokens** through its context window because two tools needed the same data and the only road between them ran through the model. The model read six megabytes it never needed, paraphrased it (imperfectly) back out, and the bill arrived anyway. Enterprise messaging solved this decades ago and named the law the **claim check**: the expensive channel carries a ticket plus enough description to decide — the payload never rides the channel. Your context window is the most expensive channel you own. Artifacts are that law, built in.
+
+## The idea in one run
+
+```ts
+import { Agent, defineTool, inMemoryArtifacts } from 'agentfootprint';
+
+const getSales = defineTool({
+  name: 'get_sales',
+  description: 'Fetch Q3 sales and check them into the artifact store.',
+  execute: async (_args, ctx) => {
+    // Imagine 48,000 rows — 6 MB — coming back from your warehouse:
+    const rows = Array.from({ length: 48_000 }, (_, i) => ({ order: i, amount: (i % 97) + 1 }));
+    const meta = await ctx.artifacts.put({
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: rows,
+      label: 'Q3 sales by region',
+    });
+    // The model reads THIS — one line, ~30 tokens:
+    return `stored ${meta.ref} [${meta.kind} · ${meta.bytes} bytes]`;
+  },
+});
+
+const summarize = defineTool({
+  name: 'summarize',
+  description: 'Total a stored dataset. Pass the art_… ref from get_sales.',
+  inputSchema: { type: 'object', properties: { ref: { type: 'string' } }, required: ['ref'] },
+  execute: async ({ ref }: { ref: string }, ctx) => {
+    const head = await ctx.artifacts.head(ref); // decide from meta — pay nothing
+    if (head === null) return `nothing under ${ref} — expired or never stored`;
+    const got = await ctx.artifacts.get(ref); // now pay for the bytes
+    const rows = got?.data as ReadonlyArray<{ amount: number }>;
+    return `total: ${rows.reduce((sum, row) => sum + row.amount, 0)}`;
+  },
+});
+
+const agent = Agent.create({ provider, model, artifacts: inMemoryArtifacts() })
+  .tool(getSales)
+  .tool(summarize)
+  .build();
+```
+
+The model routes the ticket (`art_h7Kq…`) between tools. The window spent on six megabytes of freight: two metadata lines. That is the whole feature; everything below is the law behind it.
+
+Runnable version: [`examples/features/56-artifacts.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/56-artifacts.ts) — mint in one tool, redeem in another, a derived artifact, and expiry stating itself.
+
+## `ctx.artifacts` — shaped exactly like `ctx.credentials`
+
+Every tool's execute context carries `ctx.artifacts` (a `ToolArtifacts`) and `ctx.hasArtifacts`:
+
+- **Always present, fail-closed.** With no store attached, every method throws a teaching refusal naming the fix (`Agent.create({ ..., artifacts })`) — a missing store can never read as an empty one. Branch on `ctx.hasArtifacts` for an intentional degraded mode.
+- **Scope is composed by the framework, never by the tool.** The capability closes over the run's own tenant/principal/conversation tuple (the same `ArtifactScope` — an alias of the memory identity tuple — that memory scopes on). A tool cannot name, widen, or replace the scope it resolves under.
+- **`origin` is stamped from the run's facts.** Every mint carries `{ runId, toolCallId }` (`ArtifactOrigin`) — the join to the causal record. A caller-supplied origin is discarded.
+- **Zero-cost when unused.** No store attached ⇒ byte-identical behavior and events. Nothing fires unless a tool actually calls the capability.
+
+## The port — five verbs, no more
+
+`ArtifactStore` is the vendor-neutral port every adapter implements. Scope is **always the first argument** (the `MemoryStore` constitution):
+
+| verb | returns | law |
+|---|---|---|
+| `put(scope, input)` | `ArtifactPutResult` — the minted `ArtifactMeta` + every `SweptArtifact` retention evicted | validates input (`PutArtifactInput`), proves `parentRefs`, measures `bytes`, stamps `expiresAt` |
+| `head(scope, ref)` | `ArtifactMeta \| null` | the ticket without the bytes — the render-by-ref decision |
+| `get(scope, ref)` | `ArtifactRecord \| null` | meta + payload; verifies `digest` when present |
+| `delete(scope, ref)` | `void` | removing an absence is agreement, not an error |
+| `list(scope, options)` | `ArtifactListResult` | cursored pages (`ArtifactListOptions`), newest first, meta only |
+
+`get` and `head` return `null` for missing **or** expired — the same deliberate ambiguity as memory: "no data" is the only actionable fact, and distinguishing the two would let a caller probe another scope's contents. The record still tells the truth (see events below).
+
+**The refusal, written down so it can be cited:** the port will never grow `query()` or `transform()`. The moment it does, this is a database. Compute over artifacts belongs to generated code (a later phase); five verbs is the ceiling.
+
+There are deliberately **no streaming members** in this phase — an in-memory adapter must never fake a stream.
+
+## The ref is minted, never derived
+
+An `ArtifactRef` is `art_` + 22 crypto-random chars (~26 total — `ARTIFACT_REF_PREFIX`, `mintArtifactRef`, `isArtifactRef`). It is **never content-addressed**: the same bytes stored by two tenants must be two objects, and a digest can't name two generations of "the current dataset". The content digest (`sha-256`, computed at `put` when you ask) is *metadata* — it buys integrity checking on `get` (a mismatch throws `ArtifactIntegrityError` rather than delivering corrupt bytes as whole) — but it is never the key.
+
+## Security, day one
+
+**A ref alone opens nothing.** Resolution takes the ref *and* the caller's scope. A ref pasted into a log, a model response, or a bug report is safe by construction — under any other session's scope it resolves to `null`. An anonymous run scopes to its own runId (the descriptor table dies with the process); a session-bound run to its sessionId (turn two of the session redeems turn one's tickets); an identity-carrying run to the caller's tenant/principal.
+
+**Bytes never appear in events.** Every `agentfootprint.artifacts.*` payload carries metadata only.
+
+## Three adapters
+
+```ts
+import { inMemoryArtifacts, fileArtifacts, sqliteArtifacts } from 'agentfootprint';
+
+inMemoryArtifacts()                             // dev/tests — bounded, drop-counting
+fileArtifacts({ directory: './artifacts' })     // one legible JSON file per artifact
+sqliteArtifacts({ file: './data/artifacts.db' })// one SQLite file — pairs with sqliteSessions
+```
+
+- **`inMemoryArtifacts`** (an `InMemoryArtifacts`) is **always bounded**: 32 MiB and 256 artifacts per scope by default (`DEFAULT_IN_MEMORY_ARTIFACT_RETENTION`, dials via `InMemoryArtifactsOptions`), least-recently-used evicted first (reads refresh recency), and it **counts its drops** (`store.dropped`) — "we kept the last 200 of 340" is an answer; a silently missing ref is not.
+- **`fileArtifacts`** (`FileArtifactsOptions`) partitions scopes into percent-encoded directories, so `..` and `/` in a tenant name arrive as data and land as literal directory names — never as navigation. A file that exists but cannot be read is refused by name (`UnreadableArtifactFileError`), never reported as absent.
+- **`sqliteArtifacts`** (a `SqliteArtifacts`, `SqliteArtifactsOptions`) follows the `sqliteSessions` laws line for line: lazy `node:sqlite` (no install; refused by name on Node without it), WAL with the journal mode read back, STRICT tables you can inspect from the `sqlite3` command line, `':memory:'` refused, and a file that is somebody else's schema — or a newer one — refused as `UnreadableArtifactStoreError` rather than half-read. Point it at a file beside your `sqliteSessions` store and artifacts live exactly as long as the conversations that can speak their refs.
+
+## Retention — expiry is stated, never sprung
+
+`ArtifactRetention` is three per-scope dials on any adapter: `ttlMs`, `maxBytesPerScope`, `maxCountPerScope` (`ArtifactSweepReason` names which one fired). The law: **expiry is stated at mint** — a ttl stamps `expiresAt` on the meta, so a consumer can reason about lifetime instead of discovering it. The store may *tighten* a caller's own `expiresAt`, never extend it. Budget evictions are reported by the `put` that forced them and land on the record; a payload larger than the whole byte budget is refused (`InvalidArtifactError`) instead of emptying the scope to admit it.
+
+## Derivation is a fact, not an engine
+
+`parentRefs` on a mint records what an artifact was computed *from* — validated at mint, so a parent that does not resolve in the same scope is refused (`UnknownParentRefError`): a foreign key that cannot dangle at birth. There is deliberately **no lineage-graph engine** — walking parents is a fold over `head()`, and the moment your question becomes "*why* does this chart disagree with that dataset," that is causation, which the trace already owns.
+
+## The lifecycle, on the record
+
+Four typed events (domain wildcard: `agent.on('agentfootprint.artifacts.*', …)`):
+
+| event | payload | fires when |
+|---|---|---|
+| `agentfootprint.artifacts.minted` | `ArtifactMintedPayload` — ref, kind, bytes, origin, parents | a tool checked a payload in |
+| `agentfootprint.artifacts.resolved` | `ArtifactResolvedPayload` — ref, `via: 'head' \| 'get'` | a ticket was redeemed |
+| `agentfootprint.artifacts.expired` | `ArtifactExpiredPayload` — ref, reason (ttl / max-bytes / max-count) | retention swept one |
+| `agentfootprint.artifacts.refused` | `ArtifactRefusedPayload` — op, reason, ref? | a verb refused — no store, missing-or-expired, unknown parent, digest mismatch, invalid input |
+
+This is what separates the store from plain "where are the bytes" systems: every mint, hop and refusal lands on the **same causal record** as the rest of the run, so "where did this number come from?" is a query, not an archaeology dig.
+
+For custom wiring outside the Agent (your own harness, tests), the binding layer is public: `bindArtifacts(store, scope, options)` (a `BindArtifactsOptions` with `origin` + an `ArtifactEventSink` receiving each `ArtifactEventFact` — op vocabulary `ArtifactOp`, refusal vocabulary `ArtifactRefusalReason`, put shape `ToolArtifactPutInput`) and `unconfiguredArtifacts()`, the fail-closed teacher itself.
+
+## Decisions worth knowing
+
+- **One store per agent**, attached at construction (`Agent.create({ ..., artifacts })`) — there is no second door, so "one per agent" is a fact of the type.
+- **No snapshot coupling.** `getSnapshot()` is unchanged; the store's own accounting is `list` plus the adapters' counters. Stated so the absence reads as a decision.
+- **Refs in tool arguments, resolution at dispatch, the `present` tool, placement thresholds, S3/GCS adapters and streaming are later phases** — this page is the store.

@@ -19,6 +19,8 @@ import type {
   ToolProtocol,
 } from './types.js';
 import type { PermissionCapability } from '../adapters/types.js';
+import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.js';
+import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
@@ -1625,4 +1627,71 @@ export interface AgentThinkingParseFailedPayload {
   readonly error: string;
   readonly errorName: string;
   readonly iteration: number;
+}
+
+// artifacts.* (4) — the claim-check lifecycle (9.21.0). Every hop of a ref —
+// minted, resolved, swept, refused — lands on the record AS IT HAPPENS, which
+// is what separates this store from "where are the bytes" systems: the trace
+// answers which step produced an artifact, reading what, under which decision.
+// LAW: these payloads carry META ONLY. Payload bytes never enter an event, a
+// recorder, or an exporter — an id in a log is safe by construction because a
+// ref alone opens nothing.
+
+/** A tool checked a payload in and the store minted its claim ticket. */
+export interface ArtifactMintedPayload {
+  readonly ref: string;
+  /** Consumer vocabulary: 'dataset/rows', 'chart/spec', … */
+  readonly kind: string;
+  readonly mediaType: string;
+  readonly bytes: number;
+  readonly label?: string;
+  /** `sha-256:<hex>` when the put asked for one. Metadata, never the key. */
+  readonly digest?: string;
+  /** Unix ms when the ref stops resolving — stated at mint, never sprung. */
+  readonly expiresAt?: number;
+  /** The join to the trace: the run and tool call that minted it. */
+  readonly origin?: ArtifactOrigin;
+  /** Derivation facts — validated at mint, so they cannot dangle at birth. */
+  readonly parentRefs?: readonly string[];
+  /** The tool whose execute minted it. */
+  readonly tool: string;
+}
+
+/** A ref was redeemed — described (`head`) or read (`get`) — under scope. */
+export interface ArtifactResolvedPayload {
+  readonly ref: string;
+  /** `head` is the render-by-ref decision; `get` pays for the payload. */
+  readonly via: 'head' | 'get';
+  readonly kind: string;
+  readonly bytes: number;
+  /** The tool that redeemed it. */
+  readonly tool: string;
+}
+
+/** An artifact left the store without its owner asking — the calendar (ttl)
+ *  or a budget (max-bytes / max-count). Reported by the put that swept it. */
+export interface ArtifactExpiredPayload {
+  readonly ref: string;
+  /** One vocabulary, defined in `artifacts/` and imported here — the
+   *  PermissionCapability lesson: two copies of one union can drift. */
+  readonly reason: ArtifactSweepReason;
+  readonly kind: string;
+  readonly bytes: number;
+  /** The tool whose put discovered/forced the sweep. */
+  readonly tool: string;
+}
+
+/** An artifact verb refused — or answered "no data" — and said why. `no-store`
+ *  is the fail-closed capability teaching how to attach a store;
+ *  `missing-or-expired` keeps the API's deliberate ambiguity while the record
+ *  still shows a resolve that found nothing; `digest-mismatch` is integrity
+ *  refusing to deliver corrupt bytes as whole. */
+export interface ArtifactRefusedPayload {
+  readonly op: ArtifactOp;
+  readonly reason: ArtifactRefusalReason;
+  readonly ref?: string;
+  /** The refusal sentence, when one was thrown. */
+  readonly detail?: string;
+  /** The tool whose call was refused. */
+  readonly tool: string;
 }

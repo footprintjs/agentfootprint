@@ -28,6 +28,7 @@ import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
+import type { ArtifactStore } from '../../artifacts/types.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
@@ -275,6 +276,22 @@ export interface AgentOptions {
    * `staticTokens({ ... })`, or any `CredentialProvider`).
    */
   readonly credentials?: CredentialProvider;
+  /**
+   * The artifact store (9.21.0) — the claim-check seam. When set, every tool's
+   * `ctx.artifacts` is this store bound to the RUN's scope (the same
+   * tenant/principal/conversation tuple memory scopes on, composed by the
+   * framework — a tool can never name or widen it), and every mint / resolve /
+   * sweep / refusal lands on the typed record as
+   * `agentfootprint.artifacts.*`. From the main barrel:
+   * `inMemoryArtifacts()`, `fileArtifacts({ directory })`,
+   * `sqliteArtifacts({ file })` — or any `ArtifactStore`.
+   *
+   * Unset — the default — the agent is byte-identical to earlier releases:
+   * no events, no state, and `ctx.artifacts` is a fail-closed capability whose
+   * every method throws a teaching refusal naming this option
+   * (`ctx.hasArtifacts` is the fact to branch on).
+   */
+  readonly artifacts?: ArtifactStore;
   /**
    * What the run does when a tool's DECLARED credential (`needs: { credential }`)
    * comes back `authorization-required` — a person has to click a consent link

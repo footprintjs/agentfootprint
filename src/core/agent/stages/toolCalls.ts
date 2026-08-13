@@ -59,6 +59,13 @@ import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/r
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
+import {
+  bindArtifacts,
+  unconfiguredArtifacts,
+  type ArtifactEventFact,
+  type ToolArtifacts,
+} from '../../../artifacts/capability.js';
+import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
@@ -138,6 +145,15 @@ export interface ToolCallsHandlerDeps {
    *  declared `needs` is resolved BEFORE execute and injected as `ctx.credential`;
    *  `ctx.credentials` exposes it for the pull escape hatch. */
   readonly credentialProvider?: CredentialProvider;
+  /**
+   * The claim-check store (9.21.0). When present, every dispatch binds it to
+   * the run's scope (`scope.runIdentity` — the tuple memory scopes on) as
+   * `ctx.artifacts`, with `origin` stamped from the run's own facts and every
+   * mint/resolve/sweep/refusal emitted as `agentfootprint.artifacts.*`.
+   * Undefined — the default — and `ctx.artifacts` is the fail-closed teacher:
+   * byte-identical behavior and events (zero-cost-when-unused).
+   */
+  readonly artifactStore?: ArtifactStore;
   /** Tool-args validation mode (#9). Default 'enforce': LLM-produced args
    *  are checked against the tool's `inputSchema` BEFORE dispatch; a
    *  mismatch rejects the call with a model-visible retry message.
@@ -1065,6 +1081,96 @@ export function buildToolCallsHandler(
   };
 
   /**
+   * `ctx.artifacts` + `ctx.hasArtifacts` for one dispatch — the claim-check
+   * capability, shaped exactly like `ctx.credentials` (9.21.0).
+   *
+   * The SCOPE is `scope.runIdentity` — the tuple the seed stage committed and
+   * memory already scopes on (an anonymous run isolates to its own runId, a
+   * session-bound run to its sessionId, an identity-carrying run to the
+   * caller's tenant/principal). Composed HERE, where the tool cannot reach:
+   * the capability closes over it, so a ref alone opens nothing and a tool
+   * can never widen the scope it resolves under. Detached to a plain object
+   * so the store never holds a live scope proxy.
+   *
+   * Every fact the capability reports rides the ordinary emit channel via
+   * `typedEmit`, mid-stage, carrying the real runtimeStageId — collected
+   * during traversal, exactly like `credential.failed`. Payload bytes never
+   * enter an event; the facts are meta only.
+   *
+   * With NO store attached the capability is the fail-closed teacher and no
+   * runIdentity read happens — a storeless agent's trace stays byte-identical.
+   */
+  const toolArtifacts = (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    toolCallId: string,
+  ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
+    const onEvent = (fact: ArtifactEventFact): void => {
+      switch (fact.type) {
+        case 'minted': {
+          const meta = fact.meta;
+          typedEmit(scope, 'agentfootprint.artifacts.minted', {
+            ref: meta.ref,
+            kind: meta.kind,
+            mediaType: meta.mediaType,
+            bytes: meta.bytes,
+            ...(meta.label !== undefined && { label: meta.label }),
+            ...(meta.digest !== undefined && { digest: meta.digest }),
+            ...(meta.expiresAt !== undefined && { expiresAt: meta.expiresAt }),
+            ...(meta.origin !== undefined && { origin: meta.origin }),
+            ...(meta.parentRefs !== undefined && { parentRefs: meta.parentRefs }),
+            tool: toolName,
+          });
+          return;
+        }
+        case 'resolved':
+          typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+            ref: fact.ref,
+            via: fact.via,
+            kind: fact.kind,
+            bytes: fact.bytes,
+            tool: toolName,
+          });
+          return;
+        case 'expired':
+          typedEmit(scope, 'agentfootprint.artifacts.expired', {
+            ref: fact.swept.ref,
+            reason: fact.swept.reason,
+            kind: fact.swept.kind,
+            bytes: fact.swept.bytes,
+            tool: toolName,
+          });
+          return;
+        case 'refused':
+          typedEmit(scope, 'agentfootprint.artifacts.refused', {
+            op: fact.op,
+            reason: fact.reason,
+            ...(fact.ref !== undefined && { ref: fact.ref }),
+            ...(fact.detail !== undefined && { detail: fact.detail }),
+            tool: toolName,
+          });
+          return;
+      }
+    };
+    const store = deps.artifactStore;
+    if (store === undefined) {
+      return { artifacts: unconfiguredArtifacts(onEvent), hasArtifacts: false };
+    }
+    const identity = scope.runIdentity;
+    const runScope = {
+      conversationId: identity.conversationId,
+      ...(identity.tenant !== undefined && { tenant: identity.tenant }),
+      ...(identity.principal !== undefined && { principal: identity.principal }),
+    };
+    const facts = deps.currentRun?.();
+    const artifacts: ToolArtifacts = bindArtifacts(store, runScope, {
+      origin: { ...(facts?.runId !== undefined && { runId: facts.runId }), toolCallId },
+      onEvent,
+    });
+    return { artifacts, hasArtifacts: true };
+  };
+
+  /**
    * Fire the `'call'`-scoped cleanups this tool call registered.
    *
    * Runs when `execute` SETTLES — resolve or throw — because a tool that threw
@@ -1283,6 +1389,7 @@ export function buildToolCallsHandler(
         credentials: reportingCredentials(credentials, scope, toolName),
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
+        ...toolArtifacts(scope, toolName, toolCallId),
         ...sessionContext(scope, toolName, toolCallId),
       });
       await endCall(toolCallId);
@@ -1940,6 +2047,7 @@ export function buildToolCallsHandler(
                 credentials: reportingCredentials(credentials, scope, tc.name),
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
+                ...toolArtifacts(scope, tc.name, tc.id),
                 ...sessionContext(scope, tc.name, tc.id),
               });
               // The typed effects channel (9.19.0): a recognized envelope is

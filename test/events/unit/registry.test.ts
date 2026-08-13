@@ -71,7 +71,7 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 85 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 89 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -113,7 +113,13 @@ describe('event registry — names + exhaustiveness', () => {
     //    (tools.result_refused added with 9.20.0 — a tool's own resultCeiling
     //     refused an oversized result: the model read a teaching refusal, the
     //     payload entered no channel, and this event keeps the true size.)
-    expect(ALL_EVENT_TYPES.length).toBe(85);
+    //    (artifacts.minted / resolved / expired / refused added with 9.21.0 —
+    //     the claim-check lifecycle: a tool checked a payload in and got a
+    //     ticket; a ref was redeemed; retention swept one with its reason on
+    //     the record; a verb refused — no store, missing-or-expired,
+    //     unknown parent, digest mismatch — and said why. Meta only, never
+    //     payload bytes.)
+    expect(ALL_EVENT_TYPES.length).toBe(89);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

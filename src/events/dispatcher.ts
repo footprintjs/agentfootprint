@@ -88,7 +88,12 @@ export type DomainWildcard =
   | 'agentfootprint.pause.*'
   | 'agentfootprint.checkin.*'
   | 'agentfootprint.middleware.*'
-  | 'agentfootprint.embedding.*';
+  | 'agentfootprint.embedding.*'
+  // 9.21.0 — the claim-check lifecycle. The ONE audience that wants all of it
+  // ("is anything minting, resolving, or being refused?") subscribes here; the
+  // credential-domain lesson says the wildcard ships WITH the domain, not
+  // eight minors later.
+  | 'agentfootprint.artifacts.*';
 
 export type AllWildcard = '*';
 

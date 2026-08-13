@@ -60,6 +60,7 @@ import type { Tool, ToolExecutionContext } from '../../core/tools.js';
 import { ToolSessionTier, type TeardownScope } from '../../core/toolSessions.js';
 import type { Credential, CredentialProvider } from '../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
+import { unconfiguredArtifacts } from '../../artifacts/capability.js';
 import type {
   McpCallToolRequest,
   McpHttpServeTransport,
@@ -370,6 +371,12 @@ async function buildExecutionContext(
       iteration: 0,
       credentials,
       hasCredentials,
+      // No artifact store out here (9.21.0): a served call has no run to
+      // scope refs to, so the capability is the fail-closed teacher — a tool
+      // that needs one branches on `ctx.hasArtifacts`, exactly as it would
+      // for credentials. No sink: there is no run record to land facts on.
+      artifacts: unconfiguredArtifacts(),
+      hasArtifacts: false,
       ...(signal && { signal }),
       ...(credential && { credential }),
       // No `runId`, no `sessionId`, no `identity` — and that ABSENCE is the

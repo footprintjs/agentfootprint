@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../..');
@@ -183,6 +183,81 @@ describe('Block E — concatenated meta descriptions are never truncated', () =>
     }
     // Post-cleanup the README is byte-identical to the pre-fixture state.
     expect(readFileSync(README_PATH, 'utf-8')).toBe(original);
+  });
+});
+
+// ─── 6b. REGRESSION — duplicate example numbers are REFUSED ───────
+//
+// The number-collision bug class: a new example landed as
+// features/21-artifacts.ts next to 21-deferred-observers.ts and the
+// generator happily shipped two rows both labeled "| 21 |" — --check
+// stayed green because the README faithfully mirrored the ambiguous
+// tree. The generator now refuses (BOTH modes) any collision that is
+// not on its explicit committed-debt grandfather list, naming the
+// colliding files and the folder's next free number.
+
+describe('Block E — duplicate example numbers are refused', () => {
+  const fixtureA = join(REPO_ROOT, 'examples/features/97-tmp-collision-a.ts');
+  const fixtureB = join(REPO_ROOT, 'examples/features/97-tmp-collision-b.ts');
+
+  it('a new number collision fails BOTH modes with a teaching message and never writes the README', () => {
+    runGenerator(); // pre: README up to date
+    const original = readFileSync(README_PATH, 'utf-8');
+    try {
+      writeFileSync(fixtureA, '// collision fixture (a)\n', 'utf-8');
+      writeFileSync(fixtureB, '// collision fixture (b)\n', 'utf-8');
+
+      const check = runGenerator(['--check']);
+      expect(check.code).toBe(1);
+      expect(check.err).toContain('one number must name ONE example');
+      expect(check.err).toContain('97-tmp-collision-a.ts');
+      expect(check.err).toContain('97-tmp-collision-b.ts');
+      // Next free number = highest in the folder (the 97 fixtures) + 1.
+      expect(check.err).toContain('Next free number in features/: 98');
+
+      const regen = runGenerator();
+      expect(regen.code).toBe(1);
+      // The refusal fired BEFORE any write — no ambiguous table shipped.
+      expect(readFileSync(README_PATH, 'utf-8')).toBe(original);
+    } finally {
+      rmSync(fixtureA, { force: true });
+      rmSync(fixtureB, { force: true });
+      runGenerator();
+    }
+    // Post-cleanup the README is byte-identical and --check is green again.
+    expect(readFileSync(README_PATH, 'utf-8')).toBe(original);
+    expect(runGenerator(['--check']).code).toBe(0);
+  });
+
+  it('grandfathered committed collisions still exist as listed (the ledger only shrinks)', () => {
+    // These are the collisions that were already committed when the refusal
+    // landed; the generator grandfathers EXACTLY these. Renaming one makes
+    // the generator refuse with a stale-ledger message until its row is
+    // deleted from scripts/generate-examples-readme.mjs — this pin makes
+    // the same change fail loudly here too, so ledger and tree move together.
+    const grandfathered = [
+      'examples/features/06-detached-observability.ts',
+      'examples/features/06-flowchart-boundary-payloads.ts',
+      'examples/features/06-status-subpath.ts',
+      'examples/features/06-tool-args-validation.ts',
+      'examples/observability/13-context-error-finders.ts',
+      'examples/observability/13-per-loop-trajectory.ts',
+    ];
+    for (const rel of grandfathered) {
+      expect(existsSync(join(REPO_ROOT, rel)), `${rel} should exist`).toBe(true);
+    }
+    // With only the ledgered debt present, the generator is green.
+    runGenerator();
+    expect(runGenerator(['--check']).code).toBe(0);
+  });
+
+  it('the 21-artifacts collision itself stays fixed: the example lives at 56', () => {
+    expect(existsSync(join(REPO_ROOT, 'examples/features/56-artifacts.ts'))).toBe(true);
+    expect(existsSync(join(REPO_ROOT, 'examples/features/21-artifacts.ts'))).toBe(false);
+    runGenerator();
+    const readme = readFileSync(README_PATH, 'utf-8');
+    expect(readme).toContain('56-artifacts.ts');
+    expect(readme).not.toContain('21-artifacts.ts');
   });
 });
 

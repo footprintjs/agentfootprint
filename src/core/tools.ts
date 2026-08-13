@@ -10,6 +10,7 @@
 import { isDevMode } from 'footprintjs';
 
 import type { LLMToolSchema, ToolCapability } from '../adapters/types.js';
+import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { CheckInDemand } from './checkin.js';
@@ -182,6 +183,20 @@ export interface ToolExecutionContext {
   /** True when a real provider is attached. Branch on this for intentional
    *  degraded (no-credential) mode instead of relying on `undefined`. */
   readonly hasCredentials: boolean;
+  /**
+   * The claim-check store, bound to THIS run's scope (9.21.0) — shaped
+   * exactly like `credentials`. Always present: with no store attached every
+   * method throws a teaching refusal naming how to attach one
+   * (`Agent.create({ ..., artifacts })`), so a missing store can never read
+   * as an empty one. The scope (tenant/principal/conversation) is composed by
+   * the framework from the run's identity/session and closed over — a tool
+   * cannot name, widen, or replace it. `put` stamps `origin`
+   * (`{ runId, toolCallId }`) from the run's own facts.
+   */
+  readonly artifacts: ToolArtifacts;
+  /** True when a real artifact store is attached. Branch on this for an
+   *  intentional no-store (degraded) mode instead of catching the refusal. */
+  readonly hasArtifacts: boolean;
   /** The credential resolved for this tool's declared `needs` (declare-and-push).
    *  Present only when the tool declared a need and it resolved successfully. */
   readonly credential?: Credential;

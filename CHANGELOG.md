@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.21.0] - 2026-08-13
+
+**Data stops riding the conversation: the artifact store — a tool checks
+its result in and hands back a claim ticket.**
+
+### Added — the ArtifactStore port
+
+Five verbs: `put`, `head`, `get`, `delete`, `list` — scope is always the
+first argument. `get` returns `null` for missing-or-expired, never a
+thrown error; a store is a claim-check, not a query engine, so there are
+no query or transform verbs, by design and citable.
+
+Refs are opaque minted ids (`art_…`) — never content-addressed. The
+sha-256 digest of the payload rides as metadata and is verified on
+`get`; a mismatch is a named integrity error, never silent corruption.
+`parentRefs` are derivation facts validated at mint time — a parent ref
+that doesn't resolve is refused on the spot, a foreign key that cannot
+dangle at birth.
+
+### Added — three adapters
+
+`inMemoryArtifacts`, `fileArtifacts`, `sqliteArtifacts`. `inMemoryArtifacts`
+is always bounded per scope (32MiB / 256 rows, LRU, drop-counting) — there
+is no unbounded mode. `fileArtifacts` is scope-partitioned with
+traversal-proof paths. `sqliteArtifacts` pairs with the existing
+`sqliteSessions` adapter — same lazy-dependency loading and the same
+schema-refusal laws.
+
+### Added — `ctx.artifacts`
+
+Shaped like `ctx.credentials`: always present on the tool context,
+fail-closed with a teaching refusal naming `Agent.create({ artifacts })`
+when no store is attached. Scope is composed by the framework from the
+run's own identity — a tool can never widen it — and origin (`runId`,
+`toolCallId`) is stamped from the run's own facts, never supplied by the
+tool.
+
+### Added — four typed events
+
+`agentfootprint.artifacts.minted` / `.resolved` / `.expired` / `.refused`
+— meta-only payloads, the bytes never enter the event. A ref alone opens
+nothing: resolution requires the session's scope, so the same ref under
+another tenant resolves to `null`, on the record.
+
+### Retention
+
+A `ttl` stamps `expiresAt` at mint time — stated, never sprung on a later
+read. Budget evictions are reported by the `put` call that caused them
+and counted, not swallowed.
+
+### Zero-cost when unused
+
+No store attached is a byte-identical agent — same behavior, same
+events — pinned by regression test.
+
+This is Phase 1 of the reference-architecture work. The data legs — ref
+arguments at dispatch, the present tool, the placement threshold — come
+next.
+
 ## [9.20.0] - 2026-08-13
 
 **Two-dimensional rules as data, and oversized results that teach instead

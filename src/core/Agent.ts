@@ -50,6 +50,7 @@ import type {
   PricingTable,
 } from '../adapters/types.js';
 import type { CredentialProvider } from '../identity/types.js';
+import type { ArtifactStore } from '../artifacts/types.js';
 import type { AuthorizationRequiredMode } from '../identity/consent.js';
 import { CredentialConsentRequiredError } from '../identity/CredentialConsentRequiredError.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -66,6 +67,7 @@ import { embeddingRecorder } from '../recorders/core/EmbeddingRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { credentialRecorder } from '../recorders/core/CredentialRecorder.js';
+import { artifactsRecorder } from '../recorders/core/ArtifactsRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
@@ -400,6 +402,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  unless a consumer opts in. See AgentOptions.writeProvenance. */
   private readonly writeProvenance: WriteProvenanceMode;
   private readonly credentialProvider?: CredentialProvider;
+  /** The claim-check store (9.21.0). When set, every tool's `ctx.artifacts`
+   *  is this store bound to the run's scope. See AgentOptions.artifacts. */
+  private readonly artifactStore?: ArtifactStore;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -743,6 +748,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     this.observerDeliveryOptions = opts.observerDeliveryOptions;
     if (opts.credentials) this.credentialProvider = opts.credentials;
+    // The claim-check seam (9.21.0). One store per agent, attached at
+    // construction — idempotent by shape: there is no second door to attach a
+    // competing one through, so "one per agent" is a fact of the type rather
+    // than a runtime check.
+    if (opts.artifacts) this.artifactStore = opts.artifacts;
     // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
     // read at exactly one place — the tool-dispatch loop, AFTER
     // `credentials.getCredential` came back `authorization-required`. With no
@@ -2200,6 +2210,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // adapter that failed every call did so in a silence that read like health.
     // Always-on and zero-cost: the bridge drops an event nobody listens for.
     attachObserver(credentialRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Artifact lifecycle (9.21.0). Shipped WITH the domain — the credential
+    // bridge above is the record of what waiting costs. Always-on and
+    // zero-cost: with no store attached nothing emits, and the bridge drops
+    // an event nobody listens for.
+    attachObserver(artifactsRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
     attachObserver(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
@@ -2500,6 +2515,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const costBudget = this.costBudget;
     const permissionChecker = this.permissionChecker;
     const credentialProvider = this.credentialProvider;
+    const artifactStore = this.artifactStore;
     // Cache layer (v2.6) — capture for the seed + chart-build closures.
     // `systemPromptCachePolicy` is fed into the CacheDecision subflow's
     // inputMapper. `cacheStrategy` is consulted by BuildLLMRequest at
@@ -2801,6 +2817,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
+      // The claim-check store (9.21.0). Absent → not one new line runs in
+      // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
+      // event can fire (zero-cost-when-unused).
+      ...(artifactStore && { artifactStore }),
       ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
       ...(this.maxToolResultChars !== undefined && {
         maxToolResultChars: this.maxToolResultChars,

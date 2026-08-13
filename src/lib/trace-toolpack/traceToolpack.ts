@@ -41,6 +41,7 @@ import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'fo
 import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../../core/tools.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
+import { unconfiguredArtifacts } from '../../artifacts/capability.js';
 import {
   boundedPreview,
   clampParam,
@@ -1930,6 +1931,9 @@ const OFFLINE_CONTEXT: ToolExecutionContext = {
   iteration: 0,
   credentials: unconfiguredCredentialProvider(),
   hasCredentials: false,
+  // Offline has no run to scope refs to; the capability teaches, never lies.
+  artifacts: unconfiguredArtifacts(),
+  hasArtifacts: false,
   teardownScopes: [],
   onTeardown: () => {
     throw new Error(

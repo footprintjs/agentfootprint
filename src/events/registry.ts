@@ -103,6 +103,10 @@ import type {
   ToolStartPayload,
   ValidationArgsInvalidPayload,
   MiddlewareDecisionPayload,
+  ArtifactMintedPayload,
+  ArtifactResolvedPayload,
+  ArtifactExpiredPayload,
+  ArtifactRefusedPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -233,6 +237,12 @@ export const EVENT_NAMES = {
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
+  },
+  artifacts: {
+    minted: 'agentfootprint.artifacts.minted',
+    resolved: 'agentfootprint.artifacts.resolved',
+    expired: 'agentfootprint.artifacts.expired',
+    refused: 'agentfootprint.artifacts.refused',
   },
 } as const;
 
@@ -599,6 +609,23 @@ export interface AgentfootprintEventMap {
     'agentfootprint.embedding.generated',
     EmbeddingGeneratedPayload
   >;
+  // artifacts (the claim-check lifecycle — meta only, never payload bytes)
+  'agentfootprint.artifacts.minted': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.minted',
+    ArtifactMintedPayload
+  >;
+  'agentfootprint.artifacts.resolved': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.resolved',
+    ArtifactResolvedPayload
+  >;
+  'agentfootprint.artifacts.expired': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.expired',
+    ArtifactExpiredPayload
+  >;
+  'agentfootprint.artifacts.refused': AgentfootprintEventEnvelope<
+    'agentfootprint.artifacts.refused',
+    ArtifactRefusedPayload
+  >;
 }
 
 /** Union of every typed event. Consumers use this for exhaustive `switch`. */
@@ -697,4 +724,8 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.checkin.decision',
   'agentfootprint.middleware.decision',
   'agentfootprint.embedding.generated',
+  'agentfootprint.artifacts.minted',
+  'agentfootprint.artifacts.resolved',
+  'agentfootprint.artifacts.expired',
+  'agentfootprint.artifacts.refused',
 ] as const;
