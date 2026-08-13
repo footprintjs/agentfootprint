@@ -130,6 +130,13 @@ export interface SeedStageDeps {
   readonly consumePendingResumeSkillCursor?: () => string | undefined;
   /** The mounted graph declared `continuity: 'conversation'`. */
   readonly restoreSkillCursor?: boolean;
+  /**
+   * ≥1 registered skill declares `steps` (9.18.0). Gates the per-run reset
+   * of `stepPointer` + `stepNudgeSpent` — written only when true, so an
+   * agent without stepped skills commits exactly the keys it always did
+   * (the `restoreSkillCursor` discipline, one field up).
+   */
+  readonly hasSteps?: boolean;
 }
 
 /**
@@ -369,6 +376,17 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   }
   // The model's `read_skill` pick — nothing picked yet on a fresh turn.
   scope.pendingSkillPick = undefined;
+  // Step-procedure state (9.18.0) — fresh every run, beside the cursor reset
+  // it is subordinate to. Steps are TURN-scoped by design: even under
+  // `continuity: 'conversation'` only the CURSOR carries, and a re-tenured
+  // stepped skill starts at step 1 on the continued turn (the restored
+  // history still shows the prior turn's completed step results — the record
+  // is not lost, the pointer is fresh). Written only when a stepped skill is
+  // registered, so every other agent commits exactly the keys it always did.
+  if (deps.hasSteps === true) {
+    scope.stepPointer = [];
+    scope.stepNudgeSpent = false;
+  }
 
   // `.configure()` — resolved ONCE here (seed runs exactly once per run)
   // and written to scope, which means the run's commit log records the

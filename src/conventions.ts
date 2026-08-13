@@ -94,6 +94,12 @@ export const STAGE_IDS = {
    *  with `.outputSchema(parser, { retries })`. It writes the corrective turn
    *  and loops back — a re-ask is an ordinary iteration, not a mode. */
   OUTPUT_RETRY: 'output-retry',
+  /** The Route decider's unfinished-steps branch (9.18.0), mounted ONLY on an
+   *  agent with ≥1 stepped skill. When a would-be-final answer leaves declared
+   *  steps unrun, ONE teaching nudge goes back and the loop turns once more —
+   *  the SchemaRetry mechanism verbatim (an ordinary iteration, not a mode).
+   *  At most once per turn; never a forced continue. */
+  STEP_NUDGE: 'step-nudge',
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
@@ -246,6 +252,9 @@ const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
   // answer was not good enough, which is exactly the kind of thing a reader
   // came to see. Muting it would hide the reason a run took three turns.
   STAGE_IDS.OUTPUT_RETRY,
+  // Same reasoning for the unfinished-steps nudge (9.18.0): the run telling
+  // the model its declared procedure is not done is a stop worth reading.
+  STAGE_IDS.STEP_NUDGE,
 ]);
 
 /**
@@ -334,6 +343,11 @@ export function milestoneFor(id: string): Milestone | null {
     // scrubbing to, because everything after it is a second attempt.
     case STAGE_IDS.OUTPUT_RETRY:
       return { kind: 'decision', label: 'Schema retry' };
+    // The answer left declared steps unrun and the one teaching nudge went
+    // back (9.18.0) — everything after it is the model finishing (or
+    // explaining) its procedure.
+    case STAGE_IDS.STEP_NUDGE:
+      return { kind: 'decision', label: 'Step nudge' };
     default:
       return null;
   }

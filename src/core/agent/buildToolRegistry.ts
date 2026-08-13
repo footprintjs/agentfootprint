@@ -38,6 +38,11 @@
  */
 
 import { buildReadSkillTool } from '../../lib/injection-engine/skillTools.js';
+import {
+  buildSkipStepTool,
+  stepsOf,
+  SKIP_STEP_TOOL_NAME,
+} from '../../lib/injection-engine/skillSteps.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
 import { warnIfInvalidToolName, type Tool, type ToolRegistryEntry } from '../tools.js';
@@ -151,6 +156,30 @@ export function buildToolRegistry(
     if (!registryByName.has(name)) {
       registryByName.set(name, tool);
     }
+  }
+  // ── skip_step — the procedure-integrity tool (9.18.0) ───────────────
+  // Auto-attached to the DISPATCH map when ≥1 registered skill declares
+  // `steps` (the read_skill auto-attach seam) — always dispatchable, but
+  // deliberately NOT in `augmentedRegistry`/`toolSchemas`: the tools slot
+  // OFFERS its schema only while a stepped tenure is active and unfinished
+  // (the autoActivate dispatch-vs-offer split, one map up). With no stepped
+  // skill nothing here runs — no reserved name, no map entry, no delta.
+  //
+  // The name is reserved the moment steps exist: a consumer tool (or a
+  // skill tool) already holding 'skip_step' would silently WIN the dispatch
+  // map and the model's recorded skips would run somebody else's function —
+  // accepted-and-silently-wrong, so it is refused by name instead.
+  const hasSteps = injections.some((i) => i.flavor === 'skill' && stepsOf(i) !== undefined);
+  if (hasSteps) {
+    if (registryByName.has(SKIP_STEP_TOOL_NAME)) {
+      throw new Error(
+        `Agent: tool name '${SKIP_STEP_TOOL_NAME}' is reserved when any skill declares ` +
+          `\`steps\` — the framework auto-attaches the procedure-integrity tool under that ` +
+          `name, and a same-named tool would silently take over the model's recorded skips. ` +
+          `Rename your tool.`,
+      );
+    }
+    registryByName.set(SKIP_STEP_TOOL_NAME, buildSkipStepTool());
   }
   const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
 

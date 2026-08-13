@@ -11,9 +11,10 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 | window.ts | `.window()` compaction (loop head when configured) |
 | deliver.ts | messages-slot delivery (role-checked, sequence-checked) |
 | callLLM.ts | provider invocation + streaming + reliability retry loop |
-| route.ts | the decider: tool-calls / output-retry / final |
-| toolCalls.ts | tool dispatch (pausable): permission gate → middleware → validation → credentials → execute; the read_skill gate |
+| route.ts | the decider: tool-calls / output-retry / step-nudge / final (the step judge emits `steps_unfinished` accepted/cut-short; a denied answer is never nudged) |
+| toolCalls.ts | tool dispatch (pausable): permission gate → middleware → validation → credentials → execute; the read_skill gate; the step boundary (9.18.0) — advance/skip at EVERY result-finalization site, the batch loop AND all four resume paths |
 | outputRetry.ts | `.outputSchema()` re-ask branch |
+| stepNudge.ts | the unfinished-steps teaching re-ask (9.18.0): appends the premature answer + the nudge, once per turn, loops like SchemaRetry |
 | reliabilityExecution.ts | in-loop reliability rules |
 | prepareFinal.ts / breakFinal.ts | final answer + `$break` |
 

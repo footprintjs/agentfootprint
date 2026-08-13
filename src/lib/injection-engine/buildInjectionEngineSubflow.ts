@@ -68,6 +68,12 @@ import {
 } from './types.js';
 import { SKILL_GRAPH_METADATA_KEY, type CursorMove, type SkillRouting } from './skillGraph.js';
 import { menuOutstanding, type TurnRoute } from './routingPolicy.js';
+import {
+  pointerOf,
+  rekeyStepPointer,
+  type StepPlanFor,
+  type StepPointerCarrier,
+} from './skillSteps.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -104,6 +110,15 @@ export interface InjectionEngineConfig {
    * field is omitted and an observer sees exactly what it saw in 8.14.0.
    */
   readonly supersededEntries?: (ctx: InjectionContext) => readonly string[];
+  /**
+   * The frozen step plans, keyed by skill id (9.18.0) — present only when
+   * ≥1 registered skill declares `steps`. The Evaluate stage owns the
+   * pointer's TENURE RE-KEY with it, at the same stage the cursor truth
+   * lives: tenant changed → fresh pointer (or cleared, when the new tenant
+   * has no steps); unchanged → pass-through. Absent → no pointer key is
+   * ever written (zero-cost-when-unused).
+   */
+  readonly stepPlanFor?: StepPlanFor;
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -177,6 +192,14 @@ interface InjectionEngineArgs {
    *  `to` on iteration 1; the menu hint reads `offered`. Absent on graphs
    *  without the cascade. */
   turnRoute?: TurnRoute;
+  /** The step pointer as of the PREVIOUS iteration (9.18.0) — a readonly
+   *  input here (the currentSkillId/nextSkillCursor alias discipline: an
+   *  inputMapper key cannot be written inside the subflow). Evaluate
+   *  re-keys it against this iteration's tenant and writes the fresh value
+   *  under `nextStepPointer`; the mount mappers carry the alias back onto
+   *  the parent's `stepPointer`. Carried only for agents with stepped
+   *  skills. */
+  stepPointer?: StepPointerCarrier;
 }
 
 /**
@@ -196,6 +219,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
         config.nextSkill,
         config.explainNextSkill,
         config.supersededEntries,
+        config.stepPlanFor,
       ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
@@ -235,11 +259,12 @@ function makeEvaluateStage(
   nextSkill?: (ctx: InjectionContext) => string | undefined,
   explainNextSkill?: (ctx: InjectionContext) => CursorMove,
   supersededEntries?: (ctx: InjectionContext) => readonly string[],
+  stepPlanFor?: StepPlanFor,
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
 
-    const ctx: InjectionContext = {
+    const baseCtx: InjectionContext = {
       iteration: args.iteration ?? 1,
       userMessage: args.userMessage ?? '',
       history: args.history ?? [],
@@ -262,11 +287,37 @@ function makeEvaluateStage(
     // ONE consultation of the graph per iteration: when the graph can explain
     // itself (8.5.0) the cursor comes out of `.to`, so asking for the cause costs
     // nothing extra and cannot answer a different destination than the routing did.
-    const move = explainNextSkill ? explainNextSkill(ctx) : undefined;
+    const move = explainNextSkill ? explainNextSkill(baseCtx) : undefined;
     const routes = explainNextSkill !== undefined || nextSkill !== undefined;
-    const cursor = move ? move.to : nextSkill ? nextSkill(ctx) : undefined;
+    const cursor = move ? move.to : nextSkill ? nextSkill(baseCtx) : undefined;
     if (routes) {
       scope.$setValue('nextSkillCursor', cursor);
+    }
+
+    // ── The step pointer's TENURE RE-KEY (9.18.0) ─────────────────────
+    // Same discipline as the cursor, one line down from it: `stepPointer`
+    // arrives as a readonly INPUT, so the fresh value goes out under a
+    // DISTINCT key (`nextStepPointer` — the currentSkillId/nextSkillCursor
+    // alias, NOT the turn-constant turnRoute pattern) and the mount mappers
+    // carry it back onto the parent. The tenant is the ADVANCED cursor on
+    // graph agents, else the tail of `activatedInjectionIds` (the shipped
+    // `activeSkillId` notion). Written on EVERY iteration the feature is on
+    // (the `if (routes)` precedent) so a downstream reader never sees a
+    // stale pointer; gated on `stepPlanFor` so agents without steps commit
+    // exactly the keys they always did.
+    //
+    // Computed BEFORE `evaluateInjections`, and the FRESH pointer goes into
+    // the ctx the triggers read — else `defineStepsHint`'s trigger would
+    // judge the stale pointer and the hint would miss the tenure's first
+    // iteration while the banner (tools slot, fresh value) was present.
+    let ctx = baseCtx;
+    if (stepPlanFor) {
+      const activated = args.activatedInjectionIds ?? [];
+      const tenant = routes ? cursor : activated[activated.length - 1];
+      const fresh = rekeyStepPointer({ prior: args.stepPointer, tenant, stepPlanFor });
+      scope.$setValue('nextStepPointer', fresh);
+      const freshPointer = pointerOf(fresh);
+      ctx = { ...baseCtx, ...(freshPointer !== undefined && { stepPointer: freshPointer }) };
     }
 
     // A parallel batch whose results matched edges to DIFFERENT targets

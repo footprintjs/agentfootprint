@@ -136,6 +136,11 @@ const TOOL_START = 'agentfootprint.stream.tool_start';
 const TOOL_END = 'agentfootprint.stream.tool_end';
 const THINKING_END = 'agentfootprint.stream.thinking_end';
 const CONTEXT_EVALUATED = 'agentfootprint.context.evaluated';
+// Skill-graph routing verdicts (9.16.0/9.17.0) — narrated via the same
+// commentary engine and stashed to lead the next beat, exactly like the
+// `context.evaluated` routing line. Both fire at most once per turn/batch.
+const TURN_ROUTED = 'agentfootprint.skill.turn_routed';
+const ROUTE_CONFLICT = 'agentfootprint.skill.route_conflict';
 
 function asObject(x: unknown): Record<string, unknown> {
   if (x != null && typeof x === 'object' && !Array.isArray(x)) return x as Record<string, unknown>;
@@ -247,6 +252,16 @@ export function agentThinkingTrace(
         return;
       }
 
+      if (e.name === TURN_ROUTED || e.name === ROUTE_CONFLICT) {
+        // Turn-start verdict (fires BEFORE iteration 1) / batch route conflict —
+        // narrate and queue to lead the next beat. Each fires at most once per
+        // turn/batch, so no dedupe; appended so a verdict never overwrites a
+        // pending routing line (or vice versa).
+        const line = narrate(e);
+        if (line) pendingRouting = pendingRouting ? `${pendingRouting}\n\n${line}` : line;
+        return;
+      }
+
       if (e.name === CONTEXT_EVALUATED) {
         // Fires before the LLM call — narrate the skill-graph routing (which skill
         // + why) and stash it to lead the next beat. Empty when no skillGraph()
@@ -254,7 +269,7 @@ export function agentThinkingTrace(
         // iteration while a skill stays active).
         const line = narrate(e);
         if (line && line !== lastRoutingLine) {
-          pendingRouting = line;
+          pendingRouting = pendingRouting ? `${pendingRouting}\n\n${line}` : line;
           lastRoutingLine = line;
         }
         return;

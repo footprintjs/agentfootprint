@@ -19,6 +19,16 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
+import {
+  buildSkipStepTool,
+  currentStepOf,
+  pointerOf,
+  skipStepDescription,
+  stepBannerPrefix,
+  stepInProgress,
+  type StepPlanFor,
+  type StepPointerCarrier,
+} from '../../lib/injection-engine/skillSteps.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../tools.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
@@ -98,11 +108,35 @@ export interface ToolsSlotConfig {
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
+  /**
+   * The frozen step plans, keyed by skill id (9.18.0) — set only when ≥1
+   * registered skill declares `steps`. While a stepped tenure is active and
+   * unfinished (`scope.stepPointer`, threaded by the mount mappers), Compose
+   * narrows the OFFER to the current step: the stepped skill's own tools
+   * that are not the current step's tool are held out of the request, the
+   * current step's tool description leads with the `[Step k of n — <note>]`
+   * banner (a rebuilt schema copy substituted BY NAME — the `read_skill`
+   * precedent, so dispatch is untouched), and `skip_step` is appended.
+   *
+   * The escape hatches STAY OFFERED (house law): `read_skill`,
+   * `list_skills`, every OTHER active skill's tools, the baseline `.tool()`
+   * registry, provider tools. The hold-out applies only to names whose SOLE
+   * active owner is the stepped skill — a name another active source also
+   * carries (the same Tool reference shared across skills, a provider) is
+   * somebody's escape hatch and is never pulled; a baseline `.tool()` can
+   * never even collide (that overlap is refused at Agent build). Absent
+   * plan / absent pointer / complete procedure → this path is
+   * byte-identical to today.
+   */
+  readonly stepPlanFor?: StepPlanFor;
 }
 
 interface ToolsSubflowState {
   [k: string]: unknown;
 }
+
+/** Shared empty hold-out — the no-step iterations never allocate. */
+const EMPTY_NAME_SET: ReadonlySet<string> = new Set();
 
 /**
  * Build the Tools slot subflow.
@@ -120,6 +154,10 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const toolProvider = config.toolProvider;
   const providerToolCache = config.providerToolCache;
   const hiddenSkillIdsFor = config.hiddenSkillIds;
+  const stepPlanFor = config.stepPlanFor;
+  // The skip_step schema template — description is rebuilt per iteration
+  // (it names the current step), everything else is static.
+  const skipStepSchemaTemplate = stepPlanFor ? buildSkipStepTool().schema : undefined;
   // Written by Discover (async), read by Compose (sync) — see the config note.
   //
   // Chart-scoped, and the chart is built ONCE at Agent construction — so this
@@ -243,8 +281,63 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       iteration?: number;
       currentSkillId?: string;
       turnRoute?: TurnRoute;
+      stepPointer?: StepPointerCarrier;
     }>();
     const iteration = args.iteration ?? 1;
+
+    // Active Injections — read once, up front: the step hold-out's ownership
+    // rule and the per-skill schema readmission below both consume it.
+    const activeInjections =
+      (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
+
+    // ── Per-step narrowing (9.18.0) ──────────────────────────────────
+    // The pointer arriving here is THIS iteration's: the Injection Engine
+    // re-keyed it and the mount mappers carry the fresh alias
+    // (`nextStepPointer ?? stepPointer` — the nextSkillCursor pattern), so
+    // the offer narrows on the very iteration a tenure begins. Absent
+    // plan/pointer, or a complete procedure → every variable below is
+    // undefined/empty and the compose path is byte-identical to today.
+    const stepPointer = stepPlanFor ? pointerOf(args.stepPointer) : undefined;
+    const stepPlan = stepPointer !== undefined ? stepPlanFor?.(stepPointer.skillId) : undefined;
+    const stepNow =
+      stepPlan !== undefined && stepInProgress(stepPointer)
+        ? currentStepOf(stepPointer!, stepPlan)
+        : undefined;
+    // The hold-out: the stepped skill's own tools that are not the current
+    // step's tool — MINUS every name another ACTIVE source also carries.
+    // A shared name is somebody's escape hatch; the sequence owns only what
+    // the stepped skill alone brought (the escape-hatches-stay house law).
+    // The two live co-owners are OTHER active skills (the same Tool
+    // reference shared across `tools:[]` arrays) and provider tools; a
+    // baseline `.tool()` sharing a skill tool's name is REFUSED at Agent
+    // build (`validateToolNameUniqueness` — ambiguous dispatch), so it can
+    // never reach this rule.
+    let stepHoldOut: ReadonlySet<string> = EMPTY_NAME_SET;
+    if (stepNow !== undefined && stepPointer !== undefined && stepPlan !== undefined) {
+      const ownedByOthers = new Set<string>();
+      for (const inj of activeInjections) {
+        if (inj.id === stepPointer.skillId) continue;
+        for (const t of inj.inject.tools ?? []) ownedByOthers.add(t.schema.name);
+      }
+      if (toolProvider && providerToolCache) {
+        for (const t of providerToolCache.current) ownedByOthers.add(t.schema.name);
+      }
+      const holdOut = new Set<string>();
+      for (const name of stepPlan.toolNames) {
+        if (name !== stepNow.tool && !ownedByOthers.has(name)) holdOut.add(name);
+      }
+      stepHoldOut = holdOut;
+    }
+    // The banner — a rebuilt schema copy substituted BY NAME (the
+    // `read_skill` precedent), so dispatch is untouched and nothing else in
+    // the list moves.
+    const bannered = (schema: LLMToolSchema): LLMToolSchema =>
+      stepNow !== undefined && schema.name === stepNow.tool
+        ? {
+            ...schema,
+            description: `${stepBannerPrefix(stepPointer!, stepNow)}${schema.description}`,
+          }
+        : schema;
 
     // The turn-start MENU (SG-C) — composed from the SAME verdict the record
     // carries (`scope.turnRoute`, threaded by the mount mappers), and only
@@ -269,7 +362,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // the Injection Engine already advanced it and its outputMapper wrote it to the
     // parent before this slot mounts — the same value the read_skill gate will read
     // when the model answers. Substituted by name so nothing else in the list moves.
-    const tools = readSkillFor
+    const substituted = readSkillFor
       ? staticTools.map((t) =>
           t.name === 'read_skill'
             ? readSkillFor({
@@ -280,6 +373,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             : t,
         )
       : staticTools;
+    // Step narrowing over the STATIC list (9.18.0): hold out the stepped
+    // skill's other tools (sole-owner names only — see stepHoldOut), lead the
+    // current step's tool with the banner. No step in progress → the exact
+    // array from the line above, untouched.
+    const tools =
+      stepNow !== undefined
+        ? substituted.filter((t) => !stepHoldOut.has(t.name)).map(bannered)
+        : substituted;
 
     const injections: InjectionRecord[] = tools.map((t, i) => {
       const summary = `${t.name}: ${t.description}`;
@@ -303,7 +404,10 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const providerSchemas: LLMToolSchema[] = [];
     if (toolProvider && providerToolCache) {
       for (const t of providerToolCache.current) {
-        const schema = t.schema;
+        // Never held out (a provider is an active owner, so its names are
+        // excluded from stepHoldOut by construction) — but a provider serving
+        // the CURRENT step's tool still gets the banner the model reads.
+        const schema = bannered(t.schema);
         providerSchemas.push(schema);
         const summary = `${schema.name}: ${schema.description}`;
         injections.push({
@@ -319,16 +423,17 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       }
     }
 
-    // Active Injections targeting the tools slot (Skills with tools=[…]).
-    // Filter activeInjections by `inject.tools`.
-    const activeInjections =
-      (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
+    // Active Injections targeting the tools slot (Skills with tools=[…]),
+    // read up top. An autoActivate STEPPED skill readmits through here, so
+    // the step hold-out filters this source too — by the same sole-owner
+    // rule (a name in stepHoldOut is provably the stepped skill's alone).
     const dynamicSchemas: LLMToolSchema[] = [];
     for (const inj of activeInjections) {
       const injTools = inj.inject.tools;
       if (!injTools || injTools.length === 0) continue;
       for (const tool of injTools) {
-        const schema = tool.schema;
+        if (stepNow !== undefined && stepHoldOut.has(tool.schema.name)) continue;
+        const schema = bannered(tool.schema);
         dynamicSchemas.push(schema);
         const summary = `${schema.name}: ${schema.description}`;
         injections.push({
@@ -342,6 +447,34 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           position: tools.length + providerSchemas.length + dynamicSchemas.length - 1,
         });
       }
+    }
+
+    // ── skip_step: offered ONLY while a step is in progress (9.18.0) ──
+    // Dispatchable all along (buildToolRegistry auto-attached it), but its
+    // schema enters the request here, description naming the current step,
+    // the remaining count and the declared onSkip policy. No step → no
+    // schema, no record — an agent between procedures offers exactly what
+    // it always did.
+    const stepSchemas: LLMToolSchema[] = [];
+    if (stepNow !== undefined && stepPointer !== undefined && stepPlan !== undefined) {
+      const skipSchema: LLMToolSchema = {
+        ...skipStepSchemaTemplate!,
+        description: skipStepDescription(stepPointer, stepPlan),
+      };
+      stepSchemas.push(skipSchema);
+      const summary = `${skipSchema.name}: ${skipSchema.description}`;
+      injections.push({
+        contentSummary: truncate(summary, 80),
+        contentHash: fnv1a(`tool:skill:${stepPointer.skillId}:${skipSchema.name}`),
+        slot: 'tools',
+        source: 'skill',
+        sourceId: stepPointer.skillId,
+        reason:
+          `skill '${stepPointer.skillId}' step ${stepPointer.step} of ${stepPointer.total} ` +
+          `— skip_step offered (procedure integrity)`,
+        rawContent: summary,
+        position: tools.length + providerSchemas.length + dynamicSchemas.length,
+      });
     }
 
     scope.$setValue(INJECTION_KEYS.TOOLS, injections);
@@ -359,7 +492,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // "tools: Tool names must be unique."
     const seen = new Set<string>();
     const merged: LLMToolSchema[] = [];
-    for (const t of [...tools, ...providerSchemas, ...dynamicSchemas]) {
+    for (const t of [...tools, ...providerSchemas, ...dynamicSchemas, ...stepSchemas]) {
       if (seen.has(t.name)) continue;
       seen.add(t.name);
       merged.push(t);

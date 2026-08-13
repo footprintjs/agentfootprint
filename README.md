@@ -152,6 +152,25 @@ const agent = Agent.create({ provider, model })
 
 Same shape for `.instruction()` / `.memory()` / `.rag()` / raw `.injection()` — they're all the one primitive, `Injection = slot × trigger × cache`. [The full model ↓](#the-model--what-we-abstract)
 
+When a skill's playbook is really a **sequence**, declare it as data and the framework walks it — offering one step's tool at a time (banner-led: `[Step 2 of 6 — confirm the duplicate charge]`), with `skip_step` to put a decline on the record and one teaching nudge if the model stops early. Your other tools stay available throughout — a declared order, not a cage:
+
+```typescript
+defineSkill({
+  id: 'refund',
+  description: 'Handles refunds end to end, by declared procedure.',
+  body: 'Follow the refund procedure. Every step says why it exists.',
+  tools: [findOrder, checkHistory, issueRefund, fileReceipt],
+  steps: [                                        // the procedure, as data (9.18.0)
+    { tool: 'find_order',    note: 'find the order before touching money' },
+    { tool: 'check_history', note: 'confirm the duplicate charge' },
+    { tool: 'issue_refund',  note: 'refund the duplicate charge only' },
+    { tool: 'file_receipt',  note: 'file the receipt for audit' },
+  ],
+});
+```
+
+Every move lands on the typed stream (`skill.step_advanced` / `step_skipped` / `steps_unfinished`), and a step whose tool asks a human pauses the run and advances on resume — [runnable end to end](examples/context-engineering/16-skill-steps.ts).
+
 ### Then keep the conversation
 
 `run()` is **one turn**. It seeds the conversation from the message you pass and nothing else, so calling it twice gives you two conversations — right for one-shot work, and not what a chat wants. Continuing is something you name:

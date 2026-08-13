@@ -47,6 +47,7 @@ import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../../cache/types.js';
+import { validateSkillSteps, type OnSkipPolicy, type SkillStep } from '../skillSteps.js';
 
 /**
  * Where the Skill's body lands when activated.
@@ -164,6 +165,39 @@ export interface DefineSkillOptions {
    */
   readonly autoActivate?: AutoActivateMode;
   /**
+   * The procedure, as data (9.18.0). An ordered list of `{ tool, note }`
+   * pairs naming this skill's OWN tools (a step naming a tool the skill
+   * does not carry is refused here, where both arrive together).
+   *
+   * While this skill holds the tenure, the framework owns sequence and
+   * scope at the protocol level: the tools slot offers the CURRENT step's
+   * tool (its description led by `[Step k of n — <note>]`) plus `skip_step`
+   * — and every escape hatch stays offered (`read_skill`, other active
+   * skills' tools, the baseline `.tool()` registry, provider tools), so an
+   * input the author never imagined still has the whole normal surface.
+   * The model owns judgment inside a step: run it, skip it with a recorded
+   * reason, work around it, or stop and say why.
+   *
+   * Absent → this skill is byte-identical to today (zero-cost-when-unused:
+   * no tool, no scope key, no event, no slot change).
+   *
+   * Steps are TURN-scoped: the pointer resets on every cursor move and on
+   * every new run. Under a graph's `continuity: 'conversation'` the CURSOR
+   * carries across turns and the re-tenured skill starts at step 1 on the
+   * continued turn — the pointer is subordinate to the cursor, made
+   * visible. (The prior turn's completed step results are still in the
+   * restored history; the record is not lost, the pointer is fresh.)
+   */
+  readonly steps?: readonly SkillStep[];
+  /**
+   * What the framework does when the model skips a step with `skip_step`
+   * (9.18.0): `'advance'` (default) — record the skip and move to the next
+   * step; `'hold'` — record the skip and keep the step current (its tool
+   * stays the offer; the model may retry it, use an escape hatch, or finish
+   * and explain). Legal only beside `steps`.
+   */
+  readonly onSkip?: OnSkipPolicy;
+  /**
    * Cache policy for this skill's body. Defaults to `'while-active'` —
    * the body caches while the skill is in `activeInjections[]` (i.e.,
    * while it's the most-recently-activated skill); invalidates the
@@ -279,6 +313,14 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
   }
   assertNoViaToolName(`defineSkill(${opts.id})`, opts);
   if (opts.refreshPolicy) warnRefreshPolicyDeprecated(opts.id);
+  // Steps checkup (9.18.0) — all the data is in hand HERE, so every step
+  // refusal happens here: unknown tool, empty note/tool, steps:[], steps
+  // without tools, onSkip without steps. See skillSteps.ts, the grammar owner.
+  validateSkillSteps(opts.id, {
+    ...(opts.steps !== undefined && { steps: opts.steps }),
+    ...(opts.onSkip !== undefined && { onSkip: opts.onSkip }),
+    toolNames: new Set((opts.tools ?? []).map((t) => t.schema.name)),
+  });
   return Object.freeze({
     id: opts.id,
     description: opts.description,
@@ -302,6 +344,14 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
       surfaceMode: opts.surfaceMode ?? 'auto',
       ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
       ...(opts.autoActivate && { autoActivate: opts.autoActivate }),
+      // The procedure, as data (9.18.0). `Agent` folds these into one frozen
+      // StepPlan map at build; the engine ignores them everywhere else, so a
+      // consumer reading skills off this bag sees exactly what was declared.
+      ...(opts.steps &&
+        opts.steps.length > 0 && {
+          steps: Object.freeze(opts.steps.map((s) => Object.freeze({ ...s }))),
+          onSkip: opts.onSkip ?? ('advance' as const),
+        }),
       cache: resolveCachePolicy('skill', opts.cache),
     }),
   }) as unknown as Injection;

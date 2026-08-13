@@ -53,6 +53,27 @@ export {
   type AutoActivateMode,
 } from './factories/defineSkill.js';
 
+// Steps-as-data (9.18.0) — the procedure grammar. `skillSteps.ts` is the ONE
+// owner of the types, the pointer's shape and every sentence the model reads;
+// the public slice here is what a consumer needs to DECLARE steps, READ the
+// pointer off a snapshot (`pointerOf(sharedState.stepPointer)`), and compose
+// the integrity tool into custom wiring (the buildReadSkillTool precedent).
+export {
+  buildSkipStepTool,
+  pointerOf,
+  SKIP_STEP_TOOL_NAME,
+  type OnSkipPolicy,
+  type SkillStep,
+  type StepPlan,
+  type StepPointer,
+  type StepPointerCarrier,
+} from './skillSteps.js';
+export {
+  defineStepsHint,
+  STEPS_HINT_METADATA_KEY,
+  type StepsHintOptions,
+} from './factories/defineStepsHint.js';
+
 export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
 
 // File-authored skills — a loader over `defineSkill`, not a second mechanism.

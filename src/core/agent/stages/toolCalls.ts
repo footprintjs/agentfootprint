@@ -84,6 +84,21 @@ import {
 } from '../toolArgsValidation.js';
 import { safeStringify } from '../validators.js';
 import { capToolResult } from '../toolResultCap.js';
+import {
+  currentStepOf,
+  pointerOf,
+  readSkillStepIntro,
+  skipAdvanceSentence,
+  skipHoldSentence,
+  skipNeedsReasonSentence,
+  skipNothingActiveSentence,
+  stepAdvanceSuffix,
+  stepInProgress,
+  SKIP_STEP_TOOL_NAME,
+  type StepPlan,
+  type StepPlanFor,
+  type StepPointer,
+} from '../../../lib/injection-engine/skillSteps.js';
 import type { AgentState } from '../types.js';
 
 export interface ToolCallsHandlerDeps {
@@ -151,6 +166,29 @@ export interface ToolCallsHandlerDeps {
    * why the graph cannot be jumped at all, so the model stops asking and answers.
    */
   readonly skillGraphIsTree?: boolean;
+  /**
+   * The frozen step plans, keyed by skill id (9.18.0) — set only when ≥1
+   * registered skill declares `steps`. This stage owns the pointer's two
+   * RESULT-BOUNDARY moves, applied at EVERY site a result becomes final and
+   * is pushed (the batch loop AND all the pausable resume paths — a step
+   * whose tool paused, an `askHuman` step first among them, must advance on
+   * the resumed call exactly as it would have inline):
+   *
+   *   • ADVANCE — the finalized call is the current step's tool, ran, and
+   *     was not an error/denial/refusal → pointer + 1, `step_advanced`, and
+   *     the model-visible result gains the "now on step k+1" suffix
+   *     (composed BEFORE the history push — one past, no splicing).
+   *   • SKIP — a `skip_step` call: reason validated (empty → teaching
+   *     result, no event), `step_skipped` emitted, pointer moved or held
+   *     per the skill's declared `onSkip`, and the model-visible result is
+   *     OVERWRITTEN with the authoritative sentence (the read_skill-refusal
+   *     precedent — bookkeeping lives where the batch order lives).
+   *
+   * Postures never gate `skip_step`: skipping is judgment INSIDE a step,
+   * not routing. Undefined → no stepped skill anywhere; not one new line
+   * runs (zero-cost-when-unused).
+   */
+  readonly stepPlanFor?: StepPlanFor;
   /**
    * The mount's routing POSTURE beyond reachability (SG-C `strictness`).
    * Undefined = `'assist'` = today's gate, byte-for-byte — not one new line
@@ -501,6 +539,114 @@ export function buildToolCallsHandler(
           ? result
           : capToolResult(values.modelResult, { toolName, maxChars: max }).value,
     };
+  };
+
+  // ── Step-procedure boundary (9.18.0) — ONE implementation, five sites ──
+  // The batch loop and the four resume paths all finalize results; each
+  // calls these where its result becomes final, so a pointer can never miss
+  // a move because of which door the result came through (the resume-path
+  // law: the checkpoint carries the pointer for free in sharedState, and
+  // the answered call advances it HERE on resume).
+
+  /** The in-progress procedure, when there is one: pointer + plan + the
+   *  current step. Undefined on every agent without steps, between tenures,
+   *  and once a procedure completed. */
+  const stepStateOf = (
+    scope: TypedScope<AgentState>,
+  ): { ptr: StepPointer; plan: StepPlan; step: { tool: string; note: string } } | undefined => {
+    if (!deps.stepPlanFor) return undefined;
+    const ptr = pointerOf(scope.stepPointer);
+    if (!stepInProgress(ptr)) return undefined;
+    const plan = deps.stepPlanFor(ptr.skillId);
+    if (!plan) return undefined;
+    const step = currentStepOf(ptr, plan);
+    return step ? { ptr, plan, step } : undefined;
+  };
+
+  /**
+   * `skip_step` bookkeeping — returns the AUTHORITATIVE result that
+   * replaces the tool's placeholder (both channels, the read_skill-refusal
+   * precedent). Emits `step_skipped` and moves/holds the pointer per the
+   * declared policy; a teaching answer (no active procedure / empty
+   * reason) emits nothing.
+   */
+  const applySkipStep = (
+    scope: TypedScope<AgentState>,
+    call: {
+      readonly args: Readonly<Record<string, unknown>>;
+      readonly toolCallId: string;
+      readonly iteration: number;
+    },
+  ): string => {
+    const state = stepStateOf(scope);
+    if (!state) return skipNothingActiveSentence();
+    const raw = (call.args as { reason?: unknown }).reason;
+    const reason = typeof raw === 'string' ? raw.trim() : '';
+    if (reason.length === 0) return skipNeedsReasonSentence();
+    const { ptr, plan, step } = state;
+    typedEmit(scope, 'agentfootprint.skill.step_skipped', {
+      skillId: ptr.skillId,
+      step: { index: ptr.step, total: ptr.total, tool: step.tool, note: step.note },
+      reason,
+      policy: plan.onSkip,
+      iteration: call.iteration,
+      toolCallId: call.toolCallId,
+    });
+    // 'hold': recorded and held — the step stays the offer; repeated skips
+    // of a held step are each recorded, because each is a fact.
+    if (plan.onSkip === 'hold') return skipHoldSentence(ptr, reason, plan);
+    const next: StepPointer = {
+      skillId: ptr.skillId,
+      step: ptr.step + 1,
+      total: ptr.total,
+      skipped: [...ptr.skipped, ptr.step],
+    };
+    scope.stepPointer = [next];
+    return skipAdvanceSentence(ptr.step, reason, next, plan);
+  };
+
+  /**
+   * Advance-on-return — the caller has just finalized a NON-error,
+   * NON-denied, NON-refused result for `toolName`. When that call is the
+   * current step's tool: pointer + 1, `step_advanced` (with `completed` on
+   * the last), and the returned suffix joins the model-visible result
+   * BEFORE the history push. Empty string otherwise. Eligibility (ran,
+   * not denied/rejected/errored) is judged by the CALLING site, because
+   * each dispatch path knows its own truth about that.
+   */
+  const applyStepReturn = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+  ): string => {
+    const state = stepStateOf(scope);
+    if (!state || state.step.tool !== call.toolName) return '';
+    const { ptr, plan, step } = state;
+    const next: StepPointer = {
+      skillId: ptr.skillId,
+      step: ptr.step + 1,
+      total: ptr.total,
+      skipped: [...ptr.skipped],
+    };
+    scope.stepPointer = [next];
+    const completed = next.step > next.total;
+    typedEmit(scope, 'agentfootprint.skill.step_advanced', {
+      skillId: ptr.skillId,
+      step: { index: ptr.step, total: ptr.total, tool: step.tool, note: step.note },
+      iteration: call.iteration,
+      toolCallId: call.toolCallId,
+      ...(completed && { completed: true as const }),
+    });
+    return stepAdvanceSuffix(next, plan);
+  };
+
+  /** The `read_skill` activation intro for a STEPPED skill — where its
+   *  procedure starts. Rides the same "activated for the next iteration"
+   *  promise the read_skill result already makes (a same-batch declared
+   *  edge that outruns the pick reports itself via `reroute_superseded`,
+   *  exactly as it does for the activation sentence). */
+  const readSkillStepIntroFor = (pickedId: string): string => {
+    const plan = deps.stepPlanFor?.(pickedId);
+    return plan ? readSkillStepIntro(plan) : '';
   };
 
   /**
@@ -1485,6 +1631,18 @@ export function buildToolCallsHandler(
           }
         }
 
+        // ── skip_step bookkeeping (9.18.0) ─────────────────────────────
+        // Same block as the read_skill gate, same mechanism: the stage
+        // OVERWRITES the tool's placeholder with the authoritative sentence
+        // BEFORE the after-tool moment, so governance rules and the cap
+        // compose over what the model will actually read, on both channels.
+        // Postures never gate it — skipping is judgment inside a step, not
+        // routing. Zero-cost gate: `stepPlanFor` is undefined on every agent
+        // without a stepped skill.
+        if (deps.stepPlanFor && tc.name === SKIP_STEP_TOOL_NAME && !error && !denied) {
+          result = applySkipStep(scope, { args: callArgs, toolCallId: tc.id, iteration });
+        }
+
         // ── The after-tool moment ────────────────────────────────────────
         // Last thing before the result becomes history, and only for a call
         // that ran. `modelResult` is what the model reads; `result` stays the
@@ -1516,8 +1674,34 @@ export function buildToolCallsHandler(
           durationMs,
           ...(error === true && { error: true }),
         });
-        const resultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+
+        // ── Step boundary (9.18.0): advance decided, then decorate, THEN
+        // push — the suffix must be part of the one past every reader sees
+        // (history, `lastToolResult`, the batch), never spliced in later.
+        // `stream.tool_end` above keeps reporting the tool's own truth.
+        if (deps.stepPlanFor) {
+          // The activation intro: an ACCEPTED read_skill pick of a stepped
+          // skill says where the procedure starts (recency channel §1).
+          if (tc.name === 'read_skill' && !error && !denied && !skillRejected) {
+            const pickedId = (callArgs as { id?: unknown }).id;
+            if (typeof pickedId === 'string' && pickedId.length > 0) {
+              resultStr += readSkillStepIntroFor(pickedId);
+            }
+          }
+          // The advance: only a call that RAN clean completes a step — an
+          // error result never advances (the pointer holds; the model
+          // retries, skips with a reason, or routes around), and neither
+          // does a permission denial or a gate refusal.
+          if (executed && !error && !denied && !skillRejected) {
+            resultStr += applyStepReturn(scope, {
+              toolName: tc.name,
+              toolCallId: tc.id,
+              iteration,
+            });
+          }
+        }
+
         newHistory.push({
           role: 'tool',
           content: resultStr,
@@ -1657,6 +1841,9 @@ export function buildToolCallsHandler(
          *  after-tool moment transformed or withheld it. */
         let modelResult: unknown;
         let error: boolean | undefined;
+        /** The call REALLY ran, clean — the step-advance eligibility this
+         *  path knows about itself (a decline or a chain-deny never ran). */
+        let stepToolRan = false;
         if (!decision.approved) {
           result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
           recordDecisions(scope, [
@@ -1769,6 +1956,14 @@ export function buildToolCallsHandler(
             );
             result = dispatched.result;
             error = dispatched.error;
+            stepToolRan = dispatched.executed === true && error !== true;
+            // skip_step behind a middleware ask, approved (9.18.0): the
+            // placeholder just landed — replace it with the authoritative
+            // sentence BEFORE the chain's last word, the execute loop's
+            // composition kept.
+            if (deps.stepPlanFor && toolName === SKIP_STEP_TOOL_NAME && stepToolRan) {
+              result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+            }
             // The tool ran on this side of the pause, so the chain gets its
             // last word here too — a rule about results cannot be skipped by
             // routing a call through a human.
@@ -1794,8 +1989,14 @@ export function buildToolCallsHandler(
         if (modelResult === undefined) modelResult = result;
         const askCapped = capResults(toolName, { result, modelResult });
         modelResult = askCapped.modelResult;
-        const askResultStr =
+        let askResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        // Step boundary (9.18.0) — a result finalized HERE is as final as one
+        // from the batch loop; the answered call advances the pointer before
+        // the push, exactly as it would have inline.
+        if (deps.stepPlanFor && stepToolRan) {
+          askResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
+        }
         const askHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: askResultStr, toolCallId, toolName },
@@ -1856,6 +2057,8 @@ export function buildToolCallsHandler(
         /** What the model reads — see the ask path above. */
         let modelResult: unknown;
         let error: boolean | undefined;
+        /** Step-advance eligibility, judged by this path (a decline ran nothing). */
+        let stepToolRan = false;
         if (decision.approved) {
           const env = scope.$getEnv();
           const tool = lookupTool(toolName);
@@ -1870,6 +2073,7 @@ export function buildToolCallsHandler(
           );
           result = dispatched.result;
           error = dispatched.error;
+          stepToolRan = dispatched.executed === true && error !== true;
           // Consent moved the execution to this side of the pause; the rules
           // about results move with it.
           if (dispatched.executed === true) {
@@ -1893,8 +2097,13 @@ export function buildToolCallsHandler(
         if (modelResult === undefined) modelResult = result;
         const decisionCapped = capResults(toolName, { result, modelResult });
         modelResult = decisionCapped.modelResult;
-        const decisionResultStr =
+        let decisionResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        // Step boundary (9.18.0) — an approved consequential step (a checkIn
+        // tool CAN be a step's tool) advances on the resumed dispatch.
+        if (deps.stepPlanFor && stepToolRan) {
+          decisionResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
+        }
         const decisionHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: decisionResultStr, toolCallId, toolName },
@@ -1972,8 +2181,13 @@ export function buildToolCallsHandler(
         if (modelResult === undefined) modelResult = result;
         const consentCapped = capResults(toolName, { result, modelResult });
         modelResult = consentCapped.modelResult;
-        const consentResultStr =
+        let consentResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        // Step boundary (9.18.0) — a step tool that waited on 3LO consent
+        // advances the moment its resumed dispatch really ran, clean.
+        if (deps.stepPlanFor && dispatched.executed === true && error !== true) {
+          consentResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
+        }
         const consentHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: consentResultStr, toolCallId, toolName },
@@ -2056,7 +2270,15 @@ export function buildToolCallsHandler(
       // as a tool's rows do.
       const pauseCapped = capResults(toolName, { result: input, modelResult: rawPauseResult });
       const modelResult = pauseCapped.modelResult;
-      const resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
+      // the tool paused mid-step, the person's answer IS its result, and the
+      // completed step advances here at the same boundary it would have
+      // inline. The pointer itself crossed the checkpoint for free (it is
+      // committed shared state); this is the half that has to be wired.
+      if (deps.stepPlanFor) {
+        resultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
+      }
       const newHistory: LLMMessage[] = [
         ...(scope.history as readonly LLMMessage[]),
         {

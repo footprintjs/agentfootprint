@@ -212,6 +212,17 @@ export interface InjectionContext {
    * a graph without the new options never sees this key.
    */
   readonly turnRoute?: import('./routingPolicy.js').TurnRoute;
+  /**
+   * WHERE the active skill's declared procedure stands (9.18.0) — present
+   * only while a stepped skill holds the tenure. THE FRESH pointer: the
+   * Evaluate stage re-keys it (cursor moved → reset; tenant unchanged →
+   * pass-through) BEFORE triggers run, so a `rule` predicate — the
+   * auto-registered `defineStepsHint` first among them — judges the tenure
+   * that is beginning, not the one that just ended. `step === total + 1`
+   * means the procedure completed. Strictly subordinate to
+   * `currentSkillId`: it can never move the cursor.
+   */
+  readonly stepPointer?: import('./skillSteps.js').StepPointer;
 }
 
 /**
@@ -275,9 +286,13 @@ export interface Injection {
    *   - `surfaceMode` (Skill) — `'auto' | 'system-prompt' | 'tool-only' | 'both'`
    *   - `autoActivate` (Skill) — `'currentSkill'`, the tool gate
    *   - `cache` (any flavor) — the cache directive
+   *   - `steps` / `onSkip` (Skill, 9.18.0) — the declared procedure; folded
+   *     into a frozen StepPlan map at Agent build (skillSteps.ts owns the
+   *     grammar)
    *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`; DEPRECATED-pending-steps:
-   *     stored, never read, and staying that way — a planned steps-as-data
-   *     feature supersedes it (see `RefreshPolicy`'s docstring)
+   *     stored, never read, and staying that way — superseded by `steps`
+   *     (9.18.0), whose banner + result suffixes re-deliver by construction
+   *     (see `RefreshPolicy`'s docstring)
    */
   readonly metadata?: Readonly<Record<string, unknown>>;
 }

@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.18.0] - 2026-08-12
+
+**Procedures become data: the framework holds the step pointer, the model
+fills in the blanks — and the whole cascade now narrates itself.**
+
+### Added — steps as data
+
+```ts
+defineSkill({
+  id: 'refund',
+  tools: [findOrder, checkHistory, verifyIdentity, approveRefund, issueRefund, fileReceipt],
+  steps: [
+    { tool: 'find_order', note: 'find the order before touching money' },
+    { tool: 'check_history', note: 'confirm the duplicate charge' },
+    { tool: 'verify_identity', note: 'verify the caller owns the card' },
+    { tool: 'approve_refund', note: 'a person approves before money moves' },
+    { tool: 'issue_refund', note: 'refund the duplicate charge only' },
+    { tool: 'file_receipt', note: 'file the receipt for audit' },
+  ],
+  onSkip: 'advance', // or 'hold'
+});
+```
+
+While a stepped skill is active the framework injects the current step
+every iteration ("step 3 of 6: …"), offers that step's tool plus every
+intact escape hatch (`read_skill`, other active skills' tools), advances
+the pointer on the tool's return — including across pause/resume, so a
+human-in-the-loop step resumes with the pointer intact — and records
+everything as it happens. A skill declared without `steps` is
+byte-identical to before (pinned by regression tests).
+
+### Added — `skip_step`
+
+The model may decline the current step with a required reason. The reason
+is recorded, never silently lost. `onSkip: 'advance'` (the default) moves
+the pointer on; `'hold'` keeps the step current so the model can retry it,
+work around it, or finish and explain. A premature stop with steps
+unfinished gets one teaching nudge — never a forced continue — and a second
+stop is honored.
+
+### Added — three typed events
+
+`agentfootprint.skill.step_advanced`, `agentfootprint.skill.step_skipped`,
+`agentfootprint.skill.steps_unfinished` — every pointer move, skip, and
+early stop lands on the record.
+
+### Added — build-time teaching refusals
+
+Four combinations that could never honor a declared procedure are refused
+at `Agent.build()`, naming both the problem and the fix, instead of
+silently activating a procedure that never engages:
+
+- a step naming a tool the skill doesn't carry (refused at `defineSkill`,
+  where the tool list and the steps arrive together);
+- `steps` on an OPEN skill of a mounted skill graph (activated by
+  `read_skill`, never receiving the cursor a procedure's tenure depends on);
+- `steps` on a decision `.tree()` leaf, or beside one (a tree never writes
+  a cursor);
+- `steps` on a skill with no mounted graph and a non-`llm-activated`
+  trigger (no `read_skill` activation, so no tenure ever begins);
+- `reactMode: 'classic'` with `steps` (classic freezes the tools slot after
+  turn 1 — the per-step narrowing would freeze with it).
+
+### Added — the story rail narrates routing
+
+Commentary templates render `agentfootprint.skill.turn_routed` verdicts
+with the numbers behind them (intent scores + runner-up, a near-tie hold's
+two closest shares), `route_conflict` suppressed hops (which tool result
+lost and why), `strictness` posture refusals (`guard`/`rails`), and a
+model pick's divergence from the menu it was offered. The trace recorder
+taps these into the next beat as they happen, not after the fact. Pairs
+with the Why Lens 0.33.x narration.
+
+### Deprecation reminder
+
+`refreshPolicy` remains deprecated (9.16.0) and still does nothing —
+per-step injection is its successor. Dev mode now also warns when a skill
+sets both `refreshPolicy` and `steps`.
+
 ## [9.17.0] - 2026-08-12
 
 **The turn starts where the conversation is — a routing cascade that

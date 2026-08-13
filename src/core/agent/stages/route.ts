@@ -25,8 +25,14 @@ import {
   recordOutputAttempt,
   type ResolvedOutputEnforcement,
 } from '../outputEnforcement.js';
+import {
+  pointerOf,
+  remainingStepsOf,
+  stepInProgress,
+  type StepPlanFor,
+} from '../../../lib/injection-engine/skillSteps.js';
 
-export type RouteBranch = 'tool-calls' | 'final' | 'output-retry';
+export type RouteBranch = 'tool-calls' | 'final' | 'output-retry' | 'step-nudge';
 
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
@@ -155,6 +161,73 @@ function emitRouteDecided(
   });
 }
 
+/**
+ * Judge a WOULD-BE-FINAL answer against the active step procedure (9.18.0).
+ *
+ * Called only at a moment the decider is about to return `'final'` (never on
+ * a denied answer — a withheld answer is not re-asked, and not nudged). Three
+ * verdicts, per the declared table:
+ *
+ *   • steps remain, no limit fired, nudge unspent → `'step-nudge'`: the
+ *     StepNudge branch appends the one teaching re-ask and loops (it emits
+ *     `steps_unfinished { action: 'nudged' }` itself, where the work is);
+ *   • steps remain, nudge already spent → final proceeds — NEVER a forced
+ *     continue; `steps_unfinished { action: 'accepted' }` goes on the record
+ *     here (no stage runs for an accepted stop);
+ *   • steps remain, a LIMIT forced final → final proceeds, no nudge (a nudge
+ *     would spend an iteration the limit refused);
+ *     `steps_unfinished { action: 'cut-short' }`.
+ *
+ * A turn that tenured two stepped skills is judged on the CURRENT pointer
+ * only — an earlier tenant's unfinished procedure died at its cursor move
+ * (the re-key), already visible in the record as a pointer that never
+ * completed. Undefined `stepPlanFor`, no pointer, or a complete procedure →
+ * `undefined` and not one event (zero-cost-when-unused).
+ */
+function judgeUnfinishedSteps(
+  scope: TypedScope<AgentState>,
+  stepPlanFor: StepPlanFor | undefined,
+  earlyStop: 'max-iterations' | 'cost-budget' | undefined,
+): 'step-nudge' | undefined {
+  if (!stepPlanFor) return undefined;
+  const ptr = pointerOf(scope.stepPointer);
+  if (!stepInProgress(ptr)) return undefined;
+  const plan = stepPlanFor(ptr.skillId);
+  if (!plan) return undefined;
+  const iteration = scope.iteration as number;
+  if (earlyStop !== undefined) {
+    typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
+      skillId: ptr.skillId,
+      remaining: remainingStepsOf(ptr, plan),
+      total: ptr.total,
+      action: 'cut-short',
+      iteration,
+    });
+    return undefined;
+  }
+  if (scope.stepNudgeSpent === true) {
+    typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
+      skillId: ptr.skillId,
+      remaining: remainingStepsOf(ptr, plan),
+      total: ptr.total,
+      action: 'accepted',
+      iteration,
+    });
+    return undefined;
+  }
+  return 'step-nudge';
+}
+
+/** The `route_decided` rationale for a step nudge. */
+function stepNudgeRationale(scope: TypedScope<AgentState>): string {
+  const ptr = pointerOf(scope.stepPointer)!;
+  const remaining = ptr.total - ptr.step + 1;
+  return (
+    `final answer left ${remaining} declared step(s) of '${ptr.skillId}' unrun — ` +
+    `one teaching nudge goes back (at most once per turn)`
+  );
+}
+
 export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch => {
   const { chosen, rationale, earlyStop } = decideBranch(scope);
   emitRouteDecided(scope, chosen, rationale);
@@ -207,10 +280,14 @@ export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch =>
 export function buildRouteDeciderStage(
   messageMiddleware?: readonly MessageMiddleware[],
   enforcement?: ResolvedOutputEnforcement,
+  stepPlanFor?: StepPlanFor,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
-  if (chain.length === 0 && enforcement === undefined) return routeDeciderStage;
-  if (enforcement !== undefined) return buildEnforcingDecider(chain, enforcement);
+  if (chain.length === 0 && enforcement === undefined && stepPlanFor === undefined) {
+    return routeDeciderStage;
+  }
+  if (enforcement !== undefined) return buildEnforcingDecider(chain, enforcement, stepPlanFor);
+  if (stepPlanFor !== undefined) return buildStepsAwareDecider(chain, stepPlanFor);
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
     emitRouteDecided(scope, chosen, rationale);
@@ -244,6 +321,56 @@ export function buildRouteDeciderStage(
 }
 
 /**
+ * The decider an agent with a STEPPED skill runs (9.18.0), without schema
+ * enforcement: decide, run the output chain if there is one, judge the
+ * would-be-final answer against the active procedure, THEN announce the
+ * branch once — so `route_decided` names the branch the run actually took
+ * (the enforcing decider's discipline). A DENIED answer is neither judged
+ * nor nudged: it was withheld on purpose, and looping it would re-ask for
+ * an answer the app refused to release.
+ *
+ * Only stepped agents receive this function — everyone else keeps the exact
+ * decider (and event timing) they always had.
+ */
+function buildStepsAwareDecider(
+  chain: readonly MessageMiddleware[],
+  stepPlanFor: StepPlanFor,
+): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
+  return async (scope) => {
+    const { chosen, rationale, earlyStop } = decideBranch(scope);
+    if (chosen !== 'final') {
+      emitRouteDecided(scope, chosen, rationale);
+      return chosen;
+    }
+    let denied = false;
+    if (chain.length > 0) {
+      const verdict = await runMessageChain(chain, {
+        phase: 'output',
+        content: scope.llmLatestContent,
+        history: [...(scope.history as readonly LLMMessage[])],
+        iteration: scope.iteration,
+        ...(scope.runIdentity && { identity: scope.runIdentity }),
+      });
+      recordDecisions(scope, verdict.decisions);
+      if (verdict.kind === 'deny') {
+        denied = true;
+        scope.messageDeniedReason = verdict.reason;
+        scope.messageDeniedPhase = 'output';
+        scope.messageDeniedBy = verdict.middleware;
+      }
+      scope.llmLatestContent = verdict.content;
+    }
+    if (!denied && judgeUnfinishedSteps(scope, stepPlanFor, earlyStop) === 'step-nudge') {
+      emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
+      return 'step-nudge';
+    }
+    emitRouteDecided(scope, 'final', rationale);
+    if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
+    return 'final';
+  };
+}
+
+/**
  * The decider an agent with `.outputSchema(parser, { retries })` runs:
  * decide, run the output chain if there is one, judge the answer, THEN
  * announce the branch — so `route_decided` names the branch the run actually
@@ -252,6 +379,7 @@ export function buildRouteDeciderStage(
 function buildEnforcingDecider(
   chain: readonly MessageMiddleware[],
   enforcement: ResolvedOutputEnforcement,
+  stepPlanFor?: StepPlanFor,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -305,6 +433,12 @@ function buildEnforcingDecider(
         iteration: scope.iteration as number,
         outcome: 'passed',
       });
+      // The schema verdict ran FIRST (an answer being re-asked is not a
+      // stop); the step judge sees only an answer the schema let stand.
+      if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
+        emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
+        return 'step-nudge';
+      }
       emitRouteDecided(scope, 'final', base.rationale);
       if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
       return 'final';
@@ -361,6 +495,13 @@ function buildEnforcingDecider(
       fallbackConfigured: enforcement.hasFallback,
       ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
     });
+    // A schema-exhausted answer is still a would-be-final one, and the step
+    // table is unconditional on schema state: steps remaining + nudge
+    // unspent → one teaching re-ask (its turn may well fix both).
+    if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
+      emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
+      return 'step-nudge';
+    }
     emitRouteDecided(
       scope,
       'final',

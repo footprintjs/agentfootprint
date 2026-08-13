@@ -114,8 +114,18 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   // this prose says who decided and where the turn starts.
   'skill.turn_routed.continuity':
     '{{appName}} picked up where the conversation left off — still in `{{to}}`.',
+  // Near-tie hold (9.17.0): tier 2 ran but did not clear the margin, so the
+  // incumbent kept the turn. The two closest relevance shares ride the prose —
+  // the ONE case where the verdict is only honest with its numbers.
+  'skill.turn_routed.continuity.nearTie':
+    'Near-tie between `{{tieA}}` ({{tieAShare}}) and `{{tieB}}` ({{tieBShare}}) — ' +
+    '{{appName}} stayed put, continuing in `{{to}}`.',
   'skill.turn_routed.intent':
-    'The new message decisively matched `{{to}}`{{scorerClause}}, so the turn starts there.',
+    'The new message decisively matched `{{to}}`{{scoreClause}}{{scorerClause}}, so the turn starts there.',
+  // Pre-rendered into {{scoreClause}} only when the event carries `scores` —
+  // an event without the ranked list renders the sentence without numbers.
+  'skill.turn_routed.intent.scored': ' — scored {{topScore}} vs {{runnerUpScore}} runner-up',
+  'skill.turn_routed.intent.scoredSolo': ' — scored {{topScore}}',
   'skill.turn_routed.entry': 'A declared start rule routed this turn to `{{to}}`.',
   'skill.turn_routed.menu':
     'No declared intent clearly claimed this message — {{appName}} was offered ' +
@@ -124,6 +134,58 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     'The conversation remembered being in `{{droppedId}}`, but this graph no longer has ' +
     'it — started fresh.',
   'skill.turn_routed.none': 'The turn-start router decided nothing — the turn proceeds as-is.',
+  // `by: 'none'` WITH a recorded offer = the rails posture: the menu is on the
+  // record but the model is never allowed to answer it, so the turn ran on the
+  // base prompt. WHY it ended in a menu is stated only when the event carries
+  // the evidence (`selectCommentaryKey` branches on decisive/scores/floor):
+  //   • near-tie — intent DID match, more than once, too closely to call;
+  //     `offered` is the tied set;
+  //   • unmatched — nothing cleared the floor; `offered` is the FULL menu,
+  //     so "close candidates" would be a lie there;
+  //   • no numbers → the posture-only sentence claims no reason at all.
+  'skill.turn_routed.none.rails':
+    'Routing ended in a menu, but this graph does not let the model route — the turn ran ' +
+    'on the base prompt. On the record: {{candidates}}.',
+  'skill.turn_routed.none.rails.nearTie':
+    'This message matched {{candidates}} too closely to call, and this graph does not let ' +
+    'the model break the tie — the turn ran on the base prompt.',
+  'skill.turn_routed.none.rails.unmatched':
+    'No start rule or intent matched this message strongly enough, and this graph does not ' +
+    'let the model route — the turn ran on the base prompt. The full menu stayed on the ' +
+    'record: {{candidates}}.',
+
+  // One parallel tool batch, N matched edges, different targets (9.16.0).
+  // Call order decides; the suppressed hop(s) stay on the record — this line is
+  // that record's prose. Grammar branches (was/were) are pre-rendered clauses so
+  // the key itself never has to split, and the head COUNTS the results
+  // (winner + losers) instead of hard-coding "Two" — a 3-result batch says so.
+  'skill.route_conflict':
+    '{{conflictCount}} tool results wanted different next skills — `{{winnerTool}}` → `{{winnerTarget}}` ' +
+    'won (first in the batch){{losersClause}}.',
+  'skill.route_conflict.suppressedOne': '; {{losers}} was suppressed and is on the record',
+  'skill.route_conflict.suppressedMany': '; {{losers}} were suppressed and are on the record',
+
+  // Posture refusals on `skill.rejected` (SG-C `strictness`, 9.17.0). ONLY the
+  // posture cases get prose here — a plain reachability rejection keeps its
+  // existing fall-through (the default humanizer renders the raw event, never
+  // drops it), so nothing that narrated before reads differently now.
+  'skill.rejected.guard':
+    'The model asked for the `{{requestedId}}` skill, but that choice was not on the menu ' +
+    'it was offered — {{appName}} refused the jump and re-prompted with the allowed options.',
+  'skill.rejected.rails':
+    'The model asked for the `{{requestedId}}` skill, but this graph does not let the model ' +
+    'route — {{appName}} refused the jump; start rules and declared routes decide moves.',
+
+  // The cursor moved by MODEL PICK and the event says how the offer went
+  // (`cursorMove.offered` / `cursorMove.declinedOffer`, 9.17.0) — assist-posture
+  // divergence as data. Every clause renders only from fields the event carries:
+  // no menu on the event → no menu in the sentence.
+  'context.model_pick':
+    'The model chose the `{{to}}` skill{{menuClause}}{{offMenuClause}}{{stayClause}}.',
+  'context.model_pick.menu': ' from the {{offeredCount}}-option menu it was offered',
+  'context.model_pick.offMenu':
+    ' — a pick that was not on the menu it was offered; the divergence is on the record',
+  'context.model_pick.stay': '; staying put was offered and declined',
 
   // Skill-GRAPH routing (proposal 002): a decision tree or declared edge picked a
   // skill this turn. Narrates WHICH skill + WHY (the matched decision) + what it
@@ -242,25 +304,77 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       // A dropped resume outranks the (cold) verdict it forced — the reader's
       // question is "why did my conversation forget where it was?".
       if (event.payload.droppedResume) return 'skill.turn_routed.dropped';
-      switch (event.payload.by) {
+      switch (event.payload.by as string) {
         case 'continuity':
-          return 'skill.turn_routed.continuity';
+          // A near-tie hold is only a hold because the numbers were close —
+          // when the event carries them, the prose says so.
+          return event.payload.decisive === false && (event.payload.scores?.length ?? 0) >= 2
+            ? 'skill.turn_routed.continuity.nearTie'
+            : 'skill.turn_routed.continuity';
         case 'intent':
           return 'skill.turn_routed.intent';
         case 'entry':
+        case 'rule': // era tolerance — 'rule' is the same tier-1 verdict, older/newer vocabulary
           return 'skill.turn_routed.entry';
         case 'menu':
+        case 'model-pick': // era tolerance — a menu the model resolves
           return 'skill.turn_routed.menu';
-        default:
-          return 'skill.turn_routed.none';
+        default: {
+          // `by: 'none'` with the offer on the record = the rails posture.
+          // WHY the cascade ended in a menu is stated only when the event
+          // carries the evidence: `decisive: false` with a floor-clearing top
+          // score is a near-tie (intent DID match — more than once); a top
+          // score at/below the recorded floor is honestly unmatched (the
+          // offer is the FULL menu). No numbers → the posture-only sentence.
+          const p = event.payload;
+          if ((p.offered?.length ?? 0) === 0) return 'skill.turn_routed.none';
+          const top = p.scores?.[0]?.score;
+          const floor = p.policy?.floor;
+          const cleared =
+            top !== undefined && Number.isFinite(top) && (floor === undefined || top > floor);
+          if (p.decisive === false && (p.scores?.length ?? 0) >= 2 && cleared)
+            return 'skill.turn_routed.none.rails.nearTie';
+          if (top !== undefined && !cleared) return 'skill.turn_routed.none.rails.unmatched';
+          return 'skill.turn_routed.none.rails';
+        }
       }
     }
 
-    case 'agentfootprint.context.evaluated':
+    case 'agentfootprint.skill.route_conflict':
+      return 'skill.route_conflict';
+
+    case 'agentfootprint.skill.rejected':
+      // Posture refusals (SG-C) narrate; the plain reachability rejection keeps
+      // its pre-9.17 fall-through to the caller's default humanizer (raw render,
+      // never dropped).
+      switch (event.payload.posture) {
+        case 'guard':
+          return 'skill.rejected.guard';
+        case 'rails':
+          return 'skill.rejected.rails';
+        default:
+          return undefined;
+      }
+
+    case 'agentfootprint.context.evaluated': {
+      // A model pick that resolved a turn-start menu (or diverged from it) is
+      // the iteration's routing verdict — it fires on exactly ONE iteration
+      // (`cursorMove.offered` / `declinedOffer` are stamped only then, 9.17.0)
+      // and outranks the generic routed line for that iteration. Old-era events
+      // never carry the decorations, so they keep reading exactly as before.
+      const cm = event.payload.cursorMove;
+      if (
+        cm?.by === 'model-pick' &&
+        cm.to &&
+        ((cm.offered?.length ?? 0) > 0 || cm.declinedOffer === true)
+      ) {
+        return 'context.model_pick';
+      }
       // Narrate ONLY when a skillGraph() routed a skill this turn (decision tree
       // or declared edge). Otherwise stay silent — bare injection evaluation is
       // plumbing, not pedagogy (matches the slot-mechanics skips below).
       return event.payload.routing && event.payload.routing.length > 0 ? 'context.routed' : null;
+    }
 
     case 'agentfootprint.agent.iteration_start':
     case 'agentfootprint.agent.iteration_end':
@@ -309,6 +423,10 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return undefined; // fall through
   }
 }
+
+/** Count words for the `route_conflict` head (index = the count). Beyond the
+ *  list the digit itself reads fine ("7 tool results wanted…"). */
+const CONFLICT_COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'] as const;
 
 /**
  * Build the variable bag for a given event. Flat `name → string` map;
@@ -382,8 +500,34 @@ export function extractCommentaryVars(
       // one leaf). The matched predicate = the deciding `yes` on the path; for an
       // all-`no` path (the default leaf) there's none → "default" clause. The
       // full path + every route ride the event payload for richer consumers.
+      // Model-pick decoration vars (`context.model_pick`) — computed whenever
+      // the event carries them; harmless extras for the `context.routed` key.
+      const cm = event.payload.cursorMove;
+      const pickVars: Record<string, string> = {};
+      if (cm?.by === 'model-pick' && cm.to) {
+        const offeredCount = cm.offered?.length ?? 0;
+        pickVars.to = cm.to;
+        pickVars.menuClause =
+          cm.declinedOffer !== true && offeredCount > 0
+            ? renderCommentary(templates['context.model_pick.menu'] ?? '', {
+                offeredCount: String(offeredCount),
+              })
+            : '';
+        pickVars.offMenuClause =
+          cm.declinedOffer === true ? templates['context.model_pick.offMenu'] ?? '' : '';
+        // "Staying put was offered and declined" is derivable, not invented:
+        // the current cursor was ON the menu and the accepted pick left it.
+        pickVars.stayClause =
+          cm.declinedOffer !== true &&
+          cm.from !== undefined &&
+          cm.to !== cm.from &&
+          (cm.offered ?? []).includes(cm.from)
+            ? templates['context.model_pick.stay'] ?? ''
+            : '';
+      }
+
       const r = event.payload.routing?.[0];
-      if (!r) return base;
+      if (!r) return { ...base, ...pickVars };
       const toolCount = r.tools?.length ?? 0;
       const toolClause =
         toolCount > 0 ? `${toolCount} tool${toolCount === 1 ? '' : 's'}` : 'no new tools';
@@ -393,23 +537,91 @@ export function extractCommentaryVars(
         : r.via === 'tree'
         ? templates['context.routed.default'] ?? ''
         : '';
-      return { ...base, skillId: r.injectionId, toolClause, matchClause };
+      return { ...base, skillId: r.injectionId, toolClause, matchClause, ...pickVars };
     }
 
     case 'agentfootprint.skill.turn_routed': {
       const p = event.payload;
       const offeredCount = p.offered?.length ?? 0;
+      // The verdict's numbers, rendered ONLY when the event carries them. Raw
+      // scores read to 2 decimals; `relevance` is the full-softmax share, so it
+      // reads as a percentage. An event without `scores` renders no numbers.
+      const scores = p.scores ?? [];
+      const fmtScore = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+      const fmtShare = (r: number): string => `${Math.round(r * 100)}%`;
+      const scoreClause =
+        scores.length >= 2
+          ? renderCommentary(templates['skill.turn_routed.intent.scored'] ?? '', {
+              topScore: fmtScore(scores[0].score),
+              runnerUpScore: fmtScore(scores[1].score),
+            })
+          : scores.length === 1
+          ? renderCommentary(templates['skill.turn_routed.intent.scoredSolo'] ?? '', {
+              topScore: fmtScore(scores[0].score),
+            })
+          : '';
       return {
         ...base,
-        to: p.to ?? '',
+        // Continuity verdicts hold the inherited cursor — when an emitter left
+        // `to` off (the cursor didn't move), `from` names where the turn stays.
+        to: p.to ?? (p.by === 'continuity' ? p.from ?? '' : ''),
         from: p.from ?? '',
         droppedId: p.droppedResume?.id ?? '',
         scorerClause: p.scorer !== undefined ? ` (judged by the '${p.scorer}' scorer)` : '',
         offeredCount: String(offeredCount),
         offeredPlural: offeredCount === 1 ? '' : 's',
         stayClause: p.stayOffered === true ? ' (including staying put)' : '',
+        scoreClause,
+        tieA: scores[0]?.id ?? '',
+        tieAShare: scores[0] ? fmtShare(scores[0].relevance) : '',
+        tieB: scores[1]?.id ?? '',
+        tieBShare: scores[1] ? fmtShare(scores[1].relevance) : '',
+        candidates: (p.offered ?? []).map((id) => `\`${id}\``).join(', '),
       };
     }
+
+    case 'agentfootprint.skill.route_conflict': {
+      const p = event.payload;
+      const losers = p.losers ?? [];
+      const loserList = losers.map((l) => `\`${l.toolName}\` → \`${l.target}\``).join(' and ');
+      // The head counts EVERY result in the conflict (winner + losers) — a
+      // 3-result batch says "Three", never a hard-coded "Two". An event that
+      // lists no losers can only honestly say "Multiple" (a conflict implies
+      // more than one result by definition; the emitter always lists them).
+      const count = losers.length + 1;
+      const conflictCount =
+        losers.length === 0
+          ? 'Multiple'
+          : count < CONFLICT_COUNT_WORDS.length
+          ? CONFLICT_COUNT_WORDS[count]
+          : String(count);
+      // Pre-rendered was/were clause so the outer key never has to split.
+      const losersClause =
+        losers.length === 0
+          ? ''
+          : renderCommentary(
+              templates[
+                losers.length === 1
+                  ? 'skill.route_conflict.suppressedOne'
+                  : 'skill.route_conflict.suppressedMany'
+              ] ?? '',
+              { losers: loserList },
+            );
+      return {
+        ...base,
+        conflictCount,
+        winnerTool: p.winner.toolName,
+        winnerTarget: p.winner.target,
+        losersClause,
+      };
+    }
+
+    case 'agentfootprint.skill.rejected':
+      return {
+        ...base,
+        requestedId: event.payload.requestedId,
+        currentSkillId: event.payload.currentSkillId ?? '',
+      };
 
     case 'agentfootprint.cost.limit_hit': {
       const p = event.payload;

@@ -105,7 +105,12 @@ describe('event registry — names + exhaustiveness', () => {
     //    (skill.turn_routed added with 9.17.0 — the turn-start routing
     //     cascade's verdict: which tier decided the start, every candidate's
     //     numbers, the menu offered, and the thresholds that judged it.)
-    expect(ALL_EVENT_TYPES.length).toBe(79);
+    //    (skill.step_advanced / step_skipped / steps_unfinished added with
+    //     9.18.0 — steps-as-data: a declared step completed at the result
+    //     boundary; the model declined one with its reason on the record;
+    //     the turn ended with steps unrun — nudged once, accepted, or
+    //     cut short by a limit.)
+    expect(ALL_EVENT_TYPES.length).toBe(82);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

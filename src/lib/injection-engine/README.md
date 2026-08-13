@@ -384,6 +384,85 @@ mounts no stage, writes no key and emits no new event.
 
 ---
 
+## Steps as data (9.18.0)
+
+**Why:** a skill's body could always *describe* a procedure ("look up the
+order, then refund, then file the receipt"), but prose in the system prompt
+decays with context length and the model can call any tool at any time — the
+order was a hope, not a mechanism. `steps` makes the procedure DATA, and the
+framework enforces it at the protocol level: while the skill holds the
+tenure, the tools slot sends ONLY the current step's tool (its description
+led by `[Step k of n — <note>]`) plus `skip_step`. A schema that was never
+sent cannot be called — the sequence is owned with zero refusal machinery.
+The model keeps the judgment *inside* each step: run it, skip it with a
+recorded reason, use an escape hatch, or stop and say why.
+
+```typescript
+import { Agent } from 'agentfootprint';
+import { defineSkill } from 'agentfootprint/context';
+
+const refund = defineSkill({
+  id: 'refund',
+  description: 'Handles refunds end to end, by declared procedure.',
+  body: 'Follow the refund procedure. Every step says why it exists.',
+  tools: [findOrder, checkHistory, issueRefund, fileReceipt],
+  steps: [
+    { tool: 'find_order',    note: 'find the order before touching money' },
+    { tool: 'check_history', note: 'confirm the duplicate charge' },
+    { tool: 'issue_refund',  note: 'refund the duplicate charge only' },
+    { tool: 'file_receipt',  note: 'file the receipt for audit' },
+  ],
+  onSkip: 'advance', // the default; 'hold' keeps a skipped step current
+});
+
+const agent = Agent.create({ provider, model }).skill(refund).build();
+```
+
+What the model experiences, per iteration:
+
+- the current step's tool leads with the banner —
+  `[Step 2 of 4 — confirm the duplicate charge] check_history.`;
+- every boundary result renews the position — `"…Step 2 of 4 done. Now on
+  step 3 of 4: refund the duplicate charge only (tool: \`issue_refund\`)."` —
+  so the guidance that matters *now* never decays out of attention (this is
+  the job the deprecated `refreshPolicy` promised and never did);
+- `skip_step(reason)` records a decline (`skill.step_skipped`) and moves or
+  holds per the declared `onSkip`;
+- the **escape hatches stay offered** under narrowing — `read_skill`,
+  `list_skills`, every OTHER active skill's tools, the baseline `.tool()`
+  registry, provider tools. The hold-out touches only names whose sole
+  active owner is the stepped skill. An input the author never imagined
+  still has the whole normal surface;
+- a premature final gets ONE teaching nudge (`steps_unfinished
+  { action: 'nudged' }` — the `route.ts` step-nudge branch, an ordinary
+  loop turn); a second stop is honored (`'accepted'`); a limit ending the
+  turn is honored too (`'cut-short'`). Never a forced continue.
+
+Mechanics, for the maintainer: **`skillSteps.ts` is the ONE owner of the
+grammar** — types, validation, the pointer's re-key rule, and every sentence
+the model reads. The pointer (`scope.stepPointer`) is strictly subordinate to
+the skill-graph cursor: the Evaluate stage re-keys it at the same stage the
+cursor truth lives (alias discipline: `stepPointer` in as a readonly input,
+the fresh value out under `nextStepPointer` — the `nextSkillCursor` pattern),
+and the tool-calls stage advances/skips it at EVERY result boundary,
+including the pausable resume paths — a step whose tool called `askHuman`
+advances when the person answers. Steps are turn-scoped: a cursor move away
+resets the pointer, and under `continuity: 'conversation'` only the CURSOR
+carries — a re-tenured skill starts at step 1. A step whose tool is not the
+skill's own, `steps: []`, an empty note, and `onSkip` without `steps` are all
+refused at `defineSkill`; steps on an OPEN skill of a graph agent (a tenure
+that could never begin), steps anywhere on a decision-`tree()` agent (a tree
+routes by predicate and never writes a cursor — leaf or beside-the-tree
+alike, the tenure could never begin either) and `reactMode: 'classic'` (a
+frozen offer) are refused at `Agent.build()`. Zero-cost when unused: no stepped skill means no
+`skip_step`, no scope key, no event, no slot change — byte-identical.
+
+Events: `skill.step_advanced` · `skill.step_skipped` · `skill.steps_unfinished`.
+Runnable end-to-end: `examples/context-engineering/16-skill-steps.ts` (a
+6-step refund with one human-approval pause and one recorded skip).
+
+---
+
 ## API surface
 
 Four sugar factories ship :

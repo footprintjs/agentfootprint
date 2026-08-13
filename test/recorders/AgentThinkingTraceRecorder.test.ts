@@ -460,3 +460,76 @@ describe('agentThinkingTrace — tools the model saw', () => {
     expect(answer?.toolsSeen).toBeUndefined();
   });
 });
+
+/**
+ * Turn-start routing verdicts (SG-C, 9.16.0/9.17.0): `skill.turn_routed` fires
+ * BEFORE iteration 1 and `skill.route_conflict` at batch evaluation — both are
+ * narrated by the commentary engine and LEAD the next beat, exactly like the
+ * `context.evaluated` routing line, so the story rail opens with the verdict.
+ */
+describe('agentThinkingTrace — routing verdicts lead the beat', () => {
+  type Ev = Parameters<ReturnType<typeof agentThinkingTrace>['onEmit']>[0];
+  const ev = (name: string, payload: unknown): Ev =>
+    ({
+      name,
+      payload,
+      pipelineId: 'p1',
+      subflowPath: '',
+      stageName: '',
+      runtimeStageId: 'x#0',
+      timestamp: 0,
+    } as unknown as Ev);
+  const policy = { nearTieMargin: 0.1, menuSize: 3 };
+
+  it('a turn_routed verdict leads the answer beat brain', () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    att.onEmit(ev('agentfootprint.skill.turn_routed', { by: 'entry', to: 'billing', policy }));
+    att.onEmit(
+      ev('agentfootprint.stream.llm_end', {
+        content: 'done',
+        toolCallCount: 0,
+        usage: { input: 1, output: 1 },
+      }),
+    );
+    const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer');
+    expect(answer?.brain).toBe('A declared start rule routed this turn to `billing`.\n\ndone');
+  });
+
+  it('a route_conflict line queues BEHIND a pending verdict — neither overwrites the other', () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    att.onEmit(
+      ev('agentfootprint.skill.turn_routed', {
+        by: 'intent',
+        to: 'shipping',
+        scorer: 'keyword',
+        scores: [
+          { id: 'shipping', score: 0.87, relevance: 0.62 },
+          { id: 'billing', score: 0.21, relevance: 0.38 },
+        ],
+        policy,
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.skill.route_conflict', {
+        iteration: 1,
+        winner: { toolName: 'get_order', target: 'shipping' },
+        losers: [{ toolName: 'check_charge', target: 'billing' }],
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.llm_end', {
+        content: 'done',
+        toolCallCount: 0,
+        usage: { input: 1, output: 1 },
+      }),
+    );
+    const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer');
+    const brain = answer?.brain ?? '';
+    const verdictAt = brain.indexOf('decisively matched `shipping`');
+    const conflictAt = brain.indexOf('Two tool results wanted different next skills');
+    expect(verdictAt).toBeGreaterThanOrEqual(0);
+    expect(conflictAt).toBeGreaterThan(verdictAt);
+    expect(brain).toContain('scored 0.87 vs 0.21 runner-up');
+    expect(brain.endsWith('done')).toBe(true);
+  });
+});

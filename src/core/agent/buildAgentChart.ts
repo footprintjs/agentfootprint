@@ -182,6 +182,30 @@ export interface AgentChartDeps {
   readonly hasSkills: boolean;
 
   /**
+   * Whether ≥1 registered skill declares `steps` (9.18.0). Gates the step
+   * pointer's mapper threading — engine in/out, the tools-slot arg, and (in
+   * the grouped chart) the `sf-llm-call` boundary — so an agent without
+   * stepped skills seeds and commits exactly the keys it always did. The
+   * threading lives HERE in the builders, not in the subflow (the SG-C
+   * blast-radius lesson): the alias discipline is
+   * `stepPointer` in (readonly input) → Evaluate writes `nextStepPointer`
+   * (the currentSkillId/nextSkillCursor precedent — the pointer changes
+   * every iteration, so the turn-constant `turnRoute` pattern would serve
+   * the tools slot a stale value) → mappers carry the alias back onto the
+   * parent's `stepPointer`.
+   */
+  readonly hasSteps?: boolean;
+
+  /**
+   * The unfinished-steps nudge branch (9.18.0). Present ONLY on an agent
+   * with ≥1 stepped skill — and when present it is one more branch of the
+   * Route decider carrying the same `{ loopTo }` the tool branch does,
+   * because a nudge is one more ordinary turn (the SchemaRetry mechanism
+   * verbatim). Absent → no branch, no stage, no scope key, no event.
+   */
+  readonly stepNudgeStage?: (scope: never) => void;
+
+  /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +
    * all 3 slots every iteration (loop → InjectionEngine). `'classic'`
    * engineers context ONCE (InjectionEngine + system-prompt + tools up front)
@@ -373,6 +397,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           turnRoute: parent.turnRoute as
             | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
             | undefined,
+          // The step pointer as of the previous iteration (9.18.0) — a
+          // readonly input for the Evaluate re-key. Threaded only for agents
+          // with a stepped skill, so every other agent's engine args are the
+          // exact bytes they always were.
+          ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -381,6 +410,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           activeInjections: sf.activeInjections,
           activeByslot: sf.activeByslot,
           currentSkillId: sf.nextSkillCursor,
+          // The re-keyed pointer (9.18.0), back onto the parent's key — a
+          // top-level ARRAY, so `arrayMerge: Replace` below sets it wholesale
+          // (a bare object here would shallow-merge and APPEND the nested
+          // `skipped` array across tenures; see StepPointerCarrier).
+          ...(deps.hasSteps === true && { stepPointer: sf.nextStepPointer }),
         }),
         // CRITICAL: footprintjs's default `applyOutputMapping`
         // CONCATENATES arrays from subflow output with the parent's
@@ -509,6 +543,15 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         turnRoute: parent.turnRoute as
           | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
           | undefined,
+        // The step pointer (9.18.0), ALREADY RE-KEYED — the same freshness
+        // rule the cursor line above documents. In this flat chart the
+        // engine outputMapper wrote it back onto `stepPointer`; the alias
+        // arm is for the grouped chart, where the fresh value lives under
+        // `nextStepPointer` beside a stale boundary input (the :336
+        // nextSkillCursor pattern) — one expression, correct in both.
+        ...(deps.hasSteps === true && {
+          stepPointer: parent.nextStepPointer ?? parent.stepPointer,
+        }),
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
@@ -631,6 +674,20 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'SchemaRetry',
       deps.outputRetryStage as never,
       'Answer failed the output schema — put the correction back and ask again',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The unfinished-steps nudge — conditional mount (9.18.0) ─────────
+  // The SchemaRetry mechanism verbatim, one branch over: same loop target,
+  // same "a re-ask is one more ordinary turn" reasoning, same conditional
+  // mount (no stepped skill → no branch, no stage, no event).
+  if (deps.stepNudgeStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.STEP_NUDGE,
+      'StepNudge',
+      deps.stepNudgeStage as never,
+      'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
       { loopTo: loopTarget },
     );
   }

@@ -147,6 +147,24 @@ The picture isn't drawn by hand or by a separate tracing pipeline — the agent 
 footprintjs flowchart, and the renderer (`footprint-explainable-ui`) draws that snapshot
 directly.
 
+## Give a skill a procedure (steps)
+
+When a skill's playbook is really a sequence — *look up the order, confirm the
+duplicate, then refund* — declare it as **data** and the framework walks it
+for you: each iteration offers only the current step's tool (banner-led:
+`[Step 2 of 6 — confirm the duplicate charge]`), a `skip_step` tool puts any
+decline on the record, and a premature stop gets one teaching nudge. Your
+other tools and `read_skill` stay available throughout — a declared order,
+not a cage.
+
+<CodeFile path="examples/context-engineering/16-skill-steps.ts" region="define-steps" title="examples/context-engineering/16-skill-steps.ts (region: define-steps)" />
+
+Every move is a typed event — `skill.step_advanced`, `skill.step_skipped`,
+`skill.steps_unfinished` — and a step whose tool asks a human pauses the run
+and advances on resume. Full walkthrough in [Skills → Steps as
+data](doc:skills#steps-as-data-steps-9180); runnable end-to-end in
+`examples/context-engineering/16-skill-steps.ts`.
+
 ## Next steps
 
 - **[Key concepts](doc:key-concepts)** — the 2 + 3 + N + Context Engineering + Memory mental model

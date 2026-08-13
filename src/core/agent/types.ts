@@ -831,6 +831,25 @@ export interface AgentState {
    *  `read_skill` menu envelope and the `'guard'` gate. Absent on every
    *  other agent — nothing writes it, so nothing changes. */
   turnRoute?: import('../../lib/injection-engine/routingPolicy.js').TurnRoute;
+  /** WHERE the active skill's declared procedure stands (9.18.0) — strictly
+   *  subordinate to the ONE cursor: it lives and dies inside one skill's
+   *  tenure, is re-keyed on every cursor move (by the Evaluate stage, the
+   *  same stage the cursor truth lives at) and never crosses runs. Advanced
+   *  and skip-recorded by the tool-calls stage at the result boundary.
+   *
+   *  Carried as a 0-or-1-element ARRAY (`StepPointerCarrier`), never a bare
+   *  object: footprintjs outputMappers shallow-merge bare objects field by
+   *  field (nested arrays APPEND), while a top-level array under
+   *  `arrayMerge: Replace` is set wholesale — the same reason
+   *  `activeInjections` crosses boundaries as an array. `[]` = steps are
+   *  declared somewhere but no procedure is active; ABSENT = no registered
+   *  skill declares steps (nothing ever writes it — zero-cost-when-unused).
+   *  Read it with `pointerOf()` from `agentfootprint/injection-engine`. */
+  stepPointer?: import('../../lib/injection-engine/skillSteps.js').StepPointerCarrier;
+  /** The one teaching nudge for a premature stop has been spent this turn
+   *  (9.18.0). Written by the StepNudge branch; reset at seed. Absent on
+   *  agents with no stepped skill. */
+  stepNudgeSpent?: boolean;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

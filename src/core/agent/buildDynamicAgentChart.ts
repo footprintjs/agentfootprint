@@ -235,6 +235,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         turnRoute: parent.turnRoute as
           | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
           | undefined,
+        // The step pointer as of the previous iteration (9.18.0) — the
+        // sf-llm-call boundary's readonly input, for the Evaluate re-key.
+        ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
       }),
       outputMapper: (sf) => ({
         activeInjections: sf.activeInjections,
@@ -243,6 +246,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // `currentSkillId` is a readonly input here), then mapped onto the
         // ReAct parent's mutable currentSkillId by the outer outputMapper.
         nextSkillCursor: sf.nextSkillCursor,
+        // The re-keyed step pointer (9.18.0) — same alias discipline as the
+        // cursor one line up, same round trip: out under its own key, mapped
+        // onto the ReAct parent's `stepPointer` by the outer outputMapper.
+        // A top-level ARRAY on purpose (Replace sets it wholesale; a bare
+        // object would shallow-merge — see StepPointerCarrier).
+        ...(deps.hasSteps === true && { nextStepPointer: sf.nextStepPointer }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
     },
@@ -339,6 +348,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         turnRoute: parent.turnRoute as
           | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
           | undefined,
+        // The step pointer (9.18.0) — the exact cursor pattern three lines
+        // up: the FRESH value lives under `nextStepPointer` (the engine
+        // wrote it this iteration; always a defined carrier when steps are
+        // on), the boundary's `stepPointer` is the previous iteration's
+        // readonly input. Threaded like this so the offer narrows on the
+        // very iteration a tenure begins — not one late.
+        ...(deps.hasSteps === true && {
+          stepPointer: parent.nextStepPointer ?? parent.stepPointer,
+        }),
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
@@ -513,6 +531,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // The turn-start verdict (SG-C) — written once by RouteTurn on the
           // OUTER scope, read inside by the engine mapper and the tools slot.
           turnRoute: p.turnRoute,
+          // The step pointer (9.18.0) — a direct cross-iteration read, like
+          // currentSkillId one block up: the outer key holds the value the
+          // LAST iteration's boundary bubbled out (plus tool-calls' moves).
+          ...(deps.hasSteps === true && { stepPointer: p.stepPointer }),
           // `.configure()` results, resolved + committed by seed on the OUTER
           // chart. callLLM and the System Prompt slot both live in here, so
           // the values have to cross the boundary. Read-only inside (nothing
@@ -573,6 +595,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Advanced skill-graph cursor bubbled back for the next iteration
           // (the inner injection engine wrote it under nextSkillCursor).
           currentSkillId: s.nextSkillCursor,
+          // The re-keyed step pointer (9.18.0), back onto the outer key the
+          // tool-calls stage advances — the cursor's round trip, one line up.
+          // Top-level ARRAY + `arrayMerge: Replace` = set wholesale.
+          ...(deps.hasSteps === true && { stepPointer: s.nextStepPointer }),
         };
       },
       // llmLatestToolCalls / thinkingBlocks / skillHistory are arrays —
@@ -606,6 +632,19 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'SchemaRetry',
       deps.outputRetryStage as never,
       'Answer failed the output schema — put the correction back and ask again',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The unfinished-steps nudge — conditional mount (9.18.0) ─────────
+  // Byte-twin of the flat chart's mount: same loop target, same
+  // "one more ordinary turn" mechanism, absent without a stepped skill.
+  if (deps.stepNudgeStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.STEP_NUDGE,
+      'StepNudge',
+      deps.stepNudgeStage as never,
+      'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
       { loopTo: loopTarget },
     );
   }

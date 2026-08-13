@@ -120,6 +120,8 @@ import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
+import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
+import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { checkerGoverns } from '../adapters/types.js';
 import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
@@ -2499,6 +2501,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const cachingDisabled = this.cachingDisabledValue;
     const cacheStrategy = this.cacheStrategy;
 
+    // ── Steps-as-data (9.18.0): fold the declared procedures ONCE ──────
+    // One frozen plan per stepped skill, threaded as closures into the four
+    // seams that consult it (Evaluate re-key, tools-slot narrowing,
+    // tool-calls advance/skip, the Route step judge + nudge). Empty →
+    // `stepPlanFor` stays undefined and not one of those seams runs a new
+    // line (zero-cost-when-unused).
+    const stepPlans = foldStepPlans(this.injections);
+    const stepPlanFor =
+      stepPlans.size > 0 ? (skillId: string) => stepPlans.get(skillId) : undefined;
+
     // seed extracted to ./agent/stages/seed.ts (v2.11.2). Factory takes
     // chart-build-time constants + per-run mutable accessors so the
     // resume side-channel and current run id remain dynamic.
@@ -2543,6 +2555,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return c;
       },
       restoreSkillCursor: this.skillGraphCascade?.continuity === 'conversation',
+      // Steps (9.18.0): gate the per-run stepPointer/stepNudgeSpent reset on
+      // the feature, so every other agent seeds exactly the keys it always did.
+      ...(stepPlanFor !== undefined && { hasSteps: true }),
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -2595,6 +2610,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.skillGraphSupersededEntries && {
         supersededEntries: this.skillGraphSupersededEntries,
       }),
+      // Steps (9.18.0): the Evaluate stage owns the pointer's tenure re-key.
+      ...(stepPlanFor !== undefined && { stepPlanFor }),
     });
     // The turn-start slot's occupant (SG-C). RouteTurn — the cascade — mounts
     // ONLY when the graph runs it: a classifier is configured, or the mount
@@ -2665,6 +2682,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(readSkillFor && { readSkillFor }),
       ...(hiddenSkillIds && { hiddenSkillIds }),
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
+      // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
+      ...(stepPlanFor !== undefined && { stepPlanFor }),
     });
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
@@ -2725,7 +2744,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // the agent opted into enforcement, because it is the last stage that
     // still has a loop to send the answer back around. Without enforcement
     // this is the same function reference the chart has always been handed.
-    const routeDecider = buildRouteDeciderStage(this.messageMiddleware, this.outputEnforcement);
+    // 9.18.0 — the decider also judges a would-be-final answer against the
+    // active step procedure (nudge once / accept / cut-short) when a stepped
+    // skill is registered. Without steps this is the same function reference
+    // the chart has always been handed.
+    const routeDecider = buildRouteDeciderStage(
+      this.messageMiddleware,
+      this.outputEnforcement,
+      stepPlanFor,
+    );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -2751,6 +2778,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.skillGraphCascade.strictness !== 'assist' && {
           skillStrictness: this.skillGraphCascade.strictness,
         }),
+      // Steps (9.18.0): advance/skip at the result boundary — the batch loop
+      // AND every pausable resume path (an askHuman step advances on resume).
+      ...(stepPlanFor !== undefined && { stepPlanFor }),
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
@@ -2812,6 +2842,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.outputEnforcement.retries > 0 && {
           outputRetryStage: buildOutputRetryStage(this.outputEnforcement) as (scope: never) => void,
         }),
+      // The unfinished-steps nudge branch (9.18.0) — mounted only when a
+      // stepped skill exists, same conditional-mount law as the re-ask above.
+      ...(stepPlanFor !== undefined && {
+        hasSteps: true,
+        stepNudgeStage: buildStepNudgeStage(stepPlanFor) as (scope: never) => void,
+      }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
       ...(routeTurnStage && { routeTurnStage: routeTurnStage as (scope: never) => Promise<void> }),

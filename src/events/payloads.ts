@@ -135,9 +135,12 @@ export interface AgentRouteDecidedPayload {
    * The branch the turn took. `'output-retry'` (7.26) appears only on an
    * agent built with `.outputSchema(parser, { retries })`, and only on a
    * turn whose answer failed the schema with retries left — the loop is
-   * about to ask again rather than finish.
+   * about to ask again rather than finish. `'step-nudge'` (9.18.0) appears
+   * only on an agent with a stepped skill, and only on a turn whose
+   * would-be-final answer left declared steps unrun with the one teaching
+   * nudge still unspent.
    */
-  readonly chosen: 'tool-calls' | 'final' | 'output-retry';
+  readonly chosen: 'tool-calls' | 'final' | 'output-retry' | 'step-nudge';
   readonly rationale?: string;
 }
 
@@ -781,7 +784,7 @@ export interface ValidationArgsInvalidPayload {
   readonly enforced: boolean;
 }
 
-// skill.* (6)
+// skill.* (9)
 /**
  * The turn-start routing verdict (SG-C) — one per turn on skill-graph agents
  * whose graph ran the cascade (`classify` configured, or
@@ -933,6 +936,64 @@ export interface SkillRouteConflictPayload {
     /** The skill this result would have routed to. */
     readonly target: string;
   }>;
+}
+
+/**
+ * A declared step completed: its tool returned (non-error) while it was
+ * current (9.18.0). Fired at the tool-return boundary, in batch call order —
+ * two adjacent steps naming the same tool advance twice in one batch, each
+ * on the record. A skip is NOT a completion: a `skip_step` that moved the
+ * pointer fires `step_skipped { policy: 'advance' }` alone.
+ */
+export interface SkillStepAdvancedPayload {
+  readonly skillId: string;
+  /** The step that just completed (or was skipped past). */
+  readonly step: {
+    readonly index: number;
+    readonly total: number;
+    readonly tool: string;
+    readonly note: string;
+  };
+  readonly iteration: number;
+  /** The provider's tool_use id for the completing call, when known. */
+  readonly toolCallId?: string;
+  /** Present on the LAST step: the procedure finished. */
+  readonly completed?: true;
+}
+
+/**
+ * The model declined a step, with its reason — the integrity condition, not
+ * polish (9.18.0). The framework moved on or held per the skill's declared
+ * `onSkip`; both facts are here. An empty reason never gets this far: the
+ * tool-calls stage answers it with a teaching result and no event.
+ */
+export interface SkillStepSkippedPayload {
+  readonly skillId: string;
+  readonly step: SkillStepAdvancedPayload['step'];
+  /** The model's own words. */
+  readonly reason: string;
+  readonly policy: 'advance' | 'hold';
+  readonly iteration: number;
+  readonly toolCallId?: string;
+}
+
+/**
+ * The turn is ending with steps unrun (9.18.0). `'nudged'` = the one
+ * teaching re-ask went back (at most once per turn); `'accepted'` = the
+ * model stopped again and the framework honored it — never a forced
+ * continue; `'cut-short'` = a limit (max-iterations / cost-budget) ended
+ * the turn, and a nudge would have spent an iteration the limit refused.
+ */
+export interface SkillStepsUnfinishedPayload {
+  readonly skillId: string;
+  readonly remaining: ReadonlyArray<{
+    readonly index: number;
+    readonly tool: string;
+    readonly note: string;
+  }>;
+  readonly total: number;
+  readonly action: 'nudged' | 'accepted' | 'cut-short';
+  readonly iteration: number;
 }
 
 // permission.* (4)

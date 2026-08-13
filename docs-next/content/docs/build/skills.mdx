@@ -405,6 +405,94 @@ Unaffected: a `.skill()` registered outside a graph, a bare model edge target
 (`.route(a, m)` with no `when`/`onToolReturn`), and any **open** skill — all keep the
 `llm-activated` trigger, so `read_skill` really is what activates them.
 
+## Steps as data (`steps`, 9.18.0)
+
+A skill's body can *describe* a procedure, but prose decays with context
+length and the model can call any tool at any time — the order was a hope,
+not a mechanism. `steps` declares the procedure as **data**, and the
+framework enforces it at the protocol level: while the skill is the active
+tenure, the tools slot sends **only the current step's tool** (its
+description led by `[Step k of n — <note>]`) plus a `skip_step` tool. A
+schema that was never sent cannot be called — the sequence is owned with no
+refusal machinery at all.
+
+<CodeFile path="examples/context-engineering/16-skill-steps.ts" region="define-steps" title="examples/context-engineering/16-skill-steps.ts (region: define-steps)" />
+
+The framework owns sequence and scope; **the model owns judgment inside the
+step**:
+
+- **run the tool** — the result gains a fresh position line ("Step 2 of 6
+  done. Now on step 3 of 6: …"), so the guidance that matters *now* never
+  decays out of attention;
+- **skip it** — `skip_step(reason)` puts the decline on the record
+  (`agentfootprint.skill.step_skipped`) and the declared `onSkip` decides:
+  `'advance'` (default) moves on, `'hold'` keeps the step current;
+- **use an escape hatch** — `read_skill`, `list_skills`, every *other*
+  active skill's tools, the baseline `.tool()` registry and provider tools
+  all stay offered under narrowing. Only tools that the stepped skill
+  *alone* brought are held back;
+- **or stop and say why** — a final answer with steps unrun gets **one**
+  teaching nudge per turn (`steps_unfinished { action: 'nudged' }`, an
+  ordinary loop turn); stopping again is honored (`'accepted'`), and a
+  limit ending the turn is honored too (`'cut-short'`). A procedure is a
+  declared order, not a cage.
+
+A step whose tool asks a human (`askHuman` / `pauseHere`) pauses the run
+mid-procedure; the pointer rides the checkpoint and the person's answer
+advances the step on resume — human-in-the-loop as an ordinary step:
+
+<CodeFile path="examples/context-engineering/16-skill-steps.ts" region="hitl-step" title="examples/context-engineering/16-skill-steps.ts (region: hitl-step)" />
+
+Rules worth knowing: every step must name one of the skill's **own** tools
+(refused at `defineSkill` otherwise; repeats are legal); steps are
+**turn-scoped** — a graph cursor move away resets the pointer, and under
+`continuity: 'conversation'` only the cursor carries, so a re-tenured skill
+starts at step 1; `reactMode: 'classic'` cannot honor steps (the cached
+tools slot would freeze the offer — refused at build); and on a graph agent
+a stepped skill must be **wired into a flat graph** (an entry or a route
+target). An open skill's tenure never begins, and a decision `.tree()`
+never writes a cursor at all — so steps on an unwired skill and steps on
+*any* skill of a tree agent (leaf or registered beside it) are both refused
+at build. Read the live position off a snapshot with
+`pointerOf(sharedState.stepPointer)` from `agentfootprint/injection-engine`.
+
+One honest cost note: the banner changes the tools block at every step
+boundary, so a `tools`-slot prompt-cache marker invalidates once per step —
+the CacheGate's existing churn rules govern, exactly as they do for
+`autoActivate` tool swaps.
+
+### The steps surface, named
+
+Everything steps-related imports from `agentfootprint/injection-engine`
+(also reachable through its `agentfootprint/context` alias):
+
+- `SkillStep` — one declared step: the `tool` it runs (one of the skill's
+  own tools) and the `note` the model reads.
+- `OnSkipPolicy` — the `'advance' | 'hold'` union behind `onSkip`: what the
+  framework does when the model skips a step.
+- `StepPointer` — where a procedure stands: `skillId` (the tenant), a
+  1-based `step`, `total`, and the `skipped` indexes the pointer moved
+  past; `step === total + 1` means the procedure completed.
+- `StepPointerCarrier` — how the pointer travels through scope and every
+  mount mapper: a 0-or-1-element readonly array; `pointerOf(...)` unwraps
+  it back to a `StepPointer`.
+- `StepPlan` — the frozen build-time fold of one stepped skill: its steps,
+  the hold-out candidate `toolNames`, and its `onSkip` policy.
+- `buildSkipStepTool` — builds the `skip_step` integrity tool for custom
+  wiring; `SKIP_STEP_TOOL_NAME` is its reserved name (`'skip_step'`).
+- `defineStepsHint` — the advisory injection auto-registered for stepped
+  agents, telling the model a declared procedure is in progress;
+  `StepsHintOptions` overrides its `id` or `body`, and
+  `STEPS_HINT_METADATA_KEY` is the metadata marker a custom hint carries so
+  the auto-registered default stands down.
+
+On the event stream: `agentfootprint.skill.step_advanced` fires at every
+completed step, in batch call order (the last one carries
+`completed: true`); `agentfootprint.skill.step_skipped` records a decline
+with the model's own reason and the declared policy; and
+`agentfootprint.skill.steps_unfinished` records how a turn ended with steps
+unrun — `'nudged'`, `'accepted'`, or `'cut-short'`.
+
 ## Long-context refresh (`refreshPolicy`)
 
 ```ts
@@ -416,14 +504,17 @@ defineSkill({
 });
 ```
 
-**DEPRECATED-pending-steps (9.16.0).** The field is stored on
-`skill.metadata.refreshPolicy` and nothing in the engine has ever read it — no
-re-injection happens. It is superseded by a planned steps-as-data feature and
-will **not** be wired up in the meantime; it stays accepted so existing
-declarations keep compiling (dev mode warns once per process when one is set),
-and it will be removed in the next major after steps ship. To re-surface a body
-in a long run today, use `surfaceMode: 'both'` — every `read_skill` call
-returns the body afresh, recency-first.
+**DEPRECATED (9.16.0), superseded by [`steps`](#steps-as-data-steps-9180).**
+The field is stored on `skill.metadata.refreshPolicy` and nothing in the
+engine has ever read it — no re-injection happens, on any version. Since
+9.18.0 the steps feature delivers what this field promised, by construction:
+the step banner is re-sent in the tool description on every request, and
+every boundary result carries the fresh position line — recency that cannot
+decay. The field stays accepted so existing declarations keep compiling (dev
+mode warns once per process when one is set, and once more at `Agent.build()`
+when it rides beside `steps`), and it will be removed in the next major. To
+re-surface a body without steps, use `surfaceMode: 'both'` — every
+`read_skill` call returns the body afresh, recency-first.
 
 ## SkillRegistry — centralized governance
 
