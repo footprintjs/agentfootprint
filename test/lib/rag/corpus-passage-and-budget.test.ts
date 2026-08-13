@@ -327,7 +327,15 @@ describe('refusals', () => {
     );
     expect(message).toMatch(/AgentCoreStore/);
     // This store HAS a search(); the message says what it ranks instead.
-    expect(message).toMatch(/ranks on the SERVER's side/);
+    //
+    // It now takes the `ranksBy: 'server-text'` branch rather than the
+    // `supportsVectorSearch: false` one, because that store declares both as
+    // of the Google batch — the two declarations agree, and the ranksBy
+    // message is the more precise of the pair: it names the query FORM, which
+    // is what tells a reader they can point `defineRAG` at the backend with no
+    // embedder at all.
+    expect(message).toMatch(/ranks on the BACKEND's side/);
+    expect(message).toMatch(/ranksBy: 'server-text'/);
   });
 
   it('RedisStore too — the refusal moves to the call that starts the spending', async () => {
@@ -370,9 +378,17 @@ describe('refusals', () => {
   it('buildIndexChart refuses it too — no chart that is guaranteed to lie', async () => {
     const { buildIndexChart } = await import('../../../src/doors/rag.js');
     const store = new AgentCoreStore({ memoryId: 'mem-1', _client: {} as never });
-    expect(() =>
-      buildIndexChart({ source: { text: REFUNDS, uri: 'a.md' }, store, embedder: mockEmbedder() }),
-    ).toThrow(/cannot serve vectors back/);
+    expect(
+      () =>
+        buildIndexChart({
+          source: { text: REFUNDS, uri: 'a.md' },
+          store,
+          embedder: mockEmbedder(),
+        }),
+      // Same branch move as above: a store declaring `ranksBy: 'server-text'`
+      // is refused with the message that names the query form. The law under
+      // test is unchanged — no chart that is guaranteed to lie.
+    ).toThrow(/report success and retrieve nothing/);
   });
 
   it('indexFolder refuses it too, naming the call the reader wrote', async () => {

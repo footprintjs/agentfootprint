@@ -62,6 +62,7 @@ export const GOOGLE_PACKAGES: readonly string[] = [
   '@google/genai',
   '@google-cloud/storage',
   'google-auth-library',
+  '@googleapis/aiplatform',
   'googleapis',
   '@google-cloud/aiplatform',
   '@google-cloud/discoveryengine',
@@ -123,10 +124,12 @@ export interface GoogleAdapterPin {
 }
 
 /**
- * THE REGISTRY. Verified against the installed packages on 2026-08-12:
- * `@google/genai` 2.16.0 and `google-auth-library` 11.0.1. Assertions (2) and
- * (3) below re-verify this on every run — both packages are devDependencies —
- * so the date is provenance rather than the guarantee.
+ * THE REGISTRY. Verified against the installed packages: `@google/genai` 2.16.0
+ * and `google-auth-library` 11.0.1 (2026-08-12), `@google-cloud/storage` 7.22.0
+ * (9.25.0), and `@googleapis/aiplatform` 31.0.0 (2026-08-13, the Sessions +
+ * Memory Bank batch). Assertions (2) and (3) below re-verify all of it on every
+ * run — every one of those packages is a real devDependency — so the dates are
+ * provenance rather than the guarantee.
  */
 export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
   {
@@ -146,6 +149,76 @@ export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
       'what is called, so re-adding it here has to be a decision somebody records. ' +
       'The two pinned methods are instance FIELDS on `Models`, not prototype methods — see ' +
       'assertion (2).',
+  },
+  {
+    adapter: 'agentEngineSessions',
+    sources: ['src/adapters/hosting/googleAgentEngine.ts', 'src/adapters/google/aiPlatform.ts'],
+    sdkPackage: '@googleapis/aiplatform',
+    kind: 'rest',
+    ctor: 'aiplatform',
+    namespace: 'projects.locations.reasoningEngines.sessions',
+    methods: ['create', 'get', 'patch', 'delete', 'list', 'operations.wait'],
+    apiVersions: { rest: 'v1' },
+    note:
+      'Read off a real install of @googleapis/aiplatform 31.0.0 before the adapter was ' +
+      'written, and four of those reads changed the design. (1) `create` accepts a ' +
+      'caller-supplied `sessionId` query parameter — so our session id IS the resource id, ' +
+      '`hydrate` is one `get` by name, and no mapping table exists. (2) `create` and `delete` ' +
+      'return a LongrunningOperation while `get` and `patch` return the Session, which is why ' +
+      'every write here waits on `operations.wait` before returning: a persist that came back ' +
+      'early would make the next hydrate a race whose failure mode is "no conversation". ' +
+      '(3) `Session.userId` is REQUIRED and IMMUTABLE, which is where the userId resolver ' +
+      'comes from, and why `patch` always carries an updateMask — a maskless patch is a ' +
+      'REPLACE, it would clear userId, and the service would then refuse every write. ' +
+      "(4) `Session.sessionState` is a free-form Struct, which is the envelope's home. " +
+      '`appendEvent` and `sessions.events.list` are on the surface and deliberately NOT ' +
+      'called: this store keeps ONE envelope under one key, and an event log would be a ' +
+      'second copy of the conversation that nothing reads.',
+  },
+  {
+    adapter: 'memoryBankStore',
+    sources: ['src/adapters/memory/memoryBank.ts', 'src/adapters/google/aiPlatform.ts'],
+    sdkPackage: '@googleapis/aiplatform',
+    kind: 'rest',
+    ctor: 'aiplatform',
+    namespace: 'projects.locations.reasoningEngines.memories',
+    methods: ['create', 'get', 'patch', 'delete', 'retrieve', 'operations.wait'],
+    apiVersions: { rest: 'v1' },
+    note:
+      '`retrieve` covers BOTH reads — `list()` sends simpleRetrievalParams, `search()` sends ' +
+      'similaritySearchParams — because retrieve takes the scope as a STRUCTURED field whose ' +
+      'exact-match semantics the SDK states outright, where `memories.list` selects with an ' +
+      'AIP-160 filter STRING whose ability to express a scope match is unverified. That is ' +
+      'why `list` is on the surface and NOT called. ' +
+      '`purge` is NOT called either, and that one is load-bearing: ' +
+      '`PurgeMemoriesRequest.force` defaults to FALSE, which the service documents as ' +
+      '"validated but not executed" — a forget() built on it without that flag would report ' +
+      'success and delete nothing, which is a compliance failure that looks exactly like a ' +
+      'working erasure. forget() therefore paginates retrieve-then-delete. ' +
+      '`rollback` and `generate` are unpinned features, not oversights. ' +
+      'The ranking trap lives on the RESPONSE rather than in a method name: a retrieved row ' +
+      'carries `distance` (smaller is closer) and the port carries a cosine `score` (higher ' +
+      'is closer), so the adapter converts and refuses `minScore` rather than forwarding a ' +
+      'number that reads like a similarity and is not one.',
+  },
+  {
+    adapter: 'googleIdentity',
+    sources: ['src/adapters/identity/google.ts'],
+    sdkPackage: 'google-auth-library',
+    kind: 'object',
+    ctor: 'GoogleAuth',
+    methods: ['getClient'],
+    note:
+      'Only ONE method is dispatched on the constructed `GoogleAuth`: everything after ' +
+      '`getClient()` happens on the CLIENT it answers with (`getAccessToken`, and the ' +
+      '`credentials.expiry_date` the expiry is read from), which is an `OAuth2Client` / ' +
+      '`Impersonated` / `Compute` depending on the environment — a class this adapter never ' +
+      'names and must not. `Impersonated` is reached as a CONSTRUCTOR rather than a method, ' +
+      'so assertion (2) cannot cover it as a name on this surface; the dedicated test in ' +
+      "the adapter's own suite asserts it exists on the installed package. This adapter " +
+      "caches the CLIENT and never a token — the library's own refresh logic is what keeps " +
+      'the one-hour token fresh, and an adapter-held token would be an expiry we did not ' +
+      'compute and could not see revoked.',
   },
   {
     adapter: 'geminiEmbedder',
@@ -346,6 +419,81 @@ export function chainMethodExists(root: object, path: string): boolean {
   const leaf = segments[segments.length - 1]!;
   const value = (node as Record<string, unknown>)[leaf];
   return typeof value === 'function';
+}
+
+/**
+ * Walk a dotted path of PROPERTIES and answer whether the last segment is a
+ * callable member.
+ *
+ * The sibling of {@link chainMethodExists}, and it exists because the two
+ * Google client families are reached in genuinely different ways:
+ *
+ *   • a `'chain'` row (`@google-cloud/storage`) is a FACTORY chain —
+ *     `storage.bucket(b).file(k)` — so the intermediates must be CALLED.
+ *   • a `'rest'` row (`@googleapis/aiplatform`) is a RESOURCE tree —
+ *     `client.projects.locations.reasoningEngines.sessions` — so the
+ *     intermediates must be READ. Calling one throws.
+ *
+ * Reusing the chain walker here would report every REST method missing, which
+ * is a check that fails for a reason unrelated to the thing it is checking —
+ * the worst kind of green-to-red.
+ */
+export function restMethodExists(root: object, path: string): boolean {
+  const segments = path.split('.');
+  let node: unknown = root;
+  for (const segment of segments.slice(0, -1)) {
+    if (node === null || typeof node !== 'object') return false;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  if (node === null || typeof node !== 'object') return false;
+  const leaf = segments[segments.length - 1]!;
+  return typeof (node as Record<string, unknown>)[leaf] === 'function';
+}
+
+/**
+ * Build a `_client` double for a `'rest'` row — a nested object tree whose
+ * leaves are exactly the pinned methods and nothing else.
+ *
+ * Same trick as {@link fakeGoogleClient}, one dimension deeper: an adapter
+ * reaching for an unpinned method finds `undefined` and fails on the dispatch
+ * rather than somewhere downstream. The row's `namespace` is the shared prefix
+ * every method hangs off, so the tree is built from `namespace + method`.
+ */
+export function fakeGoogleRestClient<T = unknown>(
+  pins: readonly GoogleAdapterPin[],
+  answers: Record<string, MethodAnswer> = {},
+): FakeGoogleClient<T> {
+  const sent: SentCall[] = [];
+  const root: Record<string, unknown> = {};
+
+  // The RECORDED name is the row's own dotted spelling (`operations.wait`),
+  // not the bare leaf: two collections each carry an `operations.wait`, and a
+  // dispatch log that said `wait` twice could not tell you which one ran.
+  const plant = (path: readonly string[], leaf: string, recordAs: string): void => {
+    let node = root;
+    for (const segment of path) {
+      const next = node[segment];
+      if (next === undefined) node[segment] = {};
+      node = node[segment] as Record<string, unknown>;
+    }
+    node[leaf] = (params: unknown): Promise<unknown> => {
+      sent.push({ method: recordAs, params });
+      const answer = answers[recordAs];
+      return Promise.resolve(
+        typeof answer === 'function' ? (answer as (p: unknown) => unknown)(params) : answer ?? {},
+      );
+    };
+  };
+
+  for (const pin of pins) {
+    const prefix = pin.namespace === undefined ? [] : pin.namespace.split('.');
+    for (const method of pin.methods) {
+      const parts = method.split('.');
+      plant([...prefix, ...parts.slice(0, -1)], parts[parts.length - 1]!, method);
+    }
+  }
+
+  return { client: root as T, sent, names: () => sent.map((s) => s.method) };
 }
 
 /**

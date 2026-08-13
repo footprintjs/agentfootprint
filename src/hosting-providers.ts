@@ -29,6 +29,11 @@
  *     home you choose at construction: a JSON file in the runtime's own session
  *     storage (survives a stop/resume, needs no SDK), or one AgentCore Memory
  *     event per persist (outlives the session).
+ *   • `agentEngineSessions({ project, location, reasoningEngine })` — a
+ *     `SessionLifecycle` in Vertex AI's own session service, for the row above
+ *     `sqliteSessions`: many containers sharing one conversation. The whole
+ *     `CheckpointEnvelope` rides in `Session.sessionState`, which is an
+ *     arbitrary JSON Struct, so there is no blob encoding to get wrong.
  *
  * ── How much of this is verified ─────────────────────────────────────────────
  * `agentCoreRuntimeHost` is plain HTTP with no SDK on its path, and it passes
@@ -63,6 +68,17 @@ export {
   agentCoreSessions,
   DEFAULT_SESSION_STORAGE_PATH,
 } from './adapters/hosting/agentcore.js';
+
+export {
+  agentEngineSessions,
+  DEFAULT_USER_ID,
+  SESSION_STATE_KEY,
+} from './adapters/hosting/googleAgentEngine.js';
+
+export type {
+  AgentEngineSessions,
+  AgentEngineSessionsOptions,
+} from './adapters/hosting/googleAgentEngine.js';
 
 export type {
   AgentCoreRuntimeHostOptions,

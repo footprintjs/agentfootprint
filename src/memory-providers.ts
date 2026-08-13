@@ -40,6 +40,21 @@ export {
   type AgentCoreMemoryRecord,
 } from './adapters/memory/agentcore.js';
 
+// Vertex AI Memory Bank — a NATURAL-LANGUAGE memory service, not a vector
+// store: it declares `supportsVectorSearch: false` and `ranksBy: 'server-text'`
+// so the corpus builders refuse it by name, and it converts the service's
+// DISTANCE (smaller is closer) rather than forwarding it as a similarity
+// (higher is closer). Read the module header before the first write: `scope` is
+// immutable, so the convention cannot be changed afterwards.
+export {
+  memoryBankStore,
+  MemoryBankStore,
+  MAX_PAGE_SIZE,
+  scoreFromDistance,
+  type MemoryBankStoreOptions,
+  type MemoryScope,
+} from './adapters/memory/memoryBank.js';
+
 // A durable vector index in one SQLite file — zero dependencies (node:sqlite is
 // inside Node), exact search, and the corpus embedded once rather than on every
 // restart. Lazy-loads `node:sqlite` at construction, so importing this barrel

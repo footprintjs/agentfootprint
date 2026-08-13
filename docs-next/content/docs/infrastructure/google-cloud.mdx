@@ -1,6 +1,6 @@
 ---
 title: Google Cloud & Gemini
-description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, and a Cloud Trace recipe over standard OTLP — plus every other boundary with the port that fills it and the honest reason it is not an adapter yet.
+description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, Cloud Storage artifacts, Agent Runtime sessions, Memory Bank and ADC-based identity — plus every remaining boundary with the port that fills it and the honest reason it is not an adapter yet.
 ---
 
 Google's agent platform is mid-rename and mid-replacement, so this page says what
@@ -35,11 +35,11 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 | **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | Shipped — the adapter is the existing one; the Google wiring is documented below | [Observability sinks](doc:observability-sinks) |
 | **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | 🟡 Should work unchanged; **whether the gateway demands a client certificate is unverified** | [Tools & gateways](doc:tools-and-gateways) |
-| **Agent Runtime Sessions** | — | `agentfootprint/hosting` | — | — | 🔴 Bring-your-own via `SessionLifecycle` (**two methods**) — see below | [Hosting & runtime](doc:hosting-and-runtime) |
-| **Agent Runtime Memory Bank** | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — and read the ranking warning below first | [Memory & stores](doc:memory-and-stores) |
+| **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .patch / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. **Not** the session EVENT log — one envelope per session, not a per-turn append | **contract-shaped and tested; awaiting field use** | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **contract-shaped and tested; awaiting field use** | [Memory & stores](doc:memory-and-stores) |
 | **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 Not shipped — blocked on one live probe; run on Cloud Run with `httpHost` meanwhile | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Vector Search** (v1 `Index` / `IndexEndpoint`) | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — needs a deployed IndexEndpoint, so there is no cheap path to verify one | [Memory & stores](doc:memory-and-stores) |
-| **Identity** (ADC, workload identity federation, impersonation) | — (the SDK reads ADC itself) | `agentfootprint/security` | — | — | 🔴 Bring-your-own via `CredentialProvider` (**one method**) | [Identity & credentials](doc:identity-and-credentials) |
+| **Identity** (ADC, workload identity federation, impersonation) | `googleIdentity()` | `agentfootprint/security` | `google-auth-library` | Google access tokens for Google APIs, from ADC / WIF / an impersonated service account. **Not** `mode: 'user'` — refused by name, since Google's per-user vault has no Node surface | **contract-shaped and tested; awaiting field use** | [Identity & credentials](doc:identity-and-credentials) |
 | **Agent Identity auth manager** (3-legged OAuth, API-key vault) | — | — | — | — | ⏸️ **Parked** — Preview with no Node surface as of 2026-08-12 | — |
 | **Agent Retrieval** (ex-Vector Search 2.0) | — | — | — | — | ⏸️ **Parked** — no Node SDK published as of 2026-08-12 | — |
 | **Vertex AI Extensions** | — | — | — | — | ⛔ Deprecated 2026-05-26, shutdown after 2026-11-26. Do not build on it | — |
@@ -47,13 +47,13 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 | **Control plane** (every `Create*`) | — | — | — | — | 🔴 Bridge it yourself — `googleapis`, gcloud or Terraform | — |
 
 <Callout type="warn" title="What “contract-shaped and tested; awaiting field use” means here">
-Both 9.13.0 adapters are built against `@google/genai` 2.16.0 with their calls
-exercised through an injected `_client` seam, plus a **surface pin** that checks
-the method names — and the API version — against the really-installed package on
-every test run. Neither has yet answered a request from Google in a real project.
-That is an honest rung, and it is the one they are on. **No adapter on this page —
-and none anywhere on this site — is described as *verified in a production field
-deployment*.**
+Every adapter on this page is built against a really-installed SDK, with its
+calls exercised through an injected `_client` seam, plus a **surface pin** that
+checks the method names — and the API version — against that installed package
+on every test run. **None of them has yet answered a request from Google in a
+real project.** That is an honest rung, and it is the one they are all on. No
+adapter on this page — and none anywhere on this site — is described as
+*verified in a production field deployment*.
 </Callout>
 
 ## The surface pin, and the version nobody states
@@ -69,6 +69,14 @@ not a setting, and it is exactly the kind of fact a provider page gets wrong: an
 adapter that says "GA, v1" while the client dials `v1beta1` compiles, passes, and
 calls somewhere else. The registry records the version each door resolves to and
 the test asks the installed package, so a change arrives as a red test.
+
+The same assertion, aimed the other way, is what settled which client the
+Sessions and Memory Bank adapters use. `@googleapis/aiplatform` takes its
+version as an argument rather than defaulting to one, so the pin asserts that
+the constant those adapters dial (`v1`) is a version the installed package
+really has *and* that the surface is reachable at it. That matters because the
+versions are not equivalent: **`memories.purge` and `memories.rollback` exist at
+`v1` and do not exist at `v1beta1`.**
 
 ```ts
 import { gemini } from 'agentfootprint/providers';
@@ -232,6 +240,47 @@ made-up classification of an error it cannot actually tell apart.
 `@google-cloud/storage`, loaded lazily **at construction** — a missing install
 refuses where the config was written, and a browser bundle never sees it.
 
+**How it fits with the rest of this column.** The artifact store and the session
+store are two halves of one deployment, and they compose because they scope
+identically: an artifact's object name is
+`[<prefix>/]<tenant>/<principal>/<conversation>` and Memory Bank's default scope
+is the same `{ tenant, principal, conversation }` tuple, so a run's artifacts and
+its memories partition the same way with no extra wiring.
+
+```ts
+import { Agent, gcsArtifacts } from 'agentfootprint';
+import { standingAgent, nodeHost, agentEngineSessions } from 'agentfootprint/hosting';
+import { memoryBankStore } from 'agentfootprint/memory';
+import { googleIdentity } from 'agentfootprint/security';
+import { gemini } from 'agentfootprint/providers';
+
+const ENGINE = process.env.REASONING_ENGINE_ID!;
+const PROJECT = process.env.GOOGLE_CLOUD_PROJECT!;
+const vertex = { project: PROJECT, location: 'us-central1', reasoningEngine: ENGINE };
+
+await standingAgent({
+  agentFactory: () =>
+    Agent.create({
+      provider: gemini({ project: PROJECT, location: 'us-central1' }),
+      model: 'gemini',
+      artifacts: gcsArtifacts({ bucket: 'my-agent-artifacts', projectId: PROJECT }),
+      credentials: googleIdentity(),
+    }).build(),
+  host: nodeHost({ port: Number(process.env.PORT ?? 8080) }),
+  sessions: agentEngineSessions(vertex),
+});
+
+const memories = memoryBankStore(vertex);   // wire into defineMemory / defineRAG
+```
+
+One credential path serves all of it: **Application Default Credentials**. The
+same runtime service account that `gemini()` reads is what `gcsArtifacts`,
+`agentEngineSessions` and `memoryBankStore` authenticate with, and what
+`googleIdentity` vends to your tools. On Cloud Run or GKE that is zero
+configuration; elsewhere it is `gcloud auth application-default login` or
+`GOOGLE_APPLICATION_CREDENTIALS`. See [Identity](#identity--googleidentity)
+above.
+
 ## Telemetry — standard OTLP, and no factory
 
 Google's Telemetry API accepts **standard OTLP**, and Google's own migration guide
@@ -327,58 +376,273 @@ have to pick one:
   on different instances, and an in-process or on-disk session store will not find
   the conversation.
 
-**And the session store that survives it is yours to bring.** `sqliteSessions`
-survives a restart on ONE instance with a persistent disk — fine for a single-
-instance service, wrong the moment you scale out. `memorySessions` is for tests.
-There is no Google `SessionLifecycle` adapter in 9.13.0, so a multi-instance
-deployment implements the port over Firestore, Memorystore or Agent Runtime
-Sessions. It is **two methods** — `hydrate(sessionId)` and
-`persist(sessionId, envelope)` — over a JSON blob:
+`sqliteSessions` survives a restart on ONE instance with a persistent disk, and
+is wrong the moment you scale out. `memorySessions` is for tests. The store that
+survives the second row is `agentEngineSessions`, below.
+
+## Agent Runtime Sessions — `agentEngineSessions()`
+
+The row above `sqliteSessions`: **many containers, one conversation.**
 
 ```ts
-import type { SessionLifecycle } from 'agentfootprint/hosting';
+import { standingAgent, nodeHost, agentEngineSessions } from 'agentfootprint/hosting';
 
-const firestoreSessions = (db: Firestore): SessionLifecycle => ({
-  async hydrate(sessionId) {
-    const doc = await db.collection('agent-sessions').doc(sessionId).get();
-    return doc.exists ? (doc.data()!.envelope as never) : undefined;
-  },
-  async persist(sessionId, envelope) {
-    await db.collection('agent-sessions').doc(sessionId).set({ envelope, updatedAt: Date.now() });
-  },
+const handle = await standingAgent({
+  agentFactory: () => buildAgent(),
+  host: nodeHost({ port: Number(process.env.PORT ?? 8080) }),
+  sessions: agentEngineSessions({
+    project: 'my-project',
+    location: 'us-central1',       // picks the REGIONAL host as well as the name
+    reasoningEngine: '1234567890', // sessions are children of one of these
+  }),
 });
 ```
 
-<Callout type="info" title="If you use Google's own Sessions, two facts shape the adapter">
-`Session.userId` is **required on create**, and our port only knows a `sessionId` —
-so an adapter needs a `userId` resolver in its factory options. And sessions live
-*under* a `reasoningEngine`: `projects/*/locations/*/reasoningEngines/{id}/sessions`,
-so you must create an Agent Runtime resource even if you never deploy code to it.
-The upside is real: `sessionState` is an arbitrary JSON `Struct`, which is exactly
-the shape of a checkpoint envelope, and a per-write `ttl` gives a sliding
-expiry for free.
+`AgentEngineSessionsOptions` also takes `userId`, `ttl` and `operationTimeoutMs`;
+the returned `AgentEngineSessions` adds `parent`, `forget(sessionId)` and a final
+`close()` to the two port methods. `SESSION_STATE_KEY` is the one `sessionState`
+key the envelope is stored under, exported so you can read a conversation out of
+the console or a `gcloud` call without this library.
+
+**A reasoning engine must exist even if you deploy no code to it.** Sessions are
+children of `projects/*/locations/*/reasoningEngines/{id}`, and there is nowhere
+else to put them. Creating one is a control-plane job (gcloud, Terraform, the
+console) that this library deliberately does not do.
+
+**The fit is genuinely good.** `Session.sessionState` is an arbitrary JSON
+`Struct` and a `CheckpointEnvelope` is arbitrary JSON, so the envelope goes in
+whole and comes back whole — no event log to fold and no blob encoding to get
+wrong. The session *event* log exists and is deliberately not used: this store
+keeps one envelope, and a per-turn append would be a second copy of the
+conversation that nothing reads.
+
+**Four SDK facts shaped the adapter, and two of them would have been bugs.**
+
+- **`create` accepts a caller-supplied `sessionId`.** Your session id *is* the
+  resource id, so `hydrate` is one `get` by name — no mapping table, no listing.
+- **`create` and `delete` return a long-running Operation; `get` and `patch`
+  return the Session.** Every write waits for the operation to report `done`
+  before returning. A `persist` that came back early would make the very next
+  `hydrate` a race whose failure mode is *"no conversation"* — which nobody can
+  tell from a new user. Past `operationTimeoutMs` (default 30s) it **refuses**
+  rather than reporting a write it never saw land.
+- **`Session.userId` is required on create and immutable afterwards.** The port
+  hands `persist` no user, so one is resolved: by default from the conversation's
+  own signed principal (`envelopeOwner`), so the service's idea of the owner and
+  this library's ownership index agree by construction. A conversation that ran
+  anonymously is stored under `DEFAULT_USER_ID` rather than a minted per-session
+  id — minting one would make every `listByUser` return exactly one row and look
+  like it worked.
+- **A patch without an update mask is a REPLACE.** It would clear the immutable
+  `userId`, the service would then refuse the write, and the conversation would
+  silently stop persisting. Every patch this adapter sends names its fields.
+- **`listByUser` builds an AIP-160 filter, and a user id is caller data.** The id
+  goes in as a quoted literal with the **backslash escaped before the quote** —
+  in that order, because this grammar honours backslash escapes, so escaping only
+  the quote leaves the escape character free to escape our escape and let the
+  rest of the id out of the literal as filter syntax. A listing that matched
+  every non-empty user id would hand back other people's conversation ids,
+  timestamps and message counts.
+
+**`ttl` has a 24-hour floor.** It is a knob for keeping conversations *longer*;
+the service rejects anything shorter, so a one-hour session is not available at
+any price.
+
+**The reading law is inherited, not re-implemented.** A session that was never
+written hydrates as `undefined`. A session that is present but **unreadable** —
+bytes that are not an envelope, or a `format` this runtime does not know — is
+refused by name with `UnreadableEnvelopeError`. Those are different facts and
+only one of them is safe to answer with a fresh start.
+
+**Keep large payloads out of the session.** `sessionState` holds the whole
+envelope, so a run that stuffs a 40 MB report into its conversation puts it in
+every hydrate. That is what the [claim-check store](#cloud-storage--the-artifact-store-gcsartifacts-9250)
+is for: `gcsArtifacts` keeps the bytes in a bucket and the conversation carries a
+ref. The two are designed to be used together, and the composed example is in that
+section.
+
+## Memory Bank — `memoryBankStore()`
+
+```ts
+import { memoryBankStore } from 'agentfootprint/memory';
+
+const store = memoryBankStore({
+  project: 'my-project',
+  location: 'us-central1',
+  reasoningEngine: '1234567890',
+  // Widen the scope so memories outlive one conversation — usually the point:
+  scopeFor: (id) => ({ tenant: id.tenant ?? '_', principal: id.principal ?? '_' }),
+});
+```
+
+Memory Bank is a **natural-language** memory service — not a key-value store and
+not a vector database. A `Memory` is a `fact` string plus an immutable `scope`,
+and retrieval takes a question in words which Google embeds and ranks on its own
+side. Three consequences, each with a silent-failure mode this adapter turns into
+something you can see.
+
+<Callout type="warn" title="The score is a DISTANCE, and smaller is closer">
+The port's `ScoredEntry.score` is a cosine similarity, where **higher** is closer.
+The service reports a **distance**, where **smaller** is closer — its own
+documentation says so. Forwarded unconverted, retrieval returns the *least*
+relevant memories first, with a confident-looking number in the right range that
+no threshold and no eyeball can separate from a working search.
+
+So the adapter **converts**: `score = 1 / (1 + distance)`, which is strictly
+decreasing, lands in `(0, 1]`, and therefore gets the **ordering** right — which
+is the whole point. `scoreFromDistance` is exported so you can see exactly what it
+does. The raw distance rides `entry.metadata.distance`, unmodified.
+
+And **`minScore` is refused by name.** That number was calibrated for a cosine
+similarity and this scale is not one; applying it anyway would silently keep or
+drop the wrong memories. Bound the result with `k`, or filter on the raw distance
+yourself. (The S3 Vectors adapter refuses a non-cosine index for the same reason.
+Here the metric is Google's and cannot be changed, so the threshold is what goes
+rather than the store.)
 </Callout>
 
-## Memory Bank — read this before writing anything into it
+<Callout type="warn" title="`scope` is an exact match and immutable — decide before the first write">
+A retrieval whose scope is a *subset* of a memory's scope returns **nothing** —
+not a superset, not a partial match. And `Memory.scope` cannot be changed after
+it is written.
 
-Not shipped, and the reason is worth stating because it is the same lesson the AWS
-column already paid for once. Memory Bank's `retrieveMemories` takes **text**,
-embeds and ranks server-side, and returns Google's **LLM-extracted `fact` strings**
-— never the entries you wrote. Any adapter must therefore declare
-`supportsVectorSearch: false` and `ranksBy: 'server-text'`, and refuse by name when
-`SearchOptions.text` is absent. Three further traps, all silent:
+The default is the full identity tuple —
+`{ tenant, principal, conversation }` — which is the isolation every other store
+in this library enforces, so agent code behaves identically whichever column it
+runs on. It is also the **narrowest** useful choice: memories written under it are
+retrievable only inside that one conversation. If what you want is "remember this
+person across their conversations", widen it with `scopeFor` **before you write
+anything**. Changing the convention on a live bank means re-writing every memory
+in it, because the old ones keep the scope they were written with and a retrieval
+under the new one finds them with an empty result that looks exactly like "this
+person has told us nothing".
 
-- **The score is a Euclidean distance — lower is closer.** Our `ScoredEntry.score`
-  is a cosine similarity, where **higher** is closer. Passed through unconverted,
-  retrieval returns the *least* relevant memories with a confident-looking number
-  in the right range.
-- **`scope` is an exact match and immutable after write.** A retrieval with a
-  partial scope returns nothing, not a superset — so the scope convention has to be
-  decided before the first write or the bank is poisoned permanently.
-- **No optimistic concurrency.** `Memory` has no etag, so `putIfVersion` has no
-  primitive behind it, and neither do `seen` / `recordSignature` / `feedback`.
+`MemoryScope` is the map type. An empty scope is refused — `{}` is not "no
+scoping", it is a real scope matching every other empty-scoped memory in the bank
+whoever wrote it.
+</Callout>
 
-The port, and the seven stores that do fill it: **[Memory & stores](doc:memory-and-stores)**.
+**It never ranks the vectors you wrote.** The store declares
+`supportsVectorSearch: false` and `ranksBy: 'server-text'`, so `indexCorpus` /
+`indexFolder` / `indexDocuments` refuse it **by name** instead of embedding a
+whole corpus, billing for it, reporting success and leaving it unreachable
+forever. An `embedding` on an entry handed to `put()` is not stored. `search()`
+reads `options.text` and refuses without it — a vector is the one thing this
+backend cannot use.
+
+**Five operations are refused rather than emulated.** `putIfVersion`, `seen`,
+`recordSignature`, `feedback` and `getFeedback` have no primitive here — a
+`Memory` carries no etag and there is no dedup or feedback surface. The sibling
+AgentCore adapter emulates them in a per-process Map; this one does not, and the
+difference is deliberate. A store you reach for *because* it is shared across a
+fleet is the worst possible place for per-process shadow state: `seen()` would
+answer "never" in the second container for a signature the first one recorded,
+and an emulated `putIfVersion` would report `{ applied: true }` to two writers at
+once. A refusal you read once beats a correctness bug you never find.
+
+**A memory is addressed by the scope AND the entry id, never the id alone.** The
+resource name is `<engine>/memories/<scope fingerprint>-<entry id>`, and that is
+not cosmetic. Entry ids in this library are deliberately deterministic and
+identity-free — `msg-<turn>-<index>`, `fact:<key>`, `snap-<turn>` — so two people
+talking to the same agent mint the *same* ids. A resource name addresses a row
+directly, so an address without the scope in it would be one row for both of
+them: the second writer's `fact` landing on the first writer's row while the
+immutable `scope` stays the first writer's. That reads back as one tenant seeing
+another's private fact, the second tenant's own write invisible to them, and
+`forget()` finding nothing to erase. Keying on the resolved *scope* rather than
+the raw identity keeps the two decisions one decision — a `scopeFor` widened to
+`{ tenant, principal }` shares one row per person across their conversations,
+exactly as far as it widens retrieval.
+
+The address is a partition, not the boundary. The boundary is the stored `scope`,
+re-checked on the way back from every read **and before every overwrite** — so
+`put()` reads the row it is about to write, and a row carrying somebody else's
+scope is refused (`MemoryScopeConflictError`) rather than written through. That
+read is what makes the steady-state `put` two calls instead of one; it buys a
+tenant check that a bare `patch` cannot give you.
+
+**Writes wait.** `create`, `patch` and `delete` are long-running operations, so
+every write blocks until the service says `done` — same reasoning as the session
+store, same `operationTimeoutMs`.
+
+**`forget()` does not use `purge`, and that is the load-bearing detail.**
+`PurgeMemoriesRequest.force` defaults to **false**, which the service documents as
+*"validated but not executed"*. A GDPR erasure built on it without that flag would
+report success and delete nothing — a compliance failure that looks exactly like a
+working one. And purge selects rows with a filter *string* whose ability to express
+an exact scope match is unverified: under-match leaves data behind, over-match
+deletes somebody else's. So `forget()` paginates a scoped retrieve and deletes each
+memory by name, at one call per memory, which is the right price.
+
+`MAX_PAGE_SIZE` (100) is the service's own ceiling on a page or a top-k; it
+silently coerces anything larger, so this adapter clamps and says so.
+`MemoryBankStore` is the class behind the factory, and `MemoryBankStoreOptions`
+carries `scopeFor`, `ttl`, `pageSize` and `operationTimeoutMs`.
+
+## Identity — `googleIdentity()`
+
+```ts
+import { googleIdentity } from 'agentfootprint/security';
+
+const agent = Agent.create({ provider, credentials: googleIdentity() })
+  .tool(defineTool({
+    name: 'read_sheet',
+    needs: [{ credential: 'sheets', scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] }],
+    execute: async (args, ctx) => fetch(url, { headers: ctx.credential!.toHeaders() }).then((r) => r.text()),
+  }))
+  .build();
+```
+
+The **narrow** adapter: it vends *Google* access tokens for *Google* APIs, from
+whatever credential the environment already has — Application Default Credentials
+on Cloud Run or GKE, a workload-identity federation config, a service account,
+optionally impersonating another one. `CLOUD_PLATFORM_SCOPE` is the default scope;
+a request's own `scopes` win over it. `GoogleIdentityOptions` also takes
+`impersonate` (a `GoogleImpersonation`: `targetPrincipal`, `delegates`,
+`lifetimeSeconds`), `services` and `id`. `GoogleAuthClientLike` is the small
+client shape it calls, exposed for a custom integration.
+
+<Callout type="warn" title="`mode: 'user'` is refused, not served with a machine token">
+It is **not** a token vault. The AWS column's identity adapter can vend a *GitHub*
+token for a *user* because a per-user OAuth vault sits behind it; Google's
+equivalent — the Agent Identity auth manager — is Preview with no Node surface.
+
+So a delegated request is refused **by name**. Answering it with a machine token
+would be the exact silent downgrade the port exists to prevent: the call succeeds,
+the data comes back, and it ran with the *agent's* access rather than the person's,
+with nothing downstream able to tell. A `userToken` on a request is refused for the
+same reason rather than quietly ignored.
+</Callout>
+
+<Callout type="info" title="The one-hour token, and the one place it bites">
+A Google access token lives about an hour. That is fine wherever the credential is
+fetched per use — which is how `ctx.credential` works, so the ordinary path is
+unaffected. This adapter caches the *client*, never a token, so the library's own
+refresh logic keeps it fresh, and `expiresAt` is reported on every issued
+credential.
+
+It bites in exactly one place, and it looks like it should work: **filling the
+OpenAI-compatible endpoint's `apiKey` with a token from here.** It works for an
+hour and then every call 401s, because `apiKey` is a *string* captured when the
+provider is constructed and a long-lived agent process outlives it. There is no
+refresh home in `OpenAIProviderOptions` for a credential that expires. Use the
+native `gemini()` provider, which reads ADC through the SDK and refreshes
+underneath you.
+</Callout>
+
+**Set `services` when Google is not your only credential.** Unset, this provider
+answers for any `service` — the token is a Google credential and you know which
+Google API you are about to call. But in a deployment where some tools declare
+`needs: [{ credential: 'github' }]`, an unrestricted Google provider would hand a
+Google token to the tool that wanted a GitHub one, and the failure would surface
+as a puzzling 401 from GitHub rather than as a wiring error here.
+
+**Secrets never appear in what it throws.** Auth libraries echo file paths and
+request detail into failure text, and a message thrown from a `CredentialProvider`
+reaches the LLM as a tool result *and* rides `agentfootprint.credential.failed` to
+every sink. So the error's NAME and the operation come through and its text does
+not, and the original is never attached as `cause` — that would travel into every
+serializer that walks own properties.
 
 ## Hosting — one contradiction, one probe
 
@@ -398,17 +662,30 @@ unresolved contradiction is how three AWS adapters once shipped calling operatio
 that did not exist. **One live probe settles it** — a thirty-line Node container
 implementing the unary route — and the adapter follows the answer, not the guess.
 
+The contradiction blocks the **host** boundary only. Agent Runtime's *sessions*
+are an ordinary regional REST API with no deployability question attached, which
+is why `agentEngineSessions` ships while the host adapter does not: you can keep
+conversations in Agent Runtime today from a process running anywhere.
+
 Meanwhile, Cloud Run is the ordinary path and needs nothing new:
 
 ```ts
-import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+import { standingAgent, nodeHost, agentEngineSessions } from 'agentfootprint/hosting';
 
 const handle = await standingAgent({
   agentFactory: () => buildAgent(),                    // one agent per active session
   host: nodeHost({ port: Number(process.env.PORT ?? 8080) }),
-  sessions: sqliteSessions({ file: '/data/sessions.db' }), // single instance only — see above
+  sessions: agentEngineSessions({                      // shared across instances
+    project: process.env.GOOGLE_CLOUD_PROJECT!,
+    location: 'us-central1',
+    reasoningEngine: process.env.REASONING_ENGINE_ID!,
+  }),
 });
 ```
+
+Swap `agentEngineSessions` for `sqliteSessions({ file: '/data/sessions.db' })` if
+you are pinned to one instance with a persistent disk and would rather not create
+a reasoning engine — it is one argument, which is the entire point of the port.
 
 ## Governance — enforced at the Gateway, not here
 
@@ -430,10 +707,18 @@ adapter will be built for Google either.** For rules you own, use
 Absences are facts, so here they are stated rather than discovered:
 
 - **No `googleCloudTracer()` factory** — a docs recipe instead, argued above.
-- **No Google `SessionLifecycle`, `MemoryStore` or `CredentialProvider` adapter.**
-  All three ports are open and small; two of the three need a live account to
-  verify honestly, which is why they are not shipped as claims.
-- **No Agent Runtime host adapter**, pending the Node-deployability probe.
+- **No Agent Runtime host adapter**, pending the Node-deployability probe. The
+  session store for it ships; the container contract does not.
+- **No user-delegated credential.** `googleIdentity` vends the deployment's own
+  identity and refuses `mode: 'user'` by name — Google's per-user token vault is
+  Preview with no Node surface, and a machine token in its place would be a
+  silent downgrade.
+- **No compare-and-set, dedup or feedback on Memory Bank** — `putIfVersion`,
+  `seen`, `recordSignature`, `feedback` and `getFeedback` are refused by name
+  rather than emulated in a per-process Map that a second container cannot see.
+- **No `memories.purge` and no session `appendEvent`.** Both exist on the API and
+  both are deliberately not called; the reasons are in the sections above and in
+  the surface pin's own notes.
 - **No control plane.** Creating a `reasoningEngine`, a memory bank, an index or a
   gateway is `googleapis` / gcloud / Terraform. agentfootprint is runtime-only.
 - **No multi-modal input**, no thought summaries, and no grounding tools (Google
@@ -445,6 +730,22 @@ Absences are facts, so here they are stated rather than discovered:
 - **No pricing table for Gemini models.** Cost reporting uses the token counts
   Google returns; the per-token rates are yours to configure.
 
+### What these adapters cost to run
+
+No invented numbers — the shapes, so you can price them against your own tariff:
+
+- **Sessions**: one `patch` per turn in the steady state (a `create` plus one
+  operation wait on the first turn of a conversation), one `get` per hydrate,
+  one `list` per history listing. Storage is whatever `sessionState` holds.
+- **Memory Bank**: one `get` plus one `patch` (or `create` + wait) per `put` —
+  the `get` is the tenant check described above, not an optimisation — one
+  `retrieve` per `search` **or** per `list` page, and **one delete per memory**
+  on `forget` — erasure is the expensive call here, by choice.
+- **Identity**: no billed API call of its own. Token minting is part of the auth
+  library's own refresh, and impersonation adds one IAM token exchange per client.
+- **Egress**: all three are regional. Running your process in the same region as
+  the reasoning engine keeps these calls off the cross-region path.
+
 ## Status
 
 | Piece | Door | Status |
@@ -452,11 +753,13 @@ Absences are facts, so here they are stated rather than discovered:
 | `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | `geminiEmbedder()` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **9.25.0** — contract-shaped and tested; awaiting field use |
-| The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages |
+| `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | contract-shaped and tested; awaiting field use |
+| `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | contract-shaped and tested; awaiting field use |
+| `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | contract-shaped and tested; awaiting field use |
+| The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages, now including `@googleapis/aiplatform` |
 | `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | Shipped — the adapter is the existing one; this page is the wiring |
 | Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | Shipped adapters; **client-certificate requirement unverified** |
-| `SessionLifecycle`, `MemoryStore`, `CredentialProvider` on Google backends | — | Bring-your-own via the port (two methods, several, one) |
 | Agent Runtime hosting | — | Not shipped — gated on one live probe |
 | Agent Retrieval · Agent Identity auth manager | — | Parked 2026-08-12 — no Node surface |
 | `SecurityStrategy` for Model Armor / Semantic Governance | — | **Will not be built** — gateway-enforced, no data-plane call |
@@ -470,6 +773,12 @@ primitives, and **[On-premises & self-hosted](doc:on-premises)** is the same map
 for a deployment that owns its own machines — a local model instead of Gemini,
 `sqliteVectorStore` instead of Vector Search, `fileObservability` instead of Cloud
 Trace.
+
+The three adapters this column gained are the clearest illustration of what the
+ports buy you: `agentEngineSessions` ↔ `agentCoreSessions` ↔ `sqliteSessions`,
+`memoryBankStore` ↔ `AgentCoreStore` ↔ `pgVectorStore`, `googleIdentity` ↔
+`agentCoreIdentity` ↔ `vaultCredentials`. Each trio is one argument to
+`standingAgent`, `defineRAG` or `Agent.create`. **The agent code does not change.**
 
 ## Next steps
 

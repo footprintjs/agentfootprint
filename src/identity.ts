@@ -72,6 +72,18 @@ export {
 // is refused by name rather than guessed at; see the module docstring.
 export { vaultCredentials, type VaultCredentialsOptions } from './adapters/identity/vault.js';
 
+// Google access tokens from whatever credential the environment already has
+// (ADC, workload identity, an impersonated service account). Narrow on
+// purpose: it vends the DEPLOYMENT's identity, and `mode: 'user'` is refused
+// by name rather than quietly downgraded to a machine token.
+export {
+  googleIdentity,
+  CLOUD_PLATFORM_SCOPE,
+  type GoogleIdentityOptions,
+  type GoogleImpersonation,
+  type GoogleAuthClientLike,
+} from './adapters/identity/google.js';
+
 // Verifying WHO is calling (9.26.0) — the other half of identity. The rest of
 // this door vends credentials for calls the agent makes OUTWARD;
 // `jwksIdentity` checks the credential a caller presents INWARD, against an

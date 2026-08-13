@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.27.0] - 2026-08-13
+
+**The story learns the artifact vocabulary, and the Google Cloud column gets
+its sessions, memories, and identity.**
+
+### Added — commentary templates for the artifact age
+
+The prose layer (`commentaryTemplates.ts` + the new `artifactPhrases.ts`)
+learns the events several recent releases shipped without a sentence:
+`artifacts.minted` / `.presented` / `.resolved` / `.refused` / `.expired`,
+`tools.result_refused`, the repeated-call nudge (9.26.0), and typed tool
+effects. Every line follows the same rules as the rest of the layer:
+
+- **Honest, not inferred.** `tools.result_refused`'s sentence never claims a
+  retry happened — no event attests one, so the words don't either.
+- **Sizes humanized, and the two units told apart.** `humanizeBytes` /
+  `humanizeChars` — `41.0 KB` where the ceiling counts bytes, `240,000
+  characters` where it counts characters (`tools.result_refused` counts
+  characters, because that's what the limit does).
+- **Refs and digests stay out of prose.** They identify a row for the details
+  panel; a reader doesn't read them. The repeated-call nudge's fingerprints
+  are the same story: the sentence says "identical," never the digest that
+  proves it.
+- **Absent field, absent clause.** A tool effect with no `reason` renders no
+  quote — through 9.26.0 it rendered an empty pair of quotes, a sentence
+  claiming words nobody spoke.
+- **`head` and `get` read as different decisions, not one hedge.**
+  `artifacts.resolved.head` says a ticket was described; `.get` says it was
+  redeemed and paid for — "described without paying for the payload" is the
+  render-by-ref distinction the two sentences exist to carry.
+- **Unknown events still fall through.** `selectCommentaryKey` answers
+  `undefined` for anything without a template and the caller renders it raw —
+  nothing new here is dropped on the floor, and nothing old changed shape.
+
+### Added — Google Cloud Phase B: `agentEngineSessions`, `memoryBankStore`, `googleIdentity`
+
+All three sit on one shared REST layer (`adapters/google/aiPlatform.ts`) over
+the split `@googleapis/aiplatform` package (27 MB) rather than the `googleapis`
+mega-package (209 MB) that carries every Google API for the same generated
+code — contract-shaped and tested; awaiting field use.
+
+```ts
+import { agentEngineSessions } from 'agentfootprint/hosting';
+import { memoryBankStore } from 'agentfootprint/memory';
+import { googleIdentity } from 'agentfootprint/security';
+```
+
+- **`agentEngineSessions`** — a `SessionLifecycle` over Vertex AI's own
+  session service (the API resource is still spelled `reasoningEngines`): the
+  session id IS the resource id, so `hydrate` is one `get` by name. Writes
+  wait for their long-running operation to report done before returning, or
+  refuse — a `persist` that returned early never reports a landing nobody can
+  see yet.
+- **`memoryBankStore`** — a `MemoryStore` over Memory Bank, a natural-language
+  memory service, not a vector store (`supportsVectorSearch: false`,
+  `ranksBy: 'server-text'`, so `indexCorpus`/`indexFolder`/`indexDocuments`
+  refuse it by name rather than embedding a corpus nothing will ever rank).
+  The service answers a Euclidean distance, not a similarity; this adapter
+  converts it so ordering comes out right, and keeps the raw distance in
+  `entry.metadata.distance` rather than hiding it. `minScore` is refused by
+  name — that number is calibrated to a cosine scale this service doesn't
+  use, and reinterpreting it would look like a working threshold. Writes are
+  scoped, and a stored row under a foreign scope is refused rather than
+  overwritten. `forget()` really deletes: it walks and deletes every matching
+  memory itself rather than calling the SDK's `memories.purge`, whose `force`
+  flag defaults to false — the service's own documented behavior for that
+  default is "validated but not executed," which would make a compliance
+  erasure report success and delete nothing. (The sibling `AgentCoreStore`
+  now declares the same `ranksBy: 'server-text'` for the identical reason, so
+  the two server-ranked stores no longer disagree on how they say what they
+  are.)
+- **`googleIdentity`** — a narrow `CredentialProvider`: it vends *Google*
+  access tokens for *Google* APIs from whatever credential the environment
+  already has (ADC, workload identity, an impersonated service account).
+  `mode: 'user'` is refused by name rather than quietly served a machine
+  token, since Google's user-token equivalent has no Node surface yet.
+
+Five SDK traps found by pinning against a real install and handled once,
+here, rather than per adapter:
+
+1. **Regional vs. global host.** The generated client defaults to the global
+   `aiplatform.googleapis.com`; sessions and memories are regional resources,
+   so the client always sets a regional `rootUrl` derived from `location`.
+2. **Operation races.** `sessions.create/delete` and `memories.create/patch/delete`
+   answer with a long-running Operation, not the resource — every write
+   awaits it to `done` rather than reading a resource that isn't there yet.
+3. **Maskless patch replaces.** A `patch` with no `updateMask` replaces the
+   whole resource — on a session, clearing the immutable `userId`. Every
+   patch here names its mask.
+4. **Purge's dry-run default.** Covered above under `forget()`.
+5. **Typed metadata.** Memory Bank's metadata map is not free-form JSON; it's
+   typed scalars (`stringValue`/`doubleValue`/`boolValue`/`timestampValue`),
+   pinned on the wire type rather than assumed.
+
+Every SDK error is sanitized the same way as the rest of the identity/memory
+surface: the operation and the error's name travel, never the SDK's own
+message, which echoes the request — and a request here can carry conversation
+state and an access token.
+
+### Docs
+
+The [Google Cloud](doc:google-cloud) infrastructure page is filled in to the
+same template every other provider column follows: a service → adapter map
+(door, peer dependency, ops covered, status), the two renamed-product
+callouts, and the three new adapters' boundaries stated in the same voice as
+the rest of the page.
+
 ## [9.26.0] - 2026-08-13
 
 **The server-brain deployment completes: verified identity at the door, spend

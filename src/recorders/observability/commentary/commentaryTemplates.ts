@@ -41,6 +41,14 @@
  */
 
 import type { AgentfootprintEvent } from '../../../events/registry.js';
+import {
+  ARTIFACT_OP_PHRASES,
+  ARTIFACT_REFUSAL_PHRASES,
+  ARTIFACT_SWEEP_PHRASES,
+  humanizeBytes,
+  humanizeChars,
+  phraseFor,
+} from './artifactPhrases.js';
 
 /** Flat map of template keys to template strings. Keys use a dotted
  *  hierarchy mirroring event types + payload branches
@@ -161,19 +169,27 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
 
   // Escalate-on-evidence (9.19.0): the declared refusal threshold tripped
   // and the rest of the turn runs on the bigger brain. Once per turn.
+  // The count is pre-pluralized (`refusalPlural`) — one refusal is a real
+  // configuration (`afterRefusals: 1`), and "1 refused routing attempts" is
+  // the kind of small wrongness that makes a reader distrust the rest.
   'skill.escalated':
-    'After {{refusals}} refused routing attempts, the rest of the turn escalated from ' +
-    '{{fromModel}} to {{toModel}}.',
+    'After {{refusals}} refused routing attempt{{refusalPlural}}, the rest of the turn ' +
+    'escalated from {{fromModel}} to {{toModel}}.',
 
   // Typed tool effects (9.19.0) — the effects channel's own prose, keyed by
   // kind + outcome. A refusal names itself teaching; the full sentence rides
   // the event payload (`refusalReason`) for richer consumers.
+  // `reason` (the proposal's own words) and `refusalReason` (the teaching
+  // sentence) are both OPTIONAL on the payload, so both ride pre-rendered
+  // clauses. Through 9.26.0 the accepted line spelled the reason inline and an
+  // effect that carried none rendered a pair of empty quotes — the sentence
+  // claiming words that were never spoken.
   'tools.effect.transition.accepted':
-    '`{{toolName}}` proposed moving to the `{{targetSkillId}}` skill — “{{reason}}” — and ' +
+    '`{{toolName}}` proposed moving to the `{{targetSkillId}}` skill{{reasonClause}} and ' +
     'the graph accepted it.',
   'tools.effect.transition.refused':
-    '`{{toolName}}` proposed moving to `{{targetSkillId}}` and the graph refused it — the ' +
-    'teaching refusal is on the record.',
+    '`{{toolName}}` proposed moving to `{{targetSkillId}}` and the graph refused ' +
+    'it{{refusalClause}} — the teaching refusal is on the record.',
   'tools.effect.transition.superseded':
     '`{{toolName}}` proposed moving to `{{targetSkillId}}`, but an earlier proposal in the ' +
     'same batch had already won the move.',
@@ -181,8 +197,72 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     '`{{toolName}}` pushed the `{{instructionId}}` instruction into the coming ' +
     'iteration(s) ({{deliveryLease}} lease).',
   'tools.effect.instruction.refused':
-    '`{{toolName}}` asked to push the `{{instructionId}}` instruction and was refused — ' +
-    'the teaching refusal is on the record.',
+    '`{{toolName}}` asked to push the `{{instructionId}}` instruction and was ' +
+    'refused{{refusalClause}} — the teaching refusal is on the record.',
+  'tools.effect.reason': ' (“{{reason}}”)',
+  'tools.effect.refusalReason': ' (“{{refusalReason}}”)',
+
+  // A tool's result was too big to hand back (9.20.0). The oversized payload
+  // entered no channel at all — not history, not the event — so the prose can
+  // only say HOW BIG it was and what the model was told to do about it. The
+  // size is in CHARACTERS because that is what the ceiling counts.
+  'tools.result_refused':
+    '`{{toolName}}` returned more than it is allowed to hand back ({{size}}, against a limit ' +
+    'of {{limit}}) — the model got no data, only a note on how to ask for less{{narrowClause}}.',
+  'tools.result_refused.narrowOne': ' (narrowing by `{{narrowBy}}` would help)',
+  'tools.result_refused.narrowMany': ' (narrowing by {{narrowBy}} would help)',
+
+  // The nudge moment (9.26.0): same call, same answer, and the model was told
+  // so in a note appended to the result. Nothing was refused and nothing was
+  // withheld — the prose must not imply either. The fingerprints that prove
+  // sameness are digests, and digests are DETAILS, never prose.
+  'tools.repeated_call':
+    '`{{toolName}}` was called with the same inputs and gave back the same answer as ' +
+    'before — that makes {{occurrences}} identical calls this turn, and the model was told so.',
+
+  // artifacts.* — the claim-check lifecycle (9.21.0–9.23.0). One law runs
+  // through every line here: META ONLY. Sizes are humanized ("41.2 KB"), kinds
+  // and labels are the consumer's own vocabulary, and the payload itself is
+  // never in the sentence — nor is the ref, which is an identifier for the
+  // DETAILS panel, not something a reader reads.
+  'artifacts.minted':
+    '`{{tool}}` checked {{subject}} into the store{{derivedClause}} — the model got a ' +
+    'one-line ticket, not the data.',
+  'artifacts.minted.subject.labeled': '“{{label}}” ({{kind}}, {{size}})',
+  'artifacts.minted.subject.plain': 'a {{kind}} artifact ({{size}})',
+  'artifacts.minted.derived': ', built from {{parentCount}} earlier artifact{{parentPlural}}',
+
+  'artifacts.presented':
+    'The model handed {{subject}} to the screen to show as `{{as}}` — the screen fetches ' +
+    'the data itself.',
+  'artifacts.presented.subject.labeled': '“{{label}}” ({{kind}}, {{size}})',
+  'artifacts.presented.subject.plain': 'a {{kind}} artifact ({{size}})',
+
+  // `head` describes without paying for the payload; `get` pays. That is the
+  // render-by-ref decision, so it gets two sentences rather than one hedge.
+  'artifacts.resolved.head':
+    '{{actor}} looked up what a ticket describes — a {{kind}} artifact ({{size}}) — ' +
+    'without reading the data.',
+  'artifacts.resolved.get':
+    '{{actor}} redeemed a ticket and read the {{kind}} artifact ({{size}}).',
+
+  // `tool` is absent when the hop came through the hosting door instead of a
+  // tool call (9.23.0) — a screen redeeming a ref over the wire under its own
+  // identity. Naming a phantom tool there would be a lie a dashboard groups by.
+  'artifacts.actor.tool': '`{{tool}}`',
+  'artifacts.actor.host': 'The app itself (not a tool)',
+
+  'artifacts.refused': '{{actor}} was refused {{opPhrase}} — {{reasonPhrase}}.',
+  // `op: 'dispatch'` is the framework's own door: the tool never ran, because
+  // the data it declared it wanted could not be delivered.
+  'artifacts.refused.dispatch':
+    '`{{tool}}` never ran — the artifact it asked for could not be delivered ' +
+    '({{reasonPhrase}}), and the model was told what it can ask for instead.',
+
+  'artifacts.expired':
+    'A {{kind}} artifact ({{size}}) left the store {{reasonPhrase}}{{noticedClause}} — a ' +
+    'ticket for it no longer resolves.',
+  'artifacts.expired.noticed': ', noticed while `{{tool}}` was checking something in',
 
   // One parallel tool batch, N matched edges, different targets (9.16.0).
   // Call order decides; the suppressed hop(s) stay on the record — this line is
@@ -387,6 +467,30 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return `tools.effect.${family}.${outcome}`;
     }
 
+    case 'agentfootprint.tools.result_refused':
+      return 'tools.result_refused';
+
+    case 'agentfootprint.tools.repeated_call':
+      return 'tools.repeated_call';
+
+    case 'agentfootprint.artifacts.minted':
+      return 'artifacts.minted';
+    case 'agentfootprint.artifacts.presented':
+      return 'artifacts.presented';
+    case 'agentfootprint.artifacts.resolved':
+      // `head` and `get` are different decisions, not a detail of one event:
+      // one describes the parcel, the other pays for it.
+      return event.payload.via === 'get' ? 'artifacts.resolved.get' : 'artifacts.resolved.head';
+    case 'agentfootprint.artifacts.expired':
+      return 'artifacts.expired';
+    case 'agentfootprint.artifacts.refused':
+      // The dispatch door has its own sentence — but only when the event names
+      // the tool that never ran. Without it, the generic refusal is the honest
+      // line (it says who/what without inventing an actor).
+      return event.payload.op === 'dispatch' && event.payload.tool
+        ? 'artifacts.refused.dispatch'
+        : 'artifacts.refused';
+
     case 'agentfootprint.skill.rejected':
       // Posture refusals (SG-C) narrate; the plain reachability rejection keeps
       // its pre-9.17 fall-through to the caller's default humanizer (raw render,
@@ -466,6 +570,19 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
     default:
       return undefined; // fall through
   }
+}
+
+/**
+ * Who redeemed / was refused at an artifact door. A tool names itself; the
+ * hosting door (9.23.0 — a screen resolving a ref over the wire under its own
+ * identity) has no tool name, and gets a sentence that says exactly that
+ * instead of a blank or an invented actor.
+ */
+function artifactActor(tool: string | undefined, templates: CommentaryTemplates): string {
+  const named = (tool ?? '').trim();
+  return named
+    ? renderCommentary(templates['artifacts.actor.tool'] ?? '', { tool: named })
+    : templates['artifacts.actor.host'] ?? '';
 }
 
 /** Count words for the `route_conflict` head (index = the count). Beyond the
@@ -632,6 +749,7 @@ export function extractCommentaryVars(
       return {
         ...base,
         refusals: String(p.refusals),
+        refusalPlural: p.refusals === 1 ? '' : 's',
         fromModel: p.from.model,
         // The escalation brain may inherit its model down the chain (same
         // provider) — the provider name is then the honest identity.
@@ -641,13 +759,148 @@ export function extractCommentaryVars(
 
     case 'agentfootprint.tools.effect': {
       const p = event.payload;
+      // Both reasons are optional on the payload, so both are clauses: an
+      // effect that carried no words says nothing in their place.
+      const reason = (p.reason ?? '').trim();
+      const refusalReason = (p.refusalReason ?? '').trim();
       return {
         ...base,
         toolName: p.toolName,
         targetSkillId: p.targetSkillId ?? '',
-        reason: p.reason ?? '',
+        reason,
         instructionId: p.instructionId ?? '',
         deliveryLease: p.deliveryLease ?? '',
+        reasonClause: reason
+          ? renderCommentary(templates['tools.effect.reason'] ?? '', { reason })
+          : '',
+        refusalClause: refusalReason
+          ? renderCommentary(templates['tools.effect.refusalReason'] ?? '', { refusalReason })
+          : '',
+      };
+    }
+
+    case 'agentfootprint.tools.result_refused': {
+      const p = event.payload;
+      const narrowBy = p.narrowBy ?? [];
+      const narrowClause =
+        narrowBy.length === 0
+          ? ''
+          : narrowBy.length === 1
+          ? renderCommentary(templates['tools.result_refused.narrowOne'] ?? '', {
+              narrowBy: narrowBy[0],
+            })
+          : renderCommentary(templates['tools.result_refused.narrowMany'] ?? '', {
+              narrowBy: narrowBy.map((n) => `\`${n}\``).join(' or '),
+            });
+      return {
+        ...base,
+        toolName: p.toolName,
+        size: humanizeChars(p.sizeChars),
+        limit: humanizeChars(p.maxChars),
+        narrowClause,
+      };
+    }
+
+    case 'agentfootprint.tools.repeated_call': {
+      const p = event.payload;
+      // The fingerprints stay off the prose deliberately — they answer "is this
+      // the same?" and a reader already has that answer in the sentence.
+      return { ...base, toolName: p.toolName, occurrences: String(p.occurrences) };
+    }
+
+    case 'agentfootprint.artifacts.minted': {
+      const p = event.payload;
+      const label = (p.label ?? '').trim();
+      const size = humanizeBytes(p.bytes);
+      const subject = label
+        ? renderCommentary(templates['artifacts.minted.subject.labeled'] ?? '', {
+            label,
+            kind: p.kind,
+            size,
+          })
+        : renderCommentary(templates['artifacts.minted.subject.plain'] ?? '', {
+            kind: p.kind,
+            size,
+          });
+      const parentCount = p.parentRefs?.length ?? 0;
+      return {
+        ...base,
+        tool: p.tool,
+        kind: p.kind,
+        size,
+        subject,
+        derivedClause:
+          parentCount > 0
+            ? renderCommentary(templates['artifacts.minted.derived'] ?? '', {
+                parentCount: String(parentCount),
+                parentPlural: parentCount === 1 ? '' : 's',
+              })
+            : '',
+      };
+    }
+
+    case 'agentfootprint.artifacts.presented': {
+      const p = event.payload;
+      const label = (p.snapshot.label ?? '').trim();
+      const size = humanizeBytes(p.snapshot.bytes);
+      const subject = label
+        ? renderCommentary(templates['artifacts.presented.subject.labeled'] ?? '', {
+            label,
+            kind: p.snapshot.kind,
+            size,
+          })
+        : renderCommentary(templates['artifacts.presented.subject.plain'] ?? '', {
+            kind: p.snapshot.kind,
+            size,
+          });
+      // `as` is the model's own consumer vocabulary, stored as data — rendered
+      // exactly as spoken, never normalized into a word we prefer.
+      return { ...base, subject, as: p.as, kind: p.snapshot.kind, size };
+    }
+
+    case 'agentfootprint.artifacts.resolved': {
+      const p = event.payload;
+      return {
+        ...base,
+        actor: artifactActor(p.tool, templates),
+        kind: p.kind,
+        size: humanizeBytes(p.bytes),
+      };
+    }
+
+    case 'agentfootprint.artifacts.refused': {
+      const p = event.payload;
+      // `detail` (the thrown refusal sentence) stays out of prose on purpose:
+      // it is an error string, and error strings are the one place a secret has
+      // ever ridden into a log. The typed `reason` says enough to act on.
+      return {
+        ...base,
+        actor: artifactActor(p.tool, templates),
+        tool: p.tool ?? '',
+        opPhrase: phraseFor(ARTIFACT_OP_PHRASES, p.op, 'an artifact request'),
+        reasonPhrase: phraseFor(
+          ARTIFACT_REFUSAL_PHRASES,
+          p.reason,
+          'the store did not say why in words this build knows',
+        ),
+      };
+    }
+
+    case 'agentfootprint.artifacts.expired': {
+      const p = event.payload;
+      const tool = (p.tool ?? '').trim();
+      return {
+        ...base,
+        kind: p.kind,
+        size: humanizeBytes(p.bytes),
+        reasonPhrase: phraseFor(
+          ARTIFACT_SWEEP_PHRASES,
+          p.reason,
+          'for a reason this build does not have words for',
+        ),
+        noticedClause: tool
+          ? renderCommentary(templates['artifacts.expired.noticed'] ?? '', { tool })
+          : '',
       };
     }
 

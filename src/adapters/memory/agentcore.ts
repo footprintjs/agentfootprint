@@ -263,6 +263,26 @@ export class AgentCoreStore implements MemoryStore {
    */
   readonly supportsVectorSearch = false;
 
+  /**
+   * **Words, not a vector.** `search()` is `RetrieveMemoryRecords`, whose
+   * query is natural-language text: it reads {@link SearchOptions.text} and
+   * refuses by name without it.
+   *
+   * {@link supportsVectorSearch} already said this store cannot serve back the
+   * embeddings written into it — the question a corpus BUILDER asks. This
+   * answers the next one down, which is what a corpus READER needs: what query
+   * form does `search()` take? Declaring it is what lets `defineRAG` know,
+   * before the first turn rather than after the bill, that a retriever over
+   * this store needs no `Embedder` at all — embedding the question anyway is
+   * spend on a vector discarded on arrival.
+   *
+   * Added in the same batch as the Google column's Memory Bank store, which is
+   * the second adapter of this shape. Two stores that behave identically and
+   * declare it differently is how a capability check quietly stops meaning
+   * anything.
+   */
+  readonly ranksBy = 'server-text' as const;
+
   private readonly client: AgentCoreLikeClient;
   private readonly memoryId: string;
   private readonly pageSize: number;

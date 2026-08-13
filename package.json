@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.26.0",
+  "version": "9.27.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -274,11 +274,13 @@
     "@aws-sdk/client-xray": "*",
     "@google-cloud/storage": "*",
     "@google/genai": "*",
+    "@googleapis/aiplatform": "*",
     "@huggingface/transformers": "*",
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
     "footprintjs": "^9.15.0",
+    "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
     "openai": "*",
@@ -290,16 +292,13 @@
     "@anthropic-ai/sdk": {
       "optional": true
     },
-    "openai": {
-      "optional": true
-    },
-    "@aws-sdk/client-bedrock-runtime": {
+    "@aws-sdk/client-bedrock-agent-runtime": {
       "optional": true
     },
     "@aws-sdk/client-bedrock-agentcore": {
       "optional": true
     },
-    "@aws-sdk/client-bedrock-agent-runtime": {
+    "@aws-sdk/client-bedrock-runtime": {
       "optional": true
     },
     "@aws-sdk/client-cloudwatch-logs": {
@@ -314,7 +313,16 @@
     "@aws-sdk/client-xray": {
       "optional": true
     },
-    "pg": {
+    "@google-cloud/storage": {
+      "optional": true
+    },
+    "@google/genai": {
+      "optional": true
+    },
+    "@googleapis/aiplatform": {
+      "optional": true
+    },
+    "@huggingface/transformers": {
       "optional": true
     },
     "@modelcontextprotocol/sdk": {
@@ -323,28 +331,28 @@
     "@opentelemetry/api": {
       "optional": true
     },
+    "@yarflam/potion-base-8m": {
+      "optional": true
+    },
+    "google-auth-library": {
+      "optional": true
+    },
     "ioredis": {
       "optional": true
     },
-    "zod": {
+    "jose": {
       "optional": true
     },
-    "@huggingface/transformers": {
+    "openai": {
       "optional": true
     },
-    "@yarflam/potion-base-8m": {
+    "pg": {
       "optional": true
     },
     "unpdf": {
       "optional": true
     },
-    "@google/genai": {
-      "optional": true
-    },
-    "@google-cloud/storage": {
-      "optional": true
-    },
-    "jose": {
+    "zod": {
       "optional": true
     }
   },
@@ -352,6 +360,7 @@
     "@arethetypeswrong/cli": "^0.18.1",
     "@google-cloud/storage": "^7.22.0",
     "@google/genai": "^2.16.0",
+    "@googleapis/aiplatform": "^31.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^5.61.0",
