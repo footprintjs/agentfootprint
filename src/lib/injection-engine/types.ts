@@ -202,6 +202,16 @@ export interface InjectionContext {
   /** Name of the entry scorer that produced `entryScores` (e.g. `'keyword'`,
    *  `'embedding'`). Absent unless an entry scorer ran. */
   readonly entryScorer?: string;
+  /**
+   * The turn-start routing verdict (SG-C) — written once per turn by the
+   * RouteTurn stage on agents whose graph runs the cascade (`classify` or
+   * `continuity: 'conversation'` configured), carried by the mount mappers.
+   * The cursor resolver consumes `to` on iteration 1 (the same
+   * precomputed-input pattern as `pendingSkillPick`); the tier-3 envelope
+   * reads `offered` while the menu is outstanding. Absent everywhere else —
+   * a graph without the new options never sees this key.
+   */
+  readonly turnRoute?: import('./routingPolicy.js').TurnRoute;
 }
 
 /**
@@ -213,9 +223,7 @@ export interface InjectionContext {
  * resolver go through here, so the two can never disagree about what the
  * batch was.
  */
-export function toolResultsOf(
-  ctx: InjectionContext,
-): ReadonlyArray<{
+export function toolResultsOf(ctx: InjectionContext): ReadonlyArray<{
   readonly toolName: string;
   readonly result: string;
   readonly toolCallId?: string;

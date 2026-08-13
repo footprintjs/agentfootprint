@@ -19,6 +19,12 @@
 import type { Embedder } from '../../memory/embedding/types.js';
 import { cosineSimilarity } from '../../memory/embedding/cosine.js';
 import { softmax } from './softmax.js';
+import type {
+  IntentCandidate,
+  IntentScore,
+  IntentScorer,
+  IntentScorerInput,
+} from './intentScorer.js';
 
 /** One entry candidate's relevance to the user's message. */
 export interface EntryScore {
@@ -108,19 +114,41 @@ export function rankEntries(
  * word tokens (length-normalized so a long description can't win on sheer size),
  * minus a small stop-word list. The zero-config router: good enough when skill
  * descriptions use the words a user would.
+ *
+ * ALSO an {@link IntentScorer} (SG-C): handed a candidates array as the second
+ * argument it scores the message's set-cosine against each intent's sentence +
+ * examples, and declares `floor: 0` — zero token overlap IS honestly "did not
+ * match at all", so this scorer can say *unmatched*. One factory, one name,
+ * two arities; existing `EntryScorer` callers are byte-unaffected.
  */
 export function keywordScorer(
   options: { readonly stopWords?: readonly string[] } = {},
-): EntryScorer {
+): EntryScorer & IntentScorer {
   const stop = new Set((options.stopWords ?? DEFAULT_STOP_WORDS).map((w) => w.toLowerCase()));
-  return {
-    name: 'keyword',
-    score({ userMessage, candidates }) {
-      const q = tokenize(userMessage, stop);
-      const scores = candidates.map((c) => setCosine(q, tokenize(c.description, stop)));
-      return rankEntries('keyword', candidates, scores);
-    },
-  };
+  function score(input: EntryScorerInput, signal?: AbortSignal): EntryScoring;
+  function score(
+    input: IntentScorerInput,
+    candidates: readonly IntentCandidate[],
+    signal?: AbortSignal,
+  ): readonly IntentScore[];
+  function score(
+    input: EntryScorerInput | IntentScorerInput,
+    second?: AbortSignal | readonly IntentCandidate[],
+  ): EntryScoring | readonly IntentScore[] {
+    if (Array.isArray(second)) {
+      // Intent path — set-cosine of the message against intent + example tokens.
+      const q = tokenize((input as IntentScorerInput).message, stop);
+      return second.map((c) => ({
+        id: c.id,
+        score: setCosine(q, tokenize([c.intent, ...c.examples].join(' '), stop)),
+      }));
+    }
+    const { userMessage, candidates } = input as EntryScorerInput;
+    const q = tokenize(userMessage, stop);
+    const scores = candidates.map((c) => setCosine(q, tokenize(c.description, stop)));
+    return rankEntries('keyword', candidates, scores);
+  }
+  return { name: 'keyword', floor: 0, score };
 }
 
 /**
@@ -128,22 +156,59 @@ export function keywordScorer(
  * description and cosine-scores them. Needs an `Embedder` (a model call per text);
  * runs once per turn off the hot loop. `.entryByRelevance(embedder)` is sugar for
  * `.entryBy(embeddingScorer(embedder))`.
+ *
+ * ALSO an {@link IntentScorer} (SG-C): handed a candidates array it embeds the
+ * message + one text per candidate (the intent sentence with its examples) and
+ * cosine-scores them. **No floor unless you declare one** (`{ floor }`): an
+ * absolute embedding threshold is a lie by default — measured in the field,
+ * real intent clusters separate by single-digit percentages of cosine, so a
+ * built-in cutoff would flip between "unmatched" and "decisive" on noise.
+ * Without a floor this scorer can say *stay*, *move* or *near-tie*, never
+ * *unmatched* — the verdict table documents that honestly.
  */
-export function embeddingScorer(embedder: Embedder): EntryScorer {
+export function embeddingScorer(
+  embedder: Embedder,
+  options: { readonly floor?: number } = {},
+): EntryScorer & IntentScorer {
+  async function embedAll(texts: readonly string[], signal?: AbortSignal): Promise<number[][]> {
+    // One embedBatch round-trip when the backend supports it (OpenAI/Voyage/…),
+    // else N+1 CONCURRENT embed() calls — never the serial N+1 latency stack.
+    const sig = signal ? { signal } : {};
+    return embedder.embedBatch
+      ? [...(await embedder.embedBatch({ texts: [...texts], ...sig }))]
+      : Promise.all(texts.map((text) => embedder.embed({ text, ...sig })));
+  }
+  function score(input: EntryScorerInput, signal?: AbortSignal): Promise<EntryScoring>;
+  function score(
+    input: IntentScorerInput,
+    candidates: readonly IntentCandidate[],
+    signal?: AbortSignal,
+  ): Promise<readonly IntentScore[]>;
+  async function score(
+    input: EntryScorerInput | IntentScorerInput,
+    second?: AbortSignal | readonly IntentCandidate[],
+    third?: AbortSignal,
+  ): Promise<EntryScoring | readonly IntentScore[]> {
+    if (Array.isArray(second)) {
+      if (second.length === 0) return [];
+      const texts = [
+        (input as IntentScorerInput).message,
+        ...second.map((c) => [c.intent, ...c.examples].join('\n')),
+      ];
+      const [qVec, ...cVecs] = await embedAll(texts, third);
+      return second.map((c, i) => ({ id: c.id, score: cosineSimilarity(qVec!, cVecs[i]!) }));
+    }
+    const { userMessage, candidates } = input as EntryScorerInput;
+    if (candidates.length === 0) return { scorer: 'embedding', chosen: undefined, ranked: [] };
+    const texts = [userMessage, ...candidates.map((c) => c.description)];
+    const [qVec, ...dVecs] = await embedAll(texts, second as AbortSignal | undefined);
+    const scores = dVecs.map((dVec) => cosineSimilarity(qVec!, dVec));
+    return rankEntries('embedding', candidates, scores);
+  }
   return {
     name: 'embedding',
-    async score({ userMessage, candidates }, signal) {
-      if (candidates.length === 0) return { scorer: 'embedding', chosen: undefined, ranked: [] };
-      // One embedBatch round-trip when the backend supports it (OpenAI/Voyage/…),
-      // else N+1 CONCURRENT embed() calls — never the serial N+1 latency stack.
-      const texts = [userMessage, ...candidates.map((c) => c.description)];
-      const sig = signal ? { signal } : {};
-      const [qVec, ...dVecs] = embedder.embedBatch
-        ? await embedder.embedBatch({ texts, ...sig })
-        : await Promise.all(texts.map((text) => embedder.embed({ text, ...sig })));
-      const scores = dVecs.map((dVec) => cosineSimilarity(qVec!, dVec));
-      return rankEntries('embedding', candidates, scores);
-    },
+    ...(options.floor !== undefined && { floor: options.floor }),
+    score,
   };
 }
 

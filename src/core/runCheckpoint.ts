@@ -139,6 +139,25 @@ export interface AgentRunCheckpoint {
    */
   readonly identity?: MemoryIdentity;
   /**
+   * WHERE the conversation's skill graph stood when the stored turn ended —
+   * the graph cursor, carried so a continued conversation can default its
+   * next turn's start to it (SG-C, 9.17.0).
+   *
+   * Written ONLY when the recording agent's graph declared
+   * `continuity: 'conversation'`; under the default `'turn'` the field is
+   * never written and the byte shape of every checkpoint is unchanged. On
+   * the continuing side it is honored only under the same declaration, and
+   * the RouteTurn cascade still judges it against the new message — an
+   * inherited cursor is a sticky DEFAULT, not a lock. An id the continuing
+   * graph does not know is dropped and recorded
+   * (`turn_routed.droppedResume`), never silently parked.
+   *
+   * **Version 1 still**, by the same documented rule as {@link folded} /
+   * {@link identity} / {@link agent}: an optional field is not a format
+   * change — an older runtime ignores it and continues correctly.
+   */
+  readonly skillCursor?: string;
+  /**
    * WHICH agent recorded this conversation — present only when that agent was
    * given an explicit `Agent.create({ id })` (9.2.0).
    *
@@ -481,6 +500,15 @@ export function buildCheckpoint(
    * {@link AgentRunCheckpoint.identity} and {@link AgentRunCheckpoint.agent}.
    */
   owner?: { readonly identity?: MemoryIdentity; readonly agentId?: string },
+  /**
+   * The graph cursor at the last committed state (SG-C) — read from the same
+   * snapshot `folded` comes from, by the same one-reader-two-carriers rule:
+   * `Agent.continuityCursorOf` serves BOTH `checkpoint()` and this crash
+   * carrier, so a conversation cannot keep its place on one path and silently
+   * lose it on the other. Passed only when the graph declared
+   * `continuity: 'conversation'`.
+   */
+  skillCursor?: string,
 ): AgentRunCheckpoint {
   return {
     version: 1,
@@ -493,6 +521,7 @@ export function buildCheckpoint(
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
+    ...(skillCursor !== undefined && { skillCursor }),
   };
 }
 
@@ -527,6 +556,15 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   if (!c.originalInput || typeof c.originalInput.message !== 'string') {
     throw new TypeError(
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
+    );
+  }
+  // Optional fields are validated only when PRESENT — absence is the ordinary
+  // pre-SG-C checkpoint and must keep deserializing byte-identically.
+  if (c.skillCursor !== undefined && typeof c.skillCursor !== 'string') {
+    throw new TypeError(
+      `[resumeOnError] checkpoint \`skillCursor\` must be a skill id string when present ` +
+        `(got ${typeof c.skillCursor}). It is written by a graph with ` +
+        `continuity: 'conversation' and names the node the stored turn ended on.`,
     );
   }
   // The conversation itself, message by message (8.18.0). `Array.isArray` was

@@ -375,8 +375,15 @@ export interface ContextEvaluatedPayload {
   readonly cursorMove?: {
     readonly from?: string;
     readonly to?: string;
-    /** `'entry' | 'route' | 'model-pick' | 'stay' | 'none'`. */
+    /** `'entry' | 'route' | 'model-pick' | 'intent' | 'continuity' | 'stay' | 'none'`. */
     readonly by: string;
+    /** The turn-start MENU this model pick resolved (SG-C) — present only on
+     *  the iteration an accepted pick closed an outstanding menu. */
+    readonly offered?: readonly string[];
+    /** The accepted pick was reachable but NOT on the offered menu — the
+     *  model's divergence, on the record (data under `'assist'`, a refusal
+     *  under `'guard'`/`'rails'`, which never reach here). */
+    readonly declinedOffer?: boolean;
   };
   /**
    * Skill-graph entries whose own `when` matched this iteration and which the cursor
@@ -774,7 +781,69 @@ export interface ValidationArgsInvalidPayload {
   readonly enforced: boolean;
 }
 
-// skill.* (5)
+// skill.* (6)
+/**
+ * The turn-start routing verdict (SG-C) — one per turn on skill-graph agents
+ * whose graph ran the cascade (`classify` configured, or
+ * `continuity: 'conversation'` with something to decide). Fired by the
+ * RouteTurn stage DURING traversal (collect-during-traversal; never rebuilt),
+ * BEFORE iteration 1, so it precedes every `context.evaluated` of its turn.
+ *
+ * The LOSERS are on the record: `scores` ranks every candidate the tier-2
+ * scorer judged (role-hidden skills are excluded before scoring — a hidden
+ * capability is never named, not even to observers of this run); `offered`
+ * names the menu the model was handed; `policy` stamps the exact thresholds
+ * that judged the hop, so no observer has to guess which numbers decided.
+ */
+export interface SkillTurnRoutedPayload {
+  /** The tier that decided the turn's start:
+   *  `'entry'` — a tier-1 rule (the recorded vocabulary for rule-won starts);
+   *  `'intent'` — the tier-2 scorer was decisive;
+   *  `'continuity'` — the inherited cursor held (incumbent won / near-tie /
+   *  sticky default);
+   *  `'menu'` — a menu was put in-band (near-tie or unmatched);
+   *  `'none'` — the cascade decided nothing the loop may act on (a rails
+   *  menu — the offer is still recorded here — or a dropped resume). */
+  readonly by: 'entry' | 'intent' | 'continuity' | 'menu' | 'none';
+  /** The inherited cursor (continuity), when one existed. */
+  readonly from?: string;
+  /** Where the turn starts. Absent = menu pending / none. */
+  readonly to?: string;
+  /** `IntentScorer.name` / entry-scorer name, when tier 2 ran. */
+  readonly scorer?: string;
+  /** EVERY candidate, ranked best-first — the losers, with the numbers that
+   *  lost. `score` is raw (strategy-specific); `relevance` is the
+   *  full-softmax share. */
+  readonly scores?: ReadonlyArray<{
+    readonly id: string;
+    readonly score: number;
+    readonly relevance: number;
+  }>;
+  /** The top-vs-2nd PAIRWISE gap actually judged (count-independent — see
+   *  routingPolicy.ts; NOT the difference of two `relevance` shares). */
+  readonly runnerUp?: { readonly id: string; readonly gap: number };
+  /** Whether tier 2 cleared the margin + floor. */
+  readonly decisive?: boolean;
+  /** The tier-3 menu (near-tie cluster, or every entry when unmatched). */
+  readonly offered?: readonly string[];
+  /** STAY was a first-class option in that menu (mid-conversation). */
+  readonly stayOffered?: boolean;
+  /** The thresholds that judged this turn, verbatim. `floor` is the EFFECTIVE
+   *  floor (`policy.floor ?? scorer.floor`); absent = no floor, so
+   *  `unmatched` was unreachable and near-tie governed. */
+  readonly policy: {
+    readonly nearTieMargin: number;
+    readonly menuSize: number;
+    readonly floor?: number;
+  };
+  /** Prior conversational turns the scorer saw (its declared window). */
+  readonly window?: number;
+  /** A continuity cursor that could not be honored — the stored id is not a
+   *  node of the currently mounted graph (a deploy changed it). The turn
+   *  started cold instead, and says so. */
+  readonly droppedResume?: { readonly id: string; readonly reason: 'unknown-skill' };
+}
+
 export interface SkillActivatedPayload {
   readonly skillId: string;
   readonly reason: 'autoActivate' | 'read_skill_result' | 'manual';
@@ -822,6 +891,12 @@ export interface SkillRejectedPayload {
   readonly allowed: readonly string[];
   /** The ReAct iteration the rejection fired on. */
   readonly iteration: number;
+  /** Present when a POSTURE, not reachability, refused (SG-C `strictness`):
+   *  `'guard'` — the pick was reachable but off the outstanding menu (or no
+   *  menu was outstanding); `'rails'` — routing picks are refused outright
+   *  (rules/scorer route turn starts; declared routes handle transitions).
+   *  Absent = today's reachability refusal, unchanged. */
+  readonly posture?: 'guard' | 'rails';
 }
 
 /**

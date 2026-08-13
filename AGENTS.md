@@ -475,7 +475,7 @@ Resilience decorators live on the `agentfootprint/resilience` subpath
 (not the main barrel). Each preserves the `LLMProvider` interface and
 stacks freely.
 
-### Observability — 78 typed events across 20 domains
+### Observability — 79 typed events across 20 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

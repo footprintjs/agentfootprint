@@ -38,6 +38,11 @@ export {
   READS_ENTRY_SCORES_METADATA_KEY,
   type RelevanceHintOptions,
 } from './factories/defineRelevanceHint.js';
+export {
+  defineMenuHint,
+  MENU_HINT_METADATA_KEY,
+  type MenuHintOptions,
+} from './factories/defineMenuHint.js';
 
 export {
   defineSkill,
@@ -139,6 +144,30 @@ export {
   type EntryScorerInput,
   type EntryCandidate,
 } from './entryScorer.js';
+// The turn-start routing cascade (SG-C, 9.17.0) — the intent-scorer port +
+// the built-in LLM classifier, the tie policy that judges tier 2, and the
+// graph surfaces the agent consumes. keywordScorer/embeddingScorer above ARE
+// IntentScorers too (same factories, a second arity).
+export {
+  validateIntentScores,
+  type IntentScorer,
+  type IntentCandidate,
+  type IntentScore,
+  type IntentScorerInput,
+} from './intentScorer.js';
+export { llmClassifier, type LlmClassifierOptions } from './llmClassifier.js';
+export {
+  NEAR_TIE_MARGIN,
+  MENU_SIZE,
+  DEFAULT_ROUTING_POLICY,
+  decideTier2,
+  menuOutstanding,
+  type RoutingPolicy,
+  type Tier2Verdict,
+  type RankedIntentScore,
+  type TurnRoute,
+} from './routingPolicy.js';
+export type { TurnRoutingPlan } from './skillIntent.js';
 export {
   checkSkillContract,
   checkSkillContracts,

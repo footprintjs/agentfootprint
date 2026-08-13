@@ -116,6 +116,20 @@ export interface SeedStageDeps {
    * commits exactly the keys it always did.
    */
   readonly conversationStores?: readonly MemoryStore[];
+  /**
+   * Read-AND-CLEAR accessor for the CONVERSATION'S skill cursor (SG-C,
+   * `continuity: 'conversation'`) — the `skillCursor` a continued checkpoint
+   * carried, stashed by `applyContinuation` beside the history. Consumed on
+   * every run (the side channel must clear either way); WRITTEN to
+   * `scope.currentSkillId` only when `restoreSkillCursor` is true, so a graph
+   * under the default `continuity: 'turn'` seeds the exact keys it always
+   * did. The RouteTurn stage then judges the inherited cursor against the new
+   * message (sticky default, decisively beaten, or dropped when the mounted
+   * graph no longer knows the id).
+   */
+  readonly consumePendingResumeSkillCursor?: () => string | undefined;
+  /** The mounted graph declared `continuity: 'conversation'`. */
+  readonly restoreSkillCursor?: boolean;
 }
 
 /**
@@ -344,6 +358,15 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   // graph through the entry router (cold start). The Injection Engine advances
   // it each iteration; undefined for agents without a skillGraph().
   scope.currentSkillId = undefined;
+  // …unless the graph declared `continuity: 'conversation'` and this run
+  // continues a stored conversation (SG-C): the SAME key, one clause earlier —
+  // no second cursor, no new time axis. Consumed unconditionally (the side
+  // channel clears whether or not it is honored); written only under the
+  // option, so `continuity: 'turn'` commits exactly the keys it always did.
+  const inheritedCursor = deps.consumePendingResumeSkillCursor?.();
+  if (deps.restoreSkillCursor === true && inheritedCursor !== undefined) {
+    scope.currentSkillId = inheritedCursor;
+  }
   // The model's `read_skill` pick — nothing picked yet on a fresh turn.
   scope.pendingSkillPick = undefined;
 

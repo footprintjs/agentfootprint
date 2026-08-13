@@ -18,6 +18,7 @@ import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
+import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../tools.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
@@ -70,6 +71,13 @@ export interface ToolsSlotConfig {
   readonly readSkillFor?: (args: {
     readonly currentSkillId?: string;
     readonly hiddenSkillIds?: readonly string[];
+    /** The turn-start MENU (SG-C), passed only while the turn's menu verdict
+     *  is outstanding — see the Compose stage. */
+    readonly menu?: {
+      readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
+      readonly cursorId?: string;
+      readonly stay?: boolean;
+    };
   }) => LLMToolSchema;
   /**
    * Which skills the caller's role may NOT see this run (9.11.0).
@@ -231,8 +239,31 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // into the tool slot. Pure compute, sync, fast. Reads provider tools
   // from `providerToolCache.current` populated by the Discover stage.
   const composeStage = (scope: TypedScope<ToolsSubflowState>): void => {
-    const args = scope.$getArgs<{ iteration?: number; currentSkillId?: string }>();
+    const args = scope.$getArgs<{
+      iteration?: number;
+      currentSkillId?: string;
+      turnRoute?: TurnRoute;
+    }>();
     const iteration = args.iteration ?? 1;
+
+    // The turn-start MENU (SG-C) — composed from the SAME verdict the record
+    // carries (`scope.turnRoute`, threaded by the mount mappers), and only
+    // while it is OUTSTANDING: once an accepted pick moves the cursor, the
+    // description stops offering a menu the turn has already resolved.
+    // `menuOutstanding` is the one shared implementation (routingPolicy.ts).
+    // Advisory relevance rides beside each candidate when the scorer ranked it.
+    const turnRoute = args.turnRoute;
+    const menu =
+      turnRoute?.offered !== undefined && menuOutstanding(turnRoute, args.currentSkillId)
+        ? {
+            candidates: turnRoute.offered.map((id) => {
+              const rel = turnRoute.relevance?.find((r) => r.id === id)?.relevance;
+              return { id, ...(rel !== undefined && { relevance: rel }) };
+            }),
+            ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
+            ...(turnRoute.stayOffered === true && { stay: true }),
+          }
+        : undefined;
 
     // Per-iteration `read_skill` offer. The cursor arriving here is THIS iteration's:
     // the Injection Engine already advanced it and its outputMapper wrote it to the
@@ -244,6 +275,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             ? readSkillFor({
                 ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
                 ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
+                ...(menu !== undefined && { menu }),
               })
             : t,
         )

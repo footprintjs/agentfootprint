@@ -825,6 +825,12 @@ export interface AgentState {
   /** Name of the entry scorer that produced `entryScores` (`'keyword'` /
    *  `'embedding'` / a custom scorer's name). */
   entryScorer?: string;
+  /** The turn-start routing verdict (SG-C) — written once per turn by the
+   *  RouteTurn stage on cascade graphs (`classify` / `continuity:
+   *  'conversation'`), read by the cursor resolver (iteration 1), the
+   *  `read_skill` menu envelope and the `'guard'` gate. Absent on every
+   *  other agent — nothing writes it, so nothing changes. */
+  turnRoute?: import('../../lib/injection-engine/routingPolicy.js').TurnRoute;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

@@ -124,8 +124,13 @@ import { checkerGoverns } from '../adapters/types.js';
 import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
-import type { CursorMove, EntryScoring } from '../lib/injection-engine/skillGraph.js';
+import type {
+  CursorMove,
+  EntryScoring,
+  TurnRoutingPlan,
+} from '../lib/injection-engine/skillGraph.js';
 import { makePickEntryStage } from './agent/stages/pickEntry.js';
+import { makeRouteTurnStage } from './agent/stages/routeTurn.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
 import {
   assertContinuable,
@@ -172,6 +177,7 @@ import { buildAgentChart } from './agent/buildAgentChart.js';
 import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';
 import { AgentBuilder } from './agent/AgentBuilder.js';
+export type { SkillGraphOptions } from './agent/AgentBuilder.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { findThinkingHandler } from '../thinking/registry.js';
 import type { ThinkingHandler } from '../thinking/types.js';
@@ -325,6 +331,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  public field on `SkillGraph`. Read for ONE thing: the read_skill gate's
    *  refusal has to explain that a tree has no cursor to jump (8.5.0). */
   private readonly skillGraphIsTree: boolean;
+  /** The turn-start cascade wiring (SG-C, 9.17.0) — the graph's routing plan,
+   *  the mount's posture/continuity, and the node-id set droppedResume checks
+   *  against. Absent (every graph without the new options) → RouteTurn never
+   *  mounts, the gate never postures, seed never restores a cursor, and the
+   *  checkpoint shape is byte-identical. */
+  private readonly skillGraphCascade?: {
+    readonly turnRouting?: TurnRoutingPlan;
+    readonly strictness: 'assist' | 'guard' | 'rails';
+    readonly continuity: 'turn' | 'conversation';
+    readonly nodeIds: ReadonlySet<string>;
+  };
+  /** Side channel for the conversation's inherited skill cursor (SG-C) —
+   *  stashed by `applyContinuation`, consumed-and-cleared by seed. */
+  private pendingResumeSkillCursor?: string;
   private readonly pricingTable?: PricingTable;
   /** Normalized at construction: a bare number is `{ usd, onExceed: 'warn' }`. */
   private readonly costBudget?: ResolvedCostBudget;
@@ -599,6 +619,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphExplainNextSkill?: (ctx: InjectionContext) => CursorMove,
     skillGraphIsTree?: boolean,
     skillGraphSupersededEntries?: (ctx: InjectionContext) => readonly string[],
+    skillGraphCascade?: {
+      readonly turnRouting?: TurnRoutingPlan;
+      readonly strictness: 'assist' | 'guard' | 'rails';
+      readonly continuity: 'turn' | 'conversation';
+      readonly nodeIds: ReadonlySet<string>;
+    },
   ) {
     super();
     this.provider = opts.provider;
@@ -627,6 +653,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphExplainNextSkill = skillGraphExplainNextSkill;
     this.skillGraphSupersededEntries = skillGraphSupersededEntries;
     this.skillGraphIsTree = skillGraphIsTree ?? false;
+    this.skillGraphCascade = skillGraphCascade;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -1123,6 +1150,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // identity, and the memory written after the recovery would land
           // where nothing could read it.
           this.conversationOwner(),
+          // …and the same graph cursor (SG-C), from the same snapshot reader —
+          // one reader, two carriers, so neither can lose what the other keeps.
+          this.continuityCursorOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -1136,6 +1166,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // nobody asked it to. One run, one continuation.
       this.pendingResumeHistory = undefined;
       this.pendingResumeFolded = undefined;
+      this.pendingResumeSkillCursor = undefined;
     }
   }
 
@@ -1519,6 +1550,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     const folded = this.foldedSpansOf(state);
     const owner = this.conversationOwner();
+    const skillCursor = this.continuityCursorOf(state);
     return {
       version: 1,
       runId: this.currentRunContext.runId,
@@ -1533,7 +1565,32 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Who it was for and who ran it (9.2.0) — both absent unless chosen.
       ...(owner.identity !== undefined && { identity: owner.identity }),
       ...(owner.agentId !== undefined && { agent: { id: owner.agentId } }),
+      // Where the graph stood (SG-C) — written ONLY under
+      // `continuity: 'conversation'`, so every other checkpoint keeps its
+      // exact byte shape.
+      ...(skillCursor !== undefined && { skillCursor }),
     };
+  }
+
+  /**
+   * The graph cursor a conversation carrier stores — the run's final
+   * committed `currentSkillId`, read from the SNAPSHOT (the state the run
+   * actually committed; both chart shapes map the advanced cursor onto it
+   * every iteration), and only when the mounted graph declared
+   * `continuity: 'conversation'`.
+   *
+   * ONE reader for BOTH carriers — `checkpoint()` (the conversation door
+   * `followUp()` walks through) and the crash checkpoint
+   * `RunCheckpointError` carries — the `foldedSpansOf`/`conversationOwner`
+   * rule: a conversation must not keep its place on one path and silently
+   * lose it on the other.
+   *
+   * @internal
+   */
+  private continuityCursorOf(state?: Partial<AgentState>): string | undefined {
+    if (this.skillGraphCascade?.continuity !== 'conversation') return undefined;
+    const cursor = state?.currentSkillId;
+    return typeof cursor === 'string' && cursor.length > 0 ? cursor : undefined;
   }
 
   /**
@@ -1600,6 +1657,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // and `undefined` is the right answer there — it means "this conversation
     // recorded no folds", which is exactly true.
     this.pendingResumeFolded = cp.folded;
+    // The conversation's skill cursor (SG-C). Stashed unconditionally —
+    // whether it is HONORED is seed's `restoreSkillCursor` gate, which reads
+    // the mounted graph's `continuity` declaration; a checkpoint written by a
+    // continuity graph and continued on a `'turn'` one is consumed and
+    // ignored, exactly like a `folded` field on an agent that never folds.
+    this.pendingResumeSkillCursor = cp.skillCursor;
   }
 
   /** One turn at a time — see `RunInFlightError`. @internal */
@@ -1814,6 +1877,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     | ((args: {
         readonly currentSkillId?: string;
         readonly hiddenSkillIds?: readonly string[];
+        readonly menu?: {
+          readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
+          readonly cursorId?: string;
+          readonly stay?: boolean;
+        };
       }) => LLMToolSchema)
     | undefined {
     const skills = this.injections.filter((i) => i.flavor === 'skill');
@@ -1846,6 +1914,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       return buildReadSkillTool(skills, {
         ...(grantable !== undefined && { grantable }),
         ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
+        // The turn-start menu (SG-C) — the tools slot passes it only while the
+        // verdict is outstanding; describeOffer leads with it.
+        ...(args.menu !== undefined && { menu: args.menu }),
       })!.schema;
     };
   }
@@ -2462,6 +2533,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.pendingResumeFolded = undefined;
         return f;
       },
+      // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
+      // on every run; HONORED only when the mounted graph declared
+      // `continuity: 'conversation'` — the same one-option-one-behavior gate
+      // the write side (`checkpoint()`) applies.
+      consumePendingResumeSkillCursor: () => {
+        const c = this.pendingResumeSkillCursor;
+        this.pendingResumeSkillCursor = undefined;
+        return c;
+      },
+      restoreSkillCursor: this.skillGraphCascade?.continuity === 'conversation',
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -2515,12 +2596,35 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         supersededEntries: this.skillGraphSupersededEntries,
       }),
     });
+    // The turn-start slot's occupant (SG-C). RouteTurn — the cascade — mounts
+    // ONLY when the graph runs it: a classifier is configured, or the mount
+    // declared `continuity: 'conversation'`. Every other graph keeps exactly
+    // what it had: scorer graphs keep PickEntry byte-for-byte (no cascade, no
+    // turn_routed — the zero-delta law), plain graphs keep no stage at all.
+    const cascade = this.skillGraphCascade;
+    const runsCascade =
+      cascade !== undefined &&
+      cascade.turnRouting !== undefined &&
+      (cascade.turnRouting.scorer !== undefined || cascade.continuity === 'conversation');
+    const hiddenSkillIdsForRouting = this.hiddenSkillIdsNow();
+    const routeTurnStage = runsCascade
+      ? makeRouteTurnStage({
+          turnRouting: cascade.turnRouting!,
+          ...(this.skillGraphScoreEntries && { scoreEntries: this.skillGraphScoreEntries }),
+          continuity: cascade.continuity,
+          strictness: cascade.strictness,
+          isNode: (id) => cascade.nodeIds.has(id),
+          ...(hiddenSkillIdsForRouting && { hiddenSkillIds: hiddenSkillIdsForRouting }),
+        })
+      : undefined;
     // Relevance entry router — a once-per-turn stage (off the ReAct loop) that
     // picks the starting skill by embedding similarity. Only built (and mounted)
-    // when the graph was created with `.entryByRelevance()`.
-    const pickEntryStage = this.skillGraphScoreEntries
-      ? makePickEntryStage(this.skillGraphScoreEntries)
-      : undefined;
+    // when the graph was created with `.entryByRelevance()` AND the cascade did
+    // not subsume it.
+    const pickEntryStage =
+      !routeTurnStage && this.skillGraphScoreEntries
+        ? makePickEntryStage(this.skillGraphScoreEntries)
+        : undefined;
     // With `.configure()` the base prompt becomes a function of the run: the
     // slot reads the instructions seed committed, falling back to `.system()`
     // when the resolver left it alone. `reason` follows the same fork so the
@@ -2641,6 +2745,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         openSkillIds: this.openSkillIds(),
         skillGraphIsTree: this.skillGraphIsTree,
       }),
+      // The mount's routing posture (SG-C). `'assist'` — the default — is
+      // deliberately NOT threaded: undefined keeps the gate byte-identical.
+      ...(this.skillGraphCascade !== undefined &&
+        this.skillGraphCascade.strictness !== 'assist' && {
+          skillStrictness: this.skillGraphCascade.strictness,
+        }),
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
@@ -2704,6 +2814,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
+      ...(routeTurnStage && { routeTurnStage: routeTurnStage as (scope: never) => Promise<void> }),
       // Messages-slot delivery (7.21) — mounted ONLY when something could
       // target the slot. A registered injection declaring `inject.messages`
       // is the obvious case; a `.memory()` is the other, because a hand-built

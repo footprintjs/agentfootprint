@@ -111,6 +111,15 @@ export interface AgentChartDeps {
    *  skill graph was built with a relevance scorer. */
   readonly pickEntryStage?: (scope: never) => Promise<void>;
   /**
+   * The turn-start routing CASCADE stage (SG-C) — subsumes PickEntry on
+   * graphs that run it (`classify` configured, or `continuity:
+   * 'conversation'`). Mounted in the SAME slot under the SAME id
+   * (`STAGE_IDS.PICK_ENTRY`) so recorded structures stay stable; never
+   * present together with `pickEntryStage` (Agent.buildChart picks exactly
+   * one). Absent → the chart is byte-identical to 9.16.
+   */
+  readonly routeTurnStage?: (scope: never) => Promise<void>;
+  /**
    * The window-strategy stage (`.window()` / `.compaction()`). Present ONLY
    * when the consumer configured a strategy — and when present it BECOMES the
    * ReAct loop target, mounted immediately before the current one.
@@ -283,11 +292,18 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     });
   }
 
-  // Relevance entry router (`entryByRelevance`) — picks the starting skill by
-  // embedding similarity ONCE per turn, here (before the InjectionEngine, which is
-  // the ReAct loop target), so the async embedder is off the hot loop and the
-  // chosen cursor is set before the engine reads `currentSkillId`.
-  if (deps.pickEntryStage) {
+  // The turn-start slot — ONE stage, two possible occupants, same id
+  // (recorded structures stay stable). RouteTurn is the SG-C cascade
+  // (rules → classifier/scorer → menu, continuity honored); PickEntry is the
+  // 9.x relevance router, byte-identical for graphs without the new options.
+  if (deps.routeTurnStage) {
+    builder = builder.addFunction(
+      'RouteTurn',
+      deps.routeTurnStage as never,
+      STAGE_IDS.PICK_ENTRY,
+      'Route the turn start: declared rules, then the scorer, else offer a menu (cascade)',
+    );
+  } else if (deps.pickEntryStage) {
     builder = builder.addFunction(
       'PickEntry',
       deps.pickEntryStage as never,
@@ -352,6 +368,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
             | ReadonlyArray<{ id: string; score: number; relevance: number }>
             | undefined,
           entryScorer: parent.entryScorer as string | undefined,
+          // The turn-start verdict (SG-C) — written once by RouteTurn; the
+          // resolver consumes it on iteration 1, the menu hint reads `offered`.
+          turnRoute: parent.turnRoute as
+            | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+            | undefined,
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -483,6 +504,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // outputMapper writes `currentSkillId = nextSkillCursor`, so this is the
         // cursor the gate will use when the model answers — not last turn's.
         currentSkillId: parent.currentSkillId as string | undefined,
+        // The turn-start verdict (SG-C) — the Compose stage leads read_skill's
+        // description with the menu while it is outstanding.
+        turnRoute: parent.turnRoute as
+          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+          | undefined,
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,

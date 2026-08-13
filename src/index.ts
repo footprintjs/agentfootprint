@@ -319,6 +319,9 @@ export {
   type AgentOptions,
   type AgentOutput,
   type ObserverDeliveryOptions,
+  // `.skillGraph(graph, options)` mount options (SG-C, 9.17.0): routing
+  // posture (`strictness`) + cursor span (`continuity`).
+  type SkillGraphOptions,
 } from './core/Agent.js';
 // `.window(strategy)` / `.compaction()` — keep the live context window inside
 // its budget without ever losing the record. A strategy edits the WINDOW; the

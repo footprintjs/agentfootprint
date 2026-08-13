@@ -5,8 +5,9 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 
 | file | stage |
 |---|---|
-| seed.ts | run-start state seeding (history, counters, injection arrays) |
-| pickEntry.ts | off-loop entry scoring for `.entryBy()` skill graphs |
+| seed.ts | run-start state seeding (history, counters, injection arrays; restores the conversation's skill cursor under `continuity: 'conversation'`) |
+| pickEntry.ts | off-loop entry scoring for `.entryBy()` skill graphs (subsumed by routeTurn.ts on cascade graphs) |
+| routeTurn.ts | the turn-start routing cascade (SG-C): rules → classifier/scorer → menu, continuity judged, verdict on `scope.turnRoute` + `skill.turn_routed`. Mounts in PickEntry's slot under the SAME id (`STAGE_IDS.PICK_ENTRY`) only when the graph runs the cascade (`classify` or `continuity: 'conversation'`) |
 | window.ts | `.window()` compaction (loop head when configured) |
 | deliver.ts | messages-slot delivery (role-checked, sequence-checked) |
 | callLLM.ts | provider invocation + streaming + reliability retry loop |

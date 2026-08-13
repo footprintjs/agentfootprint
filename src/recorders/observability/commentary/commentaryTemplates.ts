@@ -108,6 +108,23 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     '{{appName}} turned on a skill — its tools and instructions are now available.',
   'skill.deactivated': '{{appName}} turned off a skill.',
 
+  // Turn-start routing cascade (SG-C, 9.17.0) — one verdict per turn on
+  // cascade graphs, keyed by the tier that decided. The numbers (scores,
+  // runner-up gap, thresholds) stay on the event payload for richer consumers;
+  // this prose says who decided and where the turn starts.
+  'skill.turn_routed.continuity':
+    '{{appName}} picked up where the conversation left off — still in `{{to}}`.',
+  'skill.turn_routed.intent':
+    'The new message decisively matched `{{to}}`{{scorerClause}}, so the turn starts there.',
+  'skill.turn_routed.entry': 'A declared start rule routed this turn to `{{to}}`.',
+  'skill.turn_routed.menu':
+    'No declared intent clearly claimed this message — {{appName}} was offered ' +
+    '{{offeredCount}} option{{offeredPlural}}{{stayClause}} and chooses for itself.',
+  'skill.turn_routed.dropped':
+    'The conversation remembered being in `{{droppedId}}`, but this graph no longer has ' +
+    'it — started fresh.',
+  'skill.turn_routed.none': 'The turn-start router decided nothing — the turn proceeds as-is.',
+
   // Skill-GRAPH routing (proposal 002): a decision tree or declared edge picked a
   // skill this turn. Narrates WHICH skill + WHY (the matched decision) + what it
   // unlocked. The full decision path + tool list rides the `context.evaluated`
@@ -220,6 +237,24 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return 'skill.activated';
     case 'agentfootprint.skill.deactivated':
       return 'skill.deactivated';
+
+    case 'agentfootprint.skill.turn_routed': {
+      // A dropped resume outranks the (cold) verdict it forced — the reader's
+      // question is "why did my conversation forget where it was?".
+      if (event.payload.droppedResume) return 'skill.turn_routed.dropped';
+      switch (event.payload.by) {
+        case 'continuity':
+          return 'skill.turn_routed.continuity';
+        case 'intent':
+          return 'skill.turn_routed.intent';
+        case 'entry':
+          return 'skill.turn_routed.entry';
+        case 'menu':
+          return 'skill.turn_routed.menu';
+        default:
+          return 'skill.turn_routed.none';
+      }
+    }
 
     case 'agentfootprint.context.evaluated':
       // Narrate ONLY when a skillGraph() routed a skill this turn (decision tree
@@ -359,6 +394,21 @@ export function extractCommentaryVars(
         ? templates['context.routed.default'] ?? ''
         : '';
       return { ...base, skillId: r.injectionId, toolClause, matchClause };
+    }
+
+    case 'agentfootprint.skill.turn_routed': {
+      const p = event.payload;
+      const offeredCount = p.offered?.length ?? 0;
+      return {
+        ...base,
+        to: p.to ?? '',
+        from: p.from ?? '',
+        droppedId: p.droppedResume?.id ?? '',
+        scorerClause: p.scorer !== undefined ? ` (judged by the '${p.scorer}' scorer)` : '',
+        offeredCount: String(offeredCount),
+        offeredPlural: offeredCount === 1 ? '' : 's',
+        stayClause: p.stayOffered === true ? ' (including staying put)' : '',
+      };
     }
 
     case 'agentfootprint.cost.limit_hit': {

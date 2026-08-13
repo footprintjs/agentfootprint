@@ -81,6 +81,7 @@ import type {
   SkillRejectedPayload,
   SkillRerouteSupersededPayload,
   SkillRouteConflictPayload,
+  SkillTurnRoutedPayload,
   ToolEndPayload,
   ToolsActivatedPayload,
   ToolsDeactivatedPayload,
@@ -166,6 +167,7 @@ export const EVENT_NAMES = {
     rejected: 'agentfootprint.skill.rejected',
     rerouteSuperseded: 'agentfootprint.skill.reroute_superseded',
     routeConflict: 'agentfootprint.skill.route_conflict',
+    turnRouted: 'agentfootprint.skill.turn_routed',
   },
   validation: {
     argsInvalid: 'agentfootprint.validation.args_invalid',
@@ -437,6 +439,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.skill.route_conflict',
     SkillRouteConflictPayload
   >;
+  'agentfootprint.skill.turn_routed': AgentfootprintEventEnvelope<
+    'agentfootprint.skill.turn_routed',
+    SkillTurnRoutedPayload
+  >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
     'agentfootprint.validation.args_invalid',
@@ -622,6 +628,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.skill.rejected',
   'agentfootprint.skill.reroute_superseded',
   'agentfootprint.skill.route_conflict',
+  'agentfootprint.skill.turn_routed',
   'agentfootprint.permission.check',
   'agentfootprint.permission.gate_opened',
   'agentfootprint.permission.gate_closed',

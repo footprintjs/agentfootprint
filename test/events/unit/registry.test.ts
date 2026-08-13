@@ -102,7 +102,10 @@ describe('event registry — names + exhaustiveness', () => {
     //     tool batch matched skill-graph edges to different targets; the first
     //     in call order won the cursor and the suppressed hops are reported
     //     instead of silently dropped.)
-    expect(ALL_EVENT_TYPES.length).toBe(78);
+    //    (skill.turn_routed added with 9.17.0 — the turn-start routing
+    //     cascade's verdict: which tier decided the start, every candidate's
+    //     numbers, the menu offered, and the thresholds that judged it.)
+    expect(ALL_EVENT_TYPES.length).toBe(79);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

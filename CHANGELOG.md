@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.17.0] - 2026-08-12
+
+**The turn starts where the conversation is — a routing cascade that
+consults the model last, and says exactly which rung decided.**
+
+### Added — the turn-start routing cascade
+
+Every turn now resolves through one ordered cascade instead of one rule:
+
+```
+sticky cursor (continuity: 'conversation')
+  ← declared rules
+  ← a scorer over declared intents
+  ← the model's menu
+```
+
+Each rung is tried in that order; the first one that produces a verdict wins.
+Every verdict — win or fall-through — is recorded on a new typed event,
+`agentfootprint.skill.turn_routed`: `by`, `from`, `to`, ranked scores
+including losers, the runner-up gap, the policy numbers verbatim, and
+`droppedResume`. Near-ties fall through to the next rung rather than
+argmax-ing a coin flip. The cascade runs once per turn, off the hot loop —
+the cursor resolver itself stays synchronous.
+
+### Added — intents as data
+
+```ts
+{ match: { intent: 'refund_request', examples: ['I want a refund', 'charge me back'] }, use: 'billing' }
+```
+
+`match: { intent, examples }` joins regex and keywords as a third matcher
+arm. It is scored by a pluggable `IntentScorer` port that scores **every**
+candidate — never hands back a bare winner. Built-ins:
+
+- `keywordScorer()` and `embeddingScorer(embedder)`, both widened to the new
+  scorer shape.
+- `llmClassifier(provider, { window? })` — new: a constrained enum
+  (declared skill id, or `'none'`), never free text feeding routing
+  decisions.
+
+`skillGraphCheckup` gains intent audits — duplicate examples across skills,
+leave-one-out overlap — with their honesty boundaries stated up front
+(what the audit can and cannot promise).
+
+### Added — `strictness` on `.skillGraph(graph, options)`
+
+```ts
+.skillGraph(graph, { strictness: 'guard' })
+```
+
+Three postures:
+
+- `'assist'` — today's behavior, and the default.
+- `'guard'` — picks are pinned to the offered set (or stay) while a menu is
+  outstanding.
+- `'rails'` — the model never routes; a menu under rails proceeds on the
+  base prompt, recorded as `by: 'none'`. That's the honest cost of the
+  posture, and it's documented as one.
+
+Un-honorable combinations (`rails` × `entryByRead`, `conversation` ×
+`tree`) are refused at build time with a teaching message, not a silent
+no-op.
+
+### Added — `continuity: 'conversation'`
+
+```ts
+.skillGraph(graph, { continuity: 'conversation' })
+```
+
+The previous turn's cursor becomes the default entry on a resumed
+conversation, riding the existing run checkpoint — no second cursor, and
+opt-in only. If the graph was redeployed and no longer recognizes the
+inherited cursor, it is dropped and the drop is recorded, never silently
+kept.
+
+### Safety
+
+Role-hidden skills stay out of candidates, scores, menus, and the envelope
+end to end. A hidden-skills resolver that throws fails **closed** — nothing
+is offered that turn, and dev mode warns. A lone non-finite score reads as
+unmatched, never as an uncontested winner.
+
+### Zero-cost when unused
+
+Graphs that use none of the new options are byte-identical in behavior
+*and* events to 9.16.0 — pinned by regression tests. 78+ new tests cover
+the cascade, the scorers, the strictness postures, and continuity.
+
+### Deferred
+
+Per-skill model/provider switching and escalate-on-evidence are named in
+the design but not in this release; they land in a later minor.
+
 ## [9.16.0] - 2026-08-12
 
 **Parallel tool batches stop lying to the router, and a combination that could

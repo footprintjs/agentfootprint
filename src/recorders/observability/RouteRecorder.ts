@@ -35,8 +35,20 @@ interface RunBoundaryEvent {
  * skill, so the trace asserted that an edge fired when it had not. The cause now
  * comes from the graph's own resolver (`cursorMove.by`), not from the drawn
  * build-time provenance.
+ *
+ * `'intent'` and `'continuity'` joined in 9.17.0 (SG-C): the turn-start
+ * cascade's tier-2 scorer decisively routed the turn, and the inherited
+ * conversation cursor held it, respectively — both reported by the resolver
+ * on iteration 1, numbers on `agentfootprint.skill.turn_routed`.
  */
-export type RouteOutcome = 'entry' | 'route' | 'model-pick' | 'stay' | 'rejected';
+export type RouteOutcome =
+  | 'entry'
+  | 'route'
+  | 'model-pick'
+  | 'intent'
+  | 'continuity'
+  | 'stay'
+  | 'rejected';
 
 /** One hop of the route — the skill the graph was in at one iteration + how. */
 export interface RouteHop {
@@ -108,6 +120,13 @@ export function formatRouteHop(hop: RouteHop): string {
       return hop.fromSkill === undefined
         ? `read_skill("${hop.toSkill}") accepted at cold start`
         : `read_skill("${hop.toSkill}") accepted from "${hop.fromSkill}"`;
+    case 'intent':
+      // The turn-start classifier's decisive win — the numbers ride turn_routed.
+      return hop.fromSkill === undefined
+        ? `the message decisively matched "${hop.toSkill}" (turn-start classifier)`
+        : `"${hop.fromSkill}" → "${hop.toSkill}" (the message decisively matched it)`;
+    case 'continuity':
+      return `carried from last turn — still in "${hop.toSkill}"`;
     case 'stay':
       return `stayed in "${hop.toSkill}"`;
     case 'rejected':
@@ -141,6 +160,8 @@ function causeOf(cursorMove: unknown): RouteOutcome | undefined {
     case 'entry':
     case 'route':
     case 'model-pick':
+    case 'intent':
+    case 'continuity':
     case 'stay':
       return by;
     default:

@@ -96,6 +96,27 @@ export interface ReadSkillOffer {
    * never read the policy's own message.
    */
   readonly hiddenIds?: readonly string[];
+  /**
+   * Turn-start MENU (SG-C): when set, the description LEADS with these
+   * candidates (id + one-line description; advisory relevance %s beside
+   * near-tie candidates), names the cursor, and states STAY as a first-class
+   * option ("answer without calling read_skill to stay in '<cursor>'").
+   *
+   * Set only while the turn's menu verdict is outstanding (turn start, before
+   * any accepted pick) — the tools slot reads it off the SAME verdict the
+   * record carries, so the offer can never drift from `turn_routed.offered`.
+   * The enum stays the full catalog (the 8.5.0 law below — narrowing it would
+   * retire four honesty mechanisms), and {@link ReadSkillOffer.hiddenIds}
+   * filters menu rows exactly as it filters every other list: a role-hidden
+   * skill is never NAMED, menu or no menu.
+   */
+  readonly menu?: {
+    readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
+    /** Names the cursor the STAY sentence refers to ("you are in billing"). */
+    readonly cursorId?: string;
+    /** STAY spelled out as a first-class option (mid-conversation menus). */
+    readonly stay?: boolean;
+  };
 }
 
 /** Compose the tool description: one catalog, or the offer split in two. */
@@ -111,17 +132,39 @@ function describeOffer(
   if (!offer) {
     return `Activate a skill for the next iteration. Available skills:\n${fullCatalog}\n\n${tail}`;
   }
-  // Hidden first, so nothing below can name one — the graph split, the
-  // "not reachable" list and the plain catalog all read from this.
+  // Hidden first, so nothing below can name one — the menu, the graph split,
+  // the "not reachable" list and the plain catalog all read from this.
   const hidden = new Set(offer.hiddenIds ?? []);
   const skills = hidden.size > 0 ? allSkills.filter((s) => !hidden.has(s.id)) : allSkills;
+  // The turn-start MENU leads (SG-C) — rendered from the turn verdict, ids
+  // resolved against the (hidden-filtered) catalog so an id this description
+  // may not name, or one that is not a skill here, is silently skipped rather
+  // than fabricated into a row.
+  const byId = new Map(skills.map((s) => [s.id, s] as const));
+  const menuRows = (offer.menu?.candidates ?? [])
+    .filter((c) => byId.has(c.id))
+    .map((c) => {
+      const pct =
+        c.relevance !== undefined ? ` (relevance ~${Math.round(c.relevance * 100)}%)` : '';
+      return `${line(byId.get(c.id)!)}${pct}`;
+    });
+  const menuLead =
+    offer.menu !== undefined && menuRows.length > 0
+      ? `This turn needs a routing choice — no declared rule or intent decisively matched. ` +
+        `Closest candidates (advisory; an offline scorer ranked them and cannot see the ` +
+        `conversation):\n${menuRows.join('\n')}\n` +
+        (offer.menu.stay === true && offer.menu.cursorId !== undefined
+          ? `You are in '${offer.menu.cursorId}'. Staying is a first-class option: answer ` +
+            `WITHOUT calling read_skill to stay in '${offer.menu.cursorId}'.\n\n`
+          : `Answering WITHOUT calling read_skill is also allowed.\n\n`)
+      : '';
   if (offer.grantable === undefined) {
     // No graph — the plain catalog, filtered. A role with nothing left is told
     // plainly rather than handed an empty list to interpret.
     return skills.length === 0
       ? `Activate a skill for the next iteration. No skills are available to you — ` +
           `answer without one, or say what you are unable to do.\n\n${tail}`
-      : `Activate a skill for the next iteration. Available skills:\n${skills
+      : `${menuLead}Activate a skill for the next iteration. Available skills:\n${skills
           .map(line)
           .join('\n')}\n\n${tail}`;
   }
@@ -140,7 +183,7 @@ function describeOffer(
         .join('\n')}`,
     );
   }
-  return `Activate a skill for the next iteration.\n\n${parts.join('\n\n')}\n\n${tail}`;
+  return `${menuLead}Activate a skill for the next iteration.\n\n${parts.join('\n\n')}\n\n${tail}`;
 }
 
 /**

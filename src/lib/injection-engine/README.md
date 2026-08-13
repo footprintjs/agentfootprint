@@ -313,11 +313,16 @@ this table (a lower row never imports a higher one):
 
 | file | one job |
 |---|---|
-| `skillGraph.ts` | the compiler: fluent/object form → `SkillGraph` (per-skill triggers + drawn topology + the ONE cursor resolver, `makeResolveCursor`). Owns `toMermaid()` and the build-time `check` gate; stamps `autoActivate: 'currentSkill'` on tree leaves and (with `scopeTools: true`) on wired flat skills — always `existingAuto ?? …`, a default, never an override |
-| `entryScorer.ts` | `EntryScorer` strategies (`keywordScorer`, `embeddingScorer`) — rank the entry menu; the engine owns the `when`-filtering |
+| `skillGraph.ts` | the compiler: fluent/object form → `SkillGraph` (per-skill triggers + drawn topology + the ONE cursor resolver, `makeResolveCursor`). Owns `toMermaid()` and the build-time `check` gate; stamps `autoActivate: 'currentSkill'` on tree leaves and (with `scopeTools: true`) on wired flat skills — always `existingAuto ?? …`, a default, never an override. SG-C: `.classify(scorer, policy?)`, the resolver's iteration-1 `turnRoute` clause, and the `turnRouting`/`entrySelection`/`checkupIntents` surfaces |
+| `entryScorer.ts` | `EntryScorer` strategies (`keywordScorer`, `embeddingScorer`) — rank the entry menu; the engine owns the `when`-filtering. Both factories are ALSO `IntentScorer`s (a second arity — candidates array as the 2nd argument); keyword declares `floor: 0`, embedding declares NO floor unless you pass one |
+| `intentScorer.ts` | the `IntentScorer` PORT (SG-C tier 2) + `validateIntentScores` (every candidate scored, no foreign ids — the custody split: scorers produce numbers, the framework decides) |
+| `routingPolicy.ts` | the cascade's tie policy: `NEAR_TIE_MARGIN`/`MENU_SIZE`/`RoutingPolicy` + `decideTier2` (pure; floor + TOP-2 PAIRWISE margin, count-independent) + the `TurnRoute` POJO and `menuOutstanding` (ONE implementation for the envelope, the cursorMove decoration and the guard gate) |
+| `skillIntent.ts` | the intent domain: `TurnRoutingPlan` (what the agent's RouteTurn stage consumes), candidate projection (incumbent included), duplicate-example normalization, and the leave-one-out `checkupIntents` audit |
+| `llmClassifier.ts` | the model-judged `IntentScorer`: ONE constrained-enum call per turn (forced synthetic tool where the provider carries it, strict parse + one re-ask elsewhere; off-enum = `'none'`, never a fabricated id). The only scorer module importing `adapters/types` |
+| `factories/defineMenuHint.ts` | the tier-3 envelope's system-prompt half — advisory note while a menu is outstanding; auto-registered by Agent build on cascade graphs (marker `MENU_HINT_METADATA_KEY`, never the id) |
 | `skillContract.ts` | skill-body ↔ tool-contract checks (`body-foreign-tool` / `body-unknown-tool`). When a graph builds WITHOUT `knownTools`, these are DEFERRED via `SkillGraph.deferredBodyContract` — the note also rides each compiled skill's metadata (`SKILL_GRAPH_DEFERRED_CONTRACT_KEY`), so Agent build runs them once against the real registry whichever door the skills arrive through (`.skillGraph(graph)` or `.skills({ list: () => graph.skills })`; one problem, one report) |
-| `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap. Pure over strings — never imports engine types (`skillContract` borrows its `GraphProblem` shape so both checks report in one voice) |
-| `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData`, `compileMatch` (ONE compilation → the predicate that routes + the data that describes it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
+| `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap (re-enabled under a classifier — declaration order is back), `intent-without-classify`. Pure over strings — never imports engine types (`skillContract`/`skillIntent` borrow its `GraphProblem` shape so all checks report in one voice) |
+| `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData` (regex · keywords · intent), `compileMatch` (ONE compilation → the predicate that routes + the data that describes it; the intent arm compiles to NO predicate — the classifier judges it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
 
 Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
 `SkillMatchData` + `compileMatch` + optionally `compareMatchers`) — no
@@ -325,7 +330,57 @@ reshape anywhere else. A new checkup code = `GraphProblemCode` +
 a numbered block in `checkupGraph` (build refusals that cannot compile at
 all, like `rule-id-exists`, throw from `skillGraph.ts`'s config
 translation instead). The check-up compares only DATA — `when`
-predicates are opaque, and every message says so.
+predicates are opaque, and every message says so. A new intent scorer =
+implement `IntentScorer` (numbers for EVERY candidate; declare `floor` only
+when a low score honestly means "did not match at all", `categorical` only
+when the answer is one-id-or-none).
+
+---
+
+## The turn-start routing cascade (SG-C, 9.17.0)
+
+**Why:** a graph's entries used to be routed by predicates (binary), a scorer
+(argmax — near-ties coin-flip), or the model (every turn a judgment call).
+None of those can say *"this message decisively means refunds"*, *"these two
+were too close to call"*, or *"this is a follow-up — stay put"* — and none of
+it survived a `followUp()`. The cascade makes the turn's start a RECORDED
+DECISION: declared rules first, then a classifier over declared intents (with
+an explicit floor + near-tie margin), then — only on declared ambiguity — a
+menu the model resolves. Scorers are a tier, never a correctness dependency:
+near-ties fall through, and every verdict (winners, losers, thresholds) lands
+on `agentfootprint.skill.turn_routed`.
+
+```typescript
+import { Agent } from 'agentfootprint';
+import { skillGraph, keywordScorer } from 'agentfootprint/context';
+
+const graph = skillGraph({
+  skills: [billing, shipping],
+  start: {
+    rules: [
+      { use: 'billing',  match: { intent: 'customer wants a refund',
+                                  examples: ['refund my order', 'charged twice'] } },
+      { use: 'shipping', match: { intent: 'customer asks where a delivery is',
+                                  examples: ['track my parcel'] } },
+    ],
+    classify: keywordScorer(),           // or embeddingScorer(e) / llmClassifier(p)
+    // routing: { nearTieMargin: 0.2 },  // the ONE override home, beside its scorer
+  },
+});
+
+const agent = Agent.create({ provider, model })
+  .skillGraph(graph, {
+    continuity: 'conversation', // followUp() starts where the last turn ended
+    strictness: 'guard',        // the model routes only from an offered menu
+  })
+  .build();
+```
+
+Runs once per turn, off the hot loop (the RouteTurn stage in PickEntry's
+slot); iterations 2..N keep the 8.x law byte-for-byte. `graph.checkupIntents()`
+audits the declared examples with the CONFIGURED scorer (leave-one-out).
+Everything is zero-cost when unused: a graph without `classify`/`continuity`
+mounts no stage, writes no key and emits no new event.
 
 ---
 

@@ -79,11 +79,23 @@ import {
   type SkillMatch,
   type SkillMatchData,
 } from './skillMatch.js';
+import type { IntentScorer } from './intentScorer.js';
+import { resolveRoutingPolicy, type RoutingPolicy } from './routingPolicy.js';
+import {
+  buildTurnRoutingPlan,
+  findDuplicateIntentExamples,
+  runCheckupIntents,
+  type TurnRoutingPlan,
+} from './skillIntent.js';
 export { formatCheckup } from './skillGraphCheckup.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
 // The data-matcher domain (`match:` on start rules) — one module owns the type,
 // the compiler, the comparator and the caption; see ./skillMatch.ts.
 export type { SkillMatch, SkillMatchData } from './skillMatch.js';
+// The turn-routing surfaces the graph exposes (SG-C) — the plan the agent's
+// RouteTurn stage consumes, and the verdict POJO the resolver reads.
+export type { TurnRoutingPlan } from './skillIntent.js';
+export type { TurnRoute } from './routingPolicy.js';
 
 /** How `.build({ check })` reacts to the graph check-up. */
 export type GraphCheckMode = 'throw' | 'warn' | 'off';
@@ -174,6 +186,12 @@ export type SkillGraphStart =
   | { readonly use: string }
   | {
       readonly rules: ReadonlyArray<SkillStartRule>;
+      /** The intent classifier (SG-C) — REQUIRED iff any rule declares
+       *  `match: { intent }`. Same machine as `.classify(scorer)`. */
+      readonly classify?: IntentScorer;
+      /** Tie-policy override — the ONE override home, beside the scorer it
+       *  governs. Same machine as `.classify(scorer, policy)`. */
+      readonly routing?: Partial<RoutingPolicy>;
     }
   | {
       readonly entries: readonly string[];
@@ -387,10 +405,15 @@ function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
  * WHY the cursor landed where it did on one iteration — the winning clause of the
  * one cursor resolver, reported rather than guessed (8.5.0).
  *
- *   • `'entry'`      — cold start: the first entry whose `when` passed;
+ *   • `'entry'`      — cold start: the first entry whose `when` passed (or, on a
+ *                      cascade graph, a tier-1 start rule won the turn);
  *   • `'route'`      — a declared, `from`-gated edge fired (D1);
  *   • `'model-pick'` — no declared edge fired, so the model's gate-accepted
  *                      `read_skill` pick moved the cursor (D2), at cold start or mid-run;
+ *   • `'intent'`     — the turn-start cascade's tier-2 scorer decisively routed
+ *                      the turn (SG-C; `turn_routed` carries the numbers);
+ *   • `'continuity'` — the inherited conversation cursor held the turn's start
+ *                      (SG-C, `continuity: 'conversation'`);
  *   • `'stay'`       — nothing fired; the cursor is sticky and stayed put;
  *   • `'none'`       — no cursor at all (cold start with nothing to enter, or a
  *                      decision `tree()`, which routes by predicate and has no cursor).
@@ -400,7 +423,14 @@ function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
  * we get here this turn". A model pick into a skill that also has a declared edge was
  * therefore attributed to that edge, label and all, in the recorded route.
  */
-export type CursorMoveCause = 'entry' | 'route' | 'model-pick' | 'stay' | 'none';
+export type CursorMoveCause =
+  | 'entry'
+  | 'route'
+  | 'model-pick'
+  | 'intent'
+  | 'continuity'
+  | 'stay'
+  | 'none';
 
 /**
  * One tool result's routing implication inside a parallel batch (9.16.0) —
@@ -638,6 +668,41 @@ export interface SkillGraph {
    */
   checkup(options?: CheckupOptions): GraphCheckup;
   /**
+   * The turn-routing plan (SG-C) — what the agent's RouteTurn stage consumes:
+   * the configured classifier (if any), the resolved tie policy, tier-1 rule
+   * evaluation and the intent-candidate projection. Present on every FLAT
+   * graph (a decision `tree()` routes by predicate and has no turn start to
+   * route). Consumers never call it directly; `.skillGraph()` threads it.
+   */
+  readonly turnRouting?: TurnRoutingPlan;
+  /**
+   * How a turn's starting entry is chosen (SG-C) — `'scorer'`
+   * (`.entryBy()`/`.entryByRelevance()`), `'model-read'` (`.entryByRead()`),
+   * `'classify'` (`.classify()`), absent = the declaration-order cold walk.
+   * Read by the agent mount for exactly one refusal: `strictness: 'rails'`
+   * cannot honor `'model-read'` (that mode's entire entry mechanism is a
+   * model pick).
+   */
+  readonly entrySelection?: 'scorer' | 'model-read' | 'classify';
+  /**
+   * The ASYNC intent audit (SG-C) — present ONLY when a classifier is
+   * configured. Leave-one-out over the declared example corpus with the
+   * CONFIGURED scorer (the router that will actually run — auditing with a
+   * different scorer would prove nothing about production): each example is
+   * scored against every intent, its own intent represented by its remaining
+   * examples; a cross-match or near-tie is an `overlapping-intents` warning
+   * naming the example, both intents and both numbers.
+   *
+   * Costs one scorer call per declared example — on `llmClassifier` that is
+   * one MODEL call per example, so run it in CI, not per request. Honesty
+   * boundaries ride every message: only the configured scorer's view is
+   * checked, `when` predicates are opaque and never claimed checked, and
+   * tier-1 rules that fire before the classifier are named as unaudited
+   * shadowers. Absent without a classifier rather than answering
+   * `{ ok: true }` for a question it cannot ask.
+   */
+  checkupIntents?(signal?: AbortSignal): Promise<GraphCheckup>;
+  /**
    * Present when this graph's own build pass DEFERRED the skill-body ↔
    * tool-contract checks (`body-foreign-tool` / `body-unknown-tool`): built
    * WITHOUT `knownTools`, the graph cannot tell a typo from a baseline tool the
@@ -700,6 +765,29 @@ export interface SkillGraphBuilder {
    * here to say "don't route here on your own", never as a lock.
    */
   entryByRead(): SkillGraphBuilder;
+  /**
+   * Configure the turn-start INTENT CLASSIFIER (SG-C) — the tier-2 judge of
+   * `match: { intent, examples }` entries. `classify` is the honest verb: it
+   * classifies the NEW message against declared intents, where `.entryBy()`
+   * means "rank descriptions and pick" — a different machine (menu-exclusive
+   * winner, no floor, no stay). The entries become EXCLUSIVE (only the routed
+   * one loads); the cold-start declaration-order walk is suppressed (the
+   * cascade decides, or offers a menu — never the first-declared entry by
+   * accident).
+   *
+   * The cascade, per turn: tier 1 — regex/keyword/`when` rules in declaration
+   * order (binary, decisive); tier 2 — `scorer` over the declared intents,
+   * judged under `policy` (defaults: `NEAR_TIE_MARGIN`/`MENU_SIZE`); tier 3 —
+   * a near-tie or unmatched verdict offers a MENU through `read_skill`'s own
+   * description, and the model picks (or stays). Every verdict is recorded on
+   * `agentfootprint.skill.turn_routed` with the losers and the thresholds.
+   *
+   * `policy` here is the ONE override home for the tie policy (mirrors the
+   * one-dial-one-home law `scopeTools` follows). Mutually exclusive with
+   * `.entryBy()` / `.entryByRelevance()` / `.entryByRead()` — one entry
+   * router per graph. Flat graphs only.
+   */
+  classify(scorer: IntentScorer, policy?: Partial<RoutingPolicy>): SkillGraphBuilder;
   build(opts?: BuildOptions): SkillGraph;
 }
 
@@ -749,6 +837,8 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   let treeScopeTools = true;
   let entryScorer: EntryScorer | undefined;
   let entryByReadFlag = false;
+  let classifyScorer: IntentScorer | undefined;
+  let classifyPolicy: Partial<RoutingPolicy> | undefined;
 
   /**
    * Register a skill under its id, refusing a second DIFFERENT skill under an id
@@ -843,7 +933,47 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       entryByReadFlag = true;
       return builder;
     },
+    classify(scorer, policy) {
+      classifyScorer = scorer;
+      classifyPolicy = policy;
+      return builder;
+    },
     build(opts: BuildOptions = {}) {
+      // One entry router per graph — classify is a third machine beside the
+      // scorer and the model-read menu, and two of them deciding one turn
+      // start would let the record and the routing disagree.
+      if (classifyScorer && (entryScorer || entryByReadFlag)) {
+        throw new Error(
+          'skillGraph: pick ONE entry router — .classify(scorer) classifies the message ' +
+            'against declared intents; .entryBy()/.entryByRelevance() rank descriptions; ' +
+            '.entryByRead() lets the LLM read the menu. This graph configures more than one.',
+        );
+      }
+      if (classifyScorer && treeRoot) {
+        throw new Error(
+          'skillGraph: .classify() is for flat entry/route graphs; a .tree() already routes ' +
+            'by predicate on every iteration (there is no turn start for a classifier to route).',
+        );
+      }
+      // Intent rules need their judge — an intent compiles to no message
+      // predicate, so without a classifier the entry could never be chosen and
+      // would silently never load. Refused with a stable code, like rule-id-exists.
+      const intentEntries = entries.filter((e) => e.match?.kind === 'intent');
+      if (intentEntries.length > 0 && !classifyScorer) {
+        const problems: GraphProblem[] = intentEntries.map((e) => ({
+          kind: 'error',
+          code: 'intent-without-classify',
+          message:
+            `entry "${e.id}" declares match: { intent } and the graph configures no ` +
+            `classifier — intent rules need one to be judged. Add ` +
+            `\`classify: keywordScorer()\` (no dependency) or \`embeddingScorer(embedder)\`; ` +
+            `\`llmClassifier(provider)\` if you want the model to judge.`,
+          skill: e.id,
+        }));
+        throw new Error(
+          `skillGraph: build-time check-up failed:\n${formatCheckup({ ok: false, problems })}`,
+        );
+      }
       if (entryByReadFlag && entryScorer) {
         throw new Error(
           'skillGraph: pick one of .entryByRead() or .entryBy()/.entryByRelevance() — not ' +
@@ -906,13 +1036,14 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         const wiring = checkupGraph({
           skillIds: new Set(skillsById.keys()),
           // `conditional` counts a data `match` exactly like a `when` (it compiled
-          // to one), so a rule-router built from matchers is never read as a
-          // fan-out. The match DATA rides along so the pairwise rule checks
-          // (`overlapping-rules` / `rules-shadowed-by-order`) have something they
-          // can honestly compare.
+          // to one — an INTENT match compiles to no predicate but is judged by the
+          // classifier, which is still a condition), so a rule-router built from
+          // matchers is never read as a fan-out. The match DATA rides along so the
+          // pairwise rule checks (`overlapping-rules` / `rules-shadowed-by-order`)
+          // have something they can honestly compare.
           entries: entries.map((e) => ({
             id: e.id,
-            conditional: e.when !== undefined,
+            conditional: e.when !== undefined || e.match?.kind === 'intent',
             ...(e.match && { match: e.match }),
           })),
           routes: routes.map((r) => ({
@@ -921,15 +1052,21 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             deterministic: !!(r.when || r.onToolReturn),
           })),
           isTree: treeRoot !== undefined,
-          exclusiveEntries: entryScorer !== undefined || entryByReadFlag,
+          exclusiveEntries:
+            entryScorer !== undefined || entryByReadFlag || classifyScorer !== undefined,
           triggerKinds: new Map(
             skills.map((s) => [s.id, s.trigger.kind as CheckupTriggerKind] as const),
           ),
+          hasClassifier: classifyScorer !== undefined,
         });
         const contract = checkSkillContracts([...skillsById.values()], {
           ...(options.knownTools && { knownTools: options.knownTools }),
         });
-        const problems = [...wiring.problems, ...contract];
+        // The one PROVABLE intent-pair fact (SG-C) — the same example under two
+        // intents. Composed here like the contract checks; the scorer-dependent
+        // audit is the ASYNC `checkupIntents()`.
+        const intentDuplicates = findDuplicateIntentExamples(entries);
+        const problems = [...wiring.problems, ...intentDuplicates, ...contract];
         return { ok: !problems.some((p) => p.kind === 'error'), problems };
       };
 
@@ -957,6 +1094,8 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       let scoreEntries:
         | ((ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>)
         | undefined;
+      // The turn-routing plan (SG-C) — flat graphs only; a tree has no turn start.
+      let turnRouting: TurnRoutingPlan | undefined;
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
@@ -1020,8 +1159,18 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // `.entryByRead()` makes the entries EXCLUSIVE (like `.entryByRelevance()`),
         // but the cold-start pick is the model's: no entry auto-loads — the LLM picks
         // one via `read_skill`, and that choice becomes the cursor (see
-        // makeResolveCursor).
-        const llmReadEntry = entryByReadFlag;
+        // makeResolveCursor). `.classify()` suppresses the cold walk the SAME way:
+        // the cascade decides the start (or offers a menu) — never the
+        // first-declared entry by declaration-order accident. Without the
+        // suppression, a 'menu' verdict would fall into the cold walk and silently
+        // enter the first no-`when` entry while the record claimed a menu was
+        // outstanding. This flag is only the COMPILE-TIME half: an entry-scorer
+        // graph opts into the cascade at MOUNT time (`continuity:
+        // 'conversation'`), which no graph build can see — there the resolver
+        // suppresses the walk on the VERDICT's presence (`ctx.turnRoute`), so
+        // both arms obey one law: the cascade's verdict, never the
+        // declaration-order accident.
+        const llmReadEntry = entryByReadFlag || classifyScorer !== undefined;
         resolveCursor = makeResolveCursor(entries, routes, llmReadEntry);
         // Triggers share ONE memoized view of the resolver per evaluation pass —
         // see memoizePerPass. The public resolvers (one call per iteration) stay raw.
@@ -1033,6 +1182,14 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           supersededEntries = makeSupersededEntries(entries, resolveCursor);
         }
         if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
+        // The turn-routing plan (SG-C): candidates, tier-1 rules, tie policy —
+        // projected ONCE, so the router, the menu and the audit read one shape.
+        turnRouting = buildTurnRoutingPlan({
+          entries,
+          describeFor: (id) => skillsById.get(id)?.description,
+          policy: resolveRoutingPolicy(classifyPolicy),
+          ...(classifyScorer && { scorer: classifyScorer }),
+        });
         // `scopeTools: true` (flat) — the WIRED skills, i.e. everything an entry or a
         // route mentions. Stamped exactly as the tree stamps its leaves: a graph-level
         // DEFAULT (`existingAuto ?? …`), never an override of a skill's own declaration.
@@ -1158,6 +1315,23 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
         checkup: (options?: CheckupOptions) => checkup(options),
         ...(scoreEntries && { scoreEntries }),
+        ...(turnRouting && { turnRouting }),
+        ...(classifyScorer
+          ? { entrySelection: 'classify' as const }
+          : entryScorer
+          ? { entrySelection: 'scorer' as const }
+          : entryByReadFlag
+          ? { entrySelection: 'model-read' as const }
+          : {}),
+        ...(classifyScorer && {
+          checkupIntents: (signal?: AbortSignal) =>
+            runCheckupIntents({
+              entries,
+              scorer: classifyScorer!,
+              policy: resolveRoutingPolicy(classifyPolicy),
+              ...(signal && { signal }),
+            }),
+        }),
       };
     },
   };
@@ -1253,6 +1427,16 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             ...(r.when && { when: r.when }),
             ...(r.match !== undefined && { match: r.match }),
           });
+        }
+        // The classifier + its tie policy (SG-C) — the rules form is where
+        // intents live, so this is where the judge is declared.
+        if (start.classify) builder.classify(start.classify, start.routing);
+        else if (start.routing !== undefined) {
+          throw new Error(
+            'skillGraph: start.routing is the tie policy of the classifier and means nothing ' +
+              'without one — declare `classify` beside it (the one-dial-one-home rule: the ' +
+              'policy lives where the scorer it governs is declared).',
+          );
         }
       } else {
         for (const id of start.entries) builder.entry(resolve(id));
@@ -1402,12 +1586,46 @@ function makeResolveCursor(
   return (ctx) => {
     const cur = ctx.currentSkillId;
     const from = cur !== undefined ? { from: cur } : {};
+    // The turn-start cascade's verdict (SG-C) — a PRECOMPUTED input consumed
+    // exactly as `pendingSkillPick` is, on iteration 1 only (the RouteTurn
+    // stage decided it off the hot loop; `userMessage` is fixed for the run,
+    // so iterations 2..N keep today's law byte-for-byte). Present only on
+    // cascade graphs (`classify` / `continuity: 'conversation'`); absent, not
+    // one line here behaves differently. A `menu`/`none` verdict carries no
+    // `to` and falls through — the model resolves the menu via the ordinary
+    // gated pick (D2), which is what keeps the offer and the verdict one
+    // machinery; the cold-start walk below is suppressed by the verdict's
+    // PRESENCE, so falling through can never enter an entry the record does
+    // not claim.
+    if (ctx.iteration === 1 && ctx.turnRoute?.to !== undefined) {
+      const by =
+        ctx.turnRoute.by === 'intent'
+          ? ('intent' as const)
+          : ctx.turnRoute.by === 'continuity'
+          ? ('continuity' as const)
+          : ('entry' as const);
+      return {
+        ...(ctx.turnRoute.from !== undefined && { from: ctx.turnRoute.from }),
+        to: ctx.turnRoute.to,
+        by,
+      };
+    }
     if (cur === undefined) {
       // Cold start: declaration-order first entry whose intent predicate passes.
       // `.entryByRead()` skips this — there the library deliberately does NOT
       // auto-pick; the model reads the menu and picks (below), so no entry body
-      // loads until it does.
-      if (!llmReadEntry) {
+      // loads until it does. A turn whose cascade left a VERDICT on scope
+      // (`ctx.turnRoute`, SG-C) skips it the same way: suppression follows the
+      // verdict, not only the compile-time flag, because an entry-scorer graph
+      // opts into the cascade at MOUNT time (`continuity: 'conversation'`) —
+      // it compiles with `llmReadEntry` false, yet its cold `menu`/`none`
+      // verdict (a near-tie, or the scorer-throw fallback) must reach the
+      // model, never be overridden by the declaration-order walk while the
+      // record claims a menu is outstanding. RouteTurn writes the POJO only
+      // when the cascade DECIDED something, so a graph whose cold start still
+      // belongs to this walk (no rules, no tier 2 — e.g. after a dropped
+      // resume) keeps it.
+      if (!llmReadEntry && ctx.turnRoute === undefined) {
         for (const e of entries) {
           if (!e.when) return { to: e.id, by: 'entry' };
           try {

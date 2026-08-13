@@ -54,6 +54,7 @@ import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
+import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
@@ -150,6 +151,22 @@ export interface ToolCallsHandlerDeps {
    * why the graph cannot be jumped at all, so the model stops asking and answers.
    */
   readonly skillGraphIsTree?: boolean;
+  /**
+   * The mount's routing POSTURE beyond reachability (SG-C `strictness`).
+   * Undefined = `'assist'` = today's gate, byte-for-byte — not one new line
+   * runs. Judged AFTER reachability (an unreachable pick keeps its original
+   * teaching refusal), and only on HOPS — an OPEN skill (`.selfExplain()`,
+   * a `.skill()` beside the graph) is admitted from anywhere under every
+   * posture, so debugging never breaks:
+   *   • `'guard'` — a routing pick is admitted only while the turn's MENU is
+   *     outstanding AND names an offered id (the framework declared the
+   *     ambiguity; the model resolves exactly that). Off-menu / no-menu picks
+   *     get a teaching refusal + `skill.rejected { posture: 'guard' }`.
+   *   • `'rails'` — routing picks are refused outright: rules/scorer resolve
+   *     turn starts, declared routes handle transitions.
+   * Same graph, same trace: postures change refusal behavior only.
+   */
+  readonly skillStrictness?: 'guard' | 'rails';
   /**
    * Check-in config (evidence-carrying human consent). Resolved from the Agent
    * builder (`.checkIn({...})`) — defaults to `standard` evidence + the
@@ -340,6 +357,51 @@ function skillRefusal(requestedId: string, allowed: readonly string[], isTree: b
     );
   }
   return `${head}No skills are reachable from here — answer with the current skill, or finish.`;
+}
+
+/**
+ * The re-prompt a POSTURE-refused `read_skill` gets back (SG-C `strictness`).
+ * The pick was REACHABLE — the graph would have granted it — so the message
+ * must teach the posture, not the map: who routes here, and what the model may
+ * still do (open skills, staying, finishing).
+ */
+function postureRefusal(
+  requestedId: string,
+  posture: 'guard' | 'rails',
+  turnRoute: TurnRoute | undefined,
+  currentSkillId: string | undefined,
+  openIds: readonly string[],
+): string {
+  const openClause =
+    openIds.length > 0
+      ? ` read_skill here reaches only the open skills: ${openIds.join(', ')}.`
+      : '';
+  if (posture === 'rails') {
+    return (
+      `read_skill("${requestedId}") was declined: this graph runs on rails — turn starts ` +
+      `resolve by declared rule or scorer and transitions by declared routes; the model ` +
+      `does not route itself.${openClause} Continue with the skill you are in` +
+      `${currentSkillId !== undefined ? ` ('${currentSkillId}')` : ''}, or finish.`
+    );
+  }
+  // guard — either no menu is outstanding, or the pick was off it.
+  if (turnRoute?.offered !== undefined && menuOutstanding(turnRoute, currentSkillId)) {
+    return (
+      `read_skill("${requestedId}") was declined: under this graph's 'guard' posture a ` +
+      `routing pick must come from the offered menu — ${turnRoute.offered.join(', ')} — or ` +
+      `stay (answer without calling read_skill).${openClause}`
+    );
+  }
+  const decidedBy =
+    turnRoute?.by === 'intent' || turnRoute?.by === 'entry'
+      ? `the turn's start was resolved decisively this turn`
+      : `no routing ambiguity is open this turn`;
+  return (
+    `read_skill("${requestedId}") was declined: this graph's 'guard' posture admits a ` +
+    `routing pick only while the framework has declared ambiguity (an offered menu), and ` +
+    `${decidedBy}; declared routes handle transitions.${openClause} Continue with the ` +
+    `skill you are in${currentSkillId !== undefined ? ` ('${currentSkillId}')` : ''}, or finish.`
+  );
 }
 
 /**
@@ -1390,6 +1452,35 @@ export function buildToolCallsHandler(
                 allowed,
                 iteration,
               });
+            } else if (deps.skillStrictness !== undefined && skillHop) {
+              // ── The POSTURE arm (SG-C) — after reachability, hops only. ──
+              // OPEN skills never reach here (skillHop is false for them), so
+              // `.selfExplain()` and friends stay admitted under every posture.
+              const turnRoute = scope.turnRoute as TurnRoute | undefined;
+              const onOutstandingMenu =
+                menuOutstanding(turnRoute, currentSkillId) &&
+                turnRoute?.offered?.includes(reqId) === true;
+              const refusedByPosture =
+                deps.skillStrictness === 'rails' ||
+                (deps.skillStrictness === 'guard' && !onOutstandingMenu);
+              if (refusedByPosture) {
+                skillRejected = true;
+                skillHop = false; // a refused pick must not move the cursor below
+                result = postureRefusal(
+                  reqId,
+                  deps.skillStrictness,
+                  turnRoute,
+                  currentSkillId,
+                  deps.openSkillIds ?? [],
+                );
+                typedEmit(scope, 'agentfootprint.skill.rejected', {
+                  requestedId: reqId,
+                  ...(currentSkillId !== undefined && { currentSkillId }),
+                  allowed,
+                  iteration,
+                  posture: deps.skillStrictness,
+                });
+              }
             }
           }
         }

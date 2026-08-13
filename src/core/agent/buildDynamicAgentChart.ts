@@ -230,6 +230,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           | ReadonlyArray<{ id: string; score: number; relevance: number }>
           | undefined,
         entryScorer: parent.entryScorer as string | undefined,
+        // The turn-start verdict (SG-C) — crossed into sf-llm-call by the outer
+        // boundary below; the resolver consumes it on iteration 1.
+        turnRoute: parent.turnRoute as
+          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+          | undefined,
       }),
       outputMapper: (sf) => ({
         activeInjections: sf.activeInjections,
@@ -329,6 +334,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // PREVIOUS iteration's value, which would offer a stale menu). The Injection
         // Engine mounts before this branch, so `nextSkillCursor` is already written.
         currentSkillId: (parent.nextSkillCursor ?? parent.currentSkillId) as string | undefined,
+        // The turn-start verdict (SG-C) — the Compose stage leads read_skill's
+        // description with the menu while it is outstanding.
+        turnRoute: parent.turnRoute as
+          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+          | undefined,
       }),
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
@@ -433,10 +443,18 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     });
   }
 
-  // Relevance entry router (`entryByRelevance`) — once per turn on the OUTER scope,
-  // before the sf-llm-call loop (its loop target), so the chosen cursor is set on
-  // the parent before the boundary inputMapper carries `currentSkillId` inward.
-  if (deps.pickEntryStage) {
+  // The turn-start slot — once per turn on the OUTER scope, before the
+  // sf-llm-call loop (its loop target). ONE stage, two possible occupants,
+  // same id (recorded structures stay stable): RouteTurn is the SG-C cascade;
+  // PickEntry the 9.x relevance router, byte-identical without the new options.
+  if (deps.routeTurnStage) {
+    builder = builder.addFunction(
+      'RouteTurn',
+      deps.routeTurnStage as never,
+      STAGE_IDS.PICK_ENTRY,
+      'Route the turn start: declared rules, then the scorer, else offer a menu (cascade)',
+    );
+  } else if (deps.pickEntryStage) {
     builder = builder.addFunction(
       'PickEntry',
       deps.pickEntryStage as never,
@@ -492,6 +510,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Relevance entry ranking — carried in so defineRelevanceHint can read it.
           entryScores: p.entryScores,
           entryScorer: p.entryScorer,
+          // The turn-start verdict (SG-C) — written once by RouteTurn on the
+          // OUTER scope, read inside by the engine mapper and the tools slot.
+          turnRoute: p.turnRoute,
           // `.configure()` results, resolved + committed by seed on the OUTER
           // chart. callLLM and the System Prompt slot both live in here, so
           // the values have to cross the boundary. Read-only inside (nothing

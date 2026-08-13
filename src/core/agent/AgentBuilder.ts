@@ -34,7 +34,12 @@ import {
   type CursorMove,
   type DeferredBodyContract,
   type EntryScoring,
+  type TurnRoutingPlan,
 } from '../../lib/injection-engine/skillGraph.js';
+import {
+  defineMenuHint,
+  MENU_HINT_METADATA_KEY,
+} from '../../lib/injection-engine/factories/defineMenuHint.js';
 import { checkSkillContracts, skillToolNames } from '../../lib/injection-engine/skillContract.js';
 import { formatCheckup } from '../../lib/injection-engine/skillGraphCheckup.js';
 import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
@@ -72,6 +77,43 @@ import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
+
+/**
+ * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0). Every field
+ * is zero-cost when absent — an agent that passes none is byte-identical in
+ * behavior AND events to one built before the options existed.
+ */
+export interface SkillGraphOptions {
+  /**
+   * How much routing authority the model has. Default `'assist'` — today,
+   * always: any REACHABLE `read_skill` pick is admitted, and a pick off an
+   * offered menu is stamped on the record (`cursorMove.declinedOffer`)
+   * rather than refused.
+   *   • `'guard'` — a routing pick is admitted only while the turn's menu is
+   *     outstanding AND names an offered id (the framework declared the
+   *     ambiguity; the model resolves exactly that). Everything else gets a
+   *     teaching refusal + `skill.rejected { posture: 'guard' }`.
+   *   • `'rails'` — the model never routes: turn starts resolve by rule or
+   *     scorer, transitions by declared routes. A menu verdict then proceeds
+   *     on the base prompt with `turn_routed { by: 'none' }` recorded — the
+   *     honest cost of rails without a resolver. OPEN skills
+   *     (`.selfExplain()`, `.skill()` beside the graph) stay admitted from
+   *     anywhere under every posture.
+   */
+  readonly strictness?: 'assist' | 'guard' | 'rails';
+  /**
+   * What the cursor spans. Default `'turn'` — today's per-run cursor,
+   * unchanged. `'conversation'`: the turn's final cursor rides the
+   * conversation checkpoint (`agent.checkpoint()` / the crash carrier) and
+   * becomes the DEFAULT entry when that conversation is continued
+   * (`followUp()` / `run({ continueFrom })`) — a sticky default the new
+   * message can still decisively beat, never a lock. Without `continueFrom`
+   * nothing carries: a bare second `run()` starts cold exactly as today —
+   * this option changes what a CONTINUED conversation defaults to; it does
+   * not invent persistence.
+   */
+  readonly continuity?: 'turn' | 'conversation';
+}
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -139,6 +181,16 @@ export class AgentBuilder {
    *  is the only shape that draws `predicate` diamonds — so no new field had to be
    *  added to the public `SkillGraph`. Feeds the gate's tree-specific refusal. */
   private skillGraphIsTree = false;
+  /** Captured from `.skillGraph(graph, options)` (SG-C) — the graph's
+   *  turn-routing plan plus the mount's posture/continuity and the node-id
+   *  set droppedResume checks against. Undefined for every graph without the
+   *  new options → the Agent wires nothing new. */
+  private skillGraphCascade?: {
+    readonly turnRouting?: TurnRoutingPlan;
+    readonly strictness: 'assist' | 'guard' | 'rails';
+    readonly continuity: 'turn' | 'conversation';
+    readonly nodeIds: ReadonlySet<string>;
+  };
   /** Captured from `.skillGraph(graph)` — the graph's note that it DEFERRED its
    *  body-contract checks (built without `knownTools`, it could not tell a typo
    *  from a baseline tool this agent registers), plus the compiled skills to run
@@ -886,43 +938,66 @@ export class AgentBuilder {
    * *drawable*. Pure sugar over `.injection()` — `graph.toMermaid()` renders the
    * topology.
    *
+   * The optional second argument (SG-C, 9.17.0) sets the MOUNT's routing
+   * posture and cursor span — see {@link SkillGraphOptions}. Omitted, the
+   * agent behaves byte-for-byte as it always has.
+   *
    * @example
    *   const graph = skillGraph()
    *     .entry(triage)
    *     .route(triage, sfp, { when: (r) => r.toolName === 'get_counters' && JSON.parse(r.result).crc > 0 })
    *     .build();
    *   Agent.create({ provider }).skillGraph(graph).build();
+   *
+   * @example
+   *   // The conversation keeps its place across turns, and the model may
+   *   // route only when the router declared ambiguity:
+   *   Agent.create({ provider })
+   *     .skillGraph(graph, { continuity: 'conversation', strictness: 'guard' })
+   *     .build();
    */
-  skillGraph(graph: {
-    skills: readonly Injection[];
-    nextSkill: (ctx: InjectionContext) => string | undefined;
-    reachableSkills?: (currentSkillId?: string) => readonly string[];
-    scoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>;
-    /** The declared edges. Read for ONE thing: which skills the graph wires, so the
-     *  read_skill gate can tell a skill the graph routes from one it never mentions
-     *  (see `openSkillIds` in `build()`). Optional for forward-compat with graphs
-     *  built before `edges` existed; absent → the graph wires nothing. */
-    edges?: ReadonlyArray<{ readonly to: string }>;
-    /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
-     *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */
-    explainNextSkill?: (ctx: InjectionContext) => CursorMove;
-    /** The entries the cursor law superseded this iteration (8.15.0). Optional for
-     *  forward-compat; absent → no `supersededIds` on `context.evaluated`. */
-    supersededEntries?: (ctx: InjectionContext) => readonly string[];
-    /** The drawn nodes. Read for ONE thing: a `predicate` node means this graph is a
-     *  decision `tree()`, which the gate's refusal has to say out loud. Derived here
-     *  rather than added to `SkillGraph` as a mode field — the shape is already
-     *  public, and one fact should not be declared twice. */
-    nodes?: ReadonlyArray<{ readonly kind: string }>;
-    /** The graph's note that it deferred its body-contract checks to agent build
-     *  (built without `knownTools` — see `SkillGraph.deferredBodyContract`).
-     *  Optional for forward-compat; absent → the checks already ran at graph build
-     *  (or were off), so this agent never re-runs them. Library-built graphs also
-     *  stamp the note on each compiled skill's metadata, which `build()` prefers —
-     *  this field is the fallback for a structurally-typed graph without the
-     *  per-skill stamps (skills found by both are deduped by id). */
-    deferredBodyContract?: { readonly mode: 'throw' | 'warn' };
-  }): this {
+  skillGraph(
+    graph: {
+      skills: readonly Injection[];
+      nextSkill: (ctx: InjectionContext) => string | undefined;
+      reachableSkills?: (currentSkillId?: string) => readonly string[];
+      scoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>;
+      /** The declared edges. Read for ONE thing: which skills the graph wires, so the
+       *  read_skill gate can tell a skill the graph routes from one it never mentions
+       *  (see `openSkillIds` in `build()`). Optional for forward-compat with graphs
+       *  built before `edges` existed; absent → the graph wires nothing. */
+      edges?: ReadonlyArray<{ readonly to: string }>;
+      /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
+       *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */
+      explainNextSkill?: (ctx: InjectionContext) => CursorMove;
+      /** The entries the cursor law superseded this iteration (8.15.0). Optional for
+       *  forward-compat; absent → no `supersededIds` on `context.evaluated`. */
+      supersededEntries?: (ctx: InjectionContext) => readonly string[];
+      /** The drawn nodes. Read for TWO things: a `predicate` node means this graph is
+       *  a decision `tree()` (the gate's refusal says so out loud), and the node-id
+       *  set is what a continuity cursor is validated against (`droppedResume`).
+       *  Derived here rather than added to `SkillGraph` as a mode field — the shape
+       *  is already public, and one fact should not be declared twice. */
+      nodes?: ReadonlyArray<{ readonly kind: string; readonly id?: string }>;
+      /** The graph's turn-routing plan (SG-C) — tier-1 rules, intent candidates,
+       *  the classifier and the resolved tie policy. Optional for forward-compat
+       *  with graphs built before it existed; absent → the cascade cannot run
+       *  (classify needs it; continuity degrades to nothing rather than guess). */
+      turnRouting?: TurnRoutingPlan;
+      /** How the graph picks a turn's starting entry (SG-C). Read for one
+       *  refusal: `strictness: 'rails'` cannot honor `'model-read'`. */
+      entrySelection?: 'scorer' | 'model-read' | 'classify';
+      /** The graph's note that it deferred its body-contract checks to agent build
+       *  (built without `knownTools` — see `SkillGraph.deferredBodyContract`).
+       *  Optional for forward-compat; absent → the checks already ran at graph build
+       *  (or were off), so this agent never re-runs them. Library-built graphs also
+       *  stamp the note on each compiled skill's metadata, which `build()` prefers —
+       *  this field is the fallback for a structurally-typed graph without the
+       *  per-skill stamps (skills found by both are deduped by id). */
+      deferredBodyContract?: { readonly mode: 'throw' | 'warn' };
+    },
+    options?: SkillGraphOptions,
+  ): this {
     // Classic ReAct caches the system-prompt and tools slots after turn 1 (the
     // Context selector's `includeStatic`), while the injection engine — the loop
     // target — keeps running every iteration. A graph mounted on that mode
@@ -981,6 +1056,68 @@ export class AgentBuilder {
     // The suppression reporter (8.15.0) — what the cursor law kept off the wire.
     this.skillGraphSupersededEntries = graph.supersededEntries;
     this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
+    // ── The mount options (SG-C): posture + cursor span ────────────────────
+    const strictness = options?.strictness ?? 'assist';
+    const continuity = options?.continuity ?? 'turn';
+    if (!['assist', 'guard', 'rails'].includes(strictness)) {
+      throw new Error(
+        `Agent.skillGraph: strictness '${String(strictness)}' is not a posture this library ` +
+          `has. The three are 'assist' (today's gate — reachable picks admitted, divergence ` +
+          `recorded), 'guard' (picks only from an offered menu) and 'rails' (the model never ` +
+          `routes; rules/scorer/routes do).`,
+      );
+    }
+    if (!['turn', 'conversation'].includes(continuity)) {
+      throw new Error(
+        `Agent.skillGraph: continuity '${String(continuity)}' is not a span this library ` +
+          `has. 'turn' (default) — the cursor is per-run, exactly as always; ` +
+          `'conversation' — the turn's final cursor rides the conversation checkpoint and ` +
+          `becomes the default entry when that conversation is continued.`,
+      );
+    }
+    if (continuity === 'conversation' && this.skillGraphIsTree) {
+      throw new Error(
+        "Agent.skillGraph: continuity: 'conversation' cannot be honored by a decision " +
+          '.tree() — a tree routes by predicate on every iteration and has no cursor to ' +
+          "carry between turns. Use the flat entry/route form, or keep continuity: 'turn'.",
+      );
+    }
+    if (strictness === 'rails' && graph.entrySelection === 'model-read') {
+      throw new Error(
+        "Agent.skillGraph: strictness: 'rails' cannot honor .entryByRead() — that mode's " +
+          'entire entry mechanism IS a model pick, and rails refuses model routing. Rank the ' +
+          'entries with .entryBy(keywordScorer()) / .classify(...), declare start rules, or ' +
+          "drop to strictness: 'guard' (the model picks only from an offered menu).",
+      );
+    }
+    // The cascade needs the graph's turn-routing plan — a graph built by this
+    // version always carries one. A structurally-typed graph without it cannot
+    // be judged, and accepting the option while wiring nothing would be config
+    // that lies, so it is refused by name.
+    const needsPlan = graph.entrySelection === 'classify' || continuity === 'conversation';
+    if (needsPlan && graph.turnRouting === undefined) {
+      throw new Error(
+        `Agent.skillGraph: ${
+          graph.entrySelection === 'classify'
+            ? 'this graph declares a classifier'
+            : "continuity: 'conversation' was declared"
+        }, but the graph object carries no \`turnRouting\` plan — the turn-start cascade ` +
+          `cannot run without it. Build the graph with this version's skillGraph() (every ` +
+          `flat graph it builds carries the plan), or drop the option.`,
+      );
+    }
+    if (strictness !== 'assist' || continuity !== 'turn' || graph.entrySelection === 'classify') {
+      // Wired only when something NEW was asked for — a bare `.skillGraph(g)`
+      // on a scorer/read/plain graph stores nothing and changes nothing.
+      this.skillGraphCascade = {
+        ...(graph.turnRouting !== undefined && { turnRouting: graph.turnRouting }),
+        strictness,
+        continuity,
+        nodeIds: new Set(
+          (graph.nodes ?? []).flatMap((n) => (typeof n.id === 'string' ? [n.id] : [])),
+        ),
+      };
+    }
     // The deferred body-contract note: the graph built without `knownTools`, so its
     // typo-vs-baseline-tool checks wait for `build()`, where the registry is real.
     // Library-built graphs also stamp the note on each skill's metadata (that is
@@ -1788,9 +1925,30 @@ export class AgentBuilder {
     const selfExplainBinding = this.selfExplainConfig
       ? new SelfExplainBinding(this.selfExplainConfig.include, this.selfExplainConfig.maxEvents)
       : undefined;
-    const injections = selfExplainBinding
+    let injections = selfExplainBinding
       ? [...this.injectionList, buildSelfExplainSkill(this.selfExplainConfig!)]
       : this.injectionList;
+    // The tier-3 menu envelope's system-prompt half (SG-C): auto-registered
+    // whenever the mounted graph can produce a MENU verdict — a menu with no
+    // envelope would be a decision the model was never told about, the
+    // accepted-and-silently-wrong kind. Not under `'rails'` (the model may
+    // not act on a menu there), and not when the consumer registered their
+    // own (the metadata marker, never the id — a renamed hint still counts).
+    // Zero cost when the trigger is false: it reads `ctx.turnRoute`, which
+    // only cascade graphs ever write.
+    const cascadeForHint = this.skillGraphCascade;
+    if (
+      cascadeForHint !== undefined &&
+      cascadeForHint.strictness !== 'rails' &&
+      cascadeForHint.turnRouting !== undefined &&
+      (cascadeForHint.turnRouting.scorer !== undefined ||
+        cascadeForHint.continuity === 'conversation') &&
+      !injections.some(
+        (i) => (i.metadata as Record<string, unknown> | undefined)?.[MENU_HINT_METADATA_KEY],
+      )
+    ) {
+      injections = [...injections, defineMenuHint()];
+    }
     const toolProvider = selfExplainBinding
       ? buildSelfExplainToolProvider(
           selfExplainBinding,
@@ -1936,6 +2094,7 @@ export class AgentBuilder {
       this.skillGraphExplainNextSkill,
       this.skillGraphIsTree,
       this.skillGraphSupersededEntries,
+      this.skillGraphCascade,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

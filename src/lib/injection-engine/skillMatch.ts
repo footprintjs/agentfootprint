@@ -40,12 +40,24 @@
  * STORED on the compiled skill's provenance (`metadata.skillGraph.match`, as
  * serializable {@link SkillMatchData}).
  *
+ * The third member (SG-C) is the INTENT matcher:
+ *   • `{ intent, examples }` — one sentence naming the intent ("customer wants
+ *     a refund") plus ≥1 real user phrasings. Unlike the other two it compiles
+ *     to NO message predicate: it cannot answer synchronously, so the entry
+ *     carrying it compiles cursor-gated and the matching happens in the
+ *     turn-start cascade (the RouteTurn stage), judged by the graph's
+ *     configured classifier (`.classify(scorer)` / `start.classify`). A graph
+ *     declaring one without a classifier is refused at build.
+ *
  * Extensible by design: each non-RegExp member is an object discriminated by its
- * own required key, so a future matcher (e.g. an intent matcher with examples)
- * is a new arm — not a reshape. A shape that is none of these is refused at
- * build time, naming the forms that ARE supported.
+ * own required key, so a future matcher is a new arm — not a reshape. A shape
+ * that is none of these is refused at build time, naming the forms that ARE
+ * supported.
  */
-export type SkillMatch = RegExp | { readonly keywords: readonly string[] };
+export type SkillMatch =
+  | RegExp
+  | { readonly keywords: readonly string[] }
+  | { readonly intent: string; readonly examples: readonly string[] };
 
 /**
  * The serializable description of a DATA matcher on a start rule (`match:` on
@@ -59,7 +71,8 @@ export type SkillMatch = RegExp | { readonly keywords: readonly string[] };
  */
 export type SkillMatchData =
   | { readonly kind: 'regex'; readonly source: string; readonly flags: string }
-  | { readonly kind: 'keywords'; readonly keywords: readonly string[] };
+  | { readonly kind: 'keywords'; readonly keywords: readonly string[] }
+  | { readonly kind: 'intent'; readonly intent: string; readonly examples: readonly string[] };
 
 /** The one field a compiled matcher reads. Structural on purpose — the engine's
  *  `InjectionContext` satisfies it, and this module never has to import it. */
@@ -86,15 +99,21 @@ function keywordRegExp(keyword: string): RegExp {
 /**
  * Compile a data matcher into its predicate + its serializable description — ONE
  * compilation, so the predicate that routes and the data the check-up compares can
- * never describe different matchers. Refuses a shape it cannot honor (a JavaScript
- * caller's `{ intent: … }`, a bare string, an empty keyword list), naming the forms
+ * never describe different matchers. Refuses a shape it cannot honor (a bare
+ * string, an empty keyword list, an intent without examples), naming the forms
  * that ARE supported — accepting one and matching nothing would be the silent kind
  * of wrong.
+ *
+ * The INTENT arm compiles to `predicate: undefined` — it cannot answer
+ * synchronously (a classifier judges it in the turn-start cascade), so the entry
+ * carrying it is cursor-gated instead of rule-gated. `skillGraph.ts` is the only
+ * caller that accepts a predicate-less compile, and it refuses `match: { intent }`
+ * when no classifier is configured.
  */
 export function compileMatch(
   match: SkillMatch,
   where: string,
-): { predicate: (ctx: MatchableContext) => boolean; data: SkillMatchData } {
+): { predicate: ((ctx: MatchableContext) => boolean) | undefined; data: SkillMatchData } {
   if (match instanceof RegExp) {
     // `.test` on a /g or /y regex advances `lastIndex`, so the SAME message would
     // alternate match/no-match across iterations. A matcher is a pure yes/no —
@@ -108,10 +127,35 @@ export function compileMatch(
   }
   // A JS caller can pass anything here (null, a string, a bare function) — every
   // unhonorable shape gets the same teaching refusal, never a raw TypeError.
-  const keywords =
-    match !== null && typeof match === 'object'
-      ? (match as { readonly keywords?: unknown }).keywords
-      : undefined;
+  const shaped = match !== null && typeof match === 'object' ? (match as object) : undefined;
+  const intent = (shaped as { readonly intent?: unknown } | undefined)?.intent;
+  if (intent !== undefined) {
+    // The INTENT arm — data for the turn-start classifier, no sync predicate.
+    // Both halves required and non-empty: an intent with no examples gives a
+    // keyword/embedding classifier nothing a user ever typed to match on, and
+    // an example list under a blank intent is a menu row with no name.
+    const examples = (shaped as { readonly examples?: unknown }).examples;
+    const intentUsable = typeof intent === 'string' && intent.trim().length > 0;
+    const examplesUsable =
+      Array.isArray(examples) &&
+      examples.length > 0 &&
+      examples.every((e) => typeof e === 'string' && e.trim().length > 0);
+    if (!intentUsable || !examplesUsable) {
+      throw new Error(
+        `skillGraph: ${where} declares \`match: { intent }\` this library cannot honor. An ` +
+          `intent matcher is { intent: 'one sentence naming the intent', examples: ['a real ` +
+          `user phrasing', …] } — both required, both non-empty (examples are what the ` +
+          `classifier actually matches against). Fix the ${
+            !intentUsable ? '`intent` sentence' : '`examples` list'
+          }, or use a RegExp / { keywords } / \`when\` instead.`,
+      );
+    }
+    return {
+      predicate: undefined,
+      data: { kind: 'intent', intent: intent.trim(), examples: (examples as string[]).slice() },
+    };
+  }
+  const keywords = (shaped as { readonly keywords?: unknown } | undefined)?.keywords;
   const usable =
     Array.isArray(keywords) &&
     keywords.length > 0 &&
@@ -119,10 +163,11 @@ export function compileMatch(
   if (!usable) {
     throw new Error(
       `skillGraph: ${where} has a \`match\` this library cannot honor. Supported matchers: ` +
-        `a RegExp (tested against the user message), or { keywords: ['refund', …] } — a ` +
+        `a RegExp (tested against the user message), { keywords: ['refund', …] } — a ` +
         `non-empty array of non-empty strings (case-insensitive; any keyword present ` +
-        `matches, whole-word at word-character edges). For any other condition, use ` +
-        `\`when: (ctx) => …\`.`,
+        `matches, whole-word at word-character edges) — or { intent: '…', examples: [...] } ` +
+        `(judged by the graph's classifier at turn start; needs \`classify\`). For any ` +
+        `other condition, use \`when: (ctx) => …\`.`,
     );
   }
   const kws = (keywords as string[]).slice();
@@ -175,7 +220,12 @@ export function compareMatchers(
       why: `both match the shared keyword${shared.length === 1 ? '' : 's'} ${quoteList(shared)}`,
     };
   }
-  return undefined; // unlike kinds — not comparable without guessing
+  // Unlike kinds — and intent-vs-intent — are not comparable without guessing:
+  // two example SETS are not claimed comparable without running the configured
+  // scorer, which is `checkupIntents()`'s job (leave-one-out, async). The one
+  // provable intent-pair fact — the same example string under two intents — is
+  // its own check (`duplicate-intent-example`, skillIntent.ts).
+  return undefined;
 }
 
 /**
@@ -189,6 +239,8 @@ export function mermaidMatchCaption(m: SkillMatchData): string {
   const raw =
     m.kind === 'regex'
       ? `/${m.source}/${m.flags}`
+      : m.kind === 'intent'
+      ? `intent: ${m.intent.length > 40 ? `${m.intent.slice(0, 40)}…` : m.intent}`
       : m.keywords.length > 3
       ? `${m.keywords.slice(0, 3).join(', ')}, +${m.keywords.length - 3} more`
       : m.keywords.join(', ');

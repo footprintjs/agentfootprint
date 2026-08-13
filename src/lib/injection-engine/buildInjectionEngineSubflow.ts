@@ -67,6 +67,7 @@ import {
   type InjectionContext,
 } from './types.js';
 import { SKILL_GRAPH_METADATA_KEY, type CursorMove, type SkillRouting } from './skillGraph.js';
+import { menuOutstanding, type TurnRoute } from './routingPolicy.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -171,6 +172,11 @@ interface InjectionEngineArgs {
   entryScores?: InjectionContext['entryScores'];
   /** Name of the entry scorer that produced `entryScores`. */
   entryScorer?: InjectionContext['entryScorer'];
+  /** The turn-start routing verdict (SG-C) — written once per turn by the
+   *  RouteTurn stage, carried by the mount mappers. The resolver consumes
+   *  `to` on iteration 1; the menu hint reads `offered`. Absent on graphs
+   *  without the cascade. */
+  turnRoute?: TurnRoute;
 }
 
 /**
@@ -244,6 +250,7 @@ function makeEvaluateStage(
       ...(args.pendingSkillPick !== undefined && { pendingSkillPick: args.pendingSkillPick }),
       ...(args.entryScores !== undefined && { entryScores: args.entryScores }),
       ...(args.entryScorer !== undefined && { entryScorer: args.entryScorer }),
+      ...(args.turnRoute !== undefined && { turnRoute: args.turnRoute }),
     };
 
     // KEYSTONE cursor advance — derive the next cursor from the SAME ctx the
@@ -322,11 +329,30 @@ function makeEvaluateStage(
     const routing = routingEntriesOf(evaluation.active);
     // Structural copy (the events layer stays decoupled from `CursorMove`), and a
     // POJO so it survives the emit channel's clone.
+    //
+    // SG-C decoration: on the iteration a MODEL PICK resolves an outstanding
+    // turn-start menu, the move carries the menu it resolved (`offered`) — and
+    // `declinedOffer: true` when the accepted pick was reachable but NOT on it.
+    // Under 'assist' the model's divergence from the menu is DATA, not a
+    // refusal; without this stamp the record could not tell an on-menu pick
+    // from an off-menu one. `menuOutstanding` is the same one implementation
+    // the envelope and the 'guard' gate use, judged on the PRE-advance cursor
+    // (this very move is what closes the menu).
+    const resolvedMenu =
+      move?.by === 'model-pick' &&
+      move.to !== undefined &&
+      menuOutstanding(ctx.turnRoute, ctx.currentSkillId)
+        ? {
+            offered: [...ctx.turnRoute!.offered!],
+            ...(ctx.turnRoute!.offered!.includes(move.to) ? {} : { declinedOffer: true as const }),
+          }
+        : undefined;
     const cursorMove = move
       ? {
           ...(move.from !== undefined && { from: move.from }),
           ...(move.to !== undefined && { to: move.to }),
           by: move.by,
+          ...resolvedMenu,
         }
       : undefined;
 

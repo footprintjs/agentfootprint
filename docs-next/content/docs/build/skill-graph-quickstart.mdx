@@ -75,6 +75,68 @@ provably overlap or shadow each other get a warning naming both — and skill
 bodies that mention tools are checked against the agent's **real** tool registry
 at `Agent....build()`, automatically.
 
+## The routing cascade (9.17.0)
+
+Regex and keywords route the *phrasings you predicted*. For everything else,
+declare each start rule's **intent as data** — one sentence plus real user
+phrasings — and name one classifier to judge new messages against them:
+
+```ts twoslash
+import { Agent } from 'agentfootprint';
+import { skillGraph, defineSkill, keywordScorer } from 'agentfootprint/context';
+import { mock } from 'agentfootprint/providers';
+const provider = mock({ reply: 'demo' });
+const billing = defineSkill({ id: 'billing', description: 'Refunds and charges.', body: '…' });
+const shipping = defineSkill({ id: 'shipping', description: 'Parcel tracking.', body: '…' });
+// ---cut---
+const graph = skillGraph({
+  skills: [billing, shipping],
+  start: {
+    rules: [
+      { use: 'billing',  match: { intent: 'customer wants a refund',
+                                  examples: ['refund my order', 'charged twice'] } },
+      { use: 'shipping', match: { intent: 'customer asks where a delivery is',
+                                  examples: ['track my parcel'] } },
+    ],
+    classify: keywordScorer(), // no dependency; embeddingScorer(e) / llmClassifier(p) also fit
+  },
+});
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
+  .skillGraph(graph, { continuity: 'conversation', strictness: 'guard' })
+  .build();
+```
+
+Every turn now starts through a three-tier **cascade**, once, off the hot loop:
+
+1. **Declared rules** (regex / keywords / `when`) — binary, decisive.
+2. **The classifier** over your declared intents — with an explicit floor and a
+   near-tie margin. A decisive winner routes; a near-tie **falls through**
+   instead of coin-flipping.
+3. **A menu** — only on declared ambiguity, the closest candidates lead the
+   `read_skill` description (staying put is a first-class option) and the model
+   picks.
+
+Every verdict is recorded as `agentfootprint.skill.turn_routed` — the tier that
+decided, every candidate's score (the losers too), the runner-up gap, and the
+exact thresholds used. `graph.checkupIntents()` audits your examples with the
+configured classifier before you ship them.
+
+The two mount options:
+
+- `continuity: 'conversation'` — the cursor rides `agent.checkpoint()`, so
+  `followUp()` starts where the last turn ended. A sticky *default*, not a
+  lock: a decisively different message still moves, an unmatched one opens the
+  menu with STAY offered, and a cursor the deployed graph no longer knows is
+  dropped **and recorded** (`turn_routed.droppedResume`).
+- `strictness` — how much routing authority the model has: `'assist'`
+  (default — today's gate; off-menu picks allowed and stamped
+  `declinedOffer`), `'guard'` (picks only from an offered menu), `'rails'`
+  (the model never routes; a menu then proceeds on the base prompt, recorded
+  as `by: 'none'` — the honest cost of rails without a resolver).
+
+Neither option set = byte-identical to 9.16, events included.
+
 ## Next steps
 
 - [Skills](doc:skills) — `defineSkill` itself, plus the full graph surface: `match` details, `scopeTools`, the check-up codes, `steps` for mid-turn hand-offs

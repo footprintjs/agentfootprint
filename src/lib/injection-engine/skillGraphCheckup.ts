@@ -56,6 +56,17 @@ export type GraphProblemCode =
   | 'rules-shadowed-by-order' // WARNING — a later rule provably can never win (identical
   //   regex earlier / keyword-superset earlier). Both compare only data matchers of the
   //   same kind; `when` predicates are opaque and are never claimed to have been checked.
+  // The intents front door (SG-C):
+  | 'intent-without-classify' // ERROR — a `match: { intent }` entry with no classifier
+  //   configured: nothing can ever judge it, so the entry would silently never be
+  //   chosen. Raised as a BUILD refusal too (like `rule-id-exists`), so a graph
+  //   carrying it cannot compile in silence.
+  | 'duplicate-intent-example' // WARNING — the same (case/whitespace-normalized) example
+  //   declared under two intents: whichever wins is scorer luck. Produced by
+  //   skillIntent.ts (the intent domain module), composed into `graph.checkup()`.
+  | 'overlapping-intents' // WARNING — the ASYNC leave-one-out audit
+  //   (`graph.checkupIntents()`, present only with a classifier): an example whose
+  //   top-1 under the CONFIGURED scorer is a different intent, or a near-tie with one.
   // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency (WARNINGS):
   | 'body-foreign-tool' // body names a tool that belongs to another skill (not callable here)
   | 'body-unknown-tool'; // body has a `tool_name(` reference to a tool that exists nowhere
@@ -114,13 +125,45 @@ export interface CheckupInput {
    * unwired skill), and for that skill the old sentence was false.
    */
   readonly triggerKinds: ReadonlyMap<string, CheckupTriggerKind>;
+  /**
+   * A classifier is configured (`.classify()` / `start.classify`, SG-C). Two
+   * consequences here: an intent entry is judgeable (no
+   * `intent-without-classify`), and the tier-1 pairwise rule checks RUN even
+   * though the entries are exclusive — the cold cascade reads rule entries in
+   * declaration order again (first match wins), so the checks' premise holds,
+   * unlike under a pure scorer (which ranks ALL matching candidates) or
+   * `.entryByRead()` (the model picks).
+   */
+  readonly hasClassifier?: boolean;
 }
 
 /** Run the check-up. Pure. */
 export function checkupGraph(input: CheckupInput): GraphCheckup {
   const { skillIds, entries, routes, isTree, exclusiveEntries, triggerKinds } = input;
+  const hasClassifier = input.hasClassifier === true;
   const entryIds = entries.map((e) => e.id);
   const problems: GraphProblem[] = [];
+
+  // 0. intent-without-classify (ERROR) — a `match: { intent }` with no classifier:
+  //    an intent compiles to no message predicate, so with nothing configured to
+  //    judge it the entry could never be chosen and would silently never load.
+  if (!hasClassifier) {
+    for (const e of entries) {
+      if (e.match?.kind !== 'intent') continue;
+      problems.push({
+        kind: 'error',
+        code: 'intent-without-classify',
+        message:
+          `Entry "${e.id}" declares match: { intent: "${e.match.intent}" } but the graph ` +
+          `configures no classifier — an intent rule compiles to no message predicate, so ` +
+          `nothing can ever judge it and the entry would silently never be chosen. Add ` +
+          `\`classify: keywordScorer()\` (no dependency) or \`embeddingScorer(embedder)\`; ` +
+          `\`llmClassifier(provider)\` if you want the model to judge. Or restate the rule ` +
+          `as { keywords } / a RegExp / \`when\`.`,
+        skill: e.id,
+      });
+    }
+  }
 
   // 1. unknown-skill (ERROR) — an entry/edge references a skill not in the graph.
   //    Vacuous under the fluent builder (every edge registers its skills); the real
@@ -347,8 +390,13 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
   //
   //    Skipped under exclusive entries for the same reason the fan-out checks are:
   //    a scorer ranks ALL matching candidates (declaration order does not shadow),
-  //    and `.entryByRead()` lets the model pick.
-  if (!exclusiveEntries) {
+  //    and `.entryByRead()` lets the model pick. EXCEPT under a classifier (SG-C):
+  //    `classify` makes the entries exclusive AND puts tier-1 regex/keyword rules
+  //    back on first-match-wins declaration order in the turn-start cascade, so the
+  //    checks' premise holds again there. Intent matchers are never pairwise-compared
+  //    here (`compareMatchers` answers undefined for them) — their audit is the
+  //    async `checkupIntents()`, which runs the CONFIGURED scorer.
+  if (!exclusiveEntries || hasClassifier) {
     const withMatch = entries.filter((e) => e.match !== undefined);
     for (let j = 0; j < withMatch.length; j++) {
       for (let k = j + 1; k < withMatch.length; k++) {

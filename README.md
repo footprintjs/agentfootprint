@@ -167,6 +167,8 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 The conversation carries its own `identity`, so a continued turn writes its memory where the earlier turns can read it. Two things that *look* like this and are not: `identity.conversationId` is a namespace key (it scopes memory, RAG and permissions — it does not join two runs), and `.memory()` gives you **recall** in the system prompt rather than the verbatim window. `standingAgent({ agent, sessions, host })` does the whole store-and-continue dance per session for you. [Worked example, printing the wire each way →](examples/features/51-conversations.ts)
 
+**The conversation keeps its place, too (9.17.0).** On a skill graph mounted with `.skillGraph(graph, { continuity: 'conversation' })`, the skill the last turn ended on rides the same checkpoint — `followUp('one more thing')` starts *there* instead of re-routing from scratch. A sticky default, never a lock: each new message is still judged by the graph's declared rules and intents (`match: { intent, examples }` + `classify:` a scorer), a decisively different topic moves, a genuinely ambiguous one offers the model a menu, and every verdict — winners, losers, the thresholds that judged them — is recorded as `agentfootprint.skill.turn_routed`. [The routing cascade, in five minutes →](docs-next/content/docs/build/skill-graph-quickstart.mdx) · [Runnable example →](examples/context-engineering/15-skill-graph-intents.ts)
+
 ### Then compose control flow
 
 One agent is a `Runner`. So is every composition of agents — four control-flow primitives, and anything that runs composes into anything else:
