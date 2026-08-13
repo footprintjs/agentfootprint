@@ -350,6 +350,189 @@ describe('match — start rules declared as data', () => {
   });
 });
 
+// ═══ 2b. the conjunction matcher — { all: [...] } (9.20.0) ═══════════════════
+
+describe('match: { all } — a rule matches only when EVERY member matches', () => {
+  /** The 2D zone case from the field: a zone mention AND an audit-shaped ask. */
+  const zoneGraph = () =>
+    skillGraph({
+      skills: [skill('zone-audit'), skill('triage')],
+      start: {
+        rules: [
+          { match: { all: [/zone/i, { keywords: ['audit', 'sweep', 'all'] }] }, use: 'zone-audit' },
+          { when: () => true, use: 'triage' },
+        ],
+      },
+      check: 'off',
+    });
+
+  it('unit: both dimensions present → the all-rule wins; either alone → it does not', () => {
+    const g = zoneGraph();
+    expect(g.nextSkill(ctx({ userMessage: 'run an AUDIT of zone 4' }))).toBe('zone-audit');
+    expect(g.nextSkill(ctx({ userMessage: 'sweep every zone' }))).toBe('zone-audit');
+    // One dimension alone falls through to the catch-all — AND, not OR.
+    expect(g.nextSkill(ctx({ userMessage: 'zone 4 status' }))).toBe('triage');
+    expect(g.nextSkill(ctx({ userMessage: 'run an audit' }))).toBe('triage');
+    // Keyword members keep their whole-word law inside `all`.
+    expect(g.nextSkill(ctx({ userMessage: 'zone auditor here' }))).toBe('triage');
+  });
+
+  it('unit: a nested all is FLATTENED — same behavior, flat provenance (AND is associative)', () => {
+    const g = skillGraph({
+      skills: [skill('a')],
+      start: {
+        rules: [{ match: { all: [/x/, { all: [/y/, { keywords: ['z'] }] }] }, use: 'a' }],
+      },
+      check: 'off',
+    });
+    expect(g.nextSkill(ctx({ userMessage: 'x y z' }))).toBe('a');
+    expect(g.nextSkill(ctx({ userMessage: 'x y' }))).toBeUndefined();
+    expect(matchOf(g.skills[0]!)).toEqual({
+      kind: 'all',
+      parts: [
+        { kind: 'regex', source: 'x', flags: '' },
+        { kind: 'regex', source: 'y', flags: '' },
+        { kind: 'keywords', keywords: ['z'] },
+      ],
+    });
+  });
+
+  it('refusal: an EMPTY all has nothing to check — refused, naming the shape that works', () => {
+    expect(() =>
+      skillGraph({
+        skills: [skill('a')],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        start: { rules: [{ match: { all: [] } as any, use: 'a' }] },
+      }),
+    ).toThrow(/NON-EMPTY array of matchers[\s\S]*\{ all: \[\/zone\/i/);
+  });
+
+  it('refusal: an intent inside all cannot compose synchronously — the message names the separate-rule alternative', () => {
+    expect(() =>
+      skillGraph({
+        skills: [skill('a')],
+        start: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          rules: [
+            {
+              match: { all: [/zone/, { intent: 'wants audit', examples: ['audit it'] }] } as never,
+              use: 'a',
+            },
+          ],
+        },
+      }),
+    ).toThrow(/`all` member 2 is an intent matcher[\s\S]*classifier at turn start[\s\S]*OWN rule/);
+  });
+
+  it('refusal: a member all cannot hold names the member position and the sync forms', () => {
+    expect(() =>
+      skillGraph({
+        skills: [skill('a')],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        start: { rules: [{ match: { all: ['bare string'] } as any, use: 'a' }] },
+      }),
+    ).toThrow(/`all` member 1 is not a matcher `all` can hold[\s\S]*RegExp, \{ keywords/);
+    expect(() =>
+      skillGraph({
+        skills: [skill('a')],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        start: { rules: [{ match: { all: [{ keywords: [] }] } as any, use: 'a' }] },
+      }),
+    ).toThrow(/`all` member 1 is not a matcher `all` can hold/);
+  });
+
+  it('provenance: the compiled skill and the entry edge carry the flat conjunction data; the fluent .entry() takes it too', () => {
+    const g = zoneGraph();
+    const data = {
+      kind: 'all',
+      parts: [
+        { kind: 'regex', source: 'zone', flags: 'i' },
+        { kind: 'keywords', keywords: ['audit', 'sweep', 'all'] },
+      ],
+    };
+    expect(matchOf(g.skills.find((s) => s.id === 'zone-audit')!)).toEqual(data);
+    expect(g.edges.find((e) => e.to === 'zone-audit' && e.kind === 'entry')?.match).toEqual(data);
+    const fluent = skillGraph()
+      .entry(skill('f'), { match: { all: [/a/, { keywords: ['b'] }] } })
+      .build({ check: 'off' });
+    expect(fluent.nextSkill(ctx({ userMessage: 'a b' }))).toBe('f');
+    expect(fluent.nextSkill(ctx({ userMessage: 'a' }))).toBeUndefined();
+  });
+
+  it("toMermaid: parts join with ' AND '; the entity escaping still guards the label", () => {
+    const g = zoneGraph();
+    expect(g.toMermaid()).toContain('|/zone/i AND audit, sweep, all|');
+    const piped = skillGraph()
+      .entry(skill('p'), { match: { all: [/a|b/, { keywords: ['c'] }] } })
+      .build({ check: 'off' });
+    expect(piped.toMermaid()).toContain('|/a#124;b/ AND c|');
+  });
+
+  it('checkup: a plain rule EARLIER shadows a later all-rule sharing a part — the all-rule is a subset of its every part', () => {
+    const g = skillGraph()
+      .entry(skill('broad'), { match: { keywords: ['zone'] } })
+      .entry(skill('narrow'), { match: { all: [{ keywords: ['zone'] }, { keywords: ['audit'] }] } })
+      .build({ check: 'off' });
+    const [p] = problemsOf(g, 'rules-shadowed-by-order');
+    expect(p).toBeDefined();
+    expect(p!.message).toContain('"narrow" can never be chosen');
+    expect(p!.message).toContain('required `all` part "zone"');
+    expect(p!.message).toContain('EVERY part matches');
+  });
+
+  it('checkup: the specific-first layout — all-rule EARLIER, plain fallback later — is a design, never a warning', () => {
+    const g = skillGraph()
+      .entry(skill('narrow'), { match: { all: [{ keywords: ['zone'] }, { keywords: ['audit'] }] } })
+      .entry(skill('broad'), { match: { keywords: ['zone'] } })
+      .build({ check: 'off' });
+    expect(codesOf(g)).not.toContain('rules-shadowed-by-order');
+    expect(codesOf(g)).not.toContain('overlapping-rules');
+  });
+
+  it('checkup: all-vs-all — identical part sets shadow; a later rule that only ADDS constraints is shadowed; different parts stay silent', () => {
+    const identical = skillGraph()
+      .entry(skill('a'), { match: { all: [/zone/i, { keywords: ['audit'] }] } })
+      .entry(skill('b'), { match: { all: [/zone/i, { keywords: ['audit'] }] } })
+      .build({ check: 'off' });
+    const [p] = problemsOf(identical, 'rules-shadowed-by-order');
+    expect(p).toBeDefined();
+    expect(p!.message).toContain('"b" can never be chosen');
+    expect(p!.message).toContain('only ADD constraints');
+
+    const addsConstraint = skillGraph()
+      .entry(skill('a'), { match: { all: [/zone/i, { keywords: ['audit'] }] } })
+      .entry(skill('b'), { match: { all: [/zone/i, { keywords: ['audit'] }, /q3/] } })
+      .build({ check: 'off' });
+    expect(codesOf(addsConstraint)).toContain('rules-shadowed-by-order');
+
+    const differentParts = skillGraph()
+      .entry(skill('a'), { match: { all: [/zone/i, { keywords: ['audit'] }] } })
+      .entry(skill('b'), { match: { all: [/region/i, { keywords: ['audit'] }] } })
+      .build({ check: 'off' });
+    expect(codesOf(differentParts)).not.toContain('rules-shadowed-by-order');
+    expect(codesOf(differentParts)).not.toContain('overlapping-rules');
+  });
+
+  it('checkup: no overlap claim ever involves an all-rule — a conjunction can be unsatisfiable, so no witness is provable', () => {
+    // Shares 'zone' with the earlier plain rule but is NOT covered by it (the
+    // earlier covers no single part in full) — provable nothing, said nothing.
+    const g = skillGraph()
+      .entry(skill('a'), { match: { keywords: ['zone', 'region'] } })
+      .entry(skill('b'), { match: { all: [{ keywords: ['zone', 'audit'] }, /sweep/] } })
+      .build({ check: 'off' });
+    expect(codesOf(g)).not.toContain('overlapping-rules');
+    expect(codesOf(g)).not.toContain('rules-shadowed-by-order');
+  });
+
+  it('checkup: an earlier plain keyword SUPERSET covers a later all part — shadow claimed through coverage, not just identity', () => {
+    const g = skillGraph()
+      .entry(skill('broad'), { match: { keywords: ['zone', 'region'] } })
+      .entry(skill('narrow'), { match: { all: [{ keywords: ['zone'] }, { keywords: ['audit'] }] } })
+      .build({ check: 'off' });
+    expect(codesOf(g)).toContain('rules-shadowed-by-order');
+  });
+});
+
 // ═══ 3. check-up additions + the fan-out pin ═════════════════════════════════
 
 describe('rule-id-exists — a start rule naming an unknown skill is refused, with every bad id listed', () => {

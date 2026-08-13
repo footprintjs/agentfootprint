@@ -931,10 +931,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       if (opts?.when !== undefined && opts?.match !== undefined) {
         throw new Error(
           `skillGraph: entry "${id}" sets both \`match\` and \`when\` — an entry takes ` +
-            `exactly one condition. Use \`match\` (a RegExp or { keywords: [...] } over the ` +
-            `user message — comparable and drawable) OR \`when\` (a predicate over the ` +
-            `iteration context). To combine a pattern with extra logic, fold the pattern ` +
-            `into your \`when\` predicate.`,
+            `exactly one condition. Use \`match\` (a RegExp, { keywords: [...] } or ` +
+            `{ all: [...] } over the user message — comparable and drawable) OR \`when\` ` +
+            `(a predicate over the iteration context). To combine a pattern with extra ` +
+            `logic, fold the pattern into your \`when\` predicate.`,
         );
       }
       const compiled =
@@ -1499,9 +1499,9 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
               `skillGraph: start.rules[${i}] (use: "${use}") ${
                 both ? 'sets both `match` and `when`' : 'sets neither `match` nor `when`'
               } — a rule takes exactly one condition. Say when it applies with \`match\` ` +
-                `(a RegExp or { keywords: [...] } tested against the user message) or ` +
-                `\`when\` (a predicate over the iteration context). For an unconditional ` +
-                `start, use \`start: '${use}'\` instead of a rule.`,
+                `(a RegExp, { keywords: [...] } or { all: [...] } tested against the user ` +
+                `message) or \`when\` (a predicate over the iteration context). For an ` +
+                `unconditional start, use \`start: '${use}'\` instead of a rule.`,
             );
           }
           builder.entry(resolve(r.use), {

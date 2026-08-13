@@ -466,8 +466,18 @@ export type {
   ToolExecutionContext,
   ToolRegistryEntry,
   DefineToolOptions,
+  // The refusing result ceiling (9.20.0) — a tool's own declared cap that
+  // REFUSES teachingly instead of truncating (truncation reads as a complete
+  // result and breeds fabrication; a refusal naming how to narrow produces a
+  // clean retry). The record keeps the true size (tools.result_refused).
+  ToolResultCeiling,
 } from './core/tools.js';
-export { defineTool, assertValidToolName, warnIfInvalidToolName } from './core/tools.js';
+export {
+  defineTool,
+  assertValidToolName,
+  assertResultCeiling,
+  warnIfInvalidToolName,
+} from './core/tools.js';
 // Typed tool effects (9.19.0) — the result envelope a tool may return to
 // steer the run with DATA instead of string conventions: propose a graph
 // transition, push a registered instruction, declare an outcome status. The

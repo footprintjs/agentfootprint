@@ -5,14 +5,14 @@
   "recordedAt": "2026-08-13",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1541,
-    "declaredEvents": 84,
-    "eventSource": "src/events/registry.ts:608"
+    "declaredSymbols": 1544,
+    "declaredEvents": 85,
+    "eventSource": "src/events/registry.ts:614"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 656,
+      "documented-never-exercised": 659,
       "exercised-undocumented": 33,
       "undocumented-unexercised": 606,
       "site-code-sample-only": 23,
@@ -21,7 +21,7 @@
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 23,
+      "documented-never-exercised": 24,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 6,

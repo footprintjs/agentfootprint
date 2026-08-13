@@ -23,7 +23,7 @@
 
 /**
  * A DATA matcher on a start rule — the declarative alternative to a `when`
- * predicate. Two members:
+ * predicate. The two SYNC leaf members:
  *
  *   • a `RegExp` — tested against the user's message (`ctx.userMessage`). The
  *     stateful `g`/`y` flags are dropped at compile time (a sticky regex would
@@ -49,6 +49,18 @@
  *     configured classifier (`.classify(scorer)` / `start.classify`). A graph
  *     declaring one without a classifier is refused at build.
  *
+ * The fourth member (9.20.0) is the CONJUNCTION:
+ *   • `{ all: [...] }` — the rule matches only when EVERY member matches ("zone
+ *     AND audit-shaped" as data, instead of a lookahead regex nobody can read
+ *     back). Members are the SYNC data arms only — RegExp or `{ keywords }`:
+ *     an intent inside `all` is refused at build (intents are judged by the
+ *     classifier at turn start; they cannot compose into a synchronous AND —
+ *     declare a separate intent rule instead). A nested `all` is FLATTENED
+ *     (AND is associative, so the flattened form runs identically and the
+ *     stored data describes exactly what runs — the same normalize-to-truth
+ *     rule that drops a regex's stateful flags). An empty `all` is refused:
+ *     it has nothing to check, so it could only surprise.
+ *
  * Extensible by design: each non-RegExp member is an object discriminated by its
  * own required key, so a future matcher is a new arm — not a reshape. A shape
  * that is none of these is refused at build time, naming the forms that ARE
@@ -57,7 +69,8 @@
 export type SkillMatch =
   | RegExp
   | { readonly keywords: readonly string[] }
-  | { readonly intent: string; readonly examples: readonly string[] };
+  | { readonly intent: string; readonly examples: readonly string[] }
+  | { readonly all: readonly SkillMatch[] };
 
 /**
  * The serializable description of a DATA matcher on a start rule (`match:` on
@@ -68,11 +81,18 @@ export type SkillMatch =
  *
  * A discriminated union so a future member (e.g. an intent matcher) is a new
  * `kind` arm, not a reshape.
+ *
+ * The `'all'` arm carries the conjunction's members as `parts`. Compilation
+ * GUARANTEES the parts are the leaf sync arms only (`'regex'` / `'keywords'`):
+ * an intent member is refused, and a nested `all` is flattened before the data
+ * is stored — so every consumer (the check-up's part comparison, the mermaid
+ * caption) reads a flat AND of leaves, never a tree.
  */
 export type SkillMatchData =
   | { readonly kind: 'regex'; readonly source: string; readonly flags: string }
   | { readonly kind: 'keywords'; readonly keywords: readonly string[] }
-  | { readonly kind: 'intent'; readonly intent: string; readonly examples: readonly string[] };
+  | { readonly kind: 'intent'; readonly intent: string; readonly examples: readonly string[] }
+  | { readonly kind: 'all'; readonly parts: readonly SkillMatchData[] };
 
 /** The one field a compiled matcher reads. Structural on purpose — the engine's
  *  `InjectionContext` satisfies it, and this module never has to import it. */
@@ -128,6 +148,8 @@ export function compileMatch(
   // A JS caller can pass anything here (null, a string, a bare function) — every
   // unhonorable shape gets the same teaching refusal, never a raw TypeError.
   const shaped = match !== null && typeof match === 'object' ? (match as object) : undefined;
+  const all = (shaped as { readonly all?: unknown } | undefined)?.all;
+  if (all !== undefined) return compileAllArm(all, where);
   const intent = (shaped as { readonly intent?: unknown } | undefined)?.intent;
   if (intent !== undefined) {
     // The INTENT arm — data for the turn-start classifier, no sync predicate.
@@ -165,9 +187,10 @@ export function compileMatch(
       `skillGraph: ${where} has a \`match\` this library cannot honor. Supported matchers: ` +
         `a RegExp (tested against the user message), { keywords: ['refund', …] } — a ` +
         `non-empty array of non-empty strings (case-insensitive; any keyword present ` +
-        `matches, whole-word at word-character edges) — or { intent: '…', examples: [...] } ` +
-        `(judged by the graph's classifier at turn start; needs \`classify\`). For any ` +
-        `other condition, use \`when: (ctx) => …\`.`,
+        `matches, whole-word at word-character edges) — { all: [...] } (a conjunction: ` +
+        `EVERY listed RegExp / { keywords } member must match), or { intent: '…', ` +
+        `examples: [...] } (judged by the graph's classifier at turn start; needs ` +
+        `\`classify\`). For any other condition, use \`when: (ctx) => …\`.`,
     );
   }
   const kws = (keywords as string[]).slice();
@@ -175,6 +198,93 @@ export function compileMatch(
   return {
     predicate: (ctx) => tests.some((re) => re.test(ctx.userMessage)),
     data: { kind: 'keywords', keywords: kws },
+  };
+}
+
+/**
+ * The conjunction arm of {@link compileMatch} (9.20.0) — `{ all: [...] }`
+ * compiles to ONE predicate ANDing every member with ONE flat data record
+ * beside it, in the same single compilation.
+ *
+ * Three refusals, all teaching, all at build time:
+ *   • an EMPTY `all` — nothing to check, so it could only match everything or
+ *     nothing, both the silent kind of wrong;
+ *   • an INTENT member — an intent is judged by the graph's classifier at turn
+ *     start; it has no synchronous answer to AND with. The honest spelling is
+ *     a SEPARATE `match: { intent }` rule (rules already compose by order);
+ *   • any other shape `all` cannot hold, naming the member forms that work.
+ *
+ * A NESTED `all` is FLATTENED rather than refused: AND is associative, so
+ * `{ all: [a, { all: [b, c] }] }` runs identically to `{ all: [a, b, c] }`,
+ * and the stored data describes the form that actually runs — the same
+ * normalize-to-truth rule that drops a regex's stateful `g`/`y` flags. Every
+ * consumer therefore sees a flat list of leaf parts.
+ */
+function compileAllArm(
+  all: unknown,
+  where: string,
+): { predicate: (ctx: MatchableContext) => boolean; data: SkillMatchData } {
+  if (!Array.isArray(all) || all.length === 0) {
+    throw new Error(
+      `skillGraph: ${where} declares \`match: { all }\` this library cannot honor — \`all\` ` +
+        `must be a NON-EMPTY array of matchers that must every one match, e.g. ` +
+        `{ all: [/zone/i, { keywords: ['audit', 'sweep'] }] }. An empty \`all\` has nothing ` +
+        `to check, so it could only match everything or nothing — both silent surprises. ` +
+        `List at least one matcher, or drop the rule.`,
+    );
+  }
+  const predicates: Array<(ctx: MatchableContext) => boolean> = [];
+  const parts: SkillMatchData[] = [];
+  (all as unknown[]).forEach((member, i) => {
+    const label = `${where}, \`all\` member ${i + 1}`;
+    const memberShaped =
+      member !== null && typeof member === 'object' && !(member instanceof RegExp)
+        ? (member as {
+            readonly intent?: unknown;
+            readonly all?: unknown;
+            readonly keywords?: unknown;
+          })
+        : undefined;
+    if (memberShaped?.intent !== undefined) {
+      throw new Error(
+        `skillGraph: ${label} is an intent matcher, which \`all\` cannot hold: an intent is ` +
+          `judged by the graph's classifier at turn start, so it has no synchronous answer ` +
+          `to AND with a RegExp or keyword test. Declare the intent as its OWN rule — ` +
+          `\`{ match: { intent, examples }, use: … }\` beside this one — and keep \`all\` ` +
+          `to the sync arms (RegExp / { keywords }).`,
+      );
+    }
+    if (memberShaped?.all !== undefined) {
+      const nested = compileAllArm(memberShaped.all, label);
+      predicates.push(nested.predicate);
+      parts.push(...(nested.data as Extract<SkillMatchData, { kind: 'all' }>).parts);
+      return;
+    }
+    const memberKeywords = memberShaped?.keywords;
+    const usableMember =
+      member instanceof RegExp ||
+      (Array.isArray(memberKeywords) &&
+        memberKeywords.length > 0 &&
+        memberKeywords.every((k) => typeof k === 'string' && k.trim().length > 0));
+    if (!usableMember) {
+      throw new Error(
+        `skillGraph: ${label} is not a matcher \`all\` can hold. Every member must answer ` +
+          `synchronously from the user message: a RegExp, { keywords: ['…', …] } (a non-empty ` +
+          `array of non-empty strings), or a nested { all: [...] } (flattened — AND is ` +
+          `associative). For an intent condition declare a separate intent rule; for any ` +
+          `other logic use \`when: (ctx) => …\` on the rule itself.`,
+      );
+    }
+    const compiled = compileMatch(member as SkillMatch, label);
+    // Leaf arms always compile a predicate (only the intent arm does not, and
+    // it was refused above).
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    predicates.push(compiled.predicate!);
+    parts.push(compiled.data);
+  });
+  return {
+    predicate: (ctx) => predicates.every((p) => p(ctx)),
+    data: { kind: 'all', parts },
   };
 }
 
@@ -188,11 +298,27 @@ export function compileMatch(
  *   • `undefined`  — nothing provable here (different regex sources, a regex vs a
  *     keyword list): say nothing rather than guess.
  * `why` is the human clause the check-up splices into its problem message.
+ *
+ * The `'all'` arm (9.20.0) keeps the same law — claim only what part-coverage
+ * proves. An `all` rule matches a SUBSET of each of its parts' messages, so:
+ *   • a plain rule EARLIER that provably covers ONE part of a later `all` rule
+ *     shadows it (every message the `all` matches satisfies that part, which
+ *     the earlier already matches);
+ *   • an `all` rule EARLIER shadows a later matcher when EVERY earlier part is
+ *     provably covered by some later part — the later only ADDS constraints
+ *     (identical part sets are the simplest case).
+ * "Provably covers" is same-kind only: an identical regex, or a keyword
+ * superset. No `'overlaps'` is ever claimed for a pair involving `all`: a
+ * conjunction can be unsatisfiable (`all: [/^a/, /^b/]` matches nothing), so a
+ * witness message cannot be asserted from the data — and the ordinary
+ * specific-rule-first layout (the `all` rule above its plain fallback) is a
+ * DESIGN, not a problem to warn about.
  */
 export function compareMatchers(
   earlier: SkillMatchData,
   later: SkillMatchData,
 ): { relation: 'shadows' | 'overlaps'; why: string } | undefined {
+  if (earlier.kind === 'all' || later.kind === 'all') return compareWithAll(earlier, later);
   if (earlier.kind === 'regex' && later.kind === 'regex') {
     if (earlier.source === later.source && earlier.flags === later.flags) {
       return {
@@ -229,22 +355,99 @@ export function compareMatchers(
 }
 
 /**
+ * Provable coverage between two LEAF matchers: `true` means every message `q`
+ * matches, `p` provably matches too (matches(q) ⊆ matches(p)). Same-kind only,
+ * mirroring `compareMatchers`' own claims: identical regex (source + runtime
+ * flags), or `p`'s keyword set ⊇ `q`'s (any-keyword matching, so a message
+ * carrying one of `q`'s keywords carries one of `p`'s). Everything else —
+ * different regexes, regex vs keywords — is NOT decided: answer `false` and
+ * let the caller stay silent.
+ */
+function partCoversProvably(p: SkillMatchData, q: SkillMatchData): boolean {
+  if (p.kind === 'regex' && q.kind === 'regex') {
+    return p.source === q.source && p.flags === q.flags;
+  }
+  if (p.kind === 'keywords' && q.kind === 'keywords') {
+    const pSet = new Set(p.keywords.map((k) => k.toLowerCase()));
+    return q.keywords.every((k) => pSet.has(k.toLowerCase()));
+  }
+  return false;
+}
+
+/** Human name for one leaf part, for the `why` clauses (prose, not mermaid —
+ *  no entity escaping). */
+function describePart(p: SkillMatchData): string {
+  if (p.kind === 'regex') return `/${p.source}/${p.flags}`;
+  if (p.kind === 'keywords') return quoteList(p.keywords);
+  return `(${p.kind})`; // unreachable for compiled parts; honest if hand-built data arrives
+}
+
+/**
+ * The `compareMatchers` arm for pairs involving an `'all'` conjunction —
+ * shadows-only, subset logic (see the honesty notes on `compareMatchers`).
+ *
+ * A matcher is treated as its constraint list: a leaf is the one-element list,
+ * an `all` is its parts. `matches(later) ⊆ matches(earlier)` is PROVEN when
+ * every earlier constraint is covered by some later constraint (the later
+ * satisfies everything the earlier requires, so it can only be narrower).
+ * Intent matchers never participate (no sync match set to reason about).
+ */
+function compareWithAll(
+  earlier: SkillMatchData,
+  later: SkillMatchData,
+): { relation: 'shadows'; why: string } | undefined {
+  if (earlier.kind === 'intent' || later.kind === 'intent') return undefined;
+  const earlierParts: readonly SkillMatchData[] =
+    earlier.kind === 'all' ? earlier.parts : [earlier];
+  const laterParts: readonly SkillMatchData[] = later.kind === 'all' ? later.parts : [later];
+  const covered = earlierParts.map((e) => laterParts.find((l) => partCoversProvably(e, l)));
+  if (covered.some((c) => c === undefined)) return undefined;
+  if (earlier.kind !== 'all') {
+    // Plain earlier, `all` later: the later requires a part the earlier already
+    // matches, and an `all` rule only matches messages where EVERY part holds.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const witness = covered[0]!;
+    return {
+      relation: 'shadows',
+      why:
+        `already matches the later rule's required \`all\` part ${describePart(witness)} — a ` +
+        `conjunction only matches messages where EVERY part matches, so its matches are a ` +
+        `subset of the earlier rule's`,
+    };
+  }
+  return {
+    relation: 'shadows',
+    why:
+      `requires only what the later rule also requires (every earlier \`all\` part — ` +
+      `${earlierParts.map(describePart).join('; ')} — is covered by a later part), so the ` +
+      `later rule can only ADD constraints, never escape one`,
+  };
+}
+
+/**
  * Caption an entry edge with its data matcher, escaped for a mermaid `|…|` label
  * (`|` would end the label early; `"` would open a string — both become mermaid
  * entities). Keywords list at most three, then a count, so a wide router stays
- * readable. Used only when the author gave no explicit `label` — an explicit label
- * always wins, byte-for-byte, exactly as before.
+ * readable; an `all` conjunction joins its parts with ` AND ` (parts are always
+ * leaves — compilation flattened any nesting). Used only when the author gave no
+ * explicit `label` — an explicit label always wins, byte-for-byte, exactly as
+ * before.
  */
 export function mermaidMatchCaption(m: SkillMatchData): string {
-  const raw =
-    m.kind === 'regex'
-      ? `/${m.source}/${m.flags}`
-      : m.kind === 'intent'
-      ? `intent: ${m.intent.length > 40 ? `${m.intent.slice(0, 40)}…` : m.intent}`
-      : m.keywords.length > 3
-      ? `${m.keywords.slice(0, 3).join(', ')}, +${m.keywords.length - 3} more`
-      : m.keywords.join(', ');
-  return raw.replace(/\|/g, '#124;').replace(/"/g, '#quot;');
+  return rawCaption(m).replace(/\|/g, '#124;').replace(/"/g, '#quot;');
+}
+
+/** The unescaped caption — recursion for the `all` arm escapes ONCE, at the top. */
+function rawCaption(m: SkillMatchData): string {
+  return m.kind === 'all'
+    ? m.parts.map(rawCaption).join(' AND ')
+    : m.kind === 'regex'
+    ? `/${m.source}/${m.flags}`
+    : m.kind === 'intent'
+    ? `intent: ${m.intent.length > 40 ? `${m.intent.slice(0, 40)}…` : m.intent}`
+    : m.keywords.length > 3
+    ? `${m.keywords.slice(0, 3).join(', ')}, +${m.keywords.length - 3} more`
+    : m.keywords.join(', ');
 }
 
 /** `"a"`, `"a" and "b"`, `"a", "b" and "c"` — local twin of the check-up's own

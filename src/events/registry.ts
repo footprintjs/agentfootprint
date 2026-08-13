@@ -87,6 +87,7 @@ import type {
   SkillStepsUnfinishedPayload,
   SkillTurnRoutedPayload,
   ToolEffectPayload,
+  ToolResultRefusedPayload,
   ToolEndPayload,
   ToolsActivatedPayload,
   ToolsDeactivatedPayload,
@@ -166,6 +167,7 @@ export const EVENT_NAMES = {
     sessionClosed: 'agentfootprint.tools.session_closed',
     sessionCloseFailed: 'agentfootprint.tools.session_close_failed',
     effect: 'agentfootprint.tools.effect',
+    resultRefused: 'agentfootprint.tools.result_refused',
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
@@ -428,6 +430,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tools.effect',
     ToolEffectPayload
   >;
+  'agentfootprint.tools.result_refused': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.result_refused',
+    ToolResultRefusedPayload
+  >;
   'agentfootprint.tools.session_close_failed': AgentfootprintEventEnvelope<
     'agentfootprint.tools.session_close_failed',
     ToolsSessionCloseFailedPayload
@@ -653,6 +659,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.session_closed',
   'agentfootprint.tools.session_close_failed',
   'agentfootprint.tools.effect',
+  'agentfootprint.tools.result_refused',
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',

@@ -315,6 +315,65 @@ All from `agentfootprint`:
   `sharedState.instructionLeases`: the instruction, its lease, the tenure
   that granted it, and the granting call.
 
+## The result ceiling — refuse, never truncate (9.20.0)
+
+A tool once returned ~191,000 characters. The tempting fix — truncate it — is the
+**fabrication trap**: a truncated result reads as a complete one. The model cannot
+tell the data ends where the cut happened, so it answers from the fragment as if it
+were everything, confidently. `resultCeiling` is the tool author's contract that
+prevents it: over `maxChars`, the model receives a **teaching refusal** instead of
+data — the true size, the ceiling, the parameters to narrow by, and the sentence
+that keeps it honest: *"No data was returned."* A clean retry follows, because the
+refusal says exactly how to make one.
+
+```ts
+const exportOrders = defineTool<{ limit?: number }, string>({
+  name: 'export_orders',
+  description: 'Export orders as CSV rows. Pass limit to bound the export.',
+  inputSchema: { type: 'object', properties: { limit: { type: 'number' } } },
+  // Over 2 000 chars the model reads a refusal, not a truncation:
+  //   "Result too large: export_orders returned 102442 chars, over its declared
+  //    2000-char ceiling. Narrow the request and call again — e.g. pass 'limit'.
+  //    No data was returned."
+  resultCeiling: { maxChars: 2_000, narrowBy: ['limit'] },
+  execute: async ({ limit }) => fetchRows(limit),
+});
+```
+
+What the framework guarantees when the ceiling fires:
+
+- **The payload enters no channel.** Not history, not `stream.tool_end`, not any
+  recorder — refused means refused everywhere. The **record keeps the truth** as the
+  typed `agentfootprint.tools.result_refused` event: `{ toolName, toolCallId,
+  iteration, sizeChars, maxChars, narrowBy? }`.
+- **The result carries status `'invalid'`** — the closed-set member whose corrective
+  action is "fix the call" (the tool itself did not fail, nothing partial was
+  delivered, and no policy denied it) — so a skill-graph edge can route the
+  overflow: `.route(support, narrowDesk, { onToolStatus: 'invalid' })`.
+- **An effects envelope keeps its declared effects.** When `{ content, effects,
+  status }` overflows its *content*, the content is refused but the declared
+  effects are still judged — a tool that proposed a transition and overflowed its
+  data does not lose the transition (the effects channel is validated data, not the
+  channel that overflowed). The status the tool declared rides the event as
+  `declaredStatus`; the delivered status is `'invalid'`.
+- **A procedure step does not advance.** The refusal's own instruction is to call
+  again — a stepped skill's pointer holds.
+- **Every dispatch door refuses alike.** The inline batch and every resumed
+  dispatch (check-in approval, middleware ask, credential consent) measure at the
+  same boundary.
+- **Zero-cost when unused.** No `resultCeiling` = nothing measured, no event,
+  byte-identical results — including 9.19 envelope semantics.
+
+The agent-level [`maxToolResultChars`](doc:agent) remains the *other* ceiling —
+truncate with a verbatim head and a `truncated` marker — for operators capping tools
+they did not write. Only the author knows which parameters make a retry smaller,
+which is why `narrowBy` lives on the tool; the two compose (the refusal sentence is
+far under any sane agent cap). The declared shape is the exported
+`ToolResultCeiling` interface — `{ maxChars, narrowBy? }`. A bad ceiling is refused
+at `defineTool` — `maxChars` must be a positive whole number, and a `narrowBy: []`
+that could suggest nothing is refused too (omit the field to say "no suggestions");
+`assertResultCeiling` is exported for hand-built `Tool` objects.
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

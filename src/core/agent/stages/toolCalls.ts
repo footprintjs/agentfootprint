@@ -85,6 +85,7 @@ import {
 } from '../toolArgsValidation.js';
 import { safeStringify } from '../validators.js';
 import { capToolResult } from '../toolResultCap.js';
+import { applyResultCeiling } from '../resultCeiling.js';
 import {
   currentStepOf,
   pointerOf,
@@ -579,6 +580,44 @@ export function buildToolCallsHandler(
           ? result
           : capToolResult(values.modelResult, { toolName, maxChars: max }).value,
     };
+  };
+
+  /**
+   * The tool's OWN refusing ceiling (9.20.0) — ONE implementation for every
+   * dispatch door, applied at the execute boundary the moment the handler's
+   * return lands (BEFORE the after-tool chain, the read_skill-gate precedent:
+   * governance composes over what the model will actually read).
+   *
+   * `undefined` = no ceiling declared or the result fits — the caller keeps
+   * today's path byte for byte. Otherwise: the typed `tools.result_refused`
+   * event records the true size (the only place it survives), and the returned
+   * TEACHING REFUSAL replaces the payload on every channel — history,
+   * `stream.tool_end`, recorders. Distinct from the agent-level
+   * `maxToolResultChars` (which truncates with a verbatim head, measured AFTER
+   * the chain): this is the tool author's own contract, and the two compose —
+   * the refusal sentence is far under any sane agent cap.
+   */
+  const refuseOverCeiling = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    tool: Tool | undefined,
+    value: unknown,
+    declaredStatus?: ToolResultStatus,
+  ): string | undefined => {
+    const ceiling = tool?.resultCeiling;
+    const verdict = applyResultCeiling(value, { toolName: call.toolName, ceiling });
+    if (verdict === undefined || ceiling === undefined) return undefined;
+    typedEmit(scope, 'agentfootprint.tools.result_refused', {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      sizeChars: verdict.sizeChars,
+      maxChars: ceiling.maxChars,
+      // Copied — event payloads are detached plain data, never shared refs.
+      ...(ceiling.narrowBy !== undefined && { narrowBy: [...ceiling.narrowBy] }),
+      ...(declaredStatus !== undefined && { declaredStatus }),
+    });
+    return verdict.refusal;
   };
 
   // ── Step-procedure boundary (9.18.0) — ONE implementation, five sites ──
@@ -1161,8 +1200,16 @@ export function buildToolCallsHandler(
     error?: boolean;
     executed?: boolean;
     /** The recognized effects envelope, when the tool returned one (9.19.0)
-     *  — `result` above is already its unwrapped `content`. */
+     *  — `result` above is already its unwrapped `content`. When the ceiling
+     *  fired this carries the refusal as `content` and status `'invalid'`
+     *  (synthesized empty-effects for a non-envelope result), so every resume
+     *  path routes the status without knowing about ceilings. */
     envelope?: ReadToolResultEnvelope;
+    /** The tool's own `resultCeiling` refused the result (9.20.0): `result`
+     *  is the teaching refusal, the true size is on the record. The call ran
+     *  — but it must not complete a procedure step (the model was told to
+     *  call again). */
+    ceilingRefused?: true;
   }> => {
     if (!tool) return { result: `Unknown tool: ${toolName}`, error: true };
     const runIdentity = scope.runIdentity as
@@ -1244,7 +1291,42 @@ export function buildToolCallsHandler(
       // judged exactly as an inline one's.
       const envelope = readToolResultEnvelope(result);
       if (envelope !== undefined) {
+        // The tool's own ceiling (9.20.0) measures the CONTENT — the channel
+        // that can overflow a context window. The DECLARED effects are small
+        // validated data and are still judged by the caller: a tool that
+        // proposed a transition and overflowed its payload does not lose the
+        // transition. The delivered status becomes 'invalid' (the declared
+        // status described a result the model never received — the
+        // `result_refused` event keeps what was declared).
+        const refusal = refuseOverCeiling(
+          scope,
+          { toolName, toolCallId, iteration },
+          tool,
+          envelope.content,
+          envelope.status,
+        );
+        if (refusal !== undefined) {
+          return {
+            result: refusal,
+            executed: true,
+            ceilingRefused: true,
+            envelope: { ...envelope, content: refusal, status: 'invalid' },
+          };
+        }
         return { result: envelope.content, executed: true, envelope };
+      }
+      const refusal = refuseOverCeiling(scope, { toolName, toolCallId, iteration }, tool, result);
+      if (refusal !== undefined) {
+        // Synthesized empty-effects envelope: the resume paths read the
+        // routing status off `envelope.status`, and this is how a refused
+        // NON-envelope result carries `'invalid'` there without every path
+        // learning about ceilings. Empty effects/malformed judge to nothing.
+        return {
+          result: refusal,
+          executed: true,
+          ceilingRefused: true,
+          envelope: { content: refusal, effects: [], status: 'invalid', malformed: [] },
+        };
       }
       // A status-only shape missing its `effects: []` marker is DATA (bytes
       // unchanged) — but never silently: name the dropped marker in dev mode.
@@ -1401,6 +1483,10 @@ export function buildToolCallsHandler(
         let denied = false;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
+        /** The tool's own `resultCeiling` refused this call's result (9.20.0)
+         *  — the call ran, but it must not complete a procedure step: the
+         *  refusal's own instruction is to call again. */
+        let ceilingRefused = false;
         let haltContext:
           | {
               reason: string;
@@ -1874,6 +1960,27 @@ export function buildToolCallsHandler(
                 const nearMiss = explainStatusOnlyNearMiss(result);
                 if (nearMiss !== undefined) warnEffect(tc.name, nearMiss);
               }
+              // The tool's own refusing ceiling (9.20.0) — at the execute
+              // boundary, BEFORE the gates and the after-tool chain, so
+              // governance and the agent-level cap compose over what the
+              // model will actually read (the read_skill-gate precedent).
+              // A recognized envelope's DECLARED effects (`toolEnvelope`)
+              // are still judged below — the effects channel is not the
+              // channel that overflowed; the delivered status becomes
+              // 'invalid' so `onToolStatus` edges can route the overflow
+              // (the declared one rides the `result_refused` event).
+              const overflowRefusal = refuseOverCeiling(
+                scope,
+                { toolName: tc.name, toolCallId: tc.id, iteration },
+                tool,
+                result,
+                toolStatus,
+              );
+              if (overflowRefusal !== undefined) {
+                ceilingRefused = true;
+                result = overflowRefusal;
+                toolStatus = 'invalid';
+              }
               await endCall(tc.id);
             } catch (err) {
               if (isPauseRequest(err)) {
@@ -2041,8 +2148,10 @@ export function buildToolCallsHandler(
           // The advance: only a call that RAN clean completes a step — an
           // error result never advances (the pointer holds; the model
           // retries, skips with a reason, or routes around), and neither
-          // does a permission denial or a gate refusal.
-          if (executed && !error && !denied && !skillRejected) {
+          // does a permission denial, a gate refusal, or a ceiling refusal
+          // (the model holds no data and was told to call again — advancing
+          // would contradict the refusal's own instruction).
+          if (executed && !error && !denied && !skillRejected && !ceilingRefused) {
             resultStr += applyStepReturn(scope, {
               toolName: tc.name,
               toolCallId: tc.id,
@@ -2336,8 +2445,14 @@ export function buildToolCallsHandler(
             );
             result = dispatched.result;
             error = dispatched.error;
-            stepToolRan = dispatched.executed === true && error !== true;
-            if (stepToolRan) resumeEnvelope = dispatched.envelope;
+            // A ceiling-refused call RAN but must not advance a step (9.20.0);
+            // its envelope — status 'invalid' plus any surviving declared
+            // effects — is still picked up and judged below.
+            stepToolRan =
+              dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
+            if (dispatched.executed === true && error !== true) {
+              resumeEnvelope = dispatched.envelope;
+            }
             // skip_step behind a middleware ask, approved (9.18.0): the
             // placeholder just landed — replace it with the authoritative
             // sentence BEFORE the chain's last word, the execute loop's
@@ -2478,8 +2593,12 @@ export function buildToolCallsHandler(
           );
           result = dispatched.result;
           error = dispatched.error;
-          stepToolRan = dispatched.executed === true && error !== true;
-          if (stepToolRan) resumeEnvelope = dispatched.envelope;
+          // Same ceiling law as the ask path: ran ≠ completed a step (9.20.0).
+          stepToolRan =
+            dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
+          if (dispatched.executed === true && error !== true) {
+            resumeEnvelope = dispatched.envelope;
+          }
           // Consent moved the execution to this side of the pause; the rules
           // about results move with it.
           if (dispatched.executed === true) {
@@ -2612,8 +2731,15 @@ export function buildToolCallsHandler(
         let consentResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
-        // advances the moment its resumed dispatch really ran, clean.
-        if (deps.stepPlanFor && dispatched.executed === true && error !== true) {
+        // advances the moment its resumed dispatch really ran, clean. A
+        // ceiling-refused result is not clean (9.20.0): the model holds no
+        // data and was told to call again.
+        if (
+          deps.stepPlanFor &&
+          dispatched.executed === true &&
+          error !== true &&
+          dispatched.ceilingRefused !== true
+        ) {
           consentResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
         }
         // Typed tool effects (9.19.0) — same judge as every other path.

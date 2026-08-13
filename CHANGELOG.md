@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.20.0] - 2026-08-13
+
+**Two-dimensional rules as data, and oversized results that teach instead
+of truncate.**
+
+### Added — conjunction matcher
+
+```ts
+{ match: { all: [/zone/i, { keywords: ['audit', 'sweep', 'all'] }] }, use: 'audit-skill' }
+```
+
+A rule fires only when EVERY member of `all` matches. The 2D routing case
+— "zone AND audit-shaped" — becomes declared data instead of a hand-rolled
+condition: drawn by `toMermaid()` with its parts joined by `AND`, compared
+by the checkup (provable shadows only — a conjunction sitting above its
+own broader fallback is a supported design and is never warned about),
+and stored on provenance. An `intent` condition inside `all` is refused at
+compile time, with the alternative named; a nested `all` is flattened
+rather than refused — AND is associative, so the stored data describes
+what actually runs.
+
+### Added — the refusing result ceiling
+
+```ts
+defineTool({
+  resultCeiling: { maxChars: 10_000, narrowBy: ['vsan', 'wwpn'] },
+});
+```
+
+Over the ceiling, the model reads a teaching refusal — `Result too large
+(N chars). Narrow and call again: pass vsan or wwpn. No data was
+returned.` — and the oversized payload never enters context, history, or
+recorders. The record keeps the TRUE size via the new typed event
+`agentfootprint.tools.result_refused`; delivered status is `'invalid'` so
+`onToolStatus` edges route on it; a tool's declared effects still apply (a
+proposed transition survives its own oversized payload); a procedure step
+never advances on a refusal.
+
+A truncated result the model cannot tell is partial produces confident
+summaries of the wrong subset. A refusal that names the narrowing
+parameters produces a clean retry — field-verified.
+
+Composes with the agent-level `maxToolResultChars` (the operator's net,
+truncate-with-verbatim-head): the per-tool ceiling is the tool author's
+teaching layer underneath it.
+
 ## [9.19.0] - 2026-08-13
 
 **The cursor picks the brain, and tools stop smuggling control through

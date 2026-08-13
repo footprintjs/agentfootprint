@@ -383,6 +383,15 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
   //        overlap on messages carrying the shared keyword; declaration order decides
   //        those (`overlapping-rules` — a shadowed pair is reported as shadowed only,
   //        never twice).
+  //      • an `all` conjunction (9.20.0) is compared through PART COVERAGE, and
+  //        shadows-only: a plain rule earlier that provably covers one part of a
+  //        later `all` rule shadows it (the `all` matches a subset of each part's
+  //        messages), and an `all` earlier shadows a later matcher whose parts
+  //        cover every earlier part (the later only adds constraints). No overlap
+  //        is ever claimed for a pair involving `all` — a conjunction can be
+  //        unsatisfiable, so no witness message is provable, and the ordinary
+  //        specific-first layout (`all` rule above its plain fallback) is a
+  //        design, not a warning.
   //    Everything else is left alone and NOT claimed to be clean: two different regex
   //    sources may still overlap (intersection is not decided here), a regex and a
   //    keyword list are never compared, and a `when` predicate is opaque code this

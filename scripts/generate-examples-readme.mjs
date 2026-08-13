@@ -95,11 +95,36 @@ function extractMeta(filePath) {
    * lets the other two quote characters live inside the body, which is exactly
    * what JavaScript's own string rules say. `\\.` still consumes an escaped
    * delimiter (`'It\'s fine'`) so an escape can never terminate the string.
+   *
+   * The value must be the WHOLE expression, not the first literal. The older
+   * form stopped at the first closing quote, so a `+`-concatenated value —
+   * example 55's
+   *
+   *   description:
+   *     'an oversized return becomes a teaching ' +
+   *     'refusal ...'
+   *
+   * silently became its first fragment, and the README shipped a row ending
+   * mid-sentence (same truncated-row bug class as example 44, second
+   * instance; examples 22 and observability 02/03 were also affected).
+   * The fix matches the full `lit (+ lit)*` sequence — each literal keeps
+   * its own delimiter via a per-iteration backreference — then joins the
+   * literal bodies, exactly what JavaScript's `+` does at runtime. A single
+   * literal is the one-element sequence, so unconcatenated fields are
+   * byte-identical to before.
    */
   function fieldOf(key) {
-    const re = new RegExp(`${key}\\s*:\\s*(['"\`])((?:\\\\.|(?!\\1)[^\\\\])*)\\1`);
+    const re = new RegExp(
+      `${key}\\s*:\\s*((['"\`])(?:\\\\.|(?!\\2)[^\\\\])*\\2` +
+        `(?:\\s*\\+\\s*(['"\`])(?:\\\\.|(?!\\3)[^\\\\])*\\3)*)`,
+    );
     const found = re.exec(block);
-    return found ? found[2] : null;
+    if (!found) return null;
+    // Join the body of every literal in the (possibly `+`-joined) sequence.
+    const litRe = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
+    let out = '';
+    for (const lit of found[1].matchAll(litRe)) out += lit[2];
+    return out;
   }
 
   const id = fieldOf('id');

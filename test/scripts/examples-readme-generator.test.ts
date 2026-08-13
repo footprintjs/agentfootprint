@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../..');
@@ -121,6 +121,68 @@ describe('Block E — --check mode catches drift', () => {
     // Post-restore, --check passes again
     const { code } = runGenerator(['--check']);
     expect(code).toBe(0);
+  });
+});
+
+// ─── 6. REGRESSION — concatenated meta strings are captured whole ─
+//
+// The truncated-row bug class (second instance, after example 44's
+// quote-delimiter bug): `fieldOf` used to stop at the FIRST closing
+// quote, so a `'…' + '…'` description silently shipped as its first
+// fragment — a row that read as a complete sentence while --check
+// kept passing. Examples 55, 22, and observability 02/03 all use the
+// concatenated form; pin their rows end-to-end AND pin the extractor
+// against a synthetic fixture so the pin survives example rewording.
+
+describe('Block E — concatenated meta descriptions are never truncated', () => {
+  it('the four real concatenated descriptions render their FULL text', () => {
+    runGenerator();
+    const readme = readFileSync(README_PATH, 'utf-8');
+    // Each assertion is the FINAL clause of a `+`-concatenated
+    // description — present only if every fragment was joined.
+    expect(readme).toContain('the fabrication trap.'); // features/55
+    expect(readme).toContain('served by one bounded content-hash cache.'); // features/22
+    expect(readme).toContain('all offline via the mock embedder.'); // observability/02
+    expect(readme).toContain('the CI-gate workflow of agentfootprint-lint-tools.'); // observability/03
+  });
+
+  it('a fixture with mixed-quote concatenation renders whole, and cleanup restores the README', () => {
+    runGenerator();
+    const original = readFileSync(README_PATH, 'utf-8');
+    const fixturePath = join(REPO_ROOT, 'examples/features/98-tmp-concat-fixture.ts');
+    const fixture = [
+      "import type { ExampleMeta } from '../helpers/cli.js';",
+      '',
+      'export const meta: ExampleMeta = {',
+      "  id: 'features/98-tmp-concat-fixture',",
+      "  title: 'Concat fixture — ' + 'joined title',",
+      "  group: 'features',",
+      '  description:',
+      '    \'first fragment with an "inner quote" \' +',
+      '    "second fragment with an \'apostrophe\' " +',
+      "    'third fragment ends the sentence.',",
+      '  defaultInput: null,',
+      '  providerSlots: [],',
+      "  tags: ['fixture'],",
+      '};',
+      '',
+    ].join('\n');
+    try {
+      writeFileSync(fixturePath, fixture, 'utf-8');
+      runGenerator();
+      const readme = readFileSync(README_PATH, 'utf-8');
+      expect(readme).toContain('Concat fixture — joined title');
+      expect(readme).toContain(
+        'first fragment with an "inner quote" ' +
+          "second fragment with an 'apostrophe' " +
+          'third fragment ends the sentence.',
+      );
+    } finally {
+      rmSync(fixturePath, { force: true });
+      runGenerator();
+    }
+    // Post-cleanup the README is byte-identical to the pre-fixture state.
+    expect(readFileSync(README_PATH, 'utf-8')).toBe(original);
   });
 });
 

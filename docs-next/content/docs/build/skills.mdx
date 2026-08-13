@@ -181,17 +181,21 @@ build in silence. `check: 'warn'` still never throws.
 ### Start rules as data — `match` beside `when`
 
 A start rule can declare its condition as **data** instead of code: `match` takes a
-`SkillMatch` — either a `RegExp` tested against the user's message, or
-`{ keywords: [...] }` (case-insensitive, any keyword present, whole-word at word
-edges, so `refund` never fires on "refunds"). Each rule takes **exactly one** of
+`SkillMatch` — a `RegExp` tested against the user's message, `{ keywords: [...] }`
+(case-insensitive, any keyword present, whole-word at word edges, so `refund` never
+fires on "refunds"), or `{ all: [...] }` — the conjunction (9.20.0): the rule matches
+only when **every** member matches. Each rule takes **exactly one** of
 `match`/`when` — both or neither is a build-time refusal naming the rule — and the
 rule's type is `SkillStartRule`, so TypeScript refuses the same pair at the keystroke.
 
 ```ts
 const graph = skillGraph({
-  skills: [refunds, billing, triage],
+  skills: [zoneAudit, refunds, billing, triage],
   start: {
     rules: [
+      // "zone AND audit-shaped" as data, not a lookahead regex. Specific-first:
+      // the conjunction sits above the broader rules it composes from.
+      { match: { all: [/zone/i, { keywords: ['audit', 'sweep', 'all'] }] }, use: 'zone-audit' },
       { match: /refund|money back/i, use: 'refunds' },
       { match: { keywords: ['charge', 'invoice'] }, use: 'billing' },
       { when: (ctx) => ctx.iteration > 1, use: 'triage' }, // predicates still work beside data
@@ -200,11 +204,20 @@ const graph = skillGraph({
 });
 ```
 
+`all` holds the **sync arms only** (`RegExp` / `{ keywords }`). An intent member is
+refused at build — intents are judged by the graph's classifier at turn start and
+cannot compose into a synchronous AND; the refusal names the alternative (declare the
+intent as its own rule). A nested `all` is flattened (AND is associative, so the
+flattened form runs identically and the stored data describes exactly what runs), and
+an empty `all` is refused. `toMermaid()` captions the entry edge with the parts
+joined by ` AND `.
+
 Why data? A predicate is opaque — the library can only run it. A matcher can be
 **compared**, **drawn** and **stored**: `toMermaid()` captions the entry edge with the
 pattern, the compiled skill's provenance (`metadata.skillGraph.match`) and the entry
-edge carry a serializable `SkillMatchData` (`{ kind: 'regex', source, flags }` or
-`{ kind: 'keywords', keywords }`), and the check-up gains three codes — one for every rule, two only
+edge carry a serializable `SkillMatchData` (`{ kind: 'regex', source, flags }`,
+`{ kind: 'keywords', keywords }` or `{ kind: 'all', parts }` — parts always the flat
+leaves), and the check-up gains three codes — one for every rule, two only
 possible over data: `rule-id-exists` (ERROR — a rule routing to a skill that is
 not in `skills[]` refuses to build under every `check` mode, listing every bad id and
 the known catalog), `overlapping-rules` (two data matchers provably overlap — a shared
@@ -212,6 +225,12 @@ keyword — and declaration order decides those messages) and `rules-shadowed-by
 (a later rule provably can never win: an identical regex earlier, or an earlier
 keyword set that is a superset of the later one). The comparisons claim only what the
 data proves — `when` predicates are opaque and the messages say they were not checked.
+A conjunction is compared through **part coverage**, shadows-only: an `all` rule
+matches a subset of each of its parts' messages, so a plain rule *earlier* that covers
+one part shadows a later `all` rule (a dead rule, warned), while the reverse layout —
+the `all` rule first, its broad fallback later — is the intended specific-first design
+and stays silent; no overlap is ever claimed for a pair involving `all` (a conjunction
+can be unsatisfiable, so no witness message is provable).
 And a router where every entry carries a `when` or a `match` is a supported design:
 it never trips `multi-entry-fanout`.
 

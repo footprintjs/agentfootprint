@@ -71,7 +71,7 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 78 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 85 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -110,7 +110,10 @@ describe('event registry — names + exhaustiveness', () => {
     //     boundary; the model declined one with its reason on the record;
     //     the turn ended with steps unrun — nudged once, accepted, or
     //     cut short by a limit.)
-    expect(ALL_EVENT_TYPES.length).toBe(84);
+    //    (tools.result_refused added with 9.20.0 — a tool's own resultCeiling
+    //     refused an oversized result: the model read a teaching refusal, the
+    //     payload entered no channel, and this event keeps the true size.)
+    expect(ALL_EVENT_TYPES.length).toBe(85);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

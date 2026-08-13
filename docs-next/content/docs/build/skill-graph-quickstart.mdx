@@ -50,8 +50,10 @@ inside an edge label — it renders back as the `|` in your regex.)
 
 ## What those lines bought
 
-**Routing by data.** `match` takes a `RegExp` or `{ keywords: [...] }` (keywords
-are case-insensitive, any-of, and whole-word). From the run above:
+**Routing by data.** `match` takes a `RegExp`, `{ keywords: [...] }` (keywords
+are case-insensitive, any-of, and whole-word), or `{ all: [...] }` — a conjunction
+that fires only when every listed member matches ("zone AND audit-shaped", as data).
+From the run above:
 
 | user message | lands in | why |
 |---|---|---|

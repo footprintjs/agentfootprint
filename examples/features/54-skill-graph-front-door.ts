@@ -13,6 +13,13 @@
  *      captions the entry edge) and STORED (the compiled skill's provenance).
  *      Keywords are case-insensitive, any-of, whole-word at word edges — `refund`
  *      does not fire on "refunds"; a regex stays exactly the author's regex.
+ *      Since 9.20.0 the conjunction joins them: `match: { all: [...] }` fires
+ *      only when EVERY member matches ("zone AND audit-shaped" as data instead
+ *      of a lookahead regex). Members are the sync arms only — an intent inside
+ *      `all` is refused (declare a separate intent rule); a nested `all` is
+ *      flattened (AND is associative); the check-up sees through it (a plain
+ *      rule EARLIER that covers one part shadows a later `all` rule), and
+ *      `toMermaid()` captions the parts joined with ` AND `.
  *   2. **`scopeTools` on the FLAT arm.** The tree arm has scoped its leaves' tools
  *      since 8.7.0; now `skillGraph({ skills, start, steps, scopeTools: true })`
  *      stamps `autoActivate: 'currentSkill'` on every WIRED skill, so tools follow
@@ -49,7 +56,7 @@ export const meta: ExampleMeta = {
   title: 'Skill graph — the front door: rules as data, scoped flat tools, deferred body checks',
   group: 'features',
   description:
-    'Start rules declared as data (match: RegExp | { keywords }) so the check-up can compare them (overlapping-rules, rules-shadowed-by-order) and toMermaid can caption them; rule-id-exists refuses a rule naming an unknown skill; scopeTools reaches the FLAT arm (autoActivate on every wired skill, default false until 10.0.0); and body-contract checks defer to Agent build, where the full tool registry finally exists.',
+    'Start rules declared as data (match: RegExp | { keywords } | { all: [...] } — the 9.20.0 conjunction fires only when EVERY member matches) so the check-up can compare them (overlapping-rules, rules-shadowed-by-order) and toMermaid can caption them; rule-id-exists refuses a rule naming an unknown skill; scopeTools reaches the FLAT arm (autoActivate on every wired skill, default false until 10.0.0); and body-contract checks defer to Agent build, where the full tool registry finally exists.',
   defaultInput: '(no input — build-time declaration, validation and drawing)',
   providerSlots: [],
   tags: ['feature', 'skills', 'graph', 'validation', 'checkup', 'tools'],
@@ -85,11 +92,20 @@ export async function run(_input: string, _provider?: LLMProvider): Promise<unkn
     description: 'everything else',
     body: 'Ask one clarifying question, then hand off with read_skill(billing).',
   });
+  const zoneAudit = defineSkill({
+    id: 'zone-audit',
+    description: 'zone-wide billing audits',
+    body: 'Run the audit playbook for the named zone.',
+  });
 
   const router = skillGraph({
-    skills: [refunds, billing, triage],
+    skills: [refunds, billing, triage, zoneAudit],
     start: {
       rules: [
+        // The 2D case (9.20.0): a zone mention AND an audit-shaped ask — as
+        // data, not a lookahead regex. Specific-first: it sits above the
+        // broader rules it composes from.
+        { match: { all: [/zone/i, { keywords: ['audit', 'sweep', 'all'] }] }, use: 'zone-audit' },
         { match: /refund|money back/i, use: 'refunds' },
         { match: { keywords: ['charge', 'billing statement', 'invoice'] }, use: 'billing' },
         { when: (ctx) => ctx.iteration > 1, use: 'triage' }, // predicates still work beside data
@@ -106,6 +122,9 @@ export async function run(_input: string, _provider?: LLMProvider): Promise<unkn
     'I want my money back': router.nextSkill(iterCtx('I want my money back'))!,
     'a strange CHARGE appeared': router.nextSkill(iterCtx('a strange CHARGE appeared'))!,
     'my charger broke (whole-word: no match)': String(router.nextSkill(iterCtx('my charger broke'))),
+    // The conjunction needs BOTH dimensions — either alone falls through:
+    'AUDIT zone 4 charges (zone AND audit)': router.nextSkill(iterCtx('AUDIT zone 4 charges'))!,
+    'zone 4 status (zone alone: no match)': String(router.nextSkill(iterCtx('zone 4 status'))),
   };
 
   // …the drawing captions the entry edges with the SAME data…

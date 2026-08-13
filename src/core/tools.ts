@@ -88,7 +88,80 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *   });
    */
   readonly capabilities?: readonly ToolCapability[];
+  /**
+   * The refusing ceiling on THIS tool's result (9.20.0): when the handler's
+   * stringified return exceeds `maxChars`, the model reads a teaching refusal
+   * naming the true size, the ceiling and how to narrow — and the oversized
+   * payload never enters context, history or any event. See
+   * {@link ToolResultCeiling} for why refusal, not truncation. Omitted →
+   * byte-identical behavior (nothing measured, nothing emitted).
+   */
+  readonly resultCeiling?: ToolResultCeiling;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/**
+ * A declared cap on ONE tool's result that REFUSES instead of truncating
+ * (9.20.0).
+ *
+ * WHY refusal: a truncated result reads as a complete one — the model cannot
+ * tell the data ends where the cut happened, so it fabricates from the part it
+ * saw. A refusal that names the size, the ceiling and the parameters to narrow
+ * produces a clean retry instead (field-verified on a ~191k-char return). The
+ * agent-level `maxToolResultChars` remains the OTHER answer — truncate with a
+ * verbatim head and a marker — for operators capping tools they did not write;
+ * this one is the TOOL AUTHOR's contract, and only the author knows which
+ * parameters (`narrowBy`) make the retry smaller.
+ *
+ * The record keeps the truth: a typed `agentfootprint.tools.result_refused`
+ * event carries the true size, and the delivered result carries status
+ * `'invalid'` so `onToolStatus` edges can route on it.
+ */
+export interface ToolResultCeiling {
+  /** The ceiling, in characters of the stringified result. Positive whole
+   *  number; anything else is refused at `defineTool`. */
+  readonly maxChars: number;
+  /** Parameter names the refusal suggests narrowing by (e.g. `['limit',
+   *  'fields']`). Optional; when present it must name at least one — an empty
+   *  list is refused, because omitting the field is how "no suggestions" is
+   *  said. */
+  readonly narrowBy?: readonly string[];
+}
+
+/**
+ * Refuse a `resultCeiling` this library cannot honor, at definition time —
+ * naming the tool and the fix, never failing at the first oversized result of
+ * the first run. Exported beside {@link assertValidToolName} for consumers
+ * assembling `Tool` objects by hand.
+ */
+export function assertResultCeiling(
+  toolName: string,
+  ceiling: ToolResultCeiling | undefined,
+): void {
+  if (ceiling === undefined) return;
+  const { maxChars, narrowBy } = ceiling;
+  if (!Number.isFinite(maxChars) || !Number.isInteger(maxChars) || maxChars <= 0) {
+    throw new Error(
+      `defineTool: tool '${toolName}' declares resultCeiling.maxChars = ${String(maxChars)}, ` +
+        `which is not a positive whole number of characters. The ceiling is the size over ` +
+        `which the model reads a refusal instead of the result — to have no ceiling, omit ` +
+        `\`resultCeiling\` (absent means results are never measured, exactly as before).`,
+    );
+  }
+  if (narrowBy !== undefined) {
+    const usable =
+      Array.isArray(narrowBy) &&
+      narrowBy.length > 0 &&
+      narrowBy.every((n) => typeof n === 'string' && n.trim().length > 0);
+    if (!usable) {
+      throw new Error(
+        `defineTool: tool '${toolName}' declares resultCeiling.narrowBy = ` +
+          `${JSON.stringify(narrowBy)}, which names nothing the refusal could suggest. ` +
+          `List at least one parameter name (non-empty strings, e.g. ['limit', 'fields']), ` +
+          `or drop the field — omitting it is how "no suggestions" is said.`,
+      );
+    }
+  }
 }
 
 /** Runtime context passed to tool.execute(). */
@@ -216,6 +289,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Declare what this tool touches (see {@link Tool.capabilities}). Consulted
    *  only when the configured checker declares it governs them. */
   readonly capabilities?: readonly ToolCapability[];
+  /** Refuse (never truncate) a result over this many chars, teaching the model
+   *  to narrow (see {@link ToolResultCeiling}). Omitted → byte-identical. */
+  readonly resultCeiling?: ToolResultCeiling;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -296,6 +372,9 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   options: DefineToolOptions<TArgs, TResult>,
 ): Tool<TArgs, TResult> {
   warnIfInvalidToolName(options.name);
+  // A ceiling that cannot cap fails HERE, naming the tool — not at the first
+  // oversized result of the first run.
+  assertResultCeiling(options.name, options.resultCeiling);
   return {
     schema: {
       name: options.name,
@@ -309,6 +388,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     // Copied verbatim, never inferred — an empty array is a tool that declared
     // it touches nothing, which is a different statement from saying nothing.
     ...(options.capabilities !== undefined && { capabilities: options.capabilities }),
+    ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
     execute: options.execute,
   };
 }

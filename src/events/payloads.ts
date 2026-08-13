@@ -1,5 +1,7 @@
 /**
- * Event payload types — the 45 typed event payloads across 13 domains.
+ * Event payload types — the payload interfaces behind the registered events
+ * (never a hardcoded count here: the registry's counts are pinned by
+ * test/events/unit/registry.test.ts).
  *
  * Pattern: Discriminated Union (Gang of Four inspired, TS-native).
  * Role:    Contract layer of Event-Driven Hexagonal Architecture.
@@ -1111,6 +1113,33 @@ export interface ToolEffectPayload {
   readonly refusalReason?: string;
   /** outcome `'superseded'`: what outran it. */
   readonly supersededBy?: 'earlier-proposal';
+}
+
+/**
+ * A tool's result was refused for exceeding the tool's own declared
+ * `resultCeiling` (9.20.0) — the record of the size the content channels never
+ * carry. The model read a teaching refusal ("No data was returned", plus how
+ * to narrow); the oversized payload entered NO channel — not history, not
+ * `stream.tool_end`, not this event. The delivered result carries status
+ * `'invalid'`, so `onToolStatus` edges can route the overflow.
+ *
+ * No `resultCeiling` on the tool = this event never fires
+ * (zero-cost-when-unused).
+ */
+export interface ToolResultRefusedPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** The stringified result's TRUE length — the fact the refusal replaced. */
+  readonly sizeChars: number;
+  /** The tool's declared ceiling it exceeded. */
+  readonly maxChars: number;
+  /** The declared parameter names the refusal suggested narrowing by. */
+  readonly narrowBy?: readonly string[];
+  /** When the refused result was an effects envelope: the status the tool
+   *  DECLARED before delivery was refused (its declared effects were still
+   *  judged — a proposed transition does not die with an oversized payload). */
+  readonly declaredStatus?: ToolResultStatus;
 }
 
 // permission.* (4)
