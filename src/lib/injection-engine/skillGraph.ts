@@ -209,6 +209,9 @@ export interface SkillGraphStep {
   readonly to: string;
   readonly when?: SkillRouteOptions['when'];
   readonly onToolReturn?: string | RegExp;
+  /** Route on the result's declared outcome status (9.19.0) — see
+   *  {@link SkillRouteOptions.onToolStatus}. */
+  readonly onToolStatus?: SkillRouteOptions['onToolStatus'];
   readonly label?: string;
 }
 
@@ -288,11 +291,30 @@ export type { EntryScore, EntryScoring };
 /** Deterministic routing into a skill, keyed on the last tool result. */
 export interface SkillRouteOptions {
   /** Predicate on the previous iteration's tool result → activate the target
-   *  on the next iteration. The common, controllable edge. */
-  readonly when?: (result: { readonly toolName: string; readonly result: string }) => boolean;
+   *  on the next iteration. The common, controllable edge. `status` is
+   *  present when the tool declared one on its result envelope (9.19.0). */
+  readonly when?: (result: {
+    readonly toolName: string;
+    readonly result: string;
+    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+  }) => boolean;
   /** Sugar for "activate whenever this tool returns (any result)". String is an
    *  exact match; RegExp is tested against the tool name. */
   readonly onToolReturn?: string | RegExp;
+  /**
+   * Route on the result's declared OUTCOME, not its prose (9.19.0) — the
+   * data half of the outcome-status normalization: a `'denied'` call must
+   * never route like a `'success'`. Matches when a tool result of the batch
+   * carries one of the named statuses on its envelope; a result with NO
+   * declared status can never match (an undeclared outcome is not
+   * evidence). Compose with `onToolReturn` to pin the tool too ("when
+   * `refund` returns `'denied'`"); alone, any tool's matching status fires.
+   * Data — comparable, drawable (`toMermaid()` captions it), stored. At
+   * most one of `when` / `onToolStatus`: code or data, never both.
+   */
+  readonly onToolStatus?:
+    | import('../../core/agent/toolEffects.js').ToolResultStatus
+    | ReadonlyArray<import('../../core/agent/toolEffects.js').ToolResultStatus>;
   /** Caption rendered on the edge. Defaults to a derived label. */
   readonly label?: string;
 }
@@ -355,7 +377,7 @@ export interface TreeOptions {
   readonly scopeTools?: boolean;
 }
 
-export type SkillEdgeKind = 'entry' | 'predicate' | 'on-tool-return' | 'model';
+export type SkillEdgeKind = 'entry' | 'predicate' | 'on-tool-return' | 'on-tool-status' | 'model';
 
 export interface SkillEdge {
   /** Source skill id, or `null` for the synthetic START (an entry edge). */
@@ -410,10 +432,18 @@ function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
  *   • `'route'`      — a declared, `from`-gated edge fired (D1);
  *   • `'model-pick'` — no declared edge fired, so the model's gate-accepted
  *                      `read_skill` pick moved the cursor (D2), at cold start or mid-run;
+ *   • `'tool-proposal'` — no declared edge fired and an ACCEPTED
+ *                      `propose-transition` tool effect moved the cursor
+ *                      (9.19.0) — deterministic tool evidence, ranked between
+ *                      the author's edges (D1 still wins) and the model's
+ *                      pick (a tool outranks a guess);
  *   • `'intent'`     — the turn-start cascade's tier-2 scorer decisively routed
  *                      the turn (SG-C; `turn_routed` carries the numbers);
  *   • `'continuity'` — the inherited conversation cursor held the turn's start
  *                      (SG-C, `continuity: 'conversation'`);
+ *   • `'decider'`    — the configured tier-3 decider resolved an outstanding
+ *                      menu out-of-band and the turn starts on its pick
+ *                      (9.19.0);
  *   • `'stay'`       — nothing fired; the cursor is sticky and stayed put;
  *   • `'none'`       — no cursor at all (cold start with nothing to enter, or a
  *                      decision `tree()`, which routes by predicate and has no cursor).
@@ -427,8 +457,10 @@ export type CursorMoveCause =
   | 'entry'
   | 'route'
   | 'model-pick'
+  | 'tool-proposal'
   | 'intent'
   | 'continuity'
+  | 'decider'
   | 'stay'
   | 'none';
 
@@ -805,7 +837,23 @@ interface RouteDecl {
   readonly toId: string;
   readonly when?: SkillRouteOptions['when'];
   readonly onToolReturn?: string | RegExp;
+  readonly onToolStatus?: SkillRouteOptions['onToolStatus'];
   readonly label?: string;
+}
+
+/** A route edge that fires on its own evidence — `when` code, a tool-name
+ *  match, or a declared status. NOT a model edge. The ONE predicate every
+ *  determinism filter shares (9.19.0 folded four replicas into it when
+ *  `onToolStatus` joined the family). */
+function isDeterministicRoute(r: RouteDecl): boolean {
+  return r.when !== undefined || r.onToolReturn !== undefined || r.onToolStatus !== undefined;
+}
+
+/** The declared status set, normalized to an array. */
+function statusesOf(
+  onToolStatus: NonNullable<SkillRouteOptions['onToolStatus']>,
+): ReadonlyArray<string> {
+  return Array.isArray(onToolStatus) ? onToolStatus : [onToolStatus as string];
 }
 
 /** Mermaid node ids must be identifier-safe; keep the original id as the label. */
@@ -907,11 +955,30 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           `skillGraph: route ${fromId}→${toId} sets both 'when' and 'onToolReturn' — pick one.`,
         );
       }
+      // `when` is code, `onToolStatus` is data over the same result — both
+      // set is a contradiction (which one fires the edge?). `onToolReturn`
+      // COMPOSES with `onToolStatus` ("this tool, with this outcome"), so
+      // that pair stays legal.
+      if (opts?.when && opts?.onToolStatus) {
+        throw new Error(
+          `skillGraph: route ${fromId}→${toId} sets both 'when' and 'onToolStatus' — pick ` +
+            `one. 'onToolStatus' is the data form (drawable, comparable); to combine a ` +
+            `status with extra logic, read \`result.status\` inside your 'when' predicate.`,
+        );
+      }
+      if (opts?.onToolStatus !== undefined && statusesOf(opts.onToolStatus).length === 0) {
+        throw new Error(
+          `skillGraph: route ${fromId}→${toId} sets 'onToolStatus: []' — an empty status ` +
+            `set can never match, so the edge would be dead wiring. Name at least one ` +
+            `status, or drop the field.`,
+        );
+      }
       routes.push({
         fromId,
         toId,
         when: opts?.when,
         onToolReturn: opts?.onToolReturn,
+        ...(opts?.onToolStatus !== undefined && { onToolStatus: opts.onToolStatus }),
         label: opts?.label,
       });
       return builder;
@@ -1049,7 +1116,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           routes: routes.map((r) => ({
             fromId: r.fromId,
             toId: r.toId,
-            deterministic: !!(r.when || r.onToolReturn),
+            deterministic: isDeterministicRoute(r),
           })),
           isTree: treeRoot !== undefined,
           exclusiveEntries:
@@ -1238,8 +1305,22 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             (r): SkillEdge => ({
               from: r.fromId,
               to: r.toId,
-              kind: r.onToolReturn ? 'on-tool-return' : r.when ? 'predicate' : 'model',
-              label: r.label ?? (r.onToolReturn ? `on ${String(r.onToolReturn)}` : undefined),
+              kind: r.onToolStatus
+                ? 'on-tool-status'
+                : r.onToolReturn
+                ? 'on-tool-return'
+                : r.when
+                ? 'predicate'
+                : 'model',
+              label:
+                r.label ??
+                (r.onToolStatus
+                  ? `on ${
+                      r.onToolReturn !== undefined ? `${String(r.onToolReturn)} ` : ''
+                    }status=${statusesOf(r.onToolStatus).join('|')}`
+                  : r.onToolReturn
+                  ? `on ${String(r.onToolReturn)}`
+                  : undefined),
             }),
           ),
         );
@@ -1450,6 +1531,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       builder.route(resolve(step.from), resolve(step.to), {
         ...(step.when && { when: step.when }),
         ...(step.onToolReturn && { onToolReturn: step.onToolReturn }),
+        ...(step.onToolStatus !== undefined && { onToolStatus: step.onToolStatus }),
         ...(step.label && { label: step.label }),
       });
     }
@@ -1528,14 +1610,27 @@ function makeScoreEntries(
 }
 
 /** Does a single route edge fire for ONE tool result of the batch?
- *  `onToolReturn` matches the tool NAME, `when` runs the predicate over the
- *  result (same `{ toolName, result }` shape it has always received). The
- *  caller walks the batch in call order (9.16.0) — before that, only
+ *  `onToolStatus` matches the result's DECLARED status (composed with the
+ *  tool name when `onToolReturn` is also set — a result with no status can
+ *  never match a status edge); `onToolReturn` alone matches the tool NAME;
+ *  `when` runs the predicate over the result (same `{ toolName, result }`
+ *  shape it has always received, plus `status` when declared). The caller
+ *  walks the batch in call order (9.16.0) — before that, only
  *  `ctx.lastToolResult` was ever offered here. */
 function routeMatches(
   r: RouteDecl,
-  res: { readonly toolName: string; readonly result: string },
+  res: {
+    readonly toolName: string;
+    readonly result: string;
+    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+  },
 ): boolean {
+  if (r.onToolStatus !== undefined) {
+    if (res.status === undefined || !statusesOf(r.onToolStatus).includes(res.status)) {
+      return false;
+    }
+    return r.onToolReturn ? toolMatcher(r.onToolReturn)(res.toolName) : true;
+  }
   if (r.onToolReturn) return toolMatcher(r.onToolReturn)(res.toolName);
   return r.when ? r.when(res) : false;
 }
@@ -1603,6 +1698,8 @@ function makeResolveCursor(
           ? ('intent' as const)
           : ctx.turnRoute.by === 'continuity'
           ? ('continuity' as const)
+          : ctx.turnRoute.by === 'decider'
+          ? ('decider' as const)
           : ('entry' as const);
       return {
         ...(ctx.turnRoute.from !== undefined && { from: ctx.turnRoute.from }),
@@ -1634,6 +1731,14 @@ function makeResolveCursor(
             warnMatcherThrew(`entry "${e.id}"`, err);
           }
         }
+      }
+      // A cold ACCEPTED tool proposal enters exactly where a cold model pick
+      // may (an entry — the reachable-from-cold set), and OUTRANKS the pick:
+      // deterministic tool evidence over a model guess, the same order the
+      // mid-run walk applies below (9.19.0).
+      const coldProposal = ctx.pendingToolTransition?.targetSkillId;
+      if (coldProposal !== undefined && isEntry(coldProposal)) {
+        return { to: coldProposal, by: 'tool-proposal' };
       }
       // The model's pick becomes the starting cursor. This is what `.entryByRead()`
       // has always done; 8.3.0 makes it true for EVERY start form, which is what
@@ -1670,7 +1775,7 @@ function makeResolveCursor(
       let target: string | undefined;
       for (const r of routes) {
         if (r.fromId !== cur) continue;
-        if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
+        if (!isDeterministicRoute(r)) continue; // model edges don't auto-fire
         try {
           if (routeMatches(r, res)) {
             target = r.toId;
@@ -1696,6 +1801,16 @@ function makeResolveCursor(
         by: 'route',
         ...(losers !== undefined && { conflict: { winner, losers } }),
       };
+    }
+    // D1.5 — the ACCEPTED tool proposal (9.19.0): no declared edge fired, so
+    // a `propose-transition` effect the gate validated moves the cursor. It
+    // sits BETWEEN the edges and the pick on purpose: a declared edge is the
+    // author's determinism (never overridden), a proposal is the tool
+    // author's determinism (code that shipped), a pick is the model's guess.
+    // A proposal of the CURRENT skill is a no-op stay, not a hop.
+    const proposal = ctx.pendingToolTransition?.targetSkillId;
+    if (proposal !== undefined && proposal !== cur) {
+      return { ...from, to: proposal, by: 'tool-proposal' };
     }
     // D2 — the validated volunteer: no declared edge fired, so the model's own
     // (already gated) pick moves the cursor. A pick of the CURRENT skill is a
@@ -1864,8 +1979,9 @@ function deriveTrigger(
     };
   }
 
-  // Deterministic incoming edges (when / onToolReturn) → cursor-gated + sticky.
-  const incoming = routes.filter((r) => r.toId === id && (r.when || r.onToolReturn));
+  // Deterministic incoming edges (when / onToolReturn / onToolStatus) →
+  // cursor-gated + sticky.
+  const incoming = routes.filter(isDeterministicRoute).filter((r) => r.toId === id);
   if (incoming.length === 0) return null; // model-reachable — keep default trigger
 
   return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
@@ -2067,14 +2183,14 @@ function routingFor(
       ...(entry.match && { match: entry.match }),
     };
 
-  const incoming = routes.filter((r) => r.toId === id && (r.when || r.onToolReturn));
+  const incoming = routes.filter(isDeterministicRoute).filter((r) => r.toId === id);
   const first = incoming[0];
   if (first) {
     return {
       via: 'route',
       from: first.fromId,
       ...(first.label && { label: first.label }),
-      triggerKind: first.onToolReturn ? 'on-tool-return' : 'rule',
+      triggerKind: first.onToolReturn && !first.onToolStatus ? 'on-tool-return' : 'rule',
     };
   }
   return { via: 'model' }; // model-reachable via read_skill

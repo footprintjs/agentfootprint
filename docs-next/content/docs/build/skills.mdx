@@ -327,7 +327,7 @@ The mapping is one-to-one:
 | `start: 'id'` / `{ use }` | `.entry(skill)` |
 | `start: { rules: [{ match \| when, use }] }` | `.entry(skill, { match })` / `.entry(skill, { when })` |
 | `start: { entries, scoredBy / byRelevance }` | `.entry(...)` × n + `.entryBy(scorer)` / `.entryByRelevance(embedder)` |
-| `steps: [{ from, to, when / onToolReturn }]` | `.route(from, to, { when })` / `.route(from, to, { onToolReturn })` |
+| `steps: [{ from, to, when / onToolReturn / onToolStatus }]` | `.route(from, to, { when })` / `.route(from, to, { onToolReturn })` / `.route(from, to, { onToolStatus })` |
 | `tree: root` | `.tree(root)` |
 | `check` / `knownTools` / `scopeTools` | the same fields on `.build({ ... })` |
 
@@ -492,6 +492,85 @@ completed step, in batch call order (the last one carries
 with the model's own reason and the declared policy; and
 `agentfootprint.skill.steps_unfinished` records how a turn ended with steps
 unrun — `'nudged'`, `'accepted'`, or `'cut-short'`.
+
+## Per-skill brains — model switching (9.19.0)
+
+A skill graph already decides **where** the run is (the one cursor); a brain
+lets that same position decide **who answers**. Declare it beside the skill —
+`defineSkill({ provider, model })` — or for a whole fleet at the mount —
+`skillGraph(g, { providers: { refund: { provider, model } } })`. While the
+cursor is on that skill, every LLM call runs on its brain: triage on the
+small model, the refund skill on the strong one, with zero new stages.
+
+<CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="define-brains" title="examples/context-engineering/17-brains-and-tool-effects.ts (region: define-brains)" />
+
+**The precedence chain, stated:** `escalation > per-skill brain >
+.configure() resolvedModel > build-time default` — the more specific context
+wins (evidence > node > run > build), field by field. A brain naming only a
+`model` keeps the agent's provider ("same brain, other model"); a brain
+naming only a *same-name* provider inherits the model down the chain; a
+**foreign provider without a model is refused at build** — the agent's model
+id belongs to another vendor's namespace and would fail mid-turn, on exactly
+the iteration the cursor first enters the skill. The same id declared in
+both homes with different choices is refused naming both. `llm_start`
+records the winner: `brain: { via: 'skill' | 'escalation', skillId? }` —
+absent whenever the agent's own configuration answered, so an agent without
+brains keeps its exact prior event bytes.
+
+**Escalate on evidence.** `skillGraph(g, { escalation: { provider, model,
+afterRefusals: N } })` — when the routing gate refuses N picks in one turn
+(`skill.rejected`, reachability *or* posture — recorded refusals, never
+vibes), the rest of the turn runs on the escalation brain:
+`skill.escalated` fires once at the flip with the honest `from`/`to`, and
+the next turn's seed de-escalates. The loop the model is flubbing gets the
+bigger brain until the turn resolves.
+
+**The tier-3 decider.** `skillGraph(g, { decider: { provider, model } })`
+resolves an outstanding turn-start **menu** out of band, before the loop —
+a constrained-enum pick over the offered ids ∪ `stay` (the `llmClassifier`
+machinery: forced tool where the provider constrains generation, strict
+parse + one re-ask + `'none'` everywhere else; ids never fabricated). A
+decisive pick starts the turn (`turn_routed { by: 'decider' }`); `'stay'`
+holds the incumbent **and closes the menu** (the event keeps the full
+offered set; the loop may no longer act on it); a decline leaves the
+in-band envelope standing, consult recorded. Because the decider is
+constrained, off-loop, and recorded, **rails admits it** — it is the
+sanctioned resolver for `strictness: 'rails'` menus, which otherwise
+proceed on the base prompt. A decider needs a graph that runs the
+turn-start cascade (a classifier, or `continuity: 'conversation'`) —
+refused at build otherwise, because no other mount ever has a menu for it
+to resolve.
+
+Steps × brains are independent by construction: a stepped skill with a
+brain runs its procedure *on* its brain — the cursor picks both the working
+set and the reader of it.
+
+### The brains surface, named
+
+From `agentfootprint`:
+
+- `ProviderChoice` — one brain: an `LLMProvider` port plus an optional
+  `model`. The value type of `SkillGraphOptions.providers` and the
+  `decider` field's shape.
+- `EscalationPolicy` — a `ProviderChoice` plus `afterRefusals`, the
+  recorded-refusal threshold that flips the turn.
+
+On the event stream: `agentfootprint.skill.escalated` fires once at the
+flip (declared threshold, observed refusals, the honest `from`/`to`), and
+`agentfootprint.stream.llm_start` gains the additive `brain` field naming
+the rung that answered.
+
+From `agentfootprint/context`, the decider's machinery — shared with
+`llmClassifier` so the two enum disciplines can never drift:
+
+- `constrainedEnumPick` — ONE model call that can only answer from a fixed
+  list: a forced synthetic tool on providers that declare
+  `carriesForcedToolChoice`, a strict single-line parse + one re-ask +
+  the caller's fallback everywhere else.
+- `ConstrainedEnumPickRequest` — its request bag (provider, model, catalog
+  prompt, messages, the `allowed` enum, `fallback`, the pick tool).
+- `EnumPickTool` — the synthetic pick tool's name/description/argument, as
+  the wire shows them.
 
 ## Long-context refresh (`refreshPolicy`)
 

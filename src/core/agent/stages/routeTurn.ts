@@ -49,6 +49,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { TypedScope } from 'footprintjs';
+import type { LLMProvider } from '../../../adapters/types.js';
 import type { AgentState } from '../types.js';
 import type { InjectionContext } from '../../../lib/injection-engine/types.js';
 import type { EntryScoring } from '../../../lib/injection-engine/skillGraph.js';
@@ -60,6 +61,7 @@ import {
   type Tier2Verdict,
   type TurnRoute,
 } from '../../../lib/injection-engine/routingPolicy.js';
+import { constrainedEnumPick } from '../../../lib/injection-engine/constrainedEnumPick.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { SkillTurnRoutedPayload } from '../../../events/payloads.js';
 
@@ -81,7 +83,34 @@ export interface RouteTurnDeps {
   /** Which skills the caller's role may not see (9.11.0) — excluded from
    *  candidates, scores, menus and the envelope. Fail-closed inside. */
   readonly hiddenSkillIds?: () => Promise<readonly string[]> | readonly string[];
+  /**
+   * The tier-3 DECIDER (9.19.0) — an out-of-band constrained pick over an
+   * outstanding menu ∪ {stay}, resolved HERE, before the loop, with the
+   * `constrainedEnumPick` machinery (the `llmClassifier` discipline: forced
+   * tool on providers that constrain, strict parse + one re-ask + `'none'`
+   * everywhere else — ids never fabricated). A decisive pick starts the
+   * turn (`turn_routed { by: 'decider' }`, additive); `'stay'` holds the
+   * incumbent (`by: 'continuity'`, decider recorded); `'none'` / parse
+   * failure / a throw leaves the in-band envelope standing, decider
+   * recorded with `picked` absent. Rails × decider is ADMITTED — the
+   * decider is constrained, off-loop and recorded (a scorer in posture
+   * terms), which makes it the sanctioned resolver for rails menus.
+   * Undefined → every menu keeps its exact 9.17 behavior.
+   */
+  readonly decider?: {
+    readonly provider: LLMProvider;
+    readonly model?: string;
+    /** The agent's build-time model — the chain's last rung. */
+    readonly defaultModel: string;
+    /** `.configure()` present — only then is `scope.resolvedModel` read. */
+    readonly runConfigured: boolean;
+  };
 }
+
+/** The decider's `'stay'` sentinel — first-class on mid-conversation menus. */
+const DECIDER_STAY = 'stay';
+/** The decider's decline sentinel (the enum machinery's fallback). */
+const DECIDER_NONE = 'none';
 
 /** The verdict in stage-internal form, before it splits into POJO + event. */
 interface CascadeVerdict {
@@ -142,15 +171,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
     }
     const visibleEntryIds = plan.entryIds.filter((id) => !hidden.has(id));
 
-    const verdict = await runCascade(
-      deps,
-      plan,
-      ctx,
-      inherited,
-      hidden,
-      visibleEntryIds,
-      env.signal,
-    );
+    let verdict = await runCascade(deps, plan, ctx, inherited, hidden, visibleEntryIds, env.signal);
 
     if (verdict === undefined && droppedResume === undefined) {
       // Cold start on a continuity graph with no tier 2 at all: the resolver's
@@ -163,6 +184,62 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
     if (verdict?.scores !== undefined && verdict.scorer !== undefined) {
       scope.entryScores = verdict.scores;
       scope.entryScorer = verdict.scorer;
+    }
+
+    // ── Tier-3 DECIDER (9.19.0) — the out-of-band menu resolver ────────
+    // Runs HERE, off the hot loop, only when a menu verdict is actually
+    // outstanding. A decisive pick starts the turn; 'stay' holds the
+    // incumbent; 'none'/parse-fail/throw leaves the in-band envelope
+    // standing. The consult is ALWAYS recorded on the event (`decider`),
+    // picked or not — a resolver that ran and said nothing is still a fact.
+    let deciderRecord: SkillTurnRoutedPayload['decider'];
+    /** Set when the decider RESOLVED the menu — the menu is then no longer
+     *  outstanding, so the scope POJO carries no `offered` (the rails
+     *  what-happened vs what-the-loop-may-act-on split, reused). */
+    let deciderResolved: 'move' | 'stay' | undefined;
+    if (
+      deps.decider !== undefined &&
+      verdict !== undefined &&
+      verdict.by === 'menu' &&
+      verdict.offered !== undefined &&
+      verdict.offered.length > 0
+    ) {
+      // The precedence chain's model rung, for the decider's own call:
+      // declared > `.configure()` resolvedModel > build-time default.
+      const deciderModel =
+        deps.decider.model ??
+        (deps.decider.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ??
+        deps.decider.defaultModel;
+      const stayAllowed = verdict.stayOffered === true && inherited !== undefined;
+      const picked = await runDecider({
+        provider: deps.decider.provider,
+        model: deciderModel,
+        plan,
+        userMessage: ctx.userMessage,
+        offered: verdict.offered,
+        stayAllowed,
+        inherited,
+        signal: env.signal,
+      });
+      deciderRecord = {
+        provider: deps.decider.provider.name,
+        model: deciderModel,
+        ...(picked !== undefined && { picked }),
+      };
+      if (picked !== undefined && picked !== DECIDER_STAY) {
+        // Decisive pick: the turn starts there. `offered` stays on the
+        // VERDICT (the event keeps the full menu); the POJO below drops it.
+        verdict = { ...verdict, by: 'decider', to: picked };
+        deciderResolved = 'move';
+      } else if (picked === DECIDER_STAY) {
+        // STAY is a resolution too: the incumbent holds AND the menu closes
+        // — the scope TurnRoute carries no `offered` while the event keeps
+        // the full offered set (nice-6; guard's `menuOutstanding` then
+        // refuses late picks against a menu the decider already answered).
+        verdict = { ...verdict, by: 'continuity', to: inherited! };
+        deciderResolved = 'stay';
+      }
+      // picked === undefined → the in-band envelope stands, decider recorded.
     }
 
     const policy = plan.policy;
@@ -188,6 +265,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       },
       ...(verdict?.window !== undefined && { window: verdict.window }),
       ...(droppedResume !== undefined && { droppedResume }),
+      ...(deciderRecord !== undefined && { decider: { ...deciderRecord } }),
     });
 
     // The POJO the LOOP acts on — the resolver's iteration-1 input, the
@@ -199,13 +277,23 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
     // start on a graph whose cold walk still decides — must leave scope
     // untouched, or the drop would silently strand the turn on no entry.
     if (verdict === undefined) return;
+    // A decider-RESOLVED menu (move OR stay) is no longer outstanding: the
+    // POJO carries no `offered`, so the envelope composes none and `guard`'s
+    // `menuOutstanding` goes false — while the event above kept the full
+    // offered set. Same split rails ships; one more case earns it.
+    const menuStillOutstanding = deciderResolved === undefined;
     const turnRoute: TurnRoute = {
       by: eventBy,
       ...(inherited !== undefined && { from: inherited }),
       ...(verdict.to !== undefined && { to: verdict.to }),
-      ...(!rails && verdict.offered !== undefined && { offered: [...verdict.offered] }),
-      ...(!rails && verdict.stayOffered !== undefined && { stayOffered: verdict.stayOffered }),
       ...(!rails &&
+        menuStillOutstanding &&
+        verdict.offered !== undefined && { offered: [...verdict.offered] }),
+      ...(!rails &&
+        menuStillOutstanding &&
+        verdict.stayOffered !== undefined && { stayOffered: verdict.stayOffered }),
+      ...(!rails &&
+        menuStillOutstanding &&
         verdict.offered !== undefined &&
         verdict.scores !== undefined && {
           relevance: verdict.scores.map((s) => ({ id: s.id, relevance: s.relevance })),
@@ -401,6 +489,69 @@ function menuVerdict(
     ...(scorerName !== undefined && { scorer: scorerName }),
     ...(window !== undefined && { window }),
   };
+}
+
+/**
+ * The tier-3 decider's one constrained call (9.19.0). Candidates project
+ * from the offered entries' declared intents, else their descriptions —
+ * `plan.incumbentCandidate` is the one projection that already does exactly
+ * that, so ids are never fabricated. `'stay'` joins the enum only on a
+ * mid-conversation menu. Returns the picked id / `'stay'`, or `undefined`
+ * when the decider declined (`'none'`, a parse failure after the one
+ * re-ask, or a throw — dev-warned): a decider is a tier, never a
+ * correctness dependency, so the in-band envelope stands.
+ */
+async function runDecider(args: {
+  readonly provider: LLMProvider;
+  readonly model: string;
+  readonly plan: TurnRoutingPlan;
+  readonly userMessage: string;
+  readonly offered: readonly string[];
+  readonly stayAllowed: boolean;
+  readonly inherited: string | undefined;
+  readonly signal?: AbortSignal;
+}): Promise<string | undefined> {
+  const lines = args.offered.map((id) => {
+    const candidate = args.plan.incumbentCandidate(id);
+    return `- ${candidate.id}: ${candidate.intent}`;
+  });
+  if (args.stayAllowed) {
+    lines.push(`- ${DECIDER_STAY}: continue the current skill '${args.inherited}'`);
+  }
+  const allowed = [...args.offered, ...(args.stayAllowed ? [DECIDER_STAY] : []), DECIDER_NONE];
+  const systemPrompt =
+    `You route ONE user message to a skill from a fixed menu.\n` +
+    `Menu:\n${lines.join('\n')}\n\n` +
+    `Pick the single id that should handle the message. If genuinely none fits, pick ` +
+    `'${DECIDER_NONE}'. Never invent an id.`;
+  try {
+    const picked = await constrainedEnumPick({
+      provider: args.provider,
+      model: args.model,
+      systemPrompt,
+      messages: [{ role: 'user', content: args.userMessage }],
+      allowed,
+      fallback: DECIDER_NONE,
+      pickTool: {
+        name: 'pick_skill',
+        description: `Report which menu skill should handle the user's message ('${DECIDER_NONE}' if none).`,
+        argName: 'skill',
+        argDescription: 'The picked skill id.',
+      },
+      ...(args.signal !== undefined && { signal: args.signal }),
+    });
+    return picked === DECIDER_NONE ? undefined : picked;
+  } catch (err) {
+    if (isDevMode()) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `agentfootprint RouteTurn: the routing decider threw — the menu stands and the ` +
+          `in-band envelope resolves it (recorded: turn_routed.decider with no pick). ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return undefined;
+  }
 }
 
 /** The prior conversational turns a windowed scorer sees — user/assistant

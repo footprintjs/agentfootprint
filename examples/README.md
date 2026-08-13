@@ -188,6 +188,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 14 | [`14-durable-compaction.ts`](context-engineering/14-durable-compaction.ts) | Durable compaction — a week-old summary you can still unpack | Folds a long window into a summary, stores the conversation in a SQLite  |
 | 15 | [`15-skill-graph-intents.ts`](context-engineering/15-skill-graph-intents.ts) | Intents-as-data — the turn-start routing cascade | Declare each skill's intent + real example phrasings as data; one  |
 | 16 | [`16-skill-steps.ts`](context-engineering/16-skill-steps.ts) | Steps as data — the skill procedure the framework walks | Declare a 6-step refund procedure on a skill; the tools slot offers one  |
+| 17 | [`17-brains-and-tool-effects.ts`](context-engineering/17-brains-and-tool-effects.ts) | Per-skill brains + typed tool effects | The refund skill answers on its own declared model ("the cursor picks  |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 

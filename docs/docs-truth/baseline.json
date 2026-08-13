@@ -5,23 +5,23 @@
   "recordedAt": "2026-08-13",
   "surface": {
     "subpaths": 12,
-    "declaredSymbols": 1514,
-    "declaredEvents": 79,
-    "eventSource": "src/events/registry.ts:578"
+    "declaredSymbols": 1541,
+    "declaredEvents": 84,
+    "eventSource": "src/events/registry.ts:608"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 627,
+      "documented-never-exercised": 656,
       "exercised-undocumented": 33,
-      "undocumented-unexercised": 607,
-      "site-code-sample-only": 24,
+      "undocumented-unexercised": 606,
+      "site-code-sample-only": 23,
       "written-but-not-published": 123,
       "ok": 100
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 18,
+      "documented-never-exercised": 23,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 6,
@@ -30,7 +30,7 @@
     },
     "phantoms": 0,
     "unregisteredEvents": 2,
-    "advisories": 3,
+    "advisories": 4,
     "docTextViolations": 0
   },
   "exercisedEvidence": {
@@ -544,7 +544,6 @@
     "SkillEntryOptions",
     "SkillGraph",
     "SkillGraphBuilder",
-    "SkillGraphOptions",
     "SkillNode",
     "SkillRecorderOptions",
     "SkillRegistryOptions",
@@ -752,7 +751,6 @@
     "listRegisteredStrategies",
     "liveStateRecorder",
     "llmCallIdsFromEvents",
-    "llmClassifier",
     "llmEdgeWeigher",
     "llmExtractor",
     "llmFactExtractor",

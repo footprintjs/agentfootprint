@@ -177,6 +177,13 @@ export {
   type IntentScorerInput,
 } from './intentScorer.js';
 export { llmClassifier, type LlmClassifierOptions } from './llmClassifier.js';
+// The constrained-enum machinery behind the classifier AND the tier-3
+// decider (9.19.0) — one model call that can only answer from a fixed list.
+export {
+  constrainedEnumPick,
+  type ConstrainedEnumPickRequest,
+  type EnumPickTool,
+} from './constrainedEnumPick.js';
 export {
   NEAR_TIE_MARGIN,
   MENU_SIZE,

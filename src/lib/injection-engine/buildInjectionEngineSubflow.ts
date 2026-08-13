@@ -74,6 +74,13 @@ import {
   type StepPlanFor,
   type StepPointerCarrier,
 } from './skillSteps.js';
+import {
+  activeLeaseIds,
+  pruneLeases,
+  tenantOf,
+  type InstructionLease,
+  type PendingToolTransition,
+} from '../../core/agent/toolEffects.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -200,6 +207,21 @@ interface InjectionEngineArgs {
    *  the parent's `stepPointer`. Carried only for agents with stepped
    *  skills. */
   stepPointer?: StepPointerCarrier;
+  /** The `propose-transition` tool effect the gate accepted (9.19.0) —
+   *  written by the tool-calls stage, stamped with the granting iteration.
+   *  Honored by Evaluate exactly once, on the FOLLOWING iteration (one-shot
+   *  by data — nothing ever clears it). Present only when a tool proposed
+   *  one; the mappers thread it value-conditionally. */
+  pendingToolTransition?: PendingToolTransition;
+  /** The granted `require-instruction` leases (9.19.0) — written by the
+   *  tool-calls stage; validity is computed per pass (`activeLeaseIds`).
+   *  A readonly INPUT here, so Evaluate's tenure sweep (which makes lease
+   *  death permanent — no resurrection on cyclic re-entry) writes the
+   *  survivors under the DISTINCT key `nextInstructionLeases`, and the
+   *  mount mappers carry them back onto the parent (the
+   *  currentSkillId/nextSkillCursor alias discipline). Present only after
+   *  a tool granted one. */
+  instructionLeases?: readonly InstructionLease[];
 }
 
 /**
@@ -264,8 +286,19 @@ function makeEvaluateStage(
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
 
+    // The accepted transition proposal (9.19.0), VALID only on the iteration
+    // after its grant — one-shot by data, the same one-shot-ness the pick
+    // gets from being rewritten, with zero clearing writes (an agent whose
+    // tools never propose keeps its exact committed keys).
+    const iteration = args.iteration ?? 1;
+    const proposal =
+      args.pendingToolTransition !== undefined &&
+      args.pendingToolTransition.iteration + 1 === iteration
+        ? args.pendingToolTransition
+        : undefined;
+
     const baseCtx: InjectionContext = {
-      iteration: args.iteration ?? 1,
+      iteration,
       userMessage: args.userMessage ?? '',
       history: args.history ?? [],
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
@@ -273,6 +306,9 @@ function makeEvaluateStage(
       activatedInjectionIds: args.activatedInjectionIds ?? [],
       ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
       ...(args.pendingSkillPick !== undefined && { pendingSkillPick: args.pendingSkillPick }),
+      ...(proposal !== undefined && {
+        pendingToolTransition: { targetSkillId: proposal.targetSkillId },
+      }),
       ...(args.entryScores !== undefined && { entryScores: args.entryScores }),
       ...(args.entryScorer !== undefined && { entryScorer: args.entryScorer }),
       ...(args.turnRoute !== undefined && { turnRoute: args.turnRoute }),
@@ -318,6 +354,38 @@ function makeEvaluateStage(
       scope.$setValue('nextStepPointer', fresh);
       const freshPointer = pointerOf(fresh);
       ctx = { ...baseCtx, ...(freshPointer !== undefined && { stepPointer: freshPointer }) };
+    }
+
+    // ── Instruction leases (9.19.0) — the `require-instruction` push ───
+    // Validity is COMPUTED per pass against the ADVANCED tenure (a lease
+    // dies the same pass its tenure ends): `'next-call'` serves exactly the
+    // pass after its grant; `'until-skill-exit'` serves while the granting
+    // tenant still holds. The served ids ride the ctx the evaluator reads,
+    // which admits them into the active set beside their own triggers.
+    // Zero-cost gate: no granted lease anywhere → not one line here runs.
+    if (args.instructionLeases !== undefined) {
+      const leaseTenant = tenantOf(routes ? cursor : undefined, args.activatedInjectionIds);
+      if (args.instructionLeases.length > 0) {
+        const leaseIds = activeLeaseIds(args.instructionLeases, ctx.iteration, leaseTenant);
+        if (leaseIds.length > 0) {
+          ctx = { ...ctx, leaseActiveIds: leaseIds };
+        }
+      }
+      // The TENURE SWEEP — what makes lease death PERMANENT. `skillId ===
+      // tenant` alone cannot tell "held the tenure all along" from
+      // "re-entered the granting skill later" (a cyclic graph makes both
+      // real), so the pass that sees a tenure end removes its dead leases
+      // from the record — computed AFTER `activeLeaseIds` (this pass's
+      // serving is untouched; the swept array feeds only future passes).
+      // Same alias round trip as the cursor: `instructionLeases` is a
+      // readonly boundary INPUT here, so the survivors go out under
+      // `nextInstructionLeases` and the mount mappers carry them back onto
+      // the parent key. Written on EVERY pass the key exists — even as [] —
+      // so no boundary ever re-delivers a stale, pre-sweep array.
+      scope.$setValue(
+        'nextInstructionLeases',
+        pruneLeases(args.instructionLeases, ctx.iteration, leaseTenant),
+      );
     }
 
     // A parallel batch whose results matched edges to DIFFERENT targets
@@ -366,6 +434,22 @@ function makeEvaluateStage(
         ...(cursor !== undefined && { wonId: cursor }),
         ...(ctx.currentSkillId !== undefined && { fromSkillId: ctx.currentSkillId }),
         iteration: ctx.iteration,
+      });
+    }
+
+    // The same told-the-truth check for an ACCEPTED transition proposal
+    // (9.19.0): the effect was accepted (`tools.effect { outcome:
+    // 'accepted' }` is on the record) but a declared edge fired on the same
+    // batch and won the cursor (D1 outranks the proposal exactly as it
+    // outranks a pick). Said out loud rather than left as a promise that
+    // quietly went unmet.
+    if (proposal !== undefined && cursor !== proposal.targetSkillId) {
+      typedEmit(scope, 'agentfootprint.skill.reroute_superseded', {
+        volunteeredId: proposal.targetSkillId,
+        ...(cursor !== undefined && { wonId: cursor }),
+        ...(ctx.currentSkillId !== undefined && { fromSkillId: ctx.currentSkillId }),
+        iteration: ctx.iteration,
+        source: 'tool-proposal',
       });
     }
 

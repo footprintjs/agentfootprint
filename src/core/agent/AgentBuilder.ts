@@ -37,6 +37,12 @@ import {
   type TurnRoutingPlan,
 } from '../../lib/injection-engine/skillGraph.js';
 import {
+  foldSkillBrains,
+  type EscalationPolicy,
+  type FoldedSkillBrains,
+  type ProviderChoice,
+} from './skillBrains.js';
+import {
   defineMenuHint,
   MENU_HINT_METADATA_KEY,
 } from '../../lib/injection-engine/factories/defineMenuHint.js';
@@ -84,9 +90,10 @@ import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 
 /**
- * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0). Every field
- * is zero-cost when absent — an agent that passes none is byte-identical in
- * behavior AND events to one built before the options existed.
+ * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0; brains
+ * SG-D, 9.19.0). Every field is zero-cost when absent — an agent that passes
+ * none is byte-identical in behavior AND events to one built before the
+ * options existed.
  */
 export interface SkillGraphOptions {
   /**
@@ -118,6 +125,35 @@ export interface SkillGraphOptions {
    * not invent persistence.
    */
   readonly continuity?: 'turn' | 'conversation';
+  /**
+   * Per-skill BRAINS (9.19.0) — "the cursor picks the brain": while the
+   * graph's cursor is on a named skill, `callLLM` runs on its declared
+   * provider/model instead of the agent's. Keys are skill ids; an id that
+   * is not a graph node is refused at build, as is a foreign provider with
+   * no model (the agent's model id belongs to another vendor's namespace).
+   * The other declaration home is `defineSkill({ provider, model })` — the
+   * same id in both homes with different choices is refused naming both.
+   */
+  readonly providers?: Readonly<Record<string, ProviderChoice>>;
+  /**
+   * Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
+   * (`skill.rejected` — reachability OR posture) in ONE turn flip the rest
+   * of the turn onto this brain — `skill.escalated` goes on the record at
+   * the flip, and the next turn's seed de-escalates. Never on vibes: only
+   * real refusals count.
+   */
+  readonly escalation?: EscalationPolicy;
+  /**
+   * The tier-3 DECIDER (9.19.0): an out-of-band constrained pick over an
+   * outstanding turn-start menu ∪ {stay} (the `llmClassifier` enum
+   * machinery), resolved before the loop — `turn_routed { by: 'decider' }`.
+   * The sanctioned resolver for `'rails'` menus: constrained, off-loop, and
+   * recorded, i.e. a scorer in posture terms. Needs a graph that runs the
+   * turn-start cascade (a classifier, or `continuity: 'conversation'`) —
+   * refused at build otherwise, because no other graph ever has a menu for
+   * it to resolve.
+   */
+  readonly decider?: ProviderChoice;
 }
 
 /**
@@ -212,6 +248,15 @@ export class AgentBuilder {
     readonly mode: 'throw' | 'warn';
     readonly skills: readonly Injection[];
   };
+  /** Captured from `.skillGraph(graph, options)` (9.19.0) — the three brain
+   *  fields, verbatim; folded + validated at `build()` where the FINAL
+   *  injection list (the other declaration home) exists. */
+  private skillGraphBrainOptions?: Pick<SkillGraphOptions, 'providers' | 'escalation' | 'decider'>;
+  /** Captured from `.skillGraph(graph)` (9.19.0) — the graph's node-id set,
+   *  captured UNCONDITIONALLY (unlike the cascade's copy, which only exists
+   *  when cascade options were asked for): the brains check-up needs it on
+   *  a bare mount too. Undefined when the graph object carries no `nodes`. */
+  private skillGraphNodeIds?: ReadonlySet<string>;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -1061,6 +1106,28 @@ export class AgentBuilder {
     // The suppression reporter (8.15.0) — what the cursor law kept off the wire.
     this.skillGraphSupersededEntries = graph.supersededEntries;
     this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
+    // The node-id set (9.19.0) — the brains check-up's map. Captured on every
+    // mount; undefined when the graph object carries no `nodes` (a
+    // structurally-typed graph), in which case declaring brains is refused
+    // at build rather than validated against a map that does not exist.
+    if (graph.nodes !== undefined) {
+      this.skillGraphNodeIds = new Set(
+        graph.nodes.flatMap((n) => (typeof n.id === 'string' ? [n.id] : [])),
+      );
+    }
+    // The brains options (9.19.0) — captured verbatim; folded + validated at
+    // build(), where the final injection list (the other home) exists.
+    if (
+      options?.providers !== undefined ||
+      options?.escalation !== undefined ||
+      options?.decider !== undefined
+    ) {
+      this.skillGraphBrainOptions = {
+        ...(options.providers !== undefined && { providers: options.providers }),
+        ...(options.escalation !== undefined && { escalation: options.escalation }),
+        ...(options.decider !== undefined && { decider: options.decider }),
+      };
+    }
     // ── The mount options (SG-C): posture + cursor span ────────────────────
     const strictness = options?.strictness ?? 'assist';
     const continuity = options?.continuity ?? 'turn';
@@ -2192,6 +2259,46 @@ export class AgentBuilder {
         }
       }
     }
+    // ── The brains fold (9.19.0) — both declaration homes, one check-up ──
+    // Runs on the FINAL injection list for the same reason the delivery
+    // refusal does: `defineSkill({ provider })` can arrive through
+    // `.skill()`, `.skills()` or `.skillGraph()`, and only this line sees
+    // all of them. Undefined — nothing declared anywhere — and the Agent
+    // wires nothing new.
+    const skillBrains: FoldedSkillBrains | undefined = foldSkillBrains({
+      injections,
+      ...(this.skillGraphBrainOptions?.providers !== undefined && {
+        providers: this.skillGraphBrainOptions.providers,
+      }),
+      ...(this.skillGraphBrainOptions?.escalation !== undefined && {
+        escalation: this.skillGraphBrainOptions.escalation,
+      }),
+      ...(this.skillGraphBrainOptions?.decider !== undefined && {
+        decider: this.skillGraphBrainOptions.decider,
+      }),
+      graphMounted: this.skillGraphNextSkill !== undefined,
+      ...(this.skillGraphNodeIds !== undefined && { nodeIds: this.skillGraphNodeIds }),
+      agentProviderName: opts.provider.name,
+    });
+    // A decider with no menu to resolve: only a graph that RUNS the
+    // turn-start cascade (a classifier, or `continuity: 'conversation'`)
+    // ever produces an outstanding menu, so a decider on any other mount
+    // would be config that never runs — refused rather than silently inert.
+    if (skillBrains?.decider !== undefined) {
+      const cascade = this.skillGraphCascade;
+      const runsCascade =
+        cascade !== undefined &&
+        cascade.turnRouting !== undefined &&
+        (cascade.turnRouting.scorer !== undefined || cascade.continuity === 'conversation');
+      if (!runsCascade) {
+        throw new Error(
+          `Agent.build(): a routing decider is declared, but this mount never runs the ` +
+            `turn-start cascade — no menu can ever be outstanding, so the decider would ` +
+            `never be consulted. Give the graph a classifier (.classify(...) / start rules ` +
+            `with intents) or mount with continuity: 'conversation', or drop \`decider\`.`,
+        );
+      }
+    }
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -2222,6 +2329,7 @@ export class AgentBuilder {
       this.skillGraphIsTree,
       this.skillGraphSupersededEntries,
       this.skillGraphCascade,
+      skillBrains,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

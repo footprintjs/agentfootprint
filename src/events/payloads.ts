@@ -19,6 +19,7 @@ import type {
 import type { PermissionCapability } from '../adapters/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
+import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -171,6 +172,20 @@ export interface LLMStartPayload {
   readonly estimatedPromptTokens?: number;
   readonly temperature?: number;
   readonly providerRequestRef?: string;
+  /**
+   * WHICH BRAIN answered, when a brain rung won (9.19.0 — "the cursor picks
+   * the brain"). `via: 'skill'` = the active skill's declared brain served
+   * this call (`skillId` names the tenure); `via: 'escalation'` = the turn
+   * crossed its declared refusal threshold and the escalation brain is
+   * serving the rest of it. ABSENT whenever the agent's own configured /
+   * default model answered — an agent without brains keeps its exact prior
+   * event bytes. `provider` + `model` above always report what was actually
+   * called, whichever rung supplied them.
+   */
+  readonly brain?: {
+    readonly via: 'skill' | 'escalation';
+    readonly skillId?: string;
+  };
 }
 
 export interface LLMEndPayload {
@@ -207,6 +222,13 @@ export interface ToolEndPayload {
   readonly result: unknown;
   readonly error?: boolean;
   readonly durationMs: number;
+  /**
+   * The tool's OWN declared outcome (9.19.0) — present only when the tool
+   * returned a result envelope carrying `status`. Normalized vocabulary
+   * (`'denied'` must never read like `'success'`); route edges key on it
+   * via `onToolStatus`. Absent for every tool that never opted in.
+   */
+  readonly status?: ToolResultStatus;
 }
 
 // context.* (5) — THE CORE DOMAIN
@@ -803,11 +825,13 @@ export interface SkillTurnRoutedPayload {
    *  `'entry'` — a tier-1 rule (the recorded vocabulary for rule-won starts);
    *  `'intent'` — the tier-2 scorer was decisive;
    *  `'continuity'` — the inherited cursor held (incumbent won / near-tie /
-   *  sticky default);
+   *  sticky default / the decider picked STAY — `decider` says which);
    *  `'menu'` — a menu was put in-band (near-tie or unmatched);
+   *  `'decider'` — the configured tier-3 decider resolved the menu
+   *  out-of-band (9.19.0; `decider` carries the pick);
    *  `'none'` — the cascade decided nothing the loop may act on (a rails
    *  menu — the offer is still recorded here — or a dropped resume). */
-  readonly by: 'entry' | 'intent' | 'continuity' | 'menu' | 'none';
+  readonly by: 'entry' | 'intent' | 'continuity' | 'menu' | 'decider' | 'none';
   /** The inherited cursor (continuity), when one existed. */
   readonly from?: string;
   /** Where the turn starts. Absent = menu pending / none. */
@@ -845,6 +869,20 @@ export interface SkillTurnRoutedPayload {
    *  node of the currently mounted graph (a deploy changed it). The turn
    *  started cold instead, and says so. */
   readonly droppedResume?: { readonly id: string; readonly reason: 'unknown-skill' };
+  /**
+   * The tier-3 DECIDER's involvement (9.19.0) — present whenever one was
+   * configured AND a menu verdict reached it. `picked` is the constrained
+   * pick that resolved the menu (an offered id, or `'stay'`); ABSENT when
+   * the decider declined (`'none'` / parse failure / a throw) and the
+   * in-band envelope stood. Recorded on every outcome so the record always
+   * says the decider was consulted — a resolver that ran and said nothing
+   * is still a fact.
+   */
+  readonly decider?: {
+    readonly provider: string;
+    readonly model?: string;
+    readonly picked?: string;
+  };
 }
 
 export interface SkillActivatedPayload {
@@ -883,6 +921,14 @@ export interface SkillRerouteSupersededPayload {
   readonly fromSkillId?: string;
   /** The ReAct iteration whose evaluation dropped the pick. */
   readonly iteration: number;
+  /**
+   * WHO volunteered the superseded move (9.19.0). Absent = the model's
+   * `read_skill` pick, exactly as this event has always meant;
+   * `'tool-proposal'` = an accepted `propose-transition` effect that a
+   * same-batch declared edge outran (D1 wins over the proposal exactly as
+   * it wins over a pick — the author's determinism is never overridden).
+   */
+  readonly source?: 'tool-proposal';
 }
 
 export interface SkillRejectedPayload {
@@ -936,6 +982,14 @@ export interface SkillRouteConflictPayload {
     /** The skill this result would have routed to. */
     readonly target: string;
   }>;
+  /**
+   * WHAT conflicted (9.19.0). Absent = declared route edges, exactly as
+   * this event has always meant; `'tool-proposal'` = two or more accepted
+   * `propose-transition` effects of one batch named different targets —
+   * first accepted in call order wins, the rest are suppressed and
+   * reported here under the same law.
+   */
+  readonly source?: 'tool-proposal';
 }
 
 /**
@@ -994,6 +1048,69 @@ export interface SkillStepsUnfinishedPayload {
   readonly total: number;
   readonly action: 'nudged' | 'accepted' | 'cut-short';
   readonly iteration: number;
+}
+
+/**
+ * The turn's refusal loop crossed the declared threshold and the rest of the
+ * turn runs on the escalation brain (9.19.0). Fired ONCE per turn, at the
+ * flip, from the gate that counted the refusals — escalation is always on
+ * recorded evidence (`skill.rejected`, reachability or posture), never on
+ * vibes. De-escalation is the next turn's seed; no event marks it.
+ */
+export interface SkillEscalatedPayload {
+  /** The ReAct iteration whose refusal tripped the threshold. */
+  readonly iteration: number;
+  /** The declared threshold (`escalation.afterRefusals`). */
+  readonly afterRefusals: number;
+  /** The observed refusal count that tripped it (== afterRefusals at the
+   *  flip; the counter keeps counting but the event fires once). */
+  readonly refusals: number;
+  /** The brain that WAS serving — resolved by the same precedence chain
+   *  callLLM applies (skill brain > configured > default). */
+  readonly from: { readonly provider: string; readonly model: string };
+  /** The declared escalation brain. `model` absent = it inherits down the
+   *  chain (same-provider escalations only; enforced at build). */
+  readonly to: { readonly provider: string; readonly model?: string };
+}
+
+/**
+ * One typed tool effect was judged (9.19.0) — the effects channel's own
+ * record, fired in batch call order from the stage that judged it.
+ *
+ *   • `'accepted'` — a `propose-transition` passed the graph's reachability
+ *     law (the cursor moves at the next evaluation unless a same-batch
+ *     declared edge wins — that suppression is `skill.reroute_superseded
+ *     { source: 'tool-proposal' }`), or a `require-instruction` named a
+ *     registered instruction and its lease was granted.
+ *   • `'refused'` — the teaching refusal: unreachable target, no graph to
+ *     route, unknown instruction id, a body whose declared channel cannot
+ *     be pushed, or a malformed effect. `refusalReason` says which.
+ *   • `'superseded'` — an accepted transition proposal lost the batch to an
+ *     EARLIER accepted proposal naming a different target
+ *     (`skill.route_conflict { source: 'tool-proposal' }` reports the same
+ *     batch once, winner + losers).
+ *
+ * No effects = this event never fires (zero-cost-when-unused).
+ */
+export interface ToolEffectPayload {
+  readonly kind: 'propose-transition' | 'require-instruction';
+  readonly outcome: 'accepted' | 'refused' | 'superseded';
+  /** The tool whose result carried the effect. */
+  readonly toolName: string;
+  readonly toolCallId?: string;
+  readonly iteration: number;
+  /** propose-transition: the proposed cursor target. */
+  readonly targetSkillId?: string;
+  /** propose-transition: the effect's own declared reason. */
+  readonly reason?: string;
+  /** require-instruction: the registered injection id it pushes. */
+  readonly instructionId?: string;
+  /** require-instruction: the granted (or asked-for) lease. */
+  readonly deliveryLease?: InstructionDeliveryLease;
+  /** outcome `'refused'`: the teaching sentence, verbatim. */
+  readonly refusalReason?: string;
+  /** outcome `'superseded'`: what outran it. */
+  readonly supersededBy?: 'earlier-proposal';
 }
 
 // permission.* (4)

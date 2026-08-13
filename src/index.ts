@@ -320,8 +320,13 @@ export {
   type AgentOutput,
   type ObserverDeliveryOptions,
   // `.skillGraph(graph, options)` mount options (SG-C, 9.17.0): routing
-  // posture (`strictness`) + cursor span (`continuity`).
+  // posture (`strictness`) + cursor span (`continuity`) + per-skill brains,
+  // escalation and the tier-3 decider (9.19.0).
   type SkillGraphOptions,
+  // Per-skill model switching (9.19.0): a brain is a provider port +
+  // optional model — "the cursor picks the brain".
+  type ProviderChoice,
+  type EscalationPolicy,
 } from './core/Agent.js';
 // `.window(strategy)` / `.compaction()` — keep the live context window inside
 // its budget without ever losing the record. A strategy edits the WINDOW; the
@@ -463,6 +468,25 @@ export type {
   DefineToolOptions,
 } from './core/tools.js';
 export { defineTool, assertValidToolName, warnIfInvalidToolName } from './core/tools.js';
+// Typed tool effects (9.19.0) — the result envelope a tool may return to
+// steer the run with DATA instead of string conventions: propose a graph
+// transition, push a registered instruction, declare an outcome status. The
+// law: push mandatory procedure; pull optional knowledge; never let
+// arbitrary text promote itself into control authority.
+export {
+  explainStatusOnlyNearMiss,
+  readToolResultEnvelope,
+  TOOL_RESULT_STATUSES,
+  type InstructionDeliveryLease,
+  type InstructionLease,
+  type PendingToolTransition,
+  type ProposedEffect,
+  type ProposeTransitionEffect,
+  type ReadToolResultEnvelope,
+  type RequireInstructionEffect,
+  type ToolResultEnvelope,
+  type ToolResultStatus,
+} from './core/agent/toolEffects.js';
 // Tool sessions (9.7.0) — the identity a tool holds a session under, and the
 // end-signal that releases it. The KEY DERIVATION is exported because it is the
 // isolation boundary: one implementation, or two that disagree.

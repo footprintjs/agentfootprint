@@ -43,6 +43,7 @@
  * activates that Skill (lifetime: turn).
  */
 
+import { isDevMode } from 'footprintjs';
 import type { PausableHandler, TypedScope } from 'footprintjs';
 import type {
   LLMMessage,
@@ -99,6 +100,17 @@ import {
   type StepPlanFor,
   type StepPointer,
 } from '../../../lib/injection-engine/skillSteps.js';
+import {
+  explainStatusOnlyNearMiss,
+  pruneLeases,
+  readToolResultEnvelope,
+  tenantOf,
+  type InstructionLease,
+  type PendingToolTransition,
+  type ProposedEffect,
+  type ReadToolResultEnvelope,
+  type ToolResultStatus,
+} from '../toolEffects.js';
 import type { AgentState } from '../types.js';
 
 export interface ToolCallsHandlerDeps {
@@ -205,6 +217,34 @@ export interface ToolCallsHandlerDeps {
    * Same graph, same trace: postures change refusal behavior only.
    */
   readonly skillStrictness?: 'guard' | 'rails';
+  /**
+   * Escalate-on-evidence (9.19.0). When declared, the two `skill.rejected`
+   * emit sites below increment a per-turn counter; at `afterRefusals` the
+   * rest of the turn flips onto the escalation brain (`scope.skillEscalated`
+   * — a committed fact callLLM's `brainFor` reads) and `skill.escalated`
+   * goes on the record ONCE. Undefined — the default — and not one new key
+   * is read or written (zero-cost-when-unused).
+   */
+  readonly escalation?: {
+    readonly afterRefusals: number;
+    /** The declared escalation brain, for the event's `to`. */
+    readonly to: { readonly provider: string; readonly model?: string };
+    /** Resolve the brain that WAS serving (the event's honest `from`) — the
+     *  same precedence chain callLLM applies, evaluated at the flip. */
+    readonly describeFrom: (
+      cursor: string | undefined,
+      resolvedModel: string | undefined,
+    ) => { readonly provider: string; readonly model: string };
+  };
+  /**
+   * The registered injection ids a `require-instruction` tool effect may
+   * push, with the one fact its check-up needs (9.19.0): a skill whose
+   * declared body channel is `'tool-only'` cannot be pushed through the
+   * system slot — the slot suppresses it — so granting the lease would be
+   * accepted-and-silently-undelivered. Undefined → the agent registered no
+   * injections; every require-instruction is a teaching refusal.
+   */
+  readonly leaseTargets?: ReadonlyMap<string, { readonly surfaceMode?: string }>;
   /**
    * Check-in config (evidence-carrying human consent). Resolved from the Agent
    * builder (`.checkIn({...})`) — defaults to `standard` evidence + the
@@ -489,7 +529,7 @@ function argsForPausedCall(
  */
 function appendBatchResult(
   scope: TypedScope<AgentState>,
-  entry: { toolName: string; result: string; toolCallId: string },
+  entry: { toolName: string; result: string; toolCallId: string; status?: ToolResultStatus },
 ): void {
   scope.toolResults = [...(scope.toolResults ?? []), entry];
 }
@@ -647,6 +687,259 @@ export function buildToolCallsHandler(
   const readSkillStepIntroFor = (pickedId: string): string => {
     const plan = deps.stepPlanFor?.(pickedId);
     return plan ? readSkillStepIntro(plan) : '';
+  };
+
+  // ── Escalate-on-evidence (9.19.0) — the refusal budget ─────────────────
+  // Called beside BOTH `skill.rejected` emit sites (reachability + posture):
+  // real recorded refusals are the only evidence that counts. At the
+  // declared threshold the flip is committed (`skillEscalated` — the fact
+  // callLLM's brainFor reads) and `skill.escalated` fires ONCE; the counter
+  // keeps counting so the record shows the whole loop. Gated on the policy
+  // being declared — otherwise not one key is read or written.
+  const noteSkillRefusal = (scope: TypedScope<AgentState>, iteration: number): void => {
+    const escalation = deps.escalation;
+    if (!escalation) return;
+    const refusals = ((scope.skillRefusalsThisTurn as number | undefined) ?? 0) + 1;
+    scope.skillRefusalsThisTurn = refusals;
+    if (refusals >= escalation.afterRefusals && scope.skillEscalated !== true) {
+      scope.skillEscalated = true;
+      typedEmit(scope, 'agentfootprint.skill.escalated', {
+        iteration,
+        afterRefusals: escalation.afterRefusals,
+        refusals,
+        from: escalation.describeFrom(
+          scope.currentSkillId as string | undefined,
+          scope.resolvedModel as string | undefined,
+        ),
+        to: escalation.to,
+      });
+    }
+  };
+
+  // ── Typed tool effects (9.19.0) — ONE judge, every dispatch path ───────
+  // The batch loop and the resume paths all finalize results; each hands a
+  // recognized envelope here, so an effect can never be judged differently
+  // because of which door its result came through.
+
+  /** The batch's transition bookkeeping: first ACCEPTED proposal wins the
+   *  one `pendingToolTransition` slot (committed at acceptance, so a pause
+   *  mid-batch never drops an accepted move); later proposals to OTHER
+   *  targets are suppressed + collected for the batch-end `route_conflict`
+   *  aggregate. */
+  interface TransitionBatchState {
+    winner?: PendingToolTransition;
+    losers: Array<{ toolCallId?: string; toolName: string; target: string }>;
+  }
+
+  const warnEffect = (toolName: string, sentence: string): void => {
+    if (isDevMode()) {
+      // eslint-disable-next-line no-console
+      console.warn(`agentfootprint tool-effects: tool '${toolName}' — ${sentence}`);
+    }
+  };
+
+  /**
+   * Judge one finalized result's effects, in declaration order. Returns the
+   * model-visible NOTE (teaching refusals only — an accepted effect speaks
+   * through what it does: the cursor move, the delivered instruction).
+   * Every judgment is a `tools.effect` event; nothing is half-applied.
+   */
+  const applyToolEffects = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    envelope: ReadToolResultEnvelope,
+    state: TransitionBatchState,
+  ): string => {
+    let note = '';
+    const refuse = (
+      kind: ProposedEffect['kind'],
+      refusalReason: string,
+      fields: {
+        targetSkillId?: string;
+        reason?: string;
+        instructionId?: string;
+        deliveryLease?: InstructionLease['deliveryLease'];
+      } = {},
+    ): void => {
+      typedEmit(scope, 'agentfootprint.tools.effect', {
+        kind,
+        outcome: 'refused',
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        ...(fields.targetSkillId !== undefined && { targetSkillId: fields.targetSkillId }),
+        ...(fields.reason !== undefined && { reason: fields.reason }),
+        ...(fields.instructionId !== undefined && { instructionId: fields.instructionId }),
+        ...(fields.deliveryLease !== undefined && { deliveryLease: fields.deliveryLease }),
+        refusalReason,
+      });
+      note += ` [tool effect refused: ${refusalReason}]`;
+      warnEffect(call.toolName, refusalReason);
+    };
+
+    for (const bad of envelope.malformed) refuse(bad.kind, bad.refusalReason);
+
+    for (const effect of envelope.effects) {
+      if (effect.kind === 'propose-transition') {
+        const target = effect.targetSkillId;
+        if (!deps.allowedSkillIds) {
+          refuse(
+            'propose-transition',
+            `propose-transition → '${target}' needs a mounted skill graph: without one there ` +
+              `is no routing law to check the proposal against and no cursor to move. Mount ` +
+              `.skillGraph(), or drop the effect.`,
+            { targetSkillId: target, reason: effect.reason },
+          );
+          continue;
+        }
+        const currentSkillId = scope.currentSkillId as string | undefined;
+        const hops = deps.allowedSkillIds(currentSkillId);
+        if (!hops.includes(target)) {
+          refuse(
+            'propose-transition',
+            `propose-transition → '${target}' was refused: '${target}' is not reachable from ` +
+              `${currentSkillId !== undefined ? `'${currentSkillId}'` : 'the turn start'} per ` +
+              `the graph's own law${
+                hops.length > 0 ? ` (reachable: ${hops.join(', ')})` : ''
+              }. The graph decides — a proposal is evidence, never authority.`,
+            { targetSkillId: target, reason: effect.reason },
+          );
+          continue;
+        }
+        if (state.winner !== undefined && state.winner.targetSkillId !== target) {
+          // A later proposal to a DIFFERENT target — suppressed under the
+          // route_conflict law (first in call order wins), on the record.
+          state.losers.push({
+            toolCallId: call.toolCallId,
+            toolName: call.toolName,
+            target,
+          });
+          typedEmit(scope, 'agentfootprint.tools.effect', {
+            kind: 'propose-transition',
+            outcome: 'superseded',
+            toolName: call.toolName,
+            toolCallId: call.toolCallId,
+            iteration: call.iteration,
+            targetSkillId: target,
+            reason: effect.reason,
+            supersededBy: 'earlier-proposal',
+          });
+          continue;
+        }
+        if (state.winner === undefined) {
+          state.winner = {
+            targetSkillId: target,
+            toolName: call.toolName,
+            toolCallId: call.toolCallId,
+            reason: effect.reason,
+            iteration: call.iteration,
+          };
+          // Committed AT ACCEPTANCE (not batch end) so a pause later in the
+          // batch checkpoints the accepted move instead of dropping it.
+          scope.pendingToolTransition = state.winner;
+          // The activation promise a gate-accepted read_skill pick makes,
+          // made here too: a model-edge-only target keeps its llm-activated
+          // trigger, so the ledger entry is what makes the body actually
+          // load when the cursor lands.
+          const activated = scope.activatedInjectionIds as readonly string[];
+          if (!activated.includes(target)) {
+            scope.activatedInjectionIds = [...activated, target];
+          }
+        }
+        // First acceptance AND a same-target repeat both land here: every
+        // proposal that asked for the move that happens is 'accepted'.
+        typedEmit(scope, 'agentfootprint.tools.effect', {
+          kind: 'propose-transition',
+          outcome: 'accepted',
+          toolName: call.toolName,
+          toolCallId: call.toolCallId,
+          iteration: call.iteration,
+          targetSkillId: target,
+          reason: effect.reason,
+        });
+        continue;
+      }
+      // require-instruction
+      const known = deps.leaseTargets?.get(effect.instructionId);
+      if (known === undefined) {
+        refuse(
+          'require-instruction',
+          `require-instruction '${effect.instructionId}' was refused: no registered ` +
+            `injection carries that id — the push door serves the declared catalog only ` +
+            `(read_skill stays the pull door).`,
+          { instructionId: effect.instructionId, deliveryLease: effect.deliveryLease },
+        );
+        continue;
+      }
+      if (known.surfaceMode === 'tool-only') {
+        refuse(
+          'require-instruction',
+          `require-instruction '${effect.instructionId}' was refused: that skill declares ` +
+            `surfaceMode 'tool-only', whose body travels only as a read_skill result — the ` +
+            `system slot suppresses it, so the lease would be granted and never delivered. ` +
+            `Pull it with read_skill, or change the skill's surfaceMode.`,
+          { instructionId: effect.instructionId, deliveryLease: effect.deliveryLease },
+        );
+        continue;
+      }
+      const tenant = tenantOf(
+        scope.currentSkillId as string | undefined,
+        scope.activatedInjectionIds as readonly string[] | undefined,
+      );
+      const lease: InstructionLease = {
+        instructionId: effect.instructionId,
+        deliveryLease: effect.deliveryLease,
+        ...(tenant !== undefined && { skillId: tenant }),
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+      };
+      // Prune-as-we-write: spent grants leave with the same write that adds
+      // the new one, so a long turn never accumulates dead leases.
+      scope.instructionLeases = [
+        ...pruneLeases(
+          scope.instructionLeases as readonly InstructionLease[] | undefined,
+          call.iteration,
+          tenant,
+        ),
+        lease,
+      ];
+      typedEmit(scope, 'agentfootprint.tools.effect', {
+        kind: 'require-instruction',
+        outcome: 'accepted',
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        instructionId: effect.instructionId,
+        deliveryLease: effect.deliveryLease,
+      });
+    }
+    return note;
+  };
+
+  /** The batch-end aggregate for conflicting proposals — the
+   *  `route_conflict` reuse, additive `source` says what conflicted. The
+   *  per-effect `tools.effect` events above already carried every fact;
+   *  this is the one-event-per-batch view the edge law already ships. */
+  const emitTransitionConflict = (
+    scope: TypedScope<AgentState>,
+    iteration: number,
+    state: TransitionBatchState,
+  ): void => {
+    if (state.winner === undefined || state.losers.length === 0) return;
+    typedEmit(scope, 'agentfootprint.skill.route_conflict', {
+      iteration,
+      ...(scope.currentSkillId !== undefined && {
+        fromSkillId: scope.currentSkillId as string,
+      }),
+      winner: {
+        ...(state.winner.toolCallId !== undefined && { toolCallId: state.winner.toolCallId }),
+        toolName: state.winner.toolName,
+        target: state.winner.targetSkillId,
+      },
+      losers: state.losers.map((l) => ({ ...l })),
+      source: 'tool-proposal',
+    });
   };
 
   /**
@@ -863,7 +1156,14 @@ export function buildToolCallsHandler(
     toolCallId: string,
     iteration: number,
     env: { readonly signal?: AbortSignal },
-  ): Promise<{ result: unknown; error?: boolean; executed?: boolean }> => {
+  ): Promise<{
+    result: unknown;
+    error?: boolean;
+    executed?: boolean;
+    /** The recognized effects envelope, when the tool returned one (9.19.0)
+     *  — `result` above is already its unwrapped `content`. */
+    envelope?: ReadToolResultEnvelope;
+  }> => {
     if (!tool) return { result: `Unknown tool: ${toolName}`, error: true };
     const runIdentity = scope.runIdentity as
       | { tenant?: string; principal?: string; conversationId: string }
@@ -939,6 +1239,17 @@ export function buildToolCallsHandler(
         ...sessionContext(scope, toolName, toolCallId),
       });
       await endCall(toolCallId);
+      // The typed effects channel (9.19.0) — same unwrap as the batch loop,
+      // at this path's own execute boundary, so a resumed call's envelope is
+      // judged exactly as an inline one's.
+      const envelope = readToolResultEnvelope(result);
+      if (envelope !== undefined) {
+        return { result: envelope.content, executed: true, envelope };
+      }
+      // A status-only shape missing its `effects: []` marker is DATA (bytes
+      // unchanged) — but never silently: name the dropped marker in dev mode.
+      const nearMiss = explainStatusOnlyNearMiss(result);
+      if (nearMiss !== undefined) warnEffect(toolName, nearMiss);
       return { result, executed: true };
     } catch (err) {
       // Settled by throwing is still settled — a tool that opened a session and
@@ -1024,8 +1335,18 @@ export function buildToolCallsHandler(
       // results that really happened (the resume paths APPEND the answered
       // call to this same array). `lastToolResult` stays the last entry;
       // `on-tool-return` triggers and skill-graph routes read the batch.
-      const batchResults: { toolName: string; result: string; toolCallId: string }[] = [];
+      const batchResults: {
+        toolName: string;
+        result: string;
+        toolCallId: string;
+        status?: ToolResultStatus;
+      }[] = [];
       scope.toolResults = [];
+
+      // ── The batch's transition bookkeeping (9.19.0) ───────────────────
+      // First ACCEPTED `propose-transition` wins (committed at acceptance);
+      // later ones to other targets are suppressed + aggregated at batch end.
+      const transitionState: TransitionBatchState = { losers: [] };
 
       // Capture run identity from scope for the enriched permission ctx.
       // Same value the Tools slot passes to ToolProvider.list(ctx) so the
@@ -1046,6 +1367,11 @@ export function buildToolCallsHandler(
         const startMs = Date.now();
         let result: unknown;
         let error: boolean | undefined;
+        /** The typed effects channel (9.19.0) — set only when the tool
+         *  returned a recognized result envelope; everything else keeps
+         *  today's path byte for byte. */
+        let toolEnvelope: ReadToolResultEnvelope | undefined;
+        let toolStatus: ToolResultStatus | undefined;
         // Permission gate — when a checker is configured, evaluate BEFORE
         // executing the tool. Emits `permission.check` with the decision.
         //
@@ -1530,6 +1856,24 @@ export function buildToolCallsHandler(
                 ...(resolvedCredential && { credential: resolvedCredential }),
                 ...sessionContext(scope, tc.name, tc.id),
               });
+              // The typed effects channel (9.19.0): a recognized envelope is
+              // unwrapped HERE, at the one boundary the raw return crosses —
+              // everything downstream (governance rules, the cap, history,
+              // `tool_end`) sees the CONTENT, exactly what a bare return
+              // would have shown. The effects are judged below, after the
+              // gates, in call order.
+              const envelope = readToolResultEnvelope(result);
+              if (envelope !== undefined) {
+                toolEnvelope = envelope;
+                result = envelope.content;
+                toolStatus = envelope.status;
+              } else {
+                // A status-only shape missing its `effects: []` marker is
+                // DATA (bytes unchanged) — but never silently: name the
+                // dropped marker in dev mode.
+                const nearMiss = explainStatusOnlyNearMiss(result);
+                if (nearMiss !== undefined) warnEffect(tc.name, nearMiss);
+              }
               await endCall(tc.id);
             } catch (err) {
               if (isPauseRequest(err)) {
@@ -1598,6 +1942,7 @@ export function buildToolCallsHandler(
                 allowed,
                 iteration,
               });
+              noteSkillRefusal(scope, iteration);
             } else if (deps.skillStrictness !== undefined && skillHop) {
               // ── The POSTURE arm (SG-C) — after reachability, hops only. ──
               // OPEN skills never reach here (skillHop is false for them), so
@@ -1626,6 +1971,7 @@ export function buildToolCallsHandler(
                   iteration,
                   posture: deps.skillStrictness,
                 });
+                noteSkillRefusal(scope, iteration);
               }
             }
           }
@@ -1673,6 +2019,9 @@ export function buildToolCallsHandler(
           result: capped.result,
           durationMs,
           ...(error === true && { error: true }),
+          // The tool's own declared outcome (9.19.0) — additive, envelope
+          // tools only.
+          ...(toolStatus !== undefined && { status: toolStatus }),
         });
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
 
@@ -1702,6 +2051,21 @@ export function buildToolCallsHandler(
           }
         }
 
+        // ── Typed tool effects (9.19.0) — judged in call order ──────────
+        // Only for a call that RAN clean and returned an envelope. Refusal
+        // notes join the model-visible result AFTER the cap (framework
+        // truth, the step-suffix precedent); accepted effects speak through
+        // what they do — the cursor move, the delivered instruction — and
+        // through `tools.effect` on the record.
+        if (toolEnvelope !== undefined && executed && !error && !denied) {
+          resultStr += applyToolEffects(
+            scope,
+            { toolName: tc.name, toolCallId: tc.id, iteration },
+            toolEnvelope,
+            transitionState,
+          );
+        }
+
         newHistory.push({
           role: 'tool',
           content: resultStr,
@@ -1718,8 +2082,17 @@ export function buildToolCallsHandler(
         //     (call order preserved), so an earlier parallel call's
         //     routing implication is no longer overwritten by a
         //     later sibling's.
-        scope.lastToolResult = { toolName: tc.name, result: resultStr };
-        batchResults.push({ toolName: tc.name, result: resultStr, toolCallId: tc.id });
+        scope.lastToolResult = {
+          toolName: tc.name,
+          result: resultStr,
+          ...(toolStatus !== undefined && { status: toolStatus }),
+        };
+        batchResults.push({
+          toolName: tc.name,
+          result: resultStr,
+          toolCallId: tc.id,
+          ...(toolStatus !== undefined && { status: toolStatus }),
+        });
         scope.toolResults = [...batchResults];
 
         // (2) `read_skill` is the auto-attached activation tool.
@@ -1786,6 +2159,11 @@ export function buildToolCallsHandler(
       }
       scope.history = newHistory;
 
+      // The batch-end aggregate for conflicting transition proposals
+      // (9.19.0) — fires only when ≥2 accepted proposals named different
+      // targets; the per-effect events above already told each story.
+      emitTransitionConflict(scope, iteration, transitionState);
+
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
         turnIndex: 0,
         iterIndex: iteration,
@@ -1844,6 +2222,8 @@ export function buildToolCallsHandler(
         /** The call REALLY ran, clean — the step-advance eligibility this
          *  path knows about itself (a decline or a chain-deny never ran). */
         let stepToolRan = false;
+        /** The effects envelope the resumed call returned (9.19.0). */
+        let resumeEnvelope: ReadToolResultEnvelope | undefined;
         if (!decision.approved) {
           result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
           recordDecisions(scope, [
@@ -1957,6 +2337,7 @@ export function buildToolCallsHandler(
             result = dispatched.result;
             error = dispatched.error;
             stepToolRan = dispatched.executed === true && error !== true;
+            if (stepToolRan) resumeEnvelope = dispatched.envelope;
             // skip_step behind a middleware ask, approved (9.18.0): the
             // placeholder just landed — replace it with the authoritative
             // sentence BEFORE the chain's last word, the execute loop's
@@ -1997,18 +2378,40 @@ export function buildToolCallsHandler(
         if (deps.stepPlanFor && stepToolRan) {
           askResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
         }
+        // Typed tool effects (9.19.0) — a resumed call's envelope is judged
+        // exactly as an inline one's (fresh single-call batch state).
+        if (resumeEnvelope !== undefined) {
+          const askTransition: TransitionBatchState = { losers: [] };
+          askResultStr += applyToolEffects(
+            scope,
+            { toolName, toolCallId, iteration },
+            resumeEnvelope,
+            askTransition,
+          );
+          emitTransitionConflict(scope, iteration, askTransition);
+        }
         const askHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: askResultStr, toolCallId, toolName },
         ];
         scope.history = askHistory;
-        scope.lastToolResult = { toolName, result: askResultStr };
-        appendBatchResult(scope, { toolName, result: askResultStr, toolCallId });
+        scope.lastToolResult = {
+          toolName,
+          result: askResultStr,
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        };
+        appendBatchResult(scope, {
+          toolName,
+          result: askResultStr,
+          toolCallId,
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: askCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
@@ -2059,6 +2462,8 @@ export function buildToolCallsHandler(
         let error: boolean | undefined;
         /** Step-advance eligibility, judged by this path (a decline ran nothing). */
         let stepToolRan = false;
+        /** The effects envelope the approved call returned (9.19.0). */
+        let resumeEnvelope: ReadToolResultEnvelope | undefined;
         if (decision.approved) {
           const env = scope.$getEnv();
           const tool = lookupTool(toolName);
@@ -2074,6 +2479,7 @@ export function buildToolCallsHandler(
           result = dispatched.result;
           error = dispatched.error;
           stepToolRan = dispatched.executed === true && error !== true;
+          if (stepToolRan) resumeEnvelope = dispatched.envelope;
           // Consent moved the execution to this side of the pause; the rules
           // about results move with it.
           if (dispatched.executed === true) {
@@ -2104,19 +2510,41 @@ export function buildToolCallsHandler(
         if (deps.stepPlanFor && stepToolRan) {
           decisionResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
         }
+        // Typed tool effects (9.19.0) — an approved consequential call may
+        // carry them too; judged exactly as inline.
+        if (resumeEnvelope !== undefined) {
+          const decisionTransition: TransitionBatchState = { losers: [] };
+          decisionResultStr += applyToolEffects(
+            scope,
+            { toolName, toolCallId, iteration },
+            resumeEnvelope,
+            decisionTransition,
+          );
+          emitTransitionConflict(scope, iteration, decisionTransition);
+        }
         const decisionHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: decisionResultStr, toolCallId, toolName },
         ];
         scope.history = decisionHistory;
         // Drives `on-tool-return` triggers, same as the execute path.
-        scope.lastToolResult = { toolName, result: decisionResultStr };
-        appendBatchResult(scope, { toolName, result: decisionResultStr, toolCallId });
+        scope.lastToolResult = {
+          toolName,
+          result: decisionResultStr,
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        };
+        appendBatchResult(scope, {
+          toolName,
+          result: decisionResultStr,
+          toolCallId,
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: decisionCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
         });
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
@@ -2188,18 +2616,41 @@ export function buildToolCallsHandler(
         if (deps.stepPlanFor && dispatched.executed === true && error !== true) {
           consentResultStr += applyStepReturn(scope, { toolName, toolCallId, iteration });
         }
+        // Typed tool effects (9.19.0) — same judge as every other path.
+        const consentEnvelope =
+          dispatched.executed === true && error !== true ? dispatched.envelope : undefined;
+        if (consentEnvelope !== undefined) {
+          const consentTransition: TransitionBatchState = { losers: [] };
+          consentResultStr += applyToolEffects(
+            scope,
+            { toolName, toolCallId, iteration },
+            consentEnvelope,
+            consentTransition,
+          );
+          emitTransitionConflict(scope, iteration, consentTransition);
+        }
         const consentHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           { role: 'tool', content: consentResultStr, toolCallId, toolName },
         ];
         scope.history = consentHistory;
-        scope.lastToolResult = { toolName, result: consentResultStr };
-        appendBatchResult(scope, { toolName, result: consentResultStr, toolCallId });
+        scope.lastToolResult = {
+          toolName,
+          result: consentResultStr,
+          ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+        };
+        appendBatchResult(scope, {
+          toolName,
+          result: consentResultStr,
+          toolCallId,
+          ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+        });
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId,
           result: consentCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),
+          ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
         });
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,

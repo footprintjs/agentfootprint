@@ -171,6 +171,8 @@ defineSkill({
 
 Every move lands on the typed stream (`skill.step_advanced` / `step_skipped` / `steps_unfinished`), and a step whose tool asks a human pauses the run and advances on resume — [runnable end to end](examples/context-engineering/16-skill-steps.ts).
 
+**The cursor picks the brain, too (9.19.0).** The graph already decides *where* the run is; `defineSkill({ provider, model })` — or `skillGraph(g, { providers })` — lets that position decide *who answers*: triage on the small model, the refund skill on the strong one, `llm_start.brain` recording which rung won. Add `escalation: { provider, model, afterRefusals: N }` and N recorded routing refusals in one turn flip the rest of it onto the bigger brain (`skill.escalated` — evidence, never vibes), and `decider: { provider, model }` resolves an ambiguous turn-start menu out of band (`turn_routed { by: 'decider' }` — the sanctioned resolver for `rails`). And tools steer with **data, not string conventions**: return `{ content, status, effects }` and a `'denied'` refund routes by a declared `onToolStatus` edge — meaning, not prose — while a `propose-transition` / `require-instruction` effect is validated against the graph's own law, every acceptance and teaching refusal a typed `tools.effect` event. [Runnable end to end](examples/context-engineering/17-brains-and-tool-effects.ts)
+
 ### Then keep the conversation
 
 `run()` is **one turn**. It seeds the conversation from the message you pass and nothing else, so calling it twice gives you two conversations — right for one-shot work, and not what a chat wants. Continuing is something you name:

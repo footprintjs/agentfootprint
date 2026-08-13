@@ -206,6 +206,18 @@ export interface AgentChartDeps {
   readonly stepNudgeStage?: (scope: never) => void;
 
   /**
+   * An escalation brain is declared (9.19.0). In the GROUPED chart this
+   * gates threading `skillEscalated` across the `sf-llm-call` boundary —
+   * the flip is written by tool-calls on the OUTER scope and read by
+   * callLLM INSIDE the subflow, so without the mapper key the escalation
+   * would silently never serve a call in the default grouped shape (the
+   * SG-C blast-radius lesson: the threading lives in the builders). The
+   * flat chart shares one scope and needs no key; the flag is still
+   * accepted here so both builders take identical deps.
+   */
+  readonly hasEscalation?: boolean;
+
+  /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +
    * all 3 slots every iteration (loop → InjectionEngine). `'classic'`
    * engineers context ONCE (InjectionEngine + system-prompt + tools up front)
@@ -402,6 +414,16 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // with a stepped skill, so every other agent's engine args are the
           // exact bytes they always were.
           ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
+          // The typed tool-effects carriers (9.19.0) — value-conditional (the
+          // `resolvedModel` precedent): the keys exist only after a tool
+          // actually granted one, so every other run's engine args are the
+          // exact bytes they always were.
+          ...(parent.pendingToolTransition !== undefined && {
+            pendingToolTransition: parent.pendingToolTransition,
+          }),
+          ...(parent.instructionLeases !== undefined && {
+            instructionLeases: parent.instructionLeases,
+          }),
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -415,6 +437,15 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // (a bare object here would shallow-merge and APPEND the nested
           // `skipped` array across tenures; see StepPointerCarrier).
           ...(deps.hasSteps === true && { stepPointer: sf.nextStepPointer }),
+          // The lease tenure sweep's survivors (9.19.0), back onto the key
+          // the tool-calls stage appends to — the sweep is what makes lease
+          // death PERMANENT (a cyclic graph must not resurrect a dead lease
+          // on re-entry). Value-conditional: Evaluate writes it on every
+          // pass the parent key exists, and never before a first grant, so
+          // every other agent's mapper output is the exact bytes it was.
+          ...(sf.nextInstructionLeases !== undefined && {
+            instructionLeases: sf.nextInstructionLeases,
+          }),
         }),
         // CRITICAL: footprintjs's default `applyOutputMapping`
         // CONCATENATES arrays from subflow output with the parent's

@@ -40,13 +40,20 @@ interface RunBoundaryEvent {
  * cascade's tier-2 scorer decisively routed the turn, and the inherited
  * conversation cursor held it, respectively — both reported by the resolver
  * on iteration 1, numbers on `agentfootprint.skill.turn_routed`.
+ *
+ * `'tool-proposal'` and `'decider'` joined in 9.19.0: an accepted
+ * `propose-transition` tool effect moved the cursor (deterministic tool
+ * evidence — outranked only by a declared edge), and the configured tier-3
+ * decider resolved an outstanding turn-start menu out-of-band, respectively.
  */
 export type RouteOutcome =
   | 'entry'
   | 'route'
   | 'model-pick'
+  | 'tool-proposal'
   | 'intent'
   | 'continuity'
+  | 'decider'
   | 'stay'
   | 'rejected';
 
@@ -120,6 +127,12 @@ export function formatRouteHop(hop: RouteHop): string {
       return hop.fromSkill === undefined
         ? `read_skill("${hop.toSkill}") accepted at cold start`
         : `read_skill("${hop.toSkill}") accepted from "${hop.fromSkill}"`;
+    case 'tool-proposal':
+      // Same no-caption rule as model-pick: no declared edge fired — a tool's
+      // accepted propose-transition effect moved the cursor.
+      return hop.fromSkill === undefined
+        ? `a tool's transition proposal accepted at cold start → "${hop.toSkill}"`
+        : `a tool's transition proposal moved "${hop.fromSkill}" → "${hop.toSkill}"`;
     case 'intent':
       // The turn-start classifier's decisive win — the numbers ride turn_routed.
       return hop.fromSkill === undefined
@@ -127,6 +140,8 @@ export function formatRouteHop(hop: RouteHop): string {
         : `"${hop.fromSkill}" → "${hop.toSkill}" (the message decisively matched it)`;
     case 'continuity':
       return `carried from last turn — still in "${hop.toSkill}"`;
+    case 'decider':
+      return `the routing decider read the menu and chose "${hop.toSkill}"`;
     case 'stay':
       return `stayed in "${hop.toSkill}"`;
     case 'rejected':
@@ -160,8 +175,10 @@ function causeOf(cursorMove: unknown): RouteOutcome | undefined {
     case 'entry':
     case 'route':
     case 'model-pick':
+    case 'tool-proposal':
     case 'intent':
     case 'continuity':
+    case 'decider':
     case 'stay':
       return by;
     default:

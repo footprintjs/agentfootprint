@@ -238,6 +238,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // The step pointer as of the previous iteration (9.18.0) — the
         // sf-llm-call boundary's readonly input, for the Evaluate re-key.
         ...(deps.hasSteps === true && { stepPointer: parent.stepPointer }),
+        // The typed tool-effects carriers (9.19.0) — value-conditional (the
+        // `resolvedModel` precedent): present only after a tool granted one,
+        // crossed into sf-llm-call by the outer boundary below.
+        ...(parent.pendingToolTransition !== undefined && {
+          pendingToolTransition: parent.pendingToolTransition,
+        }),
+        ...(parent.instructionLeases !== undefined && {
+          instructionLeases: parent.instructionLeases,
+        }),
       }),
       outputMapper: (sf) => ({
         activeInjections: sf.activeInjections,
@@ -252,6 +261,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // A top-level ARRAY on purpose (Replace sets it wholesale; a bare
         // object would shallow-merge — see StepPointerCarrier).
         ...(deps.hasSteps === true && { nextStepPointer: sf.nextStepPointer }),
+        // The lease tenure sweep's survivors (9.19.0) — first hop of the
+        // same round trip (the outer boundary maps them onto the ReAct
+        // parent's `instructionLeases`). The sweep makes lease death
+        // PERMANENT: a cyclic graph must not resurrect a dead lease when
+        // the cursor re-enters the skill that granted it. Value-conditional
+        // — never written before a first grant.
+        ...(sf.nextInstructionLeases !== undefined && {
+          nextInstructionLeases: sf.nextInstructionLeases,
+        }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
     },
@@ -535,6 +553,23 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // currentSkillId one block up: the outer key holds the value the
           // LAST iteration's boundary bubbled out (plus tool-calls' moves).
           ...(deps.hasSteps === true && { stepPointer: p.stepPointer }),
+          // The typed tool-effects carriers (9.19.0) — written by tool-calls
+          // on the OUTER scope, read inside by the engine mapper. Value-
+          // conditional: the keys exist only after a tool granted one.
+          ...(p.pendingToolTransition !== undefined && {
+            pendingToolTransition: p.pendingToolTransition,
+          }),
+          ...(p.instructionLeases !== undefined && {
+            instructionLeases: p.instructionLeases,
+          }),
+          // The escalation flip (9.19.0) — written by tool-calls on the
+          // OUTER scope, read by callLLM INSIDE this boundary (`brainFor`'s
+          // second argument). Gated on the policy being declared, so every
+          // other agent's boundary args are the exact bytes they always
+          // were; seed writes the key from turn start, so the value-spread
+          // is stable within a run.
+          ...(deps.hasEscalation === true &&
+            p.skillEscalated !== undefined && { skillEscalated: p.skillEscalated }),
           // `.configure()` results, resolved + committed by seed on the OUTER
           // chart. callLLM and the System Prompt slot both live in here, so
           // the values have to cross the boundary. Read-only inside (nothing
@@ -599,6 +634,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // tool-calls stage advances — the cursor's round trip, one line up.
           // Top-level ARRAY + `arrayMerge: Replace` = set wholesale.
           ...(deps.hasSteps === true && { stepPointer: s.nextStepPointer }),
+          // The lease tenure sweep's survivors (9.19.0) — second hop, onto
+          // the outer key the tool-calls stage appends to. Permanent lease
+          // death (no cyclic resurrection); value-conditional, so agents
+          // that never saw a grant keep byte-identical mapper output.
+          ...(s.nextInstructionLeases !== undefined && {
+            instructionLeases: s.nextInstructionLeases,
+          }),
         };
       },
       // llmLatestToolCalls / thinkingBlocks / skillHistory are arrays —

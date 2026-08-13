@@ -198,6 +198,28 @@ export interface DefineSkillOptions {
    */
   readonly onSkip?: OnSkipPolicy;
   /**
+   * This skill's BRAIN (9.19.0) — "the cursor picks the brain": while a
+   * mounted skill graph's cursor is on this skill, `callLLM` runs on this
+   * provider instead of the agent's. Any `LLMProvider` port implementation;
+   * vendor-neutral by construction. A provider whose `name` differs from
+   * the agent's MUST also name `model` (the agent's model id belongs to
+   * another vendor's namespace — refused at `Agent.build()` otherwise).
+   * Legal only on agents that mount a graph; the same skill id may also be
+   * declared in `skillGraph(graph, { providers })` — same choice is fine,
+   * different choices are refused naming both homes. Absent → this skill is
+   * byte-identical to today.
+   */
+  readonly provider?: import('../../../adapters/types.js').LLMProvider;
+  /**
+   * The model this skill's calls run on (9.19.0). Legal ALONE — the agent's
+   * own provider, another model ("triage runs on the small one") — or
+   * beside `provider`. Absent with `provider` set: inherits down the
+   * precedence chain (escalation > skill brain > `.configure()` >
+   * build-time default), which is legal only while the provider is the
+   * agent's own.
+   */
+  readonly model?: string;
+  /**
    * Cache policy for this skill's body. Defaults to `'while-active'` —
    * the body caches while the skill is in `activeInjections[]` (i.e.,
    * while it's the most-recently-activated skill); invalidates the
@@ -344,6 +366,13 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
       surfaceMode: opts.surfaceMode ?? 'auto',
       ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
       ...(opts.autoActivate && { autoActivate: opts.autoActivate }),
+      // The skill's brain (9.19.0) — rides the metadata bag like every other
+      // per-skill option. NEVER projected (`projectActiveInjection`'s
+      // allow-list does not carry it), so the live provider object stays on
+      // the closure-held list and never crosses a scope boundary.
+      // `Agent.build()` folds + validates it (`skillBrains.ts`).
+      ...(opts.provider !== undefined && { provider: opts.provider }),
+      ...(opts.model !== undefined && { model: opts.model }),
       // The procedure, as data (9.18.0). `Agent` folds these into one frozen
       // StepPlan map at build; the engine ignores them everywhere else, so a
       // consumer reading skills off this bag sees exactly what was declared.

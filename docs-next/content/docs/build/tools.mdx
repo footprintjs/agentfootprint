@@ -220,6 +220,101 @@ inspector. That map rides the tool under the `TOOL_SESSIONS` registry symbol
 own shape, and a *different* symbol from `flowchartAsTool`'s inner-record
 registry, so one tool can carry both.
 
+## Typed tool effects — steering the run with data (9.19.0)
+
+Before 9.19.0 a tool that wanted to steer the run had exactly one medium —
+its result **string** — and any convention riding it (`"ROUTE:billing"`) was
+arbitrary text one prompt injection away from control authority. The typed
+effects channel replaces the convention with data the framework validates.
+The law: **push mandatory procedure; pull optional knowledge; never let
+arbitrary text promote itself into control authority.**
+
+A tool opts in by returning the result envelope — `{ content, effects,
+status? }`. `content` is what the model reads (exactly what a bare return
+would have shown); the rest is for the framework. The `effects` array is
+**required — it is the envelope marker itself**: when only the status
+matters, spell it `{ content, effects: [], status: 'denied' }`. A
+`{ content, status }` without `effects` is *not* an envelope (a domain
+object could already have that shape) — it stays data byte-for-byte, and
+dev mode warns you about the missing marker so the miss is never silent:
+
+<CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="tool-effects" title="examples/context-engineering/17-brains-and-tool-effects.ts (region: tool-effects)" />
+
+**Two effect kinds, deliberately:**
+
+- **`{ kind: 'propose-transition', targetSkillId, reason }`** — the typed
+  replacement for string routing markers. The *graph* decides: the target is
+  reachability-checked against the graph's own law, an accepted proposal
+  moves the cursor at the next evaluation (`cursorMove.by:
+  'tool-proposal'`), a refusal is teaching and recorded. Precedence is
+  stated: a same-batch **declared edge still wins** (the author's
+  determinism, reported as `skill.reroute_superseded { source:
+  'tool-proposal' }`), and a proposal outranks the model's own `read_skill`
+  pick (deterministic tool code over a model guess). Because proposals come
+  from tools — code the author shipped — they are framework-tier evidence:
+  admitted under every posture, `rails` included. Conflicting same-batch
+  proposals reuse the `route_conflict` law: first accepted in call order
+  wins, the rest are suppressed on the record (`source: 'tool-proposal'`).
+- **`{ kind: 'require-instruction', instructionId, deliveryLease }`** —
+  pushes a **registered** instruction (a skill body or a declared snippet)
+  into the coming call(s). `'next-call'` serves exactly the next LLM call;
+  `'until-skill-exit'` serves while the tenure that granted it holds — and
+  when that tenure ends, the lease dies **for good**: on a cyclic graph the
+  cursor may later re-enter the granting skill, and a dead lease does not
+  come back with it (a fresh tenure needs a fresh grant).
+  `read_skill` stays the pull door; this is the push door, and it serves
+  the declared catalog only — an unknown id (or a `'tool-only'` body,
+  whose declared channel cannot be pushed) is refused teachingly.
+
+**Outcome status, normalized.** Beside the effects rides an optional
+`status: 'success' | 'failure' | 'denied' | 'invalid' | 'partial' |
+'pending'` — and route edges gain `onToolStatus`, the data form of "route
+on meaning": `.route(refund, escalation, { onToolReturn: 'issue_refund',
+onToolStatus: 'denied' })` fires only on a *denied* refund, never a
+successful one. A result with no declared status can never match a status
+edge (an undeclared outcome is not evidence). The status also rides
+`stream.tool_end` and the `toolResults` batch, and `route()` refuses
+`when` + `onToolStatus` together (code or data, never both).
+
+Every judgment is a typed `agentfootprint.tools.effect` event —
+`accepted`, `refused` (with the teaching sentence), or `superseded` — and
+refusal notes join the model-visible result so the model can route around
+them. **Zero-cost when unused:** recognition is strict (an envelope needs
+`content` plus an `effects` array whose every element speaks the reserved
+`kind` vocabulary; an empty `effects: []` also needs one of the six
+statuses to say anything — `{ content }` alone is data), so every shape
+tools return today keeps its exact bytes and fires no new events.
+
+### The effects surface, named
+
+All from `agentfootprint`:
+
+- `ToolResultEnvelope` — what a tool returns to opt in:
+  `{ content, effects, status? }` (`effects` required — status-only is
+  `effects: []`).
+- `ProposedEffect` — the two-kind union; `ProposeTransitionEffect` and
+  `RequireInstructionEffect` are its arms, and `InstructionDeliveryLease`
+  is the `'next-call' | 'until-skill-exit'` union behind the push lease.
+- `ToolResultStatus` — the closed six-value outcome vocabulary;
+  `TOOL_RESULT_STATUSES` is the same set as data.
+- `readToolResultEnvelope` — the strict recognizer itself (exported so a
+  custom runner or a test can apply exactly the framework's rule);
+  `ReadToolResultEnvelope` is its result: unwrapped `content`, the valid
+  `effects`, the `status`, and the `malformed` refusals.
+- `explainStatusOnlyNearMiss` — the recognizer's teaching companion: given a
+  value that is *not* an envelope, it returns the warning sentence when the
+  shape is a status-only envelope missing its `effects: []` marker
+  (`{ content, status: 'denied' }`), and `undefined` for everything else.
+  The framework calls it for its own dev-mode warning; it is exported so a
+  custom runner can teach the same miss. Diagnosis only — it never changes
+  what any value does.
+- `PendingToolTransition` — the accepted proposal as it rides scope state
+  (`sharedState.pendingToolTransition`): target, proposing tool, reason,
+  and the granting iteration (one-shot by data).
+- `InstructionLease` — one granted push as it rides
+  `sharedState.instructionLeases`: the instruction, its lease, the tenure
+  that granted it, and the granting call.
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

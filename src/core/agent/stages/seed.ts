@@ -137,6 +137,14 @@ export interface SeedStageDeps {
    * (the `restoreSkillCursor` discipline, one field up).
    */
   readonly hasSteps?: boolean;
+  /**
+   * An escalation brain is declared (9.19.0). Gates the per-run reset of
+   * `skillRefusalsThisTurn` + `skillEscalated` — de-escalation IS the next
+   * seed, and the flip is a per-turn fact. Written only when true (the
+   * `hasSteps` discipline, one field up), so every other agent commits
+   * exactly the keys it always did.
+   */
+  readonly hasEscalation?: boolean;
 }
 
 /**
@@ -386,6 +394,15 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   if (deps.hasSteps === true) {
     scope.stepPointer = [];
     scope.stepNudgeSpent = false;
+  }
+  // Escalation state (9.19.0) — fresh every run: the refusal budget is a
+  // per-turn budget and DE-escalation is this very reset (the flip never
+  // outlives the turn that earned it). Written only when an escalation
+  // brain is declared, so every other agent commits exactly the keys it
+  // always did.
+  if (deps.hasEscalation === true) {
+    scope.skillRefusalsThisTurn = 0;
+    scope.skillEscalated = false;
   }
 
   // `.configure()` — resolved ONCE here (seed runs exactly once per run)

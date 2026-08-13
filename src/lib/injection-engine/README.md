@@ -318,7 +318,8 @@ this table (a lower row never imports a higher one):
 | `intentScorer.ts` | the `IntentScorer` PORT (SG-C tier 2) + `validateIntentScores` (every candidate scored, no foreign ids — the custody split: scorers produce numbers, the framework decides) |
 | `routingPolicy.ts` | the cascade's tie policy: `NEAR_TIE_MARGIN`/`MENU_SIZE`/`RoutingPolicy` + `decideTier2` (pure; floor + TOP-2 PAIRWISE margin, count-independent) + the `TurnRoute` POJO and `menuOutstanding` (ONE implementation for the envelope, the cursorMove decoration and the guard gate) |
 | `skillIntent.ts` | the intent domain: `TurnRoutingPlan` (what the agent's RouteTurn stage consumes), candidate projection (incumbent included), duplicate-example normalization, and the leave-one-out `checkupIntents` audit |
-| `llmClassifier.ts` | the model-judged `IntentScorer`: ONE constrained-enum call per turn (forced synthetic tool where the provider carries it, strict parse + one re-ask elsewhere; off-enum = `'none'`, never a fabricated id). The only scorer module importing `adapters/types` |
+| `llmClassifier.ts` | the model-judged `IntentScorer`: ONE constrained-enum call per turn over `constrainedEnumPick` (off-enum = `'none'`, never a fabricated id) |
+| `constrainedEnumPick.ts` | the enum machinery itself (9.19.0 extraction): forced synthetic tool where the provider declares `carriesForcedToolChoice`, strict single-line parse + one structured re-ask + the caller's fallback elsewhere. Shared by `llmClassifier` and the agent's tier-3 DECIDER (`SkillGraphOptions.decider` — the out-of-band menu resolver, `turn_routed { by: 'decider' }`, the sanctioned resolver for rails menus) so the two disciplines can never drift |
 | `factories/defineMenuHint.ts` | the tier-3 envelope's system-prompt half — advisory note while a menu is outstanding; auto-registered by Agent build on cascade graphs (marker `MENU_HINT_METADATA_KEY`, never the id) |
 | `skillContract.ts` | skill-body ↔ tool-contract checks (`body-foreign-tool` / `body-unknown-tool`). When a graph builds WITHOUT `knownTools`, these are DEFERRED via `SkillGraph.deferredBodyContract` — the note also rides each compiled skill's metadata (`SKILL_GRAPH_DEFERRED_CONTRACT_KEY`), so Agent build runs them once against the real registry whichever door the skills arrive through (`.skillGraph(graph)` or `.skills({ list: () => graph.skills })`; one problem, one report) |
 | `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap (re-enabled under a classifier — declaration order is back), `intent-without-classify`. Pure over strings — never imports engine types (`skillContract`/`skillIntent` borrow its `GraphProblem` shape so all checks report in one voice) |
@@ -334,6 +335,28 @@ predicates are opaque, and every message says so. A new intent scorer =
 implement `IntentScorer` (numbers for EVERY candidate; declare `floor` only
 when a low score honestly means "did not match at all", `categorical` only
 when the answer is one-id-or-none).
+
+Two 9.19.0 seams worth naming. **Route edges take a third condition**,
+`onToolStatus` (data, drawable — `on … status=denied` in `toMermaid()`):
+route on a tool result's DECLARED outcome (the six-value `ToolResultStatus`
+vocabulary from `core/agent/toolEffects.ts`) instead of its prose; a result
+with no declared status can never match, `when` + `onToolStatus` together is
+refused, and every determinism filter goes through the ONE
+`isDeterministicRoute` predicate. **The cursor resolver takes a fourth
+clause**, `ctx.pendingToolTransition` — an accepted `propose-transition`
+tool effect, ranked BETWEEN the declared edges (D1 still wins; the
+suppression is `reroute_superseded { source: 'tool-proposal' }`) and the
+model's pick (deterministic tool code outranks a model guess) — recorded as
+`cursorMove.by: 'tool-proposal'`. The evaluator also honors ONE
+framework-tier admission: `ctx.leaseActiveIds`, the `require-instruction`
+push (a granted lease serves the named injection into the pass, whatever
+its own trigger said; `read_skill` stays the pull door). Lease death is
+made PERMANENT by the Evaluate **tenure sweep**: every pass where
+`instructionLeases` arrives, the stage writes the `pruneLeases` survivors
+under `nextInstructionLeases` (the cursor's alias round trip — the mount
+mappers carry them back onto the parent key), so an `'until-skill-exit'`
+lease leaves the record the same pass its tenure ends and a cyclic graph's
+re-entry into the granting skill finds nothing to resurrect.
 
 ---
 

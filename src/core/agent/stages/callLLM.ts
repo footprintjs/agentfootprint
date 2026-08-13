@@ -126,6 +126,30 @@ export interface CallLLMStageDeps {
    * product is the recording.
    */
   readonly runConfigured?: boolean;
+  /**
+   * "The cursor picks the brain" (9.19.0). Consulted ONCE at the top of the
+   * stage with the ADVANCED cursor — `scope.nextSkillCursor ??
+   * scope.currentSkillId`, correct in BOTH chart shapes: inside
+   * `sf-llm-call` the boundary's `currentSkillId` is a readonly input still
+   * holding the previous iteration's cursor and the advanced one lives
+   * under `nextSkillCursor`; in the flat chart the engine's outputMapper
+   * has already written `currentSkillId` to the advanced value — and with
+   * the run's escalation flag (`scope.skillEscalated`, threaded across the
+   * `sf-llm-call` boundary by the grouped chart's mappers). The result
+   * resolves field by field down the STATED precedence chain:
+   *
+   *   **escalation > per-skill brain > `.configure()` `resolvedModel` >
+   *   build-time default** — `provider = brain?.provider ?? deps.provider`;
+   *   `model = brain?.model ?? (runConfigured ? scope.resolvedModel :
+   *   undefined) ?? deps.model`; `cacheStrategy = brain?.cacheStrategy ??
+   *   deps.cacheStrategy`. A brain naming only a model inherits the agent's
+   *   provider; a foreign provider without a model was refused at build.
+   *
+   * Undefined — no brain declared anywhere — and this stage reads no new
+   * scope key, resolves exactly as before, and `llm_start` keeps its exact
+   * bytes (the additive `brain` field appears only when a rung won).
+   */
+  readonly brainFor?: import('../skillBrains.js').BrainFor;
 }
 
 /**
@@ -143,13 +167,29 @@ export function buildCallLLMStage(
     // observability; the LLM-wire path now reads scope.history directly.
     const iteration = scope.iteration;
 
+    // "The cursor picks the brain" (9.19.0) — ONE consult, at the top, with
+    // the advanced cursor and the escalation flag. Gated on `deps.brainFor`
+    // so an agent without brains reads no new scope key and resolves on the
+    // exact line it always did.
+    const brain = deps.brainFor
+      ? deps.brainFor(
+          (scope.nextSkillCursor ?? scope.currentSkillId) as string | undefined,
+          scope.skillEscalated === true,
+        )
+      : undefined;
+    const provider = brain?.provider ?? deps.provider;
+    const cacheStrategy = brain?.cacheStrategy ?? deps.cacheStrategy;
+
     // The model for this run. `.configure()` resolved it at seed and
     // COMMITTED it to scope, so what gets called, what the `llm_start`
     // event reports and what cost is priced against are all one value —
     // the one the trace records. Without `.configure()` this is the
-    // build-time model and scope is never touched.
+    // build-time model and scope is never touched. A winning brain rung
+    // (9.19.0) outranks both — the stated precedence chain.
     const model =
-      (deps.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ?? deps.model;
+      brain?.model ??
+      (deps.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ??
+      deps.model;
 
     // Per-iteration boundary marker (was a dedicated `IterationStart` stage —
     // folded here since emitting is passive observability, not work that needs
@@ -200,11 +240,19 @@ export function buildCallLLMStage(
 
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
-      provider: deps.provider.name,
+      provider: provider.name,
       model,
       systemPromptChars: systemPrompt.length,
       messagesCount: messages.length,
       toolsCount: activeToolSchemas.length,
+      // WHICH BRAIN answered (9.19.0) — stamped ONLY when a brain rung won,
+      // so configured/default runs keep byte-identical events.
+      ...(brain !== undefined && {
+        brain: {
+          via: brain.via,
+          ...(brain.skillId !== undefined && { skillId: brain.skillId }),
+        },
+      }),
       ...(activeToolSchemas.length > 0 && {
         tools: activeToolSchemas.map((t) => ({
           name: t.name,
@@ -234,7 +282,7 @@ export function buildCallLLMStage(
     // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
     // is a pass-through for empty markers.
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
-    const cachePrepared = await deps.cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
+    const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
       iteration,
       iterationsRemaining: Math.max(0, deps.maxIterations - iteration),
       recentHitRate: scope.recentHitRate,
@@ -270,8 +318,8 @@ export function buildCallLLMStage(
     ): Promise<LLMResponse> => {
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
-      if (deps.provider.stream) {
-        for await (const chunk of deps.provider.stream(req, providerHooks)) {
+      if (provider.stream) {
+        for await (const chunk of provider.stream(req, providerHooks)) {
           if (chunk.done) {
             if (chunk.response) resp = chunk.response;
             break;
@@ -285,7 +333,7 @@ export function buildCallLLMStage(
           // refusal says what the terminal chunk looks like.
           if (typeof (chunk.content as unknown) !== 'string') {
             throw new TypeError(
-              `provider '${deps.provider.name}' yielded a stream chunk whose \`content\` is ` +
+              `provider '${provider.name}' yielded a stream chunk whose \`content\` is ` +
                 `${chunk.content === undefined ? 'missing' : `a ${typeof chunk.content}`}. ` +
                 `Every chunk from LLMProvider.stream() is ` +
                 `{ tokenIndex: number, content: string, done: boolean }, and the LAST one is ` +
@@ -317,7 +365,7 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        resp = await deps.provider.complete(req, providerHooks);
+        resp = await provider.complete(req, providerHooks);
       }
       // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
       // so it is moved into `content` and the call is taken off the list here,
@@ -393,8 +441,8 @@ export function buildCallLLMStage(
         scope,
         llmRequest,
         deps.reliability,
-        deps.provider,
-        deps.provider.name,
+        provider,
+        provider.name,
         model,
         singleProviderCall,
         postValidate,

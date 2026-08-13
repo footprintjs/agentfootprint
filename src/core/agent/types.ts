@@ -762,13 +762,26 @@ export interface AgentState {
   /** Most recent tool result — the LAST entry of `toolResults`. Kept for
    *  every existing reader (context-bisect's proximate-tool key among them);
    *  batch-aware routing reads `toolResults`. */
-  lastToolResult?: { toolName: string; result: string };
+  lastToolResult?: {
+    toolName: string;
+    result: string;
+    /** The tool's own declared outcome (9.19.0) — envelope tools only. */
+    status?: import('./toolEffects.js').ToolResultStatus;
+  };
   /** EVERY tool result of the current iteration's batch, in call order
    *  (9.16.0) — reset when tool dispatch starts, appended as each result
    *  lands (a pause mid-batch commits the partial batch; resume appends the
    *  answered call). Drives `on-tool-return` triggers and skill-graph routes
    *  so a parallel batch routes on all its calls, not only the last. */
-  toolResults?: ReadonlyArray<{ toolName: string; result: string; toolCallId: string }>;
+  toolResults?: ReadonlyArray<{
+    toolName: string;
+    result: string;
+    toolCallId: string;
+    /** The tool's OWN declared outcome (9.19.0) — present only when the tool
+     *  returned a result envelope carrying `status`. `onToolStatus` route
+     *  edges key on it. */
+    status?: import('./toolEffects.js').ToolResultStatus;
+  }>;
   /** The `Deliver` stage's record for THIS iteration: which messages-slot
    *  injections entered the window, and which were held back with the
    *  sentence saying why. Overwritten per iteration (the commit log keeps
@@ -813,6 +826,14 @@ export interface AgentState {
    *  Engine, where it moves the cursor unless a declared edge fired first.
    *  Undefined for agents without a skill graph (the gate is what validates it). */
   pendingSkillPick?: string;
+  /** The ADVANCED skill-graph cursor, inside `sf-llm-call` (the grouped
+   *  chart): the Injection Engine's outputMapper writes it here because the
+   *  boundary's `currentSkillId` is a readonly input still holding the
+   *  previous iteration's value. The tools slot and callLLM's `brainFor`
+   *  consult read `nextSkillCursor ?? currentSkillId`. In the flat chart the
+   *  engine's outputMapper maps it straight onto `currentSkillId`, so this
+   *  key never exists there — the same expression is correct in both shapes. */
+  nextSkillCursor?: string;
   /** The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    *  `.entryByRelevance()`) — written by the PickEntry stage once per turn (the
    *  "Why this skill?" relevance %). `score` is the raw strategy score; `relevance`
@@ -850,6 +871,27 @@ export interface AgentState {
    *  (9.18.0). Written by the StepNudge branch; reset at seed. Absent on
    *  agents with no stepped skill. */
   stepNudgeSpent?: boolean;
+  /** Gate refusals (`skill.rejected` — reachability OR posture) this turn
+   *  (9.19.0). Counted by the tool-calls stage, reset at seed, present ONLY
+   *  when an escalation brain is declared — the refusal budget that trips
+   *  the flip. */
+  skillRefusalsThisTurn?: number;
+  /** The turn crossed its declared refusal threshold and the rest of it
+   *  runs on the escalation brain (9.19.0). Written once per turn at the
+   *  flip (a recorded fact — `skill.escalated` fires beside it); reset at
+   *  seed (de-escalation). Absent without an escalation brain. */
+  skillEscalated?: boolean;
+  /** The `propose-transition` tool effect the gate ACCEPTED this iteration
+   *  (9.19.0) — reachability-validated, first-accepted-wins across the
+   *  batch, stamped with the granting iteration (one-shot by data: the
+   *  Evaluate stage honors it exactly once, on the following iteration).
+   *  Absent unless a tool proposed one on a skill-graph agent. */
+  pendingToolTransition?: import('./toolEffects.js').PendingToolTransition;
+  /** The granted `require-instruction` leases (9.19.0), in grant order.
+   *  Appended by the tool-calls stage (which prunes spent ones as it
+   *  writes); validity is computed per Evaluate pass, never mutated.
+   *  Absent unless a tool granted one. */
+  instructionLeases?: ReadonlyArray<import('./toolEffects.js').InstructionLease>;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

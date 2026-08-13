@@ -3,25 +3,29 @@
  * intent the new message is (SG-C tier 2). ONE call per turn, off the hot
  * loop, in the RouteTurn stage — never inside the ReAct iterations.
  *
- * **Constrained enum, never free text.** On a provider that declares
- * `carriesForcedToolChoice` the pick rides a forced synthetic tool whose
- * single argument is `enum: [...candidateIds, 'none']` (the same machinery
- * the `'tool-forced'` output strategy uses); on any other provider it is a
- * strict single-line parse validated against the enum, ONE structured re-ask,
- * then `'none'`. An off-enum answer is a parse failure, not a route — this
- * scorer can never emit an id it wasn't given.
+ * **Constrained enum, never free text.** The pick runs through
+ * {@link constrainedEnumPick} (extracted from this module in 9.19.0 so the
+ * tier-3 decider shares the same discipline): on a provider that declares
+ * `carriesForcedToolChoice` it rides a forced synthetic tool whose single
+ * argument is `enum: [...candidateIds, 'none']` (the same machinery the
+ * `'tool-forced'` output strategy uses); on any other provider it is a
+ * strict single-line parse validated against the enum, ONE structured
+ * re-ask, then `'none'`. An off-enum answer is a parse failure, not a route
+ * — this scorer can never emit an id it wasn't given.
  *
  * Output maps to scores the framework can judge: picked id → 1, others → 0;
  * `'none'` → all 0. `floor: 0` (so `'none'` is honestly "unmatched") and
  * `categorical: true` (one id or none — a pick is decisive by construction,
  * never diluted by the near-tie margin; see `routingPolicy.ts`).
  *
- * The only injection-engine scorer module that imports `adapters/types` —
+ * One of the two injection-engine scorer modules that import
+ * `adapters/types` (the other is `constrainedEnumPick`, its machinery) —
  * kept out of `entryScorer.ts` so the keyword/embedding paths stay
  * adapter-free.
  */
 
-import type { LLMProvider, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
+import type { LLMProvider } from '../../adapters/types.js';
+import { constrainedEnumPick } from './constrainedEnumPick.js';
 import type {
   IntentCandidate,
   IntentScore,
@@ -58,18 +62,21 @@ export function llmClassifier(
       if (candidates.length === 0) return [];
       const ids = candidates.map((c) => c.id);
       const allowed = [...ids, NONE];
-      const picked =
-        provider.carriesForcedToolChoice === true
-          ? await pickByForcedTool(
-              provider,
-              options,
-              input,
-              candidates,
-              allowed,
-              maxExamples,
-              signal,
-            )
-          : await pickByParse(provider, options, input, candidates, allowed, maxExamples, signal);
+      const picked = await constrainedEnumPick({
+        provider,
+        ...(options.model !== undefined && { model: options.model }),
+        systemPrompt: systemPromptFor(candidates, maxExamples),
+        messages: messagesFor(input),
+        allowed,
+        fallback: NONE,
+        pickTool: {
+          name: PICK_TOOL,
+          description: `Report which declared intent the user's message expresses ('${NONE}' if none).`,
+          argName: 'intent',
+          argDescription: 'The picked intent id.',
+        },
+        ...(signal !== undefined && { signal }),
+      });
       return ids.map((id) => ({ id, score: picked === id ? 1 : 0 }));
     },
   };
@@ -103,109 +110,4 @@ function messagesFor(
 ): Array<{ role: 'user' | 'assistant'; content: string }> {
   const turns = (input.recentTurns ?? []).map((t) => ({ role: t.role, content: t.content }));
   return [...turns, { role: 'user' as const, content: input.message }];
-}
-
-/** The forced-tool path: the provider constrains generation to the enum. */
-async function pickByForcedTool(
-  provider: LLMProvider,
-  options: LlmClassifierOptions,
-  input: IntentScorerInput,
-  candidates: readonly IntentCandidate[],
-  allowed: readonly string[],
-  maxExamples: number,
-  signal?: AbortSignal,
-): Promise<string> {
-  const tool: LLMToolSchema = {
-    name: PICK_TOOL,
-    description: `Report which declared intent the user's message expresses ('${NONE}' if none).`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        intent: { type: 'string', enum: [...allowed], description: 'The picked intent id.' },
-      },
-      required: ['intent'],
-      additionalProperties: false,
-    },
-  };
-  const resp = await complete(provider, {
-    systemPrompt: systemPromptFor(candidates, maxExamples),
-    messages: messagesFor(input),
-    tools: [tool],
-    toolChoice: { type: 'tool', name: PICK_TOOL },
-    model: options.model,
-    signal,
-  });
-  const call = resp.toolCalls.find((tc) => tc.name === PICK_TOOL);
-  const picked = (call?.args as { intent?: unknown } | undefined)?.intent;
-  // Off-enum = parse failure, never a route.
-  return typeof picked === 'string' && allowed.includes(picked) ? picked : NONE;
-}
-
-/** The parse path: strict single line, one structured re-ask, then 'none'. */
-async function pickByParse(
-  provider: LLMProvider,
-  options: LlmClassifierOptions,
-  input: IntentScorerInput,
-  candidates: readonly IntentCandidate[],
-  allowed: readonly string[],
-  maxExamples: number,
-  signal?: AbortSignal,
-): Promise<string> {
-  const instruction = `Answer with EXACTLY one id from this list and nothing else: ${allowed.join(
-    ', ',
-  )}`;
-  const base = messagesFor(input);
-  const first = await complete(provider, {
-    systemPrompt: `${systemPromptFor(candidates, maxExamples)}\n\n${instruction}`,
-    messages: base,
-    model: options.model,
-    signal,
-  });
-  const parsed = parseEnumLine(first.content, allowed);
-  if (parsed !== undefined) return parsed;
-  const retry = await complete(provider, {
-    systemPrompt: `${systemPromptFor(candidates, maxExamples)}\n\n${instruction}`,
-    messages: [
-      ...base,
-      { role: 'assistant', content: first.content },
-      {
-        role: 'user',
-        content:
-          `That answer was not one of the allowed ids. Reply with exactly one of: ` +
-          `${allowed.join(', ')} — a bare id, no punctuation, no explanation.`,
-      },
-    ],
-    model: options.model,
-    signal,
-  });
-  return parseEnumLine(retry.content, allowed) ?? NONE;
-}
-
-/** A trimmed single-token answer that IS one of the allowed ids, else undefined. */
-function parseEnumLine(content: string, allowed: readonly string[]): string | undefined {
-  const line = content.trim().replace(/^["'`]+|["'`.,]+$/g, '');
-  return allowed.includes(line) ? line : undefined;
-}
-
-/** One `complete()` with only the fields this classifier uses. */
-async function complete(
-  provider: LLMProvider,
-  req: {
-    systemPrompt: string;
-    messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>;
-    tools?: readonly LLMToolSchema[];
-    toolChoice?: { type: 'tool'; name: string };
-    model?: string;
-    signal?: AbortSignal;
-  },
-): Promise<LLMResponse> {
-  const request: LLMRequest = {
-    systemPrompt: req.systemPrompt,
-    messages: req.messages.map((m) => ({ role: m.role, content: m.content })),
-    ...(req.tools !== undefined && { tools: req.tools }),
-    ...(req.toolChoice !== undefined && { toolChoice: req.toolChoice }),
-    model: req.model ?? '',
-    ...(req.signal !== undefined && { signal: req.signal }),
-  };
-  return provider.complete(request);
 }

@@ -34,6 +34,7 @@ import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
+import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../conventions.js';
 import {
   DecisionRequiredError,
@@ -180,6 +181,8 @@ import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';
 import { AgentBuilder } from './agent/AgentBuilder.js';
 export type { SkillGraphOptions } from './agent/AgentBuilder.js';
+// Per-skill model switching (9.19.0) — the declared brain shapes.
+export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { findThinkingHandler } from '../thinking/registry.js';
 import type { ThinkingHandler } from '../thinking/types.js';
@@ -338,6 +341,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  against. Absent (every graph without the new options) → RouteTurn never
    *  mounts, the gate never postures, seed never restores a cursor, and the
    *  checkpoint shape is byte-identical. */
+  /** The folded per-skill brains + escalation + decider (9.19.0) —
+   *  validated at `AgentBuilder.build()`. Undefined = no brain anywhere:
+   *  callLLM, the gate, seed and RouteTurn wire nothing new. */
+  private readonly skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains;
   private readonly skillGraphCascade?: {
     readonly turnRouting?: TurnRoutingPlan;
     readonly strictness: 'assist' | 'guard' | 'rails';
@@ -627,6 +634,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       readonly continuity: 'turn' | 'conversation';
       readonly nodeIds: ReadonlySet<string>;
     },
+    skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains,
   ) {
     super();
     this.provider = opts.provider;
@@ -656,6 +664,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphSupersededEntries = skillGraphSupersededEntries;
     this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.skillGraphCascade = skillGraphCascade;
+    this.skillBrains = skillBrains;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -2558,6 +2567,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Steps (9.18.0): gate the per-run stepPointer/stepNudgeSpent reset on
       // the feature, so every other agent seeds exactly the keys it always did.
       ...(stepPlanFor !== undefined && { hasSteps: true }),
+      // Escalation (9.19.0): same gate discipline — the per-run counter/flip
+      // reset exists only when the policy does (de-escalation IS the seed).
+      ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -2632,6 +2644,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           strictness: cascade.strictness,
           isNode: (id) => cascade.nodeIds.has(id),
           ...(hiddenSkillIdsForRouting && { hiddenSkillIds: hiddenSkillIdsForRouting }),
+          // The tier-3 decider (9.19.0) — the out-of-band menu resolver.
+          // `AgentBuilder.build()` already refused a decider on a mount
+          // that never runs the cascade, so it always reaches its stage.
+          ...(this.skillBrains?.decider !== undefined && {
+            decider: {
+              provider: this.skillBrains.decider.provider,
+              ...(this.skillBrains.decider.model !== undefined && {
+                model: this.skillBrains.decider.model,
+              }),
+              defaultModel: model,
+              runConfigured: this.runConfigFn !== undefined,
+            },
+          }),
         })
       : undefined;
     // Relevance entry router — a once-per-turn stage (off the ReAct loop) that
@@ -2712,6 +2737,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Only a configured agent reads `scope.resolvedModel` — see the dep's
       // JSDoc for why this is a build-time flag and not a runtime fallback.
       ...(this.runConfigFn && { runConfigured: true }),
+      // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
+      // brain or an escalation exists, so every other agent's stage reads no
+      // new scope key and resolves on the exact line it always did. The
+      // per-brain cache strategies resolve HERE, once, where the agent's own
+      // strategy (override included) is known: same-name brains keep it,
+      // foreign providers get their registry default (markers are
+      // provider-aware — the one genuinely risky seam, resolved statically).
+      ...(this.skillBrains !== undefined &&
+        (this.skillBrains.bySkill.size > 0 || this.skillBrains.escalation !== undefined) && {
+          brainFor: buildBrainFor({
+            brains: this.skillBrains,
+            agentProviderName: provider.name,
+            agentCacheStrategy: cacheStrategy,
+          }),
+        }),
     });
 
     // Window stage (7.16 as compaction; the strategy family since 7.17) —
@@ -2781,6 +2821,39 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Steps (9.18.0): advance/skip at the result boundary — the batch loop
       // AND every pausable resume path (an askHuman step advances on resume).
       ...(stepPlanFor !== undefined && { stepPlanFor }),
+      // Escalate-on-evidence (9.19.0): the refusal budget + flip, wired only
+      // when the policy exists. `describeFrom` resolves the event's honest
+      // `from` by the same chain callLLM applies.
+      ...(this.skillBrains?.escalation !== undefined && {
+        escalation: {
+          afterRefusals: this.skillBrains.escalation.afterRefusals,
+          to: {
+            provider: this.skillBrains.escalation.provider.name,
+            ...(this.skillBrains.escalation.model !== undefined && {
+              model: this.skillBrains.escalation.model,
+            }),
+          },
+          describeFrom: (cursor: string | undefined, resolvedModel: string | undefined) =>
+            describeServingBrain({
+              brains: this.skillBrains!,
+              cursor,
+              agentProviderName: provider.name,
+              defaultModel: model,
+              ...(resolvedModel !== undefined && { resolvedModel }),
+            }),
+        },
+      }),
+      // The require-instruction catalog (9.19.0): every registered injection
+      // id + the one delivery fact its check-up needs. Wired whenever
+      // injections exist; nothing runs until a tool returns an effect.
+      ...(this.injections.length > 0 && {
+        leaseTargets: new Map(
+          this.injections.map((inj) => {
+            const surfaceMode = (inj.metadata as { surfaceMode?: string } | undefined)?.surfaceMode;
+            return [inj.id, { ...(surfaceMode !== undefined && { surfaceMode }) }] as const;
+          }),
+        ),
+      }),
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
@@ -2848,6 +2921,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         hasSteps: true,
         stepNudgeStage: buildStepNudgeStage(stepPlanFor) as (scope: never) => void,
       }),
+      // Escalation (9.19.0): the grouped chart threads `skillEscalated`
+      // across the sf-llm-call boundary only when the policy exists.
+      ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
       ...(routeTurnStage && { routeTurnStage: routeTurnStage as (scope: never) => Promise<void> }),

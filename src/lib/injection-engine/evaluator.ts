@@ -24,6 +24,13 @@
  *   • `llm-activated`      → active when the Injection's `id` is in
  *                            `ctx.activatedInjectionIds` (the LLM
  *                            previously called `viaToolName(<id>)`).
+ *
+ * Beside the trigger kinds, ONE framework-tier admission (9.19.0): an
+ * injection named by `ctx.leaseActiveIds` — a `require-instruction` tool
+ * effect's granted lease — is active for this pass even when its own
+ * trigger said nothing. Declaration order is preserved (the lease admits;
+ * it never reorders), and an injection both triggered AND leased is active
+ * once. Absent `leaseActiveIds` = the loop below is byte-identical.
  */
 
 import { toolResultsOf } from './types.js';
@@ -41,6 +48,15 @@ export function evaluateInjections(
   }> = [];
 
   for (const inj of injections) {
+    // The lease admission (9.19.0) — a granted `require-instruction` push.
+    // Checked FIRST so a leased injection is active exactly once whatever
+    // its own trigger would have said; the switch below never runs for it,
+    // which also means a leased rule's throwing predicate cannot mark a
+    // framework-granted delivery as skipped.
+    if (ctx.leaseActiveIds !== undefined && ctx.leaseActiveIds.includes(inj.id)) {
+      active.push(inj);
+      continue;
+    }
     const t = inj.trigger;
     switch (t.kind) {
       case 'always': {

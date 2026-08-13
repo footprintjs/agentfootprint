@@ -153,6 +153,36 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     'No start rule or intent matched this message strongly enough, and this graph does not ' +
     'let the model route — the turn ran on the base prompt. The full menu stayed on the ' +
     'record: {{candidates}}.',
+  // The tier-3 decider resolved the menu out-of-band (9.19.0). A 'stay'
+  // verdict lands under the continuity key — the event's `decider` field
+  // still says who answered.
+  'skill.turn_routed.decider':
+    'A dedicated decider model ({{deciderModel}}) read the menu and chose `{{to}}`.',
+
+  // Escalate-on-evidence (9.19.0): the declared refusal threshold tripped
+  // and the rest of the turn runs on the bigger brain. Once per turn.
+  'skill.escalated':
+    'After {{refusals}} refused routing attempts, the rest of the turn escalated from ' +
+    '{{fromModel}} to {{toModel}}.',
+
+  // Typed tool effects (9.19.0) — the effects channel's own prose, keyed by
+  // kind + outcome. A refusal names itself teaching; the full sentence rides
+  // the event payload (`refusalReason`) for richer consumers.
+  'tools.effect.transition.accepted':
+    '`{{toolName}}` proposed moving to the `{{targetSkillId}}` skill — “{{reason}}” — and ' +
+    'the graph accepted it.',
+  'tools.effect.transition.refused':
+    '`{{toolName}}` proposed moving to `{{targetSkillId}}` and the graph refused it — the ' +
+    'teaching refusal is on the record.',
+  'tools.effect.transition.superseded':
+    '`{{toolName}}` proposed moving to `{{targetSkillId}}`, but an earlier proposal in the ' +
+    'same batch had already won the move.',
+  'tools.effect.instruction.accepted':
+    '`{{toolName}}` pushed the `{{instructionId}}` instruction into the coming ' +
+    'iteration(s) ({{deliveryLease}} lease).',
+  'tools.effect.instruction.refused':
+    '`{{toolName}}` asked to push the `{{instructionId}}` instruction and was refused — ' +
+    'the teaching refusal is on the record.',
 
   // One parallel tool batch, N matched edges, different targets (9.16.0).
   // Call order decides; the suppressed hop(s) stay on the record — this line is
@@ -316,6 +346,8 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
         case 'entry':
         case 'rule': // era tolerance — 'rule' is the same tier-1 verdict, older/newer vocabulary
           return 'skill.turn_routed.entry';
+        case 'decider': // the tier-3 out-of-band resolver (9.19.0)
+          return 'skill.turn_routed.decider';
         case 'menu':
         case 'model-pick': // era tolerance — a menu the model resolves
           return 'skill.turn_routed.menu';
@@ -342,6 +374,18 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
 
     case 'agentfootprint.skill.route_conflict':
       return 'skill.route_conflict';
+
+    case 'agentfootprint.skill.escalated':
+      return 'skill.escalated';
+
+    case 'agentfootprint.tools.effect': {
+      // Kind + outcome pick the sentence; 'superseded' exists only for
+      // transitions (an instruction lease is never outrun).
+      const p = event.payload;
+      const family = p.kind === 'propose-transition' ? 'transition' : 'instruction';
+      const outcome = p.outcome === 'superseded' ? 'superseded' : p.outcome;
+      return `tools.effect.${family}.${outcome}`;
+    }
 
     case 'agentfootprint.skill.rejected':
       // Posture refusals (SG-C) narrate; the plain reachability rejection keeps
@@ -577,6 +621,33 @@ export function extractCommentaryVars(
         tieB: scores[1]?.id ?? '',
         tieBShare: scores[1] ? fmtShare(scores[1].relevance) : '',
         candidates: (p.offered ?? []).map((id) => `\`${id}\``).join(', '),
+        // The tier-3 decider's identity (9.19.0) — model when named, else
+        // the provider (a decider always has at least that).
+        deciderModel: p.decider?.model ?? p.decider?.provider ?? '',
+      };
+    }
+
+    case 'agentfootprint.skill.escalated': {
+      const p = event.payload;
+      return {
+        ...base,
+        refusals: String(p.refusals),
+        fromModel: p.from.model,
+        // The escalation brain may inherit its model down the chain (same
+        // provider) — the provider name is then the honest identity.
+        toModel: p.to.model ?? p.to.provider,
+      };
+    }
+
+    case 'agentfootprint.tools.effect': {
+      const p = event.payload;
+      return {
+        ...base,
+        toolName: p.toolName,
+        targetSkillId: p.targetSkillId ?? '',
+        reason: p.reason ?? '',
+        instructionId: p.instructionId ?? '',
+        deliveryLease: p.deliveryLease ?? '',
       };
     }
 

@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.19.0] - 2026-08-13
+
+**The cursor picks the brain, and tools stop smuggling control through
+prose.**
+
+### Added — per-skill brains
+
+```ts
+defineSkill({
+  id: 'refund',
+  provider: strongProvider,
+  model: 'refund-strong-model',
+  tools: [issueRefund],
+  body: 'Check the order, then issue or deny.',
+});
+```
+
+A skill graph already decides WHERE the run is; a per-skill brain lets
+that same position decide WHO answers. `defineSkill({ provider, model })`
+keeps the choice beside the skill it serves; `.skillGraph(graph, {
+providers })` keeps a fleet's choices in one place at the mount — same
+meaning, two homes. While the cursor holds a skill with a declared brain,
+every LLM call in that tenure runs on it; which brain answered is stamped
+on `llm_start`.
+
+Precedence is stated and enforced, most specific wins: **escalation
+brain > per-skill brain > `.configure()`'s run model > the build
+default.** A brain naming only a model inherits the agent's own provider;
+a brain naming a *foreign* provider without a model is refused at
+`Agent.build()` — the run's configured model belongs to another vendor's
+namespace and would fail mid-turn, on exactly the iteration the cursor
+enters the skill.
+
+### Added — escalate-on-evidence
+
+```ts
+.skillGraph(graph, { escalation: { provider: strongProvider, afterRefusals: 2 } })
+```
+
+`N` gate refusals in one turn (`skill.rejected` — reachability or
+posture, real recorded refusals, never vibes) flip the rest of that turn
+onto the escalation brain. Recorded once as
+`agentfootprint.skill.escalated`. The flip resets at the start of the
+next turn — evidence, not a standing setting.
+
+### Added — the tier-3 decider
+
+```ts
+.skillGraph(graph, { decider: { provider: smallProvider } })
+```
+
+An out-of-band constrained-enum pick (a declared skill id, or `'stay'`
+— never free text) resolves a routing menu the earlier rungs left
+outstanding. `turn_routed.by` gains `'decider'`. It is the sanctioned
+resolver for a `rails`-posture menu, which otherwise proceeds on the base
+prompt with nothing decided.
+
+### Added — typed tool effects
+
+A tool may return `{ content, effects, status }` instead of a bare
+value. Plain `{content}`-shaped returns — and every string a tool
+returns today — stay byte-identical; the envelope is recognized only by
+its own strict shape.
+
+- **`propose-transition`** — `{ kind: 'propose-transition', targetSkillId,
+  reason }`. The typed replacement for a string routing marker: the
+  *graph* decides. A same-batch declared edge still wins; an unreachable
+  target is refused out loud, not silently dropped.
+- **`require-instruction`** — `{ kind: 'require-instruction',
+  instructionId, deliveryLease: 'next-call' | 'until-skill-exit' }`.
+  Pushes a *registered* instruction into the coming call(s) —
+  `read_skill` stays the pull door for optional knowledge; this is the
+  push door for mandatory procedure, and it only pushes what was
+  registered at build. An unknown id is refused, never improvised.
+
+Every acceptance or refusal is a typed `agentfootprint.tools.effect`
+event carrying a teaching note the model can act on.
+
+### Added — route on meaning
+
+`onToolStatus` route edges match a tool result's declared outcome —
+`success | failure | denied | invalid | partial | pending` — so a denied
+call can never route like a success. Composable with `onToolReturn`;
+drawable in `toMermaid()`.
+
+### Law
+
+Push mandatory procedure. Pull optional knowledge. Never let arbitrary
+text promote itself into control authority.
+
 ## [9.18.0] - 2026-08-12
 
 **Procedures become data: the framework holds the step pointer, the model

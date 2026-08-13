@@ -137,6 +137,54 @@ The two mount options:
 
 Neither option set = byte-identical to 9.16, events included.
 
+## Brains, a decider, and routing on outcome (9.19.0)
+
+The same mount picks **who answers** and **what resolves a menu** — and an
+edge can route on a tool's declared outcome instead of its prose:
+
+```ts
+import { Agent } from 'agentfootprint';
+import { skillGraph, defineSkill, llmClassifier } from 'agentfootprint/context';
+import { mock } from 'agentfootprint/providers';
+
+const strong = mock({ reply: 'the strong model answered' }); // any LLMProvider port
+const refund = defineSkill({
+  id: 'refund',
+  description: 'refund handling',
+  body: 'Handle the refund.',
+  // "The cursor picks the brain": refund answers on its own model.
+  provider: strong,
+  model: 'strong-model',
+});
+const triage = defineSkill({ id: 'triage', description: 'first contact', body: 'Triage.' });
+const desk = defineSkill({ id: 'desk', description: 'denied refunds', body: 'Escalate.' });
+
+const graph = skillGraph()
+  .entry(triage, { match: { intent: 'customer wants a refund', examples: ['refund my order'] } })
+  // Route on MEANING: only a DENIED refund tool result moves to the desk.
+  .route(refund, desk, { onToolReturn: 'issue_refund', onToolStatus: 'denied' })
+  .route(triage, refund)
+  .classify(llmClassifier(mock({ reply: 'refund' })))
+  .build();
+
+const agent = Agent.create({ provider: mock({ reply: 'small answered' }), model: 'small' })
+  .system('You are support.')
+  .skillGraph(graph, {
+    // N recorded gate refusals in one turn → the rest runs on the big brain.
+    escalation: { provider: strong, model: 'strong-model', afterRefusals: 2 },
+    // An outstanding menu resolves out-of-band — the sanctioned rails resolver.
+    decider: { provider: strong, model: 'strong-model' },
+  })
+  .build();
+void agent;
+```
+
+Every choice is on the record: `llm_start.brain` says which rung answered,
+`skill.escalated` marks the flip with its evidence, `turn_routed { by:
+'decider' }` names the resolver, and a tool's `status` rides
+`stream.tool_end` and the routed edge. None declared = byte-identical,
+events included.
+
 ## Next steps
 
 - [Skills](doc:skills) — `defineSkill` itself, plus the full graph surface: `match` details, `scopeTools`, the check-up codes, `steps` for mid-turn hand-offs

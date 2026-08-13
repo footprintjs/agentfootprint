@@ -78,6 +78,7 @@ import type {
   RiskFlaggedPayload,
   SkillActivatedPayload,
   SkillDeactivatedPayload,
+  SkillEscalatedPayload,
   SkillRejectedPayload,
   SkillRerouteSupersededPayload,
   SkillRouteConflictPayload,
@@ -85,6 +86,7 @@ import type {
   SkillStepSkippedPayload,
   SkillStepsUnfinishedPayload,
   SkillTurnRoutedPayload,
+  ToolEffectPayload,
   ToolEndPayload,
   ToolsActivatedPayload,
   ToolsDeactivatedPayload,
@@ -163,6 +165,7 @@ export const EVENT_NAMES = {
     sessionReused: 'agentfootprint.tools.session_reused',
     sessionClosed: 'agentfootprint.tools.session_closed',
     sessionCloseFailed: 'agentfootprint.tools.session_close_failed',
+    effect: 'agentfootprint.tools.effect',
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
@@ -174,6 +177,7 @@ export const EVENT_NAMES = {
     stepAdvanced: 'agentfootprint.skill.step_advanced',
     stepSkipped: 'agentfootprint.skill.step_skipped',
     stepsUnfinished: 'agentfootprint.skill.steps_unfinished',
+    escalated: 'agentfootprint.skill.escalated',
   },
   validation: {
     argsInvalid: 'agentfootprint.validation.args_invalid',
@@ -420,6 +424,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tools.session_closed',
     ToolsSessionClosedPayload
   >;
+  'agentfootprint.tools.effect': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.effect',
+    ToolEffectPayload
+  >;
   'agentfootprint.tools.session_close_failed': AgentfootprintEventEnvelope<
     'agentfootprint.tools.session_close_failed',
     ToolsSessionCloseFailedPayload
@@ -460,6 +468,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.skill.steps_unfinished': AgentfootprintEventEnvelope<
     'agentfootprint.skill.steps_unfinished',
     SkillStepsUnfinishedPayload
+  >;
+  'agentfootprint.skill.escalated': AgentfootprintEventEnvelope<
+    'agentfootprint.skill.escalated',
+    SkillEscalatedPayload
   >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
@@ -640,6 +652,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.session_reused',
   'agentfootprint.tools.session_closed',
   'agentfootprint.tools.session_close_failed',
+  'agentfootprint.tools.effect',
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',
@@ -650,6 +663,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.skill.step_advanced',
   'agentfootprint.skill.step_skipped',
   'agentfootprint.skill.steps_unfinished',
+  'agentfootprint.skill.escalated',
   'agentfootprint.permission.check',
   'agentfootprint.permission.gate_opened',
   'agentfootprint.permission.gate_closed',

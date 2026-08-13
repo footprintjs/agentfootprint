@@ -146,6 +146,11 @@ export interface InjectionContext {
     /** The provider's tool_use id for this call — names the exact call in
      *  `skill.route_conflict`. Absent for singular-fallback entries. */
     readonly toolCallId?: string;
+    /** The tool's OWN declared outcome (9.19.0) — present only when the
+     *  tool returned a result envelope carrying `status`. `onToolStatus`
+     *  route edges key on it; a result without one can never match a
+     *  status edge (an undeclared outcome is not evidence). */
+    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
   }>;
   /**
    * IDs of LLM-activated injections that the LLM has activated this
@@ -187,6 +192,28 @@ export interface InjectionContext {
    * agents are untouched by it.
    */
   readonly pendingSkillPick?: string;
+  /**
+   * The `propose-transition` tool effect the gate ACCEPTED last iteration
+   * (9.19.0) — a TOOL's validated proposal to move the cursor, already
+   * reachability-checked where it was accepted. One-shot by data: it is
+   * stamped with the granting iteration and threaded into this context only
+   * on the following one. `graph.nextSkill` honours it BETWEEN a declared
+   * edge (the author's determinism still wins — `D1`) and the model's own
+   * pick (a deterministic tool outranks a model guess): the winning clause
+   * is recorded as `cursorMove.by: 'tool-proposal'`. Present only for
+   * skill-graph agents whose tools returned one; absent everywhere else.
+   */
+  readonly pendingToolTransition?: { readonly targetSkillId: string };
+  /**
+   * Injection ids a `require-instruction` tool effect is PUSHING into this
+   * very evaluation (9.19.0) — the lease-served set, computed per pass from
+   * the granted leases (`'next-call'` serves exactly the following call;
+   * `'until-skill-exit'` serves while the granting tenure holds). The
+   * evaluator admits these ids into the active set beside what their own
+   * triggers decided; `read_skill` stays the pull door. Absent unless a
+   * lease is live this pass.
+   */
+  readonly leaseActiveIds?: readonly string[];
   /**
    * The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    * `.entryByRelevance()`) — written by the PickEntry stage at turn start.
@@ -238,6 +265,7 @@ export function toolResultsOf(ctx: InjectionContext): ReadonlyArray<{
   readonly toolName: string;
   readonly result: string;
   readonly toolCallId?: string;
+  readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
 }> {
   return ctx.toolResults ?? (ctx.lastToolResult ? [ctx.lastToolResult] : []);
 }

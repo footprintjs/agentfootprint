@@ -110,7 +110,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     boundary; the model declined one with its reason on the record;
     //     the turn ended with steps unrun — nudged once, accepted, or
     //     cut short by a limit.)
-    expect(ALL_EVENT_TYPES.length).toBe(82);
+    expect(ALL_EVENT_TYPES.length).toBe(84);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

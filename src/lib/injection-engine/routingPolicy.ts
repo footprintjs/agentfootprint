@@ -193,9 +193,16 @@ export function decideTier2(
 export interface TurnRoute {
   /** The tier that decided the turn's start. `'entry'` = a tier-1 rule;
    *  `'intent'` = the tier-2 scorer was decisive; `'continuity'` = the
-   *  inherited cursor held; `'menu'` = a menu is outstanding; `'none'` = the
-   *  cascade decided nothing this turn (rails menu, or a dropped resume). */
-  readonly by: 'entry' | 'intent' | 'continuity' | 'menu' | 'none';
+   *  inherited cursor held (a decider-picked STAY lands here too — the
+   *  event's `decider` field says which); `'menu'` = a menu is outstanding;
+   *  `'decider'` = the configured tier-3 decider resolved the menu
+   *  out-of-band (9.19.0); `'none'` = the cascade decided nothing this turn
+   *  (rails menu, or a dropped resume). A decider-resolved verdict — move
+   *  OR stay — carries no `offered`: the menu is no longer outstanding, so
+   *  nothing downstream may offer what nothing may act on (the same
+   *  what-happened vs what-the-loop-may-act-on split rails ships; the full
+   *  offered set still rides the `turn_routed` EVENT). */
+  readonly by: 'entry' | 'intent' | 'continuity' | 'menu' | 'decider' | 'none';
   /** The inherited cursor (continuity), when one existed. */
   readonly from?: string;
   /** Where the turn starts. Absent = menu pending / none. */
