@@ -77,6 +77,7 @@ import { checkArtifactVocabularies } from './skillVocabulary.js';
 import {
   compileMatch,
   mermaidMatchCaption,
+  type RouteWitness,
   type SkillMatch,
   type SkillMatchData,
 } from './skillMatch.js';
@@ -92,7 +93,7 @@ export { formatCheckup } from './skillGraphCheckup.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
 // The data-matcher domain (`match:` on start rules) — one module owns the type,
 // the compiler, the comparator and the caption; see ./skillMatch.ts.
-export type { SkillMatch, SkillMatchData } from './skillMatch.js';
+export type { SkillMatch, SkillMatchData, RouteWitness } from './skillMatch.js';
 // The turn-routing surfaces the graph exposes (SG-C) — the plan the agent's
 // RouteTurn stage consumes, and the verdict POJO the resolver reads.
 export type { TurnRoutingPlan } from './skillIntent.js';
@@ -506,6 +507,15 @@ export interface CursorMove {
    *  matched edges to different targets — the suppression, on the record.
    *  The Evaluate stage emits it as `agentfootprint.skill.route_conflict`. */
   readonly conflict?: RouteBatchConflict;
+  /**
+   * The EVIDENCE a tier-1 DATA matcher routed on (9.28.0) — the text out of the
+   * user message that made the entry's rule true, bounded (see
+   * {@link RouteWitness}). Present only for `by: 'entry'` moves decided by a
+   * `match:` (RegExp / `{ keywords }` / `{ all }`) rule; a `when` predicate is
+   * opaque code, an unconditional entry matched nothing, and a scorer's
+   * evidence is its scores — all three record no witness.
+   */
+  readonly witness?: RouteWitness;
 }
 
 /** A node in the drawn graph — a `predicate` diamond or a `skill` box. */
@@ -831,6 +841,10 @@ interface EntryDecl {
   /** The serializable matcher behind `when`, when declared as data — what the
    *  check-up compares, `toMermaid()` captions, and the provenance stores. */
   readonly match?: SkillMatchData;
+  /** The same compilation's EVIDENCE extractor (9.28.0) — what text in the user
+   *  message made `when` true. Present only for the data forms; a `when`
+   *  predicate is opaque code and has none. Called ONLY on the rule that won. */
+  readonly witness?: (ctx: InjectionContext) => RouteWitness | undefined;
   readonly label?: string;
 }
 interface RouteDecl {
@@ -944,6 +958,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         id,
         when: compiled ? compiled.predicate : opts?.when,
         ...(compiled && { match: compiled.data }),
+        ...(compiled?.witness && { witness: compiled.witness }),
         label: opts?.label,
       });
       return builder;
@@ -1680,6 +1695,21 @@ function routeMatches(
  * a declared edge and a same-turn model pick naming the SAME target. `D1 > D2`
  * makes it a `'route'`, and only this function knows.
  */
+/** The winning entry's recorded evidence, as a spreadable fragment: `{ witness }`
+ *  when the rule was DATA and it yielded quotable text, `{}` otherwise (a `when`
+ *  predicate, an unconditional entry, a match with nothing quotable). A throwing
+ *  extractor is treated exactly as no evidence — a record is never worth a crash,
+ *  and the hop itself already happened. */
+function witnessOf(entry: EntryDecl, ctx: InjectionContext): { witness?: RouteWitness } {
+  if (!entry.witness) return {};
+  try {
+    const found = entry.witness(ctx);
+    return found === undefined ? {} : { witness: found };
+  } catch {
+    return {};
+  }
+}
+
 function makeResolveCursor(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
@@ -1713,6 +1743,10 @@ function makeResolveCursor(
         ...(ctx.turnRoute.from !== undefined && { from: ctx.turnRoute.from }),
         to: ctx.turnRoute.to,
         by,
+        // The cascade already extracted the tier-1 evidence (`turn_routed`
+        // carries it); the hop repeats it rather than re-deriving it, so the
+        // two records can never quote different text.
+        ...(ctx.turnRoute.witness !== undefined && { witness: ctx.turnRoute.witness }),
       };
     }
     if (cur === undefined) {
@@ -1734,7 +1768,10 @@ function makeResolveCursor(
         for (const e of entries) {
           if (!e.when) return { to: e.id, by: 'entry' };
           try {
-            if (e.when(ctx)) return { to: e.id, by: 'entry' };
+            // The witness is extracted HERE, on the winner only — the losing
+            // rules never pay for evidence, and an unconditional/`when` entry
+            // has none to give (`witnessOf` answers undefined).
+            if (e.when(ctx)) return { to: e.id, by: 'entry', ...witnessOf(e, ctx) };
           } catch (err) {
             warnMatcherThrew(`entry "${e.id}"`, err);
           }

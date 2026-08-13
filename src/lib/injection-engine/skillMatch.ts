@@ -100,6 +100,51 @@ export interface MatchableContext {
   readonly userMessage: string;
 }
 
+/**
+ * The EVIDENCE a data matcher routed on (9.28.0) — the actual text out of the
+ * USER MESSAGE that made the rule true. Recorded on the routing verdict
+ * (`turn_routed.witness`, `cursorMove.witness`) so the record can say *because
+ * the message said "…"* instead of only *a rule matched*.
+ *
+ * Three honesty rules, all enforced at capture:
+ *   • the text comes from `ctx.userMessage` and nothing else — never a tool
+ *     result, never system/assistant prose (a matcher only ever reads the user
+ *     message, so this is a property of where it is captured, not a filter);
+ *   • it is BOUNDED to {@link WITNESS_MAX_CHARS} characters, ellipsis included
+ *     — a `/[\s\S]+/` rule must not paste the whole message into every record;
+ *   • runs of whitespace collapse to one space and the ends are trimmed, so a
+ *     multi-line match stays one quotable clause. That is the ONLY edit made to
+ *     the matched substring, and it is the reason `text` is described as the
+ *     matched text rather than the matched bytes.
+ *
+ * `keyword` is present only for the `{ keywords }` arm: WHICH declared keyword
+ * hit, beside the text it hit on (they differ in case, and `text` may carry the
+ * phrase's real spacing).
+ *
+ * A `when` predicate produces NO witness (opaque code — the library cannot know
+ * what convinced it), and neither does an intent match (a scorer's evidence is
+ * its scores, already recorded). Absent is the honest answer there.
+ */
+export interface RouteWitness {
+  readonly text: string;
+  readonly keyword?: string;
+}
+
+/** The witness bound — 80 characters, ellipsis included. A record is evidence,
+ *  not a transcript. */
+export const WITNESS_MAX_CHARS = 80;
+
+/** Normalize + bound one matched substring into witness text. Returns undefined
+ *  when nothing quotable is left (a zero-length or whitespace-only match, e.g.
+ *  `/^/` — "the message said ''" would be worse than saying nothing). */
+function toWitnessText(matched: string): string | undefined {
+  const collapsed = matched.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0) return undefined;
+  return collapsed.length > WITNESS_MAX_CHARS
+    ? `${collapsed.slice(0, WITNESS_MAX_CHARS - 1)}…`
+    : collapsed;
+}
+
 /** Escape a literal for splicing into a RegExp source (local twin of the one in
  *  skillContract.ts — both are module-private one-liners over the same idiom). */
 function escapeRegExpLiteral(s: string): string {
@@ -129,11 +174,22 @@ function keywordRegExp(keyword: string): RegExp {
  * carrying it is cursor-gated instead of rule-gated. `skillGraph.ts` is the only
  * caller that accepts a predicate-less compile, and it refuses `match: { intent }`
  * when no classifier is configured.
+ *
+ * The third member of the returned triple is `witness` (9.28.0): the SAME
+ * compilation's evidence extractor — given a context the predicate accepted, it
+ * returns {@link RouteWitness} (the matched text, bounded). It is a separate
+ * function on purpose, so the hot path stays exactly what it was (a boolean
+ * `.test`) and the evidence is paid for ONCE per turn, on the rule that actually
+ * won. The intent arm has no witness (nothing matched synchronously).
  */
 export function compileMatch(
   match: SkillMatch,
   where: string,
-): { predicate: ((ctx: MatchableContext) => boolean) | undefined; data: SkillMatchData } {
+): {
+  predicate: ((ctx: MatchableContext) => boolean) | undefined;
+  data: SkillMatchData;
+  witness?: (ctx: MatchableContext) => RouteWitness | undefined;
+} {
   if (match instanceof RegExp) {
     // `.test` on a /g or /y regex advances `lastIndex`, so the SAME message would
     // alternate match/no-match across iterations. A matcher is a pure yes/no —
@@ -143,6 +199,15 @@ export function compileMatch(
     return {
       predicate: (ctx) => re.test(ctx.userMessage),
       data: { kind: 'regex', source: re.source, flags: re.flags },
+      // The evidence is the substring the regex actually matched (`m[0]`) —
+      // re-run only on the winning rule, on a regex with no stateful flags, so
+      // this answer is the same one `.test` gave.
+      witness: (ctx) => {
+        const m = re.exec(ctx.userMessage);
+        if (m === null) return undefined;
+        const text = toWitnessText(m[0]);
+        return text === undefined ? undefined : { text };
+      },
     };
   }
   // A JS caller can pass anything here (null, a string, a bare function) — every
@@ -198,6 +263,18 @@ export function compileMatch(
   return {
     predicate: (ctx) => tests.some((re) => re.test(ctx.userMessage)),
     data: { kind: 'keywords', keywords: kws },
+    // Matching is ANY-keyword in declaration order, so the witness names the
+    // FIRST keyword that hit — the one the predicate stopped on — plus the text
+    // it hit (they differ in case, and a phrase carries the message's spacing).
+    witness: (ctx) => {
+      for (let i = 0; i < tests.length; i++) {
+        const m = tests[i].exec(ctx.userMessage);
+        if (m === null) continue;
+        const text = toWitnessText(m[0]);
+        return text === undefined ? undefined : { text, keyword: kws[i] };
+      }
+      return undefined;
+    },
   };
 }
 
@@ -223,7 +300,11 @@ export function compileMatch(
 function compileAllArm(
   all: unknown,
   where: string,
-): { predicate: (ctx: MatchableContext) => boolean; data: SkillMatchData } {
+): {
+  predicate: (ctx: MatchableContext) => boolean;
+  data: SkillMatchData;
+  witness: (ctx: MatchableContext) => RouteWitness | undefined;
+} {
   if (!Array.isArray(all) || all.length === 0) {
     throw new Error(
       `skillGraph: ${where} declares \`match: { all }\` this library cannot honor — \`all\` ` +
@@ -234,6 +315,7 @@ function compileAllArm(
     );
   }
   const predicates: Array<(ctx: MatchableContext) => boolean> = [];
+  const witnesses: Array<(ctx: MatchableContext) => RouteWitness | undefined> = [];
   const parts: SkillMatchData[] = [];
   (all as unknown[]).forEach((member, i) => {
     const label = `${where}, \`all\` member ${i + 1}`;
@@ -257,6 +339,7 @@ function compileAllArm(
     if (memberShaped?.all !== undefined) {
       const nested = compileAllArm(memberShaped.all, label);
       predicates.push(nested.predicate);
+      witnesses.push(nested.witness);
       parts.push(...(nested.data as Extract<SkillMatchData, { kind: 'all' }>).parts);
       return;
     }
@@ -280,11 +363,24 @@ function compileAllArm(
     // it was refused above).
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     predicates.push(compiled.predicate!);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    witnesses.push(compiled.witness!);
     parts.push(compiled.data);
   });
   return {
     predicate: (ctx) => predicates.every((p) => p(ctx)),
     data: { kind: 'all', parts },
+    // A conjunction matched because EVERY part matched, so any part's text is
+    // true evidence. The FIRST part that yields quotable text is quoted — the
+    // author's leading constraint, deterministically — rather than a stitched
+    // sentence no reader could find in their message.
+    witness: (ctx) => {
+      for (const w of witnesses) {
+        const found = w(ctx);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    },
   };
 }
 

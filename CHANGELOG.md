@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.28.0] - 2026-08-13
+
+**The record quotes the evidence: routing carries the words that decided it,
+and every story sentence knows its author.**
+
+### Added — `RouteWitness` on `turn_routed` + `cursorMove`, for data-matcher routes
+
+```ts
+witness?: { text: string; keyword?: string }
+```
+
+A tier-1 route decided by a DATA matcher (`match:` — RegExp / `{ keywords }` /
+`{ all }`) now records what it matched: `text` is the matched substring of the
+**user message only**, whitespace-collapsed and bounded to 80 characters
+(ellipsis included) — a greedy `/[\s\S]+/` rule cannot paste the whole message
+into every record. `keyword` names WHICH declared keyword hit, for the
+`{ keywords }` arm. A conjunction (`{ all }`) witnesses its leading part —
+every part matched, so any part's text is true evidence, and the first is
+deterministic. A zero-width or whitespace-only match records nothing rather
+than quoting `""`.
+
+Nothing is recorded for the routes whose evidence differs: a `when` predicate
+is opaque code the library cannot quote, an intent match's evidence is already
+its `scores`, and an unconditional entry matched nothing. `turn_routed` and
+that hop's `cursorMove` carry the same value — the cascade extracts it once,
+on the winning rule only, and the hop repeats it rather than re-deriving it.
+
+The commentary layer renders it as evidence, not assertion — `routed this turn
+to \`billing\` because the message said "chargeback"` — falling back to
+today's sentence, byte-for-byte, when no witness is present.
+
+### Added — `brainSource` on story-trace return beats
+
+```ts
+brainSource?: 'model' | 'framework'
+```
+
+A tool-result return beat's `brain` line is framework narration (the
+commentary engine describing the mechanics), not the model's own words —
+`AgentThinkingTraceRecorder` now stamps `brainSource: 'framework'` on it so a
+notepad stops prefixing a sentence nobody's LLM said with "LLM reasons —".
+Absent means model-authored, the pre-9.28.0 default, so existing readers are
+unaffected. Pairs with `agentthinkingui` 0.26.
+
 ## [9.27.0] - 2026-08-13
 
 **The story learns the artifact vocabulary, and the Google Cloud column gets

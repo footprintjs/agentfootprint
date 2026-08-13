@@ -124,6 +124,15 @@ decided, every candidate's score (the losers too), the runner-up gap, and the
 exact thresholds used. `graph.checkupIntents()` audits your examples with the
 configured classifier before you ship them.
 
+When tier 1 decided — a `match:` rule (RegExp / `{ keywords }` / `{ all }`) —
+the verdict also carries the **witness**: the text out of the user's message
+that made the rule true (`witness: { text, keyword? }`, on `turn_routed` and on
+that hop's `cursorMove`). The commentary then reads *routed this turn to
+`billing` because the message said "chargeback"* instead of *a rule matched*.
+The text is the matched substring of the **user message only**, whitespace-
+collapsed and bounded to 80 characters. A `when` predicate is opaque code and a
+scorer's evidence is its scores, so neither records a witness.
+
 The two mount options:
 
 - `continuity: 'conversation'` — the cursor rides `agent.checkpoint()`, so

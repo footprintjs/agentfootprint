@@ -487,6 +487,15 @@ function makeEvaluateStage(
           ...(move.from !== undefined && { from: move.from }),
           ...(move.to !== undefined && { to: move.to }),
           by: move.by,
+          // Tier-1 DATA-matcher evidence (9.28.0) — what the message said that
+          // routed this hop. Copied field-by-field: the event payload is a
+          // structural shape, never the engine's own object.
+          ...(move.witness !== undefined && {
+            witness: {
+              text: move.witness.text,
+              ...(move.witness.keyword !== undefined && { keyword: move.witness.keyword }),
+            },
+          }),
           ...resolvedMenu,
         }
       : undefined;

@@ -13,7 +13,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { InjectionContext } from './types.js';
-import type { SkillMatchData } from './skillMatch.js';
+import type { RouteWitness, SkillMatchData } from './skillMatch.js';
 import type { IntentCandidate, IntentScorer } from './intentScorer.js';
 import { validateIntentScores } from './intentScorer.js';
 import { decideTier2, type RoutingPolicy } from './routingPolicy.js';
@@ -25,6 +25,9 @@ export interface IntentEntryDecl {
   readonly id: string;
   readonly when?: (ctx: InjectionContext) => boolean;
   readonly match?: SkillMatchData;
+  /** The data matcher's EVIDENCE extractor (9.28.0), compiled beside `when` —
+   *  called only on the rule that wins the turn. Absent for a `when` rule. */
+  readonly witness?: (ctx: InjectionContext) => RouteWitness | undefined;
 }
 
 /**
@@ -41,10 +44,14 @@ export interface TurnRoutingPlan {
   /** Every entry id, declaration order — the `unmatched` menu. */
   readonly entryIds: readonly string[];
   /** Tier 1: the first NON-intent conditional entry whose predicate passes,
-   *  declaration order. Unconditional entries are defaults, not rules — they
-   *  never beat an inherited cursor. A throwing predicate is a no-match
-   *  (dev-warned), the same law the cursor resolver applies. */
-  firstRuleMatch(ctx: InjectionContext): string | undefined;
+   *  declaration order — its id, plus the `witness` evidence when the rule was
+   *  DATA and it yielded quotable text (9.28.0; a `when` rule has none).
+   *  Unconditional entries are defaults, not rules — they never beat an
+   *  inherited cursor. A throwing predicate is a no-match (dev-warned), the
+   *  same law the cursor resolver applies. */
+  firstRuleMatch(
+    ctx: InjectionContext,
+  ): { readonly id: string; readonly witness?: RouteWitness } | undefined;
   /** Tier-2 candidates: the declared intent entries, minus `exclude`. */
   intentCandidates(exclude?: ReadonlySet<string>): readonly IntentCandidate[];
   /** The incumbent as a candidate: its declared intent when it is an intent
@@ -74,7 +81,16 @@ export function buildTurnRoutingPlan(input: {
     firstRuleMatch(ctx) {
       for (const e of ruleEntries) {
         try {
-          if (e.when!(ctx)) return e.id;
+          if (!e.when!(ctx)) continue;
+          // Evidence is extracted on the WINNER only — and a throwing extractor
+          // costs the record a witness, never the turn its route.
+          let witness: RouteWitness | undefined;
+          try {
+            witness = e.witness?.(ctx);
+          } catch {
+            witness = undefined;
+          }
+          return { id: e.id, ...(witness !== undefined && { witness }) };
         } catch (err) {
           if (isDevMode()) {
             // eslint-disable-next-line no-console

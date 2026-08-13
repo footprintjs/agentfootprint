@@ -80,6 +80,10 @@ export type AttStep =
       replyType: 'data' | 'instruction' | 'both';
       output: Record<string, unknown>;
       brain: string;
+      /** Who authored `brain`: the model's own words, or a framework delivery
+       *  sentence. Consumers (the notepad) prefix "LLM reasons —" only for
+       *  model-authored text; absent = model (the pre-field-report default). */
+      brainSource?: 'model' | 'framework';
       cost: AttCost;
       brainMode?: 'reason' | 'act';
       skill?: string;
@@ -369,8 +373,11 @@ export function agentThinkingTrace(
           replyType: started.isSkill ? 'instruction' : 'data',
           output: asObject(p!.result),
           // The tool-result beat has no LLM reasoning of its own — narrate the
-          // mechanics via the commentary engine (matches the Lens).
+          // mechanics via the commentary engine (matches the Lens). Stamp the
+          // author so the notepad never prefixes this framework sentence with
+          // "LLM reasons —" (two narrators in one line; field-reported).
           brain: narrate(e),
+          brainSource: 'framework',
           brainMode: started.isSkill ? 'act' : 'reason',
           ...(started.isSkill && started.skillId ? { skill: started.skillId } : {}),
           cost: { ms: p!.durationMs ?? 0, tokens: 0 },

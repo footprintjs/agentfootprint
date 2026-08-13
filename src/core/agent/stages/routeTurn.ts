@@ -62,6 +62,7 @@ import {
   type TurnRoute,
 } from '../../../lib/injection-engine/routingPolicy.js';
 import { constrainedEnumPick } from '../../../lib/injection-engine/constrainedEnumPick.js';
+import type { RouteWitness } from '../../../lib/injection-engine/skillMatch.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { SkillTurnRoutedPayload } from '../../../events/payloads.js';
 
@@ -123,6 +124,8 @@ interface CascadeVerdict {
   readonly scores?: ReadonlyArray<{ id: string; score: number; relevance: number }>;
   readonly runnerUp?: { id: string; gap: number };
   readonly decisive?: boolean;
+  /** Tier-1 DATA-matcher evidence (9.28.0) — see {@link RouteWitness}. */
+  readonly witness?: RouteWitness;
 }
 
 export function makeRouteTurnStage(deps: RouteTurnDeps) {
@@ -258,6 +261,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       ...(verdict?.decisive !== undefined && { decisive: verdict.decisive }),
       ...(verdict?.offered !== undefined && { offered: [...verdict.offered] }),
       ...(verdict?.stayOffered !== undefined && { stayOffered: verdict.stayOffered }),
+      ...(verdict?.witness !== undefined && { witness: { ...verdict.witness } }),
       policy: {
         nearTieMargin: policy.nearTieMargin,
         menuSize: policy.menuSize,
@@ -286,6 +290,9 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       by: eventBy,
       ...(inherited !== undefined && { from: inherited }),
       ...(verdict.to !== undefined && { to: verdict.to }),
+      // The same evidence the event carries, so the iteration-1 `cursorMove`
+      // the resolver builds from this POJO says exactly what `turn_routed` did.
+      ...(verdict.witness !== undefined && { witness: { ...verdict.witness } }),
       ...(!rails &&
         menuStillOutstanding &&
         verdict.offered !== undefined && { offered: [...verdict.offered] }),
@@ -335,7 +342,15 @@ async function runCascade(
   // decisive by definition, cold or mid-conversation.
   const ruleWin = plan.firstRuleMatch(ctx);
   if (ruleWin !== undefined) {
-    return { by: 'entry', to: ruleWin, decisive: true };
+    // A DATA rule (regex / keywords / all) also says WHAT it matched — the
+    // substring of the user message that made it true. A `when` predicate is
+    // opaque code and carries none; the verdict is identical either way.
+    return {
+      by: 'entry',
+      to: ruleWin.id,
+      decisive: true,
+      ...(ruleWin.witness !== undefined && { witness: ruleWin.witness }),
+    };
   }
 
   // Tier 2 — the classifier over declared intents…

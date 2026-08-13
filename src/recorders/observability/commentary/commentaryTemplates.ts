@@ -135,6 +135,14 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'skill.turn_routed.intent.scored': ' — scored {{topScore}} vs {{runnerUpScore}} runner-up',
   'skill.turn_routed.intent.scoredSolo': ' — scored {{topScore}}',
   'skill.turn_routed.entry': 'A declared start rule routed this turn to `{{to}}`.',
+  // The same verdict, with its EVIDENCE (9.28.0): a DATA matcher (regex /
+  // keywords / all) knows the text that made it true, so the sentence quotes
+  // the user's own words instead of asserting "a rule matched". Rendered ONLY
+  // when the event carries `witness` — a `when` predicate is opaque code and
+  // keeps the sentence above, byte-for-byte.
+  'skill.turn_routed.entry.witness':
+    'A declared start rule routed this turn to `{{to}}` because the message said ' +
+    '“{{witness}}”.',
   'skill.turn_routed.menu':
     'No declared intent clearly claimed this message — {{appName}} was offered ' +
     '{{offeredCount}} option{{offeredPlural}}{{stayClause}} and chooses for itself.',
@@ -425,7 +433,12 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
           return 'skill.turn_routed.intent';
         case 'entry':
         case 'rule': // era tolerance — 'rule' is the same tier-1 verdict, older/newer vocabulary
-          return 'skill.turn_routed.entry';
+          // Evidence when the tier-1 matcher was DATA and recorded what it
+          // matched; today's sentence when it was a `when` predicate.
+          return typeof event.payload.witness?.text === 'string' &&
+            event.payload.witness.text.length > 0
+            ? 'skill.turn_routed.entry.witness'
+            : 'skill.turn_routed.entry';
         case 'decider': // the tier-3 out-of-band resolver (9.19.0)
           return 'skill.turn_routed.decider';
         case 'menu':
@@ -738,6 +751,9 @@ export function extractCommentaryVars(
         tieB: scores[1]?.id ?? '',
         tieBShare: scores[1] ? fmtShare(scores[1].relevance) : '',
         candidates: (p.offered ?? []).map((id) => `\`${id}\``).join(', '),
+        // The tier-1 matcher's evidence — already bounded + whitespace-collapsed
+        // at capture, so the sentence quotes it verbatim.
+        witness: p.witness?.text ?? '',
         // The tier-3 decider's identity (9.19.0) — model when named, else
         // the provider (a decider always has at least that).
         deciderModel: p.decider?.model ?? p.decider?.provider ?? '',

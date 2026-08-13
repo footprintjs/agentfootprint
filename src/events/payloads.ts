@@ -413,6 +413,14 @@ export interface ContextEvaluatedPayload {
      *  model's divergence, on the record (data under `'assist'`, a refusal
      *  under `'guard'`/`'rails'`, which never reach here). */
     readonly declinedOffer?: boolean;
+    /** WHAT the message said that routed this hop (9.28.0) — present only for a
+     *  `by: 'entry'` move a DATA matcher (`match:` — RegExp / `{ keywords }` /
+     *  `{ all }`) decided. `text` is the matched substring of the USER message,
+     *  whitespace-collapsed and bounded to 80 characters (ellipsis included);
+     *  `keyword` names WHICH declared keyword hit, for the keywords arm.
+     *  Absent for `when` predicates (opaque code), unconditional entries, and
+     *  every scorer verdict (whose evidence is its scores). */
+    readonly witness?: { readonly text: string; readonly keyword?: string };
   };
   /**
    * Skill-graph entries whose own `when` matched this iteration and which the cursor
@@ -867,6 +875,15 @@ export interface SkillTurnRoutedPayload {
   readonly runnerUp?: { readonly id: string; readonly gap: number };
   /** Whether tier 2 cleared the margin + floor. */
   readonly decisive?: boolean;
+  /** WHAT the message said that won tier 1 (9.28.0) — present only on a
+   *  `by: 'entry'` verdict a DATA matcher (`match:` — RegExp / `{ keywords }` /
+   *  `{ all }`) decided. `text` is the matched substring of the USER message
+   *  (never tool or system text), whitespace-collapsed and bounded to 80
+   *  characters, ellipsis included; `keyword` names WHICH declared keyword hit
+   *  (keywords arm only). Absent for `when` predicates — opaque code the
+   *  library cannot quote — and for intent/scorer verdicts, whose evidence is
+   *  the `scores` above. */
+  readonly witness?: { readonly text: string; readonly keyword?: string };
   /** The tier-3 menu (near-tie cluster, or every entry when unmatched). */
   readonly offered?: readonly string[];
   /** STAY was a first-class option in that menu (mid-conversation). */

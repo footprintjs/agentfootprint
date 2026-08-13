@@ -36,6 +36,7 @@
 
 import { softmax } from './softmax.js';
 import type { IntentScore } from './intentScorer.js';
+import type { RouteWitness } from './skillMatch.js';
 
 /** Pairwise (top-2 softmax) gap below which tier 2 is a NEAR-TIE. */
 export const NEAR_TIE_MARGIN = 0.15;
@@ -213,6 +214,13 @@ export interface TurnRoute {
   readonly stayOffered?: boolean;
   /** Advisory relevance shares for the envelope (full-softmax, 0..1). */
   readonly relevance?: ReadonlyArray<{ readonly id: string; readonly relevance: number }>;
+  /** The EVIDENCE a tier-1 DATA matcher routed on (9.28.0) — the bounded text
+   *  out of the user message that made the rule true. Present only on a
+   *  `by: 'entry'` verdict decided by a `match:` rule, so the iteration-1
+   *  `cursorMove` can carry the same evidence the `turn_routed` event does
+   *  (one fact, one spelling). A `when` predicate, an intent match and every
+   *  scorer verdict carry none. */
+  readonly witness?: RouteWitness;
 }
 
 /**
