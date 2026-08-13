@@ -382,7 +382,7 @@ placement, then `maxToolResultChars` last (which then measures the ticket).
 
 ## `wants` — artifact refs as tool arguments (9.22.0)
 
-The [`needs`](doc:identity) precedent applied to data. A tool declares which of its
+The [`needs`](doc:identity-and-credentials) precedent applied to data. A tool declares which of its
 arguments are claim tickets and what artifact `kind` each must redeem to; the model
 passes the ~26-char `art_…` ref STRING; and at dispatch — before credentials,
 before `execute` — the framework redeems the ref under the run's own scope and
