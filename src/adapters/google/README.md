@@ -89,3 +89,25 @@ All three adapters are **contract-shaped and tested; awaiting field use**. Every
 call is exercised through an injected `_client` and pinned against the
 really-installed SDK on every test run. None has yet answered a request from
 Google in a real project.
+
+### What a field trial DID establish about the services underneath
+
+An independent trial ran the raw GCP data planes these adapters wrap, on a live
+project, before any of this code existed. It is evidence about **Google**, not
+about these adapters, so nothing above moves — but three of its findings are
+load-bearing here and are recorded where the code that needs them lives:
+
+- **A retrieved memory name is not the name you wrote.** Create and list echoed
+  caller-chosen ids; similarity retrieval answered with generated numeric
+  resource names for the same facts. `memoryBank.ts` reads entry ids from
+  metadata and never from `memory.name` — see its module header.
+- **`Session.userId` is metadata, not authorization.** The project's ordinary
+  ADC principal read two different users' sessions by name without presenting
+  either user's identity. The ownership check belongs above the port; see the
+  header of `adapters/hosting/googleAgentEngine.ts`.
+- **Exact-scope semantics and distance-ranked retrieval are real.** A partial
+  scope retrieved nothing, and similarity came back as Euclidean distances —
+  the two behaviours `memoryBankStore` already refuses to paper over.
+
+Two neighbours on this column DO have live evidence and say so in their own
+files: `gcsArtifacts()` (field-validated) and `gemini()` on Vertex.

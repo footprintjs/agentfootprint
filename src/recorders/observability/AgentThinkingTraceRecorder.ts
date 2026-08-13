@@ -271,8 +271,12 @@ export function agentThinkingTrace(
         // + why) and stash it to lead the next beat. Empty when no skillGraph()
         // routed. Narrate ONCE per distinct routing (it re-fires identically each
         // iteration while a skill stays active).
+        // A cascade graph witnesses a start-rule route TWICE — once on its
+        // verdict (`turn_routed`, queued just above) and once on the hop that
+        // carried it — and since 9.28.0 both render the SAME sentence. One fact,
+        // one line: never append what this lead already says.
         const line = narrate(e);
-        if (line && line !== lastRoutingLine) {
+        if (line && line !== lastRoutingLine && !pendingRouting.split('\n\n').includes(line)) {
           pendingRouting = pendingRouting ? `${pendingRouting}\n\n${line}` : line;
           lastRoutingLine = line;
         }

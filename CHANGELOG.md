@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.29.0] - 2026-08-13
+
+**The Google column tells field truth: signatures echo, doors default
+honestly, thinking is counted, and keys can rotate.**
+
+An independent field trial on live Google Cloud, 2026-08, drove this
+release — a real Vertex + AI Studio account, not a mock.
+
+### Added — thought-signature echo, so a 3.x tool loop survives its second call
+
+A current Gemini model does not merely prefer its `thoughtSignature` back on
+the next turn — the trial hit `400 INVALID_ARGUMENT — "Function call is
+missing a thought_signature"` on the second call of an ordinary tool loop,
+AFTER the tool had already run. `GeminiProvider` now carries the signature:
+read off the `functionCall` part it belongs to, parked on the port's
+vendor-neutral `toolCalls[].providerMeta`, and written back onto the
+reconstructed part on the next request — byte for byte, never synthesized.
+An unsigned call (a 2.5-series turn, or any turn a model chose not to sign)
+carries no `providerMeta` key at all and is byte-identical to today's wire.
+
+### Changed — per-door model defaults on `gemini()`
+
+Vertex keeps the field-proven `gemini-2.5-flash` default (Google states its
+retirement for **October 16, 2026**). The AI-Studio key door now REFUSES the
+bare `'gemini'` shorthand: the trial's key-door call to that same model
+answered `404 — "no longer available to new users"`, so shipping a second
+silent default nobody has run would be this library guessing on a service's
+behalf. The refusal quotes the 404 and names both fixes — `defaultModel` on
+the factory, or a named model per call. Fires ONLY on the shorthand; a
+request naming a real model id is unaffected on either door.
+
+### Added — typed thinking usage on `llm_end`
+
+`usage.thinking` (`LLMEndPayload`) — reasoning tokens the provider reports,
+was already flowing off Gemini's `usageMetadata` and the payload's type
+dropped it. The trial's own numbers made the gap visible: a 256-token stream
+came back `input 21, output 9, thinking 243` — 243 billed tokens outside both
+fields. Deliberately unpriced: `cost.tick` does not fold it in, because
+`PricingTable` prices four kinds and thinking isn't one — inventing a rate
+would be guessing at somebody's invoice. Undefined on providers that don't
+report it, which is most calls; consumers estimating cost from
+`input + output` alone should know that under-counts a thinking model by
+whatever it thought.
+
+### Added — `apiKey` as a callback, on the Google connection and the OpenAI-compat door
+
+```ts
+apiKey?: string | (() => string | Promise<string>)
+```
+
+on `GoogleGenAIConnectionOptions` (`gemini`, `geminiEmbedder`) and
+`OpenAIProviderOptions` (`openai`, including Vertex's OpenAI-compatible
+endpoint). The trial measured the boundary this closes: an OAuth token that
+worked returned `401` once expired, with no place in either adapter's options
+to put a fresh one. The callback is called once per request, before the
+request is built; the SDK client is rebuilt only when the answer changed, so
+a cached token costs one function call; a stream keeps the key it started
+with — nothing re-authenticates a socket that's already open. Redaction
+follows the key actually in force, not the one construction started with, so
+a rotated credential never leaks into an error message under the old key.
+
+### Added — the because-clause for rules-only graphs
+
+`cursorMove`'s witness (9.28.0) now narrates identically to the cascade's
+`skill.turn_routed` line — one sentence, shared by construction
+(`ENTRY_WITNESS_LINE`), so the two records can never drift into two stories
+about the same fact. Before this release the sentence only reached readers of
+a cascade graph; a rules-only graph (no cascade, entry rules only) fired the
+witness on the hop and said nothing. Also fixed: a cascade graph double-
+narrating the same routing line once from `turn_routed` and once from the
+hop that carried it.
+
+### Docs
+
+The door/model matrix, the Agent Engine Node recipe, and the billing
+boundary; `fileObservability` promoted to field-validated (trial cited); the
+Google adapter docs corrected where the trial contradicted them — the trial
+read two different users' Agent Engine sessions by name under one ordinary
+ADC principal, presenting neither identity, so `Session.userId` is metadata,
+not authorization. The ownership check is OURS to enforce (above the port,
+against `envelopeOwner`), not the service's — stated plainly rather than
+implied.
+
 ## [9.28.0] - 2026-08-13
 
 **The record quotes the evidence: routing carries the words that decided it,

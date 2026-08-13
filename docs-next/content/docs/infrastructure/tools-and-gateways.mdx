@@ -104,6 +104,21 @@ Nothing in `gatewayTransport` is vendor-specific: it is the `CredentialProvider`
 port on one side and Streamable HTTP on the other. AWS AgentCore's Gateway is one
 consumer of it, not its definition.
 
+<Callout type="info" title="Field-validated for bearer gateways — and refuted for Google's">
+An independent field trial, 2026-08, served a real agentfootprint tool over
+Streamable HTTP MCP, reached it through this transport, discovered and called the
+tool, and confirmed the vending law directly: **five requests, five different
+freshly vended credentials, none retained on the transport.**
+
+The same trial answered the open question about **Google's** Agent Gateway the
+other way. Its agent identities use **mTLS and DPoP** — a client certificate and a
+per-request proof — and `GatewayTransportOptions` can vend headers only. There is
+no certificate, no signer and no `fetch` hook here, so this transport is **not**
+the path for Google's identity-enforced traffic. The next section is: build the
+signer on the generic `http` transport's `fetch`. See
+[Google Cloud & Gemini](doc:google-cloud).
+</Callout>
+
 ### The fourth option: sign it yourself
 
 Some endpoints do not want a header, they want a **signature** — SigV4, DPoP, an

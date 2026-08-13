@@ -51,6 +51,28 @@ An empty environment variable (`GOOGLE_CLOUD_PROJECT=`) reads as absent, because
 variable set to nothing is not a setting — it is how a project comes to be
 "present" and unusable.
 
+### The doors do not run the same models, and the default follows the door
+
+<Callout type="warn" title="`model: 'gemini'` resolves on Vertex and is refused on the Gemini API door">
+An independent field trial, 2026-08, called the Gemini API door with this
+package's old shared default, `gemini-2.5-flash`, using a valid restricted key.
+Google answered **404**: *"This model models/gemini-2.5-flash is no longer
+available to new users."* On **Vertex**, the identical model completed a real
+two-call tool loop the same day.
+
+So the default is a **Vertex** default. On the key door the `'gemini'` shorthand
+raises at the call, naming the door, quoting that 404 and giving both fixes —
+`gemini({ apiKey, defaultModel: '…' })`, or a model named per call. Shipping a
+second silent default that nobody has run would be this library guessing which
+models your key can reach.
+
+Two more facts that belong in the same breath: Google lists `gemini-2.5-flash`
+for retirement on **2026-10-16**, and the trial could not prove *any* model on the
+key door because that account's separate AI Studio prepayment was empty — a
+`429`, not a code failure. The whole picture, every cell observed:
+**[the door/model matrix](doc:google-cloud#the-doormodel-matrix)**.
+</Callout>
+
 <Callout type="warn" title="The API version is v1beta1 by default, and that is the SDK's choice">
 `@google/genai` 2.16.0 dials **`v1beta1` on Vertex** and **`v1beta` on the Gemini
 API** unless you say otherwise. Pass `apiVersion: 'v1'` to overrule it. Both
@@ -68,7 +90,7 @@ failing test rather than as a different endpoint.
 | `vertexai` | Force the door instead of inferring it |
 | `apiVersion` | Pin the API version — see above |
 | `googleAuthOptions` | `GoogleAuthOptions` for Vertex: a key file, scopes, or an `AuthClient` you built (workload identity federation, impersonation) |
-| `defaultModel` | Model used when the request says `'gemini'`. Default `gemini-2.5-flash` |
+| `defaultModel` | Model used when the request says `'gemini'`. **Per door:** Vertex defaults to `gemini-2.5-flash`; the Gemini API door has **no** default and refuses the shorthand by name — see below |
 | `defaultMaxTokens` | `maxOutputTokens` when the request does not set one |
 
 ## What maps to what
@@ -170,12 +192,34 @@ the concrete reason to prefer this adapter over the OpenAI-compatible endpoint,
 whose documented response has no such field.
 
 **Thought summaries are not requested.** `includeThoughts` is deliberately left
-unset, so no `rawThinking` is produced: Gemini's thought parts carry a
-`thoughtSignature` that must be echoed byte-exact on the following turn, and there
-is no Gemini `ThinkingHandler` in this release to normalize and round-trip them.
-Asking for content nothing can carry back would be a leak, not a feature. A thought
-part that arrives anyway is kept out of the visible answer on both the streaming
-and non-streaming paths.
+unset, so no `rawThinking` is produced — there is no Gemini `ThinkingHandler` in
+this release to normalize thought *text*, and asking for content nothing can carry
+back would be a leak, not a feature. A thought part that arrives anyway is kept out
+of the visible answer on both the streaming and non-streaming paths.
+
+### Thought signatures are carried, because a tool loop fails without them
+
+A current Gemini model does not merely prefer its `thoughtSignature` back on the
+next turn — it **refuses the turn without it**. The 2026-08 field trial ran
+`gemini-3.1-flash-lite` on Vertex through one ordinary tool loop and the second
+call answered:
+
+```
+400 INVALID_ARGUMENT — "Function call is missing a thought_signature in
+functionCall parts. This is required for tools to work correctly …"
+```
+
+The shape of that failure is what makes it expensive: it lands **after your tool
+has already run**, so a side-effecting call happened and the answer is
+unreachable. So the signature rides the round trip — read off the `functionCall`
+part it belongs to, parked on the port's neutral `toolCalls[].providerMeta`, and
+written back onto the reconstructed part byte for byte, because the service
+verifies it rather than reading it.
+
+**What it does not cover, said plainly:** a signature attached to a *text* part of
+an answer that carries no function call. `LLMMessage.content` is a string and a
+string has nowhere to keep one. The failing shape is the function-call shape, and
+that one is handled; the other is named here rather than half-handled quietly.
 
 ## When it goes wrong
 
@@ -205,10 +249,20 @@ and non-streaming paths.
 - **No context-cache creation.** `usage.cacheRead` is reported when Google reports
   it, but creating a cache is a separate `caches.create` call this adapter does not
   make — so `cacheWrite` is always undefined.
-- **Status: contract-shaped and tested; awaiting field use.** Built against
-  `@google/genai` 2.16.0 and pinned by a surface test that checks the method names
-  *and the API version* against the really-installed package. It has not yet
-  answered a request from Google in a real project.
+- **Status: field-validated on the Vertex door** — validated in an independent
+  field trial, 2026-08: `gemini-2.5-flash` through Application Default
+  Credentials completed a real two-call tool loop, real incremental streaming
+  (10 chunks, exact content reconstruction, non-zero usage) and a live call after
+  a forced credential expiry. Built against `@google/genai` 2.16.0 and pinned by a
+  surface test that checks the method names *and the API version* against the
+  really-installed package.
+- **The Gemini API door is not field-validated**, and not for want of trying: one
+  model 404'd as unavailable to new accounts and the current one returned a
+  billing `429`. See [the matrix](doc:google-cloud#the-doormodel-matrix).
+- **The thought-signature round trip above is tested, not field-proven.** It was
+  built *from* the trial's captured failure; no live re-run against
+  `gemini-3.1-flash-lite` has confirmed the fix. That is the honest distinction
+  between "we found the bug in the field" and "we watched the fix work there".
 
 ## The OpenAI-compatible endpoint, and why it is not the path
 
@@ -218,7 +272,7 @@ ship, for four reasons this library can point at:
 
 | Concern | On the compat endpoint | On `gemini()` |
 |---|---|---|
-| Auth lifetime | An OAuth token that **expires after an hour**, with no refresh home in `OpenAIProviderOptions` | ADC refreshes itself; a Gemini API key does not expire |
+| Auth lifetime | An OAuth token that **expires after an hour** — mitigable by passing `apiKey` as a callback, which is re-read per request (a stream still keeps the key it started with) | ADC refreshes itself, proved by a forced-expiry field probe; a Gemini API key does not expire |
 | Tool schemas | `function.parameters` is **OpenAPI**, so `$ref` / `oneOf` / `additionalProperties` diverge silently | `parametersJsonSchema` — your schema, untranslated |
 | Unknown parameters | **Ignored**, not refused | The adapter sends only fields the wire has |
 | Cached / thinking tokens | Absent from the documented response, so `usage.cacheRead` and `usage.thinking` can only be undefined | Reported as their own numbers |

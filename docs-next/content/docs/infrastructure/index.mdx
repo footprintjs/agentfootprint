@@ -124,8 +124,19 @@ need:
 through an injected client seam rather than against the real service, the page
 says **contract-mapped and injection-tested** and names it. A brand-new adapter
 whose refusals and behaviour are pinned by tests but which has not yet met a
-real backend says **contract-shaped and tested; awaiting field use**. Only a
-claim that has been seen working in a real deployment is written as
+real backend says **contract-shaped and tested; awaiting field use**.
+
+**Field-validated** is the next rung up, and it is claimed only with its
+evidence named: the adapter answered a real request from the real service, in a
+live account, exercised by someone who did not write it. Today that phrase reads
+*validated in an independent field trial, 2026-08* and points at one trial on
+live Google Cloud — the rows it covers are on
+[Google Cloud & Gemini](doc:google-cloud), plus `fileObservability`, which that
+trial also wrote and read back. Where a trial exercised the *service* but not
+this library's adapter, the page says so instead of borrowing the credit.
+
+Above it, and reserved: only a claim that has been seen working in a real
+**deployment**, under sustained traffic, is written as
 *verified in a production field deployment* — and **no adapter** carries that
 phrase. The one place it appears is
 [On-premises & self-hosted](doc:on-premises), where it describes a deployment

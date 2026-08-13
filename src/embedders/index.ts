@@ -50,7 +50,7 @@ export type { Embedder } from '../memory/embedding/types.js';
 import type { Embedder } from '../memory/embedding/types.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import {
-  resolveGoogleGenAIClient,
+  createGoogleGenAIClientResolver,
   type GoogleGenAIConnectionOptions,
 } from '../adapters/llm/googleGenAI.js';
 
@@ -1100,15 +1100,16 @@ export function geminiEmbedder(options: GeminiEmbedderOptions = {}): Embedder {
   const maxInputChars = options.maxInputChars ?? charsFor(facts?.maxInputTokens);
   const onTruncation: GeminiTruncationPolicy = options.onTruncation ?? 'refuse';
 
-  let client: GeminiEmbedClientLike | undefined;
-  const connect = (): GeminiEmbedClientLike => {
-    client ??= resolveGoogleGenAIClient<GeminiEmbedClientLike>(
-      options,
-      'geminiEmbedder',
-      options._client,
-    );
-    return client;
-  };
+  // Lazy on purpose, as it always was: constructing an embedder is not
+  // connecting to one, and a factory that reached for credentials would refuse
+  // at import time in a process that only ever embeds behind a feature flag.
+  // Under a callback `apiKey` this also asks for the credential per request —
+  // see `createGoogleGenAIClientResolver`.
+  const connect = createGoogleGenAIClientResolver<GeminiEmbedClientLike>(
+    options,
+    'geminiEmbedder',
+    options._client,
+  );
 
   /**
    * ONE `embedContent` round-trip, carrying however many texts the model takes
@@ -1126,7 +1127,8 @@ export function geminiEmbedder(options: GeminiEmbedderOptions = {}): Embedder {
       ...(requested !== undefined && { outputDimensionality: requested }),
       ...(signal && { abortSignal: signal }),
     };
-    const response = await connect().models.embedContent({
+    const { client } = await connect();
+    const response = await client.models.embedContent({
       model,
       contents: [...texts],
       ...(Object.keys(config).length > 0 && { config }),

@@ -12,7 +12,8 @@
  *                   and their sentences are the ones they always were;
  *   • Security    — the witness can only ever quote the USER message, bounded,
  *                   never tool/system text;
- *   • Commentary  — the template line, present and absent.
+ *   • Commentary  — the template line, present and absent, on BOTH records that
+ *                   carry the evidence (the cascade verdict and the hop).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -331,5 +332,121 @@ describe('commentary: the witness line', () => {
     });
     expect(selectCommentaryKey(e)).toBe('skill.turn_routed.entry');
     expect(render(e)).toBe('A declared start rule routed this turn to `vip`.');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commentary — the SAME line off the hop's own record
+//
+// A graph with no cascade fires no `skill.turn_routed` at all: the hop
+// (`context.evaluated.cursorMove`) is the only record its evidence ever reaches.
+// Through 9.28.0 the selector had no key for it, so the because-clause read for
+// cascade graphs alone while a rules-only graph got the bare routed line.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A `context.evaluated` payload shaped like the real one (routing present —
+ *  every skill-graph entry carries build-time provenance, cascade or not). */
+const hopEvent = (cursorMove?: unknown, skillId = 'vip'): AgentfootprintEvent =>
+  event('agentfootprint.context.evaluated', {
+    iteration: 1,
+    activeCount: 1,
+    skippedCount: 0,
+    evaluatedTotal: 1,
+    activeIds: [skillId],
+    skippedDetails: [],
+    triggerKindCounts: { rule: 1 },
+    skillCatalog: [],
+    routing: [{ injectionId: skillId, flavor: 'skill', via: 'entry', tools: [] }],
+    ...(cursorMove !== undefined ? { cursorMove } : {}),
+  });
+
+/** What the hop said before this key existed — the zero-delta baseline. */
+const PLAIN_ROUTED_LINE = 'Neo routed to the `vip` skill — no new tools now available.';
+
+describe('commentary: the witness line on the hop (rules-only graphs)', () => {
+  it('a witnessed start-rule hop quotes the message', () => {
+    const e = hopEvent({ by: 'entry', to: 'vip', witness: { text: 'VIP', keyword: 'vip' } });
+    expect(selectCommentaryKey(e)).toBe('context.entry_witness');
+    expect(render(e)).toBe(
+      'A declared start rule routed this turn to `vip` because the message said “VIP”.',
+    );
+  });
+
+  it('ONE truth: the hop and the cascade verdict render the identical sentence', () => {
+    const witness = { text: 'zone 12' };
+    const verdict = event('agentfootprint.skill.turn_routed', {
+      by: 'entry',
+      to: 'ops',
+      witness,
+      policy,
+    });
+    const hop = hopEvent({ by: 'entry', to: 'ops', witness }, 'ops');
+    expect(render(hop)).toBe(render(verdict));
+    expect(render(hop)).toBe(
+      'A declared start rule routed this turn to `ops` because the message said “zone 12”.',
+    );
+  });
+
+  it("era tolerance: a `by: 'rule'` hop is the same verdict, so the same sentence", () => {
+    const e = hopEvent({ by: 'rule', to: 'vip', witness: { text: 'VIP' } });
+    expect(selectCommentaryKey(e)).toBe('context.entry_witness');
+    expect(render(e)).toBe(
+      'A declared start rule routed this turn to `vip` because the message said “VIP”.',
+    );
+  });
+
+  it('WITHOUT a witness the hop keeps today’s routed line, byte-for-byte', () => {
+    const e = hopEvent({ by: 'entry', to: 'vip' });
+    expect(selectCommentaryKey(e)).toBe('context.routed');
+    expect(render(e)).toBe(PLAIN_ROUTED_LINE);
+  });
+
+  it('an empty witness text never renders “the message said ””', () => {
+    const e = hopEvent({ by: 'entry', to: 'vip', witness: { text: '' } });
+    expect(selectCommentaryKey(e)).toBe('context.routed');
+    expect(render(e)).toBe(PLAIN_ROUTED_LINE);
+  });
+
+  it('no cursorMove at all (pre-8.5.0 graphs) → the routed line, untouched', () => {
+    const e = hopEvent();
+    expect(selectCommentaryKey(e)).toBe('context.routed');
+    expect(render(e)).toBe(PLAIN_ROUTED_LINE);
+  });
+
+  it('a witness on a NON-entry hop is not a start-rule claim (route/stay stay quiet)', () => {
+    const e = hopEvent({ by: 'route', to: 'vip', witness: { text: 'VIP' } });
+    expect(selectCommentaryKey(e)).toBe('context.routed');
+    expect(render(e)).toBe(PLAIN_ROUTED_LINE);
+  });
+
+  it('the model-pick decoration still outranks everything on its iteration', () => {
+    const e = hopEvent({ by: 'model-pick', to: 'vip', offered: ['vip', 'ops'] });
+    expect(selectCommentaryKey(e)).toBe('context.model_pick');
+    expect(render(e)).toBe(
+      'The model chose the `vip` skill from the 2-option menu it was offered.',
+    );
+  });
+
+  it('end to end: a rules-only run narrates the because-clause from its only record', async () => {
+    const graph = skillGraph()
+      .entry(skill('ops', 'zone audits'), { match: { keywords: ['zone'] } })
+      .entry(skill('fallback', 'everything else'))
+      .build();
+    const caps = capture();
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 2,
+    })
+      .system('You are support.')
+      .skillGraph(graph)
+      .watch(caps.recorder)
+      .build();
+    await agent.run({ message: 'please audit zone 12' });
+    expect(caps.routed).toHaveLength(0); // no cascade → no verdict event at all
+    const hop = event('agentfootprint.context.evaluated', caps.evaluated[0]);
+    expect(render(hop)).toBe(
+      'A declared start rule routed this turn to `ops` because the message said “zone”.',
+    );
   });
 });

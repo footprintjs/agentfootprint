@@ -57,6 +57,18 @@ import {
 export type CommentaryTemplates = Readonly<Record<string, string>>;
 
 /**
+ * ONE sentence, two records (9.28.0). A tier-1 DATA-matcher route is witnessed
+ * on the cascade's verdict (`skill.turn_routed`) AND on the hop that carried it
+ * (`context.evaluated.cursorMove`) — and a graph with NO cascade has only the
+ * second, which is why the because-clause used to reach cascade readers alone.
+ * Both keys ship this one string by construction, so the two records can never
+ * drift into two stories about the same fact. They stay two KEYS, because
+ * consumers override by key and each record is still its own line.
+ */
+const ENTRY_WITNESS_LINE =
+  'A declared start rule routed this turn to `{{to}}` because the message said “{{witness}}”.';
+
+/**
  * The bundled English templates. Override per-key via the renderer's
  * `templates` option — partial overrides are spread on top of these
  * defaults so consumers only ship what they want to change.
@@ -139,10 +151,9 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   // keywords / all) knows the text that made it true, so the sentence quotes
   // the user's own words instead of asserting "a rule matched". Rendered ONLY
   // when the event carries `witness` — a `when` predicate is opaque code and
-  // keeps the sentence above, byte-for-byte.
-  'skill.turn_routed.entry.witness':
-    'A declared start rule routed this turn to `{{to}}` because the message said ' +
-    '“{{witness}}”.',
+  // keeps the sentence above, byte-for-byte. Shared with `context.entry_witness`
+  // (the same route, seen from the hop): see ENTRY_WITNESS_LINE.
+  'skill.turn_routed.entry.witness': ENTRY_WITNESS_LINE,
   'skill.turn_routed.menu':
     'No declared intent clearly claimed this message — {{appName}} was offered ' +
     '{{offeredCount}} option{{offeredPlural}}{{stayClause}} and chooses for itself.',
@@ -304,6 +315,14 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'context.model_pick.offMenu':
     ' — a pick that was not on the menu it was offered; the divergence is on the record',
   'context.model_pick.stay': '; staying put was offered and declined',
+
+  // The cursor moved by a declared START RULE and the hop carries the words that
+  // made the rule true (`cursorMove.witness`, 9.28.0). A graph WITHOUT a cascade
+  // never fires `skill.turn_routed`, so this record is the only place that
+  // evidence exists — and the sentence is the cascade's, verbatim (one fact, one
+  // sentence, whichever record carried it). No witness on the hop → the routed
+  // line below, byte-for-byte.
+  'context.entry_witness': ENTRY_WITNESS_LINE,
 
   // Skill-GRAPH routing (proposal 002): a decision tree or declared edge picked a
   // skill this turn. Narrates WHICH skill + WHY (the matched decision) + what it
@@ -531,6 +550,22 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       ) {
         return 'context.model_pick';
       }
+      // A tier-1 DATA-matcher hop that carries its own evidence (9.28.0). On a
+      // rules-only graph (no cascade) NOTHING fires `skill.turn_routed`, so this
+      // is the only record that can say WHY the turn started where it did — and
+      // it says it in the cascade's own words. `'rule'` is era tolerance, the
+      // same tolerance the `turn_routed` switch keeps. An absent or empty
+      // witness falls through to the routed line unchanged.
+      const witnessedTo = cm?.to;
+      const witnessText = cm?.witness?.text;
+      if (
+        (cm?.by === 'entry' || cm?.by === 'rule') &&
+        witnessedTo &&
+        typeof witnessText === 'string' &&
+        witnessText.length > 0
+      ) {
+        return 'context.entry_witness';
+      }
       // Narrate ONLY when a skillGraph() routed a skill this turn (decision tree
       // or declared edge). Otherwise stay silent — bare injection evaluation is
       // plumbing, not pedagogy (matches the slot-mechanics skips below).
@@ -698,6 +733,16 @@ export function extractCommentaryVars(
           (cm.offered ?? []).includes(cm.from)
             ? templates['context.model_pick.stay'] ?? ''
             : '';
+      }
+      // Start-rule witness vars (`context.entry_witness`) — the hop's own
+      // evidence, computed on the same terms the key selection uses. Harmless
+      // extras for every other key: an absent witness contributes nothing, so
+      // the routed line renders exactly as it always did.
+      const witnessedTo = cm?.to;
+      const witnessText = cm?.witness?.text ?? '';
+      if ((cm?.by === 'entry' || cm?.by === 'rule') && witnessedTo && witnessText.length > 0) {
+        pickVars.to = witnessedTo;
+        pickVars.witness = witnessText;
       }
 
       const r = event.payload.routing?.[0];

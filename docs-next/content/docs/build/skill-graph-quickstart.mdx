@@ -128,7 +128,9 @@ When tier 1 decided — a `match:` rule (RegExp / `{ keywords }` / `{ all }`) �
 the verdict also carries the **witness**: the text out of the user's message
 that made the rule true (`witness: { text, keyword? }`, on `turn_routed` and on
 that hop's `cursorMove`). The commentary then reads *routed this turn to
-`billing` because the message said "chargeback"* instead of *a rule matched*.
+`billing` because the message said "chargeback"* instead of *a rule matched* —
+one sentence off either record, so a graph with **no** cascade (where the hop is
+the only record) reads exactly the same.
 The text is the matched substring of the **user message only**, whitespace-
 collapsed and bounded to 80 characters. A `when` predicate is opaque code and a
 scorer's evidence is its scores, so neither records a witness.

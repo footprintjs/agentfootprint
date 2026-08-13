@@ -34,9 +34,23 @@
  *  3. **`Session.userId` is required and immutable.** Our port's
  *     `persist(sessionId, envelope)` carries no user, so one has to be
  *     resolved — see {@link AgentEngineSessionsOptions.userId}. Immutable
- *     means the first write decides forever, which is exactly the ownership
- *     rule this library already enforces in its own stores; here the service
- *     enforces it for us.
+ *     means the first write decides forever, which is the same ownership rule
+ *     this library enforces in its own stores.
+ *
+ *     **It is metadata, not authorization, and a field trial proved it.** Two
+ *     sessions were created under `alice` and `bob`; the project's ordinary ADC
+ *     principal then read BOTH by name, presenting neither end-user identity
+ *     (FINDINGS "Native Agent Runtime Sessions"). `userId` is what a listing
+ *     filters on and what a first write pins — it is not a check the service
+ *     performs on a read. So the sentence "here the service enforces it for us"
+ *     would be false: anyone who can call the API with your project's
+ *     credentials and can guess a session id can read that conversation.
+ *
+ *     Where the check belongs is above this port, and this library already has
+ *     it: `envelopeOwner` records who a conversation belongs to, and the
+ *     host/gateway is what must compare that to the authenticated caller
+ *     before handing a session id down here. This adapter is a STORE. Nothing
+ *     that only stores can tell an impostor from an owner.
  *  4. **`ttl` is input-only with a 24-hour floor**, and `expireTime` always
  *     comes back. Sliding expiry is free; an hour-long TTL is not available at
  *     any price.

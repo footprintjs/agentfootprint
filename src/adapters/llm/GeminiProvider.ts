@@ -26,18 +26,72 @@
  * the first call, which reads like a network problem rather than a missing
  * setting.
  *
+ * ─── Status, per door, because the doors differ ─────────────────────
+ *
+ * • **Vertex: field-validated.** An independent trial ran this adapter,
+ *   unchanged since 9.13.0, against a live project through Application Default
+ *   Credentials: a two-call tool loop on `gemini-2.5-flash` returning the
+ *   expected answer with real token counts, and a stream delivering 10 content
+ *   chunks that reconstructed exactly (FINDINGS "Part 1 — native Gemini on
+ *   Vertex through ADC", "Part 2C"). `geminiEmbedder` passed on the same door.
+ * • **Gemini API (AI Studio): NOT field-validated, and not for want of
+ *   trying.** The trial's key-door calls never reached a model: the old
+ *   default model answered 404 for a new account, and a current model answered
+ *   429 for AI Studio prepayment, which is billing SEPARATE from the Google
+ *   Cloud account's credit. What that door does with a funded key is
+ *   untested here, which is why it has no default model.
+ * • **Tool calling on a 3.x model** now round-trips thought signatures (below).
+ *   That fix is built from the trial's captured 400, not from a live green run
+ *   — nothing in this repository has yet completed a 3.x tool loop.
+ *
  * ─── Why native, and not `openai({ baseURL })` ──────────────────────
  *
  * Google publishes an OpenAI-compatible endpoint, and it does work — for about
- * an hour. It authenticates with an OAuth access token that expires and has no
- * refresh home in `OpenAIProviderOptions`; its `tools.function.parameters` is
- * **OpenAPI**, not JSON Schema, so `$ref` / `oneOf` / `additionalProperties`
- * diverge silently; unsupported parameters are ignored rather than refused; and
- * its documented response carries no cached- or reasoning-token counts. This
- * adapter exists because every one of those is answerable on the native SDK:
- * ADC refreshes itself, tools go over as JSON Schema untranslated
- * (`parametersJsonSchema`), a forced single tool is expressible, and
- * `usageMetadata` reports cached and thinking tokens as separate numbers.
+ * an hour. It authenticates with an OAuth access token that expires (9.29.0
+ * gives `openai({ apiKey })` a callback form so a long-running process can
+ * refresh one, which is a mitigation and not a fix); its
+ * `tools.function.parameters` is **OpenAPI**, not JSON Schema, so `$ref` /
+ * `oneOf` / `additionalProperties` diverge silently; unsupported parameters are
+ * ignored rather than refused; and its documented response carries no cached-
+ * or reasoning-token counts. This adapter exists because every one of those is
+ * answerable on the native SDK: ADC refreshes itself, tools go over as JSON
+ * Schema untranslated (`parametersJsonSchema`), a forced single tool is
+ * expressible, and `usageMetadata` reports cached and thinking tokens as
+ * separate numbers.
+ *
+ * A field trial measured both halves of that: the native path completed a call
+ * after a forced credential expiry, while the compatible path returned HTTP 401
+ * on an expired token (FINDINGS "Part 2B").
+ *
+ * ─── Thought signatures: the round trip a tool loop cannot skip ─────
+ *
+ * A current Gemini model does not merely PREFER its thought signature back —
+ * it refuses the turn without it. An independent field trial on live GCP ran
+ * `gemini-3.1-flash-lite` on Vertex through one ordinary tool loop: the first
+ * call asked for the function, the tool ran, and the second call came back
+ *
+ *   400 INVALID_ARGUMENT — "Function call is missing a thought_signature in
+ *   functionCall parts. This is required for tools to work correctly …"
+ *
+ * (FINDINGS "Failure 4"). The cost of that shape is what makes it worth this
+ * paragraph: the failure lands AFTER the tool has already executed, so a
+ * side-effecting tool has run and the answer is unreachable.
+ *
+ * So the signature is CARRIED, not dropped. `Part.thoughtSignature` (a base64
+ * string on the installed @google/genai 2.16.0 `Part`) is read off the same
+ * part as the `functionCall` it belongs to, parked on the port's neutral
+ * `toolCalls[].providerMeta`, and written back onto the reconstructed
+ * `functionCall` part on the next request — byte for byte, because a signature
+ * is checked and not read. This is the same round trip the Anthropic adapter
+ * does with signed thinking blocks, one field along: there the carrier is
+ * `LLMMessage.thinkingBlocks[].signature`, here it is the tool call itself,
+ * because that is where Google puts it.
+ *
+ * What that does NOT cover, said plainly: a signature attached to a TEXT part
+ * of an answer with no function call. The port's assistant turn is a string,
+ * and a string has nowhere to keep one. The trial's failure was the functionCall
+ * shape; that shape is fixed here, and the other one is named rather than
+ * quietly half-handled.
  *
  * ─── Limitations (stated, not discovered) ───────────────────────────
  *
@@ -47,12 +101,12 @@
  * • **Thought summaries are not requested.** `usage.thinking` is reported
  *   honestly from `thoughtsTokenCount`, and `req.thinking.budget` is threaded
  *   to `thinkingConfig.thinkingBudget` — but `includeThoughts` is deliberately
- *   left unset, so no `rawThinking` is produced. Gemini's thought parts carry a
- *   `thoughtSignature` that has to be echoed byte-exact on the next turn, and
- *   there is no Gemini `ThinkingHandler` in this release to normalize and
- *   round-trip them. Asking for content nothing can carry would be a leak, not
- *   a feature. `thinkingConfig.thinkingLevel` has no field on `LLMRequest` and
- *   is likewise not sent.
+ *   left unset, so no `rawThinking` is produced and there is no Gemini
+ *   `ThinkingHandler` in this release to normalize thought TEXT. Asking for
+ *   content nothing can carry would be a leak, not a feature. Signature
+ *   round-tripping (above) is a separate thing and does not need one.
+ *   `thinkingConfig.thinkingLevel` has no field on `LLMRequest` and is
+ *   likewise not sent.
  * • `responseJsonSchema` (native structured output) is NOT exposed; use
  *   `.outputSchema(...)`, which goes over as a forced tool — a shape this
  *   adapter DOES carry.
@@ -71,7 +125,12 @@ import type {
   WireRole,
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
-import { resolveGoogleGenAIClient, type GoogleGenAIConnectionOptions } from './googleGenAI.js';
+import {
+  createGoogleGenAIClientResolver,
+  resolveGoogleDoor,
+  type GoogleDoor,
+  type GoogleGenAIConnectionOptions,
+} from './googleGenAI.js';
 
 // ─── The @google/genai surface, duck-typed ──────────────────────────
 //
@@ -85,6 +144,15 @@ export interface GeminiPart {
   readonly text?: string;
   /** `true` on a thought-summary part. Never joined into visible content. */
   readonly thought?: boolean;
+  /**
+   * The model's opaque signature for the thinking behind THIS part — base64,
+   * per `Part.thoughtSignature` on the installed @google/genai 2.16.0 surface.
+   *
+   * Read off a `functionCall` part and written back onto the same part on the
+   * next request. Never parsed, never trimmed, never regenerated: the service
+   * verifies it, so the only correct handling is byte-for-byte.
+   */
+  readonly thoughtSignature?: string;
   readonly functionCall?: {
     readonly id?: string;
     readonly name?: string;
@@ -184,6 +252,19 @@ export interface GeminiProviderOptions extends GoogleGenAIConnectionOptions {
   /**
    * Default model used when `LLMRequest.model` is `'gemini'` (the shorthand).
    * A request naming a full model id wins.
+   *
+   * **Unset behaves differently per door, because the doors behave
+   * differently.** On **Vertex** the shorthand resolves to
+   * `'gemini-2.5-flash'`, which a live field trial ran end to end through ADC.
+   * On the **Gemini API (AI Studio)** door the shorthand is REFUSED by name:
+   * the same trial's key-door call to that exact model returned HTTP 404 —
+   * *"no longer available to new users"* (FINDINGS "Failure 1") — and no model
+   * could be proven working on that door at all, because the account's separate
+   * AI Studio prepayment was empty (FINDINGS "Failure 2", a 429 on
+   * `gemini-3.1-flash-lite`, which at least proves that id resolves there).
+   *
+   * Shipping a second silent default nobody has run would be this library
+   * guessing on a service's behalf; the refusal names the door and the fix.
    */
   readonly defaultModel?: string;
   /** Default `maxOutputTokens` when the request doesn't set it. Optional. */
@@ -204,8 +285,23 @@ export interface GeminiProviderOptions extends GoogleGenAIConnectionOptions {
  */
 const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
 
-/** The model asked for when the request says only `'gemini'`. */
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+/**
+ * The model asked for when the request says only `'gemini'` — **on Vertex**.
+ *
+ * Field-proven rather than assumed: an independent trial on live GCP completed
+ * a real Vertex tool round trip on `gemini-2.5-flash` through Application
+ * Default Credentials, two LLM calls and one tool execution (FINDINGS "Part 1 —
+ * native Gemini on Vertex through ADC"). Google lists the model's retirement
+ * for **October 16, 2026**, so this is a default with an expiry date, not a
+ * recommendation — name a current model in `defaultModel` when you have one.
+ *
+ * There is deliberately NO sibling constant for the key door. See
+ * {@link GeminiProviderOptions.defaultModel}.
+ */
+const DEFAULT_VERTEX_MODEL = 'gemini-2.5-flash';
+
+/** The request-side shorthand that asks for whatever the door's default is. */
+const MODEL_SHORTHAND = 'gemini';
 
 /**
  * Prefix on a tool-call id THIS ADAPTER invented.
@@ -246,8 +342,20 @@ const SYNTHETIC_ID_PREFIX = 'gemini-call-';
  *         and when `@google/genai` is not installed.
  */
 export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
-  const client = resolveGoogleGenAIClient<GeminiClientLike>(options, 'gemini', options._client);
-  const defaultModel = options.defaultModel ?? DEFAULT_MODEL;
+  // Eager, so a missing `@google/genai` and an unanswerable door are still
+  // refused where the consumer typed `gemini(...)`. Under a callback key
+  // there is nothing to build yet — see the resolver.
+  const connect = createGoogleGenAIClientResolver<GeminiClientLike>(
+    options,
+    'gemini',
+    options._client,
+    true,
+  );
+  // A double talks to nobody, so its door comes from the options alone and
+  // never from the ambient environment of whoever is running the tests.
+  const door = resolveGoogleDoor(options, options._client === undefined);
+  const defaultModel =
+    options.defaultModel ?? (door === 'vertex' ? DEFAULT_VERTEX_MODEL : undefined);
   const defaultMaxTokens = options.defaultMaxTokens;
 
   // Ids are invented per PROVIDER INSTANCE, in call order — the same shape
@@ -256,8 +364,10 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
   const nextToolCallId = (): string => `${SYNTHETIC_ID_PREFIX}${++toolCallSeq}`;
 
   // The ONE secret this adapter holds, so the ONE string its errors promise
-  // never to print — see `wrapError`.
-  const wrap = (err: unknown): Error => wrapError(err, options.apiKey);
+  // never to print — see `wrapError`. Under a callback key the secret CHANGES,
+  // so the string to redact is the one the failing call actually used, not the
+  // one the options were built with.
+  const wrap = (err: unknown, apiKey: string | undefined): Error => wrapError(err, apiKey);
 
   const provider: LLMProvider = {
     name: 'gemini',
@@ -270,29 +380,48 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
     carriesForcedToolChoice: true,
 
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens);
+      const params = buildParams(
+        req,
+        resolveModel(req.model, defaultModel, door),
+        defaultMaxTokens,
+      );
+      // Resolved BEFORE the try so a lease failure carries no key to redact
+      // that we would have had to guess at; the resolver's own refusals never
+      // quote the credential.
+      const lease = await connect();
       try {
-        const response = await client.models.generateContent(params);
+        const response = await lease.client.models.generateContent(params);
         return fromGeminiResponse(response, nextToolCallId);
       } catch (err) {
-        throw wrap(err);
+        throw wrap(err, lease.apiKey);
       }
     },
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens);
+      const params = buildParams(
+        req,
+        resolveModel(req.model, defaultModel, door),
+        defaultMaxTokens,
+      );
+      // One lease for the whole stream. A key that rotates mid-stream cannot
+      // be applied to a socket that is already open — see the refresh boundary
+      // in googleGenAI.ts.
+      const lease = await connect();
       let stream: AsyncIterable<GeminiGenerateResponse>;
       try {
         // Two awaits, one call: `generateContentStream` answers with a PROMISE
         // of an async generator, so `for await` over the return value directly
         // iterates a promise and yields nothing.
-        stream = await client.models.generateContentStream(params);
+        stream = await lease.client.models.generateContentStream(params);
       } catch (err) {
-        throw wrap(err);
+        throw wrap(err, lease.apiKey);
       }
 
       const textParts: string[] = [];
-      const functionCalls: NonNullable<GeminiPart['functionCall']>[] = [];
+      // The PART, not just its `functionCall`: the thought signature is the
+      // part's field, and a call collected without it is a call that cannot
+      // go back (see the file header's Failure-4 note).
+      const functionParts: GeminiPart[] = [];
       let usage: GeminiUsageMetadata | undefined;
       let finishReason: string | undefined;
       let responseId: string | undefined;
@@ -311,7 +440,7 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
           const candidate = chunk.candidates?.[0];
           if (candidate?.finishReason) finishReason = candidate.finishReason;
           for (const part of candidate?.content?.parts ?? []) {
-            if (part.functionCall) functionCalls.push(part.functionCall);
+            if (part.functionCall) functionParts.push(part);
             // A thought-summary part is not visible content and is never
             // streamed as one. Nothing asks for them today (see the file
             // header); the guard is here so that a model that volunteers one
@@ -325,7 +454,7 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
           }
         }
 
-        const toolCalls = functionCalls.map((fc) => toLLMToolCall(fc, nextToolCallId));
+        const toolCalls = functionParts.map((part) => toLLMToolCall(part, nextToolCallId));
         const response: LLMResponse = {
           content: textParts.join(''),
           toolCalls,
@@ -341,12 +470,45 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
         };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
-        throw wrap(err);
+        throw wrap(err, lease.apiKey);
       }
     },
   };
 
   return provider;
+}
+
+/**
+ * The model this request is for — and the ONE refusal the doors do not share.
+ *
+ * A request naming a model wins, always. The shorthand `'gemini'` resolves to
+ * the door's default, and the Gemini API door HAS no default (see
+ * {@link GeminiProviderOptions.defaultModel}): the one this package used to
+ * send was measured returning HTTP 404 on that door for a new account.
+ *
+ * Refused here rather than at construction because a consumer who always names
+ * a model never needs a default, and a factory that refused them at the call
+ * site they typed would be charging everyone for a setting only some use.
+ */
+function resolveModel(
+  requested: string,
+  defaultModel: string | undefined,
+  door: GoogleDoor,
+): string {
+  if (requested !== MODEL_SHORTHAND) return requested;
+  if (defaultModel !== undefined) return defaultModel;
+  throw new Error(
+    `gemini: model 'gemini' is a shorthand for this door's default model, and the ` +
+      `${door === 'vertex' ? 'Vertex' : 'Gemini API (AI Studio)'} door has no default.\n` +
+      "  A live field trial called that door with this package's old default, " +
+      "'gemini-2.5-flash', and Google answered 404: \"This model models/gemini-2.5-flash is no " +
+      'longer available to new users." Sending it anyway would fail on YOUR first call, after ' +
+      'the request was built and paid for in latency.\n' +
+      "  Fix:  gemini({ apiKey, defaultModel: 'the-model-your-key-can-use' })\n" +
+      "  Or:   name the model per call — Agent.create({ model: 'gemini-3.1-flash-lite' }).\n" +
+      '  On VERTEX the shorthand still resolves — to gemini-2.5-flash, which the same trial ran ' +
+      'end to end (Google retires it 2026-10-16).',
+  );
 }
 
 /**
@@ -380,7 +542,7 @@ export class GeminiProvider implements LLMProvider {
 
 function buildParams(
   req: LLMRequest,
-  defaultModel: string,
+  model: string,
   defaultMaxTokens: number | undefined,
 ): GeminiGenerateParams {
   const config: GeminiGenerateConfig = {};
@@ -411,7 +573,7 @@ function buildParams(
   }
 
   return {
-    model: req.model === 'gemini' ? defaultModel : req.model,
+    model,
     contents: toGeminiContents(req.messages),
     ...(Object.keys(config).length > 0 && { config }),
   };
@@ -423,7 +585,9 @@ function buildParams(
  * Key transforms:
  *   • `role: 'system'` is DROPPED — it rides `config.systemInstruction`.
  *   • `role: 'assistant'` becomes `role: 'model'`, with `toolCalls` restored as
- *     `functionCall` parts so a multi-turn tool conversation round-trips.
+ *     `functionCall` parts so a multi-turn tool conversation round-trips —
+ *     each one carrying back the `thoughtSignature` it arrived with, which is
+ *     what makes the SECOND call of a tool loop legal on a current model.
  *   • `role: 'tool'` becomes a `functionResponse` part inside a **user** turn,
  *     which is where Gemini expects results. Consecutive tool messages merge
  *     into ONE user turn, so a reply that called three tools is answered by one
@@ -445,7 +609,12 @@ function toGeminiContents(messages: readonly LLMMessage[]): GeminiContent[] {
       const parts: GeminiPart[] = [];
       if (m.content) parts.push({ text: m.content });
       for (const tc of m.toolCalls ?? []) {
+        const signature = thoughtSignatureOf(tc.providerMeta);
         parts.push({
+          // Back on the PART, exactly where it came from and byte for byte.
+          // Absent when the model never sent one (a 2.5-series turn), because
+          // an invented signature is worse than a missing one.
+          ...(signature !== undefined && { thoughtSignature: signature }),
           functionCall: {
             // Only an id GEMINI issued goes back to Gemini — see
             // SYNTHETIC_ID_PREFIX.
@@ -493,6 +662,24 @@ function isRealId(id: string | undefined): id is string {
   return id !== undefined && id.length > 0 && !id.startsWith(SYNTHETIC_ID_PREFIX);
 }
 
+/** The key this adapter parks a thought signature under on `providerMeta`. */
+const THOUGHT_SIGNATURE = 'thoughtSignature';
+
+/**
+ * A signature off the port's neutral metadata bag — or nothing.
+ *
+ * Shape-checked rather than trusted: `providerMeta` survives a checkpoint, a
+ * `structuredClone` and whatever a consumer did to the history in between, and
+ * a non-string in the `thoughtSignature` field would go on the wire as a
+ * garbled signature, which the service rejects less clearly than a missing one.
+ */
+function thoughtSignatureOf(
+  meta: Readonly<Record<string, unknown>> | undefined,
+): string | undefined {
+  const raw = meta?.[THOUGHT_SIGNATURE];
+  return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
+}
+
 /**
  * `LLMToolSchema` → `FunctionDeclaration`, with the schema untranslated.
  *
@@ -520,7 +707,7 @@ function fromGeminiResponse(
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
 
   for (const part of candidate?.content?.parts ?? []) {
-    if (part.functionCall) toolCalls.push(toLLMToolCall(part.functionCall, nextToolCallId));
+    if (part.functionCall) toolCalls.push(toLLMToolCall(part, nextToolCallId));
     // Thought summaries are not the answer. See the header.
     if (part.thought) continue;
     if (part.text) textParts.push(part.text);
@@ -535,14 +722,32 @@ function fromGeminiResponse(
   };
 }
 
+/**
+ * One `functionCall` PART → one port tool call, signature included.
+ *
+ * Takes the part rather than the `functionCall` because the two fields that
+ * have to travel together live at different levels: the call is inside the
+ * part, the signature is on it.
+ */
 function toLLMToolCall(
-  fc: NonNullable<GeminiPart['functionCall']>,
+  part: GeminiPart,
   nextToolCallId: () => string,
-): { id: string; name: string; args: Record<string, unknown> } {
+): {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  providerMeta?: Record<string, unknown>;
+} {
+  const fc = part.functionCall ?? {};
+  const signature = part.thoughtSignature;
   return {
     id: fc.id && fc.id.length > 0 ? fc.id : nextToolCallId(),
     name: fc.name ?? '',
     args: { ...(fc.args ?? {}) },
+    // Only when there IS one. An empty bag on every tool call would be noise
+    // in every recording, every checkpoint and every narrative line.
+    ...(typeof signature === 'string' &&
+      signature.length > 0 && { providerMeta: { [THOUGHT_SIGNATURE]: signature } }),
   };
 }
 
@@ -558,6 +763,14 @@ function toLLMToolCall(
  * `cacheWrite` stays undefined on purpose: Gemini's context caching is created
  * by a separate `caches.create` call that this adapter does not make, so there
  * is no write for a `generateContent` turn to report.
+ *
+ * **`output` does not include thinking on this wire, and that matters for
+ * money.** A field trial's 256-token stream came back `input 21, output 9,
+ * thinking 243` — 243 tokens that were spent, were billed, and appear in
+ * neither `input` nor `output` (FINDINGS "Failure 5"). Anything adding
+ * `input + output` to estimate a Gemini turn is under-counting by whatever the
+ * model thought. `usage.thinking` is the number to add, and it now survives all
+ * the way to `agentfootprint.stream.llm_end`.
  */
 function toUsage(usage: GeminiUsageMetadata | undefined): LLMResponse['usage'] {
   return {

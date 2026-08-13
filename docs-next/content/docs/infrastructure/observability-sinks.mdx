@@ -100,21 +100,36 @@ optional peer dependencies. `otelObservability()` already takes the tracer.
 
 ```ts
 const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+const client = await auth.getClient();
+
 const exporter = new OTLPTraceExporter({
   url: 'https://telemetry.googleapis.com',      // regional: telemetry.<REGION>.rep.googleapis.com
-  credentials: credentials.createSsl(),
-  headers: await (await auth.getClient()).getRequestHeaders(),
+  // TLS *and* renewable Google call credentials — not TLS plus copied headers.
+  credentials: credentials.combineChannelCredentials(
+    credentials.createSsl(),
+    credentials.createFromGoogleCredential(client),
+  ),
 });
 ```
 
 plus `OTEL_RESOURCE_ATTRIBUTES=gcp.project_id=<PROJECT_ID>` and
-`OTEL_EXPORTER_OTLP_HEADERS=x-goog-user-project=<PROJECT_ID>`. Google's console
+`GOOGLE_CLOUD_QUOTA_PROJECT=<PROJECT_ID>`. Google's console
 renders the GenAI views from the **OpenTelemetry GenAI semantic conventions** —
 the same `gen_ai.*` attributes this adapter already emits — once you opt in with
 `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`. There is no
 auto-instrumentation for `@google/genai` on npm, so agentfootprint's own provider
-hooks are the instrumentation. Full copy-paste recipe:
+hooks are the instrumentation.
+
+<Callout type="warn" title="Take the pinned versions, and do not pass `tracer` on this one">
+The Google path has three sharp edges that a 2026-08 field trial found the hard
+way — OTel 2.x moved span processors into the `NodeTracerProvider` constructor,
+`google-auth-library@11` hands `@grpc/grpc-js` a `Headers` object it cannot read
+(so the exporter ships **unauthenticated**), and passing an explicit `tracer` to
+`otelObservability` produced six disconnected traces with zero child spans. The
+working shape registers the provider globally and omits `tracer`. Full
+copy-paste recipe, with the exact versions:
 [Google Cloud & Gemini](doc:google-cloud).
+</Callout>
 
 <Callout type="warn" title="fileObservability rotates ONE generation, and nothing is bounded on the way out">
 `maxBytes` renames the file to `<path>.1` — replacing any previous `.1` — and
@@ -300,9 +315,9 @@ time rather than at freeze time.
 |---|---|---|
 | `ObservabilityStrategy` port, `composeObservability` | `agentfootprint/observe` | Shipped |
 | `consoleObservability`, `auditExport` / `verifyAuditBundle` | `agentfootprint/observe` | Shipped — no vendor SDK |
-| `fileObservability` | `agentfootprint/observe` | 9.8.0 — contract-shaped and tested; awaiting field use |
+| `fileObservability` | `agentfootprint/observe` | **Field-validated** — validated in an independent field trial, 2026-08 (Node 22: 30 asserted events written as NDJSON and parsed back, on a live agent run) |
 | `otelObservability` | `agentfootprint/observe` | Shipped — BYO tracer |
-| Cloud Trace / Cloud Logging via `otelObservability` + OTLP | `agentfootprint/observe` | **9.13.0** — a documented recipe, not a new adapter |
+| Cloud Trace / Cloud Logging via `otelObservability` + OTLP | `agentfootprint/observe` | A documented recipe, not a new adapter — **field-validated in its corrected form**, an independent field trial, 2026-08 |
 | `cloudwatchObservability`, `agentcoreObservability`, `xrayObservability` | `agentfootprint/observe` | Shipped; contract-mapped and injection-tested, command names pinned |
 | `detach` delivery, `tier`, `sampleRate` | — | Shipped |
 | `recordRun` + `{ dims, norm }` embedding summary | `agentfootprint/observe` | Shipped |

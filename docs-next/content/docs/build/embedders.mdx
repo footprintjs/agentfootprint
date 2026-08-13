@@ -193,6 +193,22 @@ const vertex = geminiEmbedder({ project: 'my-project', location: 'us-central1' }
 const studio = geminiEmbedder({ apiKey: process.env.GEMINI_API_KEY! });
 ```
 
+<Callout type="info" title="The Vertex door is field-validated; the key door has a billing catch">
+An independent field trial, 2026-08, ran the **Vertex** door live —
+`gemini-embedding-001` at 768 dimensions, three documents indexed into
+`sqliteVectorStore` and retrieved through `defineRAG`, with an unchanged re-index
+embedding **zero**. The **Gemini API** door in the same trial returned
+`429 RESOURCE_EXHAUSTED` — *prepayment credits depleted* — from a valid key on a
+project with unspent Cloud credit, because AI Studio bills separately from Google
+Cloud. Neither door was misconfigured; they are two accounts. See
+[the billing boundary](doc:google-cloud).
+
+**Call it with the declared shape**, `embed({ text })` — not `embed(text)`. The
+native Google SDK takes a string overload and this port does not; passing one
+surfaces as the SDK's own `ContentUnion is required`, which reads like a
+credentials problem and is not.
+</Callout>
+
 Two models are known by name, and the difference between them is why the input
 ceiling is per-model rather than per-vendor:
 

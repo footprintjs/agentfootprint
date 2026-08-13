@@ -64,6 +64,22 @@
  * before every overwrite — so even an address collision is refused rather than
  * written through.
  *
+ * ── The retrieved NAME is not the name you wrote ────────────────────────────
+ * A live field trial on the raw service found this and it is worth stating,
+ * because it is exactly the assumption an adapter is tempted to make: `create`
+ * and `list` came back with the caller-chosen memory ids, while SIMILARITY
+ * RETRIEVAL answered with generated numeric resource names for the very same
+ * facts (FINDINGS "Agent Runtime Memory Bank"). Anything reading an entry id
+ * out of `memory.name` would therefore work perfectly on `list()` and hand back
+ * unusable ids from `search()` — ids that no `get()` or `delete()` could find.
+ *
+ * This adapter never does that: `toEntry` reads the id from the metadata this
+ * library wrote, and the resource name is carried only as
+ * `entry.metadata.resourceName`, for looking at. The same trial also confirmed
+ * exact-match scope semantics (a partial `{tenant}` scope retrieved nothing)
+ * and the distance-not-similarity ranking that {@link MemoryBankStore.search}
+ * converts.
+ *
  * ── Writes are long-running operations ──────────────────────────────────────
  * `create`, `patch` and `delete` all answer with an Operation rather than the
  * resource — verified against the installed SDK's own return types. Every
@@ -216,6 +232,14 @@ const DEFAULT_PAGE_SIZE = 20;
  * **Status: contract-shaped and tested; awaiting field use.** Every call is
  * exercised through an injected client and pinned against the really-installed
  * SDK. None of it has yet answered a request from Google in a real project.
+ *
+ * A field trial DID exercise the service this wraps — create, list, exact-scope
+ * reads, and similarity retrieval with finite distances, all against a real
+ * Memory Bank (FINDINGS "Agent Runtime Memory Bank"). That is evidence about
+ * GOOGLE's data plane, and it sharpened two things written here (see the module
+ * header on retrieved names, and `search`'s distance conversion). It is not
+ * evidence about this class, which did not exist when the trial ran, so the
+ * status stays where it is until a run of THIS code answers a real request.
  */
 export class MemoryBankStore implements MemoryStore {
   /**

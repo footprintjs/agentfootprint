@@ -84,6 +84,11 @@ export {
   type GeminiFunctionDeclaration,
 } from './adapters/llm/GeminiProvider.js';
 
+// `GoogleApiKeySource` and `GoogleDoor` are deliberately NOT re-exported here.
+// The widened key type is already reachable inline on
+// `GoogleGenAIConnectionOptions.apiKey` — `apiKey: () => token` compiles
+// without naming it — and the door is an adapter-internal decision, not a knob.
+// A name on this barrel is a promise to keep it; these two are not yet one.
 export type { GoogleGenAIConnectionOptions } from './adapters/llm/googleGenAI.js';
 
 export {

@@ -546,3 +546,74 @@ describe('OpenAIProvider — ROI (any OpenAI-compatible endpoint)', () => {
     expect(params.max_completion_tokens).toBeUndefined();
   });
 });
+
+// ─── The credential callback (9.29.0) ──────────────────────────────
+//
+// The parked backlog item, unparked by evidence. An independent field trial
+// drove Vertex AI's OpenAI-COMPATIBLE endpoint through this adapter: the call
+// with a current OAuth token returned the expected answer, and the same
+// provider with an expired one returned HTTP 401 — with nowhere in
+// `OpenAIProviderOptions` to put a fresh token, because `apiKey` was a fixed
+// string (FINDINGS "Part 2B — ADC refresh versus OpenAI-compatible OAuth").
+// A process that outlives an hour had to rebuild the provider, and usually
+// discovered it had not at 3am.
+
+describe('OpenAIProvider — apiKey as a callback', () => {
+  it('is called once per request, so a rotated token is used without rebuilding', async () => {
+    const issued: string[] = [];
+    const p = openai({
+      baseURL: 'https://us-central1-aiplatform.googleapis.com/v1/…/openapi',
+      apiKey: () => {
+        const token = `ya29.token-${issued.length + 1}`;
+        issued.push(token);
+        return token;
+      },
+      _client: makeFakeClient(baseResponse),
+    });
+
+    await p.complete(baseRequest);
+    await p.complete(baseRequest);
+    for await (const _c of p.stream!(baseRequest)) {
+      /* drain */
+    }
+
+    // Three requests, three asks. Not one ask cached at construction — which
+    // is exactly the shape that returned 401 in the field.
+    expect(issued).toEqual(['ya29.token-1', 'ya29.token-2', 'ya29.token-3']);
+  });
+
+  it('awaits an async callback, which is the shape a real token fetch has', async () => {
+    const p = openai({
+      apiKey: async () => Promise.resolve('ya29.async'),
+      _client: makeFakeClient(baseResponse),
+    });
+    expect((await p.complete(baseRequest)).content).toBe('hello');
+  });
+
+  it('refuses an empty answer, and never quotes what it got back', async () => {
+    const p = openai({ apiKey: () => '   ', _client: makeFakeClient(baseResponse) });
+    await expect(p.complete(baseRequest)).rejects.toThrow(/callback returned an empty string/);
+    await expect(p.complete(baseRequest)).rejects.toThrow(/before every request/);
+  });
+
+  it("a callback that throws surfaces the consumer's own reason", async () => {
+    const p = openai({
+      apiKey: () => {
+        throw new Error('token endpoint returned 503');
+      },
+      _client: makeFakeClient(baseResponse),
+    });
+    await expect(p.complete(baseRequest)).rejects.toThrow(/token endpoint returned 503/);
+  });
+
+  it('ZERO-DELTA: a string key still resolves ONCE, at construction', async () => {
+    // The eager path is what keeps `openai()` refusing a missing `openai`
+    // package where the consumer typed the call. Proved by absence of any
+    // per-request credential work: the same client answers both calls.
+    const client = makeFakeClient(baseResponse);
+    const p = openai({ apiKey: 'sk-fixed', _client: client });
+    await p.complete(baseRequest);
+    await p.complete(baseRequest);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(2);
+  });
+});

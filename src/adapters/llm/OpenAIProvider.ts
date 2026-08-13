@@ -132,8 +132,40 @@ interface OpenAIStreamChunk {
 // ─── Adapter ────────────────────────────────────────────────────────
 
 export interface OpenAIProviderOptions {
-  /** API key. Defaults to `OPENAI_API_KEY` env var. */
-  readonly apiKey?: string;
+  /**
+   * API key. Defaults to the `OPENAI_API_KEY` env var.
+   *
+   * **A FUNCTION here is re-read before every request (9.29.0).** That is what
+   * makes this adapter usable in front of an endpoint whose credential is a
+   * short-lived OAuth token rather than a key — Vertex AI's OpenAI-compatible
+   * endpoint being the case that forced it. An independent field trial ran a
+   * real call through that endpoint with a current token, then repeated it
+   * with an expired one and got HTTP 401 with nowhere to put a fresh token:
+   * *"`OpenAIProviderOptions` accepts a fixed `apiKey` and exposes no
+   * credential callback"* (FINDINGS "Part 2B"). A process living longer than
+   * an hour had to rebuild the provider, and usually found out it hadn't at
+   * 3am.
+   *
+   * The boundary, stated so nobody has to guess:
+   *   • called ONCE PER REQUEST, before the request is built;
+   *   • the SDK client is rebuilt only when the returned string CHANGED, so a
+   *     cached token costs one function call;
+   *   • a stream keeps the key it started with — nothing can re-authenticate
+   *     a socket that is already open;
+   *   • what expiry means is the callback's business. This adapter does not
+   *     inspect, decode or schedule anything; it asks every time and uses what
+   *     it is given.
+   *
+   * ```ts
+   * const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+   * const client = await auth.getClient();
+   * openai({
+   *   baseURL: 'https://…/openapi',
+   *   apiKey: async () => (await client.getAccessToken()).token ?? '',
+   * });
+   * ```
+   */
+  readonly apiKey?: string | (() => string | Promise<string>);
   /** Base URL — set for OpenAI-compatible APIs (Ollama, Together, vLLM). */
   readonly baseURL?: string;
   /**
@@ -180,7 +212,7 @@ const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user'
  *     .build();
  */
 export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
-  const client = resolveClient(options);
+  const connect = createClientResolver(options);
   const defaultModel = options.defaultModel ?? 'gpt-4o-mini';
   const defaultMaxTokens = options.defaultMaxTokens;
   // A custom baseURL means an OpenAI-COMPATIBLE endpoint (Ollama/vLLM/Together/Groq),
@@ -203,6 +235,9 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     carriesForcedToolChoice: !legacyEndpoint,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, { ...cfg, stream: false });
+      // The credential is asked for HERE, per request, so a token that expired
+      // since the last call is a new token and not a 401.
+      const client = await connect();
       try {
         const response = (await client.chat.completions.create(params)) as OpenAIChatCompletion;
         return fromOpenAIResponse(response);
@@ -212,6 +247,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       const params = buildParams(req, { ...cfg, stream: true });
+      const client = await connect();
       let stream: AsyncIterable<OpenAIStreamChunk>;
       try {
         stream = client.chat.completions.create(params) as AsyncIterable<OpenAIStreamChunk>;
@@ -476,6 +512,67 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
 
 // ─── Internals ──────────────────────────────────────────────────────
 
+/**
+ * The client seam — one answer per request.
+ *
+ * Three paths, and only the third is new (the same three the Google adapters
+ * take, deliberately: two doors that solved the same problem differently would
+ * be two doors to learn):
+ *
+ *  1. `_client` injected → the double, always (the credential callback still
+ *     runs, because the double replaces the client and not the credential).
+ *  2. `apiKey` a string or absent → built ONCE, at factory time, so a missing
+ *     `openai` package is still refused where the consumer typed `openai(...)`.
+ *  3. `apiKey` a callback → called before every request; the SDK client is
+ *     rebuilt only when the answer changed. Not eager: calling a consumer's
+ *     credential provider from a factory fetches a token nobody asked for yet.
+ */
+function createClientResolver(
+  options: OpenAIProviderOptions,
+): () => OpenAIClient | Promise<OpenAIClient> {
+  const source = options.apiKey;
+  if (options._client) {
+    const injected = options._client;
+    // A double stands in for the SDK client, not for the credential: a
+    // callback is still called per request, so the rotation is observable in a
+    // test that never opens a socket.
+    if (typeof source !== 'function') return () => injected;
+    return async () => {
+      await requireKey(source);
+      return injected;
+    };
+  }
+  if (typeof source !== 'function') {
+    const built = resolveClient(options);
+    return () => built;
+  }
+  let lastKey: string | undefined;
+  let built: OpenAIClient | undefined;
+  return async () => {
+    const answer = await requireKey(source);
+    if (built === undefined || answer !== lastKey) {
+      built = resolveClient({ ...options, apiKey: answer });
+      lastKey = answer;
+    }
+    return built;
+  };
+}
+
+/** Call the credential callback and insist on something usable. */
+async function requireKey(source: () => string | Promise<string>): Promise<string> {
+  const answer = await source();
+  if (typeof answer === 'string' && answer.trim().length > 0) return answer;
+  // The value is never quoted back: it is a credential when it is right.
+  throw new Error(
+    'openai: the `apiKey` callback returned ' +
+      (typeof answer === 'string' ? 'an empty string' : `a ${typeof answer}`) +
+      ', and a key has to be a non-empty string.\n' +
+      '  The callback runs before every request, so this is a live credential failure — a ' +
+      'token fetch that failed usually throws rather than returning nothing.\n' +
+      '  Fix:  return the token, or throw from the callback so openai() can report why.',
+  );
+}
+
 function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
   if (options._client) return options._client;
   let OpenAI: new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
@@ -495,7 +592,11 @@ function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
         '  Or pass `_client` for test injection.',
     );
   }
-  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+  // A callback has already been resolved to a string by `createClientResolver`
+  // before it reaches here; the guard is what keeps a function from being
+  // stringified into an `Authorization` header by a future call site.
+  const apiKey =
+    (typeof options.apiKey === 'string' ? options.apiKey : undefined) ?? process.env.OPENAI_API_KEY;
   return new OpenAI({ apiKey, ...(options.baseURL && { baseURL: options.baseURL }) });
 }
 

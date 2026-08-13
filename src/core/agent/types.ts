@@ -725,6 +725,11 @@ export interface AgentState {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
+    // Carried, never read here (9.29.0). The adapter that produced the call is
+    // the only thing that understands this bag; the loop's job is to keep it
+    // attached to its call all the way into the assistant turn, because for
+    // Gemini it holds the thought signature the NEXT request must echo.
+    readonly providerMeta?: Readonly<Record<string, unknown>>;
   }[];
   // Pause checkpoint — set when a tool calls `pauseHere()`, consumed on resume.
   pausedToolCallId: string;

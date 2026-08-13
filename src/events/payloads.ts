@@ -201,6 +201,28 @@ export interface LLMEndPayload {
     readonly output: number;
     readonly cacheRead?: number;
     readonly cacheWrite?: number;
+    /**
+     * 9.29.0 — reasoning tokens the model spent on this call, when the
+     * provider reports them (`LLMResponse.usage.thinking`).
+     *
+     * This field is the fix for a gap a field trial found by walking into it:
+     * a 256-token Gemini stream produced ONE visible chunk, and the run only
+     * made sense once the numbers were read — `input 21, output 9,
+     * thinking 243`. The provider had been reporting that third number all
+     * along and this payload's type dropped it, so the event that a consumer
+     * actually subscribes to could not explain its own run.
+     *
+     * **Not inside `output`.** On Gemini `candidatesTokenCount` counts visible
+     * tokens only; thinking is a separate, billed line item. A cost estimate
+     * built from `input + output` under-counts a thinking model by whatever it
+     * thought. `cost.tick` deliberately does NOT fold it in — `PricingTable`
+     * prices four kinds and thinking is not one of them, and inventing a rate
+     * would be this library guessing at somebody's invoice.
+     *
+     * Undefined when the provider does not report thinking tokens, which is
+     * most calls.
+     */
+    readonly thinking?: number;
   };
   readonly stopReason: string;
   readonly durationMs: number;

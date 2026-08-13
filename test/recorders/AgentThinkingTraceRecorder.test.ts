@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import type { LLMProvider } from 'footprintjs';
 import { Agent, defineTool } from '../../src/index.js';
-import { defineSkill, skillGraph, decideSkill } from '../../src/injection-engine.js';
+import { defineSkill, skillGraph, decideSkill, keywordScorer } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { agentThinkingTrace } from '../../src/observe.js';
 
@@ -378,6 +378,41 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     // The skill stays active across both iterations, so context.evaluated re-fires
     // with the SAME routing — but the lead-in appears exactly once.
     expect(brains.filter((b) => b.includes('routed to'))).toHaveLength(1);
+  });
+
+  it('a witnessed start-rule route on a CASCADE graph says its sentence once, not twice', async () => {
+    // Two records carry the same evidence — the cascade's `turn_routed` verdict
+    // and the hop's `cursorMove` — and since 9.28.0 both narrate the identical
+    // sentence. The lead must state the fact once.
+    const graph = skillGraph()
+      .entry(defineSkill({ id: 'ops', description: 'zone audits', body: 'b' }), {
+        match: { keywords: ['zone'] },
+      })
+      .entry(defineSkill({ id: 'billing', description: 'refunds', body: 'b' }), {
+        match: { intent: 'refund', examples: ['refund my order'] },
+      })
+      .classify(keywordScorer())
+      .build();
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({
+      provider: mock({ reply: 'All good.' }),
+      model: 'mock',
+      maxIterations: 3,
+    })
+      .system('')
+      .skillGraph(graph)
+      .watch(att)
+      .build();
+    await agent.run({ message: 'please audit zone 12' });
+
+    const answer = att.getTrace({ task: 'audit' }).steps.find((s) => s.kind === 'answer') as
+      | { brain?: string }
+      | undefined;
+    const sentence =
+      'A declared start rule routed this turn to `ops` because the message said “zone”.';
+    expect(answer?.brain).toContain(sentence);
+    expect(answer?.brain?.split(sentence)).toHaveLength(2); // exactly one occurrence
+    expect(answer?.brain).toContain('All good.');
   });
 });
 

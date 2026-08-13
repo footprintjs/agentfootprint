@@ -103,7 +103,7 @@ const result = await agent.run({ message: 'Weather in Paris?' });
 console.log(result);  // → "I checked: it is 72°F and sunny."
 ```
 
-For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
+For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `gemini(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
 ### Run against a local model — the free rung between the mock and the bill
 
@@ -860,13 +860,14 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - 1 reliability gate — `.reliability({ preCheck, postDecide, providers, circuitBreaker, fallback })`
 - 1 tool dispatch primitive — `ToolProvider` (sync OR async) — `staticTools` · `gatedTools` · `skillScopedTools` · or a custom `ToolProvider` that discovers over hubs / MCP / per-tenant catalogs
 
-**LLM providers** (7)
+**LLM providers** (8)
 
 | Factory | Use for |
 |---|---|
 | `anthropic` | Claude (Sonnet, Opus, Haiku) via `@anthropic-ai/sdk` |
 | `openai` | GPT-4o, GPT-4-turbo via `openai` SDK |
 | `bedrock` | Claude / Titan / Mistral via AWS Bedrock runtime |
+| `gemini` | Gemini via `@google/genai` — two doors, **Vertex** (project + ADC) or the Gemini API (one key). Not every door/model pair works: read the [door/model matrix](https://footprintjs.github.io/agentfootprint/docs/infrastructure/google-cloud/#the-doormodel-matrix) first |
 | `ollama` | Local models, over Ollama's native API — no SDK, no key, real token counts, refusals that name `ollama serve` / `ollama pull` · `openai({ baseURL })` reaches llama.cpp, vLLM, and any other OpenAI-compatible endpoint |
 | `browserAnthropic` | Browser-side Claude calls (no proxy server) |
 | `browserOpenai` | Browser-side OpenAI calls (no proxy server) |

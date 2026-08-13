@@ -32,11 +32,18 @@ export interface LLMMessage {
    * a `role: 'tool'` message, the provider reconstructs the matching
    * `tool_use` block on the previous assistant turn from this field.
    * Empty array on text-only turns; undefined for non-assistant roles.
+   *
+   * `providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
+   * response put there, and for Gemini it holds the `thoughtSignature` without
+   * which the model refuses the turn after a tool call. See
+   * {@link LLMResponse}'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
+   * is NOT stripped on the way to a provider: it exists to be sent.
    */
   readonly toolCalls?: readonly {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
+    readonly providerMeta?: Readonly<Record<string, unknown>>;
   }[];
   /**
    * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
@@ -214,6 +221,26 @@ export interface LLMResponse {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
+    /**
+     * 9.29.0 — what the PROVIDER needs back with this call, opaque to
+     * everything in between.
+     *
+     * Same escape-hatch shape and the same rules as
+     * `ThinkingBlock.providerMeta`: plain data only, nothing
+     * identity-bearing beyond what the wire itself demands, and no framework
+     * behaviour keys on it. The framework's whole job is to keep it attached
+     * to its call — through `scope.llmLatestToolCalls`, into the assistant
+     * turn in `history`, across a checkpoint — and hand it back to the same
+     * adapter on the next request.
+     *
+     * Why it exists: Gemini signs the reasoning behind a function call and
+     * REFUSES the following turn when the signature does not come back
+     * (`thought_signature`, HTTP 400 — measured in the field, after the tool
+     * had already run). The signature belongs to the tool call, not to the
+     * message and not to a thinking block, so it needed a home on the call.
+     * Providers that sign nothing leave this undefined and cost nothing.
+     */
+    readonly providerMeta?: Readonly<Record<string, unknown>>;
   }[];
   readonly usage: {
     readonly input: number;

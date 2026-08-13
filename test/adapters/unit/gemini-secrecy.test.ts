@@ -68,11 +68,17 @@ describe('P1 no failure path prints the API key', () => {
     });
 
     const request = { model: 'gemini', messages: [{ role: 'user' as const, content: 'hi' }] };
+    // `defaultModel` is not decoration: since 9.29.0 the key door has NO
+    // default model, so a provider without one refuses the shorthand before it
+    // ever reaches the client — and a refusal carrying no key would pass every
+    // assertion below while proving nothing. See the reach check after the loop.
+    const keyDoor = (): ReturnType<typeof gemini> =>
+      gemini({ apiKey: API_KEY, defaultModel: 'gemini-2.5-flash', _client: echoing() });
     const failures = await Promise.all([
       // The provider was built WITH the key and the call failed.
-      failureStrings(() => gemini({ apiKey: API_KEY, _client: echoing() }).complete(request)),
+      failureStrings(() => keyDoor().complete(request)),
       failureStrings(async () => {
-        for await (const _c of gemini({ apiKey: API_KEY, _client: echoing() }).stream!(request)) {
+        for await (const _c of keyDoor().stream!(request)) {
           /* drain */
         }
       }),
@@ -111,6 +117,11 @@ describe('P1 no failure path prints the API key', () => {
     for (const [index, text] of failures.entries()) {
       expect(text, `case ${index} did not fail`).not.toBe('');
     }
+    // …and the two call cases failed AT THE CLIENT, not at a guard in front of
+    // it. This is what stops the first two assertions from going vacuous the
+    // next time a refusal moves earlier in the call.
+    expect(failures[0], 'the complete() case never reached the client').toContain('ECONNREFUSED');
+    expect(failures[1], 'the stream() case never reached the client').toContain('401');
     // …and not one of them printed the key.
     for (const [index, text] of failures.entries()) {
       expect(text, `case ${index} leaked the API key`).not.toContain(API_KEY);
@@ -166,7 +177,10 @@ describe('P3 nothing the framework records carries the key', () => {
       },
     };
     const agent = Agent.create({
-      provider: gemini({ apiKey: API_KEY, _client: failing }),
+      // `defaultModel` for the same reason as P1: on the key door the bare
+      // 'gemini' shorthand is refused before the client is reached, and this
+      // case is about what the CLIENT's failure carries through the framework.
+      provider: gemini({ apiKey: API_KEY, defaultModel: 'gemini-2.5-flash', _client: failing }),
       model: 'gemini',
     }).build();
     agent.on('*', (event: unknown) => {
@@ -175,6 +189,8 @@ describe('P3 nothing the framework records carries the key', () => {
 
     const thrown = await failureStrings(() => agent.run({ message: 'hello' }));
     expect(thrown).not.toBe('');
+    // The run failed where this case means it to — inside the client.
+    expect(thrown, 'the run never reached the client').toContain('upstream said no');
 
     const everything = [
       thrown,

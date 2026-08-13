@@ -54,7 +54,7 @@ working in one.
 | **Sessions — process-lifetime** | `memorySessions()` | `agentfootprint/hosting` | none | Shipped |
 | **Code execution** | `localCodeRunner(opts?)` | `agentfootprint/providers` | none (`node:child_process`) | Shipped — **isolation, not a sandbox** |
 | **Telemetry — a collector you run** | `otelObservability({ tracer })` | `agentfootprint/observe` | `@opentelemetry/api` | Shipped — BYO tracer |
-| **Telemetry — no collector at all** | `fileObservability({ path })` | `agentfootprint/observe` | none (`node:fs`) | **New in 9.8.0** — contract-shaped and tested; awaiting field use |
+| **Telemetry — no collector at all** | `fileObservability({ path })` | `agentfootprint/observe` | none (`node:fs`) | **Field-validated** — an independent field trial, 2026-08 |
 | **Telemetry — an evidence record** | `auditExport()` | `agentfootprint/observe` | none (`node:crypto`) | Shipped |
 | **Bug reports with the run attached** | `exportBugReport()` + `githubBugReporter({ apiBase })` | `agentfootprint/observe` | none — plain `fetch`, and a zip writer with no zlib | **New in 9.9.0** — works fully on-premises, including GitHub Enterprise Server via `apiBase`. See [File a bug with the run attached](doc:file-a-bug) |
 | **Credentials — dev / small fixed set** | `staticTokens(map)` | `agentfootprint/security` | none | Shipped |
@@ -258,6 +258,19 @@ NDJSON on a local disk, one `JSON.stringify(event)` per line, in the same
 envelope `cloudwatchObservability` puts in a log event — so a query written
 against one reads the other, and Filebeat / Fluent Bit / Vector / `jq` all read
 it already.
+
+<Callout type="info" title="Field-validated — an independent field trial, 2026-08">
+This one is off the "awaiting field use" rung. In an independent trial on live
+infrastructure, a real agent run on Node 22 wrote its stream through this sink and
+the file was **parsed back and asserted**: 30 events, including
+`agentfootprint.agent.turn_start` / `.turn_end`, `agentfootprint.stream.llm_start`
+/ `.llm_end` and `agentfootprint.stream.tool_start` / `.tool_end`. The same trial
+also read this library's events out of Cloud Logging and Cloud Trace, so the three
+sinks were checked against one another rather than each on its own word.
+
+What that does **not** claim: sustained production traffic, rotation behaviour at
+scale, or a disk-full path. Those are still the tests' word, not the field's.
+</Callout>
 
 ```ts
 import { fileObservability } from 'agentfootprint/observe';
@@ -469,7 +482,7 @@ Honest gaps, so nobody discovers them at integration time:
 | `httpHost` / `nodeHost` + `sqliteSessions` + an OpenAI-compatible gateway | Shipped — verified in a production field deployment (the deployment SHAPE; see the callout above) |
 | `localCodeRunner` | Shipped — isolation, not a sandbox |
 | `otelObservability`, `auditExport`, `composeObservability` | Shipped |
-| `fileObservability` | **9.8.0** — contract-shaped and tested; awaiting field use |
+| `fileObservability` | **Field-validated** — validated in an independent field trial, 2026-08: a live agent run on Node 22 wrote 30 asserted events as NDJSON and the file parsed back with every required event present |
 | `staticTokens`, the `CredentialProvider` port | Shipped |
 | `vaultCredentials` (token auth, KV v2, no leases) | **9.8.0** — contract-shaped and tested; awaiting field use |
 | `mcpClient` stdio + Streamable HTTP, `mcpServe` | Shipped |

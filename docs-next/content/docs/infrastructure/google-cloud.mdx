@@ -23,6 +23,22 @@ has passed. Nothing here builds on it. The live SDK is **`@google/genai`**, and 
 is the only Google package agentfootprint loads.
 </Callout>
 
+<Callout type="info" title="Where the evidence on this page comes from">
+Several rows below are marked **field-validated — an independent field trial,
+2026-08**. That is one specific thing: the adapter answered a real request from
+the real service, in a live billing-enabled Google Cloud project, run by someone
+who is not the author of this library, against the published package. The trial
+ran `agentfootprint@9.25.0` on Node 22 with `@google/genai@2.16.0`, created a
+dedicated project, and deleted every resource afterwards.
+
+It is not "verified in a production field deployment" — no adapter on this site
+carries that phrase, and this one does not either; a trial is not sustained
+production traffic. What it *does* buy you is that the failures below are
+**observed**, not anticipated: the door/model matrix, the Agent Runtime recipe
+and the billing boundary are that trial's findings written down, including the
+four things it could not make work.
+</Callout>
+
 ## Service → adapter map
 
 Every row: what it is called, which adapter fills it, which door exports it, which
@@ -30,14 +46,14 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 
 | Google service | Adapter | Door | Peer dep | Ops covered | Status | Capability page |
 |---|---|---|---|---|---|---|
-| **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **9.13.0** — contract-shaped and tested; awaiting field use | [Gemini](doc:gemini) |
-| **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **9.13.0** — contract-shaped and tested; awaiting field use | [Embedders](doc:embedders) |
-| **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
-| **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | Shipped — the adapter is the existing one; the Google wiring is documented below | [Observability sinks](doc:observability-sinks) |
-| **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | 🟡 Should work unchanged; **whether the gateway demands a client certificate is unverified** | [Tools & gateways](doc:tools-and-gateways) |
-| **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .patch / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. **Not** the session EVENT log — one envelope per session, not a per-turn append | **contract-shaped and tested; awaiting field use** | [Hosting & runtime](doc:hosting-and-runtime) |
-| **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **contract-shaped and tested; awaiting field use** | [Memory & stores](doc:memory-and-stores) |
-| **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 Not shipped — blocked on one live probe; run on Cloud Run with `httpHost` meanwhile | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **Field-validated on the Vertex door** — an independent field trial, 2026-08: a real two-call tool loop and real streaming on `gemini-2.5-flash`. **Not every door/model pair works** — read [the matrix](#the-doormodel-matrix) before you pick one | [Gemini](doc:gemini) |
+| **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **Field-validated on the Vertex door** — 2026-08: `gemini-embedding-001` at 768 dimensions, indexed through `defineRAG`. The Gemini-API door was blocked by billing, not by code — see [the matrix](#the-doormodel-matrix) | [Embedders](doc:embedders) |
+| **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **Field-validated** — 2026-08: nine live checks against a real bucket, including scope isolation, native streaming, TTL expiry, budget eviction and the sanitized 404 | [Artifacts](doc:artifacts) |
+| **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | **Field-validated as the corrected recipe below** — 2026-08: one six-span trace read back from Cloud Trace. The recipe this page shipped before that trial did **not** work; what changed is written out in full | [Observability sinks](doc:observability-sinks) |
+| **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this transport has no certificate, signer or custom-`fetch` hook — see below | [Tools & gateways](doc:tools-and-gateways) |
+| **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .patch / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. **Not** the session EVENT log — one envelope per session, not a per-turn append | **contract-shaped and tested; awaiting field use.** The *service* was field-checked in 2026-08 — two user-bound sessions, states and events persisted and filtered — but through raw REST, not through this adapter, which shipped after that trial | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **contract-shaped and tested; awaiting field use.** Same split: the 2026-08 trial proved the *service* (create / list / exact-scope / similarity, distances and all) through raw REST; the adapter shipped after it | [Memory & stores](doc:memory-and-stores) |
+| **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 No adapter — but **Node deploys**, verified: the 2026-08 trial ran a Node container through both Agent Runtime routes. The [recipe](#agent-runtime-on-nodejs--the-verified-recipe) is below; run it on Cloud Run instead if you would rather not own the contract | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Vector Search** (v1 `Index` / `IndexEndpoint`) | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — needs a deployed IndexEndpoint, so there is no cheap path to verify one | [Memory & stores](doc:memory-and-stores) |
 | **Identity** (ADC, workload identity federation, impersonation) | `googleIdentity()` | `agentfootprint/security` | `google-auth-library` | Google access tokens for Google APIs, from ADC / WIF / an impersonated service account. **Not** `mode: 'user'` — refused by name, since Google's per-user vault has no Node surface | **contract-shaped and tested; awaiting field use** | [Identity & credentials](doc:identity-and-credentials) |
 | **Agent Identity auth manager** (3-legged OAuth, API-key vault) | — | — | — | — | ⏸️ **Parked** — Preview with no Node surface as of 2026-08-12 | — |
@@ -46,14 +62,24 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 | **Model Armor / Semantic Governance** | — | — | — | — | ⛔ **No adapter, deliberately** — enforced at the Gateway, in front of your process | [Governance & policy](doc:governance-and-policy) |
 | **Control plane** (every `Create*`) | — | — | — | — | 🔴 Bridge it yourself — `googleapis`, gcloud or Terraform | — |
 
-<Callout type="warn" title="What “contract-shaped and tested; awaiting field use” means here">
-Every adapter on this page is built against a really-installed SDK, with its
-calls exercised through an injected `_client` seam, plus a **surface pin** that
-checks the method names — and the API version — against that installed package
-on every test run. **None of them has yet answered a request from Google in a
-real project.** That is an honest rung, and it is the one they are all on. No
-adapter on this page — and none anywhere on this site — is described as
-*verified in a production field deployment*.
+<Callout type="warn" title="The two rungs on this page, and the gap between them">
+Every adapter here is built against a really-installed SDK, with its calls
+exercised through an injected `_client` seam, plus a **surface pin** that checks
+the method names — and the API version — against that installed package on every
+test run. That is the **contract-shaped and tested; awaiting field use** rung,
+and it means exactly what it says: *this one has not yet answered a request from
+Google in a real project.* `agentEngineSessions`, `memoryBankStore` and
+`googleIdentity` are all on it.
+
+**Field-validated** is one rung higher and is claimed only where the trial above
+actually made the call: `gemini()` and `geminiEmbedder()` on the **Vertex** door,
+`gcsArtifacts()`, the corrected Cloud Trace recipe, and `gatewayTransport` +
+`mcpClient` against an ordinary bearer gateway. Where the trial exercised the
+*Google service* but not this library's adapter, the row says so rather than
+borrowing the credit.
+
+No adapter on this page — and none anywhere on this site — is described as
+*verified in a production field deployment*. A trial is not production traffic.
 </Callout>
 
 ## The surface pin, and the version nobody states
@@ -121,14 +147,67 @@ streaming-usage law — is on **[Gemini](doc:gemini)**.
 <Callout type="warn" title="The OpenAI-compatible endpoint is a demo path, and this page says so">
 Google publishes an OpenAI-compatible endpoint, and `openai({ baseURL, apiKey })`
 does reach it. It is not a supported production path here, for four stated
-reasons: its bearer token **expires after an hour** with no refresh home in
-`OpenAIProviderOptions`; its tool `parameters` field is **OpenAPI, not JSON
-Schema**, so `$ref` / `oneOf` / `additionalProperties` diverge silently;
+reasons: its bearer token **expires after an hour** (`apiKey` now takes a
+callback re-read before every request, which is a mitigation, not a fix — a
+stream keeps the key it started with); its tool `parameters` field is **OpenAPI,
+not JSON Schema**, so `$ref` / `oneOf` / `additionalProperties` diverge silently;
 unsupported parameters are **ignored rather than refused**; and its documented
 response carries **no cached- or reasoning-token counts**, so `usage.cacheRead`
 and `usage.thinking` can only ever be undefined behind it. `gemini()` answers all
 four. Use the compat endpoint to try something in ten seconds, not to ship.
 </Callout>
+
+## The door/model matrix
+
+Two doors and two model generations do **not** make four working combinations.
+The 2026-08 trial ran all of them from one machine, on the same day, with the
+same package, and got four different answers. This table is that result — every
+cell is an outcome somebody observed, not a capability statement.
+
+| Door | `gemini-2.5-flash` | `gemini-3.1-flash-lite` (current) | `gemini-embedding-001` |
+|---|---|---|---|
+| **Vertex** — `gemini({ project, location })`, ADC | ✅ **Works, and is the only field-verified generate path**: two-call tool loop, real streaming, honest usage | ⚠️ **Fixed in the code, not yet re-proven in the field.** The trial's tool loop failed on the second call — `400 INVALID_ARGUMENT`, *"Function call is missing a thought_signature in functionCall parts"* — **after the tool had already run**. The adapter now carries that signature back byte-for-byte; that fix is tested, and no live re-run has confirmed it | ✅ **Works** — 768 dimensions through ADC, indexed and retrieved |
+| **Gemini API** — `gemini({ apiKey })`, an AI Studio key | ⛔ `404 NOT_FOUND` — *"no longer available to new users"*. It **used** to be this door's default too; it is not any more, and the `'gemini'` shorthand is refused here by name rather than sending it | ⚠️ Reachable, but the trial's call returned `429 RESOURCE_EXHAUSTED` — *prepayment credits depleted*. That is a [billing boundary](#the-billing-boundary), not a code failure | ⚠️ Same `429`, same reason |
+| **OpenAI-compatible** — `openai({ baseURL, apiKey: <OAuth token> })` | ✅ with a **current** token; ⛔ `401` the moment it expires. Pass `apiKey` as a **callback** and the token is re-read before every request — the answer to the trial's 401, and still a demo path for the three other reasons above | — | — |
+
+<Callout type="warn" title="Three traps, all of them observed">
+**1 — The default model is a Vertex default, and the other door has none.**
+`model: 'gemini'` is a shorthand for *this door's default*. On Vertex that
+resolves to `gemini-2.5-flash`, the working choice. On the Gemini API door there
+is deliberately **no** default and the shorthand is **refused by name**, quoting
+the 404 the trial got and naming both fixes — because the alternative is a second
+silent default that nobody has ever run. **Name your model explicitly on the
+Gemini API door.**
+
+**2 — The working model has a retirement date.** Google lists `gemini-2.5-flash`
+for retirement on **2026-10-16**, so "use 2.5 on Vertex" is a *dated*
+recommendation rather than a settled one. The current-generation cell beside it is
+the one whose tool loop this library had to fix after the trial and has not yet
+re-run live — so if your agent calls tools, run **your** tool loop against the
+current model yourself, well before that date.
+
+**3 — Tokens expire in an hour, and only one door survives it.** A Google OAuth
+access token lives about an hour. `gemini({ project, location })` reads ADC
+*through the SDK*, so refresh happens underneath you — the trial proved this
+directly by force-expiring an injected `AuthClient`, calling `getAccessToken()`
+again and completing a live model call with the refreshed one. The
+OpenAI-compatible door captures a **string** at construction: it worked with a
+fresh token and returned `401` with an expired one, in the same script. Pass
+`apiKey` as a **callback** there and it is re-read before every request — which
+answers the 401, but not the other three reasons that door stays a demo path, and
+not a stream already in flight.
+</Callout>
+
+**Regional hosts, said once for the whole column.** `location` is not decoration.
+`gemini()` and `geminiEmbedder()` accept `global` (the multi-region endpoint, and
+what the trial used). Sessions and memories are **regional** resources whose
+generated client would otherwise dial the global `aiplatform.googleapis.com`, so
+the adapters derive a regional `rootUrl` from `location` for you. Agent Runtime is
+regional in its URL (`https://<REGION>-aiplatform.googleapis.com/...`). Cloud
+Trace's OTLP endpoint has both forms — `telemetry.googleapis.com` and
+`telemetry.<REGION>.rep.googleapis.com`. Mixing regions does not fail loudly; it
+bills egress and, for the session store, looks like a conversation that is not
+there.
 
 ## Gemini embeddings
 
@@ -167,6 +246,22 @@ Full rows and the shared `maxInputChars` machinery: **[Embedders](doc:embedders)
 The [claim-check store](doc:artifacts) in a Cloud Storage bucket, and the second
 Google package this library loads. Same five-verb port as every other adapter — a
 one-line swap from `fileArtifacts`.
+
+<Callout type="info" title="Field-validated — an independent field trial, 2026-08">
+Nine checks against a real bucket (uniform bucket-level access, public-access
+prevention on) with `@google-cloud/storage@7.22.0`: JSON put/head/get with a
+verified SHA-256; a wrong tenant, principal **and** conversation each reading
+`null` or an empty list rather than another scope's object; cursor pagination
+across two distinct pages; native `putStream`/`getStream` preserving every byte;
+a TTL expiring and lazy-deleting; `maxCountPerScope` evicting oldest-first with
+reason `max-count`; an oversized label refused **before** upload against the
+documented 8 KiB metadata budget; a missing bucket reading as the documented
+ambiguous `null` on a point read while a write raised a **sanitized** 404 that
+did not leak the object key or scope; and delete being idempotent.
+
+Every one of those is a law stated below. That is the point of the list: they
+were checked in the field in the same words the docs use.
+</Callout>
 
 ```ts
 import { gcsArtifacts } from 'agentfootprint';
@@ -294,14 +389,35 @@ It was designed and then not built. Such a factory would construct an OTel
 (`@opentelemetry/sdk-trace-node`, an OTLP exporter, `@grpc/grpc-js`) and attach a
 `GoogleAuth` header — about twenty lines of wiring behind four new optional peer
 dependencies, each of which would need its own pin row and its own version-drift
-story. A convenience that restates `npm install` is not worth the surface. The
-recipe below is the whole thing; copy it.
+story. A convenience that restates `npm install` is not worth the surface.
 </Callout>
 
+<Callout type="warn" title="This recipe was wrong until 2026-08, and it was wrong in five ways at once">
+An earlier version of this page said *"the recipe below is the whole thing; copy
+it."* The 2026-08 field trial copied it, and it did not initialize — then, once
+it did, it produced **six unrelated traces with zero child spans**. Every
+correction below is a thing that trial had to change to get one readable trace
+into Cloud Trace, and the version numbers are the ones it ran. A recipe that
+ships unpinned against a mid-major SDK is a recipe with a shelf life; this one
+now states its shelf.
+</Callout>
+
+**Pin the versions.** An unpinned install is exactly where two of the five
+failures came from:
+
 ```bash
-npm install @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-grpc \
-  @grpc/grpc-js google-auth-library
+npm install @opentelemetry/api@1.9.1 @opentelemetry/sdk-trace-node@2.10.0 \
+  @opentelemetry/exporter-trace-otlp-grpc@0.221.0 @grpc/grpc-js@1.14.4 \
+  google-auth-library@9.15.1
 ```
+
+`google-auth-library@11` is the trap: `getRequestHeaders()` there answers a WHATWG
+`Headers` object, `@grpc/grpc-js` reads it with `Object.keys()`, finds nothing,
+and your exporter ships **unauthenticated** — surfacing as
+`7 PERMISSION_DENIED: Method doesn't allow unregistered callers` from
+`forceFlush()`, long after the code that caused it. Google's own current guidance
+is `9.15.1`, and the recipe below hands the auth client to gRPC rather than
+copying headers out of it at all.
 
 ```ts
 import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
@@ -313,29 +429,44 @@ import { otelObservability } from 'agentfootprint/observe';
 const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
 const client = await auth.getClient();
 
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(
-  new BatchSpanProcessor(
-    new OTLPTraceExporter({
-      url: 'https://telemetry.googleapis.com',            // regional: telemetry.<REGION>.rep.googleapis.com
-      credentials: credentials.createSsl(),
-      headers: await client.getRequestHeaders(),
-    }),
-  ),
-);
+// 1. OTel 2.x takes processors in the CONSTRUCTOR — `provider.addSpanProcessor` was removed.
+const provider = new NodeTracerProvider({
+  spanProcessors: [
+    new BatchSpanProcessor(
+      new OTLPTraceExporter({
+        url: 'https://telemetry.googleapis.com', // regional: telemetry.<REGION>.rep.googleapis.com
+        // 2. TLS *and* renewable Google call credentials, combined — not `createSsl()` plus headers.
+        credentials: credentials.combineChannelCredentials(
+          credentials.createSsl(),
+          credentials.createFromGoogleCredential(client),
+        ),
+      }),
+    ),
+  ],
+});
+
+// 3. Register globally, so the whole process shares one active context.
 provider.register();
 
+// 4. Do NOT pass `tracer`. Omitted, the strategy resolves the global tracer and its
+//    nested spans inherit the active context. Passing `provider.getTracer(...)` here
+//    produced six disconnected trace IDs and zero children.
 agent.enable.observability({
-  strategy: otelObservability({ serviceName: 'my-agent', tracer: provider.getTracer('agentfootprint') }),
+  strategy: otelObservability({ serviceName: 'my-agent', genAiSpanNames: true }),
 });
 ```
 
-Two environment variables complete it, and both are Google's own instructions:
+Two environment variables complete it:
 
 ```bash
 OTEL_RESOURCE_ATTRIBUTES=gcp.project_id=<PROJECT_ID>
-OTEL_EXPORTER_OTLP_HEADERS=x-goog-user-project=<PROJECT_ID>
+GOOGLE_CLOUD_QUOTA_PROJECT=<PROJECT_ID>
 ```
+
+The second is the fifth correction: quota attribution belongs in
+`GOOGLE_CLOUD_QUOTA_PROJECT`, which the auth client reads, **not** in a manually
+duplicated `x-goog-user-project` exporter header — Google's current migration
+guidance says not to set that header, and the trial's working run did not.
 
 And two Google reads only if you opt in — they are what makes its console render
 the GenAI views rather than plain spans:
@@ -346,12 +477,29 @@ OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY
 ```
 
 <Callout title="Our attribute names are the ones Google's console is looking for">
-`otelObservability({ genAiSemconvNames: true })` emits the OpenTelemetry **GenAI
-semantic conventions**, and Google's agent-observability dashboards are keyed on
-exactly those — sessions, turns, token usage, tool latency. There is no
-auto-instrumentation for `@google/genai` on npm, so **our provider hooks are the
-instrumentation**: the events you get are the ones the library already records,
-not a second parallel trace.
+`otelObservability({ genAiSpanNames: true })` emits the OpenTelemetry **GenAI
+semantic-convention span names**, and Google's agent-observability dashboards are
+keyed on those — sessions, turns, token usage, tool latency. (The `gen_ai.*`
+**attributes** are emitted either way; the flag renames the spans, which is why it
+is opt-in: existing dashboards key on the legacy names. The option is
+`genAiSpanNames` — this page called it `genAiSemconvNames` until 2026-08, a name
+that never existed and would have been silently ignored as an unknown property.)
+There is no auto-instrumentation for `@google/genai` on npm, so **our provider
+hooks are the instrumentation**: the events you get are the ones the library
+already records, not a second parallel trace.
+</Callout>
+
+**Verified shape:** six spans in one hierarchy — one root, two iterations, two
+chat calls, one tool call, five of them with a parent — read back from Cloud Trace
+by trace id. Prompt text and tool-result text were confirmed **absent** from the
+serialized spans.
+
+<Callout type="info" title="A 404 right after export is not a failed export">
+Cloud Trace reads are eventually consistent. The trial's first trace returned
+`404` for about a minute after a successful flush and `200` with all six spans
+afterwards. If you write a verification step, retry **only** `404`, bound it
+(60 seconds is enough), and fail immediately on every other status — a retry loop
+that swallows `403` teaches you nothing.
 </Callout>
 
 The port, the composition and delivery axes, and what each sink drops:
@@ -444,6 +592,21 @@ conversation that nothing reads.
   every non-empty user id would hand back other people's conversation ids,
   timestamps and message counts.
 
+<Callout type="warn" title="`Session.userId` is metadata, not authorization — the door is yours">
+Field-checked, 2026-08: one project ADC principal read **both** Alice's and Bob's
+sessions directly, by name, without presenting either end user's identity.
+`userId` is immutable ownership *metadata* that the service records and filters
+on; it is not an access-control boundary, and any principal with project
+credentials sees every session under the engine.
+
+So binding the authenticated person to the conversation is the host's job, not the
+store's — which is exactly what
+[`identity: { verify }`](doc:hosting-and-runtime) does on `standingAgent`: the
+token is verified **before** the run's scope is composed, and the session-history
+wire ops refuse outright on a door with no verifier. Do not let a raw
+`sessionId` off the wire select a conversation.
+</Callout>
+
 **`ttl` has a 24-hour floor.** It is a knob for keeping conversations *longer*;
 the service rejects anything shorter, so a one-hour session is not available at
 any price.
@@ -483,8 +646,9 @@ something you can see.
 
 <Callout type="warn" title="The score is a DISTANCE, and smaller is closer">
 The port's `ScoredEntry.score` is a cosine similarity, where **higher** is closer.
-The service reports a **distance**, where **smaller** is closer — its own
-documentation says so. Forwarded unconverted, retrieval returns the *least*
+The service reports a **distance** (Euclidean), where **smaller** is closer — its
+own documentation says so, and the 2026-08 field check read finite distances back
+from a live bank to confirm the scale. Forwarded unconverted, retrieval returns the *least*
 relevant memories first, with a confident-looking number in the right range that
 no threshold and no eyeball can separate from a working search.
 
@@ -561,6 +725,17 @@ scope is refused (`MemoryScopeConflictError`) rather than written through. That
 read is what makes the steady-state `put` two calls instead of one; it buys a
 tenant check that a bare `patch` cannot give you.
 
+<Callout type="info" title="A retrieved memory's `name` is not the name you wrote">
+Field-checked, 2026-08: `create` and `list` preserved caller-chosen memory ids
+(`alice-orbital-code` came back as itself), while **similarity retrieval returned
+generated numeric resource names for the same facts**. If you are writing your own
+integration over this API, do not assume a retrieved `name` round-trips to the key
+you wrote — reconcile on the `fact` and the scope, or keep your own index. (This
+adapter addresses rows by scope + entry id and re-checks the stored scope on the
+way back, so the instability does not reach the `MemoryStore` port; it will reach
+you the moment you call the API directly.)
+</Callout>
+
 **Writes wait.** `create`, `patch` and `delete` are long-running operations, so
 every write blocks until the service says `done` — same reasoning as the session
 store, same `operationTimeoutMs`.
@@ -622,12 +797,25 @@ refresh logic keeps it fresh, and `expiresAt` is reported on every issued
 credential.
 
 It bites in exactly one place, and it looks like it should work: **filling the
-OpenAI-compatible endpoint's `apiKey` with a token from here.** It works for an
-hour and then every call 401s, because `apiKey` is a *string* captured when the
-provider is constructed and a long-lived agent process outlives it. There is no
-refresh home in `OpenAIProviderOptions` for a credential that expires. Use the
-native `gemini()` provider, which reads ADC through the SDK and refreshes
-underneath you.
+OpenAI-compatible endpoint's `apiKey` with a token from here.** A *string* is
+captured when the provider is constructed, and a long-lived agent process
+outlives it — which a field trial measured directly: the same call that returned
+an answer on a current token returned `401` on an expired one.
+
+The fix is one character of shape — pass a **function** instead of a string, and
+it is re-read before every request:
+
+```ts
+openai({
+  baseURL: 'https://…/openapi',
+  apiKey: async () => (await client.getAccessToken()).token ?? '',
+});
+```
+
+The boundary is the **call**, not the chunk: a stream keeps the key it started
+with, because nothing can re-authenticate a socket that is already open. And the
+simpler answer is still the native `gemini()` provider, which reads ADC through
+the SDK and refreshes underneath you.
 </Callout>
 
 **Set `services` when Google is not your only credential.** Unset, this provider
@@ -644,30 +832,162 @@ every sink. So the error's NAME and the operation come through and its text does
 not, and the original is never attached as `cause` — that would travel into every
 serializer that walks own properties.
 
-## Hosting — one contradiction, one probe
+## Agent Runtime on Node.js — the verified recipe
 
-Agent Runtime's container contract is small and fully documented: listen on
-`0.0.0.0:8080`, implement `POST /api/reasoning_engine` taking
-`{ class_method, input }` and answering `{ output }`, plus
-`POST /api/stream_reasoning_engine` answering NDJSON. That is a near-exact fit for
-the `AgentHost` port, and it is roughly the same shape `agentCoreRuntimeHost()`
-already implements for AWS.
+**The contradiction is settled.** Google's deploy page says *"Agent Runtime
+deployment only supports Python"*; its runtime-contract page says to build your
+container *"in the programming language and server framework of your choice"* and
+ships a Node build script. This page used to say the question was open and gate an
+adapter on a probe. **The probe ran** — an independent field trial, 2026-08 —
+and the answer is:
 
-It is not shipped because **Google's own documentation contradicts itself** on
-whether a Node container can be deployed at all: the deploy page says "Agent
-Runtime deployment only supports Python", while the runtime-contract page says to
-build your container "in the programming language and server framework of your
-choice" and ships a Node-20 build script. Designing an adapter on top of an
-unresolved contradiction is how three AWS adapters once shipped calling operations
-that did not exist. **One live probe settles it** — a thirty-line Node container
-implementing the unary route — and the adapter follows the answer, not the guess.
+> Current Agent Runtime **does support Node.js through the custom-container API
+> and runtime contract.** It does **not** follow that the older Python
+> object/source deployment path accepts Node source; that path is still
+> Python-specific.
 
-The contradiction blocks the **host** boundary only. Agent Runtime's *sessions*
-are an ordinary regional REST API with no deployability question attached, which
-is why `agentEngineSessions` ships while the host adapter does not: you can keep
-conversations in Agent Runtime today from a process running anywhere.
+So the "only supports Python" sentence describes the **SDK packaging** path, and is
+wrong if you read it as a statement about the custom-container runtime. The trial
+created a Reasoning Engine from a Node image, called its unary `query` and its
+managed `streamQuery`, and read this library's own events back out of Cloud
+Logging.
 
-Meanwhile, Cloud Run is the ordinary path and needs nothing new:
+### The container contract
+
+Listen on `0.0.0.0:8080` and serve two routes:
+
+| Route | Body in | Body out |
+|---|---|---|
+| `POST /api/reasoning_engine` | `{ class_method, input }` | `{ output }` |
+| `POST /api/stream_reasoning_engine` | the same | **NDJSON** — one JSON object per line |
+
+The unary route is a `httpHost` dialect — a `wire` is exactly the object that
+turns one deployment's JSON into the port's vocabulary, so this is configuration
+rather than an adapter:
+
+```ts
+import { httpHost, standingAgent, type HttpWire } from 'agentfootprint/hosting';
+
+const agentRuntimeWire: HttpWire = {
+  readRequest: ({ body }) => {
+    const input = body.input as { message?: string; session_id?: string } | undefined;
+    return { input: String(input?.message ?? ''), sessionId: input?.session_id };
+  },
+  health: (uptimeMs) => ({ status: 'ok', uptimeMs }),
+  output: (output) => ({ output }),
+  failure: (message, code) => ({ error: { message, ...(code ? { code } : {}) } }),
+  chunk: (text) => ({ output: text }),
+};
+
+const handle = await standingAgent({
+  agentFactory: () => buildAgent(),
+  sessions,
+  host: httpHost({
+    name: 'agentRuntime',
+    wire: agentRuntimeWire,
+    invokePath: '/api/reasoning_engine',
+    healthPath: '/health',
+  }),
+});
+```
+
+<Callout type="warn" title="No adapter ships, and the reason is the second route">
+`httpHost` serves **one** invoke path, and its streamed replies are Server-Sent
+Events. Agent Runtime's second route wants **NDJSON at a different path**, so a
+shipped `agentRuntimeHost()` would have to grow the host a second route and a
+second framing — a change to the port's shape that is worth making once the demand
+is real, not to close a docs gap. Until then: the wire above serves
+`/api/reasoning_engine`, and `/api/stream_reasoning_engine` is a route you write
+beside it over `agent.stream(...)`, one `JSON.stringify(...) + '\n'` per chunk.
+The trial's container did exactly that, and its managed `streamQuery` returned
+seven chunks.
+</Callout>
+
+### The deployment, step by step
+
+**1. Build and push the image.** The trial used its repository `Dockerfile`, built
+by Cloud Build into Artifact Registry as a side effect of a Cloud Run source
+deploy. Any push to Artifact Registry works; what matters downstream is the
+**digest**.
+
+**2. Grant the managed service agent read access to your repository — do this
+first.** Skipping it is the single most expensive mistake on this path, because
+the failure is mute:
+
+```bash
+gcloud artifacts repositories add-iam-policy-binding cloud-run-source-deploy \
+  --project=<PROJECT_ID> --location=us-central1 \
+  --member='serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-aiplatform-re.iam.gserviceaccount.com' \
+  --role='roles/artifactregistry.reader'
+```
+
+**3. Create the Reasoning Engine** — `POST` to the **regional** host:
+
+```
+POST https://us-central1-aiplatform.googleapis.com/v1/projects/<PROJECT_ID>/locations/us-central1/reasoningEngines
+```
+
+```json
+{
+  "displayName": "my-node-agent",
+  "spec": {
+    "containerSpec": {
+      "imageUri": "us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO>/<IMAGE>@sha256:<DIGEST>",
+      "port": 8080
+    },
+    "deploymentSpec": {
+      "resourceLimits": { "cpu": "1", "memory": "1Gi" },
+      "minInstances": 0,
+      "maxInstances": 1,
+      "containerConcurrency": 3
+    },
+    "classMethods": [
+      { "name": "query", "api_mode": "", "parameters": { "type": "object", "properties": { "message": { "type": "string" } }, "required": ["message"] } },
+      { "name": "stream_query", "api_mode": "stream", "parameters": { "type": "object", "properties": { "message": { "type": "string" } }, "required": ["message"] } }
+    ],
+    "agentFramework": "custom"
+  }
+}
+```
+
+`classMethods` is what the managed API exposes: `api_mode: ""` is the unary
+`:query`, `api_mode: "stream"` is `:streamQuery`. `agentFramework: "custom"` is
+the any-language door.
+
+**4. Call it.** `POST .../reasoningEngines/<ID>:query` runs the unary route;
+`POST .../reasoningEngines/<ID>:streamQuery` runs the streaming one. The trial's
+unary call completed a real two-call tool loop and returned the tool's answer;
+the streamed call returned seven chunks totalling 660 characters.
+
+**5. Read the logs.** Agent Runtime logs under resource type
+`aiplatform.googleapis.com/ReasoningEngine` — not `cloud_run_revision`. Console
+JSON from this library's observability sink arrives as queryable `jsonPayload`,
+so both LLM calls, `agentfootprint.stream.tool_end` and the final
+`agentfootprint.agent.turn_end` are one filter away.
+
+### What failed on the way, and why it will fail for you too
+
+- **A reserved environment variable rejects the whole request.**
+  `spec.deploymentSpec.env` containing `GOOGLE_CLOUD_PROJECT` returns
+  `400 FAILED_PRECONDITION`: *"Environment variable name 'GOOGLE_CLOUD_PROJECT' is
+  reserved."* The runtime supplies its own project context. Remove every reserved
+  Google variable; pass your own under your own names.
+- **No Artifact Registry permission looks like a broken container.** Before step 2
+  was applied, the accepted deployment terminated with a generic
+  *"failed to start and cannot serve traffic"*, produced **no container
+  stdout/stderr at all**, and rolled the resource back — so `reasoningEngines.get`
+  answered `404` and there was nothing left to inspect. The identical request
+  succeeded once the service agent could read the image. If your first deploy dies
+  with no logs, suspect the pull before you suspect your code.
+
+### The ordinary path is still Cloud Run
+
+Nothing above is required to run this library on Google Cloud. The trial also
+deployed the same image to a **private** Cloud Run service — dedicated runtime
+service account with `roles/aiplatform.user`, `--no-allow-unauthenticated`,
+`--min=0 --max=1` — and ran the same tool loop and the same incremental stream
+across the network (10 NDJSON chunk events over 11 network reads, first chunk at
+926 ms). Cloud Run needs nothing new from this library:
 
 ```ts
 import { standingAgent, nodeHost, agentEngineSessions } from 'agentfootprint/hosting';
@@ -686,6 +1006,43 @@ const handle = await standingAgent({
 Swap `agentEngineSessions` for `sqliteSessions({ file: '/data/sessions.db' })` if
 you are pinned to one instance with a persistent disk and would rather not create
 a reasoning engine — it is one argument, which is the entire point of the port.
+
+<Callout type="warn" title="A stream that delivers one chunk is usually a thinking budget, not a broken stream">
+The trial's first streaming run over Cloud Run delivered exactly **one** chunk and
+stopped with `stopReason: 'max_tokens'`. The usage said why:
+`{ input: 21, output: 9, thinking: 243 }` — a 256-token budget, 243 of which the
+model spent thinking, leaving nine tokens of visible answer. Nothing was wrong
+with the stream. For a visible-output test set `thinking: { budget: 0 }` and give
+the answer real room; the same test then delivered ten chunks. `usage.thinking` is
+the number that tells you this, and [`gemini()`](doc:gemini) reports it as its own
+field — which is one of the concrete reasons to prefer it over the
+OpenAI-compatible endpoint, where that count does not exist.
+</Callout>
+
+## Agent Gateway — the MCP transport works; Google's identity path does not
+
+Two different claims, and this page used to make only the flattering one.
+
+**What is verified.** `gatewayTransport()` + `mcpClient()` against an **ordinary
+bearer-token** gateway: the 2026-08 trial served a real agentfootprint tool over
+Streamable HTTP MCP, discovered it through the transport, called it, and round-
+tripped the result. Five HTTP requests carried five **different** freshly vended
+credentials, and none was retained on the transport — the token-vending design
+doing exactly what it claims.
+
+**What is refuted.** Google's current Agent Gateway documentation states that
+**agent identities use mTLS and DPoP**. `GatewayTransportOptions` carries a URL, a
+`CredentialProvider`, service, scopes, mode and static headers — it can vend
+*headers*. It cannot present a client certificate, sign a DPoP proof, or hand you
+a `fetch` to do either. So the earlier *"should work unchanged"* line was wrong for
+the identity-enforced Google path, and the *"whether the gateway demands a client
+certificate is unverified"* hedge has an answer now: **it does.**
+
+**The seam if you need it today.** The generic `http` MCP transport *does* accept a
+custom `fetch`, which is where a Google-specific signer belongs — you build the
+mTLS agent and the DPoP proof, this library carries the MCP session over it. That
+is bring-your-own, and it is offered as a seam rather than described as support.
+See [Tools & gateways](doc:tools-and-gateways).
 
 ## Governance — enforced at the Gateway, not here
 
@@ -707,8 +1064,19 @@ adapter will be built for Google either.** For rules you own, use
 Absences are facts, so here they are stated rather than discovered:
 
 - **No `googleCloudTracer()` factory** — a docs recipe instead, argued above.
-- **No Agent Runtime host adapter**, pending the Node-deployability probe. The
-  session store for it ships; the container contract does not.
+- **No Agent Runtime host adapter.** Not because the question is open — the
+  Node-deployability probe [answered it](#agent-runtime-on-nodejs--the-verified-recipe) —
+  but because the contract's second route is NDJSON at its own path, which
+  `httpHost` does not serve. The unary route is a `wire` today; the recipe is
+  above.
+- **No mTLS or DPoP on `gatewayTransport`**, which is what Google's Agent Gateway
+  requires of an agent identity. Header vending only; the generic `http`
+  transport's custom `fetch` is the seam.
+- **No thought signature on a plain TEXT answer.** The function-call signature —
+  the one whose absence broke a current-model tool loop in the field — *is*
+  carried back byte-for-byte. A signature attached to a text part with no
+  function call is not: the port's assistant turn is a string and has nowhere to
+  keep one. Named, rather than half-handled quietly.
 - **No user-delegated credential.** `googleIdentity` vends the deployment's own
   identity and refuses `mode: 'user'` by name — Google's per-user token vault is
   Preview with no Node surface, and a machine token in its place would be a
@@ -746,21 +1114,77 @@ No invented numbers — the shapes, so you can price them against your own tarif
 - **Egress**: all three are regional. Running your process in the same region as
   the reasoning engine keeps these calls off the cross-region path.
 
+## The billing boundary
+
+The single most surprising thing the 2026-08 trial hit was not an API — it was an
+invoice line that does not exist where everyone assumes it does.
+
+<Callout type="warn" title="Your Google Cloud billing account does not pay for the Gemini API">
+The two Gemini doors sit on **two separate billing systems**. Vertex bills to the
+Cloud billing account linked to your project. The Gemini API (AI Studio) bills to
+its own **prepayment** balance, managed in AI Studio.
+
+The trial's project had billing enabled and an unspent **$300 introductory Cloud
+credit**. A valid API key, correctly restricted to
+`generativelanguage.googleapis.com`, still answered
+`429 RESOURCE_EXHAUSTED` — *"Your prepayment credits are depleted."* Nothing was
+misconfigured. The credit simply does not reach that door.
+
+So a `429` on `gemini({ apiKey })` usually means *"add prepayment in AI Studio"*,
+not *"slow down"* — and no retry policy will ever clear it. If you are on Cloud
+already, the Vertex door removes the whole question.
+</Callout>
+
+| What you use | Who bills it | What "out of money" looks like |
+|---|---|---|
+| `gemini()` / `geminiEmbedder()` with `{ project, location }` | Cloud billing account on the project | ordinary Cloud billing failures / quota errors |
+| `gemini()` / `geminiEmbedder()` with `{ apiKey }` | **AI Studio prepayment**, separate | `429 RESOURCE_EXHAUSTED`, *prepayment credits depleted* — even with Cloud credit unspent |
+| The OpenAI-compatible endpoint | Cloud billing (it is Vertex underneath) | plus a `401` the hour the token expires, which is not a billing failure and looks like one |
+| Cloud Run / Agent Runtime / Cloud Storage / Cloud Trace / Artifact Registry / Cloud Build | Cloud billing account | ordinary Cloud billing |
+
+**What a full validation actually costs.** The trial's own estimate for
+*everything* on this page — Cloud Run, an Agent Runtime deployment, container
+builds, live Gemini calls, embeddings, a GCS bucket, Memory Bank, native sessions
+and traces — was **under $0.25, probably much less**. That is deliberately
+conservative and explicitly *not* a claimed invoice: billing export was not
+configured and console totals lag. The shapes behind it:
+
+- **~95 build-seconds** across three container builds.
+- **Cloud Run** at 1 vCPU / 512 MiB, `min=0 max=1`, a handful of short requests.
+- **Agent Runtime** at 1 vCPU / 1 GiB, `minInstances=0`, alive about three minutes,
+  two requests, then deleted.
+- **Models**: a few short `gemini-2.5-flash` tool/stream/auth calls, plus four
+  768-dimensional embeddings (three documents and one query — a re-index of
+  unchanged files embedded **zero**, which is the RAG layer's incremental skip
+  paying for itself).
+- **Storage**: one small image for under an hour; one bucket with seven small
+  objects, deleted the same day.
+- **Failed calls cost nothing at the model.** The 404, the 429 and the
+  precondition rejections produced no model output.
+
+**Three resources that keep costing after you stop paying attention**, all of
+which the trial deleted explicitly: a Reasoning Engine (it exists whether or not
+it serves traffic), Artifact Registry images, and any bucket the deploy created
+for source archives. And one that cannot be undone rather than billed:
+**creating the `(default)` Firestore database permanently fixes your project's
+Firestore location.** Decide the region before the first `databases create`, not
+after.
+
 ## Status
 
 | Piece | Door | Status |
 |---|---|---|
-| `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
-| `geminiEmbedder()` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
-| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **9.25.0** — contract-shaped and tested; awaiting field use |
-| `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | contract-shaped and tested; awaiting field use |
-| `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | contract-shaped and tested; awaiting field use |
-| `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | contract-shaped and tested; awaiting field use |
+| `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **Field-validated on the Vertex door** — an independent field trial, 2026-08 (`gemini-2.5-flash`: tool loop, streaming, usage). Gemini-API door and current-generation tool calls: see [the matrix](#the-doormodel-matrix) |
+| `geminiEmbedder()` | `agentfootprint/providers` | **Field-validated on the Vertex door** — 2026-08, `gemini-embedding-001` at 768 dimensions through `defineRAG` |
+| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **Field-validated** — 2026-08, nine live checks against a real bucket |
+| `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | contract-shaped and tested; awaiting field use — the **service** was field-checked in 2026-08 through raw REST, this adapter was not |
+| `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | contract-shaped and tested; awaiting field use — same split: the **service** was field-checked in 2026-08, this adapter was not |
+| `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | contract-shaped and tested; awaiting field use. ADC **refresh** itself was field-proved in 2026-08, but through `gemini({ googleAuthOptions })` rather than through this adapter |
 | The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages, now including `@googleapis/aiplatform` |
 | `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
-| Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | Shipped — the adapter is the existing one; this page is the wiring |
-| Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | Shipped adapters; **client-certificate requirement unverified** |
-| Agent Runtime hosting | — | Not shipped — gated on one live probe |
+| Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | **Field-validated as the corrected recipe** — 2026-08, one six-span trace read back. The pre-trial recipe on this page did not work |
+| Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | **Field-validated for an ordinary bearer gateway** (2026-08). **Incompatible with Google's identity-enforced path** — that path is mTLS + DPoP, and this transport vends headers only |
+| Agent Runtime hosting | — | No adapter — but **Node deploys, verified** (2026-08). [Recipe above](#agent-runtime-on-nodejs--the-verified-recipe) |
 | Agent Retrieval · Agent Identity auth manager | — | Parked 2026-08-12 — no Node surface |
 | `SecurityStrategy` for Model Armor / Semantic Governance | — | **Will not be built** — gateway-enforced, no data-plane call |
 

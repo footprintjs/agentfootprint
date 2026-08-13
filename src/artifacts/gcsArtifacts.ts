@@ -70,11 +70,27 @@
  * Pass `storage` to share the client your app already built.
  *
  * ── Status ──────────────────────────────────────────────────────────────────
- * Contract-shaped and tested; awaiting field use. The method chain it calls is
- * pinned against the really-installed package by
- * `test/adapters/google/google-surface-pin.test.ts`; the behavior is proved
- * against an emulation double that speaks the same chain. No live call has
- * been made from this repository.
+ * **Field-validated** (was "awaiting field use" through 9.28.0). The method
+ * chain it calls is pinned against the really-installed package by
+ * `test/adapters/google/google-surface-pin.test.ts`, and the behaviour is
+ * proved offline against an emulation double that speaks the same chain — but
+ * the promotion rests on live evidence, not on those:
+ *
+ * An independent trial ran THIS adapter, unchanged since 9.25.0, against a real
+ * Cloud Storage bucket (`@google-cloud/storage@7.22.0`, uniform bucket-level
+ * access, public-access prevention on) and all nine checks passed: JSON
+ * put/head/get with a verified SHA-256, scope isolation refusing another
+ * tenant / principal / conversation, two distinct cursor pages, a byte-exact
+ * native `putStream`/`getStream`, a TTL that expired and lazy-deleted, a
+ * `maxCountPerScope` eviction reporting `max-count`, an oversize label refused
+ * BEFORE upload against the 8 KiB metadata budget, a missing bucket answering
+ * with the documented ambiguous `null` on read and a sanitized 404 on write
+ * that leaked neither key nor scope, and an idempotent repeated delete.
+ * (FINDINGS "Cloud Storage `gcsArtifacts()` — field PASS".)
+ *
+ * What that does NOT promote: the same evidence says nothing about a bucket
+ * with soft delete or object versioning enabled — the trial's bucket had both
+ * off, on purpose, so the evidence would be disposable.
  */
 
 import { lazyRequire } from '../lib/lazyRequire.js';
