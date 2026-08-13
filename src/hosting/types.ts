@@ -29,6 +29,9 @@ import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
+import type { IdentityVerificationOptions } from './identityVerification.js';
+import type { AdmissionPolicy } from './admission.js';
+import type { SessionSummary, SessionWireRequest, SessionWireResult } from './sessionWire.js';
 
 export type { Unsubscribe };
 
@@ -132,9 +135,28 @@ export interface HostRequest {
    */
   readonly artifact?: ArtifactWireRequest;
   /**
+   * A session-history operation this request carries INSTEAD of a message
+   * (9.26.0) — `list` (the verified caller's own sessions) or `transcript`
+   * (one owned session's messages).
+   *
+   * Its PRESENCE is the discriminant, exactly as {@link artifact}'s is: a
+   * request carrying `session` reads history and never starts or resumes a
+   * run. Both ops REQUIRE a door that verifies identity
+   * ({@link StandingAgentBaseOptions.identity}) — reading "your" conversations
+   * from an unverified header is enumeration — and both are refused by name
+   * where the session store keeps no owner index.
+   */
+  readonly session?: SessionWireRequest;
+  /**
    * Transport headers with lower-cased names, as delivered. Present so a
    * handler can map its own conventions (a correlation id, a tenant) without
    * the port having to guess which ones matter.
+   *
+   * Since 9.26.0 this is also where a door that verifies identity reads the
+   * caller's credential from — `authorization: Bearer <token>`, the one
+   * vocabulary every transport in this package normalizes onto. The port still
+   * does not interpret headers itself; it hands them to whoever was configured
+   * to.
    */
   readonly headers?: Readonly<Record<string, string>>;
   /** Aborted when the caller goes away. */
@@ -191,6 +213,22 @@ export interface HostReply {
    * merely because the wire could not describe it.
    */
   artifact?(result: ArtifactWireResult): void;
+  /**
+   * End the reply with **resolved session history** (9.26.0): the caller's own
+   * sessions for a `list`, one owned session's messages for a `transcript`.
+   *
+   * The terminal a request carrying {@link HostRequest.session} ends through.
+   * A session the verified caller does not own does not end here — it ends
+   * through `fail` with the one indistinguishable not-found, because "exists
+   * but not yours" is an oracle for which ids are real.
+   *
+   * Optional on the TYPE for the same reason {@link artifact} is: a minimal
+   * adapter need not implement it, and every shipped adapter does. When it is
+   * absent the composer ends the reply with a named refusal
+   * (`SessionsNotCarriedError`) rather than improvising a body shape no client
+   * was written against.
+   */
+  sessions?(result: SessionWireResult): void;
   /**
    * A piece of the answer, as it is produced.
    *
@@ -626,13 +664,17 @@ export type DurabilityMode = 'exit' | 'async' | 'sync';
  *    only when the resolution actually reads the store (a request carrying a
  *    `userId`); a session-only resolution composes its scope from the request
  *    alone and wakes nothing.
+ *  - `'transcript'` — a verified owner is READING that session's messages back
+ *    (9.26.0). Nothing runs and nothing is written; the store is woken because
+ *    it is about to be read from, which is the only promise this hook ever
+ *    made.
  *
- * `'resume'` was absent until 7.19, and `'artifact'` until 9.23, because
- * nothing could produce them: naming reasons nothing fires would be an
- * interface describing a system that does not exist. Something produces each
- * of them now.
+ * `'resume'` was absent until 7.19, `'artifact'` until 9.23 and `'transcript'`
+ * until 9.26, because nothing could produce them: naming reasons nothing fires
+ * would be an interface describing a system that does not exist. Something
+ * produces each of them now.
  */
-export type WakeReason = 'invoke' | 'resume' | 'artifact';
+export type WakeReason = 'invoke' | 'resume' | 'artifact' | 'transcript';
 
 /**
  * The port: where a conversation lives between requests.
@@ -652,6 +694,65 @@ export interface SessionLifecycle {
    * a store that could not wake cannot be read from either.
    */
   onWake?(sessionId: string, reason: WakeReason): void | Promise<void>;
+  /**
+   * OPTIONAL (9.26.0) — the sessions this user owns, newest first.
+   *
+   * Feature-detected, never assumed. The two required methods are a key/value
+   * map and most stores are exactly that; demanding a secondary index of every
+   * implementation that will ever exist would be this port breaking its own
+   * rule ("anything a real store also wants is that store's API, not a demand
+   * this port makes"). A store that leaves this absent makes
+   * `{ op: 'session-list' }` refuse BY NAME, naming the store's limitation —
+   * never answer "you have no sessions", which is an answer nobody could
+   * distinguish from the truth.
+   *
+   * **Ownership is derived, never declared.** `persist` takes no owner and
+   * gains none: a store fills its index from the stored envelope itself
+   * (`envelopeOwner`), which reads the `principal` on the conversation the
+   * composer put there. A store that let a caller state an owner would be a
+   * store where owning somebody's session is a matter of asking for it.
+   *
+   * **And established ONCE.** The first turn that signs for a conversation owns
+   * it; no later write moves that — not a leaner identity (which would erase
+   * it) and not a different one (which would transfer it). Both shipped stores
+   * implement the index that way, and a custom one that let the last writer win
+   * would undo every ownership check made against it one turn later.
+   *
+   * A conversation that ran anonymously has no owner and appears in nobody's
+   * list. That is the honest consequence of deriving rather than inventing.
+   */
+  listByUser?(userId: string, options?: SessionListOptions): Promise<SessionListPage>;
+  /**
+   * OPTIONAL (9.26.0) — who owns one session, or `undefined` for a session
+   * that does not exist OR names no owner.
+   *
+   * The deliberate ambiguity is the same one `ArtifactStore.get` makes:
+   * "missing" and "not yours" must be indistinguishable from the outside, and
+   * a store that answered them differently would hand a caller an oracle for
+   * which session ids are real.
+   *
+   * Implement it beside `listByUser` — a door that can list but not check
+   * ownership can hand somebody a list and then refuse to open any of it.
+   */
+  ownerOf?(sessionId: string): Promise<string | undefined>;
+}
+
+/** Paging for {@link SessionLifecycle.listByUser} — the cursor convention every
+ *  listing in this package follows. */
+export interface SessionListOptions {
+  /** Continuation token from a previous page. Omit for the first page. */
+  readonly cursor?: string;
+  /** Maximum rows this page. Stores may cap it lower. */
+  readonly limit?: number;
+}
+
+/** One page of a user's sessions. Never carries message content — a listing
+ *  says WHICH conversations exist, and `session-transcript` says what is in
+ *  one. */
+export interface SessionListPage {
+  readonly sessions: readonly SessionSummary[];
+  /** Present iff more pages exist. */
+  readonly cursor?: string;
 }
 
 // ─── The composer ────────────────────────────────────────────────────
@@ -690,6 +791,67 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
   readonly host: AgentHost & { serve(handler: HostHandler): Promise<TH> };
   /** Default `'reject'`. See {@link ConcurrentInvokePolicy}. */
   readonly onConcurrentInvoke?: ConcurrentInvokePolicy;
+  /**
+   * Verify WHO is calling, instead of believing a header (9.26.0).
+   *
+   * With this set, every request's `Authorization: Bearer <token>` is checked
+   * BEFORE the run's identity/scope is composed, and the proven user id is the
+   * one that reaches `EventMeta.principal`, `ctx.identity`, the memory
+   * namespace and the artifact scope. A request that NAMES a user it cannot
+   * prove is refused by name — never downgraded to anonymous, never served
+   * under the name it claimed.
+   *
+   * **It also decides whose sessions are whose.** With a verifier configured,
+   * EVERY door that opens a stored conversation asks one question first — the
+   * two session-history ops and an ordinary turn alike: does this session
+   * belong to the caller who proved who they are? A turn naming somebody
+   * else's session is refused with the same indistinguishable
+   * `SessionNotFoundError` a transcript gets, before a line of that
+   * conversation is hydrated into a model's context and before anything is
+   * written back. Ownership is the `principal` the first turn signed with, and
+   * no later turn moves it.
+   *
+   * The consequence to plan for: conversations stored BEFORE a door started
+   * verifying name no owner, so they cannot be continued at one that does. That
+   * is a loud refusal by design — the alternative is a door that hands old
+   * conversations to whoever names them first.
+   *
+   * Unset — the default — nothing changes: `HostRequest.userId` is read exactly
+   * as it has been since 9.12.0, and every release's behaviour before this one
+   * is byte-identical. Which is right depends on what stands in front of you,
+   * and that is a fact only the deployment knows.
+   *
+   * @example
+   *   identity: { verify: jwksIdentity({
+   *     jwksUrl: 'https://idp.example.com/.well-known/jwks.json',
+   *     issuer:  'https://idp.example.com/',
+   *     audience:'my-api',
+   *   }).verify }
+   */
+  readonly identity?: IdentityVerificationOptions;
+  /**
+   * Decide whether a request runs at all, BEFORE any model is called (9.26.0).
+   *
+   * Called once per turn with the verified caller, the session and what that
+   * caller has spent inside a rolling window; it answers `'allow'`,
+   * `{ queue: true }` (run it, but behind this session's other work) or
+   * `{ refuse: '<sentence>' }`. `turnsPerHour({ limit })` is the shipped
+   * reference policy.
+   *
+   * Unset — the default — no accounting is kept, no listener is installed, and
+   * not one line of this runs.
+   *
+   * **The honest boundary, stated once:** accounting is PER PROCESS. Two
+   * containers each keep their own window, so a limit of 20 across three
+   * replicas is a limit of 60. Centralize by writing a policy that consults
+   * your own store — the `decide` seam is exactly where that goes.
+   *
+   * And the second one: a turn is counted when it is ADMITTED, so a request
+   * the lane then refuses as a concurrent run still counts against the
+   * window. Counting later would let a burst of simultaneous requests each be
+   * decided against a window none of them had joined.
+   */
+  readonly admission?: AdmissionPolicy;
   /**
    * How often a run's progress becomes crash-survivable. Default `'exit'` —
    * one write when the run finishes, which is what every release before this

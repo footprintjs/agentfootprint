@@ -88,6 +88,13 @@ export {
   type PresentedResult,
 } from './present.js';
 export {
+  recordingPutInput,
+  RECORDING_ARTIFACT_KIND,
+  RECORDING_MEDIA_TYPE,
+  UnserializableRecordingError,
+  type RecordingMintFacts,
+} from './recordingArtifact.js';
+export {
   assertArtifactPlacement,
   isPlacedToolResult,
   placedResultKind,

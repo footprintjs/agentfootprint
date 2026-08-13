@@ -774,6 +774,63 @@ export interface CodeRunner {
   }): Promise<CodeSession>;
 }
 
+/**
+ * The environment variable an executing snippet reads its staged inputs from —
+ * a JSON object mapping each input's NAME to the path it landed at.
+ *
+ * Part of {@link CodeSession.stageInputs}'s contract rather than one adapter's
+ * convention, and named here so an adapter uses the constant instead of
+ * retyping the string. It is what makes model-written code portable across
+ * backends: the code reads one variable, and every adapter that stages inputs
+ * fills it the same way.
+ */
+export const STAGED_INPUTS_ENV = 'AF_STAGED_INPUTS';
+
+/**
+ * One payload staged INTO a code session before code runs (9.26.0).
+ *
+ * `name` is the file name the caller wants it under — the tool derives it from
+ * the declared argument (`dataset` → `dataset.json`), so the model can be told
+ * the name in a static description. An adapter may sanitize it (a name is
+ * caller data landing in a filesystem) but must not rename it beyond
+ * recognition, because the manifest is keyed by what it was ASKED for.
+ */
+export interface CodeInput {
+  /**
+   * The MANIFEST KEY — what the executing code looks this input up by. The
+   * tool uses the declared argument name (`dataset`), so a static description
+   * can tell the model exactly what to look up before any session exists.
+   */
+  readonly name: string;
+  /**
+   * The file name to write it under, when it should differ from `name` — the
+   * tool derives one from the artifact's media type (`dataset` +
+   * `application/json` → `dataset.json`) so an interpreter's own loader sees a
+   * familiar extension. Defaults to `name`.
+   *
+   * A separate field precisely so the manifest KEY and the on-disk NAME cannot
+   * drift: the code looks up what it was told to look up, whatever the file
+   * ended up being called.
+   */
+  readonly fileName?: string;
+  /** The bytes. A string is written as UTF-8 text; a `Uint8Array` verbatim. */
+  readonly data: string | Uint8Array;
+  /** The producer's own statement about the payload, when it has one. */
+  readonly mediaType?: string;
+}
+
+/** Where one staged input actually landed. */
+export interface StagedCodeInput {
+  /** The name it was asked for — the manifest key the code looks up. */
+  readonly name: string;
+  /** The path the executing code opens. Absolute, or relative to the session's
+   *  working directory: whichever it is, it is what the manifest carries and
+   *  what the code should use verbatim. */
+  readonly path: string;
+  /** How many bytes landed. */
+  readonly bytes: number;
+}
+
 /** One live session. `stop()` is idempotent and tolerates "already gone". */
 export interface CodeSession {
   /** The backend's own id for this session, when it has one. */
@@ -785,6 +842,35 @@ export interface CodeSession {
     readonly signal?: AbortSignal;
   }): Promise<CodeResult>;
   /**
+   * OPTIONAL (9.26.0) — put payloads INTO the session, so code can read data
+   * that never travelled through the context window.
+   *
+   * ── Why it is a new member rather than an argument to `execute` ──────────
+   * The port's only input was the code STRING, and 9.22.0 stated the honest
+   * consequence rather than working around it: pushing a resolved artifact
+   * through that door would mean inlining megabytes into an argv, in
+   * language-specific quoting, past operating-system argument limits. This is
+   * the session file-write verb that note said it was waiting for.
+   *
+   * ── The contract, which is two promises not one ─────────────────────────
+   *  1. The payloads are written where the session's code can read them, and
+   *     the returned {@link StagedCodeInput.path} is what the code opens.
+   *  2. Every later `execute` on this session exposes the manifest as the
+   *     {@link STAGED_INPUTS_ENV} environment variable — a JSON object of
+   *     `name → path`. That second promise is what makes the model's code
+   *     portable: it reads one variable, on every backend that stages.
+   *
+   * Staged inputs live as long as the SESSION and are released by `stop()`.
+   *
+   * ── Absent, never faked ─────────────────────────────────────────────────
+   * A backend that cannot write into its own session LEAVES THIS ABSENT.
+   * Feature-detect with `canStageCodeInputs(session)`; `codeRunnerTool`
+   * refuses by name when a tool declares artifact inputs and the runner cannot
+   * carry them, because running the code without the data it declared would be
+   * the accepted-and-silently-wrong failure.
+   */
+  stageInputs?(inputs: readonly CodeInput[]): Promise<readonly StagedCodeInput[]>;
+  /**
    * Release the session.
    *
    * Must tolerate a session the far side already reaped — an idle timeout is
@@ -792,6 +878,14 @@ export interface CodeSession {
    * no-op, not an error.
    */
   stop(): Promise<void>;
+}
+
+/** Can this session accept staged inputs? The feature-detection law: read the
+ *  member, never assume it from the adapter's name. */
+export function canStageCodeInputs(
+  session: CodeSession,
+): session is CodeSession & Required<Pick<CodeSession, 'stageInputs'>> {
+  return typeof session.stageInputs === 'function';
 }
 
 /** What one execution produced. */

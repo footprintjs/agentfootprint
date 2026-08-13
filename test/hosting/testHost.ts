@@ -20,6 +20,7 @@ import type {
   HostHandler,
   HostReply,
   PendingAsk,
+  SessionWireRequest,
 } from '../../src/hosting/index.js';
 
 /** Everything a caller can observe about one delivered request. */
@@ -45,6 +46,10 @@ export interface InProcessHost extends AgentHost {
      *  not implement `reply.artifact`, so delivering one exercises the
      *  composer's named not-carried refusal. */
     readonly artifact?: ArtifactWireRequest;
+    /** A session-history operation (9.26.0). This MINIMAL host deliberately
+     *  does not implement `reply.sessions` either, so delivering one
+     *  exercises the composer's named not-carried refusal. */
+    readonly session?: SessionWireRequest;
     readonly headers?: Readonly<Record<string, string>>;
   }): Promise<DeliveredReply>;
 }
@@ -113,6 +118,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
               ...(request.userId !== undefined && { userId: request.userId }),
               ...(request.decision !== undefined && { decision: request.decision }),
               ...(request.artifact !== undefined && { artifact: request.artifact }),
+              ...(request.session !== undefined && { session: request.session }),
               ...(request.headers !== undefined && { headers: request.headers }),
             },
             reply,

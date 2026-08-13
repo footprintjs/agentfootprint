@@ -52,7 +52,9 @@
  *   conversation.onClose(() => void agent.closeToolSessions({ sessionId }));
  */
 
-import type { CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
+import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
+import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../adapters/types.js';
+import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';
 import { defineTool, type Tool, type ToolExecutionContext } from './tools.js';
@@ -96,6 +98,36 @@ export interface CodeRunnerToolOptions {
   /** A credential this tool needs (declare-and-push). Resolved before execute.
    *  Do NOT cache it past the call: a session outliving a run outlives its token. */
   readonly needs?: CredentialNeed;
+  /**
+   * Artifact arguments, declared exactly as any other tool declares them
+   * (9.26.0): `wants: { dataset: 'dataset/rows' }`.
+   *
+   * The model passes the `art_…` ref as the argument, the framework resolves
+   * it before `execute` under the run's own scope — the same `wants` machinery,
+   * with the same teaching refusals for a stale, unknown or wrong-kind ref —
+   * and then this tool STAGES the resolved payload into the code session as a
+   * file. The data reaches the interpreter without ever entering the context
+   * window, which is the whole doctrine this tool exists for, now with an
+   * inbound leg to match the outbound one.
+   *
+   * ── What the model's code reads ─────────────────────────────────────────
+   * The staged files are named in the `AF_STAGED_INPUTS` environment variable,
+   * a JSON object of `argument name → path`. The composed tool description
+   * states it with a one-line example in the tool's language, so a model needs
+   * nothing beyond the description to use it.
+   *
+   * ── Refused rather than degraded ────────────────────────────────────────
+   * Declaring `wants` on a runner whose sessions cannot accept staged inputs
+   * (`stageInputs` absent — `agentCoreCodeRunner` today) refuses BY NAME at
+   * dispatch. Running the code without the data it declared would leave the
+   * model reasoning about a file that is not there, which is the exact silent
+   * failure this library refuses to ship.
+   *
+   * Omitted, nothing changes: no schema properties are added, no session is
+   * ever asked to stage, and the description is the one earlier releases
+   * composed.
+   */
+  readonly wants?: ToolWants;
 }
 
 const DEFAULT_MAX_OUTPUT_CHARS = 4_000;
@@ -146,9 +178,12 @@ export function codeRunnerTool(
   /** In-flight starts, so two parallel tool calls under one key open ONE session. */
   const starting = new Map<string, Promise<CodeSession>>();
 
+  const wants = options.wants;
+  const wantNames = wants === undefined ? [] : Object.keys(wants);
+
   const tool = defineTool<{ code: string }, string>({
     name,
-    description: options.description ?? describe(scope, language),
+    description: options.description ?? describe(scope, language, wants),
     inputSchema: {
       type: 'object',
       properties: {
@@ -158,14 +193,37 @@ export function codeRunnerTool(
             `${language} source to execute. Print what you want back — stdout is the result. ` +
             'Compute over big data here rather than asking for it to be pasted back to you.',
         },
+        // One string property per declared artifact argument. `assertToolWants`
+        // requires the property to exist and to be a string — the model passes
+        // the TICKET, never the bytes — so composing them here is what makes
+        // the declaration usable rather than merely legal.
+        ...Object.fromEntries(
+          wantNames.map((argName) => [
+            argName,
+            {
+              type: 'string',
+              description:
+                `The art_… ref of the ${wants?.[argName] ?? 'artifact'} to work on. Its data ` +
+                `is written into this session as a file; the path is under '${argName}' in ` +
+                `the ${STAGED_INPUTS_ENV} environment variable. Pass the ref, never the data.`,
+            },
+          ]),
+        ),
       },
       required: ['code'],
     },
     ...(options.checkIn !== undefined && { checkIn: options.checkIn }),
     ...(options.needs && { needs: options.needs }),
+    ...(wants !== undefined && { wants }),
     execute: async (args, ctx): Promise<string> => {
       const key = requireKey(ctx, scope, name);
       const session = await acquire(key, ctx);
+      // Staging happens BEFORE the code runs and after the framework resolved
+      // every declared ref — `args[argName]` is the DATA by now, not the
+      // ticket. A declared argument the model did not pass is simply not
+      // staged: an optional artifact input is the model choosing not to use
+      // one, exactly as `resolveToolWants` treats it.
+      const stagedNames = await stageDeclaredInputs(session, args, wantNames, name, ctx);
       const result = await session.execute({
         code: args.code,
         language,
@@ -173,7 +231,7 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      return render(result, maxOutputChars, minted);
+      return render(result, maxOutputChars, minted, stagedNames);
     },
   });
 
@@ -260,7 +318,7 @@ function requireKey(ctx: ToolExecutionContext, scope: CodeRunnerToolScope, name:
 }
 
 /** The description the model reads when the caller did not write one. */
-function describe(scope: CodeRunnerToolScope, language: string): string {
+function describe(scope: CodeRunnerToolScope, language: string, wants?: ToolWants): string {
   const persistence =
     scope === 'call'
       ? 'Each call runs in a fresh environment — nothing carries over, so include everything you need.'
@@ -271,8 +329,123 @@ function describe(scope: CodeRunnerToolScope, language: string): string {
     `Execute ${language} code and return its output. ${persistence} ` +
     'Use this to COMPUTE over data rather than asking for the data itself — fetch, filter, ' +
     'aggregate and print the answer, so a large result never has to travel through this ' +
-    'conversation. Print what you want to see; stdout is what you get back.'
+    'conversation. Print what you want to see; stdout is what you get back.' +
+    stagingClause(language, wants)
   );
+}
+
+/**
+ * The staging half of the description — added ONLY when the tool declares
+ * artifact arguments, so a tool without them reads exactly as it always did.
+ *
+ * It names the mechanism rather than the paths, because the paths do not exist
+ * until the session does: one environment variable, one JSON object, and a
+ * one-line example in this tool's own language. A model that reads this needs
+ * nothing else to use a staged file.
+ */
+function stagingClause(language: string, wants: ToolWants | undefined): string {
+  if (wants === undefined) return '';
+  const names = Object.keys(wants);
+  const first = names[0] ?? 'input';
+  const example = language.toLowerCase().startsWith('py')
+    ? `import json, os; path = json.loads(os.environ['${STAGED_INPUTS_ENV}'])['${first}']`
+    : `const path = JSON.parse(process.env.${STAGED_INPUTS_ENV})['${first}']`;
+  return (
+    ` Pass artifact refs as ${names.map((n) => `'${n}'`).join(', ')} and their data is written ` +
+    `into this session as files BEFORE your code runs — never paste the data into the code. ` +
+    `The file paths are in the ${STAGED_INPUTS_ENV} environment variable, a JSON object keyed ` +
+    `by argument name: ${example}. Open that path and read it.`
+  );
+}
+
+/**
+ * Stage every declared artifact argument the model actually passed.
+ *
+ * ── Refused rather than degraded ────────────────────────────────────────────
+ * A runner whose sessions cannot stage refuses BY NAME, naming both the runner
+ * and the tool. Running the code anyway would leave the model reading a file
+ * that is not there — an error it would try to debug, in a session that never
+ * had the data, for a reason nothing in the conversation could reveal.
+ *
+ * @returns the argument names that were staged, for the result's own preamble.
+ */
+async function stageDeclaredInputs(
+  session: CodeSession,
+  args: Record<string, unknown>,
+  wantNames: readonly string[],
+  toolName: string,
+  ctx: ToolExecutionContext,
+): Promise<readonly string[]> {
+  if (wantNames.length === 0) return [];
+  const inputs: CodeInput[] = [];
+  for (const argName of wantNames) {
+    const resolved = args[argName];
+    // Absent = the model chose not to pass this one. Nothing to stage, and
+    // nothing to complain about: `resolveToolWants` treats an absent optional
+    // argument the same way.
+    if (resolved === undefined) continue;
+    const meta = ctx.wanted?.[argName];
+    inputs.push({
+      // The manifest KEY is the argument name the model spoke — which is what
+      // the description told it to look up. The FILE gets an extension derived
+      // from the artifact's own stated media type, so an interpreter's loader
+      // sees something familiar; the two are separate fields precisely so they
+      // cannot drift.
+      name: argName,
+      fileName: fileNameFor(argName, meta?.mediaType),
+      data: bytesOf(resolved),
+      ...(meta?.mediaType !== undefined && { mediaType: meta.mediaType }),
+    });
+  }
+  if (inputs.length === 0) return [];
+  if (!canStageCodeInputs(session)) {
+    throw new Error(
+      `${toolName}: this tool declares artifact arguments (${wantNames.join(', ')}), and the ` +
+        `code runner behind it cannot put data into its own session — its CodeSession has no ` +
+        `stageInputs. The code would run against files that are not there, so it is not run. ` +
+        `Use a runner that stages (localCodeRunner does), or drop \`wants\` and have the model ` +
+        `fetch the data inside the code.`,
+    );
+  }
+  const landed = await session.stageInputs(inputs);
+  // Keyed back by the ARGUMENT name the model spoke, which is what the
+  // manifest promises and what the description told it to look up.
+  return landed.map((entry) => entry.name);
+}
+
+/** `dataset` + `text/csv` → `dataset.csv`. The extension comes from the meta's
+ *  own stated media type, never sniffed — and an unknown type gets no
+ *  extension rather than a guessed one. */
+function fileNameFor(argName: string, mediaType: string | undefined): string {
+  const ext = mediaType === undefined ? undefined : EXT_BY_MEDIA_TYPE[mediaType.toLowerCase()];
+  return ext === undefined ? argName : `${argName}.${ext}`;
+}
+
+/** The reverse of MEDIA_TYPE_BY_EXT, for the types a staged payload plausibly
+ *  carries. Absent means "no extension", which is honest. */
+const EXT_BY_MEDIA_TYPE: Readonly<Record<string, string>> = {
+  'application/json': 'json',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'text/html': 'html',
+  'image/svg+xml': 'svg',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'application/pdf': 'pdf',
+};
+
+/**
+ * The resolved payload as bytes for the file.
+ *
+ * Strings and binary are written verbatim; anything else is JSON, which is
+ * what the store measured and digested it as. A value JSON cannot carry never
+ * got into the store in the first place — `canonicalPayloadBytes` refuses it
+ * at `put` — so there is no lossy branch here to hide.
+ */
+function bytesOf(resolved: unknown): string | Uint8Array {
+  if (typeof resolved === 'string' || resolved instanceof Uint8Array) return resolved;
+  return JSON.stringify(resolved) ?? 'null';
 }
 
 // ── Mint-on-output (9.22.0): the store behind `CodeResult.artifacts` ────────
@@ -286,13 +459,15 @@ function describe(scope: CodeRunnerToolScope, language: string): string {
 // left the sandbox is a fact, not a failure. Zero-cost: no store, or no
 // in-band files, and not one line here runs.
 //
-// STAGING-IN IS DELIBERATELY ABSENT (the honest cut, stated): the
-// `CodeSession` port's only input is the code string — pushing a resolved
-// artifact payload through it would mean inlining megabytes into an argv
-// (`python3 -c …` has OS argument limits) in language-specific quoting.
-// Declared input refs for code sessions wait for a session file-write verb
-// on the port; until then the model routes refs BETWEEN tools, and code
-// output flows INTO the store.
+// STAGING-IN ARRIVED IN 9.26.0, through the door 9.22.0 said it was waiting
+// for. The note here used to read: "pushing a resolved artifact payload
+// through `execute` would mean inlining megabytes into an argv (`python3 -c …`
+// has OS argument limits) in language-specific quoting — declared input refs
+// wait for a session file-write verb on the port." That verb is
+// `CodeSession.stageInputs` (optional, feature-detected, absent on backends
+// that cannot write into their own session), and `wants` on this tool is what
+// uses it. Data now flows BOTH ways without entering the window: refs in as
+// staged files, produced files out as refs.
 
 /** `report.csv` → `file/csv`; extensionless → `file`. The kind vocabulary a
  *  code-produced file is minted under — derived from the producer's OWN
@@ -373,8 +548,18 @@ function render(
   result: CodeResult,
   maxOutputChars: number,
   minted?: ReadonlyMap<string, FileMintOutcome>,
+  staged: readonly string[] = [],
 ): string {
   const parts: string[] = [];
+  // What was put IN, stated before what came out. A model whose code failed to
+  // find a file needs to know the file was staged and under which name — the
+  // alternative is debugging an absence that never happened.
+  if (staged.length > 0) {
+    parts.push(
+      `[staged into this session before your code ran: ${staged.join(', ')} — ` +
+        `paths are in ${STAGED_INPUTS_ENV}]`,
+    );
+  }
   const stdout = clip(result.stdout, maxOutputChars, result.truncated?.stdout === true);
   const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
   if (stdout.text.length > 0) parts.push(stdout.text);

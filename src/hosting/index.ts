@@ -118,6 +118,8 @@ export {
 export type { SqliteSessions, SqliteSessionsOptions } from './sqliteSessions.js';
 export {
   toEnvelope,
+  envelopeOwner,
+  envelopeTranscript,
   toPausedEnvelope,
   readEnvelope,
   readPausedRun,
@@ -142,7 +144,58 @@ export {
   NoArtifactStoreError,
   ArtifactNotFoundError,
   ArtifactNotCarriedError,
+  IdentityNotVerifiedError,
+  VerifierUnavailableError,
+  AdmissionRefusedError,
+  SessionOpNeedsIdentityError,
+  SessionIndexUnavailableError,
+  SessionNotFoundError,
+  SessionsNotCarriedError,
 } from './errors.js';
+export type { IdentityFailureClass } from './errors.js';
+
+// Verified identity at the door (9.26.0) — the badge is CHECKED instead of
+// read off. `IdentityVerifier` is the port; `jwksIdentity` (from
+// `agentfootprint/security`) is the shipped adapter; `bearerToken` is the one
+// extraction every dialect's credential arrives through.
+export { bearerToken, verifyRequestIdentity } from './identityVerification.js';
+export type {
+  IdentityVerificationOptions,
+  IdentityVerifier,
+  VerifiedIdentity,
+} from './identityVerification.js';
+
+// Admission (9.26.0) — decide whether a request runs before it costs anything.
+// `turnsPerHour` is the shipped reference policy; `spendLedger` is the
+// in-process rolling-window accountant the composer feeds.
+export { spendKeyFor, spendLedger, turnsPerHour } from './admission.js';
+export type {
+  AdmissionContext,
+  AdmissionPolicy,
+  AdmissionVerdict,
+  RecentSpend,
+  SpendLedger,
+  SpendLedgerOptions,
+  TurnsPerHourOptions,
+} from './admission.js';
+
+// The session-history wire operations (9.26.0) — a person's own conversations,
+// answered only for a VERIFIED caller. One grammar owner, exactly as the
+// artifact ops have.
+export {
+  readSessionWireOp,
+  sessionWireBody,
+  SESSION_LIST_OP,
+  SESSION_TRANSCRIPT_OP,
+} from './sessionWire.js';
+export type {
+  SessionSummary,
+  SessionWireRequest,
+  SessionWireResult,
+  TranscriptMessage,
+} from './sessionWire.js';
+export { ALL_WIRE_OPS, isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
+export type { WireOpName } from './wireOps.js';
 
 // The artifact wire operations (9.23.0) — the screen's half of render-by-ref:
 // `{ op: 'artifact-head' | 'artifact-get', ref }` on the invoke path redeems
@@ -178,6 +231,8 @@ export type {
   PausedRunEnvelope,
   PendingAsk,
   SessionLifecycle,
+  SessionListOptions,
+  SessionListPage,
   StandingAgentBaseOptions,
   StandingAgentOptions,
   StandingAgentPoolOptions,

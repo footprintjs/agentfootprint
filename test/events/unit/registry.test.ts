@@ -71,7 +71,7 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 89 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 91 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -124,7 +124,12 @@ describe('event registry — names + exhaustiveness', () => {
     //     description snapshot {kind, mediaType, bytes, label} rode both the
     //     event and the tool result, so a reloaded transcript re-draws the
     //     pane or states honestly why it can't.)
-    expect(ALL_EVENT_TYPES.length).toBe(90);
+    //    (tools.repeated_call added with 9.26.0 — one tool, dispatched twice
+    //     with deeply-equal arguments, returned a byte-identical result: the
+    //     framework appended a teaching note to the second result. The call
+    //     still ran and nothing was refused. Fingerprints only — never the
+    //     arguments and never the result.)
+    expect(ALL_EVENT_TYPES.length).toBe(91);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -79,6 +79,57 @@ export interface AgentArtifactsOptions {
    * results are never measured and never placed, exactly as before.
    */
   readonly placement?: ArtifactPlacement;
+  /**
+   * Check each completed run's RECORDING into the store (9.26.0), so a screen
+   * can replay the turn later without the deployment inventing a place to keep
+   * it.
+   *
+   * `true` for the default naming, or `{ label }` to name them yourself. Off by
+   * default: unset, no recorder is attached, no events are captured, and the
+   * run is byte-identical to every earlier release.
+   *
+   * ── What lands, and where ───────────────────────────────────────────────
+   * The `recordRun` contract exactly — `{ snapshot, events, structure }`, the
+   * three things a viewer needs and the shape `observeRecording()` consumes —
+   * minted as kind `'recording/run'` in the RUN's own artifact scope, with
+   * `origin.runId` joining it back to the trace. The existing wire ops serve
+   * it: `{ op: 'artifact-get', ref }` returns the recording, and no new
+   * operation was needed for any of it. Retention rides the store, so
+   * recordings age out under the same ttl and byte budget everything else
+   * does.
+   *
+   * ── The cost, stated rather than discovered ─────────────────────────────
+   * Recording a run means an event tail and a boundary recorder for its
+   * duration, and the mint is one store write on the way OUT of `run()` — the
+   * answer is fully composed before the write begins and the write can never
+   * change it, but `run()` does return after it rather than before. That is
+   * deliberate: a fire-and-forget write is a recording lost whenever the
+   * container exits with the reply, which is exactly the deployment that wants
+   * this most.
+   *
+   * A mint that FAILS degrades to the old behaviour — the answer is returned
+   * unchanged, and the failure lands on the record as
+   * `agentfootprint.artifacts.refused`. A run never fails because its
+   * recording could not be filed.
+   *
+   * Nothing is minted for a run that paused (there is no completed run yet) or
+   * threw. A resumed run mints when it completes, and its recording covers the
+   * RESUMED run — which is what the recorder saw.
+   */
+  readonly recordings?: boolean | AgentRecordingsOptions;
+}
+
+/** The object form of {@link AgentArtifactsOptions.recordings}. */
+export interface AgentRecordingsOptions {
+  /**
+   * The label every minted recording carries, verbatim.
+   *
+   * Absent, each is labelled `run <runId>`. A static label repeats across runs
+   * on purpose — what distinguishes two recordings is the ref and
+   * `origin.runId`, and a library that decorated your label to make it unique
+   * would be overruling the name you chose.
+   */
+  readonly label?: string;
 }
 
 export interface AgentOptions {
@@ -322,6 +373,38 @@ export interface AgentOptions {
    * naming this option (`ctx.hasArtifacts` is the fact to branch on).
    */
   readonly artifacts?: ArtifactStore | AgentArtifactsOptions;
+  /**
+   * Tell the model when it has already made this exact call and already got
+   * this exact answer (9.26.0). **On by default.**
+   *
+   * When one tool is dispatched with deeply-equal arguments and returns a
+   * byte-identical result for the second time in a turn, one sentence is
+   * appended to that result: *identical call, identical result — calling again
+   * will not change it.* The call still RAN, the result is unchanged beside
+   * the note, and a third identical call is not blocked. It is evidence, not a
+   * gate.
+   *
+   * The failure it addresses is measured rather than imagined: a traced run in
+   * which a model called one tool three times with identical arguments after
+   * the backend silently ignored a filter, reading the same rows as a fresh
+   * answer each time. Nothing inside the conversation can see that; the
+   * framework watched all three land.
+   *
+   * **A turn that repeats nothing is byte-identical either way** — the same
+   * results, the same events, and the same tracked state down to the key set.
+   * The counters are held run-keyed beside the dispatch loop, never written to
+   * scope: a within-turn tally is not conversation state, and tracked state is
+   * the commit log, the snapshot, the narrative and every recording. Only an
+   * actual repeat is visible, as one sentence on that result and one
+   * `agentfootprint.tools.repeated_call` event.
+   *
+   * Set `false` to switch it off — nothing is fingerprinted, no counter is
+   * kept, and even a repeating turn is byte-identical to earlier releases.
+   * Worth doing when a deployment's tools are deliberately polled (an identical
+   * call returning an identical status IS the expected shape while a job runs)
+   * and the note would be noise rather than news.
+   */
+  readonly repeatedCallNudge?: boolean;
   /**
    * What the run does when a tool's DECLARED credential (`needs: { credential }`)
    * comes back `authorization-required` — a person has to click a consent link
@@ -822,6 +905,13 @@ export interface AgentState {
     /** The tool's own declared outcome (9.19.0) — envelope tools only. */
     status?: import('./toolEffects.js').ToolResultStatus;
   };
+  // NOTE (9.26.0): the repeated-call nudge deliberately keeps NO key here. Its
+  // counters are a within-turn tally, not conversation state, and tracked state
+  // is the commit log, the snapshot, the narrative and every recording — a key
+  // written on each tool landing would change all of them for every agent that
+  // merely upgraded. They live run-keyed beside the dispatch loop instead
+  // (`../repeatedCall.ts`), and the repeat itself lands on the record as
+  // `agentfootprint.tools.repeated_call`.
   /** EVERY tool result of the current iteration's batch, in call order
    *  (9.16.0) — reset when tool dispatch starts, appended as each result
    *  lands (a pause mid-batch commits the partial batch; resume appends the

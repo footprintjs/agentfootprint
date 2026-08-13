@@ -53,11 +53,16 @@
  * never gets written in the first place.
  */
 
-import { checkEnvelope } from './envelope.js';
+import { checkEnvelope, envelopeOwner, envelopeTranscript } from './envelope.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
-import type { CheckpointEnvelope, SessionLifecycle } from './types.js';
+import type {
+  CheckpointEnvelope,
+  SessionLifecycle,
+  SessionListOptions,
+  SessionListPage,
+} from './types.js';
 
 // ─── The little bit of `node:sqlite` this adapter uses ───────────────
 
@@ -230,6 +235,29 @@ const META_TABLE = 'agent_store_meta';
  */
 const SESSIONS_COLUMNS = ['session_id', 'format', 'saved_at', 'envelope'] as const;
 
+/**
+ * The owner index (9.26.0) — two columns ADDED to the same table, and the
+ * schema version deliberately NOT bumped.
+ *
+ * Bumping is for "an older reader could not survive this", and an older reader
+ * survives these perfectly: it names its four columns explicitly in both its
+ * `INSERT` and its `SELECT`, so two extra nullable columns are invisible to it.
+ * Refusing a 9.25 file for missing them would be the opposite mistake — the
+ * identity check above stays the ORIGINAL four, and a file that predates this
+ * release is opened, migrated with one `ALTER TABLE` per column, and used.
+ *
+ * What such a file does NOT have is owners for its EXISTING rows: nothing was
+ * recorded when they were written, and deriving them would mean parsing every
+ * stored envelope on open. Those sessions appear in nobody's list until their
+ * next turn re-persists them. Stated rather than papered over, because a
+ * sidebar that silently omits last week's conversations is a bug report and a
+ * documented migration boundary is not.
+ */
+const OWNER_COLUMNS: readonly { name: string; ddl: string }[] = [
+  { name: 'owner', ddl: 'owner TEXT' },
+  { name: 'message_count', ddl: 'message_count INTEGER' },
+];
+
 // ─── The store ───────────────────────────────────────────────────────
 
 /**
@@ -297,12 +325,31 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
   }
 
   const insert = db.prepare(
-    `INSERT INTO ${SESSIONS_TABLE} (session_id, format, saved_at, envelope) VALUES (?, ?, ?, ?) ` +
+    `INSERT INTO ${SESSIONS_TABLE} (session_id, format, saved_at, envelope, owner, message_count) ` +
+      `VALUES (?, ?, ?, ?, ?, ?) ` +
       `ON CONFLICT(session_id) DO UPDATE SET format = excluded.format, ` +
-      `saved_at = excluded.saved_at, envelope = excluded.envelope`,
+      `saved_at = excluded.saved_at, envelope = excluded.envelope, ` +
+      // WRITE ONCE — the existing owner wins, and a NULL one is filled in.
+      // An owner is a fact about the CONVERSATION, established by the first
+      // turn that signed for it: a later turn carrying a leaner identity must
+      // not erase it (the session would drop out of its owner's list), and a
+      // later turn carrying a DIFFERENT one must not take it (ownership would
+      // transfer by writing, which undoes every check made against this index).
+      // The argument order is the whole rule; reversing it is the bug.
+      `owner = COALESCE(${SESSIONS_TABLE}.owner, excluded.owner), ` +
+      `message_count = excluded.message_count`,
   );
   const select = db.prepare(`SELECT envelope FROM ${SESSIONS_TABLE} WHERE session_id = ?`);
   const remove = db.prepare(`DELETE FROM ${SESSIONS_TABLE} WHERE session_id = ?`);
+  const selectOwner = db.prepare(`SELECT owner FROM ${SESSIONS_TABLE} WHERE session_id = ?`);
+  // Keyset pagination, not OFFSET: a cursor that counted rows would skip a
+  // conversation whenever an older one is written to between two pages, and a
+  // sidebar that quietly loses a row is worse than one that pages slowly.
+  const listOwned = db.prepare(
+    `SELECT session_id, format, saved_at, message_count FROM ${SESSIONS_TABLE} ` +
+      `WHERE owner = ? AND (saved_at < ? OR (saved_at = ? AND session_id > ?)) ` +
+      `ORDER BY saved_at DESC, session_id ASC LIMIT ?`,
+  );
 
   let closed = false;
   const open = (verb: string): void => {
@@ -354,7 +401,65 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
       // Checked on the way IN as well as out: a row this store could not read
       // back is a row it has no business writing.
       const checked = checkEnvelope(envelope, sessionId);
-      insert.run(sessionId, checked.format, checked.savedAt, JSON.stringify(checked));
+      // The owner index (9.26.0): DERIVED from the conversation's own identity,
+      // never supplied by the caller — the port takes no owner argument and
+      // gains none, because a store where owning a session is a matter of
+      // asking is not an index, it is a formality.
+      const owner = envelopeOwner(checked);
+      insert.run(
+        sessionId,
+        checked.format,
+        checked.savedAt,
+        JSON.stringify(checked),
+        owner ?? null,
+        envelopeTranscript(checked).length,
+      );
+    },
+
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async listByUser(userId: string, options?: SessionListOptions): Promise<SessionListPage> {
+      open('list a user’s sessions');
+      const limit = Math.max(1, Math.floor(options?.limit ?? DEFAULT_PAGE));
+      const after = parseCursor(options?.cursor);
+      const rows = listOwned.all(
+        userId,
+        after.savedAt,
+        after.savedAt,
+        after.sessionId,
+        // One extra row, so "is there another page?" is a fact rather than a
+        // guess from a full page.
+        limit + 1,
+      ) as {
+        session_id?: unknown;
+        format?: unknown;
+        saved_at?: unknown;
+        message_count?: unknown;
+      }[];
+      const page = rows.slice(0, limit).map((row) => ({
+        sessionId: String(row.session_id),
+        savedAt: Number(row.saved_at),
+        format: String(row.format),
+        // A row written before this release has no count. `0` is the honest
+        // answer for "this store does not know" here only because the
+        // transcript op reads the envelope itself and will say the truth —
+        // the count is a listing hint, never the authority.
+        messageCount: typeof row.message_count === 'number' ? row.message_count : 0,
+      }));
+      const last = page[page.length - 1];
+      return {
+        sessions: page,
+        ...(rows.length > limit &&
+          last !== undefined && { cursor: `${last.savedAt}:${last.sessionId}` }),
+      };
+    },
+
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async ownerOf(sessionId: string): Promise<string | undefined> {
+      open('read a session’s owner');
+      const row = selectOwner.get(sessionId) as { owner?: unknown } | undefined;
+      // `undefined` for "no such session" AND for "a session nobody signed
+      // for" — the deliberate ambiguity the composer's one not-found rests on.
+      return typeof row?.owner === 'string' && row.owner.length > 0 ? row.owner : undefined;
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await
@@ -443,7 +548,8 @@ function ensureSchema(db: SqliteDatabaseLike, file: string): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS ${SESSIONS_TABLE} (` +
       `session_id TEXT PRIMARY KEY, format TEXT NOT NULL, ` +
-      `saved_at INTEGER NOT NULL, envelope TEXT NOT NULL) STRICT`,
+      `saved_at INTEGER NOT NULL, envelope TEXT NOT NULL, ` +
+      `owner TEXT, message_count INTEGER) STRICT`,
   );
   db.exec(
     `CREATE TABLE IF NOT EXISTS ${META_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT`,
@@ -466,6 +572,22 @@ function ensureSchema(db: SqliteDatabaseLike, file: string): void {
         `(missing ${missing.join(', ')}; found ${columns.join(', ') || 'nothing'}).`,
     );
   }
+
+  // The additive migration — see OWNER_COLUMNS for why this is not a version
+  // bump. Idempotent by construction (each column is added only when absent),
+  // so opening the same file twice is one migration, and opening a file this
+  // release already created does nothing at all.
+  for (const column of OWNER_COLUMNS) {
+    if (columns.includes(column.name)) continue;
+    db.exec(`ALTER TABLE ${SESSIONS_TABLE} ADD COLUMN ${column.ddl}`);
+  }
+  // Owner-scoped listings read `WHERE owner = ? ORDER BY saved_at DESC`; the
+  // index is what keeps a person's sidebar from scanning every conversation
+  // the process ever stored.
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS ${SESSIONS_TABLE}_owner ` +
+      `ON ${SESSIONS_TABLE} (owner, saved_at DESC)`,
+  );
 
   const stored = db
     .prepare(`SELECT value FROM ${META_TABLE} WHERE key = 'schema_version'`)
@@ -490,4 +612,27 @@ function ensureSchema(db: SqliteDatabaseLike, file: string): void {
 /** One sentence about a thrown thing, for a message that has to stay readable. */
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** How many rows one `listByUser` page carries when the caller names no limit. */
+const DEFAULT_PAGE = 50;
+
+/**
+ * Read a listing cursor — `<savedAt>:<sessionId>`, the last row of the previous
+ * page.
+ *
+ * A cursor this store did not mint (a truncation, a hand-edit, a client that
+ * kept one across a schema change) restarts at the top rather than throwing:
+ * the worst case is a caller seeing page one twice, and refusing a listing
+ * because a pagination token went stale would break a sidebar over something
+ * that costs nothing to recover from.
+ */
+function parseCursor(cursor: string | undefined): { savedAt: number; sessionId: string } {
+  const TOP = { savedAt: Number.MAX_SAFE_INTEGER, sessionId: '' };
+  if (cursor === undefined) return TOP;
+  const at = cursor.indexOf(':');
+  if (at <= 0) return TOP;
+  const savedAt = Number.parseInt(cursor.slice(0, at), 10);
+  if (!Number.isFinite(savedAt)) return TOP;
+  return { savedAt, sessionId: cursor.slice(at + 1) };
 }

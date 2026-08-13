@@ -1195,6 +1195,324 @@ refuse there, as `InvalidWireOpError`), and `artifactWireBody(result)` as the
 AgentCore runtime wire carries both ops with its own `status: 'success'`
 envelope beside the standard body.
 
+## Verified identity — `identity: { verify }`
+
+`HostRequest.userId` has said the same honest thing since 9.12: it is *what the
+transport said*, and how much that is worth depends on what stands in front of
+you. A managed runtime that authenticates at its front door can fill it in. A
+container you expose yourself cannot — a header there is a string anybody can
+send.
+
+Since 9.26 the door itself can know. Pass an `IdentityVerificationOptions` and
+every request's `Authorization: Bearer …` is checked **before** the run's
+identity and scope are composed:
+
+```ts
+import { standingAgent, nodeHost, sqliteSessions } from 'agentfootprint/hosting';
+import { jwksIdentity } from 'agentfootprint/security';
+
+await standingAgent({
+  agent,
+  sessions: sqliteSessions({ file: './sessions.db' }),
+  host: nodeHost({ port: 8080 }),
+  identity: {
+    verify: jwksIdentity({
+      jwksUrl: 'https://idp.example.com/.well-known/jwks.json',
+      issuer: 'https://idp.example.com/',
+      audience: 'my-api',
+    }).verify,
+  },
+});
+```
+
+The proven subject becomes the run's `principal` — which is what reaches
+`EventMeta.principal`, `ctx.identity` inside a tool, the memory namespace, and
+the artifact scope. Nothing else about the run changes.
+
+**Unset, nothing changes at all.** No verification runs, `userId` is read
+exactly as it was, and every earlier release's behaviour is byte-identical.
+
+### The refusal law
+
+With a verifier configured, a request that **names** a user it cannot prove is
+refused — never downgraded to anonymous, and never served under the name it
+claimed. Both alternatives are the same failure wearing different clothes: one
+produces an audit trail naming the wrong party, the other a door anybody opens
+by sending *less*.
+
+Anonymous requests are refused too, by default. Set
+`identity: { verify, allowAnonymous: true }` when a deployment genuinely serves
+both a public lane and a signed-in one; an anonymous request may then carry no
+`userId` at all.
+
+### And it decides whose sessions are whose
+
+A verifier is also what makes a session **belong** to somebody. With one
+configured, every door that opens a stored conversation asks the same question
+first — the two history ops below, an ordinary turn, and a request carrying a
+`decision` that resumes a paused run:
+
+> does this session belong to the caller who proved who they are?
+
+A turn naming somebody else's `sessionId` is refused with the same
+indistinguishable `SessionNotFoundError` (**404**) a transcript gets — *before*
+a line of that conversation is hydrated into a model's context, and before
+anything is written back. One question, one answer, at every door: a gate only
+some doors honour is not a gate, and the door that runs the model is the
+expensive one to get wrong.
+
+Ownership is the `principal` the **first** turn signed with, and no later turn
+moves it: a store never lets a second writer take a session it did not
+establish, and never erases an owner because one write happened to carry a
+leaner identity.
+
+Two consequences worth planning for:
+
+- Conversations stored **before** a door started verifying name no owner, so
+  they cannot be continued at one that does. That is a loud refusal by design —
+  the alternative is handing old conversations to whoever names them first.
+- A refused turn does tell the caller the id is taken. That is the one fact a
+  door which lets callers choose their own session ids cannot conceal; the
+  alternative (starting a fresh conversation over somebody else's) destroys it.
+
+Unset, none of this runs: a header-trust door hydrates exactly the session it is
+told to, as it always has.
+
+### The token never travels
+
+A bearer token is a credential, so it appears in no error, no event, no reply
+body and no log line — not truncated, not hashed, not "the first eight
+characters". What travels is the **class** of the failure
+(`IdentityFailureClass`): `'no-token'`, `'expired'`, `'not-yet-valid'`,
+`'wrong-audience'`, `'wrong-issuer'`, `'unverifiable'`,
+`'claimed-another-user'`. Each one is a different action for the caller, and
+none of them requires printing one character of the secret.
+
+`IdentityNotVerifiedError` (`ERR_IDENTITY_NOT_VERIFIED`, **401**) carries that
+class. `VerifierUnavailableError` (`ERR_IDENTITY_VERIFIER_UNAVAILABLE`, **503**)
+is the *other* fact: your identity provider was unreachable, the caller's token
+was never judged, and telling every client to re-authenticate against a provider
+that is already down is the wrong instruction at the worst moment.
+
+### Writing your own verifier
+
+`IdentityVerifier` is one method. It is handed the raw token (without the
+`Bearer ` prefix) and returns a `VerifiedIdentity` — `{ userId, roles?,
+claims? }` — or throws. An opaque token introspected against a server, a
+mutual-TLS thumbprint an edge proxy already checked, a signed cookie: all of
+them are the same shape.
+
+`roles` and `claims` reach the **admission policy** and the session-history ops
+and nothing else — stated rather than implied, because "the agent can see my
+roles" is exactly the kind of belief that gets built on. The run's identity
+stays the three-field tenant/principal/conversation tuple every store already
+scopes on.
+
+Both options are refused at construction when half-spelled — an `identity`
+without `verify`, an `admission` without `decide`. Both would fail *closed* at
+runtime, which sounds safe until you notice that a door refusing everybody for a
+configuration reason is an outage nobody can diagnose from the outside.
+
+Two helpers are exported for custom doors: `bearerToken(headers)` is the ONE
+extraction every dialect's credential arrives through, and
+`verifyRequestIdentity(options, headers, claimedUserId)` is the composer's own
+answer to "who is this", so a custom composition root inherits the same
+refusals rather than re-deriving them.
+
+### `jwksIdentity` — the shipped adapter
+
+One adapter covers cloud IdPs and on-prem ones, because JWKS is the same
+protocol in both: a URL that publishes signing keys, and tokens signed by one of
+them. `JwksIdentityOptions` takes `jwksUrl`, `issuer` and `audience` (all
+required — a verifier that accepted any issuer is a signature check with no
+opinion about who signed, and one with no audience honours a token minted for
+somebody else's API), plus `userIdClaim` (default `'sub'`), `rolesClaim`
+(default `'roles'`, read leniently — an array, or the space-delimited `scope`
+convention), `algorithms` (default: the RSA and ECDSA families — symmetric
+algorithms are deliberately excluded, because with a *public* key an accepted
+HMAC alg is the classic algorithm-confusion forgery), `clockToleranceSeconds`,
+`cacheMaxAgeMs` and `fetchTimeoutMs`.
+
+It checks the signature, `iss`, `aud`, `exp` and `nbf` — and nothing else. It is
+not an authorization decision, and it does **not** check revocation: a JWT is
+valid until it expires, and no amount of key fetching changes that. Short
+lifetimes are the answer; an adapter implying otherwise would be selling a
+guarantee the protocol does not make.
+
+It needs the `jose` peer dependency (`npm install jose`), raising
+`MissingJwksSupportError` when it is absent. In a bundled app where a bare
+specifier reaches the runtime unresolved, pass an already-imported module as
+`backend` — the `JoseBackend` slice is declared structurally, so a stub or a
+future major satisfies it without this package taking a hard type dependency on
+an optional peer.
+
+## Admission — `admission: { decide }`
+
+The cheapest refusal is the one made before the first model call. `admission`
+is where that decision goes: it is consulted once per turn, before any hydrate,
+any model call and any store write.
+
+```ts
+import { standingAgent, turnsPerHour } from 'agentfootprint/hosting';
+
+await standingAgent({
+  agent, sessions, host,
+  identity: { verify },                  // required for a PER-USER bound
+  admission: turnsPerHour({ limit: 60 }),
+});
+```
+
+An `AdmissionPolicy` sees an `AdmissionContext` — `{ identity?, sessionId?,
+recentSpend }` — and answers an `AdmissionVerdict`: `'allow'`, `{ queue: true }`
+(run it, but behind whatever this session already has in flight, even where the
+host would otherwise refuse a second concurrent turn) or `{ refuse: '<sentence>' }`.
+Deliberately not "delay by N ms" (a sleep is a thread the caller is paying for),
+not "degrade to a cheaper model" (silently answering from a different brain is
+the accepted-and-silently-wrong failure) and not a numeric priority (a priority
+means a scheduler, and this is a door).
+
+A refusal answers **429** as `AdmissionRefusedError`, carrying the policy's own
+sentence. The policy writes the words because the limit and its reset are facts
+only the operator has; a library-authored "rate limit exceeded" is a support
+ticket rather than something a caller can act on.
+
+`turnsPerHour({ limit, anonymousLimit? })` is the shipped reference policy —
+`TurnsPerHourOptions` is the whole surface. Read it and write yours: a real
+deployment's rule is usually "this plan, this endpoint, this time of day",
+which is knowledge a library does not have.
+
+### What "spend" honestly means
+
+`RecentSpend` is `{ turns, inputTokens, outputTokens, usd?, windowMs, complete }`.
+Tokens are summed from `agentfootprint.stream.llm_end`; `usd` from
+`agentfootprint.cost.tick`, and it is **absent rather than zero** when no
+pricing table is configured — a zero would read as "this caller has spent
+nothing" when the truth is "nobody is counting". `complete` is `false` while the
+process has been up for less than `windowMs`, so a policy knows when it is
+deciding on a partial window.
+
+**The accounting is PER PROCESS.** The `SpendLedger` (built by `spendLedger()`,
+configurable through `SpendLedgerOptions`, keyed by `spendKeyFor(identity)`) is
+an in-memory rolling window: two replicas keep two windows, so a limit of 20
+across three of them is a limit of 60, and a restart forgets. That is what an
+in-process accountant can truthfully claim, and it is said here so nobody builds
+a billing control on it by accident. A deployment that needs one number across a
+fleet writes a `decide` that reads its own store — the seam is the same one
+`turnsPerHour` uses.
+
+Turns are counted at **admission**, not completion, so a caller cannot hold N
+runs open under a limit of one. The stated consequence: a request the lane then
+refuses as a *concurrent run* still counts against the window. Deferring the
+count to the moment a run actually starts would fix that and open a bigger hole
+— a burst of simultaneous requests would each be decided against a window none
+of them had joined, and walk straight through the ceiling. Verified callers are keyed by the proven id;
+everyone else shares one anonymous bucket, which is the honest answer rather
+than a weakness — a session id would let a caller mint a fresh budget by asking
+for a new conversation.
+
+Unset, no ledger is built, no listener is installed, and not one line of this
+runs.
+
+## Session history — `session-list` / `session-transcript`
+
+A hosted agent stores conversations so a person can come back to one. Until
+9.26 the only way back was to already know the session id. Two wire operations
+answer the sidebar everyone actually builds:
+
+```jsonc
+// the caller's own conversations, newest first
+{ "op": "session-list" }
+// → { "sessions": [ { "sessionId": "…", "savedAt": 1736…, "format": "conversation-v1", "messageCount": 6 } ] }
+
+// one owned conversation's messages
+{ "op": "session-transcript", "sessionId": "…" }
+// → { "transcript": { "sessionId": "…", "messages": [ { "role": "user", "content": "…" } ] } }
+```
+
+`SessionSummary` is a listing row; `TranscriptMessage` is one projected
+message; `SessionWireRequest` and `SessionWireResult` are the port-side shapes
+behind them. `HostRequest.session` carries the operation and `HostReply.sessions`
+is the terminal it ends through — a host without that terminal answers
+`SessionsNotCarriedError` rather than improvising a body shape no client was
+written against.
+
+### Both ops REQUIRE verified identity
+
+Listing "your" sessions from an unverified header is enumeration with a friendly
+interface: guess a user id, read a stranger's conversations. So at a door with
+no verifier — and for an anonymous caller at a door that has one — both ops are
+refused by name (`SessionOpNeedsIdentityError`, **501**) rather than served
+under a name nobody proved. This is the one place in the hosting layer where a
+feature is gated on a security control being present, and it is gated because
+the feature without the control is a vulnerability rather than a smaller
+feature.
+
+### A foreign transcript is a 404, not a 403
+
+"That session exists but is not yours" tells an attacker which ids are real. A
+session that does not exist, one that belongs to somebody else, and one whose
+stored conversation names no owner are **one answer** — `SessionNotFoundError`,
+byte-identical but for the id the caller already knew.
+
+The same refusal guards the **ordinary turn door** at a verifying host, in the
+same words: hydrating a named session into a model's context is the same access
+as reading it back, so it cannot be the lenient one. See
+[whose sessions are whose](#and-it-decides-whose-sessions-are-whose).
+
+### What a transcript contains, and what it does not
+
+Roles and text, in stored order. Deliberately **not** tool call arguments, tool
+results, tool names, or the system prompt: a transcript is what the two parties
+said, and the tool leg is the run's internals — it routinely carries resolved
+credentials and raw records, and a screen that rendered it would publish the
+inside of the agent to whoever is signed in. `envelopeTranscript(envelope)` is
+that projection, and `envelopeOwner(envelope)` is the one derivation of who a
+stored session belongs to.
+
+### The owner index — two OPTIONAL store members
+
+`SessionLifecycle` gains `listByUser?(userId, options?)` → `SessionListPage`
+(paged by `SessionListOptions`) and `ownerOf?(sessionId)`. Optional and
+feature-detected, because the port's two required methods are a key/value map
+and most stores are exactly that. `memorySessions()` and `sqliteSessions({ file })`
+both implement them; a store that does not makes the ops refuse **by name**
+(`SessionIndexUnavailableError`, naming the missing member) rather than answer
+"you have no sessions", which nobody could distinguish from the truth.
+
+**Ownership is derived, never declared.** `persist` takes no owner and gains
+none: a store fills its index from the stored envelope's own
+`identity.principal`. A store that let a caller state an owner would be a store
+where owning somebody's session is a matter of asking. A conversation that ran
+anonymously has no owner and appears in nobody's list — the honest consequence
+of deriving rather than inventing.
+
+**And established once.** The first turn that signs for a conversation owns it;
+no later write moves that — not a leaner identity (which would erase it) and not
+a different one (which would transfer it). Both shipped stores implement the
+index that way, and a custom one that let the last writer win would undo every
+ownership check made against it one turn later.
+
+`sqliteSessions` adds two nullable columns and one index to its existing table
+without bumping the schema version: an older reader names its four columns
+explicitly in both its `INSERT` and its `SELECT`, so two extra columns are
+invisible to it, and refusing a 9.25 file for missing them would be the opposite
+mistake. Rows written before this release carry no owner and appear in nobody's
+list until their next turn re-persists them — a stated migration boundary rather
+than a bug report.
+
+### One `op` field, two domains
+
+The wire's `op` field now names operations from two domains, so the grammar has
+one owner rather than one per dialect. `WIRE_OPS` is the list (`ALL_WIRE_OPS`,
+`WireOpName`, `isWireOp`), `refuseUnknownWireOp(op)` is the single refusal for a
+name nobody speaks, and each domain's reader **declines** the other's ops rather
+than claiming them. Custom `HttpWire` dialects call `readSessionWireOp(facts.body)`
+beside `readArtifactWireOp`, and answer with `sessionWireBody(result)` —
+`SESSION_LIST_OP` and `SESSION_TRANSCRIPT_OP` are the wire spellings. A typo'd
+op still refuses with **one** message listing every operation, from either
+reader, so the answer never depends on which one a dialect happened to call
+first.
+
 ## `durability` — how often progress becomes crash-survivable
 
 An agent that only writes when a turn ends is one restart away from losing

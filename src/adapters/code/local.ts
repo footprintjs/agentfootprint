@@ -46,7 +46,8 @@
  *     .build();
  */
 
-import type { CodeResult, CodeRunner, CodeSession } from '../types.js';
+import type { CodeInput, CodeResult, CodeRunner, CodeSession, StagedCodeInput } from '../types.js';
+import { STAGED_INPUTS_ENV } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 export interface LocalCodeRunnerOptions {
@@ -85,6 +86,20 @@ export interface LocalCodeRunnerOptions {
   readonly id?: string;
   /** @internal Test seam — the `node:child_process` module. */
   readonly _childProcess?: ChildProcessModuleLike;
+  /** @internal Test seam — the `node:fs` slice staging uses. */
+  readonly _fs?: FsModuleLike;
+  /** @internal Test seam — where staging directories are created. Defaults to
+   *  the OS temp directory. */
+  readonly _stagingRoot?: string;
+}
+
+/** The slice of `node:fs` staging touches. Loaded lazily, and ONLY when a
+ *  caller actually stages something — a session that never stages never asks
+ *  this runtime for a filesystem. */
+export interface FsModuleLike {
+  readonly mkdtempSync?: (prefix: string) => string;
+  readonly writeFileSync?: (path: string, data: string | Uint8Array) => void;
+  readonly rmSync?: (path: string, options?: { recursive?: boolean; force?: boolean }) => void;
 }
 
 /** The slice of `node:child_process` this adapter touches. */
@@ -137,6 +152,13 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
       // `codeRunnerTool` states this in the tool description it hands the model.
       const sessionId = `local:${req.key}`;
       let stopped = false;
+      /** The session's staging directory, created on the FIRST `stageInputs`
+       *  and released by `stop()`. Absent until then, which is what keeps a
+       *  session that never stages byte-identical to every earlier release —
+       *  no directory, no environment variable, no filesystem module loaded. */
+      let stagingDir: string | undefined;
+      /** name → path, exactly as the manifest carries it. */
+      const staged = new Map<string, string>();
       return Promise.resolve({
         id: sessionId,
         async execute(exec): Promise<CodeResult> {
@@ -163,7 +185,19 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
               cwd: options.cwd ?? process.cwd(),
               // ALLOWLIST. `process.env` is deliberately NOT spread in — only
               // PATH, so the OS can find the interpreter, and it is overridable.
-              env: { PATH: process.env.PATH ?? '', ...(options.env ?? {}) },
+              //
+              // The staged-input manifest joins it LAST and is not overridable:
+              // it is not configuration, it is a fact about this execution, and
+              // an operator `env` that happened to define the same name would
+              // otherwise hand the model paths to files that are not there.
+              // Absent entirely when nothing was staged.
+              env: {
+                PATH: process.env.PATH ?? '',
+                ...(options.env ?? {}),
+                ...(staged.size > 0 && {
+                  [STAGED_INPUTS_ENV]: JSON.stringify(Object.fromEntries(staged)),
+                }),
+              },
               timeoutMs: exec.timeoutMs ?? timeoutMs,
               ...(exec.signal && { signal: exec.signal }),
             },
@@ -187,16 +221,102 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
             ...(Object.keys(truncated).length > 0 && { truncated }),
           };
         },
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async stageInputs(inputs: readonly CodeInput[]): Promise<readonly StagedCodeInput[]> {
+          if (stopped) {
+            throw new Error(
+              `localCodeRunner: session ${sessionId} was stopped; open a new one to stage inputs.`,
+            );
+          }
+          const fs = resolveFs(options);
+          const landed: StagedCodeInput[] = [];
+          stagingDir ??= makeStagingDir(fs, options._stagingRoot);
+          for (const input of inputs) {
+            // The name is CALLER data landing in a filesystem, so it is
+            // reduced to a single inert segment here rather than trusted: a
+            // name of '../../etc/passwd' becomes a literal file name, and the
+            // manifest still keys it by what was asked for.
+            const fileName = safeFileName(input.fileName ?? input.name);
+            const path = `${stagingDir}/${fileName}`;
+            const bytes =
+              typeof input.data === 'string'
+                ? Buffer.byteLength(input.data, 'utf8')
+                : input.data.byteLength;
+            writeFile(fs, path, input.data);
+            staged.set(input.name, path);
+            landed.push({ name: input.name, path, bytes });
+          }
+          return landed;
+        },
         stop(): Promise<void> {
-          // Nothing to release: each execution already ended with its process.
           // Idempotent, and it refuses later executions rather than silently
           // starting a fresh process under a session the caller closed.
           stopped = true;
+          // Staged inputs live as long as the session, and this is the end of
+          // it. Failure is swallowed: a temp directory that could not be
+          // removed is a tidiness problem, and turning it into a thrown
+          // teardown would fail a turn that already succeeded.
+          if (stagingDir !== undefined) {
+            try {
+              resolveFs(options).rmSync?.(stagingDir, { recursive: true, force: true });
+            } catch {
+              // See above.
+            }
+            stagingDir = undefined;
+            staged.clear();
+          }
           return Promise.resolve();
         },
       });
     },
   };
+}
+
+/** `node:fs`, or a refusal naming what staging needs. Lazy for the same reason
+ *  `node:child_process` is: a browser bundle that never stages must not pay
+ *  for a module it cannot have. */
+function resolveFs(options: LocalCodeRunnerOptions): FsModuleLike {
+  if (options._fs) return options._fs;
+  try {
+    return lazyRequire<FsModuleLike>('node:fs');
+  } catch {
+    throw new Error(
+      'localCodeRunner: staging inputs needs `node:fs`, which this runtime does not provide ' +
+        '(a browser bundle, or a restricted worker). Use a runner whose backend can write ' +
+        'into its own session, or drop the tool’s `wants` declaration.',
+    );
+  }
+}
+
+/** One private directory per session, under the OS temp root. */
+function makeStagingDir(fs: FsModuleLike, root: string | undefined): string {
+  const mkdtempSync = fs.mkdtempSync;
+  if (typeof mkdtempSync !== 'function') {
+    throw new Error('localCodeRunner: `node:fs` resolved but `mkdtempSync` is missing.');
+  }
+  const base = root ?? lazyRequire<{ tmpdir(): string }>('node:os').tmpdir();
+  return mkdtempSync(`${base}/af-code-`);
+}
+
+function writeFile(fs: FsModuleLike, path: string, data: string | Uint8Array): void {
+  const writeFileSync = fs.writeFileSync;
+  if (typeof writeFileSync !== 'function') {
+    throw new Error('localCodeRunner: `node:fs` resolved but `writeFileSync` is missing.');
+  }
+  writeFileSync(path, data);
+}
+
+/**
+ * One caller-supplied name → one inert file-name segment.
+ *
+ * Separators and dots are replaced rather than stripped, so `..` cannot
+ * survive as a parent hop and `a/b` cannot become two segments — the same law
+ * `artifacts/scopePath` states for scope tuples, applied to the one other
+ * place caller strings become file names in this package.
+ */
+function safeFileName(raw: string): string {
+  const cleaned = raw.replace(/[^A-Za-z0-9._-]/g, '_').replace(/\.{2,}/g, '_');
+  return cleaned.length > 0 ? cleaned.slice(0, 120) : 'input';
 }
 
 function resolveChildProcess(options: LocalCodeRunnerOptions): ChildProcessModuleLike {

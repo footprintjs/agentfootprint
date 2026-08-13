@@ -72,6 +72,7 @@
  */
 
 import { artifactWireBody, readArtifactWireOp } from '../../hosting/artifactWire.js';
+import { readSessionWireOp, sessionWireBody } from '../../hosting/sessionWire.js';
 import { checkEnvelope } from '../../hosting/envelope.js';
 import { headerValue, httpHost } from '../../hosting/httpHost.js';
 import type {
@@ -307,12 +308,19 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
       // `{ op, ref }` grammar reads here exactly as it does on `jsonWire`,
       // and a screen behind this runtime redeems tickets the same way.
       const artifact = readArtifactWireOp(facts.body);
+      // The session-history operations (9.26.0). Same reasoning as the
+      // artifact ops one line up: the runtime passes the payload through
+      // verbatim, so the shared grammar reads here exactly as it does on
+      // `jsonWire`, and a sidebar behind this runtime lists conversations the
+      // same way.
+      const session = readSessionWireOp(facts.body);
       return {
         input,
         ...(sessionId !== undefined && { sessionId }),
         ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
         ...(artifact !== undefined && { artifact }),
+        ...(session !== undefined && { session }),
       };
     },
     // The runtime polls this to decide whether the container is ready and
@@ -336,6 +344,9 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
     // A resolved claim ticket: the standard body, plus this dialect's own
     // `status` beside it — the same envelope rule its other replies follow.
     artifact: (result) => ({ ...artifactWireBody(result), status: 'success' }),
+    // Resolved session history, in this dialect's own envelope — the same
+    // spread-and-add rule its other replies follow.
+    sessions: (result) => ({ ...sessionWireBody(result), status: 'success' }),
     readConversation: readAgentCoreConversation,
   };
 }

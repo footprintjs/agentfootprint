@@ -37,11 +37,12 @@
 
 import type { ArtifactMeta } from '../artifacts/types.js';
 import { InvalidWireOpError } from './errors.js';
+import { isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
 
 /** The wire spelling of `head` — metadata only, the render-by-ref decision. */
-export const ARTIFACT_HEAD_OP = 'artifact-head';
+export const ARTIFACT_HEAD_OP = WIRE_OPS.artifactHead;
 /** The wire spelling of `get` — metadata + payload. */
-export const ARTIFACT_GET_OP = 'artifact-get';
+export const ARTIFACT_GET_OP = WIRE_OPS.artifactGet;
 
 /**
  * One artifact operation, as a request carries it — the port-side shape
@@ -77,9 +78,12 @@ export interface ArtifactWireResult {
  * Read an artifact operation out of a request body, if the body names one.
  *
  * Returns `undefined` for a body with no `op` field — an ordinary invoke,
- * untouched. Throws {@link InvalidWireOpError} for an `op` this grammar does
- * not know, and for a known op whose `ref` is missing or blank: a request
- * that NAMED an operation must never quietly become something else.
+ * untouched — and for an op that belongs to ANOTHER domain's reader (the
+ * session-history ops, 9.26.0): declining is not the same as refusing, and a
+ * reader that claimed a neighbour's op would be the fork this grammar has one
+ * owner to prevent. Throws {@link InvalidWireOpError} for an `op` nobody
+ * speaks, and for a known op whose `ref` is missing or blank: a request that
+ * NAMED an operation must never quietly become something else.
  *
  * Exported for custom {@link import('./httpHost.js').HttpWire} dialects, so a
  * third dialect reads the ops exactly as the two shipped ones do.
@@ -90,12 +94,10 @@ export function readArtifactWireOp(
   const op = body.op;
   if (op === undefined) return undefined;
   if (op !== ARTIFACT_HEAD_OP && op !== ARTIFACT_GET_OP) {
-    throw new InvalidWireOpError(
-      `the wire operation '${String(op)}' is not one this host speaks. Known operations: ` +
-        `'${ARTIFACT_HEAD_OP}' (the claim ticket's metadata) and '${ARTIFACT_GET_OP}' ` +
-        `(metadata + payload), each taking { ref }. A request without 'op' is an ordinary ` +
-        `invoke.`,
-    );
+    // Somebody else's op — theirs to read. Nobody's — one shared refusal,
+    // listing every operation this package speaks.
+    if (isWireOp(op)) return undefined;
+    refuseUnknownWireOp(op);
   }
   const ref = body.ref;
   if (typeof ref !== 'string' || ref.trim().length === 0) {

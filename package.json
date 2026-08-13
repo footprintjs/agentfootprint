@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.25.0",
+  "version": "9.26.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -280,6 +280,7 @@
     "@yarflam/potion-base-8m": "*",
     "footprintjs": "^9.15.0",
     "ioredis": "*",
+    "jose": "*",
     "openai": "*",
     "pg": "*",
     "unpdf": "*",
@@ -342,6 +343,9 @@
     },
     "@google-cloud/storage": {
       "optional": true
+    },
+    "jose": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -359,6 +363,7 @@
     "eslint-config-prettier": "^6.15.0",
     "footprintjs": "^9.15.0",
     "google-auth-library": "^11.0.1",
+    "jose": "^6.2.7",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

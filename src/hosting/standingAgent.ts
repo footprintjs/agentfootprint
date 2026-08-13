@@ -104,8 +104,16 @@ import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import { durableWriter, type DurableWriter } from './durability.js';
-import { readEnvelope, readPausedRun, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
+  envelopeOwner,
+  envelopeTranscript,
+  readEnvelope,
+  readPausedRun,
+  toEnvelope,
+  toPausedEnvelope,
+} from './envelope.js';
+import {
+  AdmissionRefusedError,
   ArtifactNotCarriedError,
   ArtifactNotFoundError,
   ArtifactSessionRequiredError,
@@ -114,9 +122,18 @@ import {
   NoArtifactStoreError,
   NoPendingAskError,
   PauseNotCarriedError,
+  SessionIndexUnavailableError,
+  SessionNotFoundError,
+  SessionOpNeedsIdentityError,
+  SessionsNotCarriedError,
   UnreadableEnvelopeError,
 } from './errors.js';
+import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
+import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
+import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
+import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import type {
+  CheckpointEnvelope,
   HostHandle,
   HostReply,
   HostRequest,
@@ -171,6 +188,17 @@ interface Lane {
   /** When this lane last took a request — the LRU key. */
   lastUsedMs: number;
   writer?: DurableWriter;
+  /**
+   * The ledger key of the run in flight (9.26.0), so the token and cost events
+   * this lane emits are billed to whoever caused them.
+   *
+   * Per LANE and set for the duration of one run, which is exact rather than
+   * approximate: a lane runs one request at a time, and an event names no
+   * caller of its own — the agent that produced it is the only thing that says
+   * whose it was. `undefined` with no admission policy, and then nothing
+   * subscribes at all.
+   */
+  activeSpendKey?: string;
   /** Undo everything this composer attached to the agent. */
   detach: () => void;
 }
@@ -216,6 +244,16 @@ export async function standingAgent<TH extends HostHandle>(
   const durability = options.durability ?? 'exit';
   const sharedAgent = options.agent;
   const factory = options.agentFactory;
+  /** The badge check (9.26.0), or `undefined` — the zero-delta path. */
+  const identityOptions = options.identity;
+  /** The admission policy (9.26.0), or `undefined`. */
+  const admission = options.admission;
+  /**
+   * The rolling-window accountant — built ONLY when a policy exists, because
+   * with no policy nobody would ever read it and keeping a per-caller map of a
+   * server's whole traffic would be a cost nobody asked for.
+   */
+  const ledger: SpendLedger | undefined = admission !== undefined ? spendLedger() : undefined;
 
   // ── Refused at construction, before a socket exists ──────────────────
   //
@@ -236,6 +274,30 @@ export async function standingAgent<TH extends HostHandle>(
       `[hosting] standingAgent needs something to answer with: pass 'agent' (one instance ` +
         `shared by every session) or 'agentFactory' (a new instance per active session). ` +
         `Neither was given, so there is nothing to serve.`,
+    );
+  }
+  // Two options whose shape TypeScript enforces and plain JavaScript does not.
+  // Both fail CLOSED at runtime if left half-spelled — an `identity` with no
+  // `verify` would refuse every caller as unverifiable, an `admission` with no
+  // `decide` would throw on the first turn — and a door that refuses everybody
+  // for a configuration reason is exactly the outage that takes an hour to
+  // diagnose from the outside. Named here instead, before a socket exists.
+  if (identityOptions !== undefined && typeof identityOptions.verify !== 'function') {
+    throw new Error(
+      `[hosting] standingAgent was given 'identity' without a \`verify\` function. It is the ` +
+        `strategy that turns a caller's bearer token into a proven user, so there is nothing ` +
+        `to verify with — and with it half-spelled every request would be refused as ` +
+        `unverifiable. Pass identity: { verify: jwksIdentity({ jwksUrl, issuer, audience }` +
+        `).verify } — or any IdentityVerifier's verify — or drop the option and read ` +
+        `HostRequest.userId as the transport's own claim, exactly as before.`,
+    );
+  }
+  if (admission !== undefined && typeof admission.decide !== 'function') {
+    throw new Error(
+      `[hosting] standingAgent was given 'admission' without a \`decide\` function. It is the ` +
+        `whole policy — one method answering 'allow' | { queue: true } | { refuse: '<why>' } ` +
+        `— so a bag without it decides nothing and would throw on the first turn. Pass ` +
+        `admission: turnsPerHour({ limit }), or your own { decide }, or drop the option.`,
     );
   }
   // A pool bound with no pool is a caller who believes something untrue about
@@ -300,6 +362,37 @@ export async function standingAgent<TH extends HostHandle>(
       const content = (event as { payload?: { content?: string } }).payload?.content;
       if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
     });
+    // ── Spend accounting (9.26.0) ────────────────────────────────────
+    // Only with an admission policy. Without one these two subscriptions are
+    // never made — the agent is untouched and the events cost their usual
+    // nothing (the dispatcher's own no-listener fast path).
+    //
+    // Two sources, because they answer two different questions honestly:
+    // `llm_end` always carries TOKENS, and `cost.tick` carries MONEY only
+    // where a pricing table turned tokens into it. Summing an invented rate
+    // here would be a number that looks like a bill.
+    const offUsage =
+      ledger === undefined
+        ? undefined
+        : agent.on('agentfootprint.stream.llm_end', (event) => {
+            const key = lane.activeSpendKey;
+            if (key === undefined) return;
+            const usage = (event as { payload?: { usage?: { input?: number; output?: number } } })
+              .payload?.usage;
+            ledger.add(key, {
+              inputTokens: usage?.input ?? 0,
+              outputTokens: usage?.output ?? 0,
+            });
+          });
+    const offCost =
+      ledger === undefined
+        ? undefined
+        : agent.on('agentfootprint.cost.tick', (event) => {
+            const key = lane.activeSpendKey;
+            if (key === undefined) return;
+            const usd = (event as { payload?: { estimatedUsd?: number } }).payload?.estimatedUsd;
+            if (typeof usd === 'number' && Number.isFinite(usd)) ledger.add(key, { usd });
+          });
     // Under 'exit' NOTHING is built: no observer on the agent, no barrier, no
     // per-commit work. That is what "the default is byte-identical" means here —
     // not a mode that happens to write once, but wiring that is never installed.
@@ -319,6 +412,8 @@ export async function standingAgent<TH extends HostHandle>(
     lane.detach = (): void => {
       offTurnStart();
       offToken();
+      offUsage?.();
+      offCost?.();
       uninstallBarrier?.();
       detachWriter?.();
     };
@@ -447,9 +542,15 @@ export async function standingAgent<TH extends HostHandle>(
   }
 
   /** Queue `work` behind everything already waiting on this lane, FIFO. */
-  function serialize(lane: Lane, sessionKey: string, work: () => Promise<void>): Promise<void> {
+  function serialize(
+    lane: Lane,
+    sessionKey: string,
+    work: () => Promise<void>,
+    queueAnyway = false,
+  ): Promise<void> {
     if (
       policy === 'reject' &&
+      !queueAnyway &&
       (lane.activeSession === sessionKey || lane.queued.includes(sessionKey))
     ) {
       return Promise.reject(new ConcurrentRunError(sessionKey, lane.activeRunId));
@@ -481,6 +582,35 @@ export async function standingAgent<TH extends HostHandle>(
   }
 
   const handler = async (request: HostRequest, reply: HostReply): Promise<void> => {
+    // ── The badge, before anything else ───────────────────────────────
+    // FIRST, and once — so a turn, a claim-ticket redemption and a session
+    // read all inherit one answer to "who is this", and a door added later
+    // cannot accidentally be the lenient one. With no verifier configured this
+    // returns `undefined` without touching the request: every earlier
+    // release's behaviour, to the byte.
+    let verified: VerifiedIdentity | undefined;
+    try {
+      verified = await verifyRequestIdentity(identityOptions, request.headers, request.userId);
+    } catch (err) {
+      reply.fail(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
+    // The user id that reaches every downstream composition. With a verifier
+    // it is the one the TOKEN proved (the request's own claim was already
+    // reconciled or refused); without one it is exactly what the transport
+    // said, unchanged since 9.12.0.
+    const userId = verified?.userId ?? request.userId;
+    const identified: HostRequest = userId === request.userId ? request : { ...request, userId };
+
+    // ── Reading history is not a turn either ──────────────────────────
+    if (identified.session !== undefined) {
+      try {
+        await answerSessionOp(identified.session, verified, reply);
+      } catch (err) {
+        reply.fail(err instanceof Error ? err : new Error(String(err)));
+      }
+      return;
+    }
     // ── A claim-ticket redemption is not a turn ────────────────────────
     // Its presence is the discriminant, exactly as `decision`'s is one line
     // down: a request carrying `artifact` redeems a ref and never starts,
@@ -488,15 +618,15 @@ export async function standingAgent<TH extends HostHandle>(
     // it deliberately bypasses the lane's serialization — a screen describing
     // a chart while the model is mid-turn must not be refused as a
     // "concurrent run", and must not make the turn wait either.
-    if (request.artifact !== undefined) {
+    if (identified.artifact !== undefined) {
       try {
-        await answerArtifact(request.artifact, request, reply);
+        await answerArtifact(identified.artifact, identified, reply);
       } catch (err) {
         reply.fail(err instanceof Error ? err : new Error(String(err)));
       }
       return;
     }
-    const sessionId = request.sessionId;
+    const sessionId = identified.sessionId;
     // A request with no session has nothing to hydrate and nowhere to persist
     // that the caller could ask for again, so it gets its own key and can never
     // collide with anyone. In the pooled shape those requests still SHARE one
@@ -505,12 +635,120 @@ export async function standingAgent<TH extends HostHandle>(
     // collision, which they are not.
     const sessionKey = sessionId ?? `#anonymous-${++anonymous}`;
     try {
+      // ── Admission, before a lane is even chosen ────────────────────
+      // The cheapest refusal is the one made before any work: no hydrate, no
+      // model call, no store write. With no policy this is a single
+      // `undefined` check and nothing else runs.
+      const spendKey = spendKeyFor(verified);
+      let queueAnyway = false;
+      if (admission !== undefined && ledger !== undefined) {
+        const verdict = await admission.decide({
+          ...(verified !== undefined && { identity: verified }),
+          ...(sessionId !== undefined && { sessionId }),
+          recentSpend: ledger.read(spendKey),
+        });
+        if (typeof verdict === 'object' && verdict !== null && 'refuse' in verdict) {
+          reply.fail(new AdmissionRefusedError(verdict.refuse, userId));
+          return;
+        }
+        queueAnyway = typeof verdict === 'object' && verdict !== null && 'queue' in verdict;
+        // Counted at ADMISSION, not at completion: a turn that is running has
+        // been spent whether or not it ever answers, and counting on the way
+        // out would let a caller hold N runs open under a limit of one.
+        //
+        // The stated consequence: a request the LANE then refuses as a
+        // concurrent run still counts against the window. Deferring the count
+        // to the moment a run actually starts would fix that and open a
+        // bigger hole — a burst of simultaneous requests would each be decided
+        // against a window none of them had joined, and walk straight through
+        // the ceiling. A bound that a burst defeats is not a bound.
+        ledger.admit(spendKey);
+      }
       const lane = laneFor(sessionId);
-      await serialize(lane, sessionKey, () => answerOne(lane, sessions, request, reply, sessionId));
+      await serialize(
+        lane,
+        sessionKey,
+        () => answerOne(lane, sessions, identified, reply, sessionId, verified, spendKey),
+        queueAnyway,
+      );
     } catch (err) {
       reply.fail(err instanceof Error ? err : new Error(String(err)));
     }
   };
+
+  /**
+   * Answer "which conversations are mine?" and "what did we say?" — the two
+   * session-history ops (9.26.0).
+   *
+   * ── Three refusals before an answer is even attempted ────────────────────
+   *  1. no verifier on this door → {@link SessionOpNeedsIdentityError}. Reading
+   *     "your" sessions off an unverified header is enumeration.
+   *  2. a verifier, and this caller proved nothing (an anonymous request at a
+   *     door built with `allowAnonymous`) → the same refusal shape: anonymous
+   *     owns nothing, and answering an empty list would imply the question was
+   *     honoured.
+   *  3. the session store keeps no owner index →
+   *     {@link SessionIndexUnavailableError}, naming the missing member. An
+   *     unanswerable question is not an empty result.
+   *
+   * ── And ONE indistinguishable not-found ──────────────────────────────────
+   * A transcript for a session that does not exist, one owned by somebody
+   * else, and one whose stored conversation names no owner all end the same
+   * way. Told apart, they would be an oracle for which session ids are real.
+   *
+   * Read-only and lane-free: history is answered out of the session store,
+   * which no run holds, so nothing here queues behind a turn or is refused as
+   * a concurrent one.
+   */
+  async function answerSessionOp(
+    op: SessionWireRequest,
+    verified: VerifiedIdentity | undefined,
+    reply: HostReply,
+  ): Promise<void> {
+    const opName = op.op === 'list' ? SESSION_LIST_OP : SESSION_TRANSCRIPT_OP;
+    if (identityOptions === undefined || verified === undefined) {
+      reply.fail(new SessionOpNeedsIdentityError(opName));
+      return;
+    }
+    if (op.op === 'list') {
+      if (sessions.listByUser === undefined) {
+        reply.fail(new SessionIndexUnavailableError(opName, 'listByUser'));
+        return;
+      }
+      const page = await sessions.listByUser(verified.userId);
+      deliverSessions(reply, opName, { op: 'list', sessions: page.sessions });
+      return;
+    }
+    if (sessions.ownerOf === undefined) {
+      reply.fail(new SessionIndexUnavailableError(opName, 'ownerOf'));
+      return;
+    }
+    const owner = await sessions.ownerOf(op.sessionId);
+    if (owner === undefined || owner !== verified.userId) {
+      // The ONE not-found. Missing, foreign and owner-less are one answer.
+      reply.fail(new SessionNotFoundError(op.sessionId));
+      return;
+    }
+    await sessions.onWake?.(op.sessionId, 'transcript');
+    let stored;
+    try {
+      stored = await sessions.hydrate(op.sessionId);
+    } catch (err) {
+      throw err instanceof UnreadableEnvelopeError ? err.withSession(op.sessionId) : err;
+    }
+    if (stored === undefined) {
+      // The index said one thing and the store another — a session forgotten
+      // between the two calls. Same not-found: the caller learns nothing it
+      // did not already know.
+      reply.fail(new SessionNotFoundError(op.sessionId));
+      return;
+    }
+    deliverSessions(reply, opName, {
+      op: 'transcript',
+      sessionId: op.sessionId,
+      messages: envelopeTranscript(stored),
+    });
+  }
 
   /**
    * Redeem one claim ticket for the screen: `artifact-head` (metadata — the
@@ -626,18 +864,87 @@ export async function standingAgent<TH extends HostHandle>(
     }
   }
 
+  /**
+   * Whose conversation is this — and may THIS caller open it? (9.26.0)
+   *
+   * The ownership question, asked ONCE and answered the same way at every door
+   * that opens a session. `session-transcript` asks it of the store's index;
+   * a TURN asks it of the conversation it just hydrated — the same derivation
+   * (`envelopeOwner`, the `principal` the composer itself wrote), so a store
+   * with no index is protected exactly as well as one with a fast one, and no
+   * second round-trip is spent to learn something already in hand.
+   *
+   * That a turn had to ask at all is the lesson: the ops that READ history were
+   * gated from the day they were written, while the ordinary door beside them
+   * hydrated any named session, answered from it, and re-stamped its owner —
+   * one handler, two answers, and the strict one was the decoration. A gate
+   * that only some doors honour is not a gate.
+   *
+   * The rule, whole:
+   *
+   *  - **No verifier configured → no question asked.** A door that reads
+   *    `userId` off a header has no proof to compare against, and inventing
+   *    one would refuse turns that worked in every earlier release. Byte-
+   *    identical, deliberately: how much a header is worth is the deployment's
+   *    answer, and this is the option that says so.
+   *  - **Verified caller, owned session → the owner, and only the owner.**
+   *  - **Verified caller, session that names no owner → refused.** The same
+   *    answer `session-transcript` gives, for the same reason: a conversation
+   *    nobody signed for is not evidence that it is yours. A store written
+   *    before this door verified anything therefore holds sessions that cannot
+   *    be continued — a stated migration boundary, and a loud one, rather than
+   *    a door that hands over conversations to whoever names them first.
+   *  - **Anonymous caller (`allowAnonymous`) → only a session nobody owns.**
+   *    Which is the same rule spelled with `undefined` on both sides.
+   *
+   * A session that does not exist YET is not this function's business: the
+   * caller's own first turn creates it, and the ownership fact is written when
+   * it persists.
+   *
+   * ── A conversation this runtime cannot read has no owner it can name ───────
+   * The question is asked BEFORE the strict readers, so a stored session in a
+   * format this build does not know refuses as "not one you can open" rather
+   * than describing the state of somebody's storage to a stranger. The
+   * consequence, stated: at a verifying door that is also the answer its real
+   * owner gets, because a runtime that cannot read a conversation genuinely
+   * cannot tell whose it is, and "this is yours, but broken" is a claim it
+   * would be making up. A door with no verifier is untouched — it still fails
+   * loudly by name (`UnreadableEnvelopeError`), which is where an operator
+   * mid-migration meets that fact.
+   *
+   * ── The one thing this cannot hide ─────────────────────────────────────────
+   * A refused turn tells the caller the id is taken, because the alternative
+   * (starting a fresh conversation over somebody else's) destroys it. That is
+   * the only fact a door which lets callers choose their own session ids can
+   * never conceal — and it is a long way from the conversation itself, which is
+   * what the refusal keeps.
+   */
+  function mayOpenSession(
+    stored: CheckpointEnvelope,
+    verified: VerifiedIdentity | undefined,
+  ): boolean {
+    if (identityOptions === undefined) return true;
+    return envelopeOwner(stored) === verified?.userId;
+  }
+
   async function answerOne(
     lane: Lane,
     store: SessionLifecycle,
     request: HostRequest,
     reply: HostReply,
     sessionId: string | undefined,
+    verified: VerifiedIdentity | undefined,
+    spendKey?: string,
   ): Promise<void> {
     const runner = lane.agent;
     lane.activeReply = reply;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
     lane.activeSessionId = sessionId;
+    // Whose usage this lane's next token and cost events belong to. Set only
+    // with an admission policy; the subscriptions that read it do not exist
+    // otherwise.
+    if (ledger !== undefined) lane.activeSpendKey = spendKey;
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
@@ -648,6 +955,19 @@ export async function standingAgent<TH extends HostHandle>(
         try {
           const stored = await store.hydrate(sessionId);
           if (stored !== undefined) {
+            // WHOSE conversation this is, before a single line of it is read
+            // into this run. A turn is the door that hydrates history into a
+            // model's context AND the door that re-persists who owns it, so it
+            // is the door where getting this wrong costs the most: see
+            // `mayOpenSession` for the rule and its one honest leak.
+            //
+            // Placed before the readers on purpose — an unreadable envelope
+            // belonging to somebody else must answer "not yours", not describe
+            // the state of a stranger's storage.
+            if (!mayOpenSession(stored, verified)) {
+              reply.fail(new SessionNotFoundError(sessionId));
+              return;
+            }
             // Both readers throw by name on a format this runtime cannot read —
             // better a loud refusal than an agent answering from half a session.
             if (stored.format === 'flowchart-v1') paused = readPausedRun(stored);
@@ -744,6 +1064,7 @@ export async function standingAgent<TH extends HostHandle>(
     } finally {
       lane.activeReply = undefined;
       lane.activeSessionId = undefined;
+      lane.activeSpendKey = undefined;
     }
   }
 
@@ -961,6 +1282,22 @@ function deliverArtifact(reply: HostReply, result: ArtifactWireResult): void {
     return;
   }
   reply.fail(new ArtifactNotCarriedError(result.ref));
+}
+
+/**
+ * End the reply with resolved session history — through the terminal built for
+ * it when the host has one, and through the named refusal when it does not.
+ *
+ * The {@link deliverArtifact} law, applied to the third optional terminal: a
+ * host that cannot describe the result says so by name rather than delivering
+ * an improvised shape or nothing.
+ */
+function deliverSessions(reply: HostReply, op: string, result: SessionWireResult): void {
+  if (reply.sessions) {
+    reply.sessions(result);
+    return;
+  }
+  reply.fail(new SessionsNotCarriedError(op));
 }
 
 /**

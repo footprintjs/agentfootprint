@@ -7,6 +7,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.26.0] - 2026-08-13
+
+**The server-brain deployment completes: verified identity at the door, spend
+bounds per user, recordings and history served over the wire, refs inside
+code sandboxes, and one nudge that ends retry loops.**
+
+### Added — recordings as artifacts
+
+```ts
+const agent = Agent.create({
+  provider,
+  artifacts: { store: fileArtifacts({ dir }), recordings: true },
+}).build();
+```
+
+Every completed run mints its own `{ snapshot, events, structure }` — the
+same shape `recordRun` has produced since 8.x — into the artifact store under
+kind `'recording/run'`, after the answer is final. No new wire operation: the
+existing `{ op: 'artifact-get', ref }` redeems it, so any screen that already
+speaks the artifact wire can replay a run it never held a reference to
+before this shipped.
+
+It is deliberately **awaited**, not fired-and-forgotten — stated as a cost.
+The answer cannot change by the time the mint runs, but a container that
+exits the moment it returns a reply would lose a fire-and-forget write, and
+that is precisely the serverless deployment recordings are for. The cost is
+one store write per turn, on the option. A mint failure (a full store, a
+snapshot that will not serialize) can never fail the run: the reason lands as
+`agentfootprint.artifacts.refused` and the turn's own answer returns
+unchanged.
+
+### Added — `verifyIdentity` + `jwksIdentity`
+
+Bearer-token verification at the hosting door, BEFORE the run's scope is
+composed — the ordering is the feature, since that composed scope is what
+memory namespaces on, what artifacts isolate on, and what a credential
+provider scopes a vault on:
+
+```ts
+await standingAgent({
+  agent, sessions, host: nodeHost({ port: 8080 }),
+  identity: {
+    verify: jwksIdentity({
+      jwksUrl: 'https://idp.example.com/.well-known/jwks.json',
+      issuer: 'https://idp.example.com/',
+      audience: 'my-api',
+    }).verify,
+  },
+});
+```
+
+**Configured is closed-by-default.** A request with no `Authorization`
+header is refused (401) unless `allowAnonymous: true` is set, and a request
+that *names* a `userId` without proving it is refused either way — a door
+that verifies a token when offered and waves the request through when it is
+not is a door anybody opens by sending less. `jwksIdentity` is the one
+adapter this release ships (`jose`, loaded lazily, pinned against a real
+install): signature, `iss`, `aud`, `exp`, `nbf` — not an authorization
+decision and not revocation-checked, both stated on the export.
+
+Failure travels as a named class (`expired`, `wrong-audience`,
+`wrong-issuer`, `not-yet-valid`, `claimed-another-user`, `unverifiable`, plus
+`keys-unavailable` → 503 rather than 401, since an unreachable IdP is this
+deployment's outage, not the caller's bad token) — **never the token text**,
+in the message, the event, or a log line. Verified `roles` / `claims` flow to
+exactly two places: admission's policy decision and the session-history ops.
+Nothing else reads them; they do not enter the run's own identity tuple.
+
+### Added — admission / spend
+
+```ts
+await standingAgent({
+  agent, sessions, host,
+  identity: { verify },
+  admission: turnsPerHour({ limit: 60 }),
+});
+```
+
+`AdmissionPolicy.decide()` answers `'allow'`, `{ queue: true }` (run behind
+this session's own in-flight turn instead of refusing it), or `{ refuse:
+'<sentence>' }` — the policy writes its own words, because a limit and its
+reset are facts only the operator has. The shipped reference,
+`turnsPerHour`, is fed by `spendLedger`: a rolling-window, per-caller
+accountant built from the token and cost events every run already emits
+(`turns`, `inputTokens`, `outputTokens`, and `usd` — **absent, not zero**,
+unless a `pricingTable` is configured; "we did not measure that" is a
+different fact from "you spent nothing").
+
+Honest boundary, stated on the type: **per-process** accounting. Two
+replicas keep two windows; a restart forgets. A deployment that needs one
+number across a fleet writes its own `AdmissionPolicy` reading its own
+store — same seam, wider ledger.
+
+### Added — code staging-in
+
+```ts
+Agent.create({ provider })
+  .tool(codeRunnerTool({ runner: localCodeRunner(), wants: { dataset: 'dataset/rows' } }))
+  .build();
+```
+
+`CodeRunnerTool` gains `wants`, declared exactly like any other tool's
+artifact arguments. The model passes the `art_…` ref; the framework resolves
+it under the run's own scope (the same `wants` machinery, the same teaching
+refusals for a stale, unknown, or wrong-kind ref) and stages the resolved
+bytes into the code session as a file — named in the new `AF_STAGED_INPUTS`
+environment variable, a JSON object of argument name → path — before the
+code runs. Data reaches the interpreter without ever entering the context
+window, matching the outbound leg (`CodeResult.artifacts`, 9.22.0) with an
+inbound one.
+
+The port grew one optional member, `CodeSession.stageInputs()`; `localCodeRunner`
+implements it, `agentCoreCodeRunner` does not yet. Declaring `wants` on a
+session that cannot stage refuses BY NAME at dispatch rather than running
+code against a file that was never written.
+
+### Added — session-history wire ops
+
+```
+{ op: 'session-list' }                       → the caller's own sessions, newest first
+{ op: 'session-transcript', sessionId }       → that session's messages, if the caller owns it
+```
+
+Both REQUIRE `identity: { verify }` on the door — a listing of "your"
+sessions read off an unverified header is enumeration with a friendly
+interface, so a door with no verifier refuses the op by name (501) rather
+than serving it under a claimed identity. A transcript for a session the
+verified caller does not own is one indistinguishable 404 — same law, same
+reason, as the artifact wire's not-found.
+
+Transcripts carry `{ role: 'user' | 'assistant', content }` only — never
+tool call arguments or tool results, stated explicitly, because a transcript
+that quietly dropped the tool leg would be one somebody reconstructs a
+decision from and gets wrong. `memorySessions` and `sqliteSessions` both
+grew `listByUser` / `ownerOf`; the SQLite adapter adds two nullable columns
+via idempotent `ALTER TABLE` with **no schema-version bump** — an older
+reader ignores columns it never asked for. The owner is derived at persist
+time from the stored conversation's own identity and is write-once: no later
+turn can erase or reassign it.
+
+### Added — repeated-call nudge
+
+Field-motivated: a traced production run called one tool three times in a
+row with byte-identical arguments and got a byte-identical result each time,
+and nothing in the loop could tell the model so. On the second identical
+(tool, args) → identical result landing in one turn, the framework appends
+one teaching sentence to that result — the call still runs, the result is
+otherwise unchanged, nothing is refused, and a third or fourth repeat adds no
+further note. `agentfootprint.tools.repeated_call` fires alongside it,
+carrying only non-cryptographic fingerprints of the arguments and the
+result, never the values.
+
+It is a note, not a wall: a poll-until-status-changes loop is legitimately
+identical calls returning identical results, and only the model knows which
+kind it is doing. Opt out with `Agent.create({ …, repeatedCallNudge: false })`.
+The counters live beside the dispatch loop, keyed by `runId`, never on
+tracked scope — an agent that never repeats a call is byte-identical to
+9.25.0 in state, snapshot, and every recording.
+
 ## [9.25.0] - 2026-08-13
 
 **The reference architecture is complete: artifacts reach the clouds, and

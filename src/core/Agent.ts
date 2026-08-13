@@ -50,8 +50,10 @@ import type {
   PricingTable,
 } from '../adapters/types.js';
 import type { CredentialProvider } from '../identity/types.js';
-import type { ArtifactStore } from '../artifacts/types.js';
+import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { assertArtifactPlacement, type ArtifactPlacement } from '../artifacts/placement.js';
+import { recordingPutInput } from '../artifacts/recordingArtifact.js';
+import { recordRun, type RunRecorder } from '../recorders/observability/recordRun.js';
 import type { AuthorizationRequiredMode } from '../identity/consent.js';
 import { CredentialConsentRequiredError } from '../identity/CredentialConsentRequiredError.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -165,6 +167,7 @@ import type {
   AgentInput,
   AgentOptions,
   AgentOutput,
+  AgentRecordingsOptions,
   AgentState,
   ObserverDeliveryOptions,
   RunConfig,
@@ -201,6 +204,7 @@ export type {
   AgentInput,
   AgentOptions,
   AgentOutput,
+  AgentRecordingsOptions,
   ObserverDeliveryOptions,
   RunConfig,
   RunConfigContext,
@@ -411,6 +415,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The placement threshold (9.22.0) — the operator's ref-ing dial from the
    *  object form of AgentOptions.artifacts. Only ever set beside a store. */
   private readonly artifactPlacement?: ArtifactPlacement;
+  /** Recordings-as-artifacts (9.26.0) — the operator's dial from the object
+   *  form of AgentOptions.artifacts. Only ever set beside a store; absent
+   *  means no recorder is ever attached and no run is ever recorded. */
+  private readonly artifactRecordings?: AgentRecordingsOptions;
+  /** The repeated-call nudge (9.26.0) — `false` only when the operator turned
+   *  it off. See AgentOptions.repeatedCallNudge. */
+  private readonly repeatedCallNudge?: boolean;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -754,6 +765,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     this.observerDeliveryOptions = opts.observerDeliveryOptions;
     if (opts.credentials) this.credentialProvider = opts.credentials;
+    // Kept only when it says something: `undefined` and `true` are the same
+    // default, and storing `true` would make the thread-when-off rule below
+    // read as a coincidence.
+    if (opts.repeatedCallNudge === false) this.repeatedCallNudge = false;
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
     // competing one through, so "one per agent" is a fact of the type rather
@@ -778,6 +793,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.artifactStore = opts.artifacts.store;
         if (opts.artifacts.placement !== undefined) {
           this.artifactPlacement = opts.artifacts.placement;
+        }
+        // The recordings dial (9.26.0). `true` and `{ … }` normalize to ONE
+        // shape here, so every downstream reader asks a single question
+        // ("is there a recordings option?") rather than re-deriving the union.
+        if (opts.artifacts.recordings === true) {
+          this.artifactRecordings = {};
+        } else if (
+          typeof opts.artifacts.recordings === 'object' &&
+          opts.artifacts.recordings !== null
+        ) {
+          this.artifactRecordings = opts.artifacts.recordings;
         }
       } else {
         this.artifactStore = opts.artifacts;
@@ -870,6 +896,137 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   getArtifactStore(): ArtifactStore | undefined {
     return this.artifactStore;
+  }
+
+  /**
+   * Start recording this run — or do nothing at all (9.26.0).
+   *
+   * Zero-cost when unused is not a claim here, it is the control flow: with
+   * `recordings` unset this returns `undefined` before touching the agent, so
+   * no listener is subscribed, no boundary recorder is attached, and the run
+   * is byte-identical to every earlier release.
+   *
+   * It is deliberately the SAME `recordRun` a consumer would call by hand.
+   * Nothing about this feature is a second recording implementation — the
+   * three connections that a hand-rolled version gets wrong (attach,
+   * subscribe, getCommitCount) are wired in exactly one place in this package,
+   * and this is a caller of it.
+   */
+  private startRunRecording(): RunRecorder | undefined {
+    if (this.artifactRecordings === undefined || this.artifactStore === undefined) return undefined;
+    return recordRun(this);
+  }
+
+  /**
+   * File the finished recording into the artifact store.
+   *
+   * ── When ────────────────────────────────────────────────────────────────
+   * After the answer is composed, and only for a run that COMPLETED. A pause
+   * is not a finished run (the turn continues, and the resume mints its own);
+   * a throw never reaches here at all.
+   *
+   * ── Why it is awaited ───────────────────────────────────────────────────
+   * The answer is final before this begins and this cannot change it — but
+   * `run()` does return after the write rather than before, and that is a
+   * choice rather than an oversight. A fire-and-forget write is a recording
+   * lost whenever the process exits with the reply, which is precisely the
+   * serverless deployment that wants recordings most. The cost is one store
+   * write per turn, stated on the option.
+   *
+   * ── Why it can never fail the run ───────────────────────────────────────
+   * A full store, an unserializable snapshot, a bucket that 500s — none of
+   * them are facts about the ANSWER, which is already correct and already
+   * paid for. Turning "your recording was not filed" into "your request
+   * failed" would be the library deciding that its observability matters more
+   * than the user's turn. So every failure degrades to today's path: the
+   * answer is returned unchanged and the reason lands on the record as
+   * `agentfootprint.artifacts.refused`, where a sink can count it.
+   *
+   * The recording is FROZEN before the mint, so it can never contain the
+   * `artifacts.minted` event describing itself.
+   */
+  private async fileRunRecording(
+    recorder: RunRecorder | undefined,
+    outcome: AgentOutput | RunnerPauseOutcome,
+  ): Promise<void> {
+    const store = this.artifactStore;
+    if (recorder === undefined || store === undefined || this.artifactRecordings === undefined) {
+      return;
+    }
+    if (isPaused(outcome)) return;
+    const runId = this.currentRunContext?.runId;
+    let input;
+    try {
+      input = recordingPutInput(recorder.toRecording(), {
+        ...(runId !== undefined && { runId }),
+        ...(this.artifactRecordings.label !== undefined && {
+          label: this.artifactRecordings.label,
+        }),
+      });
+    } catch (err) {
+      this.reportRecordingRefused(err, 'invalid-input');
+      return;
+    }
+    try {
+      const result = await store.put(this.runArtifactScope(), input);
+      // Sweeps ride the put result, so retention that evicted an older
+      // recording to make room says so on the record — the same law a tool's
+      // own mint follows.
+      for (const swept of result.swept) {
+        this.emit('agentfootprint.artifacts.expired', {
+          ref: swept.ref,
+          reason: swept.reason,
+          kind: swept.kind,
+          bytes: swept.bytes,
+        });
+      }
+      this.emit('agentfootprint.artifacts.minted', {
+        ref: result.meta.ref,
+        kind: result.meta.kind,
+        mediaType: result.meta.mediaType,
+        bytes: result.meta.bytes,
+        ...(result.meta.label !== undefined && { label: result.meta.label }),
+        ...(result.meta.expiresAt !== undefined && { expiresAt: result.meta.expiresAt }),
+        ...(result.meta.origin !== undefined && { origin: result.meta.origin }),
+      });
+    } catch (err) {
+      this.reportRecordingRefused(err, 'invalid-input');
+    }
+  }
+
+  /** One refusal fact for a recording that could not be filed. The message is
+   *  the store's own, which never carries a payload — only what went wrong. */
+  private reportRecordingRefused(err: unknown, reason: 'invalid-input'): void {
+    this.emit('agentfootprint.artifacts.refused', {
+      op: 'put',
+      reason,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  /**
+   * The run's artifact scope, read from the finished run's own state.
+   *
+   * The SAME tuple `ctx.artifacts` bound during the run (`scope.runIdentity`,
+   * composed by seed from the caller's identity or derived from the session).
+   * Read rather than recomposed: a second derivation here could disagree with
+   * the one the run's tools used, and a recording filed in a different scope
+   * from the artifacts it describes is a recording nobody can find.
+   */
+  private runArtifactScope(): ArtifactScope {
+    const identity = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.runIdentity;
+    if (identity === undefined) {
+      // No state to read means no run happened, which this path cannot reach —
+      // but a scope is required and inventing a tenant would be worse than a
+      // conversation id that names the run itself.
+      return { conversationId: this.currentRunContext?.runId ?? 'unknown' };
+    }
+    return {
+      conversationId: identity.conversationId,
+      ...(identity.tenant !== undefined && { tenant: identity.tenant }),
+      ...(identity.principal !== undefined && { principal: identity.principal }),
+    };
   }
 
   /**
@@ -1122,6 +1279,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // so a continued turn stays in the namespace it started in.
     this.lastRunIdentity =
       runInput.identity ?? options?.identity ?? (continued ? continued.identity : undefined);
+    // Recordings-as-artifacts (9.26.0). BEFORE `createExecutor`, because
+    // `attach()` collects recorders for the executor that has not been built
+    // yet — a recording started one line later would be missing its
+    // boundaries, which is the failure mode `recordRun` exists to prevent.
+    // Returns `undefined` (and touches nothing) unless the dial is on.
+    const recording = this.startRunRecording();
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
     const executor = this.createExecutor(options);
@@ -1164,6 +1327,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       this.recordPendingQuestion(finalized);
       await this.endRunToolSessions(finalized);
+      // The answer is FINISHED before this line and cannot be changed by it.
+      // See `fileRunRecording` for why the write is awaited rather than left
+      // in flight, and why it can never fail the run.
+      await this.fileRunRecording(recording, finalized);
       return finalized;
     } catch (cause) {
       // A THROWN pause is still a pause — see `endRunToolSessions`.
@@ -1226,6 +1393,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
+      // Always released: a recording left subscribed would keep listening
+      // through the next run and grow a tail nobody reads.
+      recording?.stop();
       stopTracking();
       this.inFlightRunId = undefined;
       // `seed` consumes the restored conversation on its way past. A run that
@@ -1514,6 +1684,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `checkpoint.sharedState` (and nested subflow states) automatically
     // on a fresh executor's `resume()`. No need to retain a paused
     // executor between run/resume.
+    // Recorded on the same terms a fresh run is (9.26.0) — and the recording
+    // covers the RESUMED run, which is what the recorder saw. A turn that
+    // paused and resumed is two runs, and each mints its own recording when
+    // (and only when) it completes.
+    const recording = this.startRunRecording();
     const executor = this.createExecutor(options);
     this.inFlightRunId = this.currentRunContext.runId;
     this.lastRunAnswer = undefined;
@@ -1527,11 +1702,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // AGAIN has asked a new one, and that one is outstanding from here.
       this.recordPendingQuestion(finalized);
       await this.endRunToolSessions(finalized);
+      await this.fileRunRecording(recording, finalized);
       return finalized;
     } catch (cause) {
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
+      recording?.stop();
       this.inFlightRunId = undefined;
     }
   }
@@ -2913,6 +3090,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.maxToolResultChars !== undefined && {
         maxToolResultChars: this.maxToolResultChars,
       }),
+      // The repeated-call nudge (9.26.0). Threaded ONLY when switched off —
+      // the VALUE-conditional pattern, so an agent on the default hands the
+      // handler exactly the deps object it always did.
+      ...(this.repeatedCallNudge === false && { repeatedCallNudge: false }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
       ...(this.skillGraphReachable && {

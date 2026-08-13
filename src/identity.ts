@@ -71,3 +71,15 @@ export {
 // vendor client. V1 is token auth + KV v2 + no leases, and every other shape
 // is refused by name rather than guessed at; see the module docstring.
 export { vaultCredentials, type VaultCredentialsOptions } from './adapters/identity/vault.js';
+
+// Verifying WHO is calling (9.26.0) — the other half of identity. The rest of
+// this door vends credentials for calls the agent makes OUTWARD;
+// `jwksIdentity` checks the credential a caller presents INWARD, against an
+// identity provider's published key set. Wire it at the hosting door:
+// `standingAgent({ …, identity: { verify: jwksIdentity({ … }).verify } })`.
+export {
+  jwksIdentity,
+  MissingJwksSupportError,
+  type JoseBackend,
+  type JwksIdentityOptions,
+} from './adapters/identity/jwks.js';

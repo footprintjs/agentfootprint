@@ -97,6 +97,7 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
+import { noteRepeatedCall, repeatedCallLedgers } from '../repeatedCall.js';
 import {
   formatToolArgIssues,
   validateToolArgs,
@@ -193,6 +194,18 @@ export interface ToolCallsHandlerDeps {
    * `../toolResultCap.ts` for the shape and why it is opt-in.
    */
   readonly maxToolResultChars?: number;
+  /**
+   * Tell the model when it has already made this exact call and already got
+   * this exact answer (9.26.0). Threaded from `AgentOptions.repeatedCallNudge`,
+   * and only when the operator turned it OFF — `undefined` here means the
+   * default, which is on.
+   *
+   * Applied at the BATCH dispatch loop only, which is where a turn's repeats
+   * actually happen. The pause-resume paths deliver a call a PERSON answered
+   * or approved, and a note telling the model it has already done what a human
+   * just authorised would be the framework arguing with the human.
+   */
+  readonly repeatedCallNudge?: boolean;
   /**
    * Skill-graph read_skill GATE (`graph.reachableSkills`). When present, a
    * `read_skill('id')` whose `id` is not reachable from the current cursor is
@@ -574,6 +587,18 @@ function appendBatchResult(
   scope.toolResults = [...(scope.toolResults ?? []), entry];
 }
 
+/**
+ * The ledger key for a handler built with no `currentRun` accessor — a
+ * hand-composed dispatch loop in a test, never an Agent (which always wires
+ * it).
+ *
+ * One shared bucket, stated rather than hidden: without a run id there is
+ * nothing to tell two runs apart by, and the honest consequence is that such a
+ * loop counts across them. It cannot leak anything — the ledger holds
+ * fingerprints — and the only visible effect is a note arriving one call early.
+ */
+const UNSCOPED_RUN = '#no-run-id';
+
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
@@ -587,6 +612,10 @@ export function buildToolCallsHandler(
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
   const hasCredentials = deps.credentialProvider !== undefined;
+  // The repeated-call counters (9.26.0), run-keyed and OFF tracked scope — an
+  // empty Map here, and not one byte written anywhere a reader can see until a
+  // tool actually lands. See `../repeatedCall.ts` for why they are not state.
+  const repeatLedgers = repeatedCallLedgers();
 
   /**
    * The tool-result ceiling, applied at the ONE place a result leaves dispatch.
@@ -2650,6 +2679,11 @@ export function buildToolCallsHandler(
           ...(toolStatus !== undefined && { status: toolStatus }),
         });
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        // The tool's OWN answer, before any framework suffix joins it — what
+        // the repeated-call ledger fingerprints. Fingerprinting the decorated
+        // string instead would compare our own additions (a step that advanced
+        // once, an effect note) and miss the repeat they decorate.
+        const deliveredResult = resultStr;
 
         // ── Step boundary (9.18.0): advance decided, then decorate, THEN
         // push — the suffix must be part of the one past every reader sees
@@ -2692,6 +2726,41 @@ export function buildToolCallsHandler(
             toolEnvelope,
             transitionState,
           );
+        }
+
+        // ── Repeated-call nudge (9.26.0) ───────────────────────────────
+        // The framework is the only party that watched all three landings, so
+        // it is the only one that can say so. A NOTE on the result — the call
+        // ran, nothing was refused, and a later identical call is not blocked.
+        // Only for a call that RAN: a permission denial, a gate rejection and
+        // a ceiling refusal each already teach their own lesson, and stacking
+        // a second one would bury it.
+        if (deps.repeatedCallNudge !== false && executed && !denied && !skillRejected) {
+          // Counted beside the run, never inside its state: a tracked write is
+          // a commit-log entry, a snapshot key, a narrative line and a row in
+          // every recording, and a turn that repeats NOTHING must stay
+          // byte-identical to the release before this one. `currentRun()` is
+          // the same accessor `ctx.runId` is composed from — one answer to
+          // "which run is this", not a second spelling of it.
+          const runKey = deps.currentRun?.().runId ?? UNSCOPED_RUN;
+          const repeat = noteRepeatedCall(
+            repeatLedgers.read(runKey),
+            tc.name,
+            callArgs,
+            deliveredResult,
+          );
+          repeatLedgers.write(runKey, repeat.ledger);
+          if (repeat.note !== undefined) {
+            resultStr += repeat.note;
+            typedEmit(scope, 'agentfootprint.tools.repeated_call', {
+              toolName: tc.name,
+              toolCallId: tc.id,
+              iteration,
+              occurrences: repeat.occurrences,
+              argsFingerprint: repeat.argsFingerprint,
+              resultFingerprint: repeat.resultFingerprint,
+            });
+          }
         }
 
         newHistory.push({

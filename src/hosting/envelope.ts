@@ -47,6 +47,7 @@ import type {
   PausedRun,
   PausedRunEnvelope,
 } from './types.js';
+import type { TranscriptMessage } from './sessionWire.js';
 
 /** Every format this runtime can read. Add, never redefine. */
 const KNOWN_FORMATS: readonly string[] = ['conversation-v1', 'flowchart-v1'];
@@ -164,6 +165,87 @@ export function checkEnvelope(envelope: unknown, sessionId?: string): Checkpoint
     validateCheckpoint((envelope as ConversationEnvelope).data);
   }
   return envelope as CheckpointEnvelope;
+}
+
+/**
+ * WHO a stored session belongs to — the `principal` on the conversation the
+ * envelope carries, or `undefined` when it names nobody (9.26.0).
+ *
+ * The ONE derivation, so a store's owner index and the composer's ownership
+ * check can never disagree about what "belongs to" means. It is read from the
+ * conversation's own identity — the tuple `standingAgent` composed from the
+ * request's verified user — and NOT from anything a caller supplied at persist
+ * time: a store that indexed on a claimed owner would be a store where owning
+ * a session is a matter of asking.
+ *
+ * A conversation that ran anonymously, or under a derived session-namespace
+ * rung with no principal, has no owner. That is a FACT, not a gap to fill: a
+ * session nobody signed for is a session nobody can list, and inventing an
+ * owner would be inventing an entitlement.
+ *
+ * Reads both formats, so a session that is mid-question is owned exactly as
+ * firmly as one that is finished. Returns `undefined` rather than throwing on
+ * a shape it cannot read — an index is a convenience, and refusing to WRITE a
+ * conversation because its owner could not be derived would be the tail
+ * wagging the dog. (Every reader of the index still checks ownership itself.)
+ */
+export function envelopeOwner(envelope: unknown): string | undefined {
+  const conversation = conversationOf(envelope);
+  const principal = conversation?.identity?.principal;
+  return typeof principal === 'string' && principal.length > 0 ? principal : undefined;
+}
+
+/**
+ * The stored conversation's messages, projected to what a person may read back
+ * (9.26.0): user and assistant TEXT, in stored order.
+ *
+ * Everything else is deliberately dropped — see {@link TranscriptMessage} for
+ * the full list and the reason. Non-string content (a provider's structured
+ * block) is dropped rather than stringified: a transcript is what was said, and
+ * `[object Object]` is not something anybody said.
+ */
+export function envelopeTranscript(envelope: unknown): readonly TranscriptMessage[] {
+  const history = conversationOf(envelope)?.history;
+  if (!Array.isArray(history)) return [];
+  const messages: TranscriptMessage[] = [];
+  for (const message of history) {
+    const role = (message as { role?: unknown }).role;
+    if (role !== 'user' && role !== 'assistant') continue;
+    const content = (message as { content?: unknown }).content;
+    if (typeof content !== 'string' || content.length === 0) continue;
+    messages.push({ role, content });
+  }
+  return messages;
+}
+
+/**
+ * The conversation inside either envelope format, WITHOUT the strict validation
+ * the two readers apply.
+ *
+ * Lenient on purpose, and only for the two projections above: an index entry
+ * and a read-back transcript are both best-effort views of something that is
+ * already stored, and raising here would turn "I could not summarize your old
+ * session" into "your request failed". The authoritative readers
+ * ({@link readEnvelope} / {@link readPausedRun}) keep their refusals for the
+ * path that actually RESTORES a session, which is the one where a half-read
+ * conversation does damage.
+ */
+function conversationOf(
+  envelope: unknown,
+): { identity?: { principal?: unknown }; history?: unknown } | undefined {
+  if (!envelope || typeof envelope !== 'object') return undefined;
+  const { format, data } = envelope as { format?: unknown; data?: unknown };
+  if (!data || typeof data !== 'object') return undefined;
+  if (format === 'flowchart-v1') {
+    const conversation = (data as { conversation?: unknown }).conversation;
+    return conversation && typeof conversation === 'object'
+      ? (conversation as { identity?: { principal?: unknown }; history?: unknown })
+      : undefined;
+  }
+  if (format === 'conversation-v1') {
+    return data as { identity?: { principal?: unknown }; history?: unknown };
+  }
+  return undefined;
 }
 
 /**

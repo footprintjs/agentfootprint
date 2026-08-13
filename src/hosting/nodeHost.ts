@@ -52,6 +52,7 @@
  */
 
 import { artifactWireBody, readArtifactWireOp } from './artifactWire.js';
+import { readSessionWireOp, sessionWireBody } from './sessionWire.js';
 import {
   headerValue,
   httpHost,
@@ -252,11 +253,17 @@ export function jsonWireWith(options: JsonWireOptions = {}): HttpWire {
       // above, exactly as every other request's does — the resolution is
       // governed by that same session identity.
       const artifact = readArtifactWireOp(facts.body);
+      // The session-history operations (9.26.0), read by their own grammar
+      // owner. Same law as the artifact ops beside them: a body naming `op`
+      // never quietly becomes a conversation turn, and neither reader claims
+      // the other's names.
+      const session = readSessionWireOp(facts.body);
       return {
         input,
         ...(sessionId !== undefined && { sessionId }),
         ...(decision !== undefined && { decision }),
         ...(artifact !== undefined && { artifact }),
+        ...(session !== undefined && { session }),
         ...(minted !== undefined &&
           sessionCookie !== undefined && {
             responseHeaders: { 'set-cookie': sessionCookieHeader(sessionCookie, minted) },
@@ -269,6 +276,7 @@ export function jsonWireWith(options: JsonWireOptions = {}): HttpWire {
     chunk: (text) => ({ text }),
     awaiting: (pending) => ({ awaiting: pending }),
     artifact: (result) => artifactWireBody(result),
+    sessions: (result) => sessionWireBody(result),
     readConversation(facts) {
       // A handshake has no body, so this dialect names the three places a
       // session id can be: the header a server-side caller sets, the cookie the

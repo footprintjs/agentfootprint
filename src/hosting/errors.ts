@@ -465,6 +465,273 @@ export class UnreadableEnvelopeError extends TypeError {
   }
 }
 
+// ─── Verified identity (9.26.0) ──────────────────────────────────────
+
+/**
+ * WHY a presented credential did not identify anybody — the whole vocabulary a
+ * refusal is allowed to say about a token.
+ *
+ * Every value here is a fact about the CHECK, never about the secret. That is
+ * the point of enumerating them at all: an operator needs to act differently on
+ * each one, and `expired` versus `wrong-audience` versus `unverifiable` is the
+ * entire difference between "the client should refresh", "the client is pointed
+ * at the wrong API" and "somebody is presenting something we cannot check" —
+ * none of which requires printing one character of the token.
+ *
+ *  - `'no-token'` — no `Authorization: Bearer …` arrived at all.
+ *  - `'expired'` — the token's own lifetime is over.
+ *  - `'not-yet-valid'` — its `nbf` is in the future (a clock-skew smell).
+ *  - `'wrong-audience'` — it was minted for a different API.
+ *  - `'wrong-issuer'` — it came from an IdP this door does not accept.
+ *  - `'unverifiable'` — the signature did not check out, no key matched, the
+ *    algorithm is not allowed, or it is not a token at all. Deliberately ONE
+ *    class: distinguishing "bad signature" from "unknown key" tells whoever is
+ *    probing which half of a forgery to fix.
+ *  - `'claimed-another-user'` — a valid token, and a request that signed
+ *    somebody else's name beside it.
+ */
+export type IdentityFailureClass =
+  | 'no-token'
+  | 'expired'
+  | 'not-yet-valid'
+  | 'wrong-audience'
+  | 'wrong-issuer'
+  | 'unverifiable'
+  | 'claimed-another-user';
+
+/**
+ * The caller could not be identified, and this door was configured to insist.
+ *
+ * **The message never contains the token.** Not truncated, not hashed, not "the
+ * first eight characters". A bearer token in a refusal is a bearer token in the
+ * reply body, in the log line, in the trace and in every sink attached — one
+ * echo and the credential has been published. What travels is
+ * {@link IdentityFailureClass} and the sentence that tells the caller what to
+ * do about it.
+ */
+export class IdentityNotVerifiedError extends Error {
+  readonly code = 'ERR_IDENTITY_NOT_VERIFIED' as const;
+  /** What went wrong, in the one vocabulary. Never the token. */
+  readonly failure: IdentityFailureClass;
+  /** Did the request also NAME a user it could not prove? The impersonation
+   *  shape, kept as a fact so a sink can count it separately. */
+  readonly claimedUser: boolean;
+
+  constructor(failure: IdentityFailureClass, claimedUser: boolean) {
+    super(`[hosting] the caller was not identified: ${sentenceFor(failure, claimedUser)}`);
+    this.name = 'IdentityNotVerifiedError';
+    this.failure = failure;
+    this.claimedUser = claimedUser;
+  }
+}
+
+/** The teaching half of {@link IdentityNotVerifiedError}, per class. */
+function sentenceFor(failure: IdentityFailureClass, claimedUser: boolean): string {
+  switch (failure) {
+    case 'no-token':
+      return claimedUser
+        ? `this request named a user but presented no credential, and this host verifies ` +
+            `identity. A user id in a header is a string anyone can send — it is accepted only ` +
+            `beside a token that proves it. Send 'Authorization: Bearer <token>', or drop the ` +
+            `user id and call anonymously (allowed only when the host was built with ` +
+            `identity: { verify, allowAnonymous: true }).`
+        : `this host verifies identity and the request presented no credential. Send ` +
+            `'Authorization: Bearer <token>'. If some callers here are genuinely anonymous, ` +
+            `build the host with identity: { verify, allowAnonymous: true } — anonymous ` +
+            `requests may then carry no user id at all.`;
+    case 'expired':
+      return (
+        `the presented token has expired. Refresh it at your identity provider and retry; ` +
+        `nothing is wrong with this host or with the token's contents.`
+      );
+    case 'not-yet-valid':
+      return (
+        `the presented token is not valid yet (its 'nbf' is in the future). That is ` +
+        `usually clock skew between the issuer and this host rather than a bad token.`
+      );
+    case 'wrong-audience':
+      return (
+        `the presented token was minted for a different audience — it is a valid token ` +
+        `for somebody else's API. Request one for this API's audience.`
+      );
+    case 'wrong-issuer':
+      return (
+        `the presented token came from an issuer this host does not accept. Check which ` +
+        `identity provider the host was configured with.`
+      );
+    case 'claimed-another-user':
+      return (
+        `the presented token identifies one user and the request named a different one. ` +
+        `One of those two facts is untrue and this door cannot know which, so it serves ` +
+        `neither. Send the user id the token proves, or send none.`
+      );
+    case 'unverifiable':
+      return (
+        `the presented credential could not be verified — the signature did not check ` +
+        `out, no key matched it, or it is not a token this host reads. Deliberately one ` +
+        `answer for all three: naming which would tell whoever is probing what to fix.`
+      );
+  }
+}
+
+/**
+ * The verifier itself could not do its job — its key set was unreachable, its
+ * introspection endpoint timed out.
+ *
+ * A DIFFERENT fact from a token that failed, and the difference is who is at
+ * fault: this is the deployment's outage, not the caller's bad credential, and
+ * answering it with a 401 would send every client off to re-authenticate
+ * against an identity provider that is already down. It maps to 503.
+ */
+export class VerifierUnavailableError extends Error {
+  readonly code = 'ERR_IDENTITY_VERIFIER_UNAVAILABLE' as const;
+  /** Which verifier could not answer — its name, never its configuration. */
+  readonly verifier: string;
+
+  constructor(verifier: string, detail?: string) {
+    super(
+      `[hosting] identity could not be verified because the '${verifier}' verifier could not ` +
+        `answer${detail !== undefined ? ` (${detail})` : ''}. This is an outage on this side, ` +
+        `not a bad credential — the caller's token was never judged. Retry once the identity ` +
+        `provider is reachable.`,
+    );
+    this.name = 'VerifierUnavailableError';
+    this.verifier = verifier;
+  }
+}
+
+// ─── Admission (9.26.0) ──────────────────────────────────────────────
+
+/**
+ * An admission policy refused this request before any work started.
+ *
+ * The policy authors the sentence — this class only carries it — because the
+ * limit and its reset are the operator's facts, not the library's. What this
+ * class guarantees is the SHAPE: a refusal that names a limit is a refusal a
+ * client can act on, and one that says "denied" is a support ticket.
+ */
+export class AdmissionRefusedError extends Error {
+  readonly code = 'ERR_ADMISSION_REFUSED' as const;
+  /** WHO was refused, when the request identified anybody. Never a token. */
+  readonly userId?: string;
+
+  constructor(reason: string, userId?: string) {
+    super(`[hosting] this request was not admitted: ${reason}`);
+    this.name = 'AdmissionRefusedError';
+    if (userId !== undefined) this.userId = userId;
+  }
+}
+
+// ─── Session history ops (9.26.0) ────────────────────────────────────
+
+/**
+ * A session-history operation arrived at a door that does not verify identity.
+ *
+ * Listing a person's conversations is answering "which sessions belong to
+ * you?", and a door that reads WHO from an unverified header would answer that
+ * for anyone who guesses a user id — enumeration with a friendly interface.
+ * So the ops are refused outright rather than served under a claimed name.
+ */
+export class SessionOpNeedsIdentityError extends Error {
+  readonly code = 'ERR_SESSION_OP_NEEDS_IDENTITY' as const;
+  /** The op that was refused. */
+  readonly op: string;
+
+  constructor(op: string) {
+    super(
+      `[hosting] '${op}' needs a VERIFIED caller and this host does not verify identity. ` +
+        `Listing or reading a person's conversations under a user id nobody proved is ` +
+        `enumeration: anyone who guesses an id reads somebody's transcript. Build the host ` +
+        `with identity: { verify: jwksIdentity({ jwksUrl, issuer, audience }).verify } — or ` +
+        `any IdentityVerifier — and these ops answer for the caller the token proves.`,
+    );
+    this.name = 'SessionOpNeedsIdentityError';
+    this.op = op;
+  }
+}
+
+/**
+ * A session-history operation arrived at a session store that keeps no
+ * owner index.
+ *
+ * The two members are OPTIONAL on the port on purpose — most stores are a
+ * key/value map and owe nobody a secondary index — so this refusal names the
+ * store's limitation instead of pretending the answer is "you have no
+ * sessions". An empty list and an unanswerable question are different facts,
+ * and only one of them is safe to render as "nothing here".
+ */
+export class SessionIndexUnavailableError extends Error {
+  readonly code = 'ERR_SESSION_INDEX_UNAVAILABLE' as const;
+  readonly op: string;
+
+  constructor(op: string, missing: string) {
+    super(
+      `[hosting] '${op}' needs the session store to answer '${missing}', and the store this ` +
+        `host was given does not implement it. That is a limitation of the store, not an ` +
+        `empty result — reporting "no sessions" here would be an answer nobody could ` +
+        `distinguish from the truth. memorySessions() and sqliteSessions({ file }) both ` +
+        `implement it; a custom SessionLifecycle can add ${missing} additively.`,
+    );
+    this.name = 'SessionIndexUnavailableError';
+    this.op = op;
+  }
+}
+
+/**
+ * The ONE answer for a session the caller may not have — read OR continued.
+ *
+ * A session that does not exist, one that belongs to somebody else, and one
+ * whose stored conversation names no owner all end here, byte-identical but
+ * for the id the caller already knew. Told apart, they would be an oracle for
+ * which session ids are real — the same law
+ * {@link ArtifactNotFoundError} follows, for the same reason.
+ *
+ * Raised by BOTH doors that open a session at a verifying host: the two
+ * session-history ops, and an ordinary turn that named somebody else's session
+ * (9.26.0). One refusal, so the answer cannot depend on which door a caller
+ * knocked at — the mistake this class of hole is always made of.
+ */
+export class SessionNotFoundError extends Error {
+  readonly code = 'ERR_SESSION_NOT_FOUND' as const;
+  /** The id that was asked for — the caller's own string, nothing learned. */
+  readonly sessionId: string;
+
+  constructor(sessionId: string) {
+    super(
+      `[hosting] session '${sessionId}' is not one you can open. Deliberately one answer for ` +
+        `"no such session", "somebody else's session" and "a session nobody signed for": ` +
+        `distinguishing them would tell a caller which ids are real. The ids you can read — ` +
+        `and continue — are exactly the ones session-list hands back.`,
+    );
+    this.name = 'SessionNotFoundError';
+    this.sessionId = sessionId;
+  }
+}
+
+/**
+ * A session-history result resolved and the reply cannot describe it.
+ *
+ * The {@link ArtifactNotCarriedError} shape, for the other new terminal.
+ */
+export class SessionsNotCarriedError extends Error {
+  readonly code = 'ERR_SESSIONS_NOT_CARRIED' as const;
+  readonly op: string;
+
+  constructor(op: string, hostName?: string) {
+    super(
+      `[hosting] '${op}' resolved, but ` +
+        (hostName !== undefined
+          ? `the '${hostName}' host's wire has no sessions() body shape, `
+          : `this host does not implement reply.sessions(), `) +
+        `so the result cannot be described on this wire. Nothing is wrong with the session ` +
+        `store — serve on an adapter that carries session results (nodeHost does), or add ` +
+        `the sessions body shape to the dialect.`,
+    );
+    this.name = 'SessionsNotCarriedError';
+    this.op = op;
+  }
+}
+
 /**
  * Assert that a host can do something, and throw a corrective error naming the
  * adapter when it cannot.

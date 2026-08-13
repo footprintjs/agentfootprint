@@ -430,6 +430,130 @@ argument, `present` hands the chart to the screen — is on the
 [Artifacts page](doc:artifacts) and runnable as
 [`examples/features/57-artifact-data-flow.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/57-artifact-data-flow.ts).
 
+## Staging refs into a code session (9.26.0)
+
+`wants` resolves a ref into an argument. For a code runner that is only half the
+story: the resolved payload still has to reach the *interpreter*, and 9.22.0
+stated the honest cut — the `CodeSession` port's only input was the code string,
+so pushing a payload through it would mean inlining megabytes into an argv in
+language-specific quoting.
+
+`CodeSession.stageInputs` is the file-write verb that note was waiting for, and
+`codeRunnerTool({ wants })` is what uses it:
+
+```ts
+import { codeRunnerTool } from 'agentfootprint';
+import { localCodeRunner } from 'agentfootprint/providers';
+
+Agent.create({ provider, model, artifacts: { store } })
+  .tool(codeRunnerTool({
+    runner: localCodeRunner(),
+    language: 'python',
+    wants: { dataset: 'dataset/rows' },
+  }))
+  .build();
+```
+
+The model passes the `art_…` ref as `dataset`; the framework resolves it under
+the run's own scope (the same `wants` machinery, with the same teaching refusals
+for a stale, unknown or wrong-kind ref); the tool writes the resolved payload
+into the session as a file **before** the code runs. Data now flows both ways
+without entering the context window: refs in as staged files, produced files out
+as refs.
+
+### What the model's code reads
+
+One environment variable, on every backend that stages. `STAGED_INPUTS_ENV`
+(`AF_STAGED_INPUTS`) holds a JSON object keyed by **argument name**:
+
+```python
+import json, os
+path = json.loads(os.environ['AF_STAGED_INPUTS'])['dataset']
+rows = json.load(open(path))
+```
+
+The composed tool description says exactly that, with a one-line example in the
+tool's own language, so a model needs nothing beyond the description. The
+manifest key is the argument name (what the description told it to look up)
+while the *file* gets an extension derived from the artifact's own media type —
+`CodeInput` keeps `name` and `fileName` as separate fields precisely so the two
+cannot drift. `StagedCodeInput` is what an adapter reports back: `{ name, path,
+bytes }`.
+
+### Refused, never degraded
+
+A runner whose sessions cannot stage — `stageInputs` absent, which is the honest
+state of any backend that cannot write into its own session — makes a
+`wants`-declaring code tool refuse **by name** at dispatch. Running the code
+anyway would leave the model debugging a missing file, in a session that never
+had the data, for a reason nothing in the conversation could reveal. Detect it
+yourself with `canStageCodeInputs(session)`.
+
+Staged inputs live as long as the session and are released by `stop()`. On
+`localCodeRunner` they land in a private temp directory, and a caller-supplied
+name becomes one inert file-name segment — `..` and separators arrive as data
+and land as literals, the same law the artifact scope paths follow.
+
+Zero-cost without `wants`: no schema properties are added, no session is ever
+asked to stage, no filesystem module is loaded, and the description is the one
+earlier releases composed.
+
+## The repeated-call nudge (9.26.0)
+
+A traced production run: the model called one tool three times with
+byte-identical arguments and got a byte-identical result each time. The tool was
+doing its job — the arguments named a filter the backend silently ignored — and
+the model read the same rows as a fresh answer each iteration, concluded nothing
+had changed, and tried again. Three calls, three identical results, one wasted
+turn, and nothing in the loop that could say "you have done this".
+
+That class of loop is invisible from inside the conversation: the history
+genuinely shows three separate calls that each returned data. The only party
+with the whole picture is the framework, which watched all three land. So on the
+**second** identical landing it appends one sentence to that result:
+
+> *identical call: 'search' has now returned exactly this result 2 times this
+> turn, for exactly these arguments. Calling it again will not change it — act
+> on what you have, or change the arguments…*
+
+**It is a note, not a refusal.** The call ran, the result is unchanged beside the
+note, nothing errored, and a third identical call is not blocked. That restraint
+is the design: polling a job until its status changes is a loop of identical
+calls returning identical results *on purpose*, and only the model knows which
+it is doing.
+
+Both halves are required. Identical arguments alone are not evidence — a "check
+status" call returning a *different* status is progress. It is the identical
+**result** that makes the repeat pointless, which is also what lets the note say
+something specific and true.
+
+It fires once per distinct call, at the threshold landing exactly; a fourth
+identical call adds nothing further, because repeating the lesson every
+iteration would be the framework doing the very thing it is complaining about.
+It is applied at the batch dispatch loop only — the pause-resume paths deliver a
+call a person answered, and a note telling the model it has already done what a
+human just authorised would be the framework arguing with the human.
+
+Set `repeatedCallNudge: false` on `Agent.create` to switch it off: nothing is
+fingerprinted, no counter is kept, and even a repeating turn is byte-identical
+to earlier releases. Worth doing when a deployment's tools are deliberately
+polled.
+
+Each note also lands on the record as **`agentfootprint.tools.repeated_call`**,
+carrying `{ toolName, toolCallId, iteration, occurrences, argsFingerprint,
+resultFingerprint }`. Fingerprints, never values — tool arguments routinely
+carry the things redaction exists for, and a fingerprint answers the only
+question this feature asks.
+
+**A turn that repeats nothing is byte-identical whether the dial is on or off**
+— same results, same events, same tracked state down to the key set. The
+counters are held beside the dispatch loop, keyed by `runId`, and never written
+to scope: a within-turn tally is not conversation state, and tracked state is
+the commit log, the snapshot, the narrative and every recording. Upgrading
+changes nothing until a call actually repeats. (A resume mints a fresh `runId`,
+so a turn continued after a person answered starts counting again — the
+framework only watched half of it.)
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

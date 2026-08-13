@@ -144,13 +144,81 @@ When a store is attached, the framework auto-attaches one more tool (the `read_s
 
 ### The code leg — `CodeResult.artifacts` gets the store behind it
 
-With a store attached, files a [code run](doc:tools) hands back **in-band** (`CodeResult.artifacts[].data` — an additive field an adapter fills when it can return the bytes) are minted under the run's scope — kind `file/<ext>` from the producer's own filename, mediaType from the adapter's statement, a well-known-extension table, or the payload's shape — and the rendered result names the ref (`[artifact: report.csv, 29 bytes, stored as art_… (file/csv) — route this ref…]`). Entries without `data` stay described-only, exactly as before. **Staging-in is deliberately absent this phase:** the `CodeSession` port's only input is the code string, and declared input refs for code sessions wait for a session file-write verb on the port — mint-on-output ships now, stated.
+With a store attached, files a [code run](doc:tools) hands back **in-band** (`CodeResult.artifacts[].data` — an additive field an adapter fills when it can return the bytes) are minted under the run's scope — kind `file/<ext>` from the producer's own filename, mediaType from the adapter's statement, a well-known-extension table, or the payload's shape — and the rendered result names the ref (`[artifact: report.csv, 29 bytes, stored as art_… (file/csv) — route this ref…]`). Entries without `data` stay described-only, exactly as before. **Since 9.26.0 the leg runs both ways:** `codeRunnerTool({ wants })` stages the resolved payload INTO the session as a file through `CodeSession.stageInputs`, so a dataset reaches the interpreter without one byte of it entering the prompt. See [Staging refs into a code session](/docs/build/tools#staging-refs-into-a-code-session-9260).
 
 Runnable version of the whole flow: [`examples/features/57-artifact-data-flow.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/57-artifact-data-flow.ts) — placement mints the 48k-row result, the ref rides a `wants` argument, and `present` finishes with the snapshot, end-to-end on the mock provider.
 
 ### The HITL leg (9.24.0) — an ask's big props ride the store, not the checkpoint
 
 A human ask can carry a typed `component: { componentId, props?, propsRef? }` — which registered screen component collects the answer. `propsRef` is this store doing for **questions** what `wants` does for tool arguments: a 200-option picker's options are minted via `ctx.artifacts.put(...)` BEFORE the ask is raised, the ask carries the ~26-char ticket, and the screen redeems it through the artifact wire under the session's own scope — the checkpoint and every stored session envelope stay lean. The ref is validated to resolve **at raise time**, so a dangling ticket refuses at its source instead of reaching the person answering. See [Pause / Resume — typed asks](/docs/monitor/pausable#typed-asks--a-registered-component-collects-the-answer) and [Check-in](/docs/monitor/checkin#the-ask-can-name-the-screen-that-collects-the-decision); runnable: [`examples/features/58-typed-hitl-component.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/58-typed-hitl-component.ts).
+
+## Recordings as artifacts (9.26.0) — the Lens over the wire
+
+A finished run already has a shape every viewer reads: `{ snapshot, events,
+structure }`, produced by `recordRun`. What nobody shipped was the boring half
+in between — *where* a completed run's recording goes so a screen can ask for it
+later. Every deployment that wanted the Lens over the wire wrote the same twenty
+lines, and each one wrote a slightly different, slightly wrong version of
+retention and scoping.
+
+All four of those problems already had an answer here. A recording is simply an
+artifact:
+
+```ts
+const agent = Agent.create({
+  provider, model,
+  artifacts: { store: sqliteArtifacts({ file: './artifacts.db' }), recordings: true },
+}).build();
+
+await agent.run({ message: 'Q3 by region?' });
+// → one artifact of kind 'recording/run', in the run's own scope,
+//   with origin.runId joining it back to the trace.
+```
+
+The frontend redeems it with the operation it already speaks:
+`{ op: 'artifact-get', ref }` returns the recording, and
+`observeRecording(JSON.parse(text))` draws it. **Zero new wire operations were
+needed.** Retention rides the store, so recordings age out under the same ttl
+and byte budget everything else does, and a sweep reports itself on
+`agentfootprint.artifacts.expired` exactly as any other eviction does.
+
+`recordings: true` takes the default naming; `AgentRecordingsOptions` —
+`{ label }` — names them yourself, and the label is used **verbatim**. A static
+label repeats on every run on purpose: what distinguishes two recordings is the
+ref and `origin.runId`, and a library that decorated your label to make it
+unique would be overruling the name you chose.
+
+### What it costs, stated rather than discovered
+
+Recording a run means an event tail and a boundary recorder for its duration,
+and the mint is one store write on the way **out** of `run()`. The answer is
+fully composed before the write begins and the write can never change it — but
+`run()` does return after it rather than before. That is deliberate: a
+fire-and-forget write is a recording lost whenever the container exits with the
+reply, which is exactly the deployment that wants this most.
+
+A mint that **fails** degrades to the old behaviour: the answer is returned
+unchanged and the reason lands on the record as
+`agentfootprint.artifacts.refused`. A run never fails because its recording
+could not be filed. Nothing is minted for a run that paused (the turn is not
+over — the resume mints its own) or threw.
+
+The payload is the recording's **JSON text** — the same bytes
+`JSON.stringify(recorder.toRecording())` produces. `recordRun` states that
+`snapshot` and `structure` are the runner's *own* objects held by reference, and
+an in-process store handed those would keep a live view into a finished run's
+state; serializing detaches it, once. A recording JSON cannot carry (a cyclic
+snapshot) is refused at the mint by `UnserializableRecordingError` rather than
+at whatever tried to read it.
+
+Unset — the default — no recorder is attached, no events are captured, nothing
+is minted, and the run is byte-identical to every earlier release.
+
+For custom harnesses the pure half is public: `recordingPutInput(recording,
+facts)` turns a recording into the `PutArtifactInput` that stores it, taking
+`RecordingMintFacts` (`{ runId?, label? }`); `RECORDING_ARTIFACT_KIND`
+(`'recording/run'`) and `RECORDING_MEDIA_TYPE` (`'application/json'`) are the
+constants a consumer branches on.
 
 ## `ctx.artifacts` — shaped exactly like `ctx.credentials`
 
@@ -266,7 +334,7 @@ For custom wiring outside the Agent (your own harness, tests), the binding layer
 - **One store per agent**, attached at construction (`Agent.create({ ..., artifacts })` — bare store, or `{ store, placement }`) — there is no second door, so "one per agent" is a fact of the type.
 - **No snapshot coupling.** `getSnapshot()` is unchanged; the store's own accounting is `list` plus the adapters' counters. Stated so the absence reads as a decision.
 - **The hosting half of render-by-ref is live (9.23.0):** a served agent answers `artifact-head` / `artifact-get` on its invoke path, so a screen redeems tickets under the requesting session's identity — see [Redeeming claim tickets](/docs/infrastructure/hosting-and-runtime#redeeming-claim-tickets--artifact-head--artifact-get).
-- **The reference architecture is complete as of 9.25.0:** typed HITL payloads landed in 9.24.0, and the cloud adapters, the optional streaming leg and the [skill artifact vocabularies](#skill-vocabularies--which-kinds-a-skill-makes-and-needs) landed here. **The component registry that validates `as` (the lens leg) and staging refs INTO code sessions remain later phases.**
+- **The reference architecture is complete as of 9.25.0:** typed HITL payloads landed in 9.24.0, and the cloud adapters, the optional streaming leg and the [skill artifact vocabularies](#skill-vocabularies--which-kinds-a-skill-makes-and-needs) landed here. Since 9.26.0 the data legs run **both ways**: [staging refs INTO code sessions](#the-code-leg--coderesultartifacts-gets-the-store-behind-it) landed with `CodeSession.stageInputs`, and [run recordings](#recordings-as-artifacts-9260--the-lens-over-the-wire) are artifacts the existing wire ops serve. **The component registry that validates `as` (the lens leg) remains a later phase.**
 
 ## Skill vocabularies — which kinds a skill makes and needs
 

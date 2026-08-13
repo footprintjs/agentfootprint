@@ -1156,6 +1156,29 @@ export interface ToolResultRefusedPayload {
   readonly declaredStatus?: ToolResultStatus;
 }
 
+/**
+ * A tool returned exactly what it returned before, for exactly the same
+ * arguments (9.26.0) — and the model was told so.
+ *
+ * A NOTE was appended to that result; the call ran, the result is unchanged
+ * beside the note, and nothing was refused. Payloads never ride this event:
+ * `argsFingerprint` and `resultFingerprint` are short non-cryptographic
+ * digests, which answer "is this the same?" and nothing else. See
+ * `core/agent/repeatedCall.ts` for why the fingerprints and not the values.
+ */
+export interface ToolRepeatedCallPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** How many times this exact call+result has landed this turn, including
+   *  this one. The note fires on the threshold landing only. */
+  readonly occurrences: number;
+  /** Digest of the arguments — never the arguments. */
+  readonly argsFingerprint: string;
+  /** Digest of the result — never the result. */
+  readonly resultFingerprint: string;
+}
+
 // permission.* (4)
 export interface PermissionCheckPayload {
   /** 9.11.0 — the shared vocabulary, so the event cannot drift from the

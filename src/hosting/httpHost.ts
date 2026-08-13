@@ -72,7 +72,14 @@ import type { Duplex } from 'node:stream';
 
 import { encodeSSE } from '../stream.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
-import { ArtifactNotCarriedError, HostClosedError, InvalidWireOpError } from './errors.js';
+import {
+  ArtifactNotCarriedError,
+  HostClosedError,
+  InvalidWireOpError,
+  SessionsNotCarriedError,
+} from './errors.js';
+import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
+import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import { lowerCasedHeaders } from './headers.js';
 import type {
   AgentHost,
@@ -149,6 +156,15 @@ export interface HttpWire {
      */
     readonly artifact?: ArtifactWireRequest;
     /**
+     * A session-history operation this request carries instead of a message
+     * (9.26.0). Read it with `readSessionWireOp(facts.body)` — the one owner
+     * of the `{ op: 'session-list' | 'session-transcript', sessionId? }`
+     * grammar. A dialect that returns it must also implement
+     * {@link HttpWire.sessions}, or every resolved listing answers with the
+     * named not-carried refusal.
+     */
+    readonly session?: SessionWireRequest;
+    /**
      * Headers to put on THIS request's reply, whatever terminal it ends with
      * (9.10.0).
      *
@@ -193,6 +209,17 @@ export interface HttpWire {
    * `ArtifactNotCarriedError` refusal instead of an improvised body.
    */
   artifact?(result: ArtifactWireResult): unknown;
+  /**
+   * Body for a RESOLVED session-history operation (9.26.0) — the caller's own
+   * sessions for a list, one owned session's messages for a transcript.
+   * Compose it with `sessionWireBody(result)` (both shipped dialects do) so
+   * clients read one shape.
+   *
+   * Optional exactly as `artifact` is: a wire without it keeps compiling, and
+   * a resolved listing on such a wire is answered with the named
+   * `SessionsNotCarriedError` refusal instead of an improvised body.
+   */
+  sessions?(result: SessionWireResult): unknown;
   /**
    * Pull the port's vocabulary out of one conversation handshake — the session
    * this conversation claims, any header mapping this dialect performs, and the
@@ -421,6 +448,26 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_ARTIFACT_NOT_FOUND: 404,
   ERR_NO_ARTIFACT_STORE: 501,
   ERR_ARTIFACT_NOT_CARRIED: 501,
+  // 9.26.0 — the badge, the bouncer and the history desk.
+  //   401: this caller was not identified (a token that did not verify, or one
+  //        that was never presented at a door that insists).
+  //   503: the VERIFIER could not answer — an outage on this side, and telling
+  //        every client to re-authenticate against an unreachable provider is
+  //        the wrong instruction at the worst moment.
+  //   429: admission said no. The one status a client is expected to back off
+  //        on, which is exactly what a spend bound wants it to do.
+  //   404: a transcript this caller may not have — one answer for missing,
+  //        foreign and owner-less alike.
+  //   501: the door was never given what the op needs (no verifier, no owner
+  //        index, no wire body shape) — a gap in THIS deployment, not a bad
+  //        request the caller could fix by sending something else.
+  ERR_IDENTITY_NOT_VERIFIED: 401,
+  ERR_IDENTITY_VERIFIER_UNAVAILABLE: 503,
+  ERR_ADMISSION_REFUSED: 429,
+  ERR_SESSION_NOT_FOUND: 404,
+  ERR_SESSION_OP_NEEDS_IDENTITY: 501,
+  ERR_SESSION_INDEX_UNAVAILABLE: 501,
+  ERR_SESSIONS_NOT_CARRIED: 501,
 };
 
 /**
@@ -856,7 +903,7 @@ async function dispatchOne(
     }
     throw err;
   }
-  const { input, sessionId, userId, decision, artifact, responseHeaders } = read;
+  const { input, sessionId, userId, decision, artifact, session, responseHeaders } = read;
   // The dialect's own reply headers — a `Set-Cookie` that issues a session, and
   // nothing else so far. Stripped of `content-type` because the framing below
   // is this host's to decide: a dialect that set it would be choosing between
@@ -921,6 +968,29 @@ async function dispatchOne(
         sendJson(res, 200, payload, extraHeaders);
       }
     },
+    sessions(result): void {
+      if (settled) return;
+      // Same law as `artifact` above: a wire that cannot describe the result
+      // says so by name rather than answering 200 with a shape no client was
+      // written against.
+      if (!wire.sessions) {
+        reply.fail(
+          new SessionsNotCarriedError(
+            result.op === 'list' ? SESSION_LIST_OP : SESSION_TRANSCRIPT_OP,
+            hostName,
+          ),
+        );
+        return;
+      }
+      settled = true;
+      const payload = wire.sessions(result);
+      if (wantsStream) {
+        res.write(encodeSSE('sessions', payload));
+        res.end();
+      } else {
+        sendJson(res, 200, payload, extraHeaders);
+      }
+    },
     awaiting(pending): void {
       if (settled) return;
       // A wire that cannot describe a question must not answer 202 with an
@@ -973,6 +1043,7 @@ async function dispatchOne(
         ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
         ...(artifact !== undefined && { artifact }),
+        ...(session !== undefined && { session }),
         headers,
         signal: controller.signal,
       },
