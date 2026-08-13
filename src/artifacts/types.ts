@@ -24,11 +24,19 @@
  * `put · head · get · delete · list`. The moment this port grows `query()` or
  * `transform()` we are building a database — compute belongs to the code leg,
  * and that refusal is written here so a future round can be refused by
- * citation. No streaming members either: an in-memory adapter must never fake
- * a stream (streaming is a later, feature-detected addition — not Phase 1).
+ * citation.
  *
  * `head` earns its place because it IS the render-by-ref decision: a consumer
  * picks what to do from `kind` and `bytes` without paying for the payload.
+ *
+ * ── …and two OPTIONAL ones (9.25.0) ─────────────────────────────────────────
+ * `putStream?` / `getStream?` are feature-detected members, not a sixth and
+ * seventh verb: a store that cannot move a payload without holding it whole
+ * LEAVES THEM ABSENT, and a consumer that calls one it did not detect gets a
+ * type error rather than a runtime surprise. An adapter must never fake a
+ * stream over bytes it already holds — a fake stream is an accepted-and-
+ * silently-wrong promise about memory. See {@link ArtifactStreamPutInput} for
+ * the two things streaming costs you (a stated `bytes`, and no digest).
  */
 
 import type { MemoryIdentity } from '../memory/identity/types.js';
@@ -166,9 +174,47 @@ export interface ArtifactListResult {
 }
 
 /**
- * The port — five verbs, scope first, vendor-neutral. Adapters are the vendor
- * layer (`inMemoryArtifacts`, `fileArtifacts`, `sqliteArtifacts`; S3/GCS are a
- * later phase behind the same five verbs).
+ * What a STREAMED put declares. Everything on {@link PutArtifactInput} the
+ * caller owns, minus the two things a store cannot honor without holding the
+ * payload whole:
+ *
+ *   • **`bytes` is REQUIRED here** (it is stamped, not measured). Retention
+ *     has to plan an eviction BEFORE the bytes arrive, and an object store
+ *     has to declare a content length before it opens the upload — neither
+ *     can wait for a stream to end. A store that can see the true count
+ *     verifies it and refuses a mismatch by name rather than storing a meta
+ *     that lies about its own payload.
+ *   • **there is no `digest`.** A digest is computed over the whole canonical
+ *     payload with the same primitive every adapter shares; a store that
+ *     never holds the payload cannot produce one, and an incremental hash
+ *     computed a second way would be a different promise wearing the same
+ *     field name. Digest the source yourself, or use `put`.
+ */
+export interface ArtifactStreamPutInput {
+  readonly kind: string;
+  readonly mediaType: string;
+  /** The payload's exact byte length — stated by the producer, not measured. */
+  readonly bytes: number;
+  readonly label?: string;
+  /** Caller-stated expiry (unix ms). The store's own ttl may only TIGHTEN it. */
+  readonly expiresAt?: number;
+  readonly origin?: ArtifactOrigin;
+  readonly parentRefs?: readonly ArtifactRef[];
+}
+
+/** What `getStream` returns when the ref resolves: the ticket, and the
+ *  payload's CANONICAL BYTES as a stream — the same bytes `meta.bytes` counts
+ *  and a digest would cover, never a re-encoding. */
+export interface ArtifactStreamRecord {
+  readonly meta: ArtifactMeta;
+  readonly body: ReadableStream<Uint8Array>;
+}
+
+/**
+ * The port — five verbs, scope first, vendor-neutral, plus two optional
+ * streaming members. Adapters are the vendor layer; every backend
+ * (in-process, on-disk, embedded database, remote object storage) implements
+ * exactly this.
  */
 export interface ArtifactStore {
   /**
@@ -198,6 +244,34 @@ export interface ArtifactStore {
 
   /** Page through this scope's tickets, newest first. */
   list(scope: ArtifactScope, options?: ArtifactListOptions): Promise<ArtifactListResult>;
+
+  /**
+   * OPTIONAL — store a payload the caller streams, without either side
+   * holding it whole. Absent on stores that cannot honor that promise; detect
+   * with `canPutArtifactStream(store)` before calling.
+   *
+   * The stream is consumed exactly once. Everything else is `put`'s law:
+   * `parentRefs` are proven first, retention plans against the DECLARED
+   * `bytes`, and the sweep rides the result.
+   */
+  putStream?(
+    scope: ArtifactScope,
+    input: ArtifactStreamPutInput,
+    body: ReadableStream<Uint8Array>,
+  ): Promise<ArtifactPutResult>;
+
+  /**
+   * OPTIONAL — read a payload as a stream of its canonical bytes. `null` for
+   * missing-or-expired, exactly like `get`. Absent on stores that would have
+   * to read the payload whole to answer; detect with
+   * `canGetArtifactStream(store)`.
+   *
+   * A `digest` on the meta is NOT re-verified here — verification needs the
+   * whole payload, which is the thing this member exists to avoid. `get`
+   * remains the verifying read, and the difference is stated rather than
+   * silently traded.
+   */
+  getStream?(scope: ArtifactScope, ref: ArtifactRef): Promise<ArtifactStreamRecord | null>;
 }
 
 // ─── Refusals ────────────────────────────────────────────────────────

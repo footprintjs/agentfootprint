@@ -560,10 +560,12 @@ export {
   bindArtifacts,
   DEFAULT_IN_MEMORY_ARTIFACT_RETENTION,
   fileArtifacts,
+  gcsArtifacts,
   inMemoryArtifacts,
   InvalidArtifactError,
   isArtifactRef,
   mintArtifactRef,
+  s3Artifacts,
   sqliteArtifacts,
   unconfiguredArtifacts,
   UnknownParentRefError,
@@ -586,14 +588,28 @@ export {
   type ArtifactSweepReason,
   type BindArtifactsOptions,
   type FileArtifactsOptions,
+  type GcsArtifactsOptions,
   type InMemoryArtifacts,
   type InMemoryArtifactsOptions,
   type PutArtifactInput,
+  type S3ArtifactsOptions,
   type SqliteArtifacts,
   type SqliteArtifactsOptions,
   type SweptArtifact,
   type ToolArtifactPutInput,
   type ToolArtifacts,
+} from './artifacts/index.js';
+// Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
+// FEATURE-DETECTED members of the port, so a store that cannot move bytes
+// without holding them whole leaves them absent rather than faking one. The
+// guards narrow the type, so calling an absent member is a compile error.
+export {
+  canGetArtifactStream,
+  canPutArtifactStream,
+  canStreamArtifacts,
+  type ArtifactStreamPutInput,
+  type ArtifactStreamRecord,
+  type StreamingArtifactStore,
 } from './artifacts/index.js';
 // Artifacts, the data legs (9.22.0) — refs the model ROUTES: `wants` (ref
 // arguments resolved at dispatch, the declare-and-push precedent applied to

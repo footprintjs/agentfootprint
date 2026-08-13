@@ -22,6 +22,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GOOGLE_PACKAGES,
   GOOGLE_SURFACE_PINS,
+  chainMethodExists,
   fakeGoogleClient,
   findGoogleLoadSites,
   installedVersion,
@@ -135,11 +136,22 @@ describe('the pinned methods against the real installed packages', () => {
       const Ctor = mod[row.ctor];
       expect(typeof Ctor, `${row.sdkPackage} must export ${row.ctor}`).toBe('function');
 
-      // Constructed with a placeholder key: this reads a surface, it never
-      // makes a call, and no credential is involved on either door.
+      // Constructed with placeholder configuration: this reads a surface, it
+      // never makes a call, and no credential is involved on any door.
       const instance = new (Ctor as new (opts: unknown) => Record<string, unknown>)({
         apiKey: 'surface-pin-not-a-real-key',
+        projectId: 'surface-pin',
       });
+
+      // A CHAIN row's methods live at several levels of a factory chain
+      // (`storage.bucket(b).file(k).save`), so each dotted path is WALKED.
+      // Enumerating one namespace would report every one of them missing.
+      if (row.kind === 'chain') {
+        const missing = row.methods.filter((path) => !chainMethodExists(instance, path));
+        expect(missing, `${row.adapter} calls methods that do not exist`).toEqual([]);
+        return;
+      }
+
       const surface = (row.namespace ? instance[row.namespace] : instance) as unknown as object;
       expect(surface, `${row.ctor} must expose ${row.namespace ?? 'its methods'}`).toBeTruthy();
 
@@ -187,6 +199,20 @@ describe('the API version each surface actually resolves to', () => {
   for (const row of GOOGLE_SURFACE_PINS) {
     if (!row.apiVersions) continue;
     for (const [mode, expected] of Object.entries(row.apiVersions)) {
+      if (mode === 'json') {
+        // The storage client dials a JSON API version nobody configures; it
+        // states it on its own `baseUrl`. Same assertion, different door —
+        // "which version does this really call?" has to be answerable per
+        // surface, not per SDK family.
+        it(`${row.adapter} dials the ${expected} JSON API`, () => {
+          const mod = realPackage(row.sdkPackage) as Record<string, unknown>;
+          const client = new (mod[row.ctor] as new (o: unknown) => { baseUrl?: string })({
+            projectId: 'surface-pin',
+          });
+          expect(client.baseUrl).toContain(`/storage/${expected}`);
+        });
+        continue;
+      }
       it(`${row.adapter} on ${mode} resolves to ${expected}`, () => {
         expect(versionOf(MODES[mode]!)).toBe(expected);
       });
@@ -284,7 +310,10 @@ describe('the registry covers every Google adapter in the source tree', () => {
     // The scan matches real load expressions, so a package merely named in a
     // comment must not create a phantom row requirement.
     expect(GOOGLE_PACKAGES).toContain('@google/genai');
-    expect([...loadSites.keys()]).toEqual(['src/adapters/llm/googleGenAI.ts']);
+    expect([...loadSites.keys()].sort()).toEqual([
+      'src/adapters/llm/googleGenAI.ts',
+      'src/artifacts/gcsArtifacts.ts',
+    ]);
   });
 
   it('pinned rows are shaped like the surfaces they claim to be', () => {

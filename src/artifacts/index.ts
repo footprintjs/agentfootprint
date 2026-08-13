@@ -23,6 +23,8 @@ export {
   type ArtifactRef,
   type ArtifactScope,
   type ArtifactStore,
+  type ArtifactStreamPutInput,
+  type ArtifactStreamRecord,
   type ArtifactSweepReason,
   type PutArtifactInput,
   type SweptArtifact,
@@ -46,6 +48,19 @@ export {
   type SqliteArtifacts,
   type SqliteArtifactsOptions,
 } from './sqliteArtifacts.js';
+export { s3Artifacts, type S3ArtifactsOptions } from './s3Artifacts.js';
+export { gcsArtifacts, type GcsArtifactsOptions } from './gcsArtifacts.js';
+export {
+  assertStreamBytes,
+  bytesAsStream,
+  canGetArtifactStream,
+  canPutArtifactStream,
+  canStreamArtifacts,
+  collectStream,
+  type GetStreamingArtifactStore,
+  type PutStreamingArtifactStore,
+  type StreamingArtifactStore,
+} from './streaming.js';
 export {
   bindArtifacts,
   unconfiguredArtifacts,

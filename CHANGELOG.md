@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.25.0] - 2026-08-13
+
+**The reference architecture is complete: artifacts reach the clouds, and
+skills declare what data they feed each other.**
+
+### Added — `s3Artifacts` + `gcsArtifacts`
+
+The five-verb store, on S3 and Cloud Storage, law-for-law with the three
+shipped adapters: scope-partitioned traversal-proof keys (a tenant of
+literally `..` is a name, never a hop), the digest verified on `get`,
+retention stated at mint and swept on read, one indistinguishable miss for a
+wrong scope, a foreign object, or an expired one. SDK surfaces are pinned
+against real installs, and both are optional peer dependencies loaded lazily
+at construction — a browser bundle sees nothing. Status: contract-shaped and
+tested; awaiting field use.
+
+S3-compatible on-prem stores (MinIO and the like) work the same way: build
+the client against your own endpoint and path style and pass it as `client` —
+the adapter dispatches the same five commands either way. Documented on the
+[AWS](doc:aws) and [on-premises](doc:on-premises) pages.
+
+### Added — skill artifact vocabularies
+
+`defineSkill` and `SkillStep` gain `produces` / `consumes` (artifact kinds).
+The checkup gains `artifact-kind-unsatisfied`: a declared consumption that
+nothing on the path produces warns at build time — honest about what static
+analysis cannot see (a tool's undeclared mint, an artifact from an earlier
+run, from another agent, from outside the process). The skill graph and the
+artifact store now speak the same vocabulary.
+
+### Added — optional streaming on the port
+
+`putStream` / `getStream` as feature-detected members (`canStreamArtifacts`,
+`canPutArtifactStream`, `canGetArtifactStream`) — a store that cannot move
+bytes without holding them whole leaves them absent rather than faking one.
+`fileArtifacts` and both cloud adapters stream natively; `inMemoryArtifacts`
+and `sqliteArtifacts` honestly do not.
+
+### Quality notes
+
+One shared contract suite now runs all five adapters — a cloud column that
+drifts from the port fails the shipped adapters' own tests. A vendor-
+neutrality guard covers the artifact port (the two adapter files are exempt
+by name; everything else may not name a cloud). Raw SDK errors are sanitized
+on every path — the operation, the exception's name and the HTTP status
+travel; the vendor's own text, which echoes the bucket and the scoped key,
+does not.
+
 ## [9.24.0] - 2026-08-13
 
 **A person answers through a typed panel: the ask carries a component, the

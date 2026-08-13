@@ -53,6 +53,7 @@ import {
 import { foldStepPlans } from '../../lib/injection-engine/skillSteps.js';
 import { checkSkillContracts, skillToolNames } from '../../lib/injection-engine/skillContract.js';
 import { formatCheckup } from '../../lib/injection-engine/skillGraphCheckup.js';
+import { checkArtifactVocabularies } from '../../lib/injection-engine/skillVocabulary.js';
 import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
@@ -2258,6 +2259,27 @@ export class AgentBuilder {
           );
         }
       }
+    }
+    // ── The artifact vocabularies (SG-F, 9.25.0) ──────────────────────
+    // Runs on the FINAL injection list, for the reason every check on this
+    // line does: skills arrive through `.skill()`, `.skills()` AND
+    // `.skillGraph()`, and only here is the whole agent visible — which is
+    // exactly what the satisfiability rule needs ("does ANYTHING on this
+    // agent declare it produces this kind?"). A graph that already ran its
+    // own checkup re-reports here only if a producer outside the graph was
+    // what silenced it, which is the answer the author wants either way.
+    //
+    // Always a dev-mode WARNING, never a throw, on ANY check mode: the rule
+    // reads declarations only and cannot see a store seeded by another agent
+    // or an earlier run (`skillVocabulary.ts` states the whole boundary), so
+    // failing a build on it would be claiming more than it knows.
+    const vocabularyProblems = checkArtifactVocabularies(injections);
+    if (vocabularyProblems.length > 0 && isDevMode()) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `agentfootprint Agent: artifact-vocabulary check-up:\n` +
+          formatCheckup({ ok: true, problems: vocabularyProblems }),
+      );
     }
     // ── The brains fold (9.19.0) — both declaration homes, one check-up ──
     // Runs on the FINAL injection list for the same reason the delivery

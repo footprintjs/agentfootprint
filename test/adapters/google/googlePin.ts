@@ -60,6 +60,7 @@ export const REPO_ROOT = new URL('../../../', import.meta.url).pathname;
 /** Every Google package family an adapter here may load. */
 export const GOOGLE_PACKAGES: readonly string[] = [
   '@google/genai',
+  '@google-cloud/storage',
   'google-auth-library',
   'googleapis',
   '@google-cloud/aiplatform',
@@ -76,7 +77,7 @@ export const GOOGLE_PACKAGES: readonly string[] = [
  * Bank arrive through them, and because a registry that cannot express the
  * surface a future row needs gets bypassed instead of extended.
  */
-export type GoogleSurfaceKind = 'object' | 'gax' | 'rest';
+export type GoogleSurfaceKind = 'object' | 'chain' | 'gax' | 'rest';
 
 /** One Google adapter's contract with its SDK. */
 export interface GoogleAdapterPin {
@@ -95,7 +96,15 @@ export interface GoogleAdapterPin {
    * when the methods are on the client itself.
    */
   readonly namespace?: string;
-  /** Every method the adapter CALLS. Empty is a claim too — see `note`. */
+  /**
+   * Every method the adapter CALLS. Empty is a claim too — see `note`.
+   *
+   * On a `'chain'` row these are DOTTED PATHS through the factory chain
+   * (`'bucket.file.save'` = `storage.bucket(b).file(k).save(...)`), because
+   * that client has no command objects AND no single namespace: the methods
+   * live at three levels. A registry that could not express the surface a row
+   * needs gets bypassed instead of extended, so it was extended.
+   */
   readonly methods: readonly string[];
   /**
    * The API version this surface RESOLVES TO, per mode, when the adapter asks
@@ -147,6 +156,41 @@ export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
     namespace: 'models',
     methods: ['embedContent'],
     apiVersions: { vertex: 'v1beta1', 'gemini-api': 'v1beta' },
+  },
+  {
+    adapter: 'gcsArtifacts',
+    sources: ['src/artifacts/gcsArtifacts.ts'],
+    sdkPackage: '@google-cloud/storage',
+    kind: 'chain',
+    ctor: 'Storage',
+    methods: [
+      'bucket',
+      'bucket.getFiles',
+      'bucket.file',
+      'bucket.file.save',
+      'bucket.file.download',
+      'bucket.file.getMetadata',
+      'bucket.file.delete',
+      'bucket.file.createReadStream',
+      'bucket.file.createWriteStream',
+    ],
+    // The JSON API version this client resolves to with no configuration. It is
+    // a DEFAULT nobody states, which is exactly the class assertion (3) exists
+    // for — read off the constructed client's own `baseUrl`.
+    apiVersions: { json: 'v1' },
+    note:
+      'Read out of a real install of @google-cloud/storage 7.22.0 before the adapter was ' +
+      'written (9.25.0) — the chain, and four SHAPES a design could only have guessed at: ' +
+      'custom metadata is NESTED (`{ metadata: { metadata: { … } } }`, an 8 KiB cap) and ' +
+      "`options.contentType` is the client's own alias for `metadata.contentType`; " +
+      '`getFiles({ autoPaginate: false })` answers `[File[], nextQuery, apiResponse]` with each ' +
+      "File's `.metadata` ALREADY POPULATED (custom entries included) and `nextQuery` null on " +
+      'the last page — which is why this adapter lists in one call where the other column ' +
+      'needs a read per row; `download()` answers `[Buffer]` while `createReadStream()` is a ' +
+      'Node Readable (bridged to a web stream at the adapter edge, never in the port); and a ' +
+      'missing object throws `{ code: 404 }`, the only failure this adapter may answer null ' +
+      'for. `exists()` and `setMetadata()` are on the surface and deliberately NOT called: ' +
+      'an exists-then-read is a race, and a ticket is written once at put.',
   },
   {
     adapter: 'Google Cloud OTLP recipe (docs)',
@@ -276,6 +320,32 @@ export function reachableMethods(target: object): Set<string> {
     node = Object.getPrototypeOf(node) as object | null;
   }
   return names;
+}
+
+/**
+ * Walk a DOTTED method path through a factory chain and answer whether the
+ * last segment is really a callable member.
+ *
+ * `'bucket.file.save'` → `typeof storage.bucket(x).file(y).save === 'function'`.
+ * The intermediate segments are called with a placeholder string: on this
+ * client they are pure local constructions (a `Bucket`/`File` handle is built,
+ * nothing is fetched), which is what lets a surface check run offline with no
+ * credential. Returns `undefined` when the chain breaks before the end — the
+ * caller reports THAT as the missing name, since a broken chain and a missing
+ * leaf are the same bug at different depths.
+ */
+export function chainMethodExists(root: object, path: string): boolean {
+  const segments = path.split('.');
+  let node: unknown = root;
+  for (const segment of segments.slice(0, -1)) {
+    const factory = (node as Record<string, unknown>)[segment];
+    if (typeof factory !== 'function') return false;
+    node = (factory as (arg: string) => unknown).call(node, 'surface-pin');
+    if (node === null || typeof node !== 'object') return false;
+  }
+  const leaf = segments[segments.length - 1]!;
+  const value = (node as Record<string, unknown>)[leaf];
+  return typeof value === 'function';
 }
 
 /**

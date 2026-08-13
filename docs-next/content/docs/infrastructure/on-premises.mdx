@@ -151,7 +151,11 @@ a different embedder (`EmbedderMismatchError`) — the failure that otherwise
 presents as *retrieval got worse*.
 
 For conversation memory, `RedisStore` if you already run one, `InMemoryStore` if
-the process is the boundary.
+the process is the boundary. For the artifact claim-check store, `s3Artifacts`
+and `gcsArtifacts` (see [AWS](doc:aws) / [Google Cloud](doc:google-cloud)) work
+against an S3-compatible on-prem object store — MinIO and the like — through
+the `client` option: your own endpoint, your own path style, the same five
+verbs. See [Artifacts](doc:artifacts).
 
 ## Embeddings — a model on the machine, or no model at all
 

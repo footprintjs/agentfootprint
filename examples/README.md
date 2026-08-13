@@ -271,6 +271,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 56 | [`56-artifacts.ts`](features/56-artifacts.ts) | Artifacts (claim check) | Tools pass DATA by reference: mint a ticket in one tool, redeem it in another, derive with parentRefs, and watch expiry state itself — all on the typed record. |
 | 57 | [`57-artifact-data-flow.ts`](features/57-artifact-data-flow.ts) | Artifact data flow (wants + placement + present) | The model routes tickets instead of hauling data: a 48k-row result is auto-placed into the store, the ref rides a wants-declared tool argument (resolved at dispatch, kind-checked, teaching refusals), and present() hands the chart to the screen with a durable description snapshot. |
 | 58 | [`58-typed-hitl-component.ts`](features/58-typed-hitl-component.ts) | Typed HITL — component asks | askHuman({ question, component }): the ask names a registered screen component; a 200-option payload rides the artifact store as propsRef, not the checkpoint; the decision returns structured and the record says which surface collected it. |
+| 59 | [`59-artifact-vocabularies.ts`](features/59-artifact-vocabularies.ts) | Artifact vocabularies (produces / consumes + the build-time check) | A skill declares which artifact kinds it produces and consumes, and graph.checkup() warns when a consumer needs a kind nothing on the agent makes — while staying silent on the legitimate runtime flow, where a wants-declaring tool redeems the ref from a store that outlives the turn. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

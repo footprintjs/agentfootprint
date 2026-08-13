@@ -48,6 +48,7 @@ import type { Tool } from '../../../core/tools.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../../cache/types.js';
 import { validateSkillSteps, type OnSkipPolicy, type SkillStep } from '../skillSteps.js';
+import { assertArtifactVocabulary } from '../skillVocabulary.js';
 
 /**
  * Where the Skill's body lands when activated.
@@ -198,6 +199,33 @@ export interface DefineSkillOptions {
    */
   readonly onSkip?: OnSkipPolicy;
   /**
+   * Artifact KINDS this skill leaves behind (9.25.0) — the producer half of
+   * its data vocabulary: `produces: ['chart/spec']`.
+   *
+   * A DECLARATION, not machinery. Nothing at run time reads it, nothing is
+   * enforced at dispatch (that is `wants`' job, against the live store), and
+   * a skill that declares none is byte-identical to one that never heard of
+   * them. What it buys: the build-time check that a consumer's kind has a
+   * producer somewhere (`artifact-kind-unsatisfied`), and a fact on this
+   * skill's metadata that a lens can draw — the data legs of a run, before
+   * the run.
+   */
+  readonly produces?: readonly string[];
+  /**
+   * Artifact KINDS this skill needs to have arrived (9.25.0):
+   * `consumes: ['dataset/rows']` — "somebody upstream made a dataset; this
+   * skill turns it into something".
+   *
+   * Checked at build against what the agent declares it produces. The check
+   * is deliberately weak-but-true: it warns only when NOTHING on the agent
+   * declares that kind, and it never fires when one of this skill's tools
+   * declares `wants` for it (that ref is redeemed at dispatch from a store
+   * that outlives the turn, so the kind can legitimately arrive from another
+   * agent or an earlier run). See `skillVocabulary.ts` for the whole rule and
+   * everything it cannot see.
+   */
+  readonly consumes?: readonly string[];
+  /**
    * This skill's BRAIN (9.19.0) — "the cursor picks the brain": while a
    * mounted skill graph's cursor is on this skill, `callLLM` runs on this
    * provider instead of the agent's. Any `LLMProvider` port implementation;
@@ -343,6 +371,12 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     ...(opts.onSkip !== undefined && { onSkip: opts.onSkip }),
     toolNames: new Set((opts.tools ?? []).map((t) => t.schema.name)),
   });
+  // The artifact vocabularies (9.25.0) — same law, same authoring point: a
+  // blank kind, an empty list or a repeat is refused HERE, where the
+  // declaration is written. Whether a consumed kind is SATISFIABLE needs the
+  // whole agent and is checked at build (`skillVocabulary.ts`).
+  assertArtifactVocabulary(`defineSkill(${opts.id})`, 'produces', opts.produces);
+  assertArtifactVocabulary(`defineSkill(${opts.id})`, 'consumes', opts.consumes);
   return Object.freeze({
     id: opts.id,
     description: opts.description,
@@ -381,6 +415,12 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
           steps: Object.freeze(opts.steps.map((s) => Object.freeze({ ...s }))),
           onSkip: opts.onSkip ?? ('advance' as const),
         }),
+      // The artifact vocabularies (9.25.0) — recorded as declared, on the same
+      // bag every other per-skill option rides. Build-time checks read them
+      // from here, and so will a lens; the engine never does. Absent when not
+      // declared, so a skill without them serializes byte-identically.
+      ...(opts.produces !== undefined && { produces: Object.freeze([...opts.produces]) }),
+      ...(opts.consumes !== undefined && { consumes: Object.freeze([...opts.consumes]) }),
       cache: resolveCachePolicy('skill', opts.cache),
     }),
   }) as unknown as Injection;

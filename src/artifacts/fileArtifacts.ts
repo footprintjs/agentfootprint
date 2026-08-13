@@ -13,7 +13,19 @@
  *     claim, not a defence;
  *   • the scope tuple — caller strings, so each segment is percent-encoded
  *     before it becomes a directory name: `..`, `/` and `\` arrive as data
- *     and land as literals, never as navigation.
+ *     and land as literals, never as navigation. That encoding is
+ *     `scopePath.ts`'s to own (9.25.0) — the object-store adapters partition
+ *     their keys with the identical law, and one traversal defence that lives
+ *     in two files is one that eventually differs in two files.
+ *
+ * ── Streaming (9.25.0) ─────────────────────────────────────────────────────
+ * This adapter implements the port's OPTIONAL `putStream`/`getStream`,
+ * because a directory can honestly do it: the bytes go to a sibling
+ * `<ref>.bin` as they arrive and the envelope records `payload: { shape:
+ * 'external' }`. The envelope is written LAST, so a crash mid-upload leaves an
+ * orphan `.bin` nobody can see rather than a ticket pointing at a payload that
+ * never finished. A streamed artifact reads back as a `Uint8Array` through
+ * `get()`, and `delete`/retention remove both files.
  *
  * ── What this adapter does NOT know ────────────────────────────────────────
  * A directory cannot cheaply know which artifact was READ last, so budget
@@ -30,6 +42,7 @@ import { lazyRequire } from '../lib/lazyRequire.js';
 import { prepareArtifact } from './minting.js';
 import { isArtifactRef } from './naming.js';
 import {
+  canonicalPayloadBytes,
   computeArtifactDigest,
   decodeArtifactData,
   encodeArtifactData,
@@ -41,6 +54,8 @@ import {
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
+import { scopeSegment } from './scopePath.js';
+import { assertStreamBytes, bytesAsStream } from './streaming.js';
 import {
   ArtifactIntegrityError,
   InvalidArtifactError,
@@ -52,6 +67,8 @@ import {
   type ArtifactRef,
   type ArtifactScope,
   type ArtifactStore,
+  type ArtifactStreamPutInput,
+  type ArtifactStreamRecord,
 } from './types.js';
 
 /** What one artifact file holds. `format` is bumped only for a change an
@@ -120,28 +137,31 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
   const path = lazyRequire<PathModule>('node:path');
   fs.mkdirSync(directory, { recursive: true });
 
-  /**
-   * One RAW tuple field → one directory name. Encoded from the FIELD, never
-   * from the joined namespace (a tenant containing '/' must not become two
-   * path segments), and with dots encoded too — `encodeURIComponent` leaves
-   * `.` alone, so a tenant of literally `'..'` would otherwise survive as a
-   * real parent-directory hop. After this, `..`, `/` and `\` are inert
-   * directory NAMES (`%2E%2E`, `%2F`, `%5C`). Empty fields collapse to `_`,
-   * mirroring `identityNamespace`'s stable layout.
-   */
-  const segment = (raw: string | undefined): string =>
-    encodeURIComponent(raw === undefined || raw === '' ? '_' : raw).replace(/\./g, '%2E');
-
+  // One RAW tuple field → one inert directory name. The law (encode the
+  // FIELD not the joined namespace; encode dots too, so a literal '..' is a
+  // NAME) is `scopePath.ts`'s — shared with the object-store adapters rather
+  // than restated here.
   const scopeDir = (scope: ArtifactScope): string =>
     path.join(
       directory,
-      segment(scope.tenant),
-      segment(scope.principal),
-      segment(scope.conversationId),
+      scopeSegment(scope.tenant),
+      scopeSegment(scope.principal),
+      scopeSegment(scope.conversationId),
     );
 
   const fileFor = (scope: ArtifactScope, ref: ArtifactRef): string =>
     path.join(scopeDir(scope), `${ref}.json`);
+
+  /** Where a STREAMED payload's bytes live: beside the envelope. */
+  const payloadFileFor = (scope: ArtifactScope, ref: ArtifactRef): string =>
+    path.join(scopeDir(scope), `${ref}.bin`);
+
+  /** Remove an artifact's files — the envelope and, when it was streamed,
+   *  the sibling payload. One remover, so no caller can forget half. */
+  const removeArtifactFiles = (scope: ArtifactScope, ref: ArtifactRef): void => {
+    fs.rmSync(fileFor(scope, ref), { force: true });
+    fs.rmSync(payloadFileFor(scope, ref), { force: true });
+  };
 
   const readEnvelope = (file: string): ArtifactEnvelope | undefined => {
     let raw: string;
@@ -183,7 +203,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
     const envelope = readEnvelope(file);
     if (envelope === undefined) return undefined;
     if (envelope.meta.expiresAt !== undefined && envelope.meta.expiresAt <= now()) {
-      fs.rmSync(file, { force: true });
+      removeArtifactFiles(scope, ref);
       return undefined;
     }
     return envelope;
@@ -207,7 +227,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
       const envelope = readEnvelope(path.join(dir, name));
       if (envelope === undefined) continue;
       if (envelope.meta.expiresAt !== undefined && envelope.meta.expiresAt <= at) {
-        fs.rmSync(path.join(dir, name), { force: true });
+        removeArtifactFiles(scope, ref);
         continue;
       }
       metas.push(envelope.meta);
@@ -234,7 +254,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
       }));
       const plan = planRetention(rows, meta.bytes, retention, at);
       if (plan.refusal !== undefined) throw new InvalidArtifactError(plan.refusal);
-      for (const swept of plan.swept) fs.rmSync(fileFor(scope, swept.ref), { force: true });
+      for (const swept of plan.swept) removeArtifactFiles(scope, swept.ref);
       const envelope: ArtifactEnvelope = {
         format: FILE_FORMAT,
         meta,
@@ -253,7 +273,14 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
     async get(scope, ref): Promise<ArtifactRecord | null> {
       const envelope = liveEnvelope(scope, ref);
       if (envelope === undefined) return null;
-      const data = decodeArtifactData(envelope.payload);
+      // A STREAMED payload lives beside the envelope: this adapter is the one
+      // that knows where, so it reads the bytes rather than asking the shared
+      // decoder to reach a file it cannot see.
+      const data =
+        envelope.payload.shape === 'external'
+          ? readPayloadFile(scope, envelope.meta.ref)
+          : decodeArtifactData(envelope.payload);
+      if (data === undefined) return null; // the sibling bytes are gone
       if (envelope.meta.digest !== undefined) {
         const actual = await computeArtifactDigest(data);
         if (actual !== envelope.meta.digest) {
@@ -266,7 +293,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
     // eslint-disable-next-line @typescript-eslint/require-await
     async delete(scope, ref): Promise<void> {
       if (!isArtifactRef(ref)) return;
-      fs.rmSync(fileFor(scope, ref), { force: true });
+      removeArtifactFiles(scope, ref);
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await
@@ -283,7 +310,119 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
         ...(nextOffset < all.length && { cursor: String(nextOffset) }),
       };
     },
+
+    /**
+     * The streamed put: bytes to `<ref>.bin` as they arrive, envelope LAST.
+     *
+     * The declared `bytes` is what retention plans against, and it is
+     * VERIFIED as the stream ends — a producer that said 10 MB and sent 11 is
+     * refused by name and leaves nothing behind, because a ticket that
+     * misdescribes its own payload is the accepted-and-silently-wrong failure
+     * this whole folder exists to prevent.
+     */
+    async putStream(
+      scope,
+      input: ArtifactStreamPutInput,
+      body: ReadableStream<Uint8Array>,
+    ): Promise<ArtifactPutResult> {
+      const at = now();
+      const declared = assertStreamBytes('fileArtifacts', input.bytes);
+      const { meta } = await prepareArtifact(
+        { ...input, data: new Uint8Array(0) },
+        (parent) => liveEnvelope(scope, parent) !== undefined,
+        retention,
+        at,
+      );
+      const stated: ArtifactMeta = { ...meta, bytes: declared };
+      const rows: RetainedRow[] = scopeMetas(scope).map((held) => ({
+        ref: held.ref,
+        kind: held.kind,
+        bytes: held.bytes,
+        ...(held.expiresAt !== undefined && { expiresAt: held.expiresAt }),
+        lastAccessedAt: held.createdAt,
+      }));
+      const plan = planRetention(rows, declared, retention, at);
+      if (plan.refusal !== undefined) throw new InvalidArtifactError(plan.refusal);
+      for (const swept of plan.swept) removeArtifactFiles(scope, swept.ref);
+
+      fs.mkdirSync(scopeDir(scope), { recursive: true });
+      const payloadFile = payloadFileFor(scope, stated.ref);
+      const handle = fs.openSync(payloadFile, 'w');
+      let written = 0;
+      try {
+        const reader = body.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value === undefined) continue;
+            written += value.byteLength;
+            if (written > declared) {
+              await reader.cancel();
+              break;
+            }
+            fs.writeSync(handle, value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      } finally {
+        fs.closeSync(handle);
+      }
+      if (written !== declared) {
+        fs.rmSync(payloadFile, { force: true });
+        throw new InvalidArtifactError(
+          `fileArtifacts: the streamed payload is ${written} bytes but declared ${declared}. ` +
+            `Nothing was stored: a ticket whose \`bytes\` misdescribes its own payload would ` +
+            `be believed by every later consumer. State the exact byte length.`,
+        );
+      }
+      // The envelope LAST: a crash before this line leaves an orphan .bin that
+      // no ref names, never a ticket pointing at an unfinished payload.
+      const envelope: ArtifactEnvelope = {
+        format: FILE_FORMAT,
+        meta: stated,
+        payload: { shape: 'external', value: `${stated.ref}.bin` },
+      };
+      fs.writeFileSync(fileFor(scope, stated.ref), JSON.stringify(envelope));
+      return { meta: stated, swept: plan.swept };
+    },
+
+    /** The streamed read: the payload's canonical bytes, straight off disk
+     *  for a streamed artifact, and as one chunk for an inline one (this
+     *  store held it whole — it says so rather than pretending to be lazy). */
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async getStream(scope, ref): Promise<ArtifactStreamRecord | null> {
+      const envelope = liveEnvelope(scope, ref);
+      if (envelope === undefined) return null;
+      if (envelope.payload.shape === 'external') {
+        const file = payloadFileFor(scope, envelope.meta.ref);
+        if (!fs.existsSync(file)) return null;
+        const stream = lazyRequire<typeof import('node:stream')>('node:stream');
+        return {
+          meta: envelope.meta,
+          body: stream.Readable.toWeb(
+            fs.createReadStream(file) as unknown as import('node:stream').Readable,
+          ) as ReadableStream<Uint8Array>,
+        };
+      }
+      return {
+        meta: envelope.meta,
+        body: bytesAsStream(canonicalPayloadBytes(decodeArtifactData(envelope.payload))),
+      };
+    },
   };
+
+  /** The bytes of a streamed payload, or undefined when the sibling file is
+   *  gone (an interrupted write, an external deletion) — which is "no data",
+   *  the same answer a missing envelope gives. */
+  function readPayloadFile(scope: ArtifactScope, ref: ArtifactRef): Uint8Array | undefined {
+    try {
+      return new Uint8Array(fs.readFileSync(payloadFileFor(scope, ref)));
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 function decodeCursor(cursor: string | undefined): number {

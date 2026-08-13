@@ -32,6 +32,7 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 |---|---|---|---|---|---|---|
 | **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **9.13.0** — contract-shaped and tested; awaiting field use | [Gemini](doc:gemini) |
 | **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **9.13.0** — contract-shaped and tested; awaiting field use | [Embedders](doc:embedders) |
+| **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | Shipped — the adapter is the existing one; the Google wiring is documented below | [Observability sinks](doc:observability-sinks) |
 | **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | 🟡 Should work unchanged; **whether the gateway demands a client certificate is unverified** | [Tools & gateways](doc:tools-and-gateways) |
 | **Agent Runtime Sessions** | — | `agentfootprint/hosting` | — | — | 🔴 Bring-your-own via `SessionLifecycle` (**two methods**) — see below | [Hosting & runtime](doc:hosting-and-runtime) |
@@ -152,6 +153,84 @@ Two traps this adapter turns into refusals:
   genuinely what you want.
 
 Full rows and the shared `maxInputChars` machinery: **[Embedders](doc:embedders)**.
+
+## Cloud Storage — the artifact store (`gcsArtifacts`, 9.25.0)
+
+The [claim-check store](doc:artifacts) in a Cloud Storage bucket, and the second
+Google package this library loads. Same five-verb port as every other adapter — a
+one-line swap from `fileArtifacts`.
+
+```ts
+import { gcsArtifacts } from 'agentfootprint';
+
+const artifacts = gcsArtifacts({
+  bucket: 'my-agent-artifacts',   // must already exist — this library never creates one
+  prefix: 'artifacts',            // optional, so a bucket can be shared
+  projectId: 'my-project',
+});
+
+const agent = Agent.create({ provider, artifacts });
+```
+
+`GcsArtifactsOptions` also takes `storage` (your own pre-built `Storage` client, so
+credentials and configuration stay yours) and `retention`.
+
+**The object name** is `[<prefix>/]<tenant>/<principal>/<conversation>/<ref>` — the
+scope partitioned with the same percent-encoding law the directory adapter uses, so
+a tenant of literally `..` is a **name**. A wrong scope computes a different name,
+the service answers 404, and the caller reads `null`: one indistinguishable miss,
+never a cross-tenant read.
+
+**The ticket rides as custom object metadata** — one entry of ASCII JSON, nested the
+way this client requires (`{ metadata: { metadata: { … } } }`, an 8 KiB cap checked
+at put and refused by name). The payload is the object body as **canonical bytes**,
+so a stored report is downloadable from the console and *is* the report.
+
+**A listing is cheaper on this column, and the reason is a real SDK difference.**
+`getFiles({ autoPaginate: false })` returns each `File` with its `.metadata`
+**already populated**, custom entries included — so `list()` reads a whole page of
+tickets in **one call**, where the other column needs a read per row returned. Worth
+knowing when you are choosing where a chatty listing lives.
+
+**Retention** works exactly as everywhere else: `ttlMs` stamps `expiresAt` **at
+mint** (stated, never sprung), expiry is enforced on **read** and swept on the way
+past, and budgets evict oldest-first. A put with no budget dials configured does not
+scan the scope.
+
+Bulk reclamation is the operator's job, through **Object Lifecycle Management**.
+This adapter never creates a rule. Keep the rule **longer** than the store's
+`ttlMs`, never shorter — the store's `expiresAt` is the promise consumers read on
+the ticket, and a lifecycle rule that deletes first makes a live ticket resolve to
+`null` before the time it printed:
+
+```jsonc
+{ "rule": [{ "action": { "type": "Delete" },
+             "condition": { "age": 7, "matchesPrefix": ["artifacts/"] } }] }
+```
+
+**Streaming** is native: `putStream` / `getStream` ride `createWriteStream` /
+`createReadStream`, bridged to web streams at the adapter's edge — the bridge never
+leaks into the port. Feature-detect before calling; see [Artifacts](doc:artifacts).
+
+**Failures never leak the object name.** The name carries this run's tenant,
+principal and conversation, so the SDK's own message is withheld and what comes
+through is the operation, the exception's name and the status. **Every** failure,
+including a 404: the only 404 that comes back raw is one from a call that *named one
+object* (`head`, `get`, `delete`), and that one never leaves the adapter, because the
+line that asked converts it to `null` on the spot.
+
+**Which 404s are "no data", said honestly.** On this column a missing object and a
+missing bucket arrive identically — `code: 404`, reason `notFound` for both, telling
+you which only in prose the adapter refuses to parse. So the split is made by the
+**call** instead: a read of one named object may answer `null`; a save or a listing
+may not, and a 404 from one of those raises. A store pointed at a bucket that does
+not exist therefore reads as empty and says so plainly on the first write — never a
+made-up classification of an error it cannot actually tell apart.
+
+**IAM:** `storage.objects.create`, `.get`, `.delete` and `.list` on the bucket
+(`roles/storage.objectAdmin` covers it). Peer dependency
+`@google-cloud/storage`, loaded lazily **at construction** — a missing install
+refuses where the config was written, and a browser bundle never sees it.
 
 ## Telemetry — standard OTLP, and no factory
 
@@ -372,6 +451,7 @@ Absences are facts, so here they are stated rather than discovered:
 |---|---|---|
 | `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | `geminiEmbedder()` | `agentfootprint/providers` | **9.13.0** — contract-shaped and tested; awaiting field use |
+| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **9.25.0** — contract-shaped and tested; awaiting field use |
 | The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages |
 | `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | Shipped — the adapter is the existing one; this page is the wiring |

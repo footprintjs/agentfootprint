@@ -42,6 +42,7 @@ status honestly is.
 | **X-Ray** | `xrayObservability` | `agentfootprint/observe` | `@aws-sdk/client-xray` | `PutTraceSegments` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
 | **AgentCore Policy** | `agentCorePolicy` | `agentfootprint/security` | — | **nothing** | **Retired 9.4.0** — refuses at construction | [Governance & policy](doc:governance-and-policy) |
 | **S3 Vectors** | `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | `GetIndex`, `PutVectors`, `QueryVectors`, `GetVectors`, `ListVectors`, `DeleteVectors` | Shipped (9.3.0); contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
+| **S3** (artifact store) | `s3Artifacts` | `agentfootprint` | `@aws-sdk/client-s3` | `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `ListObjectsV2` — plus native `putStream` / `getStream` | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
 | **Bedrock models** | `bedrock()` — Converse, model-agnostic | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `Converse`, `ConverseStream` | Shipped | [AWS Bedrock](doc:aws-bedrock) |
 | **Bedrock embeddings** | `bedrockEmbedder()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `InvokeModel` | Shipped | [Embedders](doc:embedders) |
 | **Actor on every event** (`EventMeta.principal` / `.tenant`) | `run({ identity })` — no adapter | `agentfootprint` (main) | none | — | Shipped (9.11.0); **identical on both provider columns** | [Observability sinks](doc:observability-sinks) |
@@ -265,6 +266,98 @@ which needs the `s3vectors:GetIndex` IAM permission alongside the others. Create
 the index yourself; this store never does. Full story, including the
 `nonFilterableMetadataKeys: ["af"]` requirement:
 **[Memory & stores](doc:memory-and-stores)**.
+
+## S3 — the artifact store (`s3Artifacts`, 9.25.0)
+
+The [claim-check store](doc:artifacts) in an S3 bucket: tools check big results in
+and the model routes ~26-char tickets. Same five-verb port as every other adapter,
+so this is a one-line swap from `fileArtifacts`.
+
+```ts
+import { s3Artifacts } from 'agentfootprint';
+
+const artifacts = s3Artifacts({
+  bucket: 'my-agent-artifacts',   // must already exist — this library never creates one
+  prefix: 'artifacts',            // optional, so a bucket can be shared
+  region: 'us-east-1',
+});
+
+const agent = Agent.create({ provider, artifacts });
+```
+
+`S3ArtifactsOptions` also takes `client` (your own pre-built `S3Client`, so
+configuration and credentials stay yours) and `retention`. That same `client`
+option is how an S3-compatible on-prem store (MinIO and the like) plugs in —
+build the `S3Client` against your own endpoint and path style and pass it in;
+the adapter dispatches the same five commands either way.
+
+**The object key** is `[<prefix>/]<tenant>/<principal>/<conversation>/<ref>` — the
+scope partitioned into key segments with the same percent-encoding law the
+directory adapter uses, so a tenant of literally `..` is a **name**, not a
+navigation hop. A ref alone opens nothing: a wrong scope computes a different key,
+S3 answers 404, and the caller reads `null` — one indistinguishable miss, never a
+cross-tenant read.
+
+**The ticket rides as object metadata** (`x-amz-meta-af-artifact`, one entry, ASCII
+JSON), not a sidecar object. That makes `head()` exactly one **HeadObject** and
+`get()` one **GetObject** returning ticket *and* bytes — a sidecar would double
+every read and open a window where one exists and the other does not. The cost is
+S3's **2 KB user-metadata cap**, checked at put and refused by name (a ticket only
+reaches it if the label is prose or `parentRefs` is a bibliography — the refusal
+says which). The payload is the object body as **canonical bytes**, so a stored
+report is downloadable from the console and *is* the report.
+
+**What a listing costs, plainly:** `ListObjectsV2` returns keys, sizes and
+`LastModified` but **never** user metadata — so `list()` pages the keys, sorts
+newest-first, and issues one **HeadObject** per row *it returns*, not for the whole
+scope. An expired object inside a page is dropped from that page rather than
+backfilled, so a page can come back short while more pages remain. That is the
+honest trade; an index object listing every ticket would be cheaper and would be a
+lost-update race between two writers.
+
+**Retention, and the operator's bulk tool.** `ttlMs` stamps `expiresAt` **at mint**
+(stated, never sprung) and expiry is enforced on **read** — an expired object
+answers `null` and is swept on the way past, so an expired ticket can never be
+redeemed. Budgets evict oldest-first (S3 has no cheap read-recency). A put with
+**no budget dials configured is exactly one PutObject** — no scope scan, because
+paying for a full listing on every write would be a real bill for no answer.
+
+Reclaiming storage nobody reads again is what **S3 Lifecycle rules** are for. They
+are the operator's bulk tool; this adapter never creates one (a lifecycle rule is a
+cost and compliance decision that belongs to your infrastructure). Align them so the
+rule is **longer** than the store's `ttlMs`, never shorter — the store's `expiresAt`
+is the promise consumers read on the ticket, and a lifecycle rule that deletes first
+makes a live ticket resolve to `null` **before** the time it printed:
+
+```jsonc
+{ "Rules": [{ "ID": "agentfootprint-artifacts", "Status": "Enabled",
+              "Filter": { "Prefix": "artifacts/" },
+              "Expiration": { "Days": 7 } }] }
+```
+
+**Streaming** is native here: `putStream` / `getStream` ride the SDK's own streaming
+upload and its response-stream mixin. Feature-detect before calling — see
+[Artifacts](doc:artifacts).
+
+**Failures never leak the key.** An SDK error echoes the bucket and the object key —
+and the key carries this run's tenant, principal and conversation. So the SDK's text
+is withheld; what comes through is the operation, the exception's name and the HTTP
+status. **Every** failure, including a 404: the only 404 that comes back raw is one
+from a call that *named one object* (`head`, `get`, `delete`), and that one never
+leaves the adapter, because the line that asked converts it to `null` on the spot.
+
+**A 404 is not automatically "no data".** S3 says 404 for two different sentences,
+and they are the same status: `NoSuchKey` (that object is not there) and
+`NoSuchBucket` (this store is pointed at a bucket that does not exist). So the
+adapter reads the **code**, not the status — a missing bucket raises, on every verb,
+rather than reporting an empty scope over a configuration mistake. A 404 from a
+**write or a listing** is an error for the same reason: those calls never asked
+whether one object was there, so nothing is standing by to read the answer as `null`.
+
+**IAM:** `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` and `s3:ListBucket` on the
+prefix. Peer dependency `@aws-sdk/client-s3`, loaded lazily **at construction** — a
+missing install refuses where the config was written, and a browser bundle never
+sees it.
 
 ## Bedrock — models and embeddings
 

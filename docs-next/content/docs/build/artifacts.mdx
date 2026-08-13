@@ -177,7 +177,35 @@ Every tool's execute context carries `ctx.artifacts` (a `ToolArtifacts`) and `ct
 
 **The refusal, written down so it can be cited:** the port will never grow `query()` or `transform()`. The moment it does, this is a database. Compute over artifacts belongs to generated code (a later phase); five verbs is the ceiling.
 
-There are deliberately **no streaming members** in this phase — an in-memory adapter must never fake a stream.
+### …and two OPTIONAL streaming members (9.25.0)
+
+A claim check exists so a 6 MB result never rides the conversation. It does not follow that it should ride the *process*: `putStream` and `getStream` let a payload move without either side holding it whole.
+
+They are **optional members, not a sixth and seventh verb** — a store that cannot honor the promise leaves them **absent** rather than faking it, and you **feature-detect** with narrowing guards:
+
+```ts
+import { canPutArtifactStream, canGetArtifactStream, canStreamArtifacts } from 'agentfootprint';
+
+if (canPutArtifactStream(store)) {
+  await store.putStream(scope, { kind: 'report/csv', mediaType: 'text/csv', bytes: 4_096 }, body);
+}
+```
+
+Calling an undetected member is a **type error, not a runtime surprise**. Each guard narrows: `canPutArtifactStream` proves the store really has `putStream`, `canGetArtifactStream` proves it has `getStream`, and `canStreamArtifacts` narrows to `StreamingArtifactStore` when you need the round trip. After a guard the call compiles with no `!` and no cast, so the honest branch is also the comfortable one.
+
+| store | streams? | why |
+|---|---|---|
+| `fileArtifacts` | **yes** | bytes go to a sibling `<ref>.bin` as they arrive |
+| `s3Artifacts` / `gcsArtifacts` | **yes** | the SDKs' own streaming upload/download |
+| `sqliteArtifacts` | **no** | `node:sqlite` reads and writes a BLOB whole — a "stream" here would buffer everything and call it a stream |
+| `inMemoryArtifacts` | **no** | it holds payloads whole under a byte budget; streaming into it would defeat both |
+
+A streamed put (`ArtifactStreamPutInput`) costs you exactly two things, both stated rather than silently traded:
+
+- **`bytes` is required** — it is *stated*, not measured. Retention has to plan an eviction and an object store has to declare a content length **before** the first chunk arrives. A payload that does not match what it declared is **refused**, never stored under a meta that misdescribes it.
+- **there is no `digest`.** A digest covers the whole canonical payload, computed with the one primitive every adapter shares; a store that never holds the payload cannot produce one, and an incremental hash computed a second way would be a different promise wearing the same field name. `get` remains the verifying read — `getStream` (an `ArtifactStreamRecord`) does **not** re-verify, because verification needs the whole payload, which is the thing streaming exists to avoid.
+
+**`ctx.artifacts` does not grow streaming this phase — a decision, not an omission.** A tool receives its artifacts pre-scoped and answers a model; the model cannot hold a stream. A tool that genuinely moves gigabytes holds the *store* (it already constructed it) and calls it directly, while `ctx.artifacts` stays the small, scope-bound surface a model-driven tool can be trusted with.
 
 ## The ref is minted, never derived
 
@@ -189,18 +217,24 @@ An `ArtifactRef` is `art_` + 22 crypto-random chars (~26 total — `ARTIFACT_REF
 
 **Bytes never appear in events.** Every `agentfootprint.artifacts.*` payload carries metadata only.
 
-## Three adapters
+## Five adapters
 
 ```ts
 import { inMemoryArtifacts, fileArtifacts, sqliteArtifacts } from 'agentfootprint';
+import { s3Artifacts, gcsArtifacts } from 'agentfootprint';
 
 inMemoryArtifacts()                             // dev/tests — bounded, drop-counting
 fileArtifacts({ directory: './artifacts' })     // one legible JSON file per artifact
 sqliteArtifacts({ file: './data/artifacts.db' })// one SQLite file — pairs with sqliteSessions
+s3Artifacts({ bucket: 'my-agent-artifacts' })   // a fleet, in an S3 bucket
+gcsArtifacts({ bucket: 'my-agent-artifacts' })  // a fleet, in a Cloud Storage bucket
 ```
+
+One ladder, one contract: a tool that stored a dataset against the in-memory store stores it in a bucket by swapping one constructor. The five run **the same contract suite** — a cloud column that drifts from the port fails the shipped adapters' own tests.
 
 - **`inMemoryArtifacts`** (an `InMemoryArtifacts`) is **always bounded**: 32 MiB and 256 artifacts per scope by default (`DEFAULT_IN_MEMORY_ARTIFACT_RETENTION`, dials via `InMemoryArtifactsOptions`), least-recently-used evicted first (reads refresh recency), and it **counts its drops** (`store.dropped`) — "we kept the last 200 of 340" is an answer; a silently missing ref is not.
 - **`fileArtifacts`** (`FileArtifactsOptions`) partitions scopes into percent-encoded directories, so `..` and `/` in a tenant name arrive as data and land as literal directory names — never as navigation. A file that exists but cannot be read is refused by name (`UnreadableArtifactFileError`), never reported as absent.
+- **`s3Artifacts`** (`S3ArtifactsOptions`) and **`gcsArtifacts`** (`GcsArtifactsOptions`) put artifacts in **somebody else's bucket** — the third rung of the same ladder. Both partition scopes into percent-encoded **key segments** using the same encoding law as the directory adapter (a tenant of literally `..` is a *name*), carry the ticket as **one object-metadata entry** of ASCII JSON, store the payload as the **canonical bytes** of the object body (so a stored report is downloadable with the vendor's own console and *is* the report), and answer `null` only for a **missing object** — a denied, throttled, or misdirected call is an **error**, never "no data". A not-found is only "no data" when the call *asked about one object*: a 404 from a write or a listing means something the caller never asked about is wrong (most often that the bucket does not exist), so it raises with the SDK's own text withheld rather than being swallowed as an empty scope. Both ship as **contract-shaped and tested; awaiting field use** — no live call has been made from this repository. See [AWS](doc:aws) and [Google Cloud](doc:google-cloud) for keys, costs, and how to align the operator's lifecycle rules.
 - **`sqliteArtifacts`** (a `SqliteArtifacts`, `SqliteArtifactsOptions`) follows the `sqliteSessions` laws line for line: lazy `node:sqlite` (no install; refused by name on Node without it), WAL with the journal mode read back, STRICT tables you can inspect from the `sqlite3` command line, `':memory:'` refused, and a file that is somebody else's schema — or a newer one — refused as `UnreadableArtifactStoreError` rather than half-read. Point it at a file beside your `sqliteSessions` store and artifacts live exactly as long as the conversations that can speak their refs.
 
 ## Retention — expiry is stated, never sprung
@@ -231,4 +265,20 @@ For custom wiring outside the Agent (your own harness, tests), the binding layer
 
 - **One store per agent**, attached at construction (`Agent.create({ ..., artifacts })` — bare store, or `{ store, placement }`) — there is no second door, so "one per agent" is a fact of the type.
 - **No snapshot coupling.** `getSnapshot()` is unchanged; the store's own accounting is `list` plus the adapters' counters. Stated so the absence reads as a decision.
-- **The hosting half of render-by-ref is live (9.23.0):** a served agent answers `artifact-head` / `artifact-get` on its invoke path, so a screen redeems tickets under the requesting session's identity — see [Redeeming claim tickets](/docs/infrastructure/hosting-and-runtime#redeeming-claim-tickets--artifact-head--artifact-get). **The component registry that validates `as` (the lens leg), typed HITL payloads, S3/GCS adapters, streaming, and staging refs INTO code sessions are later phases** — this page is the store and the data legs.
+- **The hosting half of render-by-ref is live (9.23.0):** a served agent answers `artifact-head` / `artifact-get` on its invoke path, so a screen redeems tickets under the requesting session's identity — see [Redeeming claim tickets](/docs/infrastructure/hosting-and-runtime#redeeming-claim-tickets--artifact-head--artifact-get).
+- **The reference architecture is complete as of 9.25.0:** typed HITL payloads landed in 9.24.0, and the cloud adapters, the optional streaming leg and the [skill artifact vocabularies](#skill-vocabularies--which-kinds-a-skill-makes-and-needs) landed here. **The component registry that validates `as` (the lens leg) and staging refs INTO code sessions remain later phases.**
+
+## Skill vocabularies — which kinds a skill makes and needs
+
+An artifact `kind` is a *consumer vocabulary*. As of 9.25.0 a skill can declare which kinds it `produces` and `consumes`, so the data legs of a run are checkable **before** the run:
+
+```ts
+defineSkill({
+  id: 'charting',
+  consumes: ['dataset/rows'],   // what must have arrived
+  produces: ['chart/spec'],     // what it leaves behind
+  steps: [{ tool: 'render', note: 'draw it', consumes: ['dataset/rows'] }],
+});
+```
+
+These are **declarations, not machinery** — nothing at run time reads them, and a skill that declares none is byte-identical to one that never heard of them. What they buy is a build-time warning (`artifact-kind-unsatisfied`) when a consumer needs a kind nothing on the agent claims to make, and a fact a lens can draw. The full rule — and the honest statement of what a static check *cannot* see — is on the [Skills](doc:skills) page.

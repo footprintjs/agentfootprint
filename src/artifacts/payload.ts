@@ -62,6 +62,44 @@ export function measureArtifactBytes(data: unknown): number {
   return canonicalPayloadBytes(data).byteLength;
 }
 
+/**
+ * Which of the three payload shapes a value is. The durable envelope carries
+ * it, and so does an object store's metadata — the canonical bytes alone
+ * cannot say whether `"7"` was the string `'7'` or the JSON number `7`, and a
+ * store that guessed would hand back a different value than it was given.
+ */
+export type PayloadShape = 'text' | 'binary' | 'json';
+
+/** The shape a payload will be stored under. Total: everything that is not a
+ *  string or a `Uint8Array` rides as JSON (and is refused at measure/encode if
+ *  JSON cannot carry it). */
+export function payloadShapeOf(data: unknown): PayloadShape {
+  if (data instanceof Uint8Array) return 'binary';
+  if (typeof data === 'string') return 'text';
+  return 'json';
+}
+
+/**
+ * Rebuild a payload from its CANONICAL BYTES and its shape — the read half of
+ * `canonicalPayloadBytes`, for stores that hold the bytes themselves (an
+ * object body, a stream) rather than the text envelope.
+ *
+ * Round-trip law: `decodeCanonicalPayload(payloadShapeOf(x),
+ * canonicalPayloadBytes(x))` equals `x` for every payload this library
+ * accepts — which is what lets `bytes`, the digest, and the stored object all
+ * be the same bytes in every adapter.
+ */
+export function decodeCanonicalPayload(shape: PayloadShape, bytes: Uint8Array): unknown {
+  switch (shape) {
+    case 'text':
+      return textDecoder.decode(bytes);
+    case 'binary':
+      return bytes;
+    case 'json':
+      return JSON.parse(textDecoder.decode(bytes)) as unknown;
+  }
+}
+
 /** `sha-256:<hex>` over the canonical bytes. */
 export async function computeArtifactDigest(data: unknown): Promise<string> {
   const bytes = canonicalPayloadBytes(data);
@@ -76,10 +114,17 @@ export async function computeArtifactDigest(data: unknown): Promise<string> {
 
 // ─── The durable envelope ────────────────────────────────────────────
 
-/** How a payload rides a file or a SQL TEXT column. One shape, two adapters. */
+/** How a payload rides a file or a SQL TEXT column. One shape, two adapters.
+ *
+ *  `'external'` (9.25.0) is the STREAMED case and exists only where a store
+ *  can hold bytes beside the envelope: the payload is not in `value` at all —
+ *  `value` names the sibling file that holds it, and the artifact reads back
+ *  as binary. Only `fileArtifacts` writes it; `decodeArtifactData` refuses it
+ *  by name, because a decoder that cannot reach the bytes must not pretend. */
 export interface EncodedPayload {
-  readonly shape: 'text' | 'binary' | 'json';
-  /** `text`: the string. `binary`: base64. `json`: the JSON serialization. */
+  readonly shape: PayloadShape | 'external';
+  /** `text`: the string. `binary`: base64. `json`: the JSON serialization.
+   *  `external`: the name of the sibling file holding the raw bytes. */
   readonly value: string;
 }
 
@@ -91,7 +136,10 @@ export function encodeArtifactData(data: unknown): EncodedPayload {
   return { shape: 'json', value: textDecoder.decode(canonicalPayloadBytes(data)) };
 }
 
-/** Decode what {@link encodeArtifactData} wrote. Total over its own output. */
+/** Decode what {@link encodeArtifactData} wrote. Total over its own output;
+ *  an `'external'` envelope is the one thing it refuses, by name — the bytes
+ *  live beside the envelope and only the adapter that wrote them can reach
+ *  them. */
 export function decodeArtifactData(encoded: EncodedPayload): unknown {
   switch (encoded.shape) {
     case 'text':
@@ -100,6 +148,12 @@ export function decodeArtifactData(encoded: EncodedPayload): unknown {
       return fromBase64(encoded.value);
     case 'json':
       return JSON.parse(encoded.value) as unknown;
+    case 'external':
+      throw new InvalidArtifactError(
+        `the payload was streamed and lives beside the envelope ('${encoded.value}'), not in ` +
+          `it. Only the store that wrote it can read it back — read this artifact through ` +
+          `that store's get()/getStream(), never by decoding the envelope alone.`,
+      );
   }
 }
 

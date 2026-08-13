@@ -512,6 +512,47 @@ with the model's own reason and the declared policy; and
 `agentfootprint.skill.steps_unfinished` records how a turn ended with steps
 unrun — `'nudged'`, `'accepted'`, or `'cut-short'`.
 
+## Artifact vocabularies (`produces` / `consumes`, 9.25.0)
+
+`steps` declares the procedure as data. Vocabularies declare the **data legs**: which artifact **kinds** a skill leaves behind and which it needs to have arrived. Two programs meet here — the [artifact store](doc:artifacts) gave payloads a consumer vocabulary (`kind`: `'dataset/rows'`, `'chart/spec'`), and the skill graph gave a run a declared shape; neither could see the other, so a skill whose whole job was turning a dataset into a chart said so only in prose.
+
+```ts
+defineSkill({
+  id: 'charting',
+  description: 'turn a dataset into a chart spec',
+  body: 'Render the dataset you were given.',
+  consumes: ['dataset/rows'],       // what must have arrived
+  produces: ['chart/spec'],         // what it leaves behind
+  tools: [fetchRows, renderChart],
+  steps: [
+    { tool: 'fetch_rows',    note: 'pull the rows first', produces: ['dataset/rows'] },
+    { tool: 'render_chart',  note: 'then draw them',      consumes: ['dataset/rows'] },
+  ],
+});
+```
+
+A step may declare them too (`SkillStep.produces` / `SkillStep.consumes`), which is what makes a single skill's internal hand-off checkable.
+
+**These are declarations, not machinery.** Nothing at run time reads them, nothing is enforced at dispatch — that is [`wants`](doc:artifacts)' job, and it happens against the live store. A skill that declares none is **byte-identical** to one that never heard of them: the metadata bag grows no keys, and the check returns immediately.
+
+### What gets checked, and what it cannot see
+
+`graph.checkup()` reports **`artifact-kind-unsatisfied`** — always a **warning**, never an error. A consumed kind `K` is **satisfied** when any of these holds:
+
+| # | satisfier | applies to |
+|---|---|---|
+| 1 | a tool in scope declares `wants` for `K` — the redemption path the framework honors at dispatch | skill (any of its tools) · step (the tool that step runs) |
+| 2 | anything on the agent declares `produces: K` — any skill, or any step of any skill | skill · step |
+| 3 | an **earlier step** of the same skill produces `K`, or the skill's own `consumes` names `K` (it arrived from outside) | step only |
+
+**The boundary, stated because a check that overclaims is worse than none.** It reads **declarations only**. A tool that mints an artifact without declaring `produces` is invisible to it; so is anything the store received in an earlier run, from another agent, or from a job outside this process — **artifacts outlive the turn that made them**. It also does **not** follow route order: a producer declared anywhere on the agent silences it, because `read_skill` can put the cursor on any open skill. The only thing it proves is the strong one: *nothing on this agent claims to make what this consumer claims to need.* That is exactly why it warns instead of erroring, and the warning says so in its own message.
+
+If the kind really does arrive from outside, declare a tool that `wants` it — that is the honest escape hatch, and it silences the check because it is a real redemption path.
+
+Declaring `consumes` on the skill to satisfy a step does not make a gap disappear; it **moves it up a level**, to the skill, where it can actually be answered.
+
+For your own tooling, the check is public: `checkArtifactVocabularies(skills)` runs the rule over any list of skills, and `vocabularyOf(skill)` reads a skill's declared `ArtifactVocabulary` back off its metadata — `undefined` when it declared none, so a lens can skip the whole feature.
+
 ## Per-skill brains — model switching (9.19.0)
 
 A skill graph already decides **where** the run is (the one cursor); a brain

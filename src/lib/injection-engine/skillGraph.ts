@@ -73,6 +73,7 @@ import {
   type GraphProblem,
 } from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
+import { checkArtifactVocabularies } from './skillVocabulary.js';
 import {
   compileMatch,
   mermaidMatchCaption,
@@ -1133,7 +1134,14 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // intents. Composed here like the contract checks; the scorer-dependent
         // audit is the ASYNC `checkupIntents()`.
         const intentDuplicates = findDuplicateIntentExamples(entries);
-        const problems = [...wiring.problems, ...intentDuplicates, ...contract];
+        // The artifact vocabularies (SG-F, 9.25.0). Composed here like the
+        // contract checks and NOT deferred: unlike a tool name, a `produces`
+        // declaration cannot arrive later from `.tool()` — it is written on a
+        // skill, and every skill of this graph is already in hand. Returns []
+        // the moment nothing declares a vocabulary, so a graph that never
+        // heard of the feature pays one `Array.some`.
+        const vocabularies = checkArtifactVocabularies([...skillsById.values()]);
+        const problems = [...wiring.problems, ...intentDuplicates, ...contract, ...vocabularies];
         return { ok: !problems.some((p) => p.kind === 'error'), problems };
       };
 

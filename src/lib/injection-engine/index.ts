@@ -74,6 +74,18 @@ export {
   type StepsHintOptions,
 } from './factories/defineStepsHint.js';
 
+// Artifact vocabularies (9.25.0) — `produces`/`consumes` on a skill or a step.
+// The public slice is what a consumer needs to READ a skill's declared data
+// legs off its metadata (`vocabularyOf`, for a lens or an inventory) and to run
+// the satisfiability check itself over a list of skills the library did not
+// assemble. `assertArtifactVocabulary` stays private: it is the authoring-time
+// refusal `defineSkill` already applies.
+export {
+  checkArtifactVocabularies,
+  vocabularyOf,
+  type ArtifactVocabulary,
+} from './skillVocabulary.js';
+
 export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
 
 // File-authored skills — a loader over `defineSkill`, not a second mechanism.

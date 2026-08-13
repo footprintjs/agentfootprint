@@ -59,6 +59,17 @@ export interface AwsAdapterPin {
   readonly client: string;
   /** Every command constructor it dispatches. Empty is a claim too — see `note`. */
   readonly commands: readonly string[];
+  /**
+   * Exception names the adapter READS off a failure to decide what it means.
+   *
+   * A name it branches on is as much a claim about the SDK as a command it
+   * constructs, and it fails the same silent way: `NoSuchKey` and
+   * `NoSuchBucket` are both modelled 404s, so an adapter that told them apart
+   * by a name the SDK never uses would answer "no such artifact" for a bucket
+   * that does not exist — forever, and green the whole time. Rows that branch
+   * on the status alone have none.
+   */
+  readonly errorNames?: readonly string[];
   /** Why a row has no commands, when it has none. */
   readonly note?: string;
 }
@@ -163,6 +174,38 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'ListVectorsCommand',
       'DeleteVectorsCommand',
     ],
+  },
+  {
+    adapter: 's3Artifacts',
+    sources: ['src/artifacts/s3Artifacts.ts'],
+    sdkPackage: '@aws-sdk/client-s3',
+    client: 'S3Client',
+    commands: [
+      'PutObjectCommand',
+      'GetObjectCommand',
+      'HeadObjectCommand',
+      'DeleteObjectCommand',
+      'ListObjectsV2Command',
+    ],
+    errorNames: ['NoSuchKey', 'NotFound', 'NoSuchBucket'],
+    note:
+      'Read out of a real install of @aws-sdk/client-s3 3.1109.0 before the adapter was ' +
+      'written (9.25.0) — the five names, and four SHAPES a design could only have guessed ' +
+      'at: user metadata is `Metadata: Record<string,string>` on Put/Get/HeadObject (which is ' +
+      'why the ticket rides ONE entry and is checked against the 2 KB cap); GetObject answers ' +
+      '`Body` carrying the SDK stream mixin (`transformToByteArray` / `transformToWebStream`), ' +
+      'not a buffer, which is what makes getStream native; ListObjectsV2 answers ' +
+      '`Contents[{Key,Size,LastModified}]` + `NextContinuationToken` and NEVER user metadata, ' +
+      'which is why a listing costs one HeadObject per row returned; and a missing key throws ' +
+      'with `$metadata.httpStatusCode: 404`. The 404 is NOT sufficient on its own, which is ' +
+      'what `errorNames` records: re-read against the same install on 2026-08-13, NoSuchKey, ' +
+      'NotFound AND NoSuchBucket are all modelled exceptions carrying `name` equal to their ' +
+      'own class name and `$metadata.httpStatusCode: 404` — so a missing BUCKET is byte-for-' +
+      'byte a missing key at the status level, and only the name separates "no data" from a ' +
+      'store pointed somewhere that does not exist. ' +
+      'DeleteObjects (the batch form) is deliberately NOT dispatched: ' +
+      'sweeps are rare and one command per verb keeps this row small — re-adding it has to be ' +
+      'a decision somebody records.',
   },
   {
     adapter: 'cloudwatchObservability / agentcoreObservability',

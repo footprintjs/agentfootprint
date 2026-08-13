@@ -38,6 +38,7 @@ import { xrayObservability } from '../../../src/adapters/observability/xray.js';
 import { bedrockEmbedder } from '../../../src/embedders/index.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
 import { agentCorePolicy } from '../../../src/security/index.js';
+import { s3Artifacts } from '../../../src/index.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
@@ -313,6 +314,49 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     expect(sdk.names().filter((n) => n === 'GetIndexCommand')).toHaveLength(1);
   });
 
+  it('s3Artifacts — the five object operations, each verb reaching for its own', async () => {
+    const row = pin('s3Artifacts');
+    // The double answers the shapes the registry's note records: Metadata on a
+    // head/get, a stream-mixin Body, a listing that carries no user metadata.
+    let stored: { Metadata?: Record<string, string>; Body?: unknown } | undefined;
+    const sdk = fakeSdk(row, {
+      PutObjectCommand: (input) => {
+        stored = { Metadata: input.Metadata as Record<string, string>, Body: input.Body };
+        return {};
+      },
+      HeadObjectCommand: () => ({ Metadata: stored?.Metadata ?? {} }),
+      GetObjectCommand: () => ({
+        Metadata: stored?.Metadata ?? {},
+        Body: {
+          transformToByteArray: () => Promise.resolve(stored?.Body as Uint8Array),
+        },
+      }),
+      ListObjectsV2Command: () => ({ Contents: [], IsTruncated: false }),
+    });
+    const store = s3Artifacts({ bucket: 'b', _sdk: sdk.module });
+    const { meta } = await store.put(IDENTITY, {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: [1, 2],
+    });
+    await store.head(IDENTITY, meta.ref);
+    await store.get(IDENTITY, meta.ref);
+    await store.list(IDENTITY);
+    await store.delete(IDENTITY, meta.ref);
+    expect(new Set(sdk.names())).toEqual(
+      new Set([
+        'PutObjectCommand',
+        'HeadObjectCommand',
+        'GetObjectCommand',
+        'ListObjectsV2Command',
+        'DeleteObjectCommand',
+      ]),
+    );
+    // A put with no retention budget scans nothing: one command, once.
+    expect(sdk.names()[0]).toBe('PutObjectCommand');
+    expect(sdk.names().filter((n) => n === 'PutObjectCommand')).toHaveLength(1);
+  });
+
   it('cloudwatchObservability — PutLogEvents, and CreateLogStream only when the stream is missing', async () => {
     const row = pin('cloudwatchObservability / agentcoreObservability');
     let puts = 0;
@@ -431,6 +475,30 @@ describe('the pinned names against the real SDK, where it is installed', () => {
       const missing = row.commands.filter((name) => typeof module[name] !== 'function');
       expect(missing, `${row.adapter} dispatches commands that do not exist`).toEqual([]);
     });
+
+    if ((row.errorNames ?? []).length > 0) {
+      it.skipIf(sdk === undefined)(`${label}: every pinned exception name really exists`, () => {
+        const module = sdk as Record<string, unknown>;
+        for (const name of row.errorNames ?? []) {
+          const ctor = module[name];
+          expect(typeof ctor, `${row.sdkPackage} must export the ${name} exception`).toBe(
+            'function',
+          );
+          // Not just exported — an INSTANCE must carry the two fields the
+          // adapter branches on. A class whose instances answered a different
+          // `name` would pass an export check and fail every real 404.
+          const instance = new (ctor as new (opts: {
+            $metadata: { httpStatusCode: number };
+            message: string;
+          }) => Error)({ $metadata: { httpStatusCode: 404 }, message: 'surface pin' });
+          expect(instance.name, `${name} instances must carry name '${name}'`).toBe(name);
+          expect(
+            (instance as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode,
+            `${name} must be a 404 — which is exactly why the status alone cannot classify it`,
+          ).toBe(404);
+        }
+      });
+    }
   }
 
   it('EvaluatePolicyCommand is not a command anybody may pin again', () => {
@@ -470,6 +538,16 @@ describe('the registry covers every AWS adapter in the source tree', () => {
     }
   });
 
+  it('the object store still pins the bucket-level 404 it branches on', () => {
+    // Always checked, installed or not. `s3Artifacts` reads NoSuchBucket to
+    // keep "the bucket is not there" from being reported as "that artifact is
+    // not there"; dropping the name from the registry would delete the only
+    // record that the distinction is a claim about somebody else's SDK.
+    const row = AWS_COMMAND_PINS.find((p) => p.adapter === 's3Artifacts');
+    expect(row?.errorNames).toContain('NoSuchBucket');
+    expect(row?.errorNames).toContain('NoSuchKey');
+  });
+
   it('pinned names are shaped like the SDK names they claim to be', () => {
     for (const row of AWS_COMMAND_PINS) {
       expect(row.client, `${row.adapter}: client must be a *Client`).toMatch(/Client$/);
@@ -483,6 +561,16 @@ describe('the registry covers every AWS adapter in the source tree', () => {
       }
       expect(new Set(row.commands).size, `${row.adapter}: duplicate command`).toBe(
         row.commands.length,
+      );
+      for (const name of row.errorNames ?? []) {
+        // An exception, not a command: a row that listed `GetObjectCommand`
+        // here would be checking the wrong kind of name.
+        expect(name, `${row.adapter}: ${name} is a command, not an exception`).not.toMatch(
+          /Command$/,
+        );
+      }
+      expect(new Set(row.errorNames ?? []).size, `${row.adapter}: duplicate exception`).toBe(
+        (row.errorNames ?? []).length,
       );
     }
   });

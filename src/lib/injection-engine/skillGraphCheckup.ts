@@ -69,7 +69,13 @@ export type GraphProblemCode =
   //   top-1 under the CONFIGURED scorer is a different intent, or a near-tie with one.
   // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency (WARNINGS):
   | 'body-foreign-tool' // body names a tool that belongs to another skill (not callable here)
-  | 'body-unknown-tool'; // body has a `tool_name(` reference to a tool that exists nowhere
+  | 'body-unknown-tool' // body has a `tool_name(` reference to a tool that exists nowhere
+  // The artifact vocabularies (SG-F, 9.25.0) — WARNING, and never more:
+  | 'artifact-kind-unsatisfied'; // a skill/step consumes a kind nothing on the agent produces.
+//   Produced by skillVocabulary.ts, which owns the rule AND its boundaries: it reads
+//   DECLARATIONS only, so a tool that mints without declaring, a store seeded by an earlier
+//   run, and a cross-agent flow are all invisible to it. That is exactly why it warns instead
+//   of erroring — see that module's header for the whole statement.
 
 /** One issue found by the check-up. `kind: 'error'` fails `ok` (and `'throw'`). */
 export interface GraphProblem {

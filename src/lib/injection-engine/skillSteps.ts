@@ -41,6 +41,7 @@
 
 import { defineTool } from '../../core/tools.js';
 import type { Tool } from '../../core/tools.js';
+import { assertArtifactVocabulary } from './skillVocabulary.js';
 import type { Injection } from './types.js';
 
 // ─── The declared shape ────────────────────────────────────────────────
@@ -55,6 +56,22 @@ export interface SkillStep {
    *  touching money"). Required, non-empty: a step with no note is a
    *  force-march instruction, and the note is the whole point. */
   readonly note: string;
+  /**
+   * Artifact KINDS this step leaves behind (9.25.0) — a declaration, not
+   * machinery: nothing at run time reads it, and a step without it is
+   * byte-identical to today. It makes the step's data leg checkable at build
+   * (`artifact-kind-unsatisfied`) and drawable by a lens. See
+   * `skillVocabulary.ts` for the satisfiability rule and its boundaries.
+   */
+  readonly produces?: readonly string[];
+  /**
+   * Artifact KINDS this step needs to have arrived (9.25.0). Satisfiable
+   * three ways — by an EARLIER step of the same skill, by the skill's own
+   * `consumes` (it arrived from outside), or by the step's tool declaring
+   * `wants` for the kind (the framework redeems that ref at dispatch, from a
+   * store that outlives the turn). Anything else is a build-time WARNING.
+   */
+  readonly consumes?: readonly string[];
 }
 
 /**
@@ -156,6 +173,10 @@ export function validateSkillSteps(
   }
   opts.steps.forEach((step, i) => {
     const n = i + 1;
+    // The vocabularies ride the same declaration, so they are refused here
+    // too — one authoring point, one place a mistake is caught.
+    assertArtifactVocabulary(`${where} step ${n}`, 'produces', step?.produces);
+    assertArtifactVocabulary(`${where} step ${n}`, 'consumes', step?.consumes);
     if (!step || typeof step.tool !== 'string' || step.tool.trim().length === 0) {
       throw new Error(
         `${where}: step ${n} names no tool. Every step is { tool, note } — the tool is ` +
