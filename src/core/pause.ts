@@ -17,6 +17,7 @@
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
+import type { AskComponent } from './askComponent.js';
 import type { CheckInRequest } from './checkin.js';
 
 /**
@@ -63,6 +64,13 @@ export interface MiddlewareAsk {
   readonly question: string;
   /** Anything else the answering UI should render. Never interpreted here. */
   readonly detail?: unknown;
+  /**
+   * Which REGISTERED screen component collects the answer (9.24.0) — the
+   * typed half of the question, carried from `ask({ question, component })`.
+   * Absent means what it always meant: render the prose. The answer comes
+   * back through the same `CheckInDecision` either way.
+   */
+  readonly component?: AskComponent;
   /** `name` of the middleware that asked. */
   readonly middleware: string;
 }

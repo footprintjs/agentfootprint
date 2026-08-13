@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.24.0] - 2026-08-13
+
+**A person answers through a typed panel: the ask carries a component, the
+options ride the store, and the decision returns as a fact.**
+
+### Added — `AskComponent` on all three ask doors
+
+```ts
+component?: { componentId: string; props?: Record<string, unknown>; propsRef?: ArtifactRef }
+```
+
+`askHuman({ component })`, middleware `ask({ component })`,
+`defineTool({ checkIn, checkInComponent })`. `componentId` is FE-registry
+vocabulary — never markup. Big option sets ride `propsRef` through the
+artifact store so the checkpoint stays lean (pinned: a 200-option ask via
+`propsRef` keeps the payload out of the checkpoint entirely).
+
+### Added — raise-time validation, one gatekeeper
+
+Shape → store attached → the ref resolves in the run's own scope — refused
+loudly AT THE SOURCE (a pause with a dead ref would strand the human).
+Declaration-time refusals: `checkInComponent` without `checkIn`; a static
+`propsRef` on a storeless agent.
+
+### Added — the surface that collected a decision is on the record
+
+`componentId` stamped additively on `checkin.decision`, `middleware.decision`,
+and `pause.resume`. The decision itself is unchanged — structured, never
+parsed from prose.
+
+### Behavior note (recorded honestly)
+
+The `component` key in an `askHuman`/`pauseHere` `pauseData` bag was
+previously uninterpreted; it is now reserved and read as `AskComponent`
+(validated at raise). Any consumer that used that key for private data must
+rename it.
+
+### Zero-cost when unused
+
+Componentless asks are byte-identical — payload key sets, checkpoint, and
+events all pinned.
+
 ## [9.23.0] - 2026-08-13
 
 **The screen redeems claim tickets: artifact resolution joins the hosting

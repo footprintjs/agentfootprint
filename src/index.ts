@@ -160,6 +160,25 @@ export {
   type RunnerPauseOutcome,
 } from './core/pause.js';
 
+// Typed HITL (9.24.0) — the OPTIONAL component half of a human ask: WHICH
+// registered screen component collects the answer, with small `props` inline
+// and the big half as an artifact ref (`propsRef`) that rides the STORE, not
+// the checkpoint. Ids and props only, never markup — the registry lives in
+// the frontend (the no-eval law). Carried by `askHuman({ question, component })`,
+// a middleware `ask({ question, component })`, and a tool's
+// `checkInComponent`; surfaced to hosts on `PendingAsk.component`. The
+// decision returns through the SAME structured field it always did.
+// `readAskComponent` is the one reader of a pause payload's component (for
+// anyone building a host); `InvalidAskComponentError` is the raise-time
+// refusal — a dangling `propsRef` fails at its source, never on the screen.
+export {
+  readAskComponent,
+  assertAskComponent,
+  InvalidAskComponentError,
+  type AskComponent,
+  type AskComponentRefusalReason,
+} from './core/askComponent.js';
+
 // The middleware family — a typed chain around every tool dispatch
 // (`.toolMiddleware()`) and around the message boundary
 // (`.messageMiddleware()`): the input before the model sees it, the output

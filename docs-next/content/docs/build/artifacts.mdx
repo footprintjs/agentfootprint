@@ -148,6 +148,10 @@ With a store attached, files a [code run](doc:tools) hands back **in-band** (`Co
 
 Runnable version of the whole flow: [`examples/features/57-artifact-data-flow.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/57-artifact-data-flow.ts) — placement mints the 48k-row result, the ref rides a `wants` argument, and `present` finishes with the snapshot, end-to-end on the mock provider.
 
+### The HITL leg (9.24.0) — an ask's big props ride the store, not the checkpoint
+
+A human ask can carry a typed `component: { componentId, props?, propsRef? }` — which registered screen component collects the answer. `propsRef` is this store doing for **questions** what `wants` does for tool arguments: a 200-option picker's options are minted via `ctx.artifacts.put(...)` BEFORE the ask is raised, the ask carries the ~26-char ticket, and the screen redeems it through the artifact wire under the session's own scope — the checkpoint and every stored session envelope stay lean. The ref is validated to resolve **at raise time**, so a dangling ticket refuses at its source instead of reaching the person answering. See [Pause / Resume — typed asks](/docs/monitor/pausable#typed-asks--a-registered-component-collects-the-answer) and [Check-in](/docs/monitor/checkin#the-ask-can-name-the-screen-that-collects-the-decision); runnable: [`examples/features/58-typed-hitl-component.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/58-typed-hitl-component.ts).
+
 ## `ctx.artifacts` — shaped exactly like `ctx.credentials`
 
 Every tool's execute context carries `ctx.artifacts` (a `ToolArtifacts`) and `ctx.hasArtifacts`:

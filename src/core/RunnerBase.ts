@@ -17,6 +17,7 @@ import type {
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
+import { readAskComponent } from './askComponent.js';
 import { pauseDemandsDecision } from './pause.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
@@ -408,6 +409,12 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   protected emitPauseResume(checkpoint: FlowchartCheckpoint, input: unknown): void {
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
+    // Which registered component the paused ask nominated to collect this
+    // answer (9.24.0) — read from the checkpoint's own pause payload
+    // (`readAskComponent` knows every home the three pause kinds use), so the
+    // resume record says which surface the person answered through. Absent for
+    // every prose-only ask, and the payload is byte-identical there.
+    const answeredVia = readAskComponent(checkpoint.pauseData)?.componentId;
     this.dispatcher.dispatch({
       type: 'agentfootprint.pause.resume',
       payload: {
@@ -416,6 +423,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
             ? (input as Readonly<Record<string, unknown>>)
             : { input },
         pausedDurationMs,
+        ...(answeredVia !== undefined && { componentId: answeredVia }),
       },
       meta: {
         ...meta,

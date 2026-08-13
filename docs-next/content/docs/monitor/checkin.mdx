@@ -40,13 +40,32 @@ The `evidence` pack (`'standard'`) has four plain-named fields:
 
 `evidence: 'minimal'` ships only `willDo` (zero cost). The whole pack survives `structuredClone` + JSON, so it can ride the checkpoint to another process.
 
+### The ask can name the screen that collects the decision
+
+Since 9.24.0 a tool can also declare **which registered frontend component** should collect its check-in decision — ids and props, never markup:
+
+```ts
+defineTool({
+  name: 'issue_refund',
+  description: 'refund a customer',
+  checkIn: (args) => args.amount > 1000,
+  checkInComponent: {
+    componentId: 'approve-panel',       // your frontend's registry id
+    props: { tone: 'serious' },         // small inline JSON
+  },
+  execute: ({ amount }) => `refunded ${amount}`,
+});
+```
+
+It rides the `CheckInRequest` as `request.component` (and `PendingAsk.component` when the pause is served over a host). Declaring `checkInComponent` without `checkIn` is refused at `defineTool` — a component for a gate that never fires is configuration that lies. A `propsRef` here must resolve in the RUN's artifact scope when the gate trips; note a check-in fires **before** `execute`, so the tool cannot mint the ref mid-call — static declarations usually want inline `props`, and the mint-then-`askHuman` flow (see [Pause / Resume](/docs/monitor/pausable#typed-asks--a-registered-component-collects-the-answer)) is the door for big payloads.
+
 ## The decision is a record
 
 The human answers with `checkInApproved({ by, note? })` or `checkInDeclined({ by, note? })`, and you `agent.resume(checkpoint, decision)`. On **approve** the tool executes normally (same iteration semantics as any resume); on **decline** the model receives `"declined by human: <note>"` as the tool result and adapts in-loop.
 
 <CodeFile path="examples/features/33-checkin.ts" region="decide" title="examples/features/33-checkin.ts (region: decide)" />
 
-Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`).
+Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`). When the ask carried a `checkInComponent`, the decision event and the recorder's record additionally carry the `componentId` that collected the answer — the trace says which surface asked, while the decision itself stays the same structured fact.
 
 ### A consent gate takes a decision, not a value
 

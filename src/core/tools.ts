@@ -15,6 +15,7 @@ import type { ArtifactMeta } from '../artifacts/types.js';
 import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import { assertAskComponent, type AskComponent } from './askComponent.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
 
@@ -67,6 +68,18 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * exposes a predicate typed to the tool's args at the CALL site.
    */
   readonly checkIn?: CheckInDemand;
+  /**
+   * Which REGISTERED screen component collects this tool's check-in decision
+   * (9.24.0) — ids and props only, never markup. Rides the `CheckInRequest`
+   * when the gate trips, so the answering screen renders its own registered
+   * component instead of prose. Meaningless without `checkIn` and refused
+   * beside its absence at `defineTool` — a component for a gate that never
+   * fires is configuration that lies. A `propsRef` here must resolve in the
+   * RUN's artifact scope when the gate trips (validated at raise time); a
+   * check-in fires BEFORE `execute`, so the tool cannot mint it mid-call —
+   * static declarations usually want inline `props`.
+   */
+  readonly checkInComponent?: AskComponent;
   /**
    * Where this tool came from — the name of the MCP server that served it.
    *
@@ -335,6 +348,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Demand a human check-in before this tool runs (see {@link Tool.checkIn}).
    *  `'always'` or a `(args, ctx) => boolean` predicate. */
   readonly checkIn?: CheckInDemand<TArgs>;
+  /** The registered screen component that collects the check-in decision
+   *  (see {@link Tool.checkInComponent}). Requires `checkIn`. */
+  readonly checkInComponent?: AskComponent;
   /** Declare what this tool touches (see {@link Tool.capabilities}). Consulted
    *  only when the configured checker declares it governs them. */
   readonly capabilities?: readonly ToolCapability[];
@@ -424,6 +440,22 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // A ceiling that cannot cap fails HERE, naming the tool — not at the first
   // oversized result of the first run.
   assertResultCeiling(options.name, options.resultCeiling);
+  // A decision component for a gate that never fires is configuration that
+  // lies — configured-and-inert looks exactly like configured-and-working
+  // (the `.checkIn({ scorer })`-with-minimal-evidence precedent). And a
+  // malformed one fails HERE, naming the tool, not at the first tripped gate
+  // of the first consequential call.
+  if (options.checkInComponent !== undefined) {
+    if (options.checkIn === undefined) {
+      throw new Error(
+        `defineTool('${options.name}'): \`checkInComponent\` has no effect without \`checkIn\`. ` +
+          `The component rides the check-in ask — which screen collects the decision — and ` +
+          `this tool declares no check-in, so it would never be shown to anyone. Declare ` +
+          `\`checkIn: 'always'\` (or a predicate), or drop the component.`,
+      );
+    }
+    assertAskComponent(options.checkInComponent, `defineTool('${options.name}') checkInComponent`);
+  }
   // A wants-arg the schema never offers (or offers as a non-string) fails
   // HERE too, naming the argument — not as a ref that never arrives. Judged
   // against the RESOLVED schema: an omitted inputSchema defaults to empty
@@ -444,6 +476,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     // The call-site predicate is typed to TArgs; the stored Tool keeps the
     // non-generic shape so it widens into `Tool[]` registries.
     ...(options.checkIn !== undefined && { checkIn: options.checkIn as CheckInDemand }),
+    ...(options.checkInComponent !== undefined && { checkInComponent: options.checkInComponent }),
     // Copied verbatim, never inferred — an empty array is a tool that declared
     // it touches nothing, which is a different statement from saying nothing.
     ...(options.capabilities !== undefined && { capabilities: options.capabilities }),

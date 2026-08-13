@@ -2693,6 +2693,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               `or any ArtifactStore), or drop the tool's \`wants\`.`,
           );
         }
+        // The same law for the typed-HITL half (9.24.0): a statically
+        // registered `checkInComponent.propsRef` on a storeless agent is a
+        // ref the screen could never redeem — every tripped gate would be
+        // refused at raise for a gap only the operator can close.
+        if (registered.checkInComponent?.propsRef !== undefined) {
+          throw new Error(
+            `Agent: tool '${toolName}' declares checkInComponent.propsRef ` +
+              `('${registered.checkInComponent.propsRef}') but no artifact store is attached, ` +
+              `so the answering screen could never redeem it and every tripped check-in would ` +
+              `be refused at raise. Pass \`artifacts\` to Agent.create (inMemoryArtifacts(), ` +
+              `fileArtifacts({ directory }), sqliteArtifacts({ file }), or any ArtifactStore), ` +
+              `or carry the payload inline as checkInComponent.props.`,
+          );
+        }
       }
     }
     // Late-bind toolSchemas into the seed stage's deps (the factory was

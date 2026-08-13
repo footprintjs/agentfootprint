@@ -27,6 +27,7 @@
  */
 
 import type { LLMMessage } from '../adapters/types.js';
+import type { AskComponent } from './askComponent.js';
 import type { AttributionUnit } from '../lib/influence-core/types.js';
 
 // ─── The ask ───────────────────────────────────────────────────────────
@@ -49,6 +50,15 @@ export interface CheckInRequest {
   readonly intent?: string;
   /** The receipts riding the ask. */
   readonly evidence: CheckInEvidence;
+  /**
+   * Which REGISTERED screen component collects the decision (9.24.0) — the
+   * tool's own declaration (`defineTool({ checkIn, checkInComponent })`),
+   * carried onto the ask. Absent means what it always meant: the screen
+   * renders the evidence pack as prose. The answer is a `CheckInDecision`
+   * either way — the component changes how the question is asked, never
+   * what the answer is.
+   */
+  readonly component?: AskComponent;
 }
 
 /**

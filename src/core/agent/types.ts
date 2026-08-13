@@ -670,6 +670,13 @@ export interface AgentState {
   // structuredClone (checkpoint discipline). Absent for non-check-in pauses.
   pausedCheckIn?: boolean;
   pausedCheckInArgs?: Readonly<Record<string, unknown>>;
+  // Which REGISTERED screen component the outstanding ask nominated to collect
+  // its decision (9.24.0) — the `componentId` of the check-in's / middleware
+  // ask's `AskComponent`, written at pause time ONLY when one exists and read
+  // back on resume so the decision record can say which surface answered.
+  // Never written for component-less asks (their checkpoints stay
+  // byte-identical) and cleared on the resume that consumed it.
+  pausedComponentId?: string;
   // Middleware-ask checkpoint — set when a `toolMiddleware` answers `ask` and
   // the run pauses BEFORE the tool executes. Same wire as the check-in pause,
   // discriminated the same way: `pausedAsk` tells resume which kind of question

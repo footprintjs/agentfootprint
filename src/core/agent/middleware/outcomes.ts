@@ -15,6 +15,7 @@
  * disagree, so it is the only thing required to say why.
  */
 
+import { assertAskComponent } from '../../askComponent.js';
 import type { AllowOutcome, AskOutcome, AskPayload, DenyOutcome } from './types.js';
 
 /** Pass the value through untouched. */
@@ -90,9 +91,16 @@ export function ask(payload: AskPayload): AskOutcome {
     payload.question.length === 0
   ) {
     throw new Error(
-      'ask(payload): expected { question, detail? } with a non-empty question. The question ' +
-        'is what a person is shown when the run pauses.',
+      'ask(payload): expected { question, detail?, component? } with a non-empty question. ' +
+        'The question is what a person is shown when the run pauses.',
     );
+  }
+  // A malformed component fails HERE, in the middleware author's own stack —
+  // not as a raise-time refusal attributed to the tool call it happened to
+  // gate. Whether a `propsRef` RESOLVES is the dispatch loop's question (it
+  // has the store and the run's scope); the shape is this constructor's.
+  if (payload.component !== undefined) {
+    assertAskComponent(payload.component, 'ask(payload)');
   }
   return { kind: 'ask', payload };
 }

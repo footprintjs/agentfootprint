@@ -66,6 +66,7 @@ export function recordDecisions(scope: LedgerScope, rows: readonly MiddlewareDec
       outcome: row.outcome,
       changed: row.changed,
       ...(row.why !== undefined && { why: row.why }),
+      ...(row.componentId !== undefined && { componentId: row.componentId }),
     });
   }
 }

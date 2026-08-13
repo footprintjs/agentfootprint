@@ -99,6 +99,7 @@
  */
 
 import { bindArtifacts, type ArtifactEventFact } from '../artifacts/capability.js';
+import { readAskComponent } from '../core/askComponent.js';
 import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
@@ -1011,12 +1012,18 @@ function describePause(outcome: RunnerPauseOutcome, sessionId: string | undefine
   const data = outcome.pauseData as { toolName?: unknown; question?: unknown } | undefined;
   const tool = typeof data?.toolName === 'string' ? data.toolName : undefined;
   const question = typeof data?.question === 'string' ? data.question : undefined;
+  // The typed half of the question (9.24.0), lifted from whichever pause kind
+  // carried it — a plain ask keeps it at the top of `pauseData`, a check-in on
+  // the typed request, a middleware ask on the question. `readAskComponent` is
+  // the one reader of those homes; this projection is where a screen looks.
+  const component = readAskComponent(outcome.pauseData);
   return {
     ...(sessionId !== undefined && { sessionId }),
     ...(tool !== undefined && { tool }),
     ...(question !== undefined && { question }),
     ...(outcome.checkIn !== undefined && { checkIn: outcome.checkIn }),
     ...(outcome.ask !== undefined && { ask: outcome.ask }),
+    ...(component !== undefined && { component }),
     pauseData: outcome.pauseData,
   };
 }

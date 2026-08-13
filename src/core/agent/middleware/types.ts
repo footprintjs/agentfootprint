@@ -68,6 +68,7 @@
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
+import type { AskComponent } from '../../askComponent.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { LoopMoment } from '../moments.js';
 
@@ -113,6 +114,13 @@ export interface AskPayload {
   readonly question: string;
   /** Anything else the answering UI should render. Never interpreted here. */
   readonly detail?: unknown;
+  /**
+   * Which REGISTERED screen component collects the answer (9.24.0) — ids and
+   * props only, never markup. Small props inline; big props as an artifact
+   * ref (`propsRef`), validated to resolve at raise time. Absent → the prose
+   * `question`, exactly as before.
+   */
+  readonly component?: AskComponent;
 }
 
 /**
@@ -349,4 +357,10 @@ export interface MiddlewareDecision {
   readonly before?: unknown;
   /** The value after this middleware. Present only when `changed`. */
   readonly after?: unknown;
+  /**
+   * The registered component that COLLECTED this decision (9.24.0). Present
+   * only on the resume-side rows of an `ask` that carried one — the trace
+   * then says which surface the person answered through. Never inferred.
+   */
+  readonly componentId?: string;
 }

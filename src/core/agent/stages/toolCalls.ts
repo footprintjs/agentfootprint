@@ -77,6 +77,11 @@ import type { AuthorizationRequiredMode } from '../../../identity/consent.js';
 import { CONSENT_PAUSE_KEY, consentQuestion, modelRefusal } from '../../../identity/consent.js';
 import { isPauseRequest, PauseAnswerRequiredError } from '../../pause.js';
 import {
+  assertAskComponent,
+  InvalidAskComponentError,
+  type AskComponent,
+} from '../../askComponent.js';
+import {
   shouldCheckIn,
   isCheckInDecision,
   checkInDeclined,
@@ -1262,6 +1267,79 @@ export function buildToolCallsHandler(
     };
   };
 
+  // ── Typed-HITL ask components at raise time (9.24.0) ───────────────────
+  // The ONE gatekeeper every component-carrying ask passes through before it
+  // is allowed to pause: `askHuman({ component })`, a middleware `ask`, and a
+  // tool's `checkInComponent` all land here. Shape first (the door the value
+  // arrived through is named in the refusal), then the `propsRef` questions
+  // only a raise site can answer — is there a store, and does the ref resolve
+  // in THIS run's scope. A dangling ref is refused at its source, loudly (the
+  // run fails with the teaching error), never handed to a screen to discover:
+  // a pause whose component cannot render is a question a person
+  // half-receives, and silently downgrading a consent gate to prose would be
+  // accepted-and-silently-wrong. Refusals + resolutions land on the record as
+  // `artifacts.refused { op: 'dispatch' }` / `artifacts.resolved` — the same
+  // facts a `wants` resolution files. Asks WITHOUT a component never reach
+  // this function: zero reads, zero events, byte-identical.
+
+  const assertComponentDeliverable = async (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    component: unknown,
+    door: string,
+  ): Promise<AskComponent> => {
+    assertAskComponent(component, door);
+    const ref = component.propsRef;
+    if (ref === undefined) return component;
+    const store = deps.artifactStore;
+    if (store === undefined) {
+      typedEmit(scope, 'agentfootprint.artifacts.refused', {
+        op: 'dispatch',
+        reason: 'no-store',
+        ref,
+        detail: `${door}: component.propsRef set but no artifact store is attached`,
+        tool: toolName,
+      });
+      throw new InvalidAskComponentError(
+        'no-store',
+        door,
+        `component.propsRef ('${ref}') is set but no artifact store is attached, so the ` +
+          `screen could never redeem it. Pass \`artifacts\` to Agent.create({ ..., artifacts }) ` +
+          `— inMemoryArtifacts(), fileArtifacts({ directory }) or sqliteArtifacts({ file }) — ` +
+          `or carry the payload inline as component.props.`,
+        ref,
+      );
+    }
+    const meta = await store.head(runScopeOf(scope), ref);
+    if (meta === null) {
+      typedEmit(scope, 'agentfootprint.artifacts.refused', {
+        op: 'dispatch',
+        reason: 'missing-or-expired',
+        ref,
+        detail: `${door}: component.propsRef does not resolve in this run's scope`,
+        tool: toolName,
+      });
+      throw new InvalidAskComponentError(
+        'unresolved-ref',
+        door,
+        `component.propsRef ('${ref}') does not resolve in this run's artifact scope — ` +
+          `missing, expired, or minted under a different scope. Mint the props BEFORE raising ` +
+          `the ask (ctx.artifacts.put(...) in the same run) and pass the ref it returns; a ` +
+          `ref the screen cannot redeem must be refused here, at the source, not discovered ` +
+          `by the person answering.`,
+        ref,
+      );
+    }
+    typedEmit(scope, 'agentfootprint.artifacts.resolved', {
+      ref: meta.ref,
+      via: 'head',
+      kind: meta.kind,
+      bytes: meta.bytes,
+      tool: toolName,
+    });
+    return component;
+  };
+
   // ── The `present` tool's authoritative result (9.22.0, Leg 2) ──────────
   // The skip_step pattern: the auto-attached placeholder ran; the stage —
   // which owns the scope, the store and the emit channel — OVERWRITES its
@@ -2014,6 +2092,23 @@ export function buildToolCallsHandler(
             denied = true;
             result = chain.reason;
           } else if (chain.kind === 'ask') {
+            // The typed half of the question (9.24.0), judged BEFORE anything
+            // is committed: a component the screen could not render must
+            // refuse here, at the source, not pause and be discovered. The
+            // `ask()` constructor already checked the shape; a hand-built
+            // outcome literal bypasses it, so the shape is re-asserted at
+            // this boundary (cheap, idempotent) along with the propsRef
+            // resolution only a raise site can judge. Asks without a
+            // component skip all of it.
+            const askComponent =
+              chain.payload.component !== undefined
+                ? await assertComponentDeliverable(
+                    scope,
+                    tc.name,
+                    chain.payload.component,
+                    `ask middleware '${chain.middleware}'`,
+                  )
+                : undefined;
             // Commit partial state so resume() finds history intact (the
             // pauseHere / check-in path does the same). The TRANSFORMED args
             // ride the checkpoint: a person approves what the chain produced,
@@ -2026,6 +2121,11 @@ export function buildToolCallsHandler(
             scope.pausedAskArgs = chain.args;
             scope.pausedAskIndex = chain.index;
             scope.pausedAskMiddleware = chain.middleware;
+            // Which surface will collect the decision — carried so the
+            // resume-side ledger rows can say which component ANSWERED.
+            // Written only when one exists: a component-less ask's
+            // checkpoint stays byte-identical.
+            if (askComponent !== undefined) scope.pausedComponentId = askComponent.componentId;
             // A defined return value triggers the footprintjs pause; this
             // object becomes the checkpoint's pauseData, and detectPause
             // surfaces `pauseData.ask` as `outcome.ask`.
@@ -2113,6 +2213,19 @@ export function buildToolCallsHandler(
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
           } else {
+            // The tool's declared decision component (9.24.0), judged BEFORE
+            // the evidence pack is assembled — a gate that cannot be honored
+            // as declared refuses before any work, and a dangling propsRef is
+            // refused at this source rather than discovered by the screen.
+            const gateComponent =
+              tool.checkInComponent !== undefined
+                ? await assertComponentDeliverable(
+                    scope,
+                    tc.name,
+                    tool.checkInComponent,
+                    `tool '${tc.name}' checkInComponent`,
+                  )
+                : undefined;
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
             const evidence = await deps.checkIn.assembler({
               tool: { name: tc.name, description: tool.schema.description },
@@ -2128,6 +2241,7 @@ export function buildToolCallsHandler(
               args: callArgs,
               ...(intent !== undefined && { intent }),
               evidence,
+              ...(gateComponent !== undefined && { component: gateComponent }),
             };
             typedEmit(scope, 'agentfootprint.checkin.request', {
               toolName: tc.name,
@@ -2144,6 +2258,10 @@ export function buildToolCallsHandler(
             scope.pausedToolStartMs = startMs;
             scope.pausedCheckIn = true;
             scope.pausedCheckInArgs = callArgs;
+            // Which surface will collect the decision — read back on resume
+            // so `checkin.decision` says which component ANSWERED. Written
+            // only when one exists (byte-identical otherwise).
+            if (gateComponent !== undefined) scope.pausedComponentId = gateComponent.componentId;
             // Returning a defined value triggers the footprintjs pause; the
             // returned object becomes the checkpoint's pauseData. detectPause
             // surfaces `pauseData.checkIn` as `outcome.checkIn`.
@@ -2333,6 +2451,27 @@ export function buildToolCallsHandler(
               await endCall(tc.id);
             } catch (err) {
               if (isPauseRequest(err)) {
+                // The typed half of the question (9.24.0): a tool that raised
+                // `askHuman({ question, component })` nominated a screen
+                // component, and the nomination is judged HERE — the raise
+                // site — before the pause is allowed to happen. The tool
+                // usually minted `propsRef` via ctx.artifacts moments ago;
+                // this validates the ref it chose to carry still resolves in
+                // this run's scope, so the throw (which fails the run loudly,
+                // naming the fix) lands in the author's lap and never in the
+                // answering person's. Pauses without a component skip this
+                // entirely — byte-identical.
+                if (typeof err.data === 'object' && err.data !== null) {
+                  const rawComponent = (err.data as { component?: unknown }).component;
+                  if (rawComponent !== undefined) {
+                    await assertComponentDeliverable(
+                      scope,
+                      tc.name,
+                      rawComponent,
+                      `askHuman in tool '${tc.name}'`,
+                    );
+                  }
+                }
                 // A pause has NOT settled this call — it is waiting for a
                 // person, and the resources it opened are what the resume
                 // needs. No `'call'` teardown here, deliberately.
@@ -2699,6 +2838,10 @@ export function buildToolCallsHandler(
         const args = (scope.pausedAskArgs ?? {}) as Readonly<Record<string, unknown>>;
         const askIndex = (scope.pausedAskIndex ?? 0) as number;
         const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
+        // The registered component that COLLECTED this decision (9.24.0),
+        // written at pause time only when the ask carried one — the ledger
+        // rows below then say which surface the person answered through.
+        const answeredVia = scope.pausedComponentId as string | undefined;
         const decision: CheckInDecision = isCheckInDecision(input)
           ? input
           : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
@@ -2726,6 +2869,7 @@ export function buildToolCallsHandler(
               outcome: 'deny',
               changed: false,
               why: `declined by ${decision.by}${decision.note ? `: ${decision.note}` : ''}`,
+              ...(answeredVia !== undefined && { componentId: answeredVia }),
             },
           ]);
         } else {
@@ -2740,6 +2884,7 @@ export function buildToolCallsHandler(
               outcome: 'allow',
               changed: false,
               why: `approved by ${decision.by}${decision.note ? `: ${decision.note}` : ''}`,
+              ...(answeredVia !== undefined && { componentId: answeredVia }),
             },
           ]);
           // Continue the chain from the link AFTER the one that asked. Its
@@ -2947,6 +3092,10 @@ export function buildToolCallsHandler(
         scope.pausedAskArgs = undefined;
         scope.pausedAskIndex = undefined;
         scope.pausedAskMiddleware = undefined;
+        // Cleared ONLY when it was set: a later component-less pause in this
+        // run must not inherit this ask's surface, and a run that never
+        // carried one must not gain the key (byte-identical).
+        if (answeredVia !== undefined) scope.pausedComponentId = undefined;
         return;
       }
 
@@ -2967,6 +3116,11 @@ export function buildToolCallsHandler(
           ? input
           : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
 
+        // The registered component that COLLECTED this decision (9.24.0),
+        // written at pause time only when the ask carried one. The decision
+        // stays exactly what it was — a structured `CheckInDecision`, never
+        // parsed from prose — and the record now says which surface asked.
+        const answeredVia = scope.pausedComponentId as string | undefined;
         typedEmit(scope, 'agentfootprint.checkin.decision', {
           toolName,
           toolCallId,
@@ -2974,6 +3128,7 @@ export function buildToolCallsHandler(
           approved: decision.approved,
           by: decision.by,
           ...(decision.note !== undefined && { note: decision.note }),
+          ...(answeredVia !== undefined && { componentId: answeredVia }),
         });
 
         let result: unknown;
@@ -3090,6 +3245,8 @@ export function buildToolCallsHandler(
         scope.pausedToolStartMs = 0;
         scope.pausedCheckIn = false;
         scope.pausedCheckInArgs = undefined;
+        // Cleared ONLY when it was set — see the ask path's twin note.
+        if (answeredVia !== undefined) scope.pausedComponentId = undefined;
         return;
       }
 

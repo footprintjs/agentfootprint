@@ -23,6 +23,7 @@
 import type { FlowchartCheckpoint } from 'footprintjs';
 
 import type { Agent } from '../core/Agent.js';
+import type { AskComponent } from '../core/askComponent.js';
 import type { CheckInRequest } from '../core/checkin.js';
 import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
@@ -558,6 +559,25 @@ export interface PendingAsk {
    * check-in uses, deliberately: a person approving is a person approving.
    */
   readonly ask?: MiddlewareAsk;
+  /**
+   * Which REGISTERED screen component collects the answer (9.24.0) — the
+   * typed half of the question, lifted from whichever pause kind carried it
+   * so a screen has ONE place to look. Ids and props only, never markup: the
+   * registry lives in the frontend, and a screen that does not know the id
+   * falls back to the prose `question` exactly as before.
+   *
+   * `props` is the small inline half; `propsRef` is a claim ticket the screen
+   * redeems through the artifact wire (`head` then `get`) under the SAME
+   * session identity every other redemption presents — a 200-option picker
+   * rides the store, not this reply and not the checkpoint. The ref was
+   * validated to resolve when the ask was raised.
+   *
+   * The answer comes back through {@link HostRequest.decision} unchanged —
+   * the component changes how the question is asked, never what the answer
+   * is. A screen may render the decision as words; the words are display,
+   * the structured decision is the record.
+   */
+  readonly component?: AskComponent;
   /**
    * Exactly what the tool passed to `askHuman()` / `pauseHere()`, uninterpreted.
    * For a plain pause this is the whole of what the tool's author chose to say,

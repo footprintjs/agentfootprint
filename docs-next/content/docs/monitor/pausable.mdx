@@ -56,6 +56,36 @@ Those are different conversations, so the caller picks. Before 8.18.0 the librar
 
 A consent gate is different: a tool's `checkIn` or a middleware's `ask` is answered with a DECISION (`checkInApproved()` / `checkInDeclined()`), and raises `DecisionRequiredError` when it gets a value instead.
 
+## Typed asks — a registered component collects the answer
+
+The question has always been prose. Since 9.24.0 an ask can also carry the **typed half**: which screen component should collect the answer, and the props it renders with.
+
+```ts
+component: {
+  componentId: 'option-picker',   // an id YOUR frontend registered
+  props: { title: 'Pick one' },   // small inline JSON
+  propsRef: meta.ref,             // artifact ref for the big half
+}
+```
+
+Why ids and props, never markup: the component **registry lives in your frontend**, so the library (and the model) can nominate a picker without ever being allowed to author one — the same no-eval rule the rest of the ecosystem follows. A screen that does not know the id falls back to the prose `question`, which still rides every ask.
+
+Why `propsRef`: the ask rides the **checkpoint**, and the checkpoint rides every stored session envelope. A 200-option picker's options belong in the [artifact store](/docs/build/artifacts), not in checkpoint freight — the tool mints them via `ctx.artifacts.put(...)` first, then raises the ask carrying the ~26-char ticket. The screen redeems it through the same artifact wire (`head` then `get`) every other ref rides, under the same session scope.
+
+<CodeFile path="examples/features/58-typed-hitl-component.ts" region="ask-with-component" title="examples/features/58-typed-hitl-component.ts (region: ask-with-component)" />
+
+All three ask doors carry it the same way — `askHuman({ question, component })` inside a tool, a middleware's `ask({ question, component })`, and a tool's declared `checkInComponent` (see [Check-in](/docs/monitor/checkin)) — and a served pause surfaces it in ONE place, `PendingAsk.component`, whichever door raised it.
+
+**A component that cannot be honored refuses at the source.** A `propsRef` with no store attached, or a ref that does not resolve in the run's own scope, raises `InvalidAskComponentError` the moment the ask is raised — naming the door and the fix — rather than pausing and letting the person answering discover a dead ref. A consent gate silently downgraded to prose would be worse than a loud refusal.
+
+**The answer does not change.** The decision posts back through the same structured field it always did (`resume(checkpoint, value)`, `checkInApproved()` / `checkInDeclined()`), never parsed from prose. The screen may render the decision as words afterwards — the words are display; the structured decision is the record. What IS new on the record: `pause.resume`, `checkin.decision` and the middleware ledger rows now carry the `componentId` that collected the answer, so the trace says which surface asked.
+
+<CodeFile path="examples/features/58-typed-hitl-component.ts" region="screen-side" title="examples/features/58-typed-hitl-component.ts (region: screen-side)" />
+
+Asks without a `component` are byte-identical to every earlier release — no new keys on the pause payload, the checkpoint, or the decision events.
+
+The shape and its helpers all ride the main barrel: the `AskComponent` interface (`{ componentId, props?, propsRef? }`); `readAskComponent(pauseData)` — the one reader of a pause payload's component, wherever the pause kind keeps it, for anyone building their own host; `assertAskComponent(value, door)` — the shape refusal, if you want to validate a component at your own boundary; and `InvalidAskComponentError`, whose `reason` field (`AskComponentRefusalReason`: `'shape' | 'no-store' | 'unresolved-ref'`) says which rule refused.
+
 ## When to use pause/resume vs error vs callback
 
 | Situation | Use |

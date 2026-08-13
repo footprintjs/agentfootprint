@@ -448,6 +448,10 @@ export interface PauseRequestPayload {
 export interface PauseResumePayload {
   readonly resumeInput: Readonly<Record<string, unknown>>;
   readonly pausedDurationMs: number;
+  /** The registered component the paused ask nominated to collect its answer
+   *  (9.24.0) — read from the checkpoint's own pause payload, whichever pause
+   *  kind carried it. Absent when the ask was prose-only. */
+  readonly componentId?: string;
 }
 
 // ─── check-in (evidence-carrying human consent) ───────────────────────
@@ -469,6 +473,11 @@ export interface CheckInDecisionPayload {
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;
+  /** The registered component that COLLECTED this decision (9.24.0) — the
+   *  `componentId` the ask carried. Absent when the ask was prose-only. The
+   *  decision itself is unchanged: a structured fact, never parsed from the
+   *  words a screen rendered. */
+  readonly componentId?: string;
 }
 
 // ─── middleware (the governance chains) ───────────────────────────────
@@ -500,6 +509,9 @@ export interface MiddlewareDecisionPayload {
   readonly changed: boolean;
   /** The transform's `why`, the denial's `reason`, or the ask's `question`. */
   readonly why?: string;
+  /** The registered component that COLLECTED this decision (9.24.0). Present
+   *  only on the resume-side rows of an `ask` that carried one. */
+  readonly componentId?: string;
 }
 
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
