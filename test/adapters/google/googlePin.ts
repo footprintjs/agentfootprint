@@ -45,6 +45,13 @@
  * devDependencies. The missing-peer-dep refusals are proved instead by stubbing
  * module resolution (`vi.doMock` on `lazyRequire`), in each adapter's own suite.
  *
+ * **With exactly one exception, which is a field on the row rather than a
+ * footnote here.** `@google-cloud/firestore` is NOT installed, because it drags
+ * `@opentelemetry/api` to the root and disarms a live refusal test. So for the
+ * `firestoreSessions` row, assertions (2) and (3) SKIP here and run only for
+ * somebody who installs the package locally; assertion (1) runs everywhere. See
+ * that row's `notInstalled`, which has to say why or the suite fails.
+ *
  * Nothing in this file, or in any file that imports it, reaches Google.
  */
 
@@ -61,6 +68,7 @@ export const REPO_ROOT = new URL('../../../', import.meta.url).pathname;
 export const GOOGLE_PACKAGES: readonly string[] = [
   '@google/genai',
   '@google-cloud/storage',
+  '@google-cloud/firestore',
   'google-auth-library',
   '@googleapis/aiplatform',
   'googleapis',
@@ -77,8 +85,19 @@ export const GOOGLE_PACKAGES: readonly string[] = [
  * path) are named here because the recon established that Sessions and Memory
  * Bank arrive through them, and because a registry that cannot express the
  * surface a future row needs gets bypassed instead of extended.
+ *
+ * `'class'` is the Firestore shape, and it is a fourth kind rather than a bent
+ * `'chain'` for one concrete reason: the chain walker CALLS each intermediate
+ * with a placeholder string, and `collection.where` needs three arguments of
+ * three different kinds before it will hand back the next link. Firestore
+ * exports every class in that chain from the module root (`Query`,
+ * `DocumentReference`, `Transaction`, `DocumentSnapshot`, `FieldPath`), so the
+ * surface can be read off the PROTOTYPES with nothing constructed, no arguments
+ * invented and no query built. `Transaction` in particular has a private
+ * constructor and is only ever handed to you inside a real transaction — a
+ * check that had to construct one could not run offline at all.
  */
-export type GoogleSurfaceKind = 'object' | 'chain' | 'gax' | 'rest';
+export type GoogleSurfaceKind = 'object' | 'chain' | 'class' | 'gax' | 'rest';
 
 /** One Google adapter's contract with its SDK. */
 export interface GoogleAdapterPin {
@@ -119,6 +138,19 @@ export interface GoogleAdapterPin {
    * about somebody else's package too.
    */
   readonly documentedOnly?: boolean;
+  /**
+   * Why this row's package is deliberately NOT a devDependency, and what it was
+   * verified against instead.
+   *
+   * Present on exactly one row, and it is an exception that had to be EARNED
+   * rather than assumed — the whole reason the other Google packages are
+   * devDependencies is that the reality assertion must run in CI (see the header
+   * above). It is recorded as a field rather than left implicit so the
+   * "everything is installed" assertion has to acknowledge it out loud, and so
+   * the next person to reach for `npm install` finds the reason before the
+   * failure.
+   */
+  readonly notInstalled?: string;
   /** Anything a reader of this row needs that the fields cannot say. */
   readonly note?: string;
 }
@@ -127,9 +159,14 @@ export interface GoogleAdapterPin {
  * THE REGISTRY. Verified against the installed packages: `@google/genai` 2.16.0
  * and `google-auth-library` 11.0.1 (2026-08-12), `@google-cloud/storage` 7.22.0
  * (9.25.0), and `@googleapis/aiplatform` 31.0.0 (2026-08-13, the Sessions +
- * Memory Bank batch). Assertions (2) and (3) below re-verify all of it on every
- * run — every one of those packages is a real devDependency — so the dates are
- * provenance rather than the guarantee.
+ * Memory Bank batch). Assertions (2) and (3) below re-verify all four of those on
+ * every run — each is a real devDependency — so for them the dates are provenance
+ * rather than the guarantee.
+ *
+ * `@google-cloud/firestore` 9.0.0 (2026-08-14) is the fifth, and for it the date
+ * IS the guarantee: the package is not installed here, so assertions (2) and (3)
+ * skip that row and its member spellings rest on a hand check against a real
+ * install. See `notInstalled` on the row.
  */
 export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
   {
@@ -178,6 +215,86 @@ export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
       'from this row exposes no `patch` at all, which is what makes a regression land on the ' +
       "dispatch rather than on somebody else's bill. `sessions.events.list` stays uncalled: " +
       'this store keeps ONE envelope under one key and reads the envelope, never the log.',
+  },
+  {
+    adapter: 'firestoreSessions',
+    sources: ['src/adapters/hosting/firestoreSessions.ts'],
+    sdkPackage: '@google-cloud/firestore',
+    kind: 'class',
+    ctor: 'Firestore',
+    notInstalled:
+      'Verified against a real install of @google-cloud/firestore 9.0.0 in a scratch project ' +
+      '(2026-08-14): every member on this row was read out of `types/firestore.d.ts` and then ' +
+      'confirmed on the constructed client and the exported prototypes. It is NOT a ' +
+      'devDependency here, and that is a measured decision rather than a size complaint. ' +
+      '`@google-cloud/firestore` has `@opentelemetry/api` as a HARD dependency, so installing ' +
+      'it hoists that package to the root — and this repository has a test that proves ' +
+      '`otelObservability()` refuses BY NAME when `@opentelemetry/api` is absent. Adding ' +
+      'Firestore turns that refusal into something no test can reach, which is the same ' +
+      'trade the AWS pin makes for the same reason: an installed package makes ONE check ' +
+      'runnable and an absent-peer check vacuous, and here the absent-peer check is the one ' +
+      'that guards a live refusal a user meets. Assertions (2) and (3) therefore SKIP this ' +
+      'row in CI and run in full for anyone who installs the package locally; assertion (1), ' +
+      'the dispatch, runs everywhere.',
+    methods: [
+      'Firestore.collection',
+      'Firestore.runTransaction',
+      'Firestore.terminate',
+      'CollectionReference.doc',
+      'Query.where',
+      'Query.orderBy',
+      'Query.startAfter',
+      'Query.limit',
+      'Query.get',
+      'QuerySnapshot.docs',
+      'DocumentReference.get',
+      'DocumentReference.delete',
+      'DocumentSnapshot.exists',
+      'DocumentSnapshot.data',
+      'DocumentSnapshot.id',
+      'Transaction.get',
+      'Transaction.set',
+      'FieldPath.documentId',
+    ],
+    note:
+      'Read off a real install of @google-cloud/firestore 9.0.0 before the adapter was ' +
+      'written, and five of those reads shaped the design. ' +
+      '(1) `Transaction.get` is ASYNC and `Transaction.set` is SYNCHRONOUS (it answers the ' +
+      'transaction, for chaining) — the asymmetry a convenient double gets wrong, and the ' +
+      'reason the adapter can read-then-write inside one function without sequencing ' +
+      'promises. (2) `DocumentSnapshot.exists` is a PROPERTY, not a method, and a missing ' +
+      'document comes back as a snapshot rather than as an error — so "no conversation" is ' +
+      'READ, never inferred from a failure. (3) `QuerySnapshot.docs` is a materialised ' +
+      'ARRAY; the SDK has `Query.stream()` for the other shape and this adapter does not use ' +
+      'it, so a double handing back an async iterable would be testing a client nobody ' +
+      'ships. (4) `FieldPath.documentId()` is a STATIC returning a sentinel — there is no ' +
+      'string spelling of `__name__` the client accepts in `orderBy`, which is why the ' +
+      'module is loaded even when a caller passes their own client. (5) `startAfter` accepts ' +
+      'a bare document-name STRING for a documentId ordering and converts it to a full ' +
+      'reference, which is what lets the listing cursor stay an opaque `savedAt:docId` token ' +
+      'rather than a second round trip to fetch a snapshot. ' +
+      '(6) THE CURSOR READS `DocumentSnapshot.id`, NOT `DocumentReference.id`, and this row ' +
+      'pins the one the adapter really reads. `last` in the cursor mint comes out of ' +
+      '`QuerySnapshot.docs`, so it is a `QueryDocumentSnapshot`, which extends ' +
+      '`DocumentSnapshot` (firestore.d.ts line 1667) and inherits its `readonly id: string` ' +
+      '(line 1617). Hand-verified in the same 9.0.0 install, in the .d.ts AND at runtime: ' +
+      '`DocumentSnapshot.prototype` really owns `id`, and `QueryDocumentSnapshot.prototype` ' +
+      'really inherits from it. This member was added after a review found the row pinning ' +
+      'the sibling instead — its provenance is that hand check, not a test that runs here. ' +
+      'It is a PROPERTY, which is why the double models it as one: an `id()` method would ' +
+      "mint a function's source text into a pagination token, the same lie shape as an " +
+      '`exists()` method. `DocumentReference.id` is REAL (line 1442) and is deliberately not ' +
+      'on this row, because this adapter never reads it — `FirestoreDocumentReferenceLike` ' +
+      'declares `id` only so the test double can key its staged writes by it. This row lists ' +
+      'what is CALLED, and a member nobody calls is the same overclaim as a citation nobody ' +
+      'can follow. ' +
+      '`WriteBatch`, `BulkWriter`, `Query.stream`, `Query.count`, `Firestore.batch` and ' +
+      '`CollectionReference.listDocuments` are all on the surface and deliberately NOT ' +
+      'called: a session store writes one document at a time, and a listing that streamed ' +
+      'or counted would be answering a question the port never asks. ' +
+      '`set` with `{ merge: true }` is absent from this row and that absence is ' +
+      'load-bearing: merge is how ownership would silently transfer to the last writer, ' +
+      'which is the whole reason the write is a transaction.',
   },
   {
     adapter: 'memoryBankStore',
@@ -337,8 +454,11 @@ export function fakeGoogleClient<T = unknown>(
   return { client, sent, names: () => sent.map((s) => s.method) };
 }
 
-/** The installed package, when it IS installed. Both Google packages are
- *  devDependencies, so `undefined` here is a finding, not the normal case. */
+/** The installed package, when it IS installed. Every Google package here is a
+ *  devDependency except `@google-cloud/firestore`, so `undefined` is a FINDING
+ *  for the others and the expected answer for that one — which is why the row
+ *  carrying it must declare `notInstalled` and why its checks skip rather than
+ *  pass. */
 export function realPackage(sdkPackage: string): Record<string, unknown> | undefined {
   try {
     return require_(sdkPackage) as Record<string, unknown>;
@@ -423,6 +543,39 @@ export function chainMethodExists(root: object, path: string): boolean {
   const leaf = segments[segments.length - 1]!;
   const value = (node as Record<string, unknown>)[leaf];
   return typeof value === 'function';
+}
+
+/**
+ * Answer whether `ClassName.member` is a real member of a module-exported class.
+ *
+ * The `'class'` kind's walker, and it looks in three places for one reason
+ * each:
+ *
+ *   • the PROTOTYPE, walked to the top, for ordinary methods (`Query.where`);
+ *   • as a property DESCRIPTOR rather than a function, because several members
+ *     this adapter reads are accessors — `DocumentSnapshot.exists` and
+ *     `QuerySnapshot.docs` are `readonly` properties, and a `typeof … ===
+ *     'function'` check would report both of them missing;
+ *   • on the CLASS itself, for a static (`FieldPath.documentId`).
+ *
+ * Nothing is constructed and nothing is called, so this runs offline with no
+ * credential — which is the only way to check a class like `Transaction`, whose
+ * constructor is private and whose instances exist only inside a live
+ * transaction.
+ */
+export function classMemberExists(mod: Record<string, unknown>, path: string): boolean {
+  const at = path.indexOf('.');
+  if (at <= 0) return false;
+  const Ctor = mod[path.slice(0, at)] as { prototype?: object } | undefined;
+  const member = path.slice(at + 1);
+  if (typeof Ctor !== 'function') return false;
+
+  let node: object | null = (Ctor as { prototype?: object }).prototype ?? null;
+  while (node !== null && node !== Object.prototype) {
+    if (Object.getOwnPropertyDescriptor(node, member) !== undefined) return true;
+    node = Object.getPrototypeOf(node) as object | null;
+  }
+  return Object.getOwnPropertyDescriptor(Ctor, member) !== undefined;
 }
 
 /**

@@ -27,6 +27,7 @@ import {
   GOOGLE_PACKAGES,
   GOOGLE_SURFACE_PINS,
   chainMethodExists,
+  classMemberExists,
   fakeGoogleClient,
   fakeGoogleRestClient,
   findGoogleLoadSites,
@@ -45,6 +46,8 @@ import {
   safeResourceId,
 } from '../../../src/adapters/google/aiPlatform.js';
 import { agentEngineSessions } from '../../../src/adapters/hosting/googleAgentEngine.js';
+import { firestoreSessions } from '../../../src/adapters/hosting/firestoreSessions.js';
+import { fakeFirestore } from '../../hosting/firestoreDouble.js';
 import { memoryBankStore } from '../../../src/adapters/memory/memoryBank.js';
 import { googleIdentity } from '../../../src/adapters/identity/google.js';
 import { toEnvelope } from '../../../src/hosting/index.js';
@@ -147,6 +150,69 @@ describe('Google adapters call exactly the methods they are pinned to', () => {
     expect(row.note).toMatch(/appending an event/);
   });
 
+  it('firestoreSessions — one transaction to write, one indexed query to list', async () => {
+    // Driven through the SAME honest double the adapter's own suite uses, so
+    // the dispatch claim and the behaviour claims cannot drift apart. The
+    // double's docstring records which line of the installed `firestore.d.ts`
+    // gives each fake member its shape.
+    const fake = fakeFirestore();
+    const sessions = firestoreSessions({ _sdk: fake.sdk });
+    const stored = toEnvelope({
+      version: 1,
+      runId: 'run-1',
+      history: [{ role: 'user', content: 'hi' }],
+      lastCompletedIteration: 1,
+      originalInput: { message: 'hi' },
+      checkpointedAt: Date.now(),
+      identity: { principal: 'alice' },
+    } as unknown as AgentRunCheckpoint);
+
+    await sessions.persist('s1', stored);
+    await sessions.persist('s2', stored);
+    await sessions.hydrate('s1');
+    // Two pages, so the SECOND one is a real cursored page. Without it
+    // `Query.startAfter` is pinned and never dispatched — and it is the member
+    // that makes this release a cursor rather than an offset, so "pinned" alone
+    // would be the weakest possible claim about the one thing that is new.
+    const firstPage = await sessions.listByUser('alice', { limit: 1 });
+    expect(firstPage.cursor, 'a cursored page is the point of this sequence').toBeDefined();
+    await sessions.listByUser('alice', { limit: 1, cursor: firstPage.cursor });
+    await sessions.forget('s1');
+    await sessions.close();
+
+    // ONE direction is asserted here, and it is the direction this pin exists
+    // for: everything DISPATCHED is on the row. Reach for a name the registry
+    // does not carry and it lands on a double that does not have it — the 9.4.0
+    // bug class, caught here rather than in somebody's project.
+    //
+    // The reverse (everything on the row is dispatched here) is NOT asserted and
+    // is NOT true, which an earlier version of this comment got wrong. `calls` is
+    // a log of CALLS, and five of this row's eighteen members never appear in one:
+    // `QuerySnapshot.docs`, `DocumentSnapshot.exists` and `DocumentSnapshot.id`
+    // are PROPERTY reads, and the double does not log `DocumentSnapshot.data` or
+    // the `FieldPath.documentId` static. All five ARE reached — the cursor above
+    // could not exist otherwise — they simply leave no entry in a call log. That
+    // they are spelled the way Google spells them is held by assertion (2) below,
+    // which skips in this repository because the package is not installed here.
+    // It is a hand check, and the row says so.
+    const reached = new Set(
+      fake.calls.filter((c) => c.includes('.')).map((c) => c.replace(/^new Firestore.*/, '')),
+    );
+    const row = pin('firestoreSessions');
+    for (const call of reached) {
+      if (call === '') continue;
+      expect(row.methods, `${call} is dispatched but not pinned`).toContain(call);
+    }
+    // The four that matter most, stated rather than inferred from a set.
+    expect(fake.calls).toContain('Firestore.runTransaction');
+    expect(fake.calls).toContain('Query.where');
+    expect(fake.calls).toContain('Query.startAfter');
+    expect(fake.calls).toContain('Firestore.terminate');
+    // A merged write is what would let ownership transfer to the last writer.
+    // There is no `merge` anywhere on this row, and that absence is the law.
+    expect(JSON.stringify(row.methods)).not.toContain('merge');
+  });
+
   it('memoryBankStore — one retrieve for a search, one for a list, and never memories.list', async () => {
     const row = pin('memoryBankStore');
     const fake = fakeGoogleRestClient<never>([row], {
@@ -207,18 +273,43 @@ describe('Google adapters call exactly the methods they are pinned to', () => {
 // ─── 2. METHOD-NAME REALITY ──────────────────────────────────────────
 //
 // The half that makes the registry a claim about Google rather than about
-// ourselves. Unlike the AWS pin, this is NOT skippable: both packages are
-// devDependencies precisely so this runs in CI.
+// ourselves. Unlike the AWS pin, this runs in CI: the Google SDKs are
+// devDependencies precisely so it can.
+//
+// With one exception, and it is not a footnote — `@google-cloud/firestore` is
+// NOT installed here (it would hoist `@opentelemetry/api` and disarm an
+// absent-peer refusal test), so for the `firestoreSessions` row this whole
+// section SKIPS. Its member spellings rest on a hand check against a real
+// install, recorded in the row's `notInstalled`, and the assertions below are
+// what make that exemption declared rather than accidental.
 
 describe('the pinned methods against the real installed packages', () => {
   it('every pinned package is actually installed — an unrunnable check is not a check', () => {
-    const missing = [...new Set(GOOGLE_SURFACE_PINS.map((p) => p.sdkPackage))].filter(
-      (pkg) => realPackage(pkg) === undefined,
+    // …with ONE documented exemption, which has to say why in the registry.
+    // Silence here is what turns "we decided not to install it" into "nobody
+    // noticed it was gone".
+    const exempt = new Set(
+      GOOGLE_SURFACE_PINS.filter((p) => p.notInstalled !== undefined).map((p) => p.sdkPackage),
     );
+    const missing = [...new Set(GOOGLE_SURFACE_PINS.map((p) => p.sdkPackage))]
+      .filter((pkg) => !exempt.has(pkg))
+      .filter((pkg) => realPackage(pkg) === undefined);
     expect(
       missing,
       'these are devDependencies on purpose: the reality and API-version assertions must RUN',
     ).toEqual([]);
+
+    // The exemption is a claim, so it carries its evidence: which version was
+    // read, and why the package is not here.
+    for (const row of GOOGLE_SURFACE_PINS) {
+      if (row.notInstalled === undefined) continue;
+      expect(row.notInstalled, `${row.adapter}: an exempt row must say why`).toMatch(
+        /\d+\.\d+\.\d+/,
+      );
+    }
+    // And it stays an exception. Two would mean the doctrine has quietly
+    // inverted and this file is describing a policy nobody chose.
+    expect(exempt.size, 'the Google column installs its SDKs; exemptions are one-offs').toBe(1);
   });
 
   it('reports the versions this run checked, so drift is visible in the log', () => {
@@ -231,6 +322,19 @@ describe('the pinned methods against the real installed packages', () => {
     expect(versions['@google/genai']).toMatch(/^\d+\.\d+\.\d+/);
     expect(versions['google-auth-library']).toMatch(/^\d+\.\d+\.\d+/);
     expect(versions['@googleapis/aiplatform']).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('@google-cloud/firestore, when a developer HAS it, is the 9.x this was built against', () => {
+    // A major bump is a redesign, not an upgrade. It is not installed in CI —
+    // see the row's `notInstalled` — so this is the check that fires for the
+    // person who does install it, on the machine where it can still be fixed
+    // before it reaches somebody's conversations.
+    const version = installedVersion('@google-cloud/firestore');
+    if (version === undefined) {
+      expect(pin('firestoreSessions').notInstalled).toContain('9.0.0');
+      return;
+    }
+    expect(version.split('.')[0]).toBe('9');
   });
 
   it('the SPLIT per-API package is what is installed, not the 209 MB mega-package', () => {
@@ -251,10 +355,31 @@ describe('the pinned methods against the real installed packages', () => {
   });
 
   for (const row of GOOGLE_SURFACE_PINS) {
-    it(`${row.adapter} → ${row.sdkPackage}: every pinned method really exists`, () => {
-      const mod = realPackage(row.sdkPackage) as Record<string, unknown>;
+    it(`${row.adapter} → ${row.sdkPackage}: every pinned method really exists`, (context) => {
+      const mod = realPackage(row.sdkPackage) as Record<string, unknown> | undefined;
+      if (mod === undefined) {
+        // The exempt row, on a machine that does not have the package. It is
+        // SKIPPED rather than passed: a check that quietly returns green when it
+        // could not run is how a pin stops being a pin. Anyone who installs
+        // `@google-cloud/firestore` gets the full assertion, and the assertion
+        // above proves the exemption is declared rather than accidental.
+        expect(row.notInstalled, `${row.sdkPackage} is missing and not exempt`).toBeDefined();
+        context.skip(`${row.sdkPackage} is not installed here — see the row's notInstalled`);
+        return;
+      }
       const Ctor = mod[row.ctor];
       expect(typeof Ctor, `${row.sdkPackage} must export ${row.ctor}`).toBe('function');
+
+      // A CLASS row is read off the module's exported PROTOTYPES — nothing is
+      // constructed, so this branch comes before the construction below. It has
+      // to: `Transaction` has a private constructor and only exists inside a
+      // live transaction, and building a Firestore query would need three
+      // invented arguments per link.
+      if (row.kind === 'class') {
+        const missing = row.methods.filter((path) => !classMemberExists(mod, path));
+        expect(missing, `${row.adapter} calls members that do not exist`).toEqual([]);
+        return;
+      }
 
       // Constructed with placeholder configuration: this reads a surface, it
       // never makes a call, and no credential is involved on any door.
@@ -593,6 +718,7 @@ describe('the registry covers every Google adapter in the source tree', () => {
     expect(GOOGLE_PACKAGES).toContain('@google/genai');
     expect([...loadSites.keys()].sort()).toEqual([
       'src/adapters/google/aiPlatform.ts',
+      'src/adapters/hosting/firestoreSessions.ts',
       'src/adapters/identity/google.ts',
       'src/adapters/llm/googleGenAI.ts',
       'src/artifacts/gcsArtifacts.ts',

@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.33.0] - 2026-08-14
+
+**A fourth rung on the session ladder — Firestore — built around the one
+query decision a field trial of a different adapter proved matters.**
+
+### Added — `firestoreSessions()`
+
+The `SessionLifecycle` port on Google Cloud Firestore, beside
+`memorySessions()` and `sqliteSessions()`: a fleet-shared conversation store
+with no instance to size, no connection pool to tune, and a free tier.
+`@google-cloud/firestore` is an optional peer — a deployment that never
+constructs this store installs nothing, and one that tries to without the
+package is refused by name with the install line, alongside the fact that
+`memorySessions()`/`sqliteSessions()` need nothing installed:
+
+```
+npm install @google-cloud/firestore
+```
+
+`listByUser` is SERVER-SIDE, INDEXED and CURSORED —
+`where(owner) + orderBy(savedAt desc) + orderBy(__name__ desc) +
+startAfter(...) + limit(n+1)` — and that query shape is the point of the
+release, not a detail of it. An independent field trial of a different,
+hand-written Firestore adapter passed eight ownership and history checks
+against a real Firestore, and named its own defect in the report: it read
+every document for one owner, sorted them in the client, and applied an
+offset cursor. That is correct until somebody has had a lot of
+conversations, and then it reads all of them to show ten.
+
+Ownership is DERIVED from the stored envelope and established ONCE, inside
+a transaction. Firestore has no `COALESCE`, and `set({ merge: true })` is
+not a stand-in for one: mentioning `owner` at all lets the last writer win,
+and leaving it out means a conversation that gains an identity on turn two
+never records one. `ownerOf` returns `undefined` for both "no such session"
+and "a session nobody signed for" — a deliberate ambiguity, so the method
+can never be read as an oracle for which session ids are real.
+
+Document names are the full sha-256 of a NUL-separated domain and the raw
+session id, not the id itself, so a session id containing `/`, unicode, or
+an awkward length still addresses cleanly. Worth saying plainly because the
+shape invites the wrong reading: this is ADDRESSING, not encryption — the
+conversation is stored in the clear, and the raw id rides alongside the hash
+in its own field so a console reader can still see whose document it is.
+
+A missing composite index refuses by name with the exact `gcloud firestore
+indexes composite create` line, `--database` included even for `(default)`
+— because an operator on a named database who follows a command without
+that flag creates the index on the wrong one and gets the identical failure
+back with nothing to suggest why.
+
+**Status: contract-shaped and tested, NOT field-validated.** Nothing here
+has been run against a live Firestore by this repository. The 18 pinned SDK
+members were read off a real `@google-cloud/firestore` 9.0.0 install
+outside this repo and hand-verified there. The reality assertion — the
+check that every pinned member really exists on the real package — SKIPS
+here: installing the package hoists `@opentelemetry/api`, which would
+disarm the test proving `otelObservability()` refuses when that package is
+absent. So CI machine-checks the SHAPE pin instead: this adapter dispatches
+exactly the members its pin names and no others, every run, everywhere —
+not the reality pin.
+
+A rule worth stating because this file just relearned it, not just an
+adapter's footnote: a comment claiming what a test proves is itself a
+claim, and the only way to know is to break the code and watch. Mutation
+checks during this work twice caught a claim a careful read had not.
+
 ## [9.32.0] - 2026-08-14
 
 **Three questions we could not answer without an account came back

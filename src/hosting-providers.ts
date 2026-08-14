@@ -36,6 +36,15 @@
  *     arbitrary JSON Struct, so there is no blob encoding to get wrong — and it
  *     is written by APPENDING AN EVENT, because the service refuses a state
  *     patch (a field trial found that the expensive way; see the adapter).
+ *   • `firestoreSessions({ project?, database?, collection? })` — the same fleet
+ *     row without a reasoning engine: one Firestore document per session, in a
+ *     project you probably already have. `listByUser` is a server-side indexed
+ *     query with a real Firestore cursor (never a client-side sort over every
+ *     document, which is the shape that quietly becomes a full read per page),
+ *     and ownership is written ONCE inside a transaction because Firestore has
+ *     no `COALESCE` and a merged write would let the last writer take a session.
+ *     It needs one composite index; the adapter names it, and says so again in
+ *     the error you get without it.
  *
  * ── How much of this is verified ─────────────────────────────────────────────
  * `agentCoreRuntimeHost` is plain HTTP with no SDK on its path, and it passes
@@ -46,6 +55,17 @@
  * **contract-mapped and injection-tested**: the SDK calls are exercised through
  * the `_client` seam and no test pretends to have reached AWS. Real-cloud
  * verification lands with a field deployment.
+ *
+ * `firestoreSessions` is **contract-shaped and tested** on the same terms, with
+ * one difference worth stating: every SDK member it calls was read off a real
+ * install of `@google-cloud/firestore` 9.0.0 and hand-verified there, but the
+ * package is deliberately NOT installed in this repository (it would hoist
+ * `@opentelemetry/api` and disarm an absent-peer refusal test), so the assertion
+ * that re-checks those names against the real package SKIPS here and runs for
+ * anyone who installs it locally. What CI checks is dispatch. Nothing here has
+ * reached a live Firestore. Its DESIGN is informed by a field trial of a
+ * different adapter — see the module header for exactly what that trial proved
+ * and what it did not.
  *
  * @example  An agent in an AgentCore Runtime container
  *   import { standingAgent } from 'agentfootprint/hosting';
@@ -82,6 +102,35 @@ export type {
   AgentEngineSessions,
   AgentEngineSessionsOptions,
 } from './adapters/hosting/googleAgentEngine.js';
+
+// `documentIdFor`, `firestoreFailure` and the gRPC status readers stay OFF this
+// barrel on purpose. The first is reachable as a method on the store, where it
+// carries the store's own context; the others are this adapter's internals, and
+// a name as generic as `grpcStatusOf` on a package-wide door is a collision
+// waiting for the second gRPC adapter. Import them from the module path if a
+// test needs them.
+export {
+  firestoreSessions,
+  DEFAULT_SESSION_COLLECTION,
+  FIRESTORE_MAX_DOCUMENT_BYTES,
+  FIRESTORE_MAX_ENVELOPE_BYTES,
+  EnvelopeTooLargeError,
+  FirestoreIndexMissingError,
+} from './adapters/hosting/firestoreSessions.js';
+
+export type {
+  FirestoreSessions,
+  FirestoreSessionsOptions,
+  FirestoreSdkModule,
+  FirestoreConstructorLike,
+  FirestoreLike,
+  FirestoreCollectionLike,
+  FirestoreQueryLike,
+  FirestoreQuerySnapshotLike,
+  FirestoreDocumentReferenceLike,
+  FirestoreDocumentSnapshotLike,
+  FirestoreTransactionLike,
+} from './adapters/hosting/firestoreSessions.js';
 
 export type {
   AgentCoreRuntimeHostOptions,

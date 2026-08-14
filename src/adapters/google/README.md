@@ -4,16 +4,26 @@ One file, `aiPlatform.ts`, and three adapters that sit on it. Nothing else in
 this package builds a Vertex client, names a Vertex resource, waits on a Vertex
 operation, or describes a Vertex failure.
 
-| adapter | port | lives in |
-|---|---|---|
-| `agentEngineSessions` | `SessionLifecycle` | `adapters/hosting/googleAgentEngine.ts` |
-| `memoryBankStore` | `MemoryStore` | `adapters/memory/memoryBank.ts` |
-| `googleIdentity` | `CredentialProvider` | `adapters/identity/google.ts` (its own SDK — see below) |
+| adapter               | port                 | lives in                                                          |
+| --------------------- | -------------------- | ----------------------------------------------------------------- |
+| `agentEngineSessions` | `SessionLifecycle`   | `adapters/hosting/googleAgentEngine.ts`                           |
+| `memoryBankStore`     | `MemoryStore`        | `adapters/memory/memoryBank.ts`                                   |
+| `googleIdentity`      | `CredentialProvider` | `adapters/identity/google.ts` (its own SDK — see below)           |
+| `firestoreSessions`   | `SessionLifecycle`   | `adapters/hosting/firestoreSessions.ts` (its own SDK — see below) |
 
 The first two share `aiPlatform.ts`. `googleIdentity` does not: it loads
 `google-auth-library` directly, because vending a token is a different job from
 calling a data plane and coupling them would make the identity adapter drag in
 27 MB it has no use for.
+
+`firestoreSessions` does not either, and for a stronger reason than size: it is
+not a Vertex adapter at all. Firestore is a different product on a different
+protocol, and the two facts `aiPlatform.ts` is built on do not hold there — a
+Firestore error's numeric `code` is a **gRPC status**, not an HTTP one, so
+`httpStatusOf` would read a `NOT_FOUND` as "HTTP 5" and a missing index as
+"HTTP 9". Sharing the sanitizer would have been a smaller diff and a wrong one.
+It lives on this column's table because it is a Google adapter and this is where
+the Google column's status is recorded.
 
 ## Why this directory exists
 
@@ -62,7 +72,7 @@ install the package, enumerate the prototype chain, read `build/v1.d.ts`.
 and reports the operation plus the HTTP status. Not because a Vertex error
 always contains a secret, but because a REST client echoes the request into its
 failure text, our requests carry conversation state and an access token, and an
-error thrown from an adapter reaches the model as a tool result *and* rides the
+error thrown from an adapter reaches the model as a tool result _and_ rides the
 event stream to every sink. The original is never attached as `cause` — that
 travels into every serializer that walks own properties.
 
@@ -72,28 +82,83 @@ travels into every serializer that walks own properties.
 precise diagnosis ("did not finish within 30000ms") with a generic one, which is
 its own kind of silently wrong.
 
-## Adding a fourth adapter
+## Adding another Google adapter
 
 1. Scratch-pin the SDK surface first — read the installed `.d.ts`, do not trust
-   a doc page.
+   a doc page. Steps 2 and 4 apply only if you are on Vertex.
 2. Add the calls to `AiPlatformClientLike` here, not in your adapter.
-3. Add a row to `GOOGLE_SURFACE_PINS` (`kind: 'rest'`, dotted method paths).
-   The completeness assertion fails the build for any `src/**` file that loads a
-   Google package without one.
+3. Add a row to `GOOGLE_SURFACE_PINS`. The completeness assertion fails the build
+   for any `src/**` file that loads a Google package without one. Pick the
+   `kind` that matches how the surface is really reached — `'rest'` for a
+   discovery resource tree, `'chain'` for a factory chain, `'class'` for an SDK
+   that exports its classes and can be read off prototypes.
 4. Every write that returns an Operation goes through `awaitOperation`, outside
    the `try` that sanitizes transport failures.
+5. If the SDK is not REST — Firestore is gRPC — write its own failure sanitizer
+   rather than reusing `googleSdkFailure`. The numeric `code` means something
+   different, and a sanitizer that misreads it reports the wrong failure with
+   full confidence.
+
+## The fourth adapter, and the one line of its status that matters
+
+`firestoreSessions` is **contract-shaped and tested — NOT field-validated.**
+Nothing in this repository has run it against a live Firestore. What HAS been
+done is the surface pin: the 18 members it calls were hand-verified against a
+real install of `@google-cloud/firestore` 9.0.0 in a scratch project outside this
+repository — seventeen read off `types/firestore.d.ts` before a line was written,
+and `DocumentSnapshot.id` verified afterwards, when a review found the row had
+pinned the sibling `DocumentReference.id` (real, but never read here) in place of
+the member the listing cursor actually reads.
+
+Say the rest plainly, because this row is the one exception to the column's own
+doctrine. `@google-cloud/firestore` is **not** a devDependency here: it depends
+on `@opentelemetry/api`, and installing it hoists that package to the root and
+disarms `test/observability-providers/otel.test.ts`, which proves
+`otelObservability()` refuses by name when `@opentelemetry/api` is absent. So
+the `firestoreSessions` row carries a `notInstalled` exemption, and **the
+reality assertion SKIPS in this repository.** It runs in full for anyone who
+installs `@google-cloud/firestore` locally, on the machine where a mismatch can
+still be fixed. What is machine-checked in CI is the **shape** pin — the adapter
+dispatches exactly the members the row names and no others — not the reality
+pin. (The row is `kind: 'class'`: Firestore exports the whole chain, so where
+the check does run it reads the surface off prototypes, with nothing constructed
+and no credential involved.)
+
+Its **design was informed by a field trial of a different Firestore adapter**,
+and it is worth being precise about what that buys, because "informed by a field
+trial" is the kind of phrase that quietly becomes "validated". That trial ran
+against a real Firestore and passed eight ownership and history checks — so the
+ownership and history SEMANTICS are known to survive a real service. It also
+named its own defect: it read every document for one owner, sorted them in the
+client, and applied an offset cursor. That works until somebody has a lot of
+conversations, and then a page costs a full read of all of them.
+
+So this adapter does the opposite — a server-side `where` + `orderBy`, paged with
+a real Firestore cursor — and the trial proves **nothing** about that query, its
+cursor, its transaction or its composite index, because the adapter that was
+tried had none of them. Three things follow, all of them still unproven here:
+
+- the composite index (`owner ASC, savedAt DESC, __name__ DESC`) has never been
+  created against a real project, so the `FAILED_PRECONDITION` refusal is built
+  on documented behaviour rather than on a measured one;
+- the write-once ownership transaction has never been contended by two real
+  containers — it is contended by a double that models the SDK's documented
+  retry;
+- the 1 MiB document ceiling is refused locally, before the wire, so the
+  service's own refusal has never been seen.
 
 ## Status
 
-All three adapters were **field-validated on 2026-08-14** — an independent trial
+All three Vertex adapters were **field-validated on 2026-08-14** — an independent trial
 ran this code against live Agent Runtime resources, not a double. Two of them
 came back with a defect, and both are fixed in 9.30.0:
 
-| Adapter | What the live run proved | What it found, and what changed |
-|---|---|---|
-| `agentEngineSessions` | create · hydrate through a fresh instance · owners preserved · paged `listByUser` · `ownerOf` · unknown envelope format refused before storage · idempotent `forget` | **The second write to a session was impossible.** 9.29.0 patched `sessionState`; the service refuses that and says so (`HTTP 400 — you can only update it by appending an event`). 9.30.0 appends an event, the repair the same trial verified on the wire |
-| `memoryBankStore` | honest `supportsVectorSearch` / `ranksBy` · cross-conversation recall under a widened scope · two identities, one entry id, no collision · JSON values · pagination · tier filter · similarity ordered correctly · scoped delete · `forget` · the five refusals | **Entries were not preserved whole**: `source` and caller `metadata` went in and did not come back. 9.30.0 carries them (plus `decayPolicy`), refuses a caller key that collides with a generated one, and refuses an oversized carried field rather than truncating it |
-| `googleIdentity` | a real bearer from ADC authorized a Vertex call (HTTP 200) · `bearer` kind · ~3,599 s expiry · re-vend without reconstruction · `mode: 'user'` and a disallowed service both failing **closed** · `JSON.stringify` leaking nothing but `{"kind":"bearer"}` | Nothing to fix. **Still unproven:** an expiry-triggered refresh — the run did not span an hour |
+| Adapter               | What the live run proved                                                                                                                                                                                                                                        | What it found, and what changed                                                                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentEngineSessions` | create · hydrate through a fresh instance · owners preserved · paged `listByUser` · `ownerOf` · unknown envelope format refused before storage · idempotent `forget`                                                                                            | **The second write to a session was impossible.** 9.29.0 patched `sessionState`; the service refuses that and says so (`HTTP 400 — you can only update it by appending an event`). 9.30.0 appends an event, the repair the same trial verified on the wire              |
+| `memoryBankStore`     | honest `supportsVectorSearch` / `ranksBy` · cross-conversation recall under a widened scope · two identities, one entry id, no collision · JSON values · pagination · tier filter · similarity ordered correctly · scoped delete · `forget` · the five refusals | **Entries were not preserved whole**: `source` and caller `metadata` went in and did not come back. 9.30.0 carries them (plus `decayPolicy`), refuses a caller key that collides with a generated one, and refuses an oversized carried field rather than truncating it |
+| `googleIdentity`      | a real bearer from ADC authorized a Vertex call (HTTP 200) · `bearer` kind · ~3,599 s expiry · re-vend without reconstruction · `mode: 'user'` and a disallowed service both failing **closed** · `JSON.stringify` leaking nothing but `{"kind":"bearer"}`      | Nothing to fix. **Still unproven:** an expiry-triggered refresh — the run did not span an hour                                                                                                                                                                          |
+| `firestoreSessions`   | **Nothing. This adapter has not been run live by us**                                                                                                                                                                                                           | Contract-shaped and tested only — see the section above for what a trial of a DIFFERENT adapter did and did not establish                                                                                                                                               |
 
 Neither repair has itself been re-run in a live project. Both are built on
 service behaviour that trial measured, and both are held by tests here: the
