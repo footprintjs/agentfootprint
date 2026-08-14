@@ -29,21 +29,56 @@
  * body (what it reads after deciding). That is the same file convention Claude
  * Code made familiar, so a skill folder is portable between the two.
  *
- * ── What a SKILL.md can and cannot carry ─────────────────────────────────────
- * `name`, `description`, the body. That is the whole per-file surface, and the
- * limits follow from it rather than from an oversight:
+ * ── What a SKILL.md can carry (9.36.0: the whole runbook) ────────────────────
+ * A runbook you already have on disk is three things — what to do (prose),
+ * what to do it WITH (tools), and in what order (steps). This door used to
+ * carry the first and drop the other two, so the one thing the library exists
+ * to say ("extract the workflow you already have") arrived two-thirds empty.
+ * All three now cross:
  *
- *   - **no `tools`** — a tool is code with an `execute`, and a markdown file has
- *     none. Every loaded skill is body-only. To give one tools, define that skill
- *     with `defineSkill` and mix the lists (`[...loaded, codeAuthored]`), or put
- *     the tools on the route target you declare in code.
- *   - **no `autoActivate`** — so a loaded skill never scopes the agent's tool list
- *     on its own (it has no tools to scope).
- *   - **no per-file `surfaceMode`, `cache` or `refreshPolicy`** — `surfaceMode` is
- *     settable for the WHOLE directory via `opts`, all of them or none; the others
- *     take `defineSkill`'s defaults.
- *   - unknown frontmatter keys are IGNORED, not rejected, so a file carrying
- *     another tool's metadata still loads here.
+ *   ---
+ *   name: billing
+ *   description: Use for refunds, charges and billing questions.
+ *   tools: lookup_order, issue_refund
+ *   steps:
+ *     - lookup_order: look up the order before touching money
+ *     - issue_refund: refund only what the lookup found
+ *   onSkip: hold
+ *   ---
+ *   When handling billing: confirm identity first, then …
+ *
+ *   const skills = await skillsFromDir('./skills', {
+ *     tools: [lookupOrder, issueRefund],   // the real Tools, from YOUR code
+ *   });
+ *
+ * The remaining limits, and why each one is a decision rather than an
+ * oversight:
+ *
+ *   - **the file names a tool; it never defines one.** A tool is code with an
+ *     `execute`, and a markdown file has none. `tools:` is a list of NAMES,
+ *     resolved against the `tools` registry the CALLER passes — so the file
+ *     can only ever pick from capabilities you already handed in, and reading a
+ *     directory can never introduce one. See "why this is not a code-execution
+ *     vector" below.
+ *   - **a name the registry does not carry is refused BY NAME at load** —
+ *     never a skill that quietly loads without the tool it asked for, because
+ *     that skill runs, sounds confident, and cannot do the job.
+ *   - **no per-step `produces` / `consumes`** — the artifact vocabularies
+ *     (9.25.0) are a build-time contract between skills, not runbook prose;
+ *     declare them with `defineSkill` where the rest of the agent is declared.
+ *   - **no `autoActivate`** — a directory does not decide the agent's tool
+ *     posture. Say it once on the agent with `.toolsFromActiveSkill()`
+ *     (9.36.0), which scopes every skill's tools to that skill's activation.
+ *     Without it, a loaded skill's tools are on the wire from iteration 1, the
+ *     same as any hand-written `defineSkill({ tools })`.
+ *   - **no per-file `surfaceMode`, `cache` or `refreshPolicy`** — `surfaceMode`
+ *     is settable for the WHOLE directory via `opts`, all of them or none; the
+ *     others take `defineSkill`'s defaults.
+ *   - unknown frontmatter keys are still IGNORED, not rejected, so a file
+ *     carrying another tool's metadata still loads here. `name`,
+ *     `description`, `tools`, `steps` and `onSkip` are the KNOWN keys — a file
+ *     that used one of those five for something else is the one case this
+ *     release can change, and it changes it loudly.
  *
  * A worked example feeding this into a graph:
  * `examples/features/47-skills-from-dir-graph.ts`.
@@ -57,6 +92,17 @@
  * only make about a path on your own disk at build time. Each file is read
  * ONCE, here; a later edit does not reach a run already in flight.
  *
+ * ── Why carrying tools is not a code-execution vector ───────────────────────
+ * Nothing in a SKILL.md is evaluated, imported, required or resolved as a
+ * path. `tools:` is a list of strings, and the only thing a string can do here
+ * is MATCH — against `tool.schema.name` in a registry the caller constructed in
+ * their own source, from their own imports. A hostile file can therefore ask
+ * for a tool you already gave the agent (and it would have to guess the name);
+ * it can never name a module, widen the agent's capabilities, or cause one byte
+ * of new code to run. The set of things this directory can do is a SUBSET of
+ * what the calling file already decided to do, which is the same property the
+ * local-path rule above buys for bodies.
+ *
  * Node-only. `node:fs/promises` and `node:path` are imported lazily inside the
  * call, the same gating `lib/tool-lint/cli.ts` uses: this module is reachable
  * from the `agentfootprint/context` barrel, and a TOP-LEVEL node:fs
@@ -64,6 +110,8 @@
  */
 
 import type { Injection } from './types.js';
+import type { Tool } from '../../core/tools.js';
+import type { OnSkipPolicy, SkillStep } from './skillSteps.js';
 import { defineSkill, type SurfaceMode } from './factories/defineSkill.js';
 
 /** The file name every skill folder is expected to use. */
@@ -79,12 +127,31 @@ const SKILL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 /** Anything of the form `scheme://…` — http, https, s3, git+ssh, file, … */
 const URL_LIKE_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
 
+/** How many registry names a refusal lists before it stops. Long enough to
+ *  spot the typo, short enough that a 200-tool agent's error is still readable. */
+const NAMES_IN_REFUSAL = 20;
+
 export interface SkillsFromDirOptions {
   /**
    * Where a loaded skill's body lands once activated. Defaults to
    * `defineSkill`'s own default, `'auto'`. See {@link SurfaceMode}.
    */
   readonly surfaceMode?: SurfaceMode;
+  /**
+   * The tools a file may NAME (9.36.0) — the resolution registry for every
+   * `tools:` declaration in the directory, matched by `tool.schema.name`.
+   *
+   * This is the half a markdown file cannot supply. The file picks; you decide
+   * what there is to pick FROM, in your own source, from your own imports. A
+   * declared name that is not in here is refused at load, naming the file, the
+   * name, and what this registry does carry.
+   *
+   * Pass every tool the directory might use; a tool nothing names is simply
+   * unused (no skill gets it, and no error). Omit the option entirely on a
+   * prose-only directory — a file that declares `tools:` with no registry
+   * passed is refused rather than loaded without them.
+   */
+  readonly tools?: readonly Tool[];
 }
 
 /**
@@ -96,6 +163,13 @@ interface ParsedSkillFile {
   readonly name: string;
   readonly description: string;
   readonly body: string;
+  /** Tool NAMES the file declared, in declaration order. Absent when the file
+   *  declared no `tools:` key at all — which is not the same as an empty list
+   *  (that is refused). */
+  readonly toolNames?: readonly string[];
+  /** Steps as data, already shaped like `defineSkill`'s `steps`. */
+  readonly steps?: readonly SkillStep[];
+  readonly onSkip?: OnSkipPolicy;
   /** Absolute-ish path as given to the reader — what error messages quote. */
   readonly file: string;
 }
@@ -117,8 +191,9 @@ interface ParsedSkillFile {
  *
  * @throws when `dir` is not a local path, does not exist, is not a directory,
  *   or contains no `SKILL.md` at all; when a file's frontmatter is malformed
- *   (the message names the file); or when two files claim the same skill name
- *   (the message names both).
+ *   (the message names the file); when two files claim the same skill name
+ *   (the message names both); or when a file names a tool the `tools` registry
+ *   does not carry, or sequences a tool the file itself did not declare.
  */
 export async function skillsFromDir(
   dir: string,
@@ -191,17 +266,27 @@ export async function skillsFromDir(
     byName.set(skill.name, skill);
   }
 
+  // The registry, indexed once for the whole directory. Built even when no file
+  // declares tools — an empty Map costs nothing and keeps the resolve path one
+  // shape. `undefined` (option omitted) is DISTINCT from an empty registry: the
+  // refusals say different things, because the fixes are different.
+  const registry = indexToolRegistry(opts.tools);
+
   return parsed
     .slice()
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    .map((skill) =>
-      defineSkill({
+    .map((skill) => {
+      const tools = resolveDeclaredTools(skill, opts.tools, registry);
+      return defineSkill({
         id: skill.name,
         description: skill.description,
         body: skill.body,
+        ...(tools !== undefined && { tools }),
+        ...(skill.steps !== undefined && { steps: skill.steps }),
+        ...(skill.onSkip !== undefined && { onSkip: skill.onSkip }),
         ...(opts.surfaceMode !== undefined && { surfaceMode: opts.surfaceMode }),
-      }),
-    );
+      });
+    });
 }
 
 // ─── Authorship guard ──────────────────────────────────────────────
@@ -255,7 +340,119 @@ function assertLocalDirectoryArgument(dir: unknown): asserts dir is string {
   }
 }
 
+// ─── Tool resolution (names on disk → Tools from your code) ────────
+
+/**
+ * Index the caller's registry by wire name.
+ *
+ * `undefined` in, empty Map out — the CALLER's `undefined` is remembered
+ * separately by `resolveDeclaredTools`, because "you passed no registry" and
+ * "your registry does not carry that one" need different sentences.
+ *
+ * Two registry entries under one name is refused here rather than resolved by
+ * last-wins: which of the two a skill got would depend on array order, and a
+ * skill silently running the wrong `execute` is the failure this whole door is
+ * supposed to make impossible.
+ */
+function indexToolRegistry(tools: readonly Tool[] | undefined): ReadonlyMap<string, Tool> {
+  const index = new Map<string, Tool>();
+  for (const tool of tools ?? []) {
+    const name = tool?.schema?.name;
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new Error(
+        `skillsFromDir: the \`tools\` registry contains an entry with no \`schema.name\`. ` +
+          `Every entry must be a Tool (defineTool(...) produces one) — a SKILL.md resolves ` +
+          `tools BY NAME, so an unnamed one can never be picked.`,
+      );
+    }
+    const prior = index.get(name);
+    if (prior !== undefined && prior !== tool) {
+      throw new Error(
+        `skillsFromDir: the \`tools\` registry carries two different tools named '${name}'. ` +
+          `A SKILL.md names a tool by that string, so which implementation a skill got would ` +
+          `depend on array order. Rename one, or pass only the one you mean.`,
+      );
+    }
+    index.set(name, tool);
+  }
+  return index;
+}
+
+/** The registry's names, sorted and capped — the material every refusal ends with. */
+function availableNames(registry: ReadonlyMap<string, Tool>): string {
+  if (registry.size === 0) return '(the registry you passed is empty)';
+  const names = [...registry.keys()].sort();
+  const shown = names.slice(0, NAMES_IN_REFUSAL).join(', ');
+  return names.length > NAMES_IN_REFUSAL
+    ? `${shown}, …and ${names.length - NAMES_IN_REFUSAL} more`
+    : shown;
+}
+
+/**
+ * Turn one file's declared tool NAMES into real Tools, or refuse by name.
+ *
+ * Undefined out means the file declared no `tools:` key — a prose-only skill,
+ * byte-identical to what this loader has always produced. It never means "the
+ * names did not resolve": that throws.
+ */
+function resolveDeclaredTools(
+  skill: ParsedSkillFile,
+  passed: readonly Tool[] | undefined,
+  registry: ReadonlyMap<string, Tool>,
+): readonly Tool[] | undefined {
+  if (skill.toolNames === undefined) return undefined;
+  // The commonest mistake, and the one with the most misleading failure: the
+  // file is right, the call site forgot the half a file cannot carry. Refused
+  // with the whole list it asked for, so the fix is a copy-paste.
+  if (passed === undefined) {
+    throw new Error(
+      `skillsFromDir: '${skill.file}' declares tools '${skill.toolNames.join(', ')}', but ` +
+        `skillsFromDir was called without a tool registry. A markdown file can NAME a tool; ` +
+        `only your code can supply one. Pass them: ` +
+        `skillsFromDir(dir, { tools: [${skill.toolNames.join(', ')}] }). ` +
+        `(If \`tools\` in this file belongs to another program, rename that key — it is a ` +
+        `key this loader now reads.)`,
+    );
+  }
+  const resolved: Tool[] = [];
+  for (const name of skill.toolNames) {
+    const tool = registry.get(name);
+    if (tool === undefined) {
+      throw new Error(
+        `skillsFromDir: '${skill.file}' names the tool '${name}', which the \`tools\` registry ` +
+          `passed to skillsFromDir does not carry. A skill that loads without the tool it ` +
+          `asked for still runs and still sounds sure of itself, so this is refused instead. ` +
+          `Add it to the registry, or fix the name — available: ${availableNames(registry)}.`,
+      );
+    }
+    resolved.push(tool);
+  }
+  return resolved;
+}
+
 // ─── Frontmatter ───────────────────────────────────────────────────
+
+/**
+ * One frontmatter value: a scalar (`key: value`) or a block list (`key:` with
+ * nothing after it, followed by indented `- …` items).
+ *
+ * The list arm exists because `steps` is PAIRS — `{ tool, note }` — and a
+ * single line cannot carry an ordered list of pairs without inventing a
+ * separator soup that nobody can read at 5pm. A `- <tool>: <why>` item reuses
+ * the `key: value` rule the frontmatter already has, one level in.
+ */
+type FieldValue =
+  | { readonly kind: 'scalar'; readonly text: string }
+  | { readonly kind: 'list'; readonly items: readonly ListItem[] };
+
+interface ListItem {
+  /** Text before the first `:`, or the whole item when it has none. */
+  readonly key: string;
+  /** Text after the first `:`, unquoted. Undefined when the item has no colon. */
+  readonly value?: string;
+  /** 1-based line number in the file — every refusal quotes it. */
+  readonly line: number;
+}
 
 /**
  * Parse one `SKILL.md`. Every refusal names the file — a loader that says
@@ -263,9 +460,10 @@ function assertLocalDirectoryArgument(dir: unknown): asserts dir is string {
  *
  * The grammar is deliberately small: an opening `---` line, `key: value` lines
  * (`#` comments and blank lines skipped, single/double quotes stripped), a
- * closing `---` line, then the body. Keys other than `name` and `description`
- * are IGNORED rather than rejected, so a file carrying extra frontmatter for
- * another tool still loads here.
+ * closing `---` line, then the body. A key with NOTHING after the colon opens a
+ * block list, whose items are the following `- …` lines. Keys other than the
+ * five known ones are IGNORED rather than rejected, so a file carrying extra
+ * frontmatter for another tool still loads here.
  */
 function parseSkillFile(raw: string, file: string): ParsedSkillFile {
   // Strip a UTF-8 BOM — an editor artifact, not the author's intent.
@@ -287,29 +485,10 @@ function parseSkillFile(raw: string, file: string): ParsedSkillFile {
     );
   }
 
-  const fields = new Map<string, string>();
-  for (let i = 1; i < closingIndex; i++) {
-    const line = lines[i] ?? '';
-    if (line.trim().length === 0 || line.trimStart().startsWith('#')) continue;
-    const separator = line.indexOf(':');
-    if (separator === -1) {
-      throw new Error(
-        `skillsFromDir: '${file}' frontmatter line ${i + 1} is not 'key: value' — got ` +
-          `${JSON.stringify(line)}.`,
-      );
-    }
-    const key = line.slice(0, separator).trim();
-    if (key.length === 0) {
-      throw new Error(
-        `skillsFromDir: '${file}' frontmatter line ${i + 1} has an empty key — got ` +
-          `${JSON.stringify(line)}.`,
-      );
-    }
-    fields.set(key, unquote(line.slice(separator + 1).trim()));
-  }
+  const fields = parseFrontmatterFields(lines, closingIndex, file);
 
-  const name = fields.get('name') ?? '';
-  const description = fields.get('description') ?? '';
+  const name = readScalar(fields, 'name', file);
+  const description = readScalar(fields, 'description', file);
   const body = lines
     .slice(closingIndex + 1)
     .join('\n')
@@ -340,7 +519,236 @@ function parseSkillFile(raw: string, file: string): ParsedSkillFile {
     );
   }
 
-  return { name, description, body, file };
+  const toolNames = readToolNames(fields, file);
+  const steps = readSteps(fields, file, toolNames);
+  const onSkip = readOnSkip(fields, file, steps);
+
+  return {
+    name,
+    description,
+    body,
+    ...(toolNames !== undefined && { toolNames }),
+    ...(steps !== undefined && { steps }),
+    ...(onSkip !== undefined && { onSkip }),
+    file,
+  };
+}
+
+/**
+ * The frontmatter lines → `key → value` map.
+ *
+ * A `- …` line is an ITEM only while a list is open (the line above it was a
+ * key with an empty value). Anywhere else it falls through to the `key: value`
+ * rule exactly as it always did — so a stray dash in somebody's unknown key
+ * keeps loading, and only a deliberate block list is read as one.
+ */
+function parseFrontmatterFields(
+  lines: readonly string[],
+  closingIndex: number,
+  file: string,
+): ReadonlyMap<string, FieldValue> {
+  const fields = new Map<string, FieldValue>();
+  let openList: ListItem[] | undefined;
+  for (let i = 1; i < closingIndex; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue;
+
+    if (openList !== undefined && (trimmed === '-' || trimmed.startsWith('- '))) {
+      const item = trimmed === '-' ? '' : trimmed.slice(2).trim();
+      const separator = item.indexOf(':');
+      openList.push(
+        separator === -1
+          ? { key: item, line: i + 1 }
+          : {
+              key: item.slice(0, separator).trim(),
+              value: unquote(item.slice(separator + 1).trim()),
+              line: i + 1,
+            },
+      );
+      continue;
+    }
+
+    const separator = line.indexOf(':');
+    if (separator === -1) {
+      throw new Error(
+        `skillsFromDir: '${file}' frontmatter line ${i + 1} is not 'key: value' — got ` +
+          `${JSON.stringify(line)}.`,
+      );
+    }
+    const key = line.slice(0, separator).trim();
+    if (key.length === 0) {
+      throw new Error(
+        `skillsFromDir: '${file}' frontmatter line ${i + 1} has an empty key — got ` +
+          `${JSON.stringify(line)}.`,
+      );
+    }
+    const value = unquote(line.slice(separator + 1).trim());
+    if (value.length === 0) {
+      // An empty value OPENS a list. With no items after it the field stays an
+      // empty list, which every reader below treats exactly as the empty string
+      // it used to be — so `name:` with nothing after it still says "missing
+      // 'name'", not something new about lists.
+      const items: ListItem[] = [];
+      openList = items;
+      fields.set(key, { kind: 'list', items });
+    } else {
+      openList = undefined;
+      fields.set(key, { kind: 'scalar', text: value });
+    }
+  }
+  return fields;
+}
+
+/** A single-valued key, as it always read. An empty block list reads as '' — a
+ *  key with nothing under it never carried a value in the first place. */
+function readScalar(fields: ReadonlyMap<string, FieldValue>, key: string, file: string): string {
+  const field = fields.get(key);
+  if (field === undefined) return '';
+  if (field.kind === 'scalar') return field.text;
+  if (field.items.length === 0) return '';
+  throw new Error(
+    `skillsFromDir: '${file}' frontmatter '${key}' is a list, and '${key}' takes one value. ` +
+      `Write it as '${key}: <value>' on one line.`,
+  );
+}
+
+/**
+ * `tools:` → the declared names, or undefined when the key is absent.
+ *
+ * Two spellings, because both read naturally at the size they are for:
+ * `tools: a, b` for the two-tool skill, and a block list once there are six.
+ */
+function readToolNames(
+  fields: ReadonlyMap<string, FieldValue>,
+  file: string,
+): readonly string[] | undefined {
+  const field = fields.get('tools');
+  if (field === undefined) return undefined;
+
+  const names =
+    field.kind === 'scalar'
+      ? field.text
+          .split(',')
+          .map((n) => unquote(n.trim()))
+          .filter((n) => n.length > 0)
+      : field.items.map((item) => {
+          if (item.value !== undefined) {
+            throw new Error(
+              `skillsFromDir: '${file}' line ${item.line}: a 'tools' item is a NAME, not a ` +
+                `pair — write '- ${item.key}'. (Did you mean to put this under 'steps', where ` +
+                `each item is '- <tool>: <why>'?)`,
+            );
+          }
+          return item.key;
+        });
+
+  if (names.length === 0) {
+    throw new Error(
+      `skillsFromDir: '${file}' declares 'tools' with no names. Say what you mean and omit ` +
+        `the key — a skill with no tools is exactly what this loader has always produced. ` +
+        `Otherwise: 'tools: lookup_order, issue_refund', or a '- <name>' block list.`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (seen.has(name)) {
+      throw new Error(
+        `skillsFromDir: '${file}' lists the tool '${name}' twice in 'tools'. Each tool ` +
+          `belongs to a skill once (a skill's tools must be unique within itself); repeat it ` +
+          `in 'steps' instead if the procedure runs it twice.`,
+      );
+    }
+    seen.add(name);
+  }
+  return names;
+}
+
+/**
+ * `steps:` → the procedure, as data.
+ *
+ * Validated against the file's OWN `tools` here, ahead of `defineSkill`'s
+ * identical check, for one reason: this message can name the FILE and the LINE.
+ * `defineSkill` sees a skill id and cannot.
+ */
+function readSteps(
+  fields: ReadonlyMap<string, FieldValue>,
+  file: string,
+  toolNames: readonly string[] | undefined,
+): readonly SkillStep[] | undefined {
+  const field = fields.get('steps');
+  if (field === undefined) return undefined;
+  if (field.kind === 'scalar') {
+    throw new Error(
+      `skillsFromDir: '${file}' writes 'steps' on one line, and a procedure is an ORDERED ` +
+        `list of pairs. Write it as a block:\nsteps:\n  - lookup_order: look up the order ` +
+        `first\n  - issue_refund: refund only what the lookup found`,
+    );
+  }
+  if (field.items.length === 0) {
+    throw new Error(
+      `skillsFromDir: '${file}' declares 'steps' with no items. Say what you mean and omit ` +
+        `the key — a skill without steps is byte-identical to one that never heard of them.`,
+    );
+  }
+  if (toolNames === undefined) {
+    throw new Error(
+      `skillsFromDir: '${file}' declares 'steps' but no 'tools'. Every step runs one of the ` +
+        `skill's own tools, so a sequence with nothing to sequence can never engage. Add ` +
+        `'tools: …', or drop 'steps'.`,
+    );
+  }
+  const declared = new Set(toolNames);
+  return field.items.map((item) => {
+    if (item.value === undefined || item.value.length === 0) {
+      throw new Error(
+        `skillsFromDir: '${file}' line ${item.line}: every step is '- <tool>: <why>' and ` +
+          `this one has no why. The note is the sentence the model reads about why the step ` +
+          `exists — a step without one is a force-march instruction, and the note is the ` +
+          `whole point.`,
+      );
+    }
+    if (item.key.length === 0) {
+      throw new Error(
+        `skillsFromDir: '${file}' line ${item.line}: this step names no tool. Every step is ` +
+          `'- <tool>: <why>'.`,
+      );
+    }
+    if (!declared.has(item.key)) {
+      throw new Error(
+        `skillsFromDir: '${file}' line ${item.line}: step '${item.key}' is not in this ` +
+          `file's 'tools' (${toolNames.join(', ')}). Steps may only sequence the skill's own ` +
+          `tools — add it to 'tools', or fix the name. Everything else the agent has stays ` +
+          `available as an escape hatch, unsequenced.`,
+      );
+    }
+    return { tool: item.key, note: item.value };
+  });
+}
+
+/** `onSkip:` → the skip policy. Refused here rather than at `defineSkill` so
+ *  the message can name the file the author has to open. */
+function readOnSkip(
+  fields: ReadonlyMap<string, FieldValue>,
+  file: string,
+  steps: readonly SkillStep[] | undefined,
+): OnSkipPolicy | undefined {
+  if (fields.get('onSkip') === undefined) return undefined;
+  const raw = readScalar(fields, 'onSkip', file);
+  if (steps === undefined) {
+    throw new Error(
+      `skillsFromDir: '${file}' declares 'onSkip' with no 'steps'. It says what a SKIPPED ` +
+        `step does, and this file declares no steps. Add 'steps:', or drop 'onSkip'.`,
+    );
+  }
+  if (raw !== 'advance' && raw !== 'hold') {
+    throw new Error(
+      `skillsFromDir: '${file}' declares onSkip '${raw}', which is not a policy this ` +
+        `library has. The two are 'advance' (record the skip and move on — the default) and ` +
+        `'hold' (record the skip and keep the step current).`,
+    );
+  }
+  return raw;
 }
 
 /** Strip one layer of matching single or double quotes from a YAML-ish scalar. */

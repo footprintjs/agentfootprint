@@ -158,6 +158,13 @@ export interface DefineSkillOptions {
    *   agent's registry at BUILD time and the model can see and call them
    *   from iteration 1, activated or not.
    *
+   * Saying it once for the whole agent instead of once per skill:
+   * `.toolsFromActiveSkill()` on the builder (9.36.0) stamps this field on
+   * every tool-carrying skill, and `skillGraph({ scopeTools: true })` stamps it
+   * on the skills a graph wires. Both are DEFAULTS — a skill that declared its
+   * own keeps it — and since `'currentSkill'` is the only legal value, none of
+   * the three can contradict another.
+   *
    * Wired at runtime since v2.5: `buildToolRegistry` holds these tools out of the
    * static registry and `buildToolsSlot` readmits them per-iteration from the
    * active injections. Dispatch is unaffected either way — an autoActivate tool

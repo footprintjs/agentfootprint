@@ -116,6 +116,13 @@ export function buildToolRegistry(
       // autoActivate skills: their tools come ONLY through dynamicSchemas
       // (buildToolsSlot.ts pulls them from activeInjections.inject.tools
       // when the skill is active). Don't pre-load in the static registry.
+      //
+      // Reaching this line means NOBODY asked for the tool to be scoped —
+      // not the skill (`defineSkill({ autoActivate })`), not the graph
+      // (`skillGraph({ scopeTools: true })`), not the agent
+      // (`.toolsFromActiveSkill()`, 9.36.0, which stamps the same field on
+      // every tool-carrying skill at build). All three write `autoActivate`
+      // and this reads it, so there is one gate here, not three.
       if (isAutoActivate) continue;
       skillToolEntries.push({ name, tool });
     }

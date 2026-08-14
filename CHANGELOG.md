@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.36.0] - 2026-08-14
+
+**The adoption release — two changes aimed at the same moment: the first
+skill graph someone builds who has never built one.**
+
+### Added — `.toolsFromActiveSkill()`
+
+An agent-level lever that scopes every skill's tools to the active skill,
+so a tool reaches the wire only while its skill is current.
+
+Why a boolean and not a third posture: the wire has no middle. A tool's
+schema is either in the request or it is not, and "record that we sent
+it" is just sending it. `strictness` and the evidence `posture` earn
+three values because routing and evidence each have a real record-it
+middle; this does not. A three-value dial here would ship one behaviour
+under two names.
+
+What it is not: authority to run. It governs what the model is SHOWN, not
+whether an inactive skill's tool may dispatch — that is a different axis,
+and the library already ships the composable answer (`gatedTools`,
+`PermissionChecker`, `skillScopedTools`). The boundary is documented on
+the method and pinned by a test, so nobody reads this as an execution
+gate.
+
+Why agent-level and not graph-level: `skillGraph({ scopeTools: true })`
+already stamps every WIRED skill and already names 10.0.0 for its default
+flip. The gap is everything outside that — listed-but-unwired graph
+skills, skills registered beside the graph, and every skill on a
+graph-less agent, including a whole `skillsFromDir` directory.
+
+How it interacts with the per-skill flag: they cannot disagree.
+`autoActivate` has exactly one legal value, so a skill can ask to be
+scoped and can never ask to be exempt. The stamp is a default, never an
+override, and the result is monotone — turning it on only ever removes
+names from the static list. Pinned two ways: object identity, and a
+value-level pin using a reserved future mode, so the law still holds the
+day further modes ship.
+
+Default unchanged, pinned by a wire-level test asserting the exact tool
+list on iteration 1 without the call. The flip is on the same 10.0.0
+ledger as `scopeTools`.
+
+### Changed — `skillsFromDir` carries the whole runbook
+
+A directory-defined skill can now declare its tools and its steps, not
+only its body. It reuses the existing `key: value` grammar one level in
+(`tools:` as an inline list or a `- name` block; `steps:` as `- tool: why`
+items; `onSkip:`), and steps reuse the shipped `skillSteps` grammar
+verbatim rather than a parallel one.
+
+Why this is not a code-execution vector — said plainly: nothing in the
+file is evaluated, imported, required, or resolved as a path. `tools:` is
+a list of strings, and the only thing a string can do is MATCH a tool
+name in a registry the caller built in their own source from their own
+imports. The file PICKS; it never DEFINES. The capabilities a directory
+can reach are a strict subset of what the calling file already handed
+in. Pinned by a security test feeding `rm_rf`, `node:child_process`, and
+`../../../etc/passwd`.
+
+Unresolved names refuse at load, never a half-skill — because a silently
+tool-less skill looks exactly like a working one. Every message names the
+file (steps name the line) and carries the fix: an unknown name lists
+what IS available; `tools:` with no registry prints the exact call to
+paste. Also refused: a step naming an undeclared tool, a step with no
+why, `steps` without `tools`, empty or duplicate `tools`, `onSkip`
+without `steps`, an unknown `onSkip`, and a registry with two different
+tools under one name.
+
+No new checkup code, deliberately: the checkup is an advisory build-time
+report, and a code there would have downgraded "never load a half-skill"
+to a warning.
+
+Additive: a directory that declares only prose loads identically — and
+that constraint is guarded by the entire pre-existing `skillsFromDir`
+suite as well as a new pin (breaking it fails 20 tests), which is the
+strongest evidence it cannot silently rot.
+
 ## [9.35.0] - 2026-08-14
 
 **`.namesAndNumbersFromEvidence()` — every name and number in the final

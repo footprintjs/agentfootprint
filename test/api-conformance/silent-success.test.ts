@@ -678,6 +678,7 @@ const REFUSES_A_SECOND_CALL = [
   'thinking',
   'thinkingHandler',
   'toolProvider',
+  'toolsFromActiveSkill',
   'window',
 ] as const;
 
@@ -818,6 +819,7 @@ describe('silent success — the doctrine sweep', () => {
       thinking: () => base().thinking({ budget: 1024 }).thinking({ budget: 2048 }),
       thinkingHandler: () => base().thinkingHandler(null).thinkingHandler(null),
       toolProvider: () => base().toolProvider(noopProvider()).toolProvider(noopProvider()),
+      toolsFromActiveSkill: () => base().toolsFromActiveSkill().toolsFromActiveSkill(),
       window: () => base().window(keepAll()).window(keepAll()),
     };
 

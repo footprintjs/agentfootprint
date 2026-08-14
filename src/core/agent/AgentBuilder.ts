@@ -22,6 +22,7 @@ import {
   type ResolvedOutputEnforcement,
 } from './outputEnforcement.js';
 import { resolveEvidenceGate } from './evidence/gate.js';
+import { scopeToolsToActiveSkill } from './toolsFromActiveSkill.js';
 import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
 import {
   validateCannedAgainstSchema,
@@ -274,6 +275,11 @@ export class AgentBuilder {
    *  Undefined for every agent that did not ask for it, which is what makes
    *  the feature byte-identical when unused. */
   private evidenceGate?: ResolvedEvidenceGate;
+  /** The tool posture (9.36.0) — set by `.toolsFromActiveSkill()`. False for
+   *  every agent that did not ask for it, and the stamp it gates is the ONLY
+   *  thing it does, which is what makes the feature byte-identical when
+   *  unused. */
+  private toolsFromActiveSkillValue = false;
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -1443,6 +1449,77 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Offer a skill's tools **only while that skill is active** (9.36.0). One
+   * line, for every skill on the agent.
+   *
+   * ## What it fixes
+   *
+   * By default a skill's `tools` go into the agent's STATIC tool list at build
+   * time, so the model can see and call them from iteration 1 — activated or
+   * not. Narrowing that was a per-skill field (`defineSkill({ autoActivate:
+   * 'currentSkill' })`) you had to remember on every skill; the one you forgot
+   * kept its tools on the wire for the life of the agent, and nothing said so.
+   * This says it once, for all of them.
+   *
+   * With it on, a skill's tools enter the request on the iterations where the
+   * skill is active — through the same readmission path `autoActivate` has used
+   * since v2.5 — and nowhere else. Everything else is untouched: `read_skill`,
+   * `list_skills`, your `.tool()` registry, provider tools and every other
+   * active skill's tools stay offered, because a scoped agent still has to
+   * handle the input nobody imagined.
+   *
+   * ## Not a posture dial, and why
+   *
+   * `.skillGraph({ strictness })` and `.namesAndNumbersFromEvidence({ posture })`
+   * take three values because there is a real middle there — record it, revise
+   * it, refuse it. The wire has no middle: a tool's schema is either in the
+   * request or it is not, and "record that we sent it" is just sending it. A
+   * three-value dial here would ship one behaviour under two names.
+   *
+   * ## What it does NOT do
+   *
+   * It governs the OFFER, not dispatch. A tool stays resolvable by name so an
+   * active skill's call lands — the split `autoActivate` has always had. If you
+   * need execution itself gated (an inactive skill's tool refused even when the
+   * model names it from a restored transcript), that is a `PermissionChecker`
+   * or a `gatedTools` provider, and it is a different question: authority to
+   * run, not what the model was shown.
+   *
+   * ## Interaction with the per-skill flag and with `scopeTools`
+   *
+   * All three stamp the same field, and none can contradict another:
+   * `autoActivate` has one legal value, so a skill can ask to be scoped and can
+   * never ask to be exempt. A skill that declared its own keeps it; the graph's
+   * `scopeTools: true` fills in the skills it wires; this fills in the rest.
+   * Turning it on can only remove tools from the static list, never add one.
+   *
+   * **Opt-in in 9.x.** The default is unchanged — an agent that never calls
+   * this builds byte-identical bytes and emits byte-identical events. The
+   * default flips in 10.0.0, the same ledger `skillGraph({ scopeTools })` is on.
+   *
+   * @example
+   *   const skills = await skillsFromDir('./skills', { tools: [lookupOrder, issueRefund] });
+   *   const agent = Agent.create({ provider, model })
+   *     .skills({ list: () => skills })
+   *     .toolsFromActiveSkill()   // billing's tools appear when billing does
+   *     .build();
+   */
+  toolsFromActiveSkill(): this {
+    // Refused rather than shrugged at, like every other one-per-agent policy:
+    // a second call means the author believes there are two of these to set,
+    // and the honest answer is that there is one.
+    if (this.toolsFromActiveSkillValue) {
+      throw new Error(
+        'AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole ' +
+          "agent — every skill's tools follow that skill's activation — so a second call " +
+          'has nothing left to say. Drop it.',
+      );
+    }
+    this.toolsFromActiveSkillValue = true;
+    return this;
+  }
+
   outputSchema<T>(parser: OutputSchemaParser<T>, opts?: OutputSchemaOptions): this {
     if (this.outputSchemaParser) {
       throw new Error(
@@ -2101,6 +2178,17 @@ export class AgentBuilder {
       )
     ) {
       injections = [...injections, defineMenuHint()];
+    }
+    // ── The tool posture (9.36.0) — `.toolsFromActiveSkill()` ──────────
+    // Applied to the FINAL injection list, for the reason every fold on this
+    // line uses: skills arrive through `.skill()`, `.skills()`, `.injection()`,
+    // `.skillGraph()` and `.selfExplain()`, and only here is the whole agent
+    // visible. From this point on there is exactly ONE list, so the registry,
+    // the slots, the projection and every recorder read the same stamp.
+    // Untouched when the posture was never asked for — the `false` branch does
+    // not even walk the list.
+    if (this.toolsFromActiveSkillValue) {
+      injections = scopeToolsToActiveSkill(injections);
     }
     // ── Steps-as-data check-up + advisory (9.18.0) ─────────────────────
     // Judged on the FINAL injection list (the delivery-refusal reasoning:
