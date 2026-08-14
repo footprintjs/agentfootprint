@@ -103,6 +103,7 @@
 
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
 import { UnreadableEnvelopeError } from '../../hosting/errors.js';
+import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
 import type {
   CheckpointEnvelope,
   SessionLifecycle,
@@ -318,6 +319,37 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
    * Answers `false` — rather than raising — for the one case the caller has a
    * repair for: there is no session here yet, so it has to be created.
    */
+  /**
+   * Who already signed for this conversation, as far as this service can say —
+   * or `undefined` for a session that is new, or that nobody has signed for.
+   *
+   * TWO places have to be consulted, and only this adapter has that problem.
+   * `userId` is the index `ownerOf` answers from, and the service pins it at
+   * CREATE and will not let it change; so a conversation that ran anonymously
+   * on turn one and gained an identity on turn two is stored under the
+   * anonymous placeholder forever, with its real owner recorded only inside
+   * the envelope. Reading `userId` alone would therefore see "nobody owns
+   * this" on a conversation somebody plainly signed for, and let the next
+   * signer overwrite it.
+   */
+  const signedBy = async (name: string): Promise<string | undefined> => {
+    let session: VertexSession | undefined;
+    try {
+      session = (await sessions.get({ name }))?.data;
+    } catch (err) {
+      // No session is not an owner — it is the first turn, and there is
+      // nothing to contradict. Anything else is a failure to READ, and a write
+      // that proceeded on an unread ownership check would be the defect this
+      // whole read exists to close.
+      if (isNotFound(err)) return undefined;
+      throw googleSdkFailure(ADAPTER, 'sessions.get', err);
+    }
+    const userId = session?.userId;
+    if (typeof userId === 'string' && userId !== '' && userId !== DEFAULT_USER_ID) return userId;
+    const stored = session?.sessionState?.[SESSION_STATE_KEY];
+    return stored !== null && typeof stored === 'object' ? envelopeOwner(stored) : undefined;
+  };
+
   const append = async (name: string, stateDelta: Record<string, unknown>): Promise<boolean> => {
     try {
       await sessions.appendEvent({
@@ -384,6 +416,27 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       const name = nameOf(sessionId);
       const state = { [SESSION_STATE_KEY]: checked as unknown as Record<string, unknown> };
 
+      // ── Whose conversation is this, before a byte of it is written ────
+      //
+      // The 9.36.1 correction, and this adapter had the defect in its own
+      // dialect: `userId` is immutable at the service, `hydrate` answers from
+      // `sessionState`, and nothing compared them — so appending an envelope
+      // signed by somebody else left `ownerOf` naming the person who created
+      // the session and the stored conversation belonging to the person who
+      // wrote last. The one the index named would open it and read the other's
+      // conversation.
+      //
+      // ONE read, and only when this turn actually names somebody. An
+      // anonymous envelope claims nobody, so it can contradict nobody, and it
+      // is written on exactly the call path it always was — which is also why
+      // the steady state of an anonymous conversation still costs one call.
+      const incoming = envelopeOwner(checked);
+      if (incoming !== undefined) {
+        // Throws SessionOwnershipConflictError on a different signer, before
+        // either the append or the create below.
+        resolveSessionOwner(sessionId, await signedBy(name), incoming);
+      }
+
       // APPEND first, CREATE when there is no session to append to.
       //
       // The steady state of a conversation is "it already exists": created
@@ -412,6 +465,16 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         // won. That is not a failure: the session exists now, which is all
         // this call wanted, so our state goes on with the same appended event.
         if (!isAlreadyExists(err)) throw googleSdkFailure(ADAPTER, 'sessions.create', err);
+        // ASK AGAIN before appending into it. The ownership check above ran
+        // when there was no session to own; an ALREADY_EXISTS is proof that
+        // somebody created one in between, and they may have signed it. This
+        // is the exact interleaving the field trial hit — two writers, one
+        // fresh session, both calls fulfilling — and re-reading here is what
+        // closes it: the 409 itself guarantees the other writer's create has
+        // already landed, so this read cannot miss it.
+        if (incoming !== undefined) {
+          resolveSessionOwner(sessionId, await signedBy(name), incoming);
+        }
         if (await append(name, state)) return;
         // Created by somebody and gone again before we could write to it.
         // Nothing here can say this turn landed, so it does not say it.

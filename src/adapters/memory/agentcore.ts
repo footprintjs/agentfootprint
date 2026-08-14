@@ -51,6 +51,7 @@ import type {
 } from '../../memory/store/types.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
+import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { describeStoredShape } from '../../lib/storedPreview.js';
 
@@ -323,8 +324,13 @@ export class AgentCoreStore implements MemoryStore {
       sessionId: this.sessionId(identity),
     };
   }
+  // The in-process shadow maps (dedup signatures, feedback) are keyed by the
+  // SHARED namespace encoder rather than a hand-rolled copy of it: a copy of
+  // the tuple layout is a copy of whatever is wrong with it, and this one was
+  // a copy of the version where a `/` inside a tenant donated a field boundary
+  // — two different identities sharing one dedup set and one feedback bag.
   private shadowKey(identity: MemoryIdentity): string {
-    return `${identity.tenant || '_'}/${identity.principal || '_'}/${identity.conversationId}`;
+    return identityNamespace(identity);
   }
   private feedbackKey(identity: MemoryIdentity, id: string): string {
     return `${this.shadowKey(identity)}::${id}`;

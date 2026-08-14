@@ -291,6 +291,31 @@ describe('InMemoryStore — security', () => {
     expect(await store.get(noTenant, 'k')).toBeNull();
   });
 
+  it('a slash inside a tenant cannot move the field boundary', async () => {
+    // The 9.36.x namespace defect: `${tenant}/${principal}/${conversationId}`
+    // let a value donate a separator, so these two identities — different
+    // tenants, different principals — addressed ONE namespace and read each
+    // other's rows. No race, no misconfiguration; a JWT `sub` that is a URI
+    // is enough.
+    const owner: MemoryIdentity = { tenant: 'acme', principal: 'hr/alice', conversationId: 'c1' };
+    const neighbour: MemoryIdentity = {
+      tenant: 'acme/hr',
+      principal: 'alice',
+      conversationId: 'c1',
+    };
+    await store.put(owner, makeEntry('k', { value: 'salary band' }));
+    expect(await store.get(neighbour, 'k')).toBeNull();
+    expect((await store.list(neighbour)).entries).toEqual([]);
+    expect((await store.get(owner, 'k'))?.value).toBe('salary band');
+  });
+
+  it('a tenant literally named "_" is not the anonymous namespace', async () => {
+    const anonymous: MemoryIdentity = { conversationId: 'c1' };
+    const named: MemoryIdentity = { tenant: '_', principal: '_', conversationId: 'c1' };
+    await store.put(named, makeEntry('k', { value: 'belongs to the tenant named _' }));
+    expect(await store.get(anonymous, 'k')).toBeNull();
+  });
+
   it('recordSignature is isolated per identity', async () => {
     await store.recordSignature(ID_A, 'evil-signature');
     expect(await store.seen(ID_B, 'evil-signature')).toBe(false);

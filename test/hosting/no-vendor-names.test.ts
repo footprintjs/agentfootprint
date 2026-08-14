@@ -43,10 +43,28 @@ const FORBIDDEN: readonly RegExp[] = [
   /\/invocations\b/,
 ];
 
-function hostingSources(): { file: string; text: string }[] {
-  return readdirSync(HOSTING_DIR)
-    .filter((name) => name.endsWith('.ts'))
-    .map((name) => ({ file: name, text: readFileSync(join(HOSTING_DIR, name), 'utf8') }));
+/**
+ * Every `.ts` under `src/hosting`, INCLUDING subdirectories (9.36.1).
+ *
+ * It used to read one directory level, which was true of the tree until
+ * `conformance/` arrived. A guardrail that stops at the first folder somebody
+ * adds is a guardrail with an opt-out nobody had to ask for — and the whole
+ * point of this test is that it is cruder than the thing it guards. Names are
+ * reported relative to `src/hosting`, so a failure says which file.
+ */
+function hostingSources(dir: string = HOSTING_DIR, prefix = ''): { file: string; text: string }[] {
+  const found: { file: string; text: string }[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      found.push(...hostingSources(join(dir, entry.name), `${prefix}${entry.name}/`));
+    } else if (entry.name.endsWith('.ts')) {
+      found.push({
+        file: `${prefix}${entry.name}`,
+        text: readFileSync(join(dir, entry.name), 'utf8'),
+      });
+    }
+  }
+  return found;
 }
 
 describe('the hosting ports name no vendor', () => {
@@ -63,6 +81,10 @@ describe('the hosting ports name no vendor', () => {
     // somebody is most tempted to write a vendor's spelling into it, and a pin
     // that only counts files would not notice the one that was never added.
     expect(files).toContain('webSocketConversation.ts');
+    // And the subtree the walk was widened for: the conformance battery is
+    // read by every store author, in-tree and out, which makes it the last
+    // place a vendor's spelling should turn up as an example.
+    expect(files).toContain('conformance/cases.ts');
     expect(files).toContain('webSocketFrames.ts');
     expect(files).toContain('headers.ts');
     expect(files.length).toBeGreaterThanOrEqual(10);

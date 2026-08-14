@@ -1,3 +1,5 @@
+import { encodeIdentityField } from './encode.js';
+
 /**
  * MemoryIdentity — hierarchical scoping for everything memory-related.
  *
@@ -42,15 +44,34 @@ export interface MemoryIdentity {
 
 /**
  * Encode a MemoryIdentity as a deterministic storage namespace. Used by
- * storage adapters that need a single string key (Redis, localStorage,
- * filesystem paths). Format is stable across library versions — adapters
+ * storage adapters that need a single string key (Redis, SQLite columns,
+ * object-store keys). Format is stable across library versions — adapters
  * can safely use it for long-lived keys.
  *
- * Empty `tenant` / `principal` collapse to `_` so the format has a constant
- * shape (easy to parse, easy to list by prefix).
+ * **The encoding is INJECTIVE: two different identities never produce the
+ * same namespace.** That is the isolation guarantee itself, not a detail of
+ * it — a namespace two tuples share is a scope that reads and overwrites
+ * another scope's rows, with no race required. It held only for well-behaved
+ * ids before 9.36.x: `{ tenant: 'acme/hr', principal: 'alice' }` and
+ * `{ tenant: 'acme', principal: 'hr/alice' }` spelled one namespace, and a
+ * JWT `sub` is routinely a URI. Each field is now escaped by
+ * {@link encodeIdentityField} before it is joined, so a value can no longer
+ * donate a field boundary — do not "simplify" the joins back to raw
+ * interpolation.
+ *
+ * A missing `tenant` / `principal` / `conversationId` is the segment `_`, so
+ * the shape stays constant (three segments, easy to list by prefix), and a
+ * field whose VALUE is `_` encodes as `%5F` so "no tenant" and "the tenant
+ * named `_`" stay two different scopes.
+ *
+ * Building a FILESYSTEM path? Use `scopeSegments` from `artifacts/scopePath`
+ * instead: it encodes each field for a path (`.` included, so a field of `..`
+ * cannot be a directory hop). This namespace is a key, not a path.
  */
 export function identityNamespace(identity: MemoryIdentity): string {
-  const tenant = identity.tenant || '_';
-  const principal = identity.principal || '_';
-  return `${tenant}/${principal}/${identity.conversationId}`;
+  return [
+    encodeIdentityField(identity.tenant),
+    encodeIdentityField(identity.principal),
+    encodeIdentityField(identity.conversationId),
+  ].join('/');
 }

@@ -104,6 +104,60 @@ export function contractSuite(
       expect(await store.get(SCOPE, meta.ref)).not.toBeNull();
     });
 
+    /**
+     * The scope tuple is the isolation boundary, so the way it becomes an
+     * address has to be injective on EVERY column — a leak closed in the
+     * in-memory store and left open in the bucket is still a leak. Each pair
+     * below is two DIFFERENT tuples that a naive encoder spells identically:
+     * the separator donated by a value (a JWT `sub` is routinely a URI), and
+     * the absence marker worn by a real name.
+     */
+    const CONFUSABLE: ReadonlyArray<[string, ArtifactScope, ArtifactScope]> = [
+      [
+        'a slash inside a tenant vs. the same slash inside a principal',
+        { tenant: 'acme/hr', principal: 'alice', conversationId: 'c1' },
+        { tenant: 'acme', principal: 'hr/alice', conversationId: 'c1' },
+      ],
+      [
+        'a slash inside a principal vs. the same slash inside a conversation',
+        { tenant: 't', principal: 'alice/c1', conversationId: 'x' },
+        { tenant: 't', principal: 'alice', conversationId: 'c1/x' },
+      ],
+      [
+        'no tenant vs. a tenant literally named _',
+        { conversationId: 'c1' },
+        { tenant: '_', principal: '_', conversationId: 'c1' },
+      ],
+      [
+        'a value that already looks escaped vs. the value it would decode to',
+        { tenant: 'a%2Fb', conversationId: 'c1' },
+        { tenant: 'a/b', conversationId: 'c1' },
+      ],
+    ];
+
+    for (const [what, left, right] of CONFUSABLE) {
+      it(`keeps two scopes apart when ${what}`, async () => {
+        const time = clock();
+        const store = makeStore(time.now);
+        const { meta } = await store.put(left, {
+          kind: 'note',
+          mediaType: 'text/plain',
+          data: 'confidential to the left scope',
+        });
+
+        // The neighbour must not be able to read it, describe it, list it,
+        // or delete it.
+        expect(await store.get(right, meta.ref)).toBeNull();
+        expect(await store.head(right, meta.ref)).toBeNull();
+        expect((await store.list(right)).artifacts).toEqual([]);
+        await store.delete(right, meta.ref);
+
+        // …and the owner still has everything it wrote.
+        expect((await store.get(left, meta.ref))?.data).toBe('confidential to the left scope');
+        expect((await store.list(left)).artifacts).toHaveLength(1);
+      });
+    }
+
     it('get/head return null for missing AND for expired — the deliberate ambiguity', async () => {
       const time = clock();
       const store = makeStore(time.now);

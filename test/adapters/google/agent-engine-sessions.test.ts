@@ -409,7 +409,14 @@ describe('session state is written by appending an event, never by patching', ()
   });
 
   it('the event author is configurable, and it is not the owner', async () => {
-    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
+    // The seeded `userId` matches the envelope's principal on purpose. It read
+    // `'u1'` against an alice-signed conversation until 9.36.1, which is the
+    // split-brain state itself — an index naming one person over a stored
+    // conversation naming another — and `persist` refuses to produce it now.
+    // Seeding it was seeding the defect; what this test is about is that the
+    // event AUTHOR is a different thing from the owner, which the two visibly
+    // different strings below say more plainly than the mismatch did.
+    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'alice' } } });
     const sessions = agentEngineSessions({
       ...CONNECTION,
       _client: fake.client,
@@ -420,8 +427,10 @@ describe('session state is written by appending an event, never by patching', ()
       author?: string;
     };
     expect(event.author).toBe('billing-agent');
-    // `userId` was pinned at create and is untouched by an appended event.
-    expect(fake.store[NAME]?.['userId']).toBe('u1');
+    // `userId` was pinned at create and is untouched by an appended event —
+    // and it is NOT the author.
+    expect(fake.store[NAME]?.['userId']).toBe('alice');
+    expect(fake.store[NAME]?.['userId']).not.toBe('billing-agent');
   });
 
   it('an append that fails for a reason OTHER than a missing session is refused, not re-created', async () => {

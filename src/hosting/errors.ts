@@ -709,6 +709,57 @@ export class SessionNotFoundError extends Error {
 }
 
 /**
+ * A `persist` would have left the ownership index naming one person and the
+ * stored conversation naming another (9.36.1).
+ *
+ * ── The split brain this exists to prevent ──────────────────────────────────
+ * The write-once rule protects the INDEX and said nothing about the PAYLOAD.
+ * Two writers signing the same fresh session therefore produced a store where
+ * `ownerOf(session)` answered the FIRST writer and the stored envelope carried
+ * the SECOND writer's whole conversation — and the envelope carries its own
+ * identity. The first writer lists the session, opens it, and reads somebody
+ * else's conversation. That is not a race in one backend: it was reproduced in
+ * a live trial and then found, by inspection, in every store implementing this
+ * contract, because the flaw was in the contract rather than in any of them.
+ *
+ * So the rule gained its missing half: **a different non-empty identity is
+ * refused, and an absent one is allowed.** A leaner turn claims nobody and
+ * cannot contradict anybody — the contract explicitly blesses it — while a
+ * turn signed by somebody else is a contradiction, and a store that stored it
+ * would be a store where ownership is decided by who wrote last.
+ *
+ * ── What this refusal will not tell you ─────────────────────────────────────
+ * Neither name. Not the owner, not the caller, not a line of either
+ * conversation. An error is read by whoever provoked it, and a refusal that
+ * names the person who owns a session is an oracle for who is signed in — the
+ * same law {@link SessionNotFoundError} and {@link ArtifactNotFoundError}
+ * follow. The session id is here because it is the caller's own string, which
+ * is the one thing the message teaches nobody anything by repeating.
+ */
+export class SessionOwnershipConflictError extends Error {
+  readonly code = 'ERR_SESSION_OWNERSHIP_CONFLICT' as const;
+  /** The id that was written to — the caller's own string, nothing learned. */
+  readonly sessionId: string;
+
+  constructor(sessionId: string) {
+    super(
+      `[hosting] refusing to persist session '${sessionId}': it already belongs to a ` +
+        `different signed-in person than the one this conversation is signed by. ` +
+        `Ownership is established by the FIRST turn that signs for a conversation and no ` +
+        `later write moves it, so storing this envelope would leave the ownership index ` +
+        `naming one person and the stored conversation naming another — and the person the ` +
+        `index names would open it and read the other one's conversation. ` +
+        `Neither name appears in this message on purpose. ` +
+        `What to do: write this turn under a NEW session id, or continue the existing one ` +
+        `under the identity that already owns it. Configuring 'identity' on standingAgent ` +
+        `refuses a foreign turn at the door, before it ever reaches the store.`,
+    );
+    this.name = 'SessionOwnershipConflictError';
+    this.sessionId = sessionId;
+  }
+}
+
+/**
  * A session-history result resolved and the reply cannot describe it.
  *
  * The {@link ArtifactNotCarriedError} shape, for the other new terminal.

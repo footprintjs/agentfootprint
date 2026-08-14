@@ -311,11 +311,48 @@ describe('scope: exact, immutable, and re-checked on the way back', () => {
   });
 
   it('a wildcard in a scope value becomes a NAME, since the service rejects one', async () => {
+    // It used to become `a_b`. That is a NAME, but it is also somebody else's
+    // name: `a*b` and `a_b` addressed one scope, and `*` alone landed on `_`,
+    // the marker for "no tenant". Escaped instead of replaced, so the value
+    // stays inert AND stays its own. Not a weakening — the assertion is now
+    // that two different scope values cannot become one.
     const { store: s, fake } = store(undefined, { scopeFor: () => ({ tenant: 'a*b' }) });
     await s.list(IDENTITY);
     expect((fake.calls[0]!.params['requestBody'] as Record<string, unknown>)['scope']).toEqual({
-      tenant: 'a_b',
+      tenant: 'a%2Ab',
     });
+
+    const { store: plain, fake: plainFake } = store(undefined, {
+      scopeFor: () => ({ tenant: 'a_b' }),
+    });
+    await plain.list(IDENTITY);
+    expect((plainFake.calls[0]!.params['requestBody'] as Record<string, unknown>)['scope']).toEqual(
+      { tenant: 'a_b' },
+    );
+  });
+
+  it('the default scope keeps "no tenant" and "a tenant named _" apart', async () => {
+    // Memory Bank matches scope EXACTLY and a written scope is immutable, so
+    // two identities that resolve to one scope share their memories for good.
+    // `identity.tenant || '_'` gave the anonymous scope away to anyone whose
+    // tenant is literally `_`.
+    const { store: anon, fake: anonFake } = store();
+    await anon.list({ conversationId: 'c1' });
+    const { store: named, fake: namedFake } = store();
+    await named.list({ tenant: '_', principal: '_', conversationId: 'c1' });
+
+    const scopeOf = (fake: { calls: { params: Record<string, unknown> }[] }) =>
+      (fake.calls[0]!.params['requestBody'] as Record<string, unknown>)['scope'];
+    // `%255F`, not `%5F`: the value is escaped once by the identity encoder
+    // (`_` → `%5F`, so it cannot wear the absence marker) and again by the
+    // adapter's own `*`/`%` pass on the way to the service, which cannot know
+    // whether the scope it was handed came from the default or from a caller's
+    // `scopeFor`. Two injective passes compose to an injective one; the result
+    // is unreadable for a value nobody has, and unreadable-but-separate beats
+    // legible-and-shared.
+    expect(scopeOf(anonFake)).toEqual({ tenant: '_', principal: '_', conversation: 'c1' });
+    expect(scopeOf(namedFake)).toEqual({ tenant: '%255F', principal: '%255F', conversation: 'c1' });
+    expect(scopeOf(anonFake)).not.toEqual(scopeOf(namedFake));
   });
 
   it('get() re-checks the scope, so a guessed id cannot read another tenant’s memory', async () => {

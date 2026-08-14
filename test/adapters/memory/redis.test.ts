@@ -12,6 +12,7 @@ import { RedisStore } from '../../../src/adapters/memory/redis.js';
 import type { RedisLikeClient, RedisLikePipeline } from '../../../src/adapters/memory/redis.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
+import { redisStringMatch } from './redisGlob.js';
 
 interface SetEntry {
   value: string;
@@ -106,8 +107,11 @@ class MockRedis implements RedisLikeClient {
   ): Promise<readonly [string, readonly string[]]> {
     if (cursor !== '0') return ['0', []];
     const allKeys = [...this.kv.keys(), ...this.sets.keys(), ...this.hashes.keys()];
-    const re = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-    return ['0', allKeys.filter((k) => re.test(k))];
+    // Redis's own matcher, not a RegExp approximation of it: `?` and `[a-z]`
+    // are metacharacters the server honours, and a `\` in a pattern is a GLOB
+    // escape, not a regex one. A double that gets that wrong cannot prove
+    // anything about glob injection — see redisGlob.ts.
+    return ['0', allKeys.filter((k) => redisStringMatch(pattern, k))];
   }
 
   async eval(
@@ -331,6 +335,75 @@ describe('RedisStore — signatures + feedback', () => {
   });
 });
 
+/**
+ * The test double's matcher, checked against the examples Redis itself
+ * publishes for `KEYS` — because everything below rests on it behaving like
+ * the server. If this block is wrong, the isolation tests underneath it are
+ * measuring a fiction.
+ *
+ * @see https://redis.io/docs/latest/commands/keys/
+ */
+describe('the glob harness matches documented Redis semantics', () => {
+  it("h?llo matches hello, hallo and hxllo — but not 'hllo'", () => {
+    for (const k of ['hello', 'hallo', 'hxllo']) expect(redisStringMatch('h?llo', k)).toBe(true);
+    expect(redisStringMatch('h?llo', 'hllo')).toBe(false);
+  });
+
+  it('h*llo matches hllo and heeeello', () => {
+    for (const k of ['hllo', 'heeeello']) expect(redisStringMatch('h*llo', k)).toBe(true);
+  });
+
+  it('h[ae]llo matches hello and hallo, but not hillo', () => {
+    expect(redisStringMatch('h[ae]llo', 'hello')).toBe(true);
+    expect(redisStringMatch('h[ae]llo', 'hallo')).toBe(true);
+    expect(redisStringMatch('h[ae]llo', 'hillo')).toBe(false);
+  });
+
+  it('h[^e]llo matches hallo and hbllo, but not hello', () => {
+    expect(redisStringMatch('h[^e]llo', 'hallo')).toBe(true);
+    expect(redisStringMatch('h[^e]llo', 'hbllo')).toBe(true);
+    expect(redisStringMatch('h[^e]llo', 'hello')).toBe(false);
+  });
+
+  it('h[a-b]llo matches hallo and hbllo, but not hcllo', () => {
+    expect(redisStringMatch('h[a-b]llo', 'hallo')).toBe(true);
+    expect(redisStringMatch('h[a-b]llo', 'hbllo')).toBe(true);
+    expect(redisStringMatch('h[a-b]llo', 'hcllo')).toBe(false);
+  });
+
+  it('a backslash escapes the next character verbatim', () => {
+    expect(redisStringMatch('a\\*b', 'a*b')).toBe(true);
+    expect(redisStringMatch('a\\*b', 'axb')).toBe(false);
+    expect(redisStringMatch('a\\*b', 'axxxb')).toBe(false);
+    expect(redisStringMatch('a\\?b', 'a?b')).toBe(true);
+    expect(redisStringMatch('a\\?b', 'axb')).toBe(false);
+    expect(redisStringMatch('a\\[b', 'a[b')).toBe(true);
+    expect(redisStringMatch('a\\\\b', 'a\\b')).toBe(true);
+  });
+
+  it('a ] outside a class is an ordinary character — which is why it is not escaped', () => {
+    expect(redisStringMatch('a]b', 'a]b')).toBe(true);
+    expect(redisStringMatch('a]b', 'axb')).toBe(false);
+  });
+
+  it('an unescaped wildcard really does span the namespace separators', () => {
+    // The defect itself, stated as the harness sees it: `*` does not stop at
+    // `/` or `:`, so a conversation id of `*` reaches every sibling…
+    expect(redisStringMatch('af:t1/u1/*:*', 'af:t1/u1/c1:e:x')).toBe(true);
+    // …and a whole tuple of them reaches the entire keyspace.
+    expect(redisStringMatch('af:*/*/*:*', 'af:t9/u9/c9:e:x')).toBe(true);
+  });
+
+  it('`_` is NOT a wildcard here — it is one in SQL LIKE, and that difference matters', () => {
+    // Worth pinning because the absence marker the encoder emits is `_`, and
+    // the same string means "any single character" in a LIKE clause. Redis
+    // glob compares it literally, so the anonymous namespace matches only
+    // itself.
+    expect(redisStringMatch('af:_/_/c1:*', 'af:t1/u1/c1:e:x')).toBe(false);
+    expect(redisStringMatch('af:_/_/c1:*', 'af:_/_/c1:e:x')).toBe(true);
+  });
+});
+
 describe('RedisStore — multi-tenant isolation', () => {
   it('writes under tenant A do not appear under tenant B', async () => {
     const store = new RedisStore({ _client: new MockRedis() });
@@ -351,6 +424,55 @@ describe('RedisStore — multi-tenant isolation', () => {
     expect(await store.getFeedback(id, 'a')).toBeNull();
     expect(await store.get(id2, 'a')).not.toBeNull();
   });
+
+  /**
+   * `forget` is the one method that DELETES by pattern, and a key is data
+   * while a MATCH pattern is a glob. An id carrying a glob character used to
+   * be pasted into the pattern raw, so `{ conversationId: '*' }` scanned
+   * `af:_/_/*:*` — which matches every other scope's keys — and then deleted
+   * what it found. Cross-tenant destruction, from an id that is merely odd.
+   *
+   * The assertion that matters is not "the right keys died" but "the WRONG
+   * ones survived", so every case below checks the neighbour.
+   */
+  const GLOBBY: ReadonlyArray<[string, MemoryIdentity]> = [
+    ['a bare asterisk', { tenant: 't1', principal: 'u1', conversationId: '*' }],
+    ['an asterisk inside a name', { tenant: 't1', principal: 'u1', conversationId: 'c*' }],
+    ['a single-character wildcard', { tenant: 't1', principal: 'u1', conversationId: '?' }],
+    ['a character class', { tenant: 't1', principal: 'u1', conversationId: '[a-z]' }],
+    ['a negated class', { tenant: 't1', principal: 'u1', conversationId: '[^q]' }],
+    ['an escape character', { tenant: 't1', principal: 'u1', conversationId: '\\' }],
+    ['an already-escaped-looking name', { tenant: 't1', principal: 'u1', conversationId: '\\*' }],
+    ['every metacharacter at once', { tenant: '*?[', principal: '\\', conversationId: '*' }],
+  ];
+
+  for (const [what, globby] of GLOBBY) {
+    it(`forget with ${what} erases only its own scope`, async () => {
+      const store = new RedisStore({ _client: new MockRedis() });
+      const neighbour: MemoryIdentity = { tenant: 't1', principal: 'u1', conversationId: 'c1' };
+      // A ONE-character sibling as well: `?` matches exactly one character, so
+      // a neighbour with a longer id would survive an unescaped pattern by
+      // luck rather than by the fix, and the case would prove nothing.
+      const short: MemoryIdentity = { tenant: 't1', principal: 'u1', conversationId: 'z' };
+      const faraway: MemoryIdentity = { tenant: 't9', principal: 'u9', conversationId: 'c9' };
+
+      await store.put(globby, makeEntry('mine'));
+      for (const other of [neighbour, short, faraway]) await store.put(other, makeEntry('theirs'));
+      await store.recordSignature(neighbour, 'sig-1');
+      await store.feedback(neighbour, 'theirs', 0.5);
+
+      await store.forget(globby);
+
+      // Its own keys are really gone — the escape must not break the erasure.
+      expect(await store.get(globby, 'mine')).toBeNull();
+      // …and nobody else's are.
+      for (const other of [neighbour, short, faraway]) {
+        expect(await store.get(other, 'theirs')).not.toBeNull();
+      }
+      expect(await store.seen(neighbour, 'sig-1')).toBe(true);
+      expect(await store.getFeedback(neighbour, 'theirs')).not.toBeNull();
+    });
+  }
 });
 
 describe('RedisStore — lifecycle', () => {

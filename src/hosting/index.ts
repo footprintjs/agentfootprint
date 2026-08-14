@@ -150,9 +150,36 @@ export {
   SessionOpNeedsIdentityError,
   SessionIndexUnavailableError,
   SessionNotFoundError,
+  SessionOwnershipConflictError,
   SessionsNotCarriedError,
 } from './errors.js';
 export type { IdentityFailureClass } from './errors.js';
+
+// The one owner-transition rule (9.36.1) — shared by every store here, and
+// available to any store anybody else writes. Four adapters each spelling this
+// rule out in their own dialect is how all four came to be missing the same
+// half of it.
+export { resolveSessionOwner } from './sessionOwnership.js';
+
+// The battery a store must pass to CLAIM the port (9.36.1), exported beside
+// the port itself so an out-of-tree store imports the check the same way it
+// imports the interface it is implementing.
+// See src/hosting/conformance/README.md.
+export {
+  formatConformanceReport,
+  runSessionLifecycleCase,
+  runSessionLifecycleConformance,
+  sessionLifecycleConformance,
+} from './conformance/index.js';
+export type {
+  ConformanceKit,
+  SessionLifecycleCase,
+  SessionLifecycleCaseName,
+  SessionLifecycleOutcome,
+  SessionLifecycleReport,
+  SessionStoreHarness,
+  SessionStoreMember,
+} from './conformance/index.js';
 
 // Verified identity at the door (9.26.0) — the badge is CHECKED instead of
 // read off. `IdentityVerifier` is the port; `jwksIdentity` (from

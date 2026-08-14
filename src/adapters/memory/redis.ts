@@ -146,6 +146,29 @@ export class RedisStore implements MemoryStore {
 
   // Key helpers
 
+  /**
+   * A literal string → a `SCAN MATCH` pattern that matches only itself.
+   *
+   * A key is stored bytes; a MATCH pattern is a GLOB, and Redis reads it with
+   * `stringmatchlen`, whose metacharacters are `*`, `?`, `[` and `\` (a `]`
+   * outside a class is an ordinary character, so it needs no escape). The
+   * namespace deliberately does NOT escape `*` — it is a legal character in a
+   * name and escaping it in the KEY would re-key every store that has one —
+   * so it has to be escaped HERE, at the one place a name is used as a
+   * pattern instead of as data.
+   *
+   * Without this, `forget({ conversationId: '*' })` scanned `af:_/_/*:*`,
+   * which glob-matches every other scope's keys — and `forget` DELETES what
+   * it scans. That is cross-tenant destruction from one ordinary-looking id.
+   *
+   * The backslash is escaped FIRST, for the same reason the namespace encoder
+   * escapes `%` first: it introduces every escape that follows, so a name
+   * containing `\*` must not come out as an escaped `*`.
+   */
+  private static globLiteral(raw: string): string {
+    return raw.replace(/\\/g, '\\\\').replace(/[*?[]/g, (ch) => `\\${ch}`);
+  }
+
   private nsKey(identity: MemoryIdentity, suffix: string): string {
     return `${this.prefix}:${identityNamespace(identity)}:${suffix}`;
   }
@@ -314,10 +337,15 @@ export class RedisStore implements MemoryStore {
 
   /**
    * GDPR — drop every key under this identity's namespace.
+   *
+   * Only the trailing `*` is a wildcard: the prefix and the namespace are
+   * matched LITERALLY (see {@link RedisStore.globLiteral}), so an id that
+   * happens to contain a glob character erases its own scope and nobody
+   * else's.
    */
   async forget(identity: MemoryIdentity): Promise<void> {
     this.ensureOpen('forget');
-    const pattern = `${this.prefix}:${identityNamespace(identity)}:*`;
+    const pattern = `${RedisStore.globLiteral(`${this.prefix}:${identityNamespace(identity)}:`)}*`;
     let cursor = '0';
     do {
       const [next, keys] = await this.client.scan(

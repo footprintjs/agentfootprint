@@ -162,7 +162,8 @@
 import { createHash } from 'node:crypto';
 
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
-import { UnreadableEnvelopeError } from '../../hosting/errors.js';
+import { SessionOwnershipConflictError, UnreadableEnvelopeError } from '../../hosting/errors.js';
+import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import type {
   CheckpointEnvelope,
@@ -664,8 +665,9 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
         messageCount: envelopeTranscript(checked).length,
       };
 
-      // WRITE ONCE for the owner, LAST WRITE WINS for everything else — the same
-      // rule SQLite states as `owner = COALESCE(sessions.owner, excluded.owner)`.
+      // WRITE ONCE for the owner, LAST WRITE WINS for everything else — the one
+      // rule every store in this package shares, and since 9.36.1 the one
+      // IMPLEMENTATION they share: `resolveSessionOwner`.
       //
       // An owner is a fact about the CONVERSATION, established by the first turn
       // that signed for it: a later turn carrying a leaner identity must not
@@ -673,6 +675,16 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
       // turn carrying a DIFFERENT one must not take it (ownership would transfer
       // by writing, which undoes every check made against this index one turn
       // later).
+      //
+      // A DIFFERENT one is REFUSED here rather than dropped, which is the
+      // 9.36.1 correction. Keeping `owner` and writing the rest of the document
+      // was this adapter's behaviour until then, and a live trial found what it
+      // costs: two writers signed the same fresh session, both transactions
+      // committed, and the surviving document named the FIRST writer in `owner`
+      // and carried the SECOND writer's whole conversation in `envelope`. The
+      // first writer listed it, opened it, and read the second writer's
+      // conversation. `tx.set` is not reached at all now — the refusal leaves
+      // the document exactly as it was.
       //
       // Firestore has no COALESCE, and `set({ merge: true })` is NOT a stand-in:
       // merge means "keep fields I did not mention", so mentioning `owner` at
@@ -694,17 +706,29 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
           const snapshot = await tx.get(ref);
           const existing = snapshot.exists ? snapshot.data() : undefined;
           const existingOwner = existing?.['owner'];
-          const keptOwner =
-            typeof existingOwner === 'string' && existingOwner.length > 0
-              ? existingOwner
-              : owner ?? null;
+          // Throws SessionOwnershipConflictError on a different signer, out of
+          // the transaction function and therefore out of `runTransaction` —
+          // which is exactly the behaviour wanted: an aborted transaction
+          // writes nothing at all.
+          const keptOwner = resolveSessionOwner(
+            sessionId,
+            typeof existingOwner === 'string' ? existingOwner : undefined,
+            owner,
+          );
           // `null`, never `undefined`: an absent owner has to be a STORED fact,
           // because the default client throws on `undefined` and because a field
           // that is simply missing cannot be told apart from a field this store
           // failed to write.
-          tx.set(ref, { ...row, owner: keptOwner });
+          tx.set(ref, { ...row, owner: keptOwner ?? null });
         });
       } catch (err) {
+        // OUTSIDE the wrapping on purpose — the same reason `awaitOperation`'s
+        // refusal is left alone in the sibling adapter. This refusal is already
+        // sanitized, already names the session and already says what to do;
+        // re-describing it as a Firestore failure would replace a precise
+        // diagnosis with "the backend said no" and imply the backend was at
+        // fault, when the backend did exactly what it was told.
+        if (err instanceof SessionOwnershipConflictError) throw err;
         throw firestoreFailure('persisting a session', collectionName, err);
       }
     },

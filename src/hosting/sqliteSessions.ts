@@ -55,6 +55,7 @@
 
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from './envelope.js';
 import { UnreadableEnvelopeError } from './errors.js';
+import { resolveSessionOwner } from './sessionOwnership.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
 import type {
@@ -329,14 +330,17 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
       `VALUES (?, ?, ?, ?, ?, ?) ` +
       `ON CONFLICT(session_id) DO UPDATE SET format = excluded.format, ` +
       `saved_at = excluded.saved_at, envelope = excluded.envelope, ` +
-      // WRITE ONCE — the existing owner wins, and a NULL one is filled in.
-      // An owner is a fact about the CONVERSATION, established by the first
-      // turn that signed for it: a later turn carrying a leaner identity must
-      // not erase it (the session would drop out of its owner's list), and a
-      // later turn carrying a DIFFERENT one must not take it (ownership would
-      // transfer by writing, which undoes every check made against this index).
-      // The argument order is the whole rule; reversing it is the bug.
-      `owner = COALESCE(${SESSIONS_TABLE}.owner, excluded.owner), ` +
+      // The owner is bound, already decided — NOT `COALESCE(sessions.owner,
+      // excluded.owner)`, which is what this was until 9.36.1.
+      //
+      // COALESCE kept the right owner and could not refuse, so a turn signed
+      // by somebody else quietly won the `envelope` column beside an `owner`
+      // column that still named the first writer: the index said one person
+      // and the stored conversation said another. SQL that can only pick a
+      // column cannot express "and if they disagree, write nothing" — so the
+      // decision moved out of the statement and into `resolveSessionOwner`,
+      // one transaction up, where a refusal can stop the whole row.
+      `owner = excluded.owner, ` +
       `message_count = excluded.message_count`,
   );
   const select = db.prepare(`SELECT envelope FROM ${SESSIONS_TABLE} WHERE session_id = ?`);
@@ -405,15 +409,44 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
       // never supplied by the caller — the port takes no owner argument and
       // gains none, because a store where owning a session is a matter of
       // asking is not an index, it is a formality.
-      const owner = envelopeOwner(checked);
-      insert.run(
-        sessionId,
-        checked.format,
-        checked.savedAt,
-        JSON.stringify(checked),
-        owner ?? null,
-        envelopeTranscript(checked).length,
-      );
+      const incoming = envelopeOwner(checked);
+      // BEGIN IMMEDIATE, not BEGIN: it takes the write lock up front, so the
+      // read below and the write after it cannot have another writer's turn
+      // between them. A deferred transaction would take the lock only at the
+      // INSERT — which is exactly the window where two containers persisting
+      // the same fresh session both read "nobody owns this" and both proceed.
+      // The lock waits `busy_timeout` and then fails loudly, which is the same
+      // bargain the rest of this store makes.
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const existing = selectOwner.get(sessionId) as { owner?: unknown } | undefined;
+        const owner = resolveSessionOwner(
+          sessionId,
+          typeof existing?.owner === 'string' ? existing.owner : undefined,
+          incoming,
+        );
+        insert.run(
+          sessionId,
+          checked.format,
+          checked.savedAt,
+          JSON.stringify(checked),
+          owner ?? null,
+          envelopeTranscript(checked).length,
+        );
+        db.exec('COMMIT');
+      } catch (err) {
+        // The envelope must not land when the owner was refused — the payload
+        // is the half that carries somebody's conversation, and a row that
+        // kept the old owner beside a new conversation is the whole defect.
+        // ROLLBACK is best-effort: if the transaction is already gone the
+        // original refusal is the one worth raising, not this one.
+        try {
+          db.exec('ROLLBACK');
+        } catch {
+          /* Already rolled back or never opened; the error below says why. */
+        }
+        throw err;
+      }
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await

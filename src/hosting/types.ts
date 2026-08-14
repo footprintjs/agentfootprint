@@ -683,11 +683,40 @@ export type WakeReason = 'invoke' | 'resume' | 'artifact' | 'transcript';
  * Deliberately two required methods. Anything a real store also wants — a TTL,
  * a scan, a delete — is that store's own API, not a demand this port makes of
  * every store that will ever implement it.
+ *
+ * ── Claiming the port ───────────────────────────────────────────────────────
+ * The two required methods are what TypeScript checks. What a store has to
+ * *behave* like is a battery every shipped store runs against and any store
+ * can: `sessionLifecycleConformance`, exported from this same subpath. It was
+ * written after a flaw in THIS interface's semantics turned up in four
+ * independent adapters at once — every one of them tested, and every one of
+ * them tested only against its own doubles, which is precisely why none of
+ * them could see it. Run it against your store; a case your store cannot
+ * satisfy is DECLARED by name with its reason, never skipped.
  */
 export interface SessionLifecycle {
   /** The stored conversation, or `undefined` for a session that has none yet. */
   hydrate(sessionId: string): Promise<CheckpointEnvelope | undefined>;
-  /** Store the conversation for this session. Last write wins. */
+  /**
+   * Store the conversation for this session. Last write wins — with ONE
+   * exception, and it is the only thing this method ever refuses.
+   *
+   * **A store that keeps an owner index refuses a turn signed by somebody
+   * other than the established owner** (`SessionOwnershipConflictError`,
+   * 9.36.1), and refuses it whole: neither the index nor the ENVELOPE changes.
+   * Until 9.36.1 the write-once rule protected only the index, so such a write
+   * kept the first writer's `owner` and stored the second writer's entire
+   * conversation — leaving the index naming one person and the stored
+   * conversation naming another. The person the index named listed it, opened
+   * it, and read the other one's conversation.
+   *
+   * A turn carrying a LEANER identity is not refused. It claims nobody, so it
+   * contradicts nobody, and the established owner stands — see `listByUser`.
+   *
+   * The composer refuses a foreign turn at the door long before this, when a
+   * verifier is configured. This is the store keeping the same promise for
+   * every caller that holds it directly, and for a door with no verifier.
+   */
   persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void>;
   /**
    * Called once per served request, before `hydrate`, for stores that need to
@@ -715,9 +744,38 @@ export interface SessionLifecycle {
    *
    * **And established ONCE.** The first turn that signs for a conversation owns
    * it; no later write moves that — not a leaner identity (which would erase
-   * it) and not a different one (which would transfer it). Both shipped stores
-   * implement the index that way, and a custom one that let the last writer win
-   * would undo every ownership check made against it one turn later.
+   * it) and not a different one (which would transfer it). Every shipped store
+   * implements the index that way, and a custom one that let the last writer
+   * win would undo every ownership check made against it one turn later.
+   *
+   * The two halves of "no later write moves it" are NOT symmetrical, and
+   * 9.36.1 exists because they were treated as if they were:
+   *
+   *  - a **leaner** turn is stored, and the owner is kept. It claims nobody, so
+   *    it contradicts nobody. Refusing it would break a flow this contract
+   *    blesses in the sentence above.
+   *  - a **different** turn is REFUSED — index and envelope both. Keeping the
+   *    index while storing the payload is not "not moving" the owner; it is
+   *    moving the CONVERSATION out from under them, which is worse. Don't
+   *    write this rule yourself: `resolveSessionOwner(sessionId, stored,
+   *    incoming)` is the one implementation, and it is what every shipped store
+   *    now calls.
+   *
+   * ── Which of the two says who owns a session ────────────────────────────────
+   * This index is the authority for LISTING and for the session-history ops:
+   * `ownerOf` is the question `{ op: 'session-transcript' }` asks, and nothing
+   * re-derives an answer behind it. An ordinary TURN does not ask it — it
+   * re-derives from the envelope it has just hydrated (`envelopeOwner`), which
+   * is the same derivation and one round-trip cheaper, and which is what keeps
+   * a store with NO index protected exactly as well as one with a fast one.
+   *
+   * Those two can never name different people: that is what the refusal above
+   * buys, and it is the only reason a turn is safe to answer from the envelope.
+   * They CAN differ in one direction — an index that names somebody over a
+   * conversation that names nobody, which is what a leaner turn leaves behind.
+   * That state only ever REFUSES: the owner can still list and read the
+   * session, and a turn on it is refused at any verifying door, for everybody.
+   * Stated because it is a real asymmetry and not a bug to be surprised by.
    *
    * A conversation that ran anonymously has no owner and appears in nobody's
    * list. That is the honest consequence of deriving rather than inventing.
@@ -734,6 +792,12 @@ export interface SessionLifecycle {
    *
    * Implement it beside `listByUser` — a door that can list but not check
    * ownership can hand somebody a list and then refuse to open any of it.
+   *
+   * This is the ownership INDEX, and it is not a second source of truth beside
+   * the identity embedded in the stored envelope: `persist` refuses any write
+   * that would make the two name different people. A store that answers this
+   * from something a caller supplied, rather than from what it derived, has
+   * built a permission system out of a request field.
    */
   ownerOf?(sessionId: string): Promise<string | undefined>;
 }

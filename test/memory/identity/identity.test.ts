@@ -88,12 +88,21 @@ describe('identityNamespace — property', () => {
 // ── Security ────────────────────────────────────────────────
 
 describe('identityNamespace — security', () => {
-  it('tenant with embedded slash is passed through (adapter responsibility to reject)', () => {
-    // The namespace function is not a validator — it's a deterministic
-    // encoder. Storage adapters enforce character safety. This test pins
-    // that contract so future "helpful" sanitization doesn't silently
-    // change behavior.
+  it('tenant with embedded slash is ESCAPED, not passed through', () => {
+    // This test used to pin the opposite: that a `/` inside a tenant was
+    // "passed through, adapter responsibility to reject". That premise was
+    // the defect. No adapter rejected it, none could — by the time a store
+    // sees `a/b/_/c` the field boundary has already moved, and
+    // `{tenant:'a/b'}` and `{tenant:'a', principal:'b'}` are one scope
+    // reading each other's rows. The encoder is not a validator, but it IS
+    // the thing that decides where one field ends, so escaping is its job
+    // and nobody else's.
+    //
+    // Stricter than what it replaces: it pins the escape AND the
+    // non-collision. See identity-injective.test.ts for the full proof.
     const ns = identityNamespace({ tenant: 'a/b', conversationId: 'c' });
-    expect(ns).toBe('a/b/_/c');
+    expect(ns).toBe('a%2Fb/_/c');
+    expect(ns).not.toBe(identityNamespace({ tenant: 'a', principal: 'b', conversationId: 'c' }));
+    expect(ns.split('/')).toHaveLength(3);
   });
 });

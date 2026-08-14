@@ -22,8 +22,14 @@
  *   • The `decision` door (resuming somebody's paused run) is the same door
  *     and gets the same answer.
  *   • The owner is never locked out of their own session.
- *   • ZERO-DELTA — with no verifier configured, not one of these checks runs:
- *     a header-trust door behaves exactly as it did in 9.25.
+ *   • ZERO-DELTA — with no verifier configured, not one of these DOOR checks
+ *     runs: a header-trust door hydrates whatever session id it is handed and
+ *     the model sees that conversation, exactly as in 9.25. The one thing that
+ *     is no longer identical is below the door — since 9.36.1 the STORE
+ *     refuses a write signed by a different person, because accepting it was
+ *     what produced the split brain (owner index naming one person, stored
+ *     conversation naming another) that a live trial found. See
+ *     `session-ownership-conflict.test.ts`.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -33,6 +39,7 @@ import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
 import {
   memorySessions,
+  SessionOwnershipConflictError,
   sqliteSessions,
   standingAgent,
   toEnvelope,
@@ -287,12 +294,24 @@ describe('an owner is written ONCE — unit', () => {
   it('memorySessions refuses to move an owner, and still fills an empty one', async () => {
     const sessions = memorySessions();
     await sessions.persist('s1', envelopeFor('bob', 'bobs words'));
-    // A second write naming somebody else does NOT transfer the session.
-    await sessions.persist('s1', envelopeFor('alice', 'alices words'));
+    // A second write naming somebody else does NOT transfer the session — and
+    // since 9.36.1 does not LAND either. Until then it was accepted and only
+    // the index was protected, so the session stayed labelled bob's while
+    // holding alice's conversation. Asserting the index alone is precisely how
+    // that shipped, so both halves are asserted here now.
+    await expect(sessions.persist('s1', envelopeFor('alice', 'alices words'))).rejects.toThrow(
+      SessionOwnershipConflictError,
+    );
     expect(await sessions.ownerOf?.('s1')).toBe('bob');
-    // …nor does one naming nobody erase it.
+    expect(JSON.stringify(await sessions.hydrate('s1'))).toContain('bobs words');
+    expect(JSON.stringify(await sessions.hydrate('s1'))).not.toContain('alices words');
+
+    // …nor does one naming nobody erase it. This write is ACCEPTED: an absent
+    // identity claims nobody and so contradicts nobody, which is the flow the
+    // port blesses in as many words.
     await sessions.persist('s1', envelopeFor(undefined, 'anonymous words'));
     expect(await sessions.ownerOf?.('s1')).toBe('bob');
+    expect(JSON.stringify(await sessions.hydrate('s1'))).toContain('anonymous words');
 
     // An unowned session, then a signed turn: the empty slot IS filled.
     await sessions.persist('s2', envelopeFor(undefined, 'hello'));
@@ -313,12 +332,22 @@ describe('an owner is written ONCE — unit', () => {
     }
     try {
       await sessions.persist('s1', envelopeFor('bob', 'bobs words'));
-      await sessions.persist('s1', envelopeFor('alice', 'alices words'));
+      // Refused whole, on disk too — see the memory case above for why the
+      // envelope assertion is the one that matters.
+      await expect(sessions.persist('s1', envelopeFor('alice', 'alices words'))).rejects.toThrow(
+        SessionOwnershipConflictError,
+      );
       expect(await sessions.ownerOf?.('s1')).toBe('bob');
+      expect(JSON.stringify(await sessions.hydrate('s1'))).toContain('bobs words');
+      expect(JSON.stringify(await sessions.hydrate('s1'))).not.toContain('alices words');
       expect((await sessions.listByUser?.('alice'))?.sessions).toEqual([]);
       expect((await sessions.listByUser?.('bob'))?.sessions.map((s) => s.sessionId)).toEqual([
         's1',
       ]);
+      // And a leaner turn is still stored, with the owner kept.
+      await sessions.persist('s1', envelopeFor(undefined, 'anonymous words'));
+      expect(await sessions.ownerOf?.('s1')).toBe('bob');
+      expect(JSON.stringify(await sessions.hydrate('s1'))).toContain('anonymous words');
 
       await sessions.persist('s2', envelopeFor(undefined, 'hello'));
       await sessions.persist('s2', envelopeFor('carol', 'hello again'));
@@ -333,20 +362,33 @@ describe('an owner is written ONCE — unit', () => {
 // ─── 5. ZERO-DELTA — a door with no verifier is untouched ────────────
 
 describe('session ownership — zero-delta', () => {
-  it('with no identity option, a named session hydrates exactly as it did before', async () => {
+  it('with no identity option the DOOR still asks nothing — and the store now refuses the write', async () => {
     const sessions = memorySessions();
     const host = inProcessHost();
     const seen: LLMRequest[] = [];
     await standingAgent({ agent: watchingAgent(seen), sessions, host });
 
     await host.deliver({ input: BOBS_SECRET, sessionId: 's1', userId: 'bob' });
-    // The header-trust door: another userId on the same session still
-    // continues it, because a header is what the transport said and this door
-    // was never told to check. Byte-identical to 9.25 — the option is the
-    // thing that changes it.
     const second = await host.deliver({ input: 'continue', sessionId: 's1', userId: 'alice' });
-    expect(second.output).toBe('answered');
+
+    // ── What is still byte-identical, and it is the load-bearing half ──
+    // The DOOR asks no ownership question: it hydrates whatever session id the
+    // body named and the model sees that conversation. A header is what the
+    // transport said and this door was never told to check. Stated as an
+    // assertion rather than left implied, because it is the honest reason to
+    // configure a verifier — nothing below the door is a substitute for one.
     expect(JSON.stringify(seen[seen.length - 1]?.messages)).toContain('SECRET-BOB-TEXT');
+
+    // ── What changed in 9.36.1, and why it is a fix ───────────────────
+    // The WRITE is refused. This turn used to succeed, and succeeding is what
+    // produced the split brain a live trial found: bob keeps the owner index
+    // while alice's conversation is stored under it, so bob lists the session,
+    // opens it, and reads alice's. The refusal stops the store from ever
+    // holding those two facts at once. It is the only behaviour in this file
+    // that a door with no verifier does not share with 9.25.
+    expect(second.code).toBe('ERR_SESSION_OWNERSHIP_CONFLICT');
+    expect(await sessions.ownerOf?.('s1')).toBe('bob');
+    expect(JSON.stringify(await sessions.hydrate('s1'))).toContain('SECRET-BOB-TEXT');
   });
 
   it('an anonymous caller at an allowAnonymous door keeps its own unowned session', async () => {

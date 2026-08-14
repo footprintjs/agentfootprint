@@ -159,6 +159,26 @@ describe('AgentCoreStore — unit (basics)', () => {
     expect(await store.get(id, 'a')).toBeNull();
     expect(await store.getFeedback(id, 'a')).toBeNull();
   });
+
+  it('the in-process shadow state is keyed injectively — a slash cannot merge two identities', async () => {
+    // `seen` and `feedback` have no AgentCore primitive, so they live in
+    // process maps keyed by the identity tuple. That key used to be a COPY of
+    // the namespace encoder, including its defect: `{tenant:'acme',
+    // principal:'hr/alice'}` and `{tenant:'acme/hr', principal:'alice'}`
+    // shared one dedup set, so one identity's writes were silently swallowed
+    // as duplicates of another's, and one's feedback scored the other's rows.
+    const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
+    const owner = { tenant: 'acme', principal: 'hr/alice', conversationId: 'c1' };
+    const neighbour = { tenant: 'acme/hr', principal: 'alice', conversationId: 'c1' };
+
+    await store.recordSignature(owner, 'sig-1');
+    expect(await store.seen(neighbour, 'sig-1')).toBe(false);
+    expect(await store.seen(owner, 'sig-1')).toBe(true);
+
+    await store.feedback(owner, 'e1', 1);
+    expect(await store.getFeedback(neighbour, 'e1')).toBeNull();
+    expect((await store.getFeedback(owner, 'e1'))?.average).toBe(1);
+  });
 });
 
 describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands)', () => {

@@ -22,9 +22,15 @@
  * a store that let you state an owner is a store where owning somebody's
  * session is a matter of asking. A conversation that ran anonymously has no
  * owner and appears in nobody's list.
+ *
+ * Since 9.36.1 the owner rule is not written out here at all: it is
+ * `resolveSessionOwner`, shared with every other store, because four stores
+ * each spelling the same rule in their own dialect is how all four came to be
+ * missing the same half of it.
  */
 
 import { envelopeOwner } from './envelope.js';
+import { resolveSessionOwner } from './sessionOwnership.js';
 import type {
   CheckpointEnvelope,
   SessionLifecycle,
@@ -70,24 +76,26 @@ export function memorySessions(): SessionLifecycle {
 
   return {
     hydrate: (sessionId) => Promise.resolve(stored.get(sessionId)),
-    persist: (sessionId, envelope) => {
+    // `async` so the ownership refusal below arrives as a REJECTION. This
+    // method returns a promise on the happy path, and one that threw
+    // synchronously on the sad one would need two error handlers from every
+    // caller — and the one they forget is the one that fires at 3am. The
+    // sibling file store states the same rule over its three methods.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    persist: async (sessionId, envelope) => {
+      // DECIDE BEFORE WRITING. The order is the whole fix (9.36.1): this used
+      // to store the envelope first and then guard only the index, so a turn
+      // signed by somebody else kept the first writer's `owner` and stored the
+      // second writer's entire conversation — index and payload naming
+      // different people, and the one the index named reading the other's
+      // conversation. `resolveSessionOwner` is the one rule; see its table.
+      //
+      // A conflict throws out of here having touched nothing. Single-threaded
+      // is all the atomicity a `Map` needs: no `await` sits between the read
+      // and the writes below, so nothing can interleave into them.
+      const owner = resolveSessionOwner(sessionId, owners.get(sessionId), envelopeOwner(envelope));
       stored.set(sessionId, envelope);
-      const owner = envelopeOwner(envelope);
-      // WRITE ONCE. An owner is a fact about the conversation, established by
-      // the first turn that signed for it, and no later write moves it:
-      //
-      //  - a turn that names no owner does not ERASE one, or a single leaner
-      //    identity would silently drop the session out of its owner's list;
-      //  - a turn that names a DIFFERENT one does not TAKE it, or ownership
-      //    transfers by writing — which is the whole point of an index nobody
-      //    can declare into. A store that let the last writer win would undo
-      //    every ownership check made against it, one turn later.
-      //
-      // The composer refuses a foreign turn long before this line is reached;
-      // this is the store keeping its own promise, for every caller that holds
-      // it directly.
-      if (owner !== undefined && !owners.has(sessionId)) owners.set(sessionId, owner);
-      return Promise.resolve();
+      if (owner !== undefined) owners.set(sessionId, owner);
     },
     listByUser: (userId: string, options?: SessionListOptions): Promise<SessionListPage> => {
       const rows = [];

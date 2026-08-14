@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.37.0] - 2026-08-14
+
+**A security release — three cross-tenant defects, and the suite that
+would have caught one of them.**
+
+### Fixed — scope namespaces were not injective (cross-tenant read)
+
+`identityNamespace()` joined tenant/principal/conversationId with a raw
+`/`, so two DIFFERENT scope tuples produced ONE namespace —
+`{tenant:'acme/hr', principal:'alice'}` and
+`{tenant:'acme', principal:'hr/alice'}` both became `acme/hr/alice/c1`.
+No race required. An audit read another scope's artifact payload in
+full. Reachable in practice: a JWT `sub` is frequently a URI containing
+slashes. It also collapsed absent/empty/`'_'` onto one shelf, so a
+tenant literally named `_` shared the anonymous scope, and
+`conversationId: undefined` became the literal string `"undefined"`.
+
+The encoding is now injective, and the proof is structural: `%` is
+escaped before `/`, so a decoder undoing them in reverse is a left
+inverse — and a left inverse existing IS injectivity. Pinned by a
+39,304-tuple adversarial cross-product plus decoder round-trips.
+
+MIGRATION IS THE DESIGN, not an afterthought: a value containing neither
+the separator nor the sentinel keeps its EXISTING namespace byte-for-byte.
+Measured against a corpus of realistic ids — **18,225 tuples identical,
+and zero of the changed ones fall outside the class {contains `/`,
+contains `%`, is exactly `_`}**. Only keys that were already colliding
+move, and those were broken. Well-behaved deployments migrate nothing.
+Eight literal expected strings are pinned so a refactor cannot silently
+re-key anyone.
+
+Affected far beyond artifacts: the memory subsystem keyed on the same
+function. Three modules that had re-implemented the encoder by hand are
+fixed directly rather than patched around.
+
+### Fixed — `redis.forget()` deleted across tenants (cross-tenant destruction)
+
+It built `${prefix}:${namespace}:*` and handed it to `SCAN MATCH`, then
+`DEL`ed the results — with glob metacharacters unescaped. Redis's `*`
+spans `/`, so an identity carrying `*` matched and destroyed other
+scopes' keys. The pattern is now escaped at the point of use (`\`, `*`,
+`?`, `[`; `]` correctly needs none, confirmed against Redis's own
+`stringmatchlen_impl`), backslash first, for the same left-inverse
+reason as above. Nothing is re-keyed — the escape is on the PATTERN, not
+on stored keys, which is why this fix is free.
+
+Worth recording as a lesson: the test mock implemented `MATCH` as a
+RegExp `replace(/\*/g,'.*')`, which does not implement `?` or `[a-z]`
+and reads `\` as a regex escape — so a glob-injection test against it
+would have proven nothing. Redis's real matcher was ported into the
+harness and pinned against the documented examples first. And one
+`forget` case was initially passing by luck, because the bystander's id
+was too long for `?` to reach; a one-character sibling was added. A
+double that cannot model the bug makes the whole suite theatre.
+
+### Fixed — session ownership split-brain (cross-tenant read, all four stores)
+
+Write-once ownership preserved the FIRST writer's owner while storing the
+SECOND writer's envelope — and the envelope carries its own identity. The
+index said Alice, the stored conversation said Bob, so Alice listed it,
+opened it, and read Bob's conversation. Found live by a field trial
+running two real concurrent transactions; confirmed present in
+`memorySessions`, `sqliteSessions`, `firestoreSessions` AND
+`agentEngineSessions`.
+
+A different non-empty signer on an owned session is now refused by name
+(`SessionOwnershipConflictError`), carrying no principal, owner,
+conversation text or credential. A LEANER turn is still accepted — the
+contract blesses it explicitly, an absence claims nobody so it
+contradicts nobody, and the composer cannot even produce the divergent
+state because identity is inherited through `continueFrom`.
+
+BEHAVIOUR CHANGE, stated plainly: a `persist` that used to succeed now
+refuses. It cannot fire at a verifying door (the composer refuses
+foreign turns before the store is reached). It CAN fire at a
+header-trust door with no verifier — which is exactly the split-brain
+producer — and there the model has already seen the prior conversation
+before the write refuses. A verifier is what closes that door.
+
+### Added — `SessionLifecycle` conformance suite
+
+The real deliverable. This bug lived in four adapters at once because
+every store is tested against its own doubles, so a flaw in the PORT's
+semantics is invisible to all of them simultaneously.
+`runSessionLifecycleConformance({ name, createStore, … })` is exported
+from `agentfootprint/hosting` so an out-of-tree store can run it too. 13
+cases × 4 stores.
+
+A store that legitimately cannot satisfy a case DECLARES it by name with
+a reason — and the case still runs, so a declaration that starts
+passing is reported STALE. "Needed a harness hook nobody supplied and
+nobody declared" counts as FAILED, not skipped. There is no way to make
+a case quietly disappear, and that rule is itself a test. Exactly one
+declaration exists today: `agentEngineSessions` cannot fill in ownership
+on a later signed turn, because the service pins `userId` at create.
+
+### Known and NOT fixed — named, not buried
+
+- `agentcore`'s `actorId` slugs non-alphanumerics and joins
+  tenant+principal with `_`, so `a_b`+`c` collides with `a`+`b_c`. A
+  genuine cross-tenant collision at the AWS session boundary, left alone
+  deliberately: any fix re-keys durable remote rows in a customer's
+  account, and underscores in ids are common. Migration is unavoidable,
+  so it is the operator's decision, not ours.
+- Composition seams (`redis` `:`, `s3Vectors` `#`): a `:` or `#` inside a
+  conversation id lets two (scope, entry) pairs compose one key.
+  Escaping them in the encoder would close it but would re-key
+  `urn:`/`sub:`-style ids, breaking the byte-preservation property that
+  makes the fix above migration-free.
+
 ## [9.36.0] - 2026-08-14
 
 **The adoption release — two changes aimed at the same moment: the first

@@ -41,6 +41,7 @@ import { askHuman, isPaused } from '../../src/core/pause.js';
 import {
   memorySessions,
   readPausedRun,
+  SessionOwnershipConflictError,
   standingAgent,
   toEnvelope,
   toPausedEnvelope,
@@ -269,15 +270,29 @@ describe('firestoreSessions — ownership is derived, and established once', () 
     expect([...fake.store.values()][0]!['owner']).toBe('alice');
   });
 
-  it('a later turn with a DIFFERENT identity does not take it', async () => {
-    const { sessions } = storeWith();
+  it('a later turn with a DIFFERENT identity is REFUSED — index and envelope both', async () => {
+    const { sessions, fake } = storeWith();
     await sessions.persist('s1', envelope('alice'));
-    await sessions.persist('s1', envelope('mallory'));
+
+    // 9.36.1. Until then this write SUCCEEDED and only the `owner` column was
+    // protected — which is how a live trial ended up with `ownerOf` naming
+    // alice over a document whose `envelope` was mallory's whole conversation.
+    // Keeping the index while storing the payload is not "not moving" the
+    // owner; it is moving the CONVERSATION out from under her.
+    await expect(sessions.persist('s1', envelope('mallory'))).rejects.toBeInstanceOf(
+      SessionOwnershipConflictError,
+    );
 
     // Ownership by writing would undo every check made against this index one
-    // turn later. This is the assertion that says it cannot happen.
+    // turn later. These are the assertions that say it cannot happen.
     await expect(sessions.ownerOf('s1')).resolves.toBe('alice');
     await expect(sessions.listByUser('mallory')).resolves.toEqual({ sessions: [] });
+    // THE HALF THAT WAS NEVER CHECKED, and the reason the defect shipped: the
+    // stored document is still alice's, not merely labelled alice.
+    const row = [...fake.store.values()][0]!;
+    expect(row['owner']).toBe('alice');
+    expect(String(row['envelope'])).toContain('alice');
+    expect(String(row['envelope'])).not.toContain('mallory');
   });
 
   it('a conversation that gains an identity on turn TWO records it', async () => {
@@ -333,27 +348,52 @@ describe('firestoreSessions — the write is a transaction, and that is why', ()
     expect(txCalls).toEqual(['Firestore.runTransaction', 'Transaction.get', 'Transaction.set']);
   });
 
+  const interleaveOwner = (owner: string) => ({
+    interleave: (store: FakeStore) => {
+      store.set(documentIdFor('s1'), {
+        sessionId: 's1',
+        owner,
+        savedAt: 1,
+        format: 'x',
+        envelope: `{"who":"${owner}"}`,
+        messageCount: 0,
+      });
+    },
+  });
+
   it('another container committing an owner underneath us does not lose it', async () => {
     // The whole point. Our transaction reads "no owner", another turn commits
     // `alice`, and a store that just wrote its own answer would overwrite her.
-    // Firestore aborts and re-runs the function; the second attempt sees alice.
-    const { sessions, fake } = storeWith({
-      interleave: (store) => {
-        store.set(documentIdFor('s1'), {
-          sessionId: 's1',
-          owner: 'alice',
-          savedAt: 1,
-          format: 'x',
-          envelope: '{}',
-          messageCount: 0,
-        });
-      },
-    });
+    // Firestore aborts and re-runs the function; the second attempt sees alice
+    // — and, since 9.36.1, ACTS on what it saw rather than only preserving the
+    // column. Seeing it and refusing is a stricter proof of the same retry
+    // than seeing it and keeping it was.
+    const { sessions, fake } = storeWith(interleaveOwner('alice'));
 
-    await sessions.persist('s1', envelope('mallory'));
+    await expect(sessions.persist('s1', envelope('mallory'))).rejects.toBeInstanceOf(
+      SessionOwnershipConflictError,
+    );
 
     expect(fake.attempts()).toBe(2);
     await expect(sessions.ownerOf('s1')).resolves.toBe('alice');
+    // The other container's document survived whole — an aborted transaction
+    // writes nothing at all.
+    expect([...fake.store.values()][0]?.['envelope']).toBe('{"who":"alice"}');
+  });
+
+  it('…and a concurrent turn from the SAME person still lands', async () => {
+    // The case the retry actually protects in production: two containers
+    // persisting turns of ONE person's conversation. The interleave still
+    // aborts and re-runs, the second attempt sees the same owner, and the
+    // write goes through — so the refusal above is about a DIFFERENT signer
+    // and not about contention.
+    const { sessions, fake } = storeWith(interleaveOwner('alice'));
+
+    await sessions.persist('s1', envelope('alice'));
+
+    expect(fake.attempts()).toBe(2);
+    await expect(sessions.ownerOf('s1')).resolves.toBe('alice');
+    expect(String([...fake.store.values()][0]?.['envelope'])).toContain('alice');
   });
 
   it('with no interference the write is ONE attempt — the retry is not the normal path', async () => {

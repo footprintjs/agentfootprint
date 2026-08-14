@@ -105,6 +105,7 @@
 
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
+import { encodeIdentityField } from '../../memory/identity/index.js';
 import type {
   ListOptions,
   ListResult,
@@ -218,11 +219,18 @@ export interface MemoryBankStoreOptions extends AiPlatformConnection {
    * across their conversations" — which is usually the point — widen it here:
    *
    * ```ts
+   *   import { encodeIdentityField } from 'agentfootprint/memory';
+   *
    *   scopeFor: (identity) => ({
-   *     tenant: identity.tenant ?? '_',
-   *     principal: identity.principal ?? '_',
+   *     tenant: encodeIdentityField(identity.tenant),
+   *     principal: encodeIdentityField(identity.principal),
    *   })
    * ```
+   *
+   * Encode the fields rather than writing `identity.tenant ?? '_'`: a raw `_`
+   * is what "no tenant" spells, so an un-encoded widening hands the anonymous
+   * scope to anyone whose tenant is literally `_`. The encoder returns
+   * ordinary ids byte for byte and only escapes the ones that would collide.
    *
    * **And why it is worth getting right the first time.** `Memory.scope` is
    * immutable. Memories already written keep the scope they were written with,
@@ -849,9 +857,18 @@ export class MemoryBankStore implements MemoryStore {
           `empty-scoped memory in the bank, whoever wrote it. Return at least one key.`,
       );
     }
-    // The service rejects `*` in a scope value. Replaced rather than passed on,
-    // so a tenant named with one is a NAME and not a wildcard.
-    return Object.fromEntries(entries.map(([key, value]) => [key, value.replace(/\*/g, '_')]));
+    // The service rejects `*` in a scope value, so one is ESCAPED rather than
+    // passed on — a tenant named with one is a NAME, not a wildcard. Escaped
+    // and not replaced: mapping `*` onto some other character merges two
+    // different scopes into one address, which is the isolation bug this
+    // method exists to prevent (`*` used to become `_`, landing a tenant named
+    // `*` on top of the no-tenant scope). `%` goes first because it introduces
+    // the escape; a value that arrived already encoded is escaped again, which
+    // is unreadable but injective, and unreadable-and-separate beats legible
+    // and shared.
+    return Object.fromEntries(
+      entries.map(([key, value]) => [key, value.replace(/%/g, '%25').replace(/\*/g, '%2A')]),
+    );
   }
 }
 
@@ -863,7 +880,10 @@ export class MemoryBankStore implements MemoryStore {
  *     project: 'my-project',
  *     location: 'us-central1',
  *     reasoningEngine: '1234567890',
- *     scopeFor: (id) => ({ tenant: id.tenant ?? '_', principal: id.principal ?? '_' }),
+ *     scopeFor: (id) => ({
+ *       tenant: encodeIdentityField(id.tenant),
+ *       principal: encodeIdentityField(id.principal),
+ *     }),
  *   });
  *
  *   const hits = await store.search(identity, [], { text: 'what does she prefer?', k: 5 });
@@ -928,12 +948,22 @@ function foreignMemory(id: string, name: string): Error {
   return err;
 }
 
-/** The default scope: the full identity tuple, matching every other store. */
+/**
+ * The default scope: the full identity tuple, matching every other store.
+ *
+ * Each field goes through the SAME encoder the namespace stores use, so the
+ * isolation is the same isolation: absence is the marker `_`, and a value that
+ * spells the marker (or carries the separator) is escaped away from it. Left
+ * raw, a bank with no tenant and a bank whose tenant is named `_` shared one
+ * scope — and a Memory Bank scope is exact-matched, so sharing it is sharing
+ * the memories. Well-behaved ids encode to themselves, so existing banks keep
+ * the scope they were written under.
+ */
 function defaultScopeFor(identity: MemoryIdentity): MemoryScope {
   return {
-    tenant: identity.tenant || '_',
-    principal: identity.principal || '_',
-    conversation: identity.conversationId,
+    tenant: encodeIdentityField(identity.tenant),
+    principal: encodeIdentityField(identity.principal),
+    conversation: encodeIdentityField(identity.conversationId),
   };
 }
 

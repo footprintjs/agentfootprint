@@ -18,18 +18,28 @@
  *     parent-directory hop (`%2E%2E` is a NAME);
  *   • an empty or absent field collapses to `_`, mirroring
  *     `identityNamespace`'s stable layout, so "no tenant" is one shape and
- *     not two.
+ *     not two — and a field whose VALUE is `_` is escaped away from that
+ *     marker, so absence and the tenant named `_` are not one directory.
  *
  * After this, `..`, `/` and `\` arrive as data and land as literals. The
  * adapters assert `isArtifactRef` on the last segment anyway, because
  * "cannot happen" is a claim, not a defence.
+ *
+ * The encoding is INJECTIVE, per field and therefore per scope: two different
+ * scopes never address one directory or one key prefix. `encodeURIComponent`
+ * supplies that for every character (it escapes `%`, its own introducer, so
+ * an already-escaped-looking value cannot land on the value that produced
+ * it); {@link distinctFromAbsent} supplies it for the absence marker, which
+ * `encodeURIComponent` passes through untouched because `_` is unreserved.
  */
 
+import { distinctFromAbsent, IDENTITY_ABSENT } from '../memory/identity/index.js';
 import type { ArtifactScope } from './types.js';
 
 /** One RAW tuple field → one inert path/key segment. */
 export function scopeSegment(raw: string | undefined): string {
-  return encodeURIComponent(raw === undefined || raw === '' ? '_' : raw).replace(/\./g, '%2E');
+  if (raw === undefined || raw === '') return IDENTITY_ABSENT;
+  return distinctFromAbsent(encodeURIComponent(raw).replace(/\./g, '%2E'));
 }
 
 /** The three encoded segments of a scope, in the fixed tenant/principal/
