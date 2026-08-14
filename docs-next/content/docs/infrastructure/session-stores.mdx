@@ -1,0 +1,413 @@
+---
+title: Writing a session store
+description: The ownership rule every SessionLifecycle store must hold, and the shared battery that checks it — runSessionLifecycleConformance, 13 cases, three deliberately distinct non-pass outcomes, and no way to make a case quietly disappear. For anyone implementing the port over Postgres, DynamoDB, SQL Server or anything else.
+---
+
+> **A defect that lives in a PORT is invisible to every adapter's own tests at
+> once.** Each store was tested against its own doubles, so each suite agreed
+> with the same wrong idea of what the port meant. Four stores, four green
+> suites, one live bug.
+
+This page is for the person implementing
+[`SessionLifecycle`](doc:hosting-and-runtime#sessions-what-crosses-the-restart)
+over something this package does not ship — Postgres, SQL Server, DynamoDB,
+your own service. It has two halves, and they are one subject: the **ownership
+rule** a store has to hold, and the **battery** that checks whether it does.
+
+## Why the battery exists
+
+In August 2026 a live trial against a real backend reproduced a split-brain
+ownership bug. Two writers signed the same fresh session concurrently. The
+write-once rule kept the **first** writer in the owner index and stored the
+**second** writer's entire conversation — and a stored conversation carries its
+own identity. The first writer listed the session, opened it, and read the
+second writer's conversation.
+
+It was then found, by inspection, in **every** store implementing the ownership
+index: the in-memory one, the file-backed one, and both service-backed ones.
+All four had tests. None of those tests could see it, because every store was
+tested against its own doubles, so a flaw in the PORT's semantics was invisible
+to all of them simultaneously.
+
+A per-adapter test can only ever check that an adapter matches the author's
+reading of the contract. When the reading is what is wrong, four suites just
+agree with each other. So the laws moved out of the four suites and into one
+battery, written against the port and run against every store — including
+stores nobody here has written. It would have failed four adapters on the same
+day.
+
+## Running it
+
+One call, one report:
+
+```ts twoslash
+import {
+  formatConformanceReport,
+  memorySessions,
+  runSessionLifecycleConformance,
+} from 'agentfootprint/hosting';
+import type { SessionStoreHarness } from 'agentfootprint/hosting';
+
+const harness: SessionStoreHarness = {
+  name: 'memorySessions',
+  createStore: () => memorySessions(),
+  // Replace one session's stored bytes with something unreadable, behind the
+  // store's back. There is no portable way to do this, so it is your job.
+  corrupt: (store, sessionId) => void store.persist(sessionId, { not: 'an envelope' } as never),
+};
+
+const report = await runSessionLifecycleConformance(harness);
+if (!report.ok) throw new Error(formatConformanceReport(report));
+```
+
+`SessionStoreHarness` is the whole input — `{ name, createStore, disposeStore?,
+corrupt?, declared? }`. `SessionLifecycleReport` is the whole output: the
+`store` name, one `SessionLifecycleOutcome` per case, the four counts
+(`passed`, `notApplicable`, `declared`, `failed`) and `ok`, which is true when
+nothing **failed**. `formatConformanceReport(report)` renders it as one line per
+case — the thing to put in a failure message or a log:
+
+```
+SessionLifecycle conformance — memorySessions: 12 passed, 0 declared, 1 n/a, 0 FAILED
+  ok        absent-session-hydrates-undefined
+  ok        persist-hydrate-round-trip
+  ok        unreadable-is-not-absent
+  n/a       forget-removes-the-conversation — no forget() on this store
+  ok        ownership-is-derived-from-the-envelope
+  ok        ownership-fills-in-on-a-later-signed-turn
+  ok        ownership-survives-a-leaner-turn
+  ok        ownership-is-not-taken-by-a-different-signer
+  ok        contested-write-leaves-no-split-brain
+  ok        owner-of-is-undefined-for-missing-and-unowned
+  ok        list-by-user-pages-with-a-stable-tie-break
+  ok        awkward-session-ids-round-trip
+  ok        optional-members-are-feature-detected
+```
+
+<Callout type="info" title="`ok` means nothing failed — not that everything passed">
+A store with a stated limitation is conformant **with limits**, which is a
+different claim from unqualified conformance, and the report prints both. Read
+the counts, not just the boolean.
+</Callout>
+
+### One `it()` per case
+
+A battery that fails as one blob tells you a store is broken and not which
+promise it broke. `sessionLifecycleConformance` is an ordinary iterable array of
+`SessionLifecycleCase`, so any framework gets one assertion per case:
+
+```ts twoslash
+import { runSessionLifecycleCase, sessionLifecycleConformance } from 'agentfootprint/hosting';
+import type { SessionStoreHarness } from 'agentfootprint/hosting';
+
+declare const harness: SessionStoreHarness;
+declare function it(name: string, body: () => Promise<void>): void;
+declare function expect(value: unknown): { not: { toBe(expected: unknown): void } };
+// ---cut---
+for (const testCase of sessionLifecycleConformance) {
+  it(testCase.name, async () => {
+    const outcome = await runSessionLifecycleCase(testCase, harness);
+    expect(outcome.status).not.toBe('failed');
+  });
+}
+```
+
+`runSessionLifecycleCase(testCase, harness)` builds a store, runs one case,
+disposes the store, and hands back that case's `SessionLifecycleOutcome`.
+`runSessionLifecycleConformance` is exactly a loop over it.
+
+**Nothing in the battery imports a test framework.** A case throws to fail —
+the one convention every runner in every language already agrees on — so it
+works under vitest, jest, `node:test`, or a plain script with no runner at all.
+Each `SessionLifecycleCase` also carries a `law`: the promise it holds, in one
+sentence, printed beside a failure so the output reads as a broken promise
+rather than as a broken assertion.
+
+## The harness is a factory, not a store
+
+`createStore()` is called **once per case**, and `disposeStore(store)` after it,
+including after a case that failed.
+
+That shape is not a style preference. Most of the battery needs a store with
+**nothing in it** — a listing case that saw another case's rows would be
+asserting on somebody else's fixtures — and a store that has been closed, or
+whose file was removed, cannot be reset in place. One store per case, disposed
+after it, is the only shape that holds for a `Map`, a file, a transaction and a
+managed service at once. `createStore()` may be sync or async, because some
+stores open a file and some await a connection, and a battery that demanded one
+shape would exclude half the stores it exists to check.
+
+| field | for |
+|---|---|
+| `name` | what the store is called in the report |
+| `createStore()` | a fresh, empty store. Sync or async |
+| `disposeStore(store)` | release what `createStore` acquired. Called even when the case failed — a store left open by a failing case is a handle leak that surfaces three cases later as a confusing second failure |
+| `corrupt(store, sessionId)` | replace one session's stored bytes with something that is not a readable envelope, behind the store's back. A poke at the table, the file or the document — so it cannot be portable, and it is the harness's job |
+| `declared` | cases this store cannot satisfy, **by name**, each with the reason |
+
+`ConformanceKit` is what a case is handed beside the store: `id(suffix)` for a
+session id nothing else in the run uses, `envelope(text, principal?, savedAt?)`
+for a valid stored conversation optionally signed by somebody, and `harness`
+itself for the cases that need one of its hooks. You only touch it if you write
+a case of your own.
+
+## Three ways a case does not pass, and they mean different things
+
+The runner owns exactly three decisions, and all three are about the ways a case
+can **not** run. `SessionLifecycleOutcome` is a discriminated union on `status`:
+
+| status | what it means | carries |
+|---|---|---|
+| `'passed'` | the store holds the law | — |
+| `'not-applicable'` | the case is about an **optional** port member this store does not implement. Feature detection, which is the port's own rule applied to its own battery — a key/value store owes nobody a secondary index | `missing`, a `SessionStoreMember` |
+| `'declared'` | the store implements the member and still cannot satisfy the case, and said so **by name with a reason** | `reason`, and `stillFails` |
+| `'failed'` | the store broke the law — **or** the case needed a harness hook nobody supplied and nobody declared | `error` |
+
+Three properties are worth stating plainly, because they are what a reader is
+deciding whether to trust.
+
+**A declared case still RUNS.** The declaration suppresses the failure, not the
+execution. If the case turns out to pass, the outcome comes back with
+`stillFails: false` and the formatter prints `[STALE: it passes now]`. A
+suppression nobody revisits is how a fixed defect keeps its exemption and a real
+one inherits it later.
+
+**"Needed a hook nobody gave me" is a FAILURE, not a skip.** Drop the `corrupt`
+hook from the example above and the report says so, with the fix in the message:
+
+```
+SessionLifecycle conformance — memorySessions (no corrupt hook): 11 passed, 0 declared, 1 n/a, 1 FAILED
+  ok        persist-hydrate-round-trip
+  FAILED    unreadable-is-not-absent
+            law: A stored conversation this runtime cannot read is never answered as absent.
+            [conformance] 'unreadable-is-not-absent' needs harness.corrupt() and this harness has
+            none — so the case did not run, and a case that did not run must never look like one
+            that passed. Supply the hook, or DECLARE this case by name with the reason your store
+            cannot be corrupted from outside:
+              declared: { 'unreadable-is-not-absent': 'why not' }
+```
+
+An undeclared skip is a pass with the evidence removed — the same shape as the
+defect the whole suite exists to catch.
+
+**There is deliberately no way to make a case quietly disappear**, and that rule
+is itself a test: the in-tree suite asserts that a harness with no `corrupt`
+hook and no declaration comes back `'failed'`, so the property cannot be
+regressed without a red build.
+
+`SessionLifecycleCaseName` is a **closed** union of the 13 names, which is what
+makes `declared` safe. A declaration keyed by a free-form string would keep
+suppressing nothing at all after a rename — the same shape as the bug this suite
+exists to catch.
+
+## The 13 cases
+
+| case | what it proves |
+|---|---|
+| `absent-session-hydrates-undefined` | only a session that was never written hydrates as `undefined`. Anything else and the composer starts a conversation on top of a value it did not understand |
+| `persist-hydrate-round-trip` | `format`, `savedAt`, what was said and who signed it all survive; and a **second** `persist` replaces the first, because every turn after the first is a second `persist` |
+| `unreadable-is-not-absent` | bytes that are present and unreadable are refused or handed back — never answered as `undefined`, which would be a fresh start over a conversation that exists. Needs `corrupt` |
+| `forget-removes-the-conversation` | deletion deletes, the owner index included, and forgetting twice is not an error. Needs a `forget` member |
+| `ownership-is-derived-from-the-envelope` | the owner comes from the stored conversation's own `principal`, never from a field on the request. Plants a decoy `owner` / `userId` on the envelope and checks the store ignores both |
+| `ownership-fills-in-on-a-later-signed-turn` | a conversation that ran anonymously and is then signed for gains that owner — and an anonymous one is not given an invented one |
+| `ownership-survives-a-leaner-turn` | a later turn carrying **no** identity is accepted, is stored, does not erase the owner, and does not drop the session out of that owner's listing |
+| `ownership-is-not-taken-by-a-different-signer` | a foreign signer is refused **whole** — index *and* stored conversation unchanged — and the refusal names no principal, no owner and no conversation text |
+| `contested-write-leaves-no-split-brain` | two concurrent writers on one fresh session: at least one succeeds, the index and the stored conversation never name different people, and the conversation that survived is one writer's whole conversation rather than a document nobody wrote |
+| `owner-of-is-undefined-for-missing-and-unowned` | "no such session" and "nobody signed for it" are one answer, or a caller has an oracle for which session ids are real |
+| `list-by-user-pages-with-a-stable-tie-break` | every owned row exactly once, nobody else's ever, a cursor only when more rows exist, newest first — with five sessions sharing one `savedAt`, so the tie-break carries the paging rather than the timestamp |
+| `awkward-session-ids-round-trip` | an id is an opaque string — slashes, spaces, `..`, unicode, quotes, 1000 characters — and whatever mapping a store uses to make one legal for its backend is injective, so `a/b` and `a%2Fb` stay two conversations |
+| `optional-members-are-feature-detected` | `onWake`, `listByUser` and `ownerOf` are present as functions or absent, never something a caller has to guess about; and a store that can `listByUser` can also `ownerOf`, or a door hands somebody a list and then refuses to open any of it |
+
+Eight of the thirteen are about an **optional** member and report
+`'not-applicable'` when the store does not have it: one needs `forget`, one needs
+`listByUser`, and the six ownership cases need `ownerOf`. `SessionStoreMember` is
+that set — `'listByUser' | 'ownerOf' | 'forget'`. The remaining five hold for
+every store, because they are about the two members the port actually requires.
+
+### The one declaration that exists today
+
+Across all four in-tree stores, exactly one:
+
+```ts
+declared: {
+  'ownership-fills-in-on-a-later-signed-turn':
+    'the service pins userId at create and refuses to change it, so a conversation that ' +
+    'ran anonymously cannot be moved into somebody’s index on a later turn',
+}
+```
+
+That is `agentEngineSessions`. Its backing service requires a `userId` when a
+session is created and refuses to change it afterwards, so a conversation that
+ran anonymously on turn one stays under the anonymous placeholder in the
+service-side index forever. Its real owner **is** recorded — in the envelope,
+where `persist` reads it to refuse a foreign signer — but the index that
+`ownerOf` and `listByUser` answer from cannot be moved. Such a session appears
+in nobody's list until it is written under a new id.
+
+That is a ceiling of the backing service, not a defect and not a gap in the
+battery. It is written down so it can be argued with, and the case still runs
+against it every build.
+
+### A missing runtime is not a store failing a law
+
+`sqliteSessions` needs `node:sqlite`, which ships from Node 22.5; this package
+still supports Node 20. On a runtime without it the store cannot be
+**constructed at all**, so there is no store to ask, and `declared` would be the
+wrong tool — a declaration answers a question about the port. The battery is
+therefore skipped **whole** for that harness, and visibly, so a runner reports it
+as skipped rather than as quietly absent. The distinction is the same one the
+three non-pass outcomes are built on: a case that did not run must never look
+like one that passed.
+
+## The rule the battery is checking — session ownership
+
+An owner is a fact about the **conversation**, established by the first turn that
+signs for it. `resolveSessionOwner(sessionId, storedOwner, incomingOwner)` is the
+one implementation of that rule, exported from `agentfootprint/hosting` and
+called by every shipped store:
+
+| stored | incoming | outcome |
+|---|---|---|
+| nobody | nobody | still nobody — an anonymous conversation |
+| nobody | somebody | **filled in** — the first turn that signs, owns |
+| somebody | nobody | **kept** — a leaner turn erases nothing |
+| somebody | the same | **kept** — the ordinary turn |
+| somebody | **different** | **refused** — `SessionOwnershipConflictError` |
+
+```ts twoslash
+import { envelopeOwner, resolveSessionOwner } from 'agentfootprint/hosting';
+import type { CheckpointEnvelope } from 'agentfootprint/hosting';
+
+declare const rows: Map<string, CheckpointEnvelope>;
+declare const owners: Map<string, string>;
+declare const sessionId: string;
+declare const checked: CheckpointEnvelope;
+// ---cut---
+// Inside your persist, INSIDE whatever makes read-then-write atomic for you.
+const owner = resolveSessionOwner(sessionId, owners.get(sessionId), envelopeOwner(checked));
+
+// Only now — a refusal above must leave the stored conversation alone.
+rows.set(sessionId, checked);
+if (owner !== undefined) owners.set(sessionId, owner);
+```
+
+Empty strings read as "nobody" on both sides, matching `envelopeOwner`, so a
+store that keeps `''` for an unowned row cannot accidentally turn it into a
+principal that conflicts with everybody.
+
+It is a function rather than a base class because stores share no ancestry and
+should not start now: one is a `Map`, one is a SQL upsert, one is a distributed
+transaction, one is a managed service. What they share is a **decision**, so what
+they share is a decision function.
+
+<Callout type="warn" title="Atomicity is yours, and cannot be this function's">
+A read-then-decide is only as safe as the transaction it happens inside, and
+only your store knows what it has. `resolveSessionOwner` owns the answer; **where
+it is safe to ask** is your store's own promise — and
+`contested-write-leaves-no-split-brain` is the case that checks you kept it.
+</Callout>
+
+### What `SessionOwnershipConflictError` means
+
+A `persist` was about to leave the ownership index naming one person and the
+stored conversation naming another. It is refused **whole**: neither the index
+nor the envelope changes. A store that catches this and writes the payload
+anyway has re-created the exact defect — the refusal exists to stop the
+*conversation* being replaced, not merely to protect an index column.
+
+The error carries `code: 'ERR_SESSION_OWNERSHIP_CONFLICT'` and the `sessionId`,
+and **nothing else**: not the owner, not the caller, not a line of either
+conversation. An error is read by whoever provoked it, and a refusal that names
+the person who owns a session is an oracle for who is signed in. The session id
+is there because it is the caller's own string, which is the one thing the
+message teaches nobody anything by repeating.
+
+### When it does NOT fire
+
+**A leaner turn is accepted.** A turn carrying no identity claims nobody, so it
+contradicts nobody; the port blesses that write in as many words, and the
+established owner stands. Refusing it would fail a flow the library's own
+documentation describes as intended, in order to protect against a claim that
+was never made. On top of that the composer cannot even produce the divergent
+state: identity is inherited through `continueFrom`, so a continued conversation
+carries the identity it started with.
+
+<Callout type="warn" title="Behaviour change: a persist that used to succeed now refuses">
+Stated plainly, because a deployer has to read it. A second signer writing onto
+somebody else's owned session used to store its conversation; it now throws.
+
+It **cannot** fire at a verifying door — `standingAgent` with `identity: { verify }`
+refuses a foreign turn before the store is reached at all. It **can** fire at a
+header-trust door with no verifier, which is exactly the configuration that
+produced the split brain. Note what that costs even now: at such a door the
+model has already been given the prior conversation by the time the write
+refuses. The refusal stops the *store* being corrupted; a **verifier** is what
+stops a stranger reading the conversation in the first place.
+</Callout>
+
+### Which of the two says who owns a session
+
+Two things can answer "whose session is this", and it is worth knowing which
+answers where.
+
+- The **index** (`ownerOf`) is the authority for listing and for the
+  session-history ops. `{ op: 'session-transcript' }` asks it, and nothing
+  re-derives an answer behind it.
+- An ordinary **turn** does not ask it. It re-derives from the envelope it has
+  just hydrated — `envelopeOwner(stored)`, the same derivation, one round-trip
+  cheaper — which is what keeps a store with **no** index protected exactly as
+  well as one with a fast one.
+
+Those two are safe to treat as one answer only because they can no longer name
+different people, and the refusal above is what buys that. Before it, they
+could, and that was the bug.
+
+They *can* still differ in one direction, and this is a real asymmetry rather
+than a bug to be surprised by: an index that names somebody over a conversation
+that names nobody, which is what a leaner turn leaves behind. That state only
+ever **refuses** — the owner can still list and read the session, and a turn on
+it is refused at any verifying door, for everybody, because the envelope names
+nobody to match against.
+
+## The identity a store reads is not the identity memory keys on
+
+Both are called identity and they are different things. The `principal` on a
+stored conversation is what this page's ownership rule is derived from. The
+`{ tenant, principal, conversationId }` tuple that addresses memory rows and
+artifacts is a separate encoding with its own injectivity requirement — see
+[the identity namespace](doc:memory-and-stores#multi-tenant-identity-is-enforced-at-the-store).
+
+## Symbols
+
+| Symbol | Door | What it is |
+|---|---|---|
+| `runSessionLifecycleConformance(harness)` | `agentfootprint/hosting` | Run the whole battery against one store → `Promise<SessionLifecycleReport>` |
+| `runSessionLifecycleCase(testCase, harness)` | `agentfootprint/hosting` | Run **one** case, building and disposing the store around it → `Promise<SessionLifecycleOutcome>` |
+| `sessionLifecycleConformance` | `agentfootprint/hosting` | The battery: `readonly SessionLifecycleCase[]`, 13 of them, ordered so a store fails it most usefully (reading before writing, writing before ownership, ownership before the listing built on it) |
+| `formatConformanceReport(report)` | `agentfootprint/hosting` | The report as a string — one line per case, with the reason a case did not simply pass |
+| `SessionStoreHarness` | `agentfootprint/hosting` | How the battery reaches your store: `{ name, createStore, disposeStore?, corrupt?, declared? }` |
+| `SessionLifecycleReport` | `agentfootprint/hosting` | `{ store, outcomes, passed, notApplicable, declared, failed, ok }` |
+| `SessionLifecycleOutcome` | `agentfootprint/hosting` | One case's result — a union on `status`, carrying `missing`, `reason` + `stillFails`, or `error` |
+| `SessionLifecycleCase` | `agentfootprint/hosting` | One case: `name`, `law`, optional `members` / `harnessNeeds`, and `run(store, kit)` |
+| `SessionLifecycleCaseName` | `agentfootprint/hosting` | The closed union of the 13 case names — what `declared` is keyed by |
+| `SessionStoreMember` | `agentfootprint/hosting` | `'listByUser' \| 'ownerOf' \| 'forget'` — the members a case can be not-applicable for |
+| `ConformanceKit` | `agentfootprint/hosting` | What a case is handed beside the store: `id()`, `envelope()`, `harness` |
+| `resolveSessionOwner(sessionId, stored, incoming)` | `agentfootprint/hosting` | The one owner-transition rule → the owner to record, or throws |
+| `SessionOwnershipConflictError` | `agentfootprint/hosting` | `ERR_SESSION_OWNERSHIP_CONFLICT` — the two would have named different people |
+
+## Status
+
+| Piece | Door | Status |
+|---|---|---|
+| `resolveSessionOwner` + `SessionOwnershipConflictError` | `agentfootprint/hosting` | Shipped (9.37.0). Called by all four in-tree stores; the split-brain state it prevents was reproduced live before the fix |
+| `sessionLifecycleConformance` — the 13 cases | `agentfootprint/hosting` | Shipped (9.37.0). Run against four in-tree stores every build, one `it()` per case per store, entirely offline |
+| `runSessionLifecycleConformance` / `runSessionLifecycleCase` / `formatConformanceReport` | `agentfootprint/hosting` | Shipped (9.37.0) — the out-of-tree entry points |
+| The no-silent-skip rule | — | Shipped and **executable**: a harness missing a needed hook with no declaration is asserted to come back `'failed'` |
+| Conformance for the two host ports | `agentfootprint/hosting` | Separate suites, described on [Hosting & runtime](doc:hosting-and-runtime#the-conformance-suites) |
+
+## Next
+
+- [Hosting & runtime](doc:hosting-and-runtime) — the ports this battery checks, and the composer above them
+- [Sessions in a file](doc:sqlite) — `sqliteSessions`, one of the four stores under the battery
+- [Memory & stores](doc:memory-and-stores) — the other identity encoding, and why it has to be injective
+- [Infrastructure: ports & adapters](doc:infrastructure) — the boundary this page is one port of

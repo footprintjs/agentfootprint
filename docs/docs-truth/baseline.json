@@ -5,18 +5,18 @@
   "recordedAt": "2026-08-14",
   "surface": {
     "subpaths": 13,
-    "declaredSymbols": 1736,
+    "declaredSymbols": 1752,
     "declaredEvents": 93,
     "eventSource": "src/events/registry.ts:665"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 857,
+      "documented-never-exercised": 874,
       "exercised-undocumented": 33,
       "undocumented-unexercised": 605,
       "site-code-sample-only": 19,
-      "written-but-not-published": 120,
+      "written-but-not-published": 119,
       "ok": 102
     },
     "events": {
@@ -721,7 +721,6 @@
     "formatToolContractCheckup",
     "getDefaultCacheStrategy",
     "heuristicExtractor",
-    "identityNamespace",
     "injectionKeyForSlot",
     "isCheckInDecision",
     "isFact",

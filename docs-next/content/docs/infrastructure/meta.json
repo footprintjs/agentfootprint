@@ -11,6 +11,7 @@
     "governance-and-policy",
     "---[Server]Runtime & tools---",
     "hosting-and-runtime",
+    "session-stores",
     "tools-and-gateways",
     "---[Activity]Telemetry---",
     "observability-sinks",

@@ -699,6 +699,129 @@ All three follow the same peer-dep + subpath import pattern as every store above
 
 Every `MemoryStore` method takes `MemoryIdentity` as the first arg. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong identity surfaces as "no data" — not as a cross-tenant leak.
 
+`identityNamespace(identity)` is how that tuple becomes one string for stores
+that need a single key — a Redis prefix, a SQLite column, an object-store key.
+It is `tenant/principal/conversationId`, each field passed through
+`encodeIdentityField` first.
+
+### Why the encoding has to be injective
+
+**Injective** means two different tuples never spell the same string. That is not
+tidiness; it is the isolation guarantee itself. A namespace two scopes share is
+one scope reading, overwriting and erasing the other's rows — no race, no
+misconfiguration, just arithmetic.
+
+Until 9.37.0 the fields were joined with a raw `/`, and two different scopes did
+collapse onto one namespace:
+
+```
+{ tenant: 'acme/hr', principal: 'alice' }   →  acme/hr/alice/c1
+{ tenant: 'acme',    principal: 'hr/alice' } →  acme/hr/alice/c1
+```
+
+This is reachable rather than theoretical: a JWT `sub` is frequently a URI, and
+URIs contain slashes. In a measured case an audit read another scope's artifact
+payload in full.
+
+Two things could collapse two tuples into one string, and each has a rule.
+
+**The separator.** `/` is escaped to `%2F` — and `%`, the escape's own
+introducer, is escaped **first**, to `%25`. The order is the whole proof. Because
+`%` is inert before any escape is emitted, a decoder that undoes them in the
+reverse order (`%2F`, then `%25`) is a **left inverse** of the encoder — and a
+left inverse existing IS injectivity. Reverse those two lines and `a%2Fb` decodes
+onto the value that produced `a/b`, which moves the collision rather than closing
+it.
+
+**The absence marker.** A field that was not given still needs a segment, and
+that segment is `IDENTITY_ABSENT` — the string `_`. A tenant *named* `_` is a
+different scope from *no tenant*, so a present value that spells the marker is
+escaped to `%5F`. Those three bytes are unreachable any other way, because every
+`%` in an encoded value is already escaped — which is what makes the segment safe
+to reserve.
+
+```ts twoslash
+import { encodeIdentityField, identityNamespace, IDENTITY_ABSENT } from 'agentfootprint/memory';
+
+encodeIdentityField('acme'); // 'acme'      — a well-behaved value is unchanged
+encodeIdentityField('acme/hr'); // 'acme%2Fhr' — cannot donate a field boundary
+encodeIdentityField('a%2Fb'); // 'a%252Fb'  — and does not become 'a/b'
+encodeIdentityField('_'); // '%5F'      — a value that spells absence
+encodeIdentityField(undefined); // '_'        — IDENTITY_ABSENT itself
+
+IDENTITY_ABSENT; // '_'
+
+identityNamespace({ tenant: 'acme/hr', principal: 'alice', conversationId: 'c1' });
+// 'acme%2Fhr/alice/c1'  — always exactly three segments
+```
+
+A non-string field is refused with a `TypeError`, and the value is deliberately
+**not** quoted in the message: this function is the identity boundary, and an
+error string is the one place a tenant id must never travel. Convert it at the
+call site instead.
+
+### Absence has exactly one spelling
+
+`undefined`, `null` and `''` all mean "not given" and all encode to
+`IDENTITY_ABSENT`. The conflation is deliberate: an empty string is not a name,
+and treating it as one would create a second anonymous scope rather than
+distinguish anything real. The other half of the same rule is that a value
+literally equal to the sentinel is escaped away from it, so it cannot impersonate
+absence.
+
+### Upgrading re-keys almost nobody — and that is measured
+
+<Callout type="info" title="A well-behaved value keeps its EXISTING namespace, byte for byte">
+A value containing neither the separator (`/`) nor the escape introducer (`%`),
+and which is not exactly `_`, is returned unchanged. Every artifact and memory row
+written under an ordinary id therefore keeps its address, and there is no
+migration to run.
+
+Measured against a corpus of realistic ids: **18,225 tuples identical, and every
+value that did change was one that contains `/`, contains `%`, or is exactly
+`_` — none fell outside that class**. The only keys that move are keys that were already colliding with
+somebody else's, and those were broken. Eight literal expected namespaces are
+pinned by test so a future "simplification" cannot silently re-key anyone, and a
+39,304-tuple adversarial cross-product plus decoder round-trips pin the
+injectivity.
+</Callout>
+
+If your scope values do contain a `/`, a `%`, or are exactly `_`, then your rows
+were sharing a namespace with another scope before this release, and their
+addresses change. Read them under the old key and rewrite them, or accept the
+loss deliberately — there is no in-place upgrade for a key that was ambiguous.
+
+### Writing your own encoder
+
+`encodeIdentityField` is exported for adapters that build their own key shapes;
+it is what `memoryBank` uses per field. `distinctFromAbsent(escaped)` is the
+narrower half, for an adapter that already does its own escaping and only needs
+the absence law applied on top — the artifact path encoder is one, because it
+escapes with `encodeURIComponent` and has `.` to handle as well, so a field of
+`..` cannot become a directory hop.
+
+<Callout type="warn" title="`distinctFromAbsent` has a precondition, and it is load-bearing">
+Whatever escaper you hand it must itself escape `%`. Without that, a
+caller-supplied `%5F` collides with an escaped `_` and the function is hiding a
+collision instead of closing one. `encodeURIComponent` satisfies it;
+a hand-rolled escaper may not.
+</Callout>
+
+<Callout type="warn" title="Two composition seams are known and NOT closed">
+A `:` inside a conversation id (the `RedisStore` key seam) or a `#` (the
+`s3VectorsStore` seam) still lets two different (scope, entry) pairs compose one
+key. Escaping them in the encoder would close it and would also re-key every
+`urn:`- or `sub:`-style id, breaking the byte-preservation property above. Named
+here rather than buried: if your ids carry those characters, choose the
+composition yourself.
+
+Separately, `AgentCoreStore`'s `actorId` slugs non-alphanumerics and joins
+tenant + principal with `_`, so `a_b` + `c` collides with `a` + `b_c`. It is left
+alone deliberately, because any fix re-keys durable rows in somebody else's
+account and underscores in ids are common — so the migration is the operator's
+decision to make, not this library's.
+</Callout>
+
 ## Status
 
 | Piece | Door | Peer dep | Status |
@@ -712,6 +835,7 @@ Every `MemoryStore` method takes `MemoryIdentity` as the first arg. Adapters MUS
 | `AgentCoreStore` | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned |
 | `BedrockAgentMemory` (reader, not a store) | `agentfootprint/memory` | `@aws-sdk/client-bedrock-agent-runtime` | Shipped; contract-mapped and injection-tested |
 | `listMemoryStrategies()` / build-time requirement refusal | `agentfootprint/memory` | — | Shipped (9.5.0) |
+| `identityNamespace` / `encodeIdentityField` / `distinctFromAbsent` / `IDENTITY_ABSENT` | `agentfootprint/memory` | — | Shipped (9.37.0) — injective, with the left inverse pinned by test. Well-behaved ids keep their existing namespace byte for byte; two composition seams named above are **not** closed |
 | `SUMMARIZE` LLM compression | — | — | **Declared, not wired** — see the caveat above |
 | `RedisSearchStore`, DynamoDB, Pinecone / Qdrant / Weaviate | — | — | Planned |
 
