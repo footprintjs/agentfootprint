@@ -37,10 +37,7 @@
  * resolves correctly.
  */
 
-import {
-  buildReadSkillTool,
-  buildSkipStepTool,
-} from '../../lib/injection-engine/skillTools.js';
+import { buildReadSkillTool, buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
 import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../lib/injection-engine/skillSteps.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
