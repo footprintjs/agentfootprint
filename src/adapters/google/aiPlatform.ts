@@ -96,6 +96,36 @@ export interface VertexSession {
   readonly ttl?: string | null;
 }
 
+/**
+ * One appended session event — **the only way session STATE may be changed.**
+ *
+ * A live field trial established this against the real service (2026-08-14):
+ * `sessions.patch` with `updateMask: 'sessionState'` is refused with HTTP 400
+ * and the service's own words, recovered through a raw diagnostic that carried
+ * no conversation state:
+ *
+ *   "Can't update the session state for session …, you can only update it by
+ *    appending an event."
+ *
+ * The same trial then sent `appendEvent` with `actions.stateDelta` and the
+ * following `GET` returned the new state. So the fields below are not the whole
+ * `SessionEvent` message — they are the four this column writes: the three the
+ * message marks Required (`author`, `invocationId`, `timestamp`) plus the
+ * `actions.stateDelta` that carries the change.
+ */
+export interface VertexSessionEvent {
+  /** Required by the message: who sent it. */
+  readonly author?: string | null;
+  /** Required by the message: which invocation it belongs to. */
+  readonly invocationId?: string | null;
+  /** Required by the message: RFC 3339, client-side. */
+  readonly timestamp?: string | null;
+  /** What the event DOES. `stateDelta` is the half this column uses. */
+  readonly actions?: {
+    readonly stateDelta?: Record<string, unknown> | null;
+  } | null;
+}
+
 /** The `sessions` collection. Every method here is pinned. */
 export interface SessionsApi {
   create(params: {
@@ -104,6 +134,21 @@ export interface SessionsApi {
     requestBody: VertexSession;
   }): Promise<RestResponse<LongRunningOperation> | undefined>;
   get(params: { name: string }): Promise<RestResponse<VertexSession> | undefined>;
+  /**
+   * Append one event — and, through `actions.stateDelta`, the only supported
+   * way to change `sessionState` after creation. Synchronous: it answers a
+   * response, not a long-running operation.
+   */
+  appendEvent(params: {
+    name: string;
+    requestBody: VertexSessionEvent;
+  }): Promise<RestResponse<Record<string, unknown>> | undefined>;
+  /**
+   * **Not for `sessionState`.** See {@link VertexSessionEvent}: the live
+   * service refuses a state patch by name. Pinned because the method exists and
+   * the surface pin asserts what this column can reach; no adapter here sends a
+   * `sessionState` mask through it.
+   */
   patch(params: {
     name: string;
     updateMask?: string;
@@ -334,7 +379,18 @@ export function resolveEngine(adapter: string, connection: AiPlatformConnection)
       throw new TypeError(
         `${adapter}: 'reasoningEngine' names project '${project}' but 'project' says ` +
           `'${connection.project}'. Two spellings of one fact that disagree are refused rather ` +
-          `than arbitrated — drop one of them.`,
+          `than arbitrated — drop one of them.\n` +
+          (looksLikeProjectNumber(project) && !looksLikeProjectNumber(connection.project)
+            ? `  These may well be the SAME project: Google hands back canonical resource ` +
+              `names with the numeric project NUMBER, while you configured the textual project ` +
+              `ID. This adapter cannot tell one case from the other without a Resource Manager ` +
+              `lookup it deliberately does not make — resolving them as equal on a guess is how ` +
+              `one project's conversations end up in another's.\n` +
+              `  Fix: pass the ENGINE ID alone ('${engineId}') beside your ` +
+              `project/location, or pass the full name Google gave you and drop 'project'.\n`
+            : '') +
+          `  A field trial hit exactly this (2026-08-14) after copying an engine's canonical ` +
+          `name out of the console.`,
       );
     }
     if (location !== undefined && location !== engineLocation) {
@@ -370,6 +426,18 @@ export function resolveEngine(adapter: string, connection: AiPlatformConnection)
     engineId,
     parent: `projects/${project}/locations/${location.trim()}/reasoningEngines/${engineId}`,
   };
+}
+
+/**
+ * Is this string the numeric project NUMBER rather than the textual project ID?
+ *
+ * Google accepts either in a resource name and answers with the number, so the
+ * two spellings of one project routinely disagree byte for byte. A project ID
+ * must start with a letter, so "all digits" separates them without ambiguity.
+ * Used only to make the refusal above teach; nothing resolves on it.
+ */
+function looksLikeProjectNumber(value: string): boolean {
+  return /^\d+$/.test(value);
 }
 
 /** `process.env` without assuming `process` exists (browser bundles do not have one). */

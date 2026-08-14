@@ -40,9 +40,14 @@
  *   429 for AI Studio prepayment, which is billing SEPARATE from the Google
  *   Cloud account's credit. What that door does with a funded key is
  *   untested here, which is why it has no default model.
- * • **Tool calling on a 3.x model** now round-trips thought signatures (below).
- *   That fix is built from the trial's captured 400, not from a live green run
- *   — nothing in this repository has yet completed a 3.x tool loop.
+ * • **Tool calling on a 3.x model: field-validated.** The signature round trip
+ *   below was built from the trial's captured 400, and the same independent
+ *   trial then re-ran it on live Vertex against the published fix
+ *   (2026-08-14): `gemini-3.1-flash-lite` called a tool, the tool answered,
+ *   the signature went back byte for byte, and the second model call
+ *   completed with the right answer — two LLM calls, one tool execution, real
+ *   token counts. What it does NOT cover is a signature attached to a TEXT
+ *   part with no function call beside it; see below.
  *
  * ─── Why native, and not `openai({ baseURL })` ──────────────────────
  *

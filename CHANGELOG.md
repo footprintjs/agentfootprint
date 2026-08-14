@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.30.0] - 2026-08-14
+
+**The field answered back: one adapter wrote with the wrong verb, another
+dropped what it was handed — both corrected, and four statuses now say what
+the trial proved.**
+
+A second independent field-trial round on live Google Cloud, 2026-08, drove
+this release.
+
+### Fixed — `agentEngineSessions` persist: the service refuses a patch of session state
+
+`sessions.patch({ updateMask: 'sessionState,ttl' })` stored the first turn of
+a conversation and then answered every later turn with `HTTP 400 — "Can't
+update the session state for session …, you can only update it by appending
+an event."` Every injected-client test passed, because a double will patch
+anything it is handed; only a live call could find this. `persist` now
+appends a `SessionEvent` whose `actions.stateDelta` carries the envelope —
+creating the session when it does not yet exist, appending again on a race
+between two writers. The pin no longer names `patch` on the sessions path,
+and the test double throws the service's own 400 for a `sessionState` patch,
+so a regression here fails offline, not in somebody's production project.
+
+### Fixed — `memoryBankStore` fidelity: source identity and caller metadata preserved
+
+A memory's `source` and the caller's own `metadata` went in and did not come
+back — silently dropped, even though the port documents `MemorySource`
+fields as ones a storage adapter "MUST preserve verbatim on every
+read/write." Both, plus `decayPolicy`, are now carried under prefixed
+metadata keys and restored verbatim on read. A caller's own value under one
+of the three keys this adapter generates (`source`, `resourceName`,
+`distance`) is refused by name rather than silently shadowed — recognized by
+*identity*, not shape, so a caller's own `distance: 12` cannot be mistaken
+for this adapter's. An oversized carried field is refused rather than
+truncated: provenance that came back shortened would be provenance nobody
+could tell was shortened.
+
+### Changed — engine naming: a project-number-shaped name beside a project id is refused teachingly
+
+`reasoningEngine` naming one project's canonical (numeric) engine name
+beside a `project` that names the same project by its textual id was already
+refused as two disagreeing spellings; that refusal now teaches when the two
+strings could plausibly be the same project spelled two ways. A project
+number is not provably the same project as an id without a Resource Manager
+lookup this library deliberately does not make — resolving them as equal on
+a guess is how one project's conversations get written into another's. The
+refusal names both fixes: pass the engine id alone beside `project` and
+`location`, or pass the full name and drop `project`.
+
+### Status — four promotions the trial earned
+
+The Gemini 3.x tool loop and thought-signature round trip is
+**field-validated**: the same trial re-ran it live against
+`gemini-3.1-flash-lite`, tool call, signature echoed back byte for byte, and
+a correct second answer. `agentEngineSessions` and `memoryBankStore` are
+**field-validated with the corrections above** — a third honest word joins
+the status matrix, **field-corrected**: the trial ran the shipped code, the
+service refused it, and the code changed to what the service actually
+accepts; neither repair has itself been re-run live yet, and the docs say
+so. `googleIdentity` is **field-validated for machine identity** — a real
+bearer credential from ADC authorized a live Vertex request, `mode: 'user'`
+and a disallowed service both failed closed — with expiry-triggered refresh
+still explicitly unproven; the trial vended twice minutes apart and did not
+wait out an hour.
+
+### Docs
+
+The Google Cloud page carries per-adapter outcomes in place of one blanket
+rung, the session method table matches the service (`appendEvent`, not
+`patch`), and the Memory Bank mapping rules — what's carried, what's
+refused, what's still dropped — are stated rather than implied. The deferred
+unified ingress-audit story (a 401 or 429 before a run exists, so
+`auditExport`'s hash chain never sees it) is named as a tracked gap rather
+than half-shipped quietly, with the seams that can record a refusal today:
+your own `verify` and `admission.decide` functions see every refusal they
+hand back, and an empty audit bundle is not evidence nobody was turned away
+— **absence of a refusal is not consent.**
+
 ## [9.29.0] - 2026-08-13
 
 **The Google column tells field truth: signatures echo, doors default

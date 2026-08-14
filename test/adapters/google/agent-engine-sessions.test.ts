@@ -8,9 +8,23 @@
  *   • an absent session and an UNREADABLE one are different facts, and only one
  *     of them may hydrate as `undefined`;
  *   • a write is not finished until the service says the operation is done;
- *   • a patch without an update mask is a REPLACE, which would clear the
- *     immutable `userId` and silently stop every later write;
+ *   • **state is written by APPENDING AN EVENT, never by patching** — the law a
+ *     field trial bought at the cost of a release (see below);
  *   • the SDK's own failure text never reaches the caller.
+ *
+ * ── The regression these tests exist to prevent ─────────────────────────────
+ * 9.29.0 persisted with `sessions.patch({ updateMask: 'sessionState,ttl' })`.
+ * Every test passed, because a double patches whatever it is handed. An
+ * independent trial ran it against the live service (2026-08-14): the first
+ * turn of a conversation stored, and every turn after it failed with
+ *
+ *   HTTP 400 — "Can't update the session state for session …, you can only
+ *               update it by appending an event."
+ *
+ * So the double in this file no longer accepts a patch. `sessions.patch`
+ * THROWS the service's own refusal shape, and the write tests assert the
+ * adapter never reaches for it — which is the only way a suite of doubles can
+ * hold a rule that lives on the server.
  *
  * Nothing here reaches Google or needs a credential.
  */
@@ -48,11 +62,22 @@ interface Call {
   readonly params: Record<string, unknown>;
 }
 
+/**
+ * The live service's refusal of a `sessionState` patch, in the shape a Gaxios
+ * error arrives in. Quoted from the field trial's raw diagnostic.
+ */
+const PATCH_REFUSED = {
+  code: 400,
+  message:
+    "Can't update the session state for session s1, you can only update it by appending an event.",
+};
+
 /** A double that records every call and answers from a tiny in-memory table. */
 function fakeVertex(
   options: {
     sessions?: Record<string, Record<string, unknown>>;
     onPatch?: (params: Record<string, unknown>) => unknown;
+    onAppend?: (params: Record<string, unknown>) => unknown;
     onCreate?: (params: Record<string, unknown>) => unknown;
     onGet?: (params: Record<string, unknown>) => unknown;
     onList?: (params: Record<string, unknown>) => unknown;
@@ -80,7 +105,16 @@ function fakeVertex(
         reasoningEngines: {
           sessions: {
             get: record('get', options.onGet, undefined) as never,
-            patch: record('patch', options.onPatch, undefined) as never,
+            // Answers what the LIVE service answers: state cannot be patched.
+            patch: record(
+              'patch',
+              options.onPatch ??
+                (() => {
+                  throw PATCH_REFUSED;
+                }),
+              undefined,
+            ) as never,
+            appendEvent: record('appendEvent', options.onAppend, { data: {} }) as never,
             create: record('create', options.onCreate, { data: { done: true } }) as never,
             delete: record('delete', options.onDelete, { data: { done: true } }) as never,
             list: record('list', options.onList, { data: { sessions: [] } }) as never,
@@ -103,15 +137,28 @@ function fakeVertex(
       return Promise.resolve({ data: found });
     }) as never;
   }
-  if (!options.onPatch) {
-    client.projects.locations.reasoningEngines.sessions.patch = ((
+  // Default appendEvent: the service's own semantics as the trial observed
+  // them — no such session is a 404, and `actions.stateDelta` MERGES into
+  // `sessionState` by top-level key rather than replacing the struct.
+  if (!options.onAppend) {
+    client.projects.locations.reasoningEngines.sessions.appendEvent = ((
       params: Record<string, unknown>,
     ) => {
-      calls.push({ op: 'patch', params });
+      calls.push({ op: 'appendEvent', params });
       const name = String(params['name']);
-      if (store[name] === undefined) return Promise.resolve(notFound());
-      store[name] = { ...store[name], ...(params['requestBody'] as object) };
-      return Promise.resolve({ data: store[name] });
+      const session = store[name];
+      if (session === undefined) return Promise.resolve(notFound());
+      const event = params['requestBody'] as {
+        actions?: { stateDelta?: Record<string, unknown> };
+      };
+      store[name] = {
+        ...session,
+        sessionState: {
+          ...((session['sessionState'] as Record<string, unknown>) ?? {}),
+          ...(event.actions?.stateDelta ?? {}),
+        },
+      };
+      return Promise.resolve({ data: {} });
     }) as never;
   }
   if (!options.onCreate) {
@@ -202,23 +249,17 @@ describe('a write is not finished until the operation is', () => {
   it('waits on an un-done operation and stops when it reports done', async () => {
     let waits = 0;
     const fake = fakeVertex({
-      onPatch: () => {
-        throw { code: 404 };
-      },
       onCreate: () => ({ data: { name: 'operations/abc', done: false } }),
       onWait: () => ({ data: { name: 'operations/abc', done: ++waits >= 2 } }),
     });
     const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
     await sessions.persist('s1', toEnvelope(conversation('hi')));
     expect(waits).toBe(2);
-    expect(fake.ops()).toEqual(['patch', 'create', 'wait', 'wait']);
+    expect(fake.ops()).toEqual(['appendEvent', 'create', 'wait', 'wait']);
   });
 
   it('refuses rather than reporting a success it never saw land', async () => {
     const fake = fakeVertex({
-      onPatch: () => {
-        throw { code: 404 };
-      },
       onCreate: () => ({ data: { name: 'operations/abc', done: false } }),
       onWait: () => ({ data: { name: 'operations/abc', done: false } }),
     });
@@ -233,21 +274,13 @@ describe('a write is not finished until the operation is', () => {
   });
 
   it('an operation with no name is refused — there is nothing to confirm against', async () => {
-    const fake = fakeVertex({
-      onPatch: () => {
-        throw { code: 404 };
-      },
-      onCreate: () => ({ data: { done: false } }),
-    });
+    const fake = fakeVertex({ onCreate: () => ({ data: { done: false } }) });
     const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
     await expect(sessions.persist('s1', toEnvelope(conversation('hi')))).rejects.toThrow(/no name/);
   });
 
   it('a failed operation raises WITHOUT the service’s own message', async () => {
     const fake = fakeVertex({
-      onPatch: () => {
-        throw { code: 404 };
-      },
       onCreate: () => ({
         data: {
           name: 'operations/abc',
@@ -263,29 +296,19 @@ describe('a write is not finished until the operation is', () => {
     expect(String(error)).not.toContain('secret@example.com');
   });
 
-  it('patches BEFORE creating, so the steady state costs one call', async () => {
+  it('appends BEFORE creating, so the steady state costs one call', async () => {
     const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
     const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
     await sessions.persist('s1', toEnvelope(conversation('hi')));
-    expect(fake.ops()).toEqual(['patch']);
+    expect(fake.ops()).toEqual(['appendEvent']);
   });
 
-  it('a patch always names an update mask — a maskless one would clear the immutable userId', async () => {
-    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
-    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
-    await sessions.persist('s1', toEnvelope(conversation('hi')));
-    const patch = fake.calls.find((c) => c.op === 'patch');
-    expect(patch?.params['updateMask']).toBe('sessionState');
-    // And the mask never claims `userId`, which the service refuses to change.
-    expect(String(patch?.params['updateMask'])).not.toContain('userId');
-  });
-
-  it('a create that lost a race to another writer falls back to patching', async () => {
+  it('a create that lost a race to another writer falls back to appending', async () => {
     let created = false;
     const fake = fakeVertex({
-      onPatch: (p) => {
+      onAppend: () => {
         if (!created) throw { code: 404 };
-        return { data: { name: p['name'] } };
+        return { data: {} };
       },
       onCreate: () => {
         created = true;
@@ -295,7 +318,178 @@ describe('a write is not finished until the operation is', () => {
     });
     const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
     await sessions.persist('s1', toEnvelope(conversation('hi')));
-    expect(fake.ops()).toEqual(['patch', 'create', 'patch']);
+    expect(fake.ops()).toEqual(['appendEvent', 'create', 'appendEvent']);
+  });
+});
+
+// ── The write VERB — the field trial's own shape ────────────────────
+//
+// Finding 28 of the 2026-08-14 trial: 9.29.0 stored turn one and could never
+// store turn two, because it patched. These are the tests that would have
+// caught it with no Google account.
+
+describe('session state is written by appending an event, never by patching', () => {
+  it('a SECOND persist on an existing conversation succeeds — the trial’s exact failure', async () => {
+    const fake = fakeVertex();
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+
+    await sessions.persist('s1', toEnvelope(conversation('turn one')));
+    // Turn two. Under 9.29.0 this was an HTTP 400 the caller could not act on
+    // — the double now refuses a patch exactly as the service does, so a
+    // regression fails here rather than in production.
+    await sessions.persist('s1', toEnvelope(conversation('turn two')));
+
+    expect(fake.ops()).toEqual(['appendEvent', 'create', 'appendEvent']);
+    expect(fake.ops()).not.toContain('patch');
+    const back = await sessions.hydrate('s1');
+    expect(back?.data).toEqual(toEnvelope(conversation('turn two')).data);
+  });
+
+  it('ten turns keep answering the LAST envelope', async () => {
+    const fake = fakeVertex();
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    for (let turn = 1; turn <= 10; turn++) {
+      await sessions.persist('s1', toEnvelope(conversation(`turn ${turn}`)));
+    }
+    expect(fake.ops().filter((op) => op === 'create')).toHaveLength(1);
+    expect(fake.ops()).not.toContain('patch');
+    // `savedAt` is stamped by `toEnvelope` at call time, so the conversation
+    // itself is what this compares.
+    expect((await sessions.hydrate('s1'))?.data).toEqual(toEnvelope(conversation('turn 10')).data);
+  });
+
+  it('the appended event carries the envelope in actions.stateDelta, under ONE key', async () => {
+    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    const envelope = toEnvelope(conversation('hi'));
+    await sessions.persist('s1', envelope);
+
+    const event = fake.calls.find((c) => c.op === 'appendEvent')?.params['requestBody'] as {
+      author?: string;
+      invocationId?: string;
+      timestamp?: string;
+      actions?: { stateDelta?: Record<string, unknown> };
+    };
+    // The three the message marks Required, all present and all non-empty.
+    expect(event.author).toBe('agentfootprint');
+    expect(event.invocationId).toMatch(/\S/);
+    expect(Number.isFinite(Date.parse(String(event.timestamp)))).toBe(true);
+    // One top-level key, so a merging delta and a replacing one agree.
+    expect(Object.keys(event.actions?.stateDelta ?? {})).toEqual([SESSION_STATE_KEY]);
+    expect(event.actions?.stateDelta?.[SESSION_STATE_KEY]).toEqual(envelope);
+  });
+
+  it('another guest’s keys in the same session survive our write', async () => {
+    // A state delta merges by top-level key. This store owns exactly one, so
+    // whoever else writes under the same session keeps theirs.
+    const fake = fakeVertex({
+      sessions: {
+        [NAME]: { name: NAME, userId: 'u1', sessionState: { 'someone.else': { keep: true } } },
+      },
+    });
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    await sessions.persist('s1', toEnvelope(conversation('hi')));
+    expect((fake.store[NAME]?.['sessionState'] as Record<string, unknown>)['someone.else']).toEqual(
+      {
+        keep: true,
+      },
+    );
+  });
+
+  it('each turn gets its own invocationId — a conversation is not one invocation', async () => {
+    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    await sessions.persist('s1', toEnvelope(conversation('one')));
+    await sessions.persist('s1', toEnvelope(conversation('two')));
+    const ids = fake.calls
+      .filter((c) => c.op === 'appendEvent')
+      .map((c) => (c.params['requestBody'] as { invocationId?: string }).invocationId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it('the event author is configurable, and it is not the owner', async () => {
+    const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
+    const sessions = agentEngineSessions({
+      ...CONNECTION,
+      _client: fake.client,
+      eventAuthor: 'billing-agent',
+    });
+    await sessions.persist('s1', toEnvelope(conversation('hi', 'alice')));
+    const event = fake.calls.find((c) => c.op === 'appendEvent')?.params['requestBody'] as {
+      author?: string;
+    };
+    expect(event.author).toBe('billing-agent');
+    // `userId` was pinned at create and is untouched by an appended event.
+    expect(fake.store[NAME]?.['userId']).toBe('u1');
+  });
+
+  it('an append that fails for a reason OTHER than a missing session is refused, not re-created', async () => {
+    // The dangerous repair would be "append failed, so create instead": on a
+    // permission failure that turns one caller's refusal into a create that
+    // may 409 forever, and hides the real cause. So a failed append asks the
+    // resource whether it exists, and re-raises when it does.
+    const fake = fakeVertex({
+      sessions: { [NAME]: { name: NAME, userId: 'u1' } },
+      onAppend: () => {
+        throw {
+          code: 403,
+          message: 'caller lacks aiplatform.sessions.update on token ya29.SECRET',
+        };
+      },
+    });
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    const error = await sessions.persist('s1', toEnvelope(conversation('hi'))).catch((e) => e);
+    expect(String(error)).toContain('sessions.appendEvent');
+    expect(String(error)).toContain('HTTP 403');
+    expect(String(error)).not.toContain('ya29.SECRET');
+    expect(fake.ops()).toEqual(['appendEvent', 'get']);
+    // Nothing was created behind the failure.
+    expect(fake.ops()).not.toContain('create');
+  });
+
+  it('an append refused without a 404 on a session that is GONE still creates it', async () => {
+    // The mirror of the test above, and the reason `missing()` exists: the
+    // trial verified create-on-a-new-session and append-on-an-existing one,
+    // and never measured what the service says when you append to a session
+    // that is not there. So the first turn does not ride on a guessed status.
+    let created = false;
+    const fake = fakeVertex({
+      onAppend: () => {
+        if (!created) throw { code: 400, message: 'session not found in this engine' };
+        return { data: {} };
+      },
+      onGet: () => {
+        if (!created) throw { code: 404 };
+        return { data: { name: NAME, userId: 'u1' } };
+      },
+      onCreate: () => {
+        created = true;
+        return { data: { name: 'op/1', done: true } };
+      },
+    });
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    await sessions.persist('s1', toEnvelope(conversation('hi')));
+    expect(fake.ops()).toEqual(['appendEvent', 'get', 'create']);
+  });
+
+  it('the ttl is sent on create and never claimed to slide', async () => {
+    const fake = fakeVertex();
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client, ttl: '172800s' });
+    await sessions.persist('s1', toEnvelope(conversation('one')));
+    await sessions.persist('s1', toEnvelope(conversation('two')));
+
+    const create = fake.calls.find((c) => c.op === 'create')?.params['requestBody'] as {
+      ttl?: string;
+    };
+    expect(create.ttl).toBe('172800s');
+    // And no later call pretends to renew it — whether an appended event
+    // renews the expiry is unmeasured, so nothing here says it does.
+    const appends = fake.calls.filter((c) => c.op === 'appendEvent');
+    expect(appends).toHaveLength(2);
+    for (const append of appends) {
+      expect(JSON.stringify(append.params)).not.toContain('172800s');
+    }
   });
 });
 

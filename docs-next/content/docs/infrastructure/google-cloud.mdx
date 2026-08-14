@@ -27,9 +27,16 @@ is the only Google package agentfootprint loads.
 Several rows below are marked **field-validated — an independent field trial,
 2026-08**. That is one specific thing: the adapter answered a real request from
 the real service, in a live billing-enabled Google Cloud project, run by someone
-who is not the author of this library, against the published package. The trial
+who is not the author of this library, against the published package. The first round
 ran `agentfootprint@9.25.0` on Node 22 with `@google/genai@2.16.0`, created a
 dedicated project, and deleted every resource afterwards.
+
+A **second round on 2026-08-14** re-ran the published `agentfootprint@9.29.0`
+with `@googleapis/aiplatform@31.0.0` and `google-auth-library@11.0.2` — this
+time against the three new Agent Runtime adapters, a Gemini 3.1 tool loop, and
+the identity provider. It confirmed the 9.29 Gemini fix, promoted three rows
+below, and found the two defects 9.30.0 repairs. It also left nothing behind:
+five temporary reasoning engines, all deleted, total spend under five cents.
 
 It is not "verified in a production field deployment" — no adapter on this site
 carries that phrase, and this one does not either; a trial is not sustained
@@ -46,16 +53,16 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 
 | Google service | Adapter | Door | Peer dep | Ops covered | Status | Capability page |
 |---|---|---|---|---|---|---|
-| **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **Field-validated on the Vertex door** — an independent field trial, 2026-08: a real two-call tool loop and real streaming on `gemini-2.5-flash`. **Not every door/model pair works** — read [the matrix](#the-doormodel-matrix) before you pick one | [Gemini](doc:gemini) |
+| **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **Field-validated on the Vertex door** — an independent field trial, 2026-08: a real two-call tool loop and real streaming on `gemini-2.5-flash`; and on **2026-08-14** a live `gemini-3.1-flash-lite` tool loop through 9.29's thought-signature round trip, which is the 3.x path that used to 400 after the tool had already run. **Not every door/model pair works** — read [the matrix](#the-doormodel-matrix) before you pick one | [Gemini](doc:gemini) |
 | **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **Field-validated on the Vertex door** — 2026-08: `gemini-embedding-001` at 768 dimensions, indexed through `defineRAG`. The Gemini-API door was blocked by billing, not by code — see [the matrix](#the-doormodel-matrix) | [Embedders](doc:embedders) |
 | **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **Field-validated** — 2026-08: nine live checks against a real bucket, including scope isolation, native streaming, TTL expiry, budget eviction and the sanitized 404 | [Artifacts](doc:artifacts) |
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | **Field-validated as the corrected recipe below** — 2026-08: one six-span trace read back from Cloud Trace. The recipe this page shipped before that trial did **not** work; what changed is written out in full | [Observability sinks](doc:observability-sinks) |
 | **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this transport has no certificate, signer or custom-`fetch` hook — see below | [Tools & gateways](doc:tools-and-gateways) |
-| **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .patch / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. **Not** the session EVENT log — one envelope per session, not a per-turn append | **contract-shaped and tested; awaiting field use.** The *service* was field-checked in 2026-08 — two user-bound sessions, states and events persisted and filtered — but through raw REST, not through this adapter, which shipped after that trial | [Hosting & runtime](doc:hosting-and-runtime) |
-| **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **contract-shaped and tested; awaiting field use.** Same split: the 2026-08 trial proved the *service* (create / list / exact-scope / similarity, distances and all) through raw REST; the adapter shipped after it | [Memory & stores](doc:memory-and-stores) |
+| **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .appendEvent / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. State is written by **appending an event** — the service forbids patching it. Reads never touch the event log: one envelope per session, read out of `sessionState` | **Field-validated, with the write verb field-CORRECTED (9.30.0).** The 2026-08-14 trial ran this adapter live: create, hydrate through a fresh instance, owners, paged `listByUser`, `ownerOf`, an unknown envelope format refused before storage, idempotent forget — all PASS. The **second** write failed, because 9.29.0 patched `sessionState` and Google refuses that; 9.30.0 appends an event instead (the repair the same trial verified on the wire). The corrected write has not itself been re-run live | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **Field-validated on the data plane** — 2026-08-14, this adapter against a real Memory Bank: cross-conversation recall under a widened scope, two identities sharing one entry id without collision, string and JSON values, pagination cursors, tier filtering, similarity with correctly *ordered* scores, scoped delete and `forget()`, and the five unsupported ops refusing by name. The same trial found entries losing `source` and caller `metadata`; **9.30.0 carries them** (that fix is tested, not yet re-run live) | [Memory & stores](doc:memory-and-stores) |
 | **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 No adapter — but **Node deploys**, verified: the 2026-08 trial ran a Node container through both Agent Runtime routes. The [recipe](#agent-runtime-on-nodejs--the-verified-recipe) is below; run it on Cloud Run instead if you would rather not own the contract | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Vector Search** (v1 `Index` / `IndexEndpoint`) | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — needs a deployed IndexEndpoint, so there is no cheap path to verify one | [Memory & stores](doc:memory-and-stores) |
-| **Identity** (ADC, workload identity federation, impersonation) | `googleIdentity()` | `agentfootprint/security` | `google-auth-library` | Google access tokens for Google APIs, from ADC / WIF / an impersonated service account. **Not** `mode: 'user'` — refused by name, since Google's per-user vault has no Node surface | **contract-shaped and tested; awaiting field use** | [Identity & credentials](doc:identity-and-credentials) |
+| **Identity** (ADC, workload identity federation, impersonation) | `googleIdentity()` | `agentfootprint/security` | `google-auth-library` | Google access tokens for Google APIs, from ADC / WIF / an impersonated service account. **Not** `mode: 'user'` — refused by name, since Google's per-user vault has no Node surface | **Field-validated for machine identity; refresh bounded** — 2026-08-14: a real bearer from ADC authorized a Vertex request (HTTP 200), expiry ≈3,599 s out, a second vend without reconstruction, `mode: 'user'` and a disallowed service both failing **closed**, and `JSON.stringify(credential)` yielding `{"kind":"bearer"}` — no token, no header. **Not** proven: an expiry-triggered refresh; the run did not span an hour | [Identity & credentials](doc:identity-and-credentials) |
 | **Agent Identity auth manager** (3-legged OAuth, API-key vault) | — | — | — | — | ⏸️ **Parked** — Preview with no Node surface as of 2026-08-12 | — |
 | **Agent Retrieval** (ex-Vector Search 2.0) | — | — | — | — | ⏸️ **Parked** — no Node SDK published as of 2026-08-12 | — |
 | **Vertex AI Extensions** | — | — | — | — | ⛔ Deprecated 2026-05-26, shutdown after 2026-11-26. Do not build on it | — |
@@ -68,15 +75,24 @@ exercised through an injected `_client` seam, plus a **surface pin** that checks
 the method names — and the API version — against that installed package on every
 test run. That is the **contract-shaped and tested; awaiting field use** rung,
 and it means exactly what it says: *this one has not yet answered a request from
-Google in a real project.* `agentEngineSessions`, `memoryBankStore` and
-`googleIdentity` are all on it.
+Google in a real project.*
 
-**Field-validated** is one rung higher and is claimed only where the trial above
-actually made the call: `gemini()` and `geminiEmbedder()` on the **Vertex** door,
-`gcsArtifacts()`, the corrected Cloud Trace recipe, and `gatewayTransport` +
-`mcpClient` against an ordinary bearer gateway. Where the trial exercised the
-*Google service* but not this library's adapter, the row says so rather than
-borrowing the credit.
+**Field-validated** is one rung higher and is claimed only where a trial
+actually made the call: `gemini()` and `geminiEmbedder()` on the **Vertex**
+door, `gcsArtifacts()`, the corrected Cloud Trace recipe, `gatewayTransport` +
+`mcpClient` against an ordinary bearer gateway — and, since the **2026-08-14**
+second round, `agentEngineSessions()`, `memoryBankStore()` and
+`googleIdentity()`, which that round ran live against real Agent Runtime
+resources. Where a trial exercised the *Google service* but not this library's
+adapter, the row says so rather than borrowing the credit.
+
+That second round also earned this page a third phrase, used on exactly two
+rows: **field-corrected**. It means the trial ran the shipped code, the service
+refused it, and the code changed to what the service actually accepts — the
+session write verb (`patch` → `appendEvent`) and the Memory Bank entry mapping
+(`source` and caller `metadata` now carried). Both repairs are tested here and
+built on measured service behaviour; neither has been re-run live yet, and the
+rows say that too.
 
 No adapter on this page — and none anywhere on this site — is described as
 *verified in a production field deployment*. A trial is not production traffic.
@@ -557,19 +573,65 @@ children of `projects/*/locations/*/reasoningEngines/{id}`, and there is nowhere
 else to put them. Creating one is a control-plane job (gcloud, Terraform, the
 console) that this library deliberately does not do.
 
+**Name the engine one way, not two.** `reasoningEngine` takes either the bare id
+(`'1234567890'`) or the full resource name, and the full name carries its own
+project and location — so passing it *beside* a `project` that disagrees is
+refused rather than arbitrated. The trip-wire the 2026-08-14 trial hit: Google
+hands back canonical names carrying the numeric **project number**, while your
+config almost certainly holds the textual **project ID**. Those two strings
+disagree byte for byte even when they are the same project, and this library will
+not resolve them as equal on a guess — resolving a number to an ID it never
+looked up is how one project's conversations end up written into another's. The
+refusal names this case and tells you the fix, which is: pass the **engine id
+alone** beside your `project` and `location`, or pass the full name Google gave
+you and drop `project`. Both spellings work; mixing them does not. (The same rule
+applies to `memoryBankStore`, which shares this resolver.)
+
 **The fit is genuinely good.** `Session.sessionState` is an arbitrary JSON
 `Struct` and a `CheckpointEnvelope` is arbitrary JSON, so the envelope goes in
 whole and comes back whole — no event log to fold and no blob encoding to get
-wrong. The session *event* log exists and is deliberately not used: this store
-keeps one envelope, and a per-turn append would be a second copy of the
-conversation that nothing reads.
+wrong.
 
-**Four SDK facts shaped the adapter, and two of them would have been bugs.**
+<Callout type="warn" title="State is written by APPENDING AN EVENT — 9.29.0 patched it, and the field trial caught that">
+9.29.0 persisted a turn with `sessions.patch({ updateMask: 'sessionState,ttl' })`,
+and **this page documented that method**. The live service refuses it:
+
+```text
+HTTP 400 — Can't update the session state for session …, you can only update it
+           by appending an event.
+```
+
+So `agentEngineSessions()` stored the first turn of a conversation and failed on
+every turn after it — the core job of a session store. Every injected-client test
+passed, because a double patches whatever it is handed; only a live call could
+find this.
+
+**9.30.0 changes the verb.** `persist()` now sends `sessions.appendEvent` with the
+envelope in `actions.stateDelta` — the repair the same trial verified end to end
+(append accepted, the following `GET` returning the new state). Two things follow:
+
+- **A state delta merges by top-level key**, and this store writes exactly one
+  (`SESSION_STATE_KEY`), so another guest's keys under the same session survive.
+- **A conversation now has an event log behind it** — one event per persisted
+  turn, because that is the only writing surface the service offers. Nothing here
+  *reads* it: `hydrate` still reads the one envelope out of `sessionState`, so the
+  log is the service's audit trail of our writes, never a second copy of the
+  truth. `forget()` deletes the session and its events together.
+- **`ttl` is sent on create only.** Whether an appended event renews the expiry is
+  not something this library has measured, so nothing here claims sliding expiry —
+  set a `ttl` long enough at creation if a conversation must outlive it.
+
+If you are upgrading from 9.29.0: no session data is lost, and no migration is
+needed. Sessions written by 9.29.0 hydrate unchanged; their next turn appends
+rather than patching.
+</Callout>
+
+**Five SDK facts shaped the adapter, and two of them would have been bugs.**
 
 - **`create` accepts a caller-supplied `sessionId`.** Your session id *is* the
   resource id, so `hydrate` is one `get` by name — no mapping table, no listing.
-- **`create` and `delete` return a long-running Operation; `get` and `patch`
-  return the Session.** Every write waits for the operation to report `done`
+- **`create` and `delete` return a long-running Operation; `get` and
+  `appendEvent` return directly.** Every operation-shaped write waits for it to report `done`
   before returning. A `persist` that came back early would make the very next
   `hydrate` a race whose failure mode is *"no conversation"* — which nobody can
   tell from a new user. Past `operationTimeoutMs` (default 30s) it **refuses**
@@ -581,9 +643,22 @@ conversation that nothing reads.
   anonymously is stored under `DEFAULT_USER_ID` rather than a minted per-session
   id — minting one would make every `listByUser` return exactly one row and look
   like it worked.
-- **A patch without an update mask is a REPLACE.** It would clear the immutable
-  `userId`, the service would then refuse the write, and the conversation would
-  silently stop persisting. Every patch this adapter sends names its fields.
+- **`sessionState` cannot be patched at all** (the callout above). The first
+  write is the only one that may name `userId`; every later turn appends an
+  event, which touches the state and nothing else.
+- **Every appended event carries an `author`, and the service treats it as free
+  text.** It defaults to `SESSION_EVENT_AUTHOR` (`'agentfootprint'`), which is
+  what the console shows as having written the turn — useful beside somebody
+  else's agent writing to the same engine. Override it with the `eventAuthor`
+  option. It is *not* the conversation's owner: that is `userId`, pinned at
+  create and immutable.
+- **An append that fails for a reason other than "no such session" is refused,
+  not turned into a create.** The trial proved the two ends of the write path —
+  `create` on a new session, `appendEvent` on an existing one — and never
+  measured what the service answers when you append to a session that is not
+  there. So a failed append asks the resource whether it exists rather than
+  branching on a guessed status code, which keeps the *first* turn of every
+  conversation off an assumption.
 - **`listByUser` builds an AIP-160 filter, and a user id is caller data.** The id
   goes in as a quoted literal with the **backslash escaped before the quote** —
   in that order, because this grammar honours backslash escapes, so escaping only
@@ -753,6 +828,47 @@ memory by name, at one call per memory, which is the right price.
 silently coerces anything larger, so this adapter clamps and says so.
 `MemoryBankStore` is the class behind the factory, and `MemoryBankStoreOptions`
 carries `scopeFor`, `ttl`, `pageSize` and `operationTimeoutMs`.
+
+<Callout type="warn" title="What an entry keeps — and what 9.29.0 silently dropped">
+A `Memory` is a `fact` string, an immutable `scope`, and a metadata map of typed
+scalars. A `MemoryEntry` is richer than that, so the mapping is where fidelity is
+won or lost — and 9.29.0 lost it. The 2026-08-14 field trial wrote an entry with
+`source.turn`, `source.messageId` and its own `metadata`, and read back an entry
+with **no `source` at all** and only this adapter's generated metadata. The
+`MemoryEntry` contract says the opposite in as many words: `MemorySource.identity`
+is a field *"storage adapters MUST preserve verbatim on every read/write"*, and
+those fields drive audit, causal chains, decay and retrieval policy.
+
+**9.30.0 carries them.** `source`, your own `metadata` and `decayPolicy` are
+stored as JSON under prefixed metadata keys of ours and restored verbatim.
+
+Three rules come with that, and all three are visible rather than silent:
+
+- **Three metadata keys are generated on every read** — `source` (the backend
+  name), `resourceName` (the Vertex name) and `distance` (the raw retrieval
+  distance). Your own metadata under one of those names is **refused by name**
+  (`MemoryMetadataConflictError`) rather than stored and shadowed. Values this
+  store itself produced are recognised and dropped instead, so reading an entry
+  and writing it straight back is always safe. Recognition is by **identity, not
+  shape**: `resourceName` and `distance` count as this adapter's only when the
+  `source` stamp it writes on every read rides with them on the same entry, so a
+  `metadata.resourceName = 'sku-42'` of your own is refused rather than accepted
+  as ours. The one case that stays ambiguous is a `distance` you set yourself on
+  an entry that *did* come out of this store — it is dropped; keep such a value
+  under a name of your own.
+- **A carried field over `MAX_CARRIED_JSON` (8,192 JSON characters) is refused,
+  never truncated.** That bound is this adapter's own — the service's ceiling on
+  a metadata string is not something this library has measured — and the refusal
+  says so. Provenance that came back shortened would be provenance nothing could
+  tell was shortened.
+- **`embedding` and `embeddingModel` are still dropped**, and that one is a
+  stated refusal: there is nowhere to put a vector here and nothing that would
+  rank it (`supportsVectorSearch: false`).
+
+Rows written by 9.29.0 keep working — they simply carry no provenance, and read
+back as entries without a `source`. Nothing needs migrating; re-`put()` an entry
+if you want its provenance stored.
+</Callout>
 
 ## Identity — `googleIdentity()`
 
@@ -1084,9 +1200,12 @@ Absences are facts, so here they are stated rather than discovered:
 - **No compare-and-set, dedup or feedback on Memory Bank** — `putIfVersion`,
   `seen`, `recordSignature`, `feedback` and `getFeedback` are refused by name
   rather than emulated in a per-process Map that a second container cannot see.
-- **No `memories.purge` and no session `appendEvent`.** Both exist on the API and
-  both are deliberately not called; the reasons are in the sections above and in
-  the surface pin's own notes.
+- **No `memories.purge`, and no *reading* of the session event log.** `purge` is
+  deliberately not called (its `force` flag defaults to false — a forget built on
+  it would report success and delete nothing). `sessions.appendEvent` *is* now
+  called, because it is the only way the service lets state be written;
+  `sessions.events.list` is not, because `hydrate` reads the one envelope out of
+  `sessionState` and a second copy of a conversation is not truth.
 - **No control plane.** Creating a `reasoningEngine`, a memory bank, an index or a
   gateway is `googleapis` / gcloud / Terraform. agentfootprint is runtime-only.
 - **No multi-modal input**, no thought summaries, and no grounding tools (Google
@@ -1102,9 +1221,10 @@ Absences are facts, so here they are stated rather than discovered:
 
 No invented numbers — the shapes, so you can price them against your own tariff:
 
-- **Sessions**: one `patch` per turn in the steady state (a `create` plus one
-  operation wait on the first turn of a conversation), one `get` per hydrate,
-  one `list` per history listing. Storage is whatever `sessionState` holds.
+- **Sessions**: one `appendEvent` per turn in the steady state (on the first turn
+  of a conversation, one failed append plus one `get` plus a `create` and its
+  operation wait), one `get` per hydrate, one `list` per history listing. Storage
+  is whatever `sessionState` holds, plus one small event per persisted turn.
 - **Memory Bank**: one `get` plus one `patch` (or `create` + wait) per `put` —
   the `get` is the tenant check described above, not an optimisation — one
   `retrieve` per `search` **or** per `list` page, and **one delete per memory**
@@ -1177,9 +1297,9 @@ after.
 | `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **Field-validated on the Vertex door** — an independent field trial, 2026-08 (`gemini-2.5-flash`: tool loop, streaming, usage). Gemini-API door and current-generation tool calls: see [the matrix](#the-doormodel-matrix) |
 | `geminiEmbedder()` | `agentfootprint/providers` | **Field-validated on the Vertex door** — 2026-08, `gemini-embedding-001` at 768 dimensions through `defineRAG` |
 | `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **Field-validated** — 2026-08, nine live checks against a real bucket |
-| `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | contract-shaped and tested; awaiting field use — the **service** was field-checked in 2026-08 through raw REST, this adapter was not |
-| `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | contract-shaped and tested; awaiting field use — same split: the **service** was field-checked in 2026-08, this adapter was not |
-| `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | contract-shaped and tested; awaiting field use. ADC **refresh** itself was field-proved in 2026-08, but through `gemini({ googleAuthOptions })` rather than through this adapter |
+| `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | **field-validated 2026-08-14** (create, hydrate, listing, owners, forget). The write verb is **field-corrected in 9.30.0**: state is appended as an event, because the service refuses a `sessionState` patch |
+| `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | **field-validated on the data plane 2026-08-14**. Entry fidelity is **field-corrected in 9.30.0**: `source`, caller `metadata` and `decayPolicy` are carried instead of dropped |
+| `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | **field-validated 2026-08-14** — a real bearer authorized a Vertex call, both fail-closed refusals held, and the credential does not serialize its token. **Expiry-triggered refresh is still unproven for this door** |
 | The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages, now including `@googleapis/aiplatform` |
 | `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | **Field-validated as the corrected recipe** — 2026-08, one six-span trace read back. The pre-trial recipe on this page did not work |

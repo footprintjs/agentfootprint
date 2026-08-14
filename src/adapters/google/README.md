@@ -85,17 +85,26 @@ its own kind of silently wrong.
 
 ## Status
 
-All three adapters are **contract-shaped and tested; awaiting field use**. Every
-call is exercised through an injected `_client` and pinned against the
-really-installed SDK on every test run. None has yet answered a request from
-Google in a real project.
+All three adapters were **field-validated on 2026-08-14** — an independent trial
+ran this code against live Agent Runtime resources, not a double. Two of them
+came back with a defect, and both are fixed in 9.30.0:
 
-### What a field trial DID establish about the services underneath
+| Adapter | What the live run proved | What it found, and what changed |
+|---|---|---|
+| `agentEngineSessions` | create · hydrate through a fresh instance · owners preserved · paged `listByUser` · `ownerOf` · unknown envelope format refused before storage · idempotent `forget` | **The second write to a session was impossible.** 9.29.0 patched `sessionState`; the service refuses that and says so (`HTTP 400 — you can only update it by appending an event`). 9.30.0 appends an event, the repair the same trial verified on the wire |
+| `memoryBankStore` | honest `supportsVectorSearch` / `ranksBy` · cross-conversation recall under a widened scope · two identities, one entry id, no collision · JSON values · pagination · tier filter · similarity ordered correctly · scoped delete · `forget` · the five refusals | **Entries were not preserved whole**: `source` and caller `metadata` went in and did not come back. 9.30.0 carries them (plus `decayPolicy`), refuses a caller key that collides with a generated one, and refuses an oversized carried field rather than truncating it |
+| `googleIdentity` | a real bearer from ADC authorized a Vertex call (HTTP 200) · `bearer` kind · ~3,599 s expiry · re-vend without reconstruction · `mode: 'user'` and a disallowed service both failing **closed** · `JSON.stringify` leaking nothing but `{"kind":"bearer"}` | Nothing to fix. **Still unproven:** an expiry-triggered refresh — the run did not span an hour |
 
-An independent trial ran the raw GCP data planes these adapters wrap, on a live
-project, before any of this code existed. It is evidence about **Google**, not
-about these adapters, so nothing above moves — but three of its findings are
-load-bearing here and are recorded where the code that needs them lives:
+Neither repair has itself been re-run in a live project. Both are built on
+service behaviour that trial measured, and both are held by tests here: the
+session double now **refuses a patch exactly as the service does**, and the pin
+row for sessions carries no `patch` at all.
+
+### What an earlier field trial established about the services underneath
+
+An earlier round ran the raw GCP data planes these adapters wrap, before any of
+this code existed. It is evidence about **Google** rather than about these
+adapters, and three of its findings are load-bearing here:
 
 - **A retrieved memory name is not the name you wrote.** Create and list echoed
   caller-chosen ids; similarity retrieval answered with generated numeric
@@ -109,5 +118,6 @@ load-bearing here and are recorded where the code that needs them lives:
   scope retrieved nothing, and similarity came back as Euclidean distances —
   the two behaviours `memoryBankStore` already refuses to paper over.
 
-Two neighbours on this column DO have live evidence and say so in their own
-files: `gcsArtifacts()` (field-validated) and `gemini()` on Vertex.
+Two neighbours on this column have live evidence of their own: `gcsArtifacts()`
+(field-validated) and `gemini()` on Vertex — the latter now including a live
+`gemini-3.1-flash-lite` tool loop through the thought-signature round trip.

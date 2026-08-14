@@ -27,6 +27,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  MAX_CARRIED_JSON,
   MAX_PAGE_SIZE,
   memoryBankStore,
   scoreFromDistance,
@@ -647,6 +648,210 @@ describe('a MemoryEntry through the fact field and back', () => {
     const ttl = String((create!.params['requestBody'] as Record<string, unknown>)['ttl']);
     expect(ttl).toMatch(/^\d+s$/);
     expect(Number.parseInt(ttl, 10)).toBeGreaterThan(3500);
+  });
+});
+
+// ── 5. ENTRY FIDELITY — the field trial's own entry ─────────────────
+//
+// Finding 29 of the 2026-08-14 trial: every data-plane behaviour passed live,
+// and the entry did NOT come back whole. An entry written with `source.turn`,
+// `source.messageId` and caller metadata came back with no `source` at all and
+// only this adapter's own metadata — while `MemorySource.identity` is
+// documented as a field "storage adapters MUST preserve verbatim on every
+// read/write". These tests are that entry, through a faithful bank.
+
+describe('an entry comes back whole — provenance and caller metadata included', () => {
+  /** The trial's own entry, field for field. */
+  const trialEntry = () =>
+    entry('fact:code', 'the validation code is VERTEX-AF-9137', {
+      source: {
+        turn: 7,
+        messageId: 'message-private-code',
+        identity: { tenant: 't1', principal: 'alice', conversationId: 'c1' },
+      },
+      metadata: { classification: 'private', nested: { trial: 'run-marker-9137' } },
+    });
+
+  it('source and caller metadata survive the round trip verbatim', async () => {
+    const { store: s } = bankStore();
+    await s.put(IDENTITY, trialEntry());
+    const back = await s.get(IDENTITY, 'fact:code');
+
+    expect(back?.source).toEqual({
+      turn: 7,
+      messageId: 'message-private-code',
+      identity: { tenant: 't1', principal: 'alice', conversationId: 'c1' },
+    });
+    expect(back?.metadata?.['classification']).toBe('private');
+    expect(back?.metadata?.['nested']).toEqual({ trial: 'run-marker-9137' });
+  });
+
+  it('the adapter’s own read-side facts are still there beside them', async () => {
+    const { store: s } = bankStore();
+    await s.put(IDENTITY, trialEntry());
+    const back = await s.get(IDENTITY, 'fact:code');
+    expect(back?.metadata?.['source']).toBe('vertex-memory-bank');
+    expect(String(back?.metadata?.['resourceName'])).toContain('/memories/');
+  });
+
+  it('a decay policy survives too — retrieval ranking depends on it', async () => {
+    const { store: s } = bankStore();
+    await s.put(
+      IDENTITY,
+      entry('m1', 'x', { decayPolicy: { halfLifeMs: 86_400_000, accessBoost: 1.5 } }),
+    );
+    const back = await s.get(IDENTITY, 'm1');
+    expect(back?.decayPolicy).toEqual({ halfLifeMs: 86_400_000, accessBoost: 1.5 });
+  });
+
+  it('reading an entry and writing it straight back is not an error', async () => {
+    // The generated keys come back on every read, so a read-modify-write cycle
+    // hands them to put(). They are recognised as ours and dropped rather than
+    // stored — and nothing is lost, because the next read regenerates them.
+    const { store: s, bank } = bankStore();
+    await s.put(IDENTITY, trialEntry());
+    const back = await s.get(IDENTITY, 'fact:code');
+    await s.put(IDENTITY, { ...back!, value: 'updated', version: 2 });
+
+    const again = await s.get(IDENTITY, 'fact:code');
+    expect(again?.value).toBe('updated');
+    expect(again?.version).toBe(2);
+    expect(again?.source).toEqual(back?.source);
+    expect(again?.metadata?.['classification']).toBe('private');
+    // The stored metadata carries our JSON, never a second copy of the row's
+    // own resource name.
+    const stored = JSON.stringify(bank.only().metadata);
+    expect(stored).toContain('classification');
+    expect(stored).not.toContain('vertex-memory-bank');
+  });
+
+  it('a caller metadata key that collides with a generated one is refused BY NAME', async () => {
+    // The alternative is a write that succeeds and a read that answers this
+    // adapter's value in place of the caller's — the exact silent wrongness
+    // the carrying fix exists to end.
+    const { store: s } = bankStore();
+    const error = await s
+      .put(IDENTITY, entry('m1', 'x', { metadata: { source: 'user-upload' } }))
+      .catch((e: unknown) => e);
+    expect((error as Error).name).toBe('MemoryMetadataConflictError');
+    expect(String(error)).toContain('metadata.source');
+    expect(String(error)).toContain('rename');
+  });
+
+  // The generated-key guard was SHAPE-based once: `resourceName` matched any
+  // string and `distance` any number, so a caller's own values under those names
+  // were accepted, dropped, and answered on the next read with this adapter's
+  // resourceName standing where theirs had been. Recognition is by IDENTITY now
+  // — this store's own `metadata.source` stamp has to ride along — and these are
+  // that difference.
+
+  it('a caller’s own metadata.resourceName is refused, not mistaken for ours', async () => {
+    const { store: s, bank } = bankStore();
+    const error = await s
+      .put(IDENTITY, entry('m1', 'x', { metadata: { resourceName: 'sku-42', keptKey: 'ok' } }))
+      .catch((e: unknown) => e);
+    expect((error as Error).name).toBe('MemoryMetadataConflictError');
+    expect(String(error)).toContain('metadata.resourceName');
+    expect(String(error)).toContain('sku-42');
+    // Refused means refused: nothing landed with the caller's key silently gone.
+    expect(bank.rows.size).toBe(0);
+  });
+
+  it('a caller’s own metadata.distance is refused, not mistaken for a retrieval distance', async () => {
+    const { store: s } = bankStore();
+    const error = await s
+      .put(IDENTITY, entry('m1', 'x', { metadata: { distance: 12 } }))
+      .catch((e: unknown) => e);
+    expect((error as Error).name).toBe('MemoryMetadataConflictError');
+    expect(String(error)).toContain('metadata.distance');
+  });
+
+  it('a resource-shaped string is still refused without this store’s own stamp beside it', async () => {
+    // Shape alone cannot say "ours" — anyone can write that string.
+    const { store: s } = bankStore();
+    const error = await s
+      .put(IDENTITY, entry('m1', 'x', { metadata: { resourceName: `${PARENT}/memories/m1` } }))
+      .catch((e: unknown) => e);
+    expect((error as Error).name).toBe('MemoryMetadataConflictError');
+  });
+
+  it('a search hit — stamp, resource name AND distance — writes back cleanly', async () => {
+    // What `search()` hands back carries all three generated keys, so this is
+    // the round trip that must not be an error, and must store none of them.
+    const { store: s, bank } = bankStore();
+    await s.put(
+      IDENTITY,
+      entry('m1', 'x', {
+        metadata: {
+          source: 'vertex-memory-bank',
+          resourceName: `${PARENT}/memories/whatever`,
+          distance: 0.42,
+          classification: 'private',
+        },
+      }),
+    );
+    const stored = JSON.stringify(bank.only().metadata);
+    expect(stored).toContain('classification');
+    expect(stored).not.toContain('vertex-memory-bank');
+    expect(stored).not.toContain('0.42');
+    const back = await s.get(IDENTITY, 'm1');
+    expect(back?.metadata?.['classification']).toBe('private');
+  });
+
+  it('a round-tripped entry whose resourceName was EDITED is refused, and the refusal says so', async () => {
+    // The stamp says the entry came from here; the value says this field did not.
+    // Dropping it would discard something somebody deliberately set.
+    const { store: s } = bankStore();
+    const error = await s
+      .put(
+        IDENTITY,
+        entry('m1', 'x', { metadata: { source: 'vertex-memory-bank', resourceName: 'sku-42' } }),
+      )
+      .catch((e: unknown) => e);
+    expect((error as Error).name).toBe('MemoryMetadataConflictError');
+    expect(String(error)).toContain('came from here');
+  });
+
+  it('a carried field too large to store is refused, never truncated', async () => {
+    const { store: s } = bankStore();
+    const huge = { note: 'x'.repeat(MAX_CARRIED_JSON + 1) };
+    const error = await s
+      .put(IDENTITY, entry('m1', 'x', { metadata: huge }))
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RangeError);
+    expect(String(error)).toContain(String(MAX_CARRIED_JSON));
+    // And it says the bound is OURS, not a measured service limit.
+    expect(String(error)).toMatch(/not measured/);
+  });
+
+  it('a row written before this fix still reads — it simply carries no provenance', async () => {
+    // Rows written by 9.29.0 have none of the carried keys. They must read as
+    // entries without a `source`, not fail and not invent one.
+    const { store: s } = store({ get: () => ({ data: memory('m1', 'old row', FULL_SCOPE) }) });
+    const back = await s.get(IDENTITY, 'm1');
+    expect(back?.id).toBe('m1');
+    expect(back?.source).toBeUndefined();
+    expect(back?.metadata?.['source']).toBe('vertex-memory-bank');
+  });
+
+  it('damaged provenance JSON does not make an existing memory read as absent', async () => {
+    const damaged = memory('m1', 'still here', FULL_SCOPE);
+    (damaged.metadata as Record<string, unknown>)['agentfootprint_source'] = {
+      stringValue: '{not json',
+    };
+    const { store: s } = store({ get: () => ({ data: damaged }) });
+    const back = await s.get(IDENTITY, 'm1');
+    expect(back?.value).toBe('still here');
+    expect(back?.source).toBeUndefined();
+  });
+
+  it('an embedding is still dropped, and that one is a stated refusal', async () => {
+    const { store: s, bank } = bankStore();
+    await s.put(IDENTITY, entry('m1', 'x', { embedding: [0.1, 0.2], embeddingModel: 'text-004' }));
+    const back = await s.get(IDENTITY, 'm1');
+    expect(back?.embedding).toBeUndefined();
+    expect(back?.embeddingModel).toBeUndefined();
+    expect(JSON.stringify(bank.only())).not.toContain('text-004');
   });
 });
 

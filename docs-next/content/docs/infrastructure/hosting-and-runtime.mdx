@@ -1413,6 +1413,33 @@ for a new conversation.
 Unset, no ledger is built, no listener is installed, and not one line of this
 runs.
 
+<Callout type="warn" title="Ingress refusals are outside `auditExport` — the gap, and what to do today">
+An independent field trial checked this twice (2026-08, again 2026-08-14) and it
+is still true: a **401** from `identity.verify` and a **429** from `admission`
+happen *before a run exists*. No agent has been built, no observer is attached,
+and no typed event is emitted — so `auditExport()`'s hash chain, which is a
+record of **runs**, does not contain them. A compliance reviewer asking "who was
+turned away, and why?" cannot answer it from the bundle.
+
+That is a real gap and it is not closed by this release. What is honest today:
+
+- **Both refusals pass through seams you own.** Your `verify` function sees every
+  token it rejects, and your `admission.decide` sees every verdict it returns,
+  refusals included. Writing your own record there — one line per decision, to
+  the same sink your runs go to — is the recipe, and it is the only one that does
+  not require this library to invent an event it does not have.
+- **Keep the two records joinable.** Record the same principal your verifier
+  proves (`identity.principal`), so an ingress refusal and a later run by the
+  same caller line up in whatever you query.
+- **Do not read a refusal's absence as consent.** An empty audit bundle means no
+  run happened, not that nobody was turned away.
+
+A unified gateway-plus-agent record — ingress decisions inside the same
+tamper-evident chain — is the shape this wants, and it is a design question
+(what is a "record" when there is no run id?) rather than a missing line of code.
+It is not scheduled here rather than half-shipped quietly.
+</Callout>
+
 ## Session history — `session-list` / `session-transcript`
 
 A hosted agent stores conversations so a person can come back to one. Until

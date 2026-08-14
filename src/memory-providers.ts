@@ -45,11 +45,14 @@ export {
 // so the corpus builders refuse it by name, and it converts the service's
 // DISTANCE (smaller is closer) rather than forwarding it as a similarity
 // (higher is closer). Read the module header before the first write: `scope` is
-// immutable, so the convention cannot be changed afterwards.
+// immutable, so the convention cannot be changed afterwards. An entry's
+// `source`, caller `metadata` and `decayPolicy` are CARRIED (9.30.0) — a field
+// trial caught 9.29.0 accepting and silently dropping them.
 export {
   memoryBankStore,
   MemoryBankStore,
   MAX_PAGE_SIZE,
+  MAX_CARRIED_JSON,
   scoreFromDistance,
   type MemoryBankStoreOptions,
   type MemoryScope,

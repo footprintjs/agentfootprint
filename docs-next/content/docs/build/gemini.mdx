@@ -216,6 +216,12 @@ part it belongs to, parked on the port's neutral `toolCalls[].providerMeta`, and
 written back onto the reconstructed part byte for byte, because the service
 verifies it rather than reading it.
 
+**And it works, watched:** the same trial re-ran that loop on live Vertex against
+the shipped fix (2026-08-14). `gemini-3.1-flash-lite` called the tool, the tool
+answered, the signature went back, and the second model call returned the right
+answer — one tool execution, two LLM calls, real token counts. The failure above
+is superseded.
+
 **What it does not cover, said plainly:** a signature attached to a *text* part of
 an answer that carries no function call. `LLMMessage.content` is a string and a
 string has nowhere to keep one. The failing shape is the function-call shape, and
@@ -259,10 +265,17 @@ that one is handled; the other is named here rather than half-handled quietly.
 - **The Gemini API door is not field-validated**, and not for want of trying: one
   model 404'd as unavailable to new accounts and the current one returned a
   billing `429`. See [the matrix](doc:google-cloud#the-doormodel-matrix).
-- **The thought-signature round trip above is tested, not field-proven.** It was
-  built *from* the trial's captured failure; no live re-run against
-  `gemini-3.1-flash-lite` has confirmed the fix. That is the honest distinction
-  between "we found the bug in the field" and "we watched the fix work there".
+- **The thought-signature round trip above is field-proven.** It was built *from*
+  the trial's captured 400, and the same independent trial then re-ran it on live
+  Vertex against the published fix (**2026-08-14**): `gemini-3.1-flash-lite`
+  asked for a tool, the tool answered, the signature went back byte for byte, and
+  the second model call returned the right answer — two LLM calls, one tool
+  execution, real token counts. So this one has crossed from "we found the bug in
+  the field" to "we watched the fix work there".
+
+  What that run does **not** cover, still: the AI Studio key door (no key in that
+  environment), and a signature attached to a **text** part with no function call
+  beside it — the port's assistant turn is a string and has nowhere to keep one.
 
 ## The OpenAI-compatible endpoint, and why it is not the path
 

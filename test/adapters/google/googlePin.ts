@@ -157,23 +157,27 @@ export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
     kind: 'rest',
     ctor: 'aiplatform',
     namespace: 'projects.locations.reasoningEngines.sessions',
-    methods: ['create', 'get', 'patch', 'delete', 'list', 'operations.wait'],
+    methods: ['create', 'get', 'appendEvent', 'delete', 'list', 'operations.wait'],
     apiVersions: { rest: 'v1' },
     note:
       'Read off a real install of @googleapis/aiplatform 31.0.0 before the adapter was ' +
       'written, and four of those reads changed the design. (1) `create` accepts a ' +
       'caller-supplied `sessionId` query parameter — so our session id IS the resource id, ' +
       '`hydrate` is one `get` by name, and no mapping table exists. (2) `create` and `delete` ' +
-      'return a LongrunningOperation while `get` and `patch` return the Session, which is why ' +
-      'every write here waits on `operations.wait` before returning: a persist that came back ' +
-      'early would make the next hydrate a race whose failure mode is "no conversation". ' +
+      'return a LongrunningOperation while `get` and `appendEvent` return directly, which is ' +
+      'why every operation-shaped write waits on `operations.wait` before returning: a persist ' +
+      'that came back early would make the next hydrate a race whose failure mode is ' +
+      '"no conversation". ' +
       '(3) `Session.userId` is REQUIRED and IMMUTABLE, which is where the userId resolver ' +
-      'comes from, and why `patch` always carries an updateMask — a maskless patch is a ' +
-      'REPLACE, it would clear userId, and the service would then refuse every write. ' +
+      'comes from — and why the FIRST write is the only one that may name it. ' +
       "(4) `Session.sessionState` is a free-form Struct, which is the envelope's home. " +
-      '`appendEvent` and `sessions.events.list` are on the surface and deliberately NOT ' +
-      'called: this store keeps ONE envelope under one key, and an event log would be a ' +
-      'second copy of the conversation that nothing reads.',
+      'PATCH IS DELIBERATELY ABSENT FROM THIS ROW, and that is the 9.30.0 correction: a field ' +
+      'trial (2026-08-14) ran 9.29.0 live and the service refused ' +
+      '`patch({ updateMask: "sessionState" })` with HTTP 400 — "you can only update it by ' +
+      'appending an event" — so turn one stored and every later turn failed. The double built ' +
+      'from this row exposes no `patch` at all, which is what makes a regression land on the ' +
+      "dispatch rather than on somebody else's bill. `sessions.events.list` stays uncalled: " +
+      'this store keeps ONE envelope under one key and reads the envelope, never the log.',
   },
   {
     adapter: 'memoryBankStore',

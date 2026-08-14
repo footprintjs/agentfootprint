@@ -33,7 +33,9 @@
  *     `SessionLifecycle` in Vertex AI's own session service, for the row above
  *     `sqliteSessions`: many containers sharing one conversation. The whole
  *     `CheckpointEnvelope` rides in `Session.sessionState`, which is an
- *     arbitrary JSON Struct, so there is no blob encoding to get wrong.
+ *     arbitrary JSON Struct, so there is no blob encoding to get wrong — and it
+ *     is written by APPENDING AN EVENT, because the service refuses a state
+ *     patch (a field trial found that the expensive way; see the adapter).
  *
  * ── How much of this is verified ─────────────────────────────────────────────
  * `agentCoreRuntimeHost` is plain HTTP with no SDK on its path, and it passes
@@ -73,6 +75,7 @@ export {
   agentEngineSessions,
   DEFAULT_USER_ID,
   SESSION_STATE_KEY,
+  SESSION_EVENT_AUTHOR,
 } from './adapters/hosting/googleAgentEngine.js';
 
 export type {

@@ -150,7 +150,47 @@ const META = {
   updatedAt: 'agentfootprint_updated_at',
   tier: 'agentfootprint_tier',
   json: 'agentfootprint_json',
+  /** {@link MemoryEntry.source}, verbatim, as JSON. See {@link MAX_CARRIED_JSON}. */
+  source: 'agentfootprint_source',
+  /** {@link MemoryEntry.metadata} the CALLER wrote, verbatim, as JSON. */
+  meta: 'agentfootprint_metadata',
+  /** {@link MemoryEntry.decayPolicy}, as JSON — retrieval ranking depends on it. */
+  decay: 'agentfootprint_decay',
 } as const;
+
+/**
+ * The metadata keys this adapter GENERATES on the way out, which therefore
+ * cannot also be caller metadata.
+ *
+ * They are read-side facts about the row, not stored data: `source` names the
+ * backend, `resourceName` is the Vertex name, `distance` is the raw retrieval
+ * distance. Round-tripping an entry this store handed back must not fail, and
+ * a caller's own value under one of these names must not be silently replaced
+ * — see {@link splitMetadata} for how those two are told apart.
+ */
+const GENERATED_METADATA = ['source', 'resourceName', 'distance'] as const;
+
+/**
+ * What a Vertex resource name for a memory looks like:
+ * `projects/<p>/locations/<l>/reasoningEngines/<e>/memories/<resource id>`.
+ *
+ * Used as the SHAPE half of recognising this adapter's own `resourceName` on the
+ * way back in — never as a parser. Nothing reads an id out of a resource name
+ * here (the module header says why); this only answers "could this string be one
+ * of ours?".
+ */
+const RESOURCE_NAME = /^projects\/.+\/memories\/[^/]+$/;
+
+/**
+ * The most JSON one carried field may be, in characters.
+ *
+ * Memory Bank metadata values are typed scalars and this column has NOT
+ * measured the service's own ceiling on a string one, so the bound is this
+ * adapter's own and says so where it refuses. It is a refusal rather than a
+ * truncation on purpose: provenance that came back shortened would be
+ * provenance nobody could tell was shortened.
+ */
+export const MAX_CARRIED_JSON = 8_192;
 
 /** The scope map an identity resolves to. Keys and values are both strings. */
 export type MemoryScope = Readonly<Record<string, string>>;
@@ -229,17 +269,22 @@ const DEFAULT_PAGE_SIZE = 20;
 /**
  * A `MemoryStore` over Vertex AI Memory Bank.
  *
- * **Status: contract-shaped and tested; awaiting field use.** Every call is
- * exercised through an injected client and pinned against the really-installed
- * SDK. None of it has yet answered a request from Google in a real project.
+ * **Status: field-validated on the data plane (2026-08-14).** An independent
+ * trial ran THIS class against a real Memory Bank and every one of these
+ * answered a live request: the honest `supportsVectorSearch: false` /
+ * `ranksBy: 'server-text'` declarations; cross-conversation recall under a
+ * widened `scopeFor`; two identities using the SAME entry id without collision
+ * or disclosure; string and structured values; opaque pagination cursors; tier
+ * filtering; text similarity that found the right marker, excluded the other
+ * identity, returned finite distances and converted them to correctly ORDERED
+ * scores; overwrite advancing value and version; a scoped delete leaving the
+ * other identity intact; `forget()` erasing across the widened scope; and the
+ * five unsupported operations refusing by name rather than pretending.
  *
- * A field trial DID exercise the service this wraps — create, list, exact-scope
- * reads, and similarity retrieval with finite distances, all against a real
- * Memory Bank (FINDINGS "Agent Runtime Memory Bank"). That is evidence about
- * GOOGLE's data plane, and it sharpened two things written here (see the module
- * header on retrieved names, and `search`'s distance conversion). It is not
- * evidence about this class, which did not exist when the trial ran, so the
- * status stays where it is until a run of THIS code answers a real request.
+ * The same trial found the one thing that was NOT faithful — `source` and
+ * caller `metadata` were accepted and silently dropped — which 9.30.0 fixes by
+ * carrying them (see `toMemory`). That fix is tested here and has not itself
+ * been re-run in a live project.
  */
 export class MemoryBankStore implements MemoryStore {
   /**
@@ -939,7 +984,25 @@ const num = (value: number): VertexMemoryMetadataValue => ({ doubleValue: value 
  * retrieval over structured values is close to meaningless. Store a sentence
  * when you want it found.
  *
- * `embedding` is deliberately dropped — see `supportsVectorSearch`.
+ * ── What is CARRIED, and why it took a field trial ──────────────────────────
+ * `source`, the caller's own `metadata` and `decayPolicy` are stored as JSON
+ * under prefixed keys of ours and restored verbatim on the way back.
+ *
+ * They were dropped until 9.30.0, and an independent trial (2026-08-14) is what
+ * made that visible: an entry written with `source.turn`, `source.messageId`
+ * and `metadata.classification` came back carrying only this adapter's own
+ * metadata. That is a contract failure and not merely a gap —
+ * `MemorySource.identity` is documented as a field "storage adapters MUST
+ * preserve verbatim on every read/write", and the fields feed audit, causal
+ * chains, decay and retrieval policy. A store that accepts them, reports
+ * success and silently forgets them is the exact shape of wrongness this
+ * library refuses everywhere else.
+ *
+ * `embedding` and `embeddingModel` are the ONE pair still dropped, and that is
+ * a refusal rather than an oversight: there is nowhere to put a vector here and
+ * nothing that would rank it (see `supportsVectorSearch`), and a stored
+ * `embeddingModel` with no vector beside it would claim a compatibility that
+ * does not exist.
  */
 function toMemory(
   entry: MemoryEntry<unknown>,
@@ -947,6 +1010,7 @@ function toMemory(
   defaultTtl: string | undefined,
 ): VertexMemory {
   const isString = typeof entry.value === 'string';
+  const carried = splitMetadata(entry);
   const metadata: Record<string, VertexMemoryMetadataValue> = {
     [META.id]: str(entry.id),
     [META.version]: num(entry.version),
@@ -954,6 +1018,15 @@ function toMemory(
     [META.updatedAt]: num(entry.updatedAt),
     [META.json]: { boolValue: !isString },
     ...(entry.tier !== undefined && { [META.tier]: str(entry.tier) }),
+    ...(entry.source !== undefined && {
+      [META.source]: str(carriedJson(entry.source, 'source', entry.id)),
+    }),
+    ...(carried !== undefined && {
+      [META.meta]: str(carriedJson(carried, 'metadata', entry.id)),
+    }),
+    ...(entry.decayPolicy !== undefined && {
+      [META.decay]: str(carriedJson(entry.decayPolicy, 'decayPolicy', entry.id)),
+    }),
   };
   return {
     fact: isString ? (entry.value as string) : JSON.stringify(entry.value ?? null),
@@ -967,6 +1040,131 @@ function toMemory(
       : defaultTtl !== undefined && { ttl: defaultTtl }),
   };
 }
+
+/**
+ * The caller's own metadata, with this adapter's generated keys separated out
+ * — or `undefined` when there is none to carry.
+ *
+ * The three keys in {@link GENERATED_METADATA} are produced on every read, so
+ * an entry that came out of this store carries them and a `get`-then-`put`
+ * round trip hands them straight back. Two cases, told apart rather than
+ * conflated:
+ *
+ *  • **It is one of ours coming home** — recognised by IDENTITY, not by shape.
+ *    See {@link isGeneratedValue}.
+ *  • **It is the caller's own value** under one of those names — refused by
+ *    name. Storing it would mean the next read silently answered with our
+ *    value instead of theirs, which is the failure mode this whole function
+ *    exists to end.
+ */
+function splitMetadata(entry: MemoryEntry<unknown>): Record<string, unknown> | undefined {
+  const metadata = entry.metadata;
+  if (metadata === undefined || metadata === null) return undefined;
+  // `toEntry` stamps `source` on EVERY read, so its presence — with exactly the
+  // backend name this store writes — is what distinguishes an entry coming home
+  // from a caller who happened to pick one of our key names. Computed once for
+  // the whole bag, because it is a fact about the ENTRY, not about a key.
+  const ours = (metadata as Record<string, unknown>)['source'] === BACKEND_NAME;
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!(GENERATED_METADATA as readonly string[]).includes(key)) {
+      kept[key] = value;
+      continue;
+    }
+    if (isGeneratedValue(key, value, ours)) continue;
+    throw metadataKeyConflict(entry.id, key, value, ours);
+  }
+  return Object.keys(kept).length === 0 ? undefined : kept;
+}
+
+/**
+ * Is this the value THIS adapter put under that key on a read — or the caller's
+ * own, wearing one of our names?
+ *
+ * **Recognition is by identity, not by shape**, and the difference is a bug this
+ * adapter shipped once. A shape test asks "is `resourceName` a string, is
+ * `distance` a number?" — which every string and every number passes, so a
+ * caller's `metadata.resourceName = 'sku-42'` or `metadata.distance = 12` was
+ * accepted as ours, dropped, and answered on the next read with THIS adapter's
+ * resourceName sitting where their value had been. That is precisely the
+ * accepted-and-silently-wrong failure {@link metadataKeyConflict} exists to
+ * refuse, and a shape test could not tell the two apart even in principle
+ * (finding 29, 2026-08-14 field trial).
+ *
+ * So the test is: `source` must be exactly {@link BACKEND_NAME} — the stamp
+ * `toEntry` writes on every read and nothing else does — and `resourceName` /
+ * `distance` count as ours only when that stamp RIDES WITH THEM on the same
+ * entry, and the value itself still has the right shape (a Vertex resource name;
+ * a number). Both halves are needed: the stamp says "this entry came from here",
+ * the shape says "and this field was not overwritten since".
+ *
+ * The one ambiguity left is honest and narrow: a caller who takes an entry out
+ * of this store and writes their OWN number into `metadata.distance` before
+ * putting it back is indistinguishable from the retrieval distance that came
+ * with it, and is dropped. Keep such a value under a name of your own.
+ */
+function isGeneratedValue(key: string, value: unknown, ours: boolean): boolean {
+  if (key === 'source') return value === BACKEND_NAME;
+  if (!ours) return false;
+  if (key === 'resourceName') return typeof value === 'string' && RESOURCE_NAME.test(value);
+  return typeof value === 'number';
+}
+
+/**
+ * A caller's metadata key collides with one this adapter generates on every read.
+ *
+ * `ours` says whether the entry carried this store's own `source` stamp, which
+ * decides WHICH of the two things went wrong — a name collision, or a value
+ * edited into a round-tripped entry — and therefore what the reader should do.
+ */
+function metadataKeyConflict(id: string, key: string, value: unknown, ours: boolean): Error {
+  const err = new Error(
+    // The caller's own value, echoed back short: enough to recognise which
+    // field this is, never enough to paste a whole payload into a log line
+    // that an error reaches more sinks than the writer expects.
+    `${ADAPTER}: entry '${id}' carries metadata.${key} = ${shortly(value)}, and this ` +
+      `adapter GENERATES metadata.${key} on every read.\n` +
+      `  Storing it would mean your value went in and this adapter's came back — a read that ` +
+      `looks right and is not. The three generated keys are: ` +
+      `${GENERATED_METADATA.join(', ')} (the backend name, the Vertex resource name, and the ` +
+      `raw retrieval distance).\n` +
+      (ours
+        ? `  This entry does carry this store's own metadata.source = '${BACKEND_NAME}', so it ` +
+          `came from here — but this particular value is not the one this adapter wrote ` +
+          `(a resourceName must look like 'projects/…/memories/<id>'; a distance must be a ` +
+          `number). It is refused rather than dropped, because dropping a value somebody ` +
+          `deliberately set is the same silent wrongness in the other direction.\n`
+        : '') +
+      `  Fix: rename the key on your entry. Values this store itself produced are recognised ` +
+      `and dropped instead, so reading an entry and writing it back is always safe.`,
+  );
+  err.name = 'MemoryMetadataConflictError';
+  return err;
+}
+
+/** A value as at most 80 characters of JSON, for a refusal to point with. */
+function shortly(value: unknown): string {
+  const json = JSON.stringify(value) ?? String(value);
+  return json.length <= 80 ? json : `${json.slice(0, 77)}…`;
+}
+
+/** One carried field as JSON, or a refusal that says which field and how big. */
+function carriedJson(value: unknown, field: string, id: string): string {
+  const json = JSON.stringify(value ?? null);
+  if (json.length <= MAX_CARRIED_JSON) return json;
+  throw new RangeError(
+    `${ADAPTER}: entry '${id}' has a '${field}' of ${json.length} JSON characters, over this ` +
+      `adapter's ${MAX_CARRIED_JSON}-character bound for a carried field.\n` +
+      `  Memory Bank stores these as metadata STRINGS, and the service's own ceiling on one is ` +
+      `not measured by this library — so the bound is ours and deliberately conservative.\n` +
+      `  It refuses rather than truncating: provenance that came back shortened would be ` +
+      `provenance nothing could tell was shortened. Keep large payloads in the entry VALUE, ` +
+      `which becomes the memory's fact.`,
+  );
+}
+
+/** What this adapter names itself as the backend, in a returned entry's metadata. */
+const BACKEND_NAME = 'vertex-memory-bank';
 
 /**
  * `Memory` → `MemoryEntry`, or `null` for a row this store did not write.
@@ -1003,6 +1201,9 @@ function toEntry<T>(
   const updatedAt = metadata[META.updatedAt]?.doubleValue ?? toMillis(memory.updateTime);
   const tier = metadata[META.tier]?.stringValue;
   const expireTime = toMillis(memory.expireTime);
+  const source = carriedBack<MemoryEntry<T>['source']>(metadata[META.source]?.stringValue);
+  const callerMetadata = carriedBack<Record<string, unknown>>(metadata[META.meta]?.stringValue);
+  const decayPolicy = carriedBack<MemoryEntry<T>['decayPolicy']>(metadata[META.decay]?.stringValue);
 
   return {
     id,
@@ -1014,14 +1215,38 @@ function toEntry<T>(
     accessCount: 0,
     ...(expireTime > 0 && { ttl: expireTime }),
     ...(tier === 'hot' || tier === 'warm' || tier === 'cold' ? { tier } : {}),
+    ...(source !== undefined && { source }),
+    ...(decayPolicy !== undefined && { decayPolicy }),
     metadata: {
-      source: 'vertex-memory-bank',
+      // The caller's own metadata first, then this adapter's generated facts.
+      // They cannot collide: a caller value under a generated key is refused at
+      // write time rather than overwritten here (see splitMetadata).
+      ...callerMetadata,
+      source: BACKEND_NAME,
       ...(memory.name !== null && memory.name !== undefined && { resourceName: memory.name }),
       // The raw distance, carried through unmodified — the honest number
       // beside the converted one, for a caller who knows the metric.
       ...(typeof retrieved?.distance === 'number' && { distance: retrieved.distance }),
     },
   };
+}
+
+/**
+ * One carried JSON field on the way back, or `undefined`.
+ *
+ * Unparseable JSON answers `undefined` rather than raising: the bytes were
+ * written by an older release of this adapter or edited in the console, and a
+ * memory that EXISTS must not read as one that was never written over a
+ * damaged provenance field. The entry's own value is unaffected.
+ */
+function carriedBack<T>(json: string | null | undefined): T | undefined {
+  if (typeof json !== 'string' || json === '') return undefined;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed === null ? undefined : (parsed as T);
+  } catch {
+    return undefined;
+  }
 }
 
 /** An RFC 3339 timestamp as unix milliseconds, or 0 when it is not one. */

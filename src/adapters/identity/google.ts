@@ -173,10 +173,24 @@ interface CachedGoogleClient {
 /**
  * Vend Google access tokens from whatever credential this environment has.
  *
- * **Status: contract-shaped and tested; awaiting field use.** Every path is
- * exercised through an injected client and the loaded surface is pinned
- * against the really-installed package. None of it has yet answered a real
- * Google token request in a live project.
+ * **Status: field-validated for machine identity; refresh bounded.** An
+ * independent trial ran this adapter on live Google Cloud (2026-08-14):
+ * `googleIdentity({ services: ['aiplatform'] })` vended a real bearer
+ * credential from Application Default Credentials, and that credential
+ * authorized a Vertex AI request with HTTP 200. The same run proved the
+ * `bearer` kind, an expiry about 3,599 seconds out, a second vend without
+ * reconstruction, `mode: 'user'` failing CLOSED rather than quietly handing
+ * back machine access, a disallowed service failing closed, and
+ * `JSON.stringify(credential)` yielding `{"kind":"bearer"}` — no token, no
+ * Authorization header.
+ *
+ * **What is NOT proven:** an expiry-triggered refresh. The trial called the
+ * provider twice minutes apart and checked a future expiry; it did not wait an
+ * hour. Google's own auth client is what refreshes (this adapter caches the
+ * CLIENT, never a token — see {@link CachedGoogleClient}), and that refresh was
+ * field-proved on a different door (`gemini({ googleAuthOptions })`). A soak or
+ * a controlled expiring-credential double is still owed before anyone claims
+ * long-duration production proof for THIS provider.
  *
  * @throws when `mode: 'user'` is requested — Google's per-user token vault has
  *   no Node surface, and a machine token returned in its place would be a

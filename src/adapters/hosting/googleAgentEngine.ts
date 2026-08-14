@@ -14,23 +14,53 @@
  * was designed under; where the product name and the API disagree, the API is
  * the one that has not moved.
  *
- * ── The fit, and it is a good one ───────────────────────────────────────────
+ * ── The fit, and the one thing it cost ──────────────────────────────────────
  * `Session.sessionState` is an arbitrary JSON `Struct`. A `CheckpointEnvelope`
  * is arbitrary JSON. So the envelope goes in whole, under one key, and comes
- * back whole — no event log to fold, no blob encoding to get wrong, no
- * per-turn append. That is a materially better fit than the other column's
- * session store, which had to learn the hard way that an object handed to an
- * event blob comes back as somebody else's `toString()`.
+ * back whole — no event log to fold, no blob encoding to get wrong. What it
+ * cost is the WRITE VERB, and that took a field trial to learn: state goes in
+ * through an appended EVENT, never through a patch. See fact 2b below.
  *
- * ── The four facts that shaped the code, all read off the installed SDK ─────
+ * ── The five facts that shaped the code ─────────────────────────────────────
  *  1. **`sessions.create` takes a caller-supplied `sessionId`.** So our session
  *     id IS the resource id and `hydrate` is one `get` by name. No mapping
  *     table, no listing to find a conversation.
  *  2. **`create` and `delete` answer a long-running Operation; `get` and
- *     `patch` answer the Session.** Every write here therefore waits for the
- *     operation to report `done` before it returns — a `persist` that returned
- *     early would make the very next `hydrate` a race whose failure mode is
- *     "no conversation", which nobody can tell from a new user.
+ *     `appendEvent` answer directly.** Every operation-shaped write here waits
+ *     for `done` before it returns — a `persist` that returned early would make
+ *     the very next `hydrate` a race whose failure mode is "no conversation",
+ *     which nobody can tell from a new user.
+ *
+ *  2b. **`sessionState` CANNOT be patched. This one is field truth, and it cost
+ *     a release.** 9.29.0 wrote the steady state as
+ *     `sessions.patch({ updateMask: 'sessionState,ttl' })`, which every
+ *     injected-client test accepted because a double will patch anything. An
+ *     independent field trial ran it against the live service (2026-08-14) and
+ *     found that turn one stored and **every later turn failed**:
+ *
+ *       HTTP 400 — "Can't update the session state for session …, you can only
+ *                   update it by appending an event."
+ *
+ *     A store that keeps the first turn of a conversation and refuses the
+ *     second is not a session store, so the verb changed rather than the
+ *     documentation: `persist` now appends a `SessionEvent` whose
+ *     `actions.stateDelta` carries the envelope, which the same trial verified
+ *     end to end (append accepted, `GET` returned the new state).
+ *
+ *     Two consequences worth saying out loud, because they are the difference
+ *     between this fix and a plausible-looking one:
+ *
+ *       • **A state delta MERGES by top-level key.** This store writes exactly
+ *         one key — {@link SESSION_STATE_KEY} — so "merge the delta" and
+ *         "replace our key" are the same outcome for us, and another guest's
+ *         keys under the same session are left alone either way.
+ *       • **A conversation now has an event log behind it**, one event per
+ *         persisted turn, because that is the only writing surface the service
+ *         offers. Nothing here READS that log — `hydrate` still reads the one
+ *         envelope out of `sessionState` — so the log is the service's audit
+ *         trail of our writes and never a second copy of the truth. Sessions
+ *         are per-conversation and events are small; if that growth matters to
+ *         you, `forget()` deletes the session and its events together.
  *  3. **`Session.userId` is required and immutable.** Our port's
  *     `persist(sessionId, envelope)` carries no user, so one has to be
  *     resolved — see {@link AgentEngineSessionsOptions.userId}. Immutable
@@ -52,8 +82,15 @@
  *     before handing a session id down here. This adapter is a STORE. Nothing
  *     that only stores can tell an impostor from an owner.
  *  4. **`ttl` is input-only with a 24-hour floor**, and `expireTime` always
- *     comes back. Sliding expiry is free; an hour-long TTL is not available at
- *     any price.
+ *     comes back. An hour-long TTL is not available at any price.
+ *
+ *     **Sliding expiry is NOT claimed here**, and that changed with fact 2b. A
+ *     `ttl` is sent on `create`, where the service takes it; later turns append
+ *     an event, and whether an appended event renews the expiry is a service
+ *     behaviour nothing in this repository has measured. Rather than send an
+ *     unverified second call per turn to "refresh" it — a write whose only
+ *     evidence would be that it did not error — the adapter sends the ttl once
+ *     and says so. See {@link AgentEngineSessionsOptions.ttl}.
  *
  * ── The laws it inherits rather than re-implements ──────────────────────────
  * `checkEnvelope` runs on the way OUT and on the way IN, so an envelope whose
@@ -134,8 +171,23 @@ export interface AgentEngineSessionsOptions extends AiPlatformConnection {
    *
    * Omit and no `ttl` is sent, which leaves the service's own default
    * expiry in charge.
+   *
+   * **Sent on CREATE only.** Later turns append an event (see the module
+   * header, fact 2b), and whether an appended event renews the expiry is not
+   * something this repository has measured — so a long conversation may still
+   * expire on the clock started by its first turn. If you need a conversation
+   * to outlive that, set a `ttl` long enough at creation.
    */
   readonly ttl?: string;
+  /**
+   * The `author` recorded on every event this store appends. Default
+   * {@link SESSION_EVENT_AUTHOR}.
+   *
+   * The service requires one and treats it as free text; it is who the console
+   * shows as having written the turn. This is not the conversation's owner —
+   * that is `userId`, which is pinned at create and immutable.
+   */
+  readonly eventAuthor?: string;
   /**
    * How long a write waits for its long-running operation before refusing.
    * Default {@link DEFAULT_OPERATION_TIMEOUT_MS} (30s).
@@ -149,6 +201,16 @@ export interface AgentEngineSessionsOptions extends AiPlatformConnection {
 
 /** What a conversation that named nobody is stored under. */
 export const DEFAULT_USER_ID = 'agentfootprint-anonymous';
+
+/**
+ * The `author` on every event this store appends, unless
+ * {@link AgentEngineSessionsOptions.eventAuthor} names another.
+ *
+ * The service requires the field and treats it as free text. This name says
+ * which library wrote the turn, which is the useful thing to see in the console
+ * beside somebody else's agent writing to the same engine.
+ */
+export const SESSION_EVENT_AUTHOR = 'agentfootprint';
 
 /**
  * A session store in Vertex AI's session service.
@@ -178,9 +240,20 @@ export interface AgentEngineSessions extends SessionLifecycle {
  * Conversations in Vertex AI's session service — the store that survives a
  * fleet, not just a restart.
  *
- * **Status: contract-shaped and tested; awaiting field use.** Every call is
- * exercised through an injected client and pinned against the really-installed
- * SDK. None of it has yet answered a request from Google in a real project.
+ * **Status: field-validated except the write verb, which is field-CORRECTED.**
+ * An independent trial ran this adapter against a live Agent Runtime engine
+ * (2026-08-14) and everything below answered a real request from Google:
+ * creating first-turn sessions from real envelopes, hydrating them through a
+ * fresh instance, owners preserved, paged `listByUser` filtering, `ownerOf`,
+ * an unknown envelope format refused before storage, and idempotent `forget`.
+ *
+ * The one thing that FAILED was the second write to an existing session — the
+ * core job — because 9.29.0 patched `sessionState` and the service refuses
+ * that. The trial recovered the service's own words and verified the repair
+ * path (`appendEvent` with `actions.stateDelta`, then a `GET` showing the new
+ * state) with a raw diagnostic. This adapter now uses that verb; the repair is
+ * built on measured service behaviour and tested here, but the corrected write
+ * has not itself been re-run through this adapter in a live project.
  *
  * @example  A standing agent whose conversations are shared across instances
  *   import { standingAgent, nodeHost } from 'agentfootprint/hosting';
@@ -215,6 +288,59 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
 
   const nameOf = (sessionId: string): string =>
     `${scope.parent}/sessions/${safeResourceId(sessionId)}`;
+
+  /**
+   * Does a session by this name exist? Asked ONLY to tell "there is nothing to
+   * append to" apart from "the append itself was refused".
+   *
+   * The live trial proved the two ends of the write path — `create` stores a
+   * new conversation, `appendEvent` updates an existing one — and left the
+   * middle unmeasured: what the service answers when you append to a session
+   * that is not there. Branching on an assumed 404 would put the FIRST turn of
+   * every conversation on a guess. So a failed append asks the resource itself,
+   * which is a fact rather than a convention, and costs one call on the one
+   * turn where the append was never going to work anyway.
+   */
+  const missing = async (name: string): Promise<boolean> => {
+    try {
+      await sessions.get({ name });
+      return false;
+    } catch (err) {
+      // Anything that is not a clean "no such session" leaves the append's own
+      // failure standing — it is the one that says what went wrong.
+      return isNotFound(err);
+    }
+  };
+
+  /**
+   * Write the envelope onto an EXISTING session, as one appended event.
+   *
+   * Answers `false` — rather than raising — for the one case the caller has a
+   * repair for: there is no session here yet, so it has to be created.
+   */
+  const append = async (name: string, stateDelta: Record<string, unknown>): Promise<boolean> => {
+    try {
+      await sessions.appendEvent({
+        name,
+        requestBody: {
+          author: options.eventAuthor ?? SESSION_EVENT_AUTHOR,
+          // Required, and one per persisted turn. It groups the events of one
+          // invocation on the service's side; this store writes exactly one
+          // event per turn, so a fresh id per call is the honest grouping.
+          invocationId: newInvocationId(),
+          timestamp: new Date().toISOString(),
+          // ONE top-level key — see the module header. A state delta merges by
+          // top-level key, so this replaces our envelope and touches nothing
+          // else in the struct.
+          actions: { stateDelta },
+        },
+      });
+      return true;
+    } catch (err) {
+      if (isNotFound(err) || (await missing(name))) return false;
+      throw googleSdkFailure(ADAPTER, 'sessions.appendEvent', err);
+    }
+  };
 
   return {
     parent: scope.parent,
@@ -256,31 +382,18 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       // read back is one it has no business writing.
       const checked = checkEnvelope(envelope, sessionId);
       const name = nameOf(sessionId);
-      const body: VertexSession = {
-        sessionState: { [SESSION_STATE_KEY]: checked as unknown as Record<string, unknown> },
-        ...(options.ttl !== undefined && { ttl: options.ttl }),
-      };
+      const state = { [SESSION_STATE_KEY]: checked as unknown as Record<string, unknown> };
 
-      // PATCH first, CREATE on 404 — rather than the other way round.
+      // APPEND first, CREATE when there is no session to append to.
       //
-      // The steady state of a conversation is "it already exists": a session
-      // is created once and written on every turn after that. Trying create
-      // first would mean one guaranteed-to-fail call per turn for the life of
-      // every conversation, and would burn a long-running operation to learn
-      // something a patch answers directly.
-      try {
-        await sessions.patch({
-          name,
-          // Only the fields we own. Without a mask a patch is a REPLACE, and a
-          // replace would drop `userId` — which is immutable, so the service
-          // would refuse the write and a conversation would stop persisting.
-          updateMask: maskFor(body),
-          requestBody: body,
-        });
-        return;
-      } catch (err) {
-        if (!isNotFound(err)) throw googleSdkFailure(ADAPTER, 'sessions.patch', err);
-      }
+      // The steady state of a conversation is "it already exists": created
+      // once, written on every turn after that. So the ordinary turn costs one
+      // call, and the extra call is paid on turn one only.
+      //
+      // Appending — not patching. `sessions.patch` with a `sessionState` mask is
+      // refused by the live service (module header, fact 2b); it is the verb
+      // 9.29.0 used and the reason a second turn could not be stored.
+      if (await append(name, state)) return;
 
       const userId = resolveUserId(sessionId, checked);
       let created;
@@ -288,19 +401,21 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         created = await sessions.create({
           parent: scope.parent,
           sessionId: safeResourceId(sessionId),
-          requestBody: { ...body, userId },
+          requestBody: {
+            sessionState: state,
+            ...(options.ttl !== undefined && { ttl: options.ttl }),
+            userId,
+          },
         });
       } catch (err) {
         // Two writers opened the same conversation at once and the other one
         // won. That is not a failure: the session exists now, which is all
-        // this call wanted, so the patch below writes our state onto it.
+        // this call wanted, so our state goes on with the same appended event.
         if (!isAlreadyExists(err)) throw googleSdkFailure(ADAPTER, 'sessions.create', err);
-        try {
-          await sessions.patch({ name, updateMask: maskFor(body), requestBody: body });
-        } catch (patchErr) {
-          throw googleSdkFailure(ADAPTER, 'sessions.patch', patchErr);
-        }
-        return;
+        if (await append(name, state)) return;
+        // Created by somebody and gone again before we could write to it.
+        // Nothing here can say this turn landed, so it does not say it.
+        throw googleSdkFailure(ADAPTER, 'sessions.create', err);
       }
       // OUTSIDE the try on purpose: this refusal is already sanitized and
       // already says what to do, and re-wrapping it would replace a precise
@@ -469,16 +584,22 @@ function userIdResolver(
 }
 
 /**
- * The update mask for a patch.
+ * A fresh `invocationId` for one appended event.
  *
- * A patch with no mask REPLACES the resource, which would clear `userId` — and
- * `userId` is immutable, so the service refuses the write and the conversation
- * silently stops persisting. Naming the fields we own is the whole fix.
+ * The field is required and groups the events of one invocation on the
+ * service's side. This store writes exactly one event per persisted turn, so a
+ * new id per call is what that grouping honestly is — reusing one across turns
+ * would tell the console that a whole conversation was a single invocation.
+ *
+ * `randomUUID` where the runtime has it, and a time-plus-random id where it
+ * does not: this is a correlation label, not a security value, and an adapter
+ * that threw on an old runtime because a label could not be minted would be
+ * failing a conversation over nothing.
  */
-function maskFor(body: VertexSession): string {
-  const fields = ['sessionState'];
-  if (body.ttl !== undefined) fields.push('ttl');
-  return fields.join(',');
+function newInvocationId(): string {
+  const uuid = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID;
+  if (typeof uuid === 'function') return `af-${uuid.call(globalThis.crypto)}`;
+  return `af-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** The id out of a resource name, which is everything after the last `/`. */

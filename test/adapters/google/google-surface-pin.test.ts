@@ -96,13 +96,21 @@ describe('Google adapters call exactly the methods they are pinned to', () => {
     expect(fake.names()).toEqual(['embedContent', 'embedContent', 'embedContent']);
   });
 
-  it('agentEngineSessions — patch first, then create on a 404, then wait on the operation', async () => {
+  it('agentEngineSessions — appendEvent first, create on a missing session, and NEVER patch', async () => {
     const row = pin('agentEngineSessions');
-    // The steady state (patch succeeds) costs ONE call; a first write falls
-    // through to create + wait. Both are exercised in that order.
+    // The steady state (the session exists, the event appends) costs ONE call;
+    // a first write falls through to get + create. Both are exercised in that
+    // order — and `patch` is not on this row at all, so an adapter that went
+    // back to patching `sessionState` (the 9.29.0 bug the field trial caught)
+    // would reach for `undefined` and fail here rather than in somebody's
+    // production conversation.
     let sessionExists = false;
     const fake = fakeGoogleRestClient<never>([row], {
-      patch: () => {
+      appendEvent: () => {
+        if (!sessionExists) throw { code: 404 };
+        return { data: {} };
+      },
+      get: () => {
         if (!sessionExists) throw { code: 404 };
         return { data: { name: 'x' } };
       },
@@ -128,10 +136,15 @@ describe('Google adapters call exactly the methods they are pinned to', () => {
     await sessions.persist('s1', envelope);
     await sessions.persist('s1', envelope);
 
-    expect(fake.names()).toEqual(['patch', 'create', 'patch']);
+    expect(fake.names()).toEqual(['appendEvent', 'create', 'appendEvent']);
     // `operations.wait` is pinned and NOT called here, because the service
     // answered an already-done operation. That is the cheap path and it is
     // supposed to skip the round trip — the wait path has its own test.
+    //
+    // The registry does not carry `patch`, and that absence is load-bearing:
+    // the live service refuses a `sessionState` patch outright.
+    expect(row.methods).not.toContain('patch');
+    expect(row.note).toMatch(/appending an event/);
   });
 
   it('memoryBankStore — one retrieve for a search, one for a list, and never memories.list', async () => {
