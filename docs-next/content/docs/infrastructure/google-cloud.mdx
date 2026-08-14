@@ -1,6 +1,6 @@
 ---
 title: Google Cloud & Gemini
-description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, Cloud Storage artifacts, Agent Runtime sessions, Memory Bank and ADC-based identity — plus every remaining boundary with the port that fills it and the honest reason it is not an adapter yet.
+description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, Cloud Storage artifacts, Agent Runtime sessions, Firestore sessions, Memory Bank and ADC-based identity — plus every remaining boundary with the port that fills it and the honest reason it is not an adapter yet.
 ---
 
 Google's agent platform is mid-rename and mid-replacement, so this page says what
@@ -59,6 +59,7 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | **Field-validated as the corrected recipe below** — 2026-08: one six-span trace read back from Cloud Trace. The recipe this page shipped before that trial did **not** work; what changed is written out in full | [Observability sinks](doc:observability-sinks) |
 | **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers, plus a custom `fetch` seam (9.32.0) | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this library implements neither. Since 9.32 you can supply your own signer through `fetch` and keep the rotation — bring-your-own, never support — see below | [Tools & gateways](doc:tools-and-gateways) |
 | **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .appendEvent / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. State is written by **appending an event** — the service forbids patching it. Reads never touch the event log: one envelope per session, read out of `sessionState` | **Field-validated, with the write verb field-CORRECTED (9.30.0).** The 2026-08-14 trial ran this adapter live: create, hydrate through a fresh instance, owners, paged `listByUser`, `ownerOf`, an unknown envelope format refused before storage, idempotent forget — all PASS. The **second** write failed, because 9.29.0 patched `sessionState` and Google refuses that; 9.30.0 appends an event instead (the repair the same trial verified on the wire). The corrected write has not itself been re-run live | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Firestore** (session store) | `firestoreSessions()` | `agentfootprint/hosting` | `@google-cloud/firestore` | `collection().doc()`, `doc.get / .delete`, `runTransaction` (one read, then one `set`), and a server-side listing built from `where` + `orderBy` + `startAfter` + `limit`. **Not** a control plane — the database, the collection and the one composite index are yours to create | **Contract-shaped and tested; NOT field-validated.** Nothing here has reached a live Firestore from this repository. Its eighteen pinned SDK members were hand-verified against a real `@google-cloud/firestore` 9.0.0 install *outside* the repo, and the reality assertion **skips** in CI — [the full account is below](#firestore-sessions--firestoresessions) | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **Field-validated on the data plane** — 2026-08-14, this adapter against a real Memory Bank: cross-conversation recall under a widened scope, two identities sharing one entry id without collision, string and JSON values, pagination cursors, tier filtering, similarity with correctly *ordered* scores, scoped delete and `forget()`, and the five unsupported ops refusing by name. The same trial found entries losing `source` and caller `metadata`; **9.30.0 carries them** (that fix is tested, not yet re-run live) | [Memory & stores](doc:memory-and-stores) |
 | **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 No adapter — but **Node deploys**, verified: the 2026-08 trial ran a Node container through both Agent Runtime routes. The [recipe](#agent-runtime-on-nodejs--the-verified-recipe) is below; run it on Cloud Run instead if you would rather not own the contract | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Vector Search** (v1 `Index` / `IndexEndpoint`) | — | `agentfootprint/memory` | — | — | 🔴 Bring-your-own via `MemoryStore` — needs a deployed IndexEndpoint, so there is no cheap path to verify one | [Memory & stores](doc:memory-and-stores) |
@@ -76,6 +77,13 @@ the method names — and the API version — against that installed package on e
 test run. That is the **contract-shaped and tested; awaiting field use** rung,
 and it means exactly what it says: *this one has not yet answered a request from
 Google in a real project.*
+
+One adapter sits on that rung with **one leg of it missing**, and says so at
+length rather than borrowing the phrase whole: `firestoreSessions` is pinned and
+dispatch-checked like the rest, but `@google-cloud/firestore` is deliberately not
+installed in this repository, so the pin's *reality* assertion skips in CI. Its
+[own section](#firestore-sessions--firestoresessions) explains what that costs
+and why the trade was taken.
 
 **Field-validated** is one rung higher and is claimed only where a trial
 actually made the call: `gemini()` and `geminiEmbedder()` on the **Vertex**
@@ -129,12 +137,20 @@ const pinned = gemini({ project: 'my-project', location: 'us-central1', apiVersi
 
 Two more mechanical differences from the AWS pin, both deliberate:
 
-- **The packages ARE devDependencies.** The AWS SDKs are kept uninstalled so six
-  adapters can prove their missing-peer-dep refusals by real absence — which makes
-  the AWS reality check vacuous in CI. Google is mid-rebrand and its Node surface
-  lags its Python one, so version drift is precisely where the bugs live: the
-  reality and version assertions have to actually *run*. The missing-peer-dep
-  refusals are proved by stubbing module resolution instead.
+- **The packages ARE devDependencies — with one measured exception.** The AWS
+  SDKs are kept uninstalled so six adapters can prove their missing-peer-dep
+  refusals by real absence, which makes the AWS reality check vacuous in CI.
+  Google is mid-rebrand and its Node surface lags its Python one, so version
+  drift is precisely where the bugs live: the reality and version assertions have
+  to actually *run*, and the missing-peer-dep refusals are proved by stubbing
+  module resolution instead. The exception is **`@google-cloud/firestore`**,
+  which is *not* installed here: it depends on `@opentelemetry/api`, so
+  installing it would hoist that package to the repository root and disarm the
+  test proving `otelObservability()` refuses by name when it is absent. That is
+  the same trade the AWS pin makes, taken for the same reason — so the
+  `firestoreSessions` row's reality and version assertions skip in CI and run in
+  full for anyone who installs the package locally, while its dispatch assertion
+  runs everywhere.
 - **The reality check enumerates the INSTANCE, not just the prototype.**
   `@google/genai` assigns `generateContent`, `generateContentStream` and
   `embedContent` as instance fields; only `countTokens` is a prototype method. A
@@ -571,8 +587,11 @@ have to pick one:
   the conversation.
 
 `sqliteSessions` survives a restart on ONE instance with a persistent disk, and
-is wrong the moment you scale out. `memorySessions` is for tests. The store that
-survives the second row is `agentEngineSessions`, below.
+is wrong the moment you scale out. `memorySessions` is for tests. Two stores
+survive the second row, and they are one argument apart: `agentEngineSessions`,
+below, if you already own a reasoning engine — and `firestoreSessions` if you do
+not, which is most deployments. Both are `SessionLifecycle`; nothing above them
+moves when you swap one for the other.
 
 ## Agent Runtime Sessions — `agentEngineSessions()`
 
@@ -728,6 +747,303 @@ every hydrate. That is what the [claim-check store](#cloud-storage--the-artifact
 is for: `gcsArtifacts` keeps the bytes in a bucket and the conversation carries a
 ref. The two are designed to be used together, and the composed example is in that
 section.
+
+## Firestore sessions — `firestoreSessions()`
+
+The same **many containers, one conversation** row as `agentEngineSessions`,
+without the reasoning engine: one Firestore document per session, in a project
+you very likely already have. No instance to size, no connection pool to tune,
+and a free tier — the plainest fleet-shared session store on this column.
+
+```ts
+import { standingAgent, nodeHost, firestoreSessions } from 'agentfootprint/hosting';
+
+const sessions = firestoreSessions({ project: 'my-project' });
+
+const handle = await standingAgent({
+  agentFactory: () => buildAgent(),
+  host: nodeHost({ port: Number(process.env.PORT ?? 8080) }),
+  sessions,
+});
+
+// close() is ASYNC on this store, unlike the others. See "the surface", below.
+process.on('SIGTERM', () => void handle.close().then(() => sessions.close()));
+```
+
+<Callout type="warn" title="Status: contract-shaped and tested — NOT field-validated">
+**Nothing here has been run against a live Firestore by this repository.** That
+sentence is the status, not a hedge attached to one, and no amount of green CI
+changes it.
+
+Every SDK member this adapter calls was read off a real
+`@google-cloud/firestore` 9.0.0 install in a scratch project **outside** this
+repository and hand-verified there — eighteen of them, recorded as the
+`firestoreSessions` row of the [Google surface pin](#the-surface-pin-and-the-version-nobody-states).
+But the package is deliberately **not installed here**: it depends on
+`@opentelemetry/api`, so installing it hoists that package to the repository root
+and disarms the test proving `otelObservability()` refuses **by name** when
+`@opentelemetry/api` is absent. An installed package would make one check
+runnable and an absent-peer check vacuous, and the absent-peer check is the one
+guarding a refusal a reader actually meets.
+
+The consequence, stated plainly rather than left in a footnote: **the reality
+assertion — "every pinned member really exists on the real package" — SKIPS in
+CI.** What CI machine-checks is the **dispatch** pin: this adapter calls exactly
+the members its row names and no others, every run, everywhere. That those names
+are spelled the way Google spells them is held by a hand check against a real
+install, not by a test that runs here. Install `@google-cloud/firestore` locally
+and the reality assertion runs in full.
+</Callout>
+
+<Callout type="info" title="What a field trial of a DIFFERENT adapter did and did not establish">
+The design is informed by an independent field trial, 2026-08-13, of a
+**different, hand-written** Firestore session adapter. That one ran against a
+real Firestore and passed eight ownership and history checks, which is genuine
+evidence that the ownership and history *semantics* survive a real service — the
+reason those laws are inherited here rather than re-invented.
+
+It is **not** evidence about this code. That adapter had **no indexed query, no
+cursor, no transaction and no index requirement**: it read every document for one
+owner, sorted them in the client and applied an offset cursor — the defect its
+own report named, and the one shape this adapter exists not to reproduce. Every
+property described below is a property that trial never exercised.
+</Callout>
+
+**The peer dependency is optional, and its absence is a refusal rather than a
+fallback.** `@google-cloud/firestore` is loaded only when you actually construct
+one of these stores, so a deployment that never calls `firestoreSessions`
+installs nothing and importing `agentfootprint/hosting` never reaches for it.
+Without it, construction refuses by name with the install line, and says in the
+same breath that `memorySessions()` and `sqliteSessions()` need nothing
+installed:
+
+```bash
+npm install @google-cloud/firestore
+```
+
+**One collection, one document per session, six fields** — `sessionId`,
+`format`, `savedAt`, `envelope`, `owner`, `messageCount`. That is deliberately
+the `sqliteSessions` table moved: two stores under the same port and the same
+laws, so a reader who has audited one does not have to learn a second model to
+audit the other. The envelope rides as a JSON **string** rather than a nested
+map, because a conversation carries field names a model's tool call chose, values
+that may be `undefined`, and arrays directly inside arrays — and Firestore
+refuses all three. Serialising once at the edge makes every one of those a
+non-event; the price is that you cannot query *inside* a conversation, which no
+caller of this port has ever asked to do.
+
+`DEFAULT_SESSION_COLLECTION` is that collection's name when you choose none:
+`'agentfootprint_sessions'`. Override it with the `collection` option, which
+takes a **top-level collection name, not a path** — a `/` in it is refused at
+construction naming the option you set, rather than reaching the client as a
+complaint about "an odd number of components".
+
+**`listByUser` asks the server for the filter, the order and the page.** One
+query does all of it — an equality on `owner`, ordered by `savedAt` descending
+with the document name as an explicit tiebreak, positioned by a real Firestore
+cursor, and asking for one row more than you wanted. This is the query the
+adapter builds against the Firestore client, not something you write; you call
+`sessions.listByUser(userId, { limit, cursor })` and get a page back:
+
+```ts
+collection
+  .where('owner', '==', userId)
+  .orderBy('savedAt', 'desc')
+  .orderBy(FieldPath.documentId(), 'desc')  // __name__, the document name
+  .startAfter(lastSavedAt, lastDocumentName)
+  .limit(limit + 1);
+```
+
+Each of those four is load-bearing. **Server-side** is the whole point: the
+alternative — read every document for one owner, sort them in the client, skip N
+— is correct right up until somebody has had a lot of conversations, and then it
+reads *all* of them to show ten. **The `__name__` ordering is explicit** rather
+than left to Firestore's implicit tiebreak, for the same reason the SQLite
+listing orders by `session_id` after `saved_at`: two conversations saved in the
+same millisecond need a total order, or a cursor placed between them skips one or
+repeats one. **The cursor is a real `startAfter`**, carrying the previous page's
+last stored `savedAt` and document name, not an offset — an offset re-reads
+everything it skips. **The extra row** makes "is there another page?" a fact
+rather than a guess from a full page.
+
+A cursor this store did not mint — truncated, hand-edited, kept across a release,
+or minted by `sqliteSessions`, whose ids may legitimately be path-shaped —
+**restarts at the top** rather than throwing. Page one twice is a cost nobody
+notices; a refused listing is an empty sidebar.
+
+<Callout type="warn" title="The composite index is required, and it is the first thing you will hit">
+Firestore's automatic single-field indexes do **not** serve an equality filter on
+one field ordered by another. Until the composite index exists, the query above
+fails with gRPC status **9, `FAILED_PRECONDITION`** — and this adapter turns that
+into `FirestoreIndexMissingError` (`code: 'ERR_FIRESTORE_INDEX_MISSING'`), which
+carries the `collection` and `database` as fields and prints the fix with your
+values already filled in:
+
+```bash
+gcloud firestore indexes composite create \
+  --collection-group=agentfootprint_sessions \
+  --field-config=field-path=owner,order=ascending \
+  --field-config=field-path=savedAt,order=descending \
+  --database='(default)'
+```
+
+That is `owner` Ascending, `savedAt` Descending, `__name__` Descending. You only
+name the first two: an index's trailing `__name__` takes the direction of the
+last ordered field, so a console-generated index for `owner ASC, savedAt DESC` is
+already the right one.
+
+**`--database` is always printed, including for `(default)`, where gcloud would
+have assumed it anyway.** A project can hold several Firestore databases, and an
+operator on a named one who follows a command without that flag creates the index
+somewhere else and gets the identical failure back, with nothing to suggest why.
+A refusal that teaches the wrong fix is worse than a bare failure, and one
+always-present flag costs nothing to be right. It is single-quoted for the same
+kind of reason: the default database is literally spelled `(default)`, and bare
+parentheses are a syntax error in every shell you would paste this into.
+
+When you passed your own client, this store cannot know which database it was
+built for and **does not guess** — the flag comes back as a placeholder to fill
+in from wherever the client was constructed, and the message says that an index
+created on the wrong database leaves the error exactly as it is.
+
+Google's own error carries a one-click console link and is **deliberately not
+echoed**: it restates the failing query, and the failing query contains a user
+id. Look in Cloud Logging for the original.
+</Callout>
+
+**Ownership is derived from the stored envelope and established ONCE — which is
+why the write is a transaction.** `persist` takes no owner and gains none; the
+owner is read off the conversation's own signed principal, exactly as
+[the port requires](doc:hosting-and-runtime). The first turn that signs for a
+conversation owns it: a later turn carrying a leaner identity must not erase it
+(the session would drop out of its owner's list), and a later turn carrying a
+different one must not take it (ownership would transfer by writing, which undoes
+every check made against the index one turn later).
+
+SQLite states that rule as `owner = COALESCE(sessions.owner, excluded.owner)`.
+Firestore has no `COALESCE`, and **`set({ merge: true })` is not a stand-in for
+one.** Merge means "keep the fields I did not mention", so mentioning `owner` at
+all lets the last writer win, and *not* mentioning it means a conversation that
+gains an identity on turn two never records one. Both are the bug rather than a
+workaround for it. The rule has to **read** the stored owner and then decide, and
+read-then-decide-then-write is only safe inside a transaction — Firestore retries
+the whole function when a concurrent write touched the document, so two
+containers persisting the same turn cannot interleave into a lost owner. Every
+other field is last-write-wins, through a full `set` rather than a merge, so a
+field written by an older version of this store cannot linger beside the fields
+that replaced it.
+
+**`ownerOf` answers `undefined` for two different facts, deliberately.** "No such
+session" and "a session nobody ever signed for" come back identically. A store
+that told them apart would hand a caller an oracle for which session ids are
+real, and the composer's single not-found rests on exactly this ambiguity.
+
+<Callout type="info" title="Document names are a full SHA-256 — and that is ADDRESSING, not encryption">
+A `sessionId` in this library is opaque: a UUID, an upstream gateway's
+correlation id, a path-shaped tenant key, a unicode string somebody typed.
+Firestore document names have rules — no `/`, not `.` or `..`, not matching
+`__…__`, at most 1500 bytes — and an id that broke one of them would fail at the
+wire on the one turn it mattered, or worse, two ids differing only past a
+truncation point would silently become one conversation. So the document name is
+`sha256(domain + NUL + sessionId)` in hex: 64 characters, always legal, injective
+for every input anyone will ever have. The raw id is stored in the `sessionId`
+**field** beside it.
+
+**It is not encryption, and it is important not to read it as any.** The
+conversation is stored in the clear, the `sessionId` field spells out the id the
+hash was made from, and anyone who can read the collection can read every
+conversation in it. Encryption at rest is Google's (always on, CMEK-configurable)
+and access control is IAM's; neither is implied by the hash. Two things it does
+cost you, worth knowing before an incident rather than during one: **you cannot
+look a session up in the Firestore console by typing its raw id** — query
+`sessionId == '…'`, or hash it yourself — and a document name carries nothing a
+human can sort or scan by. The store exposes the mapping as
+`sessions.documentIdFor(sessionId)` for exactly that moment; it is a pure
+function, it touches nothing, and it still answers on a closed store.
+</Callout>
+
+**The ceiling has a name, and the refusal happens before the write.** A Firestore
+document is capped at `FIRESTORE_MAX_DOCUMENT_BYTES` — 1,048,576, the service's
+number and not this library's. This store refuses above
+`FIRESTORE_MAX_ENVELOPE_BYTES`, which sits 8 KiB below it because the document
+also carries five other fields, their *names*, and its own path, all of which
+count toward Firestore's total. A conversation whose serialized envelope exceeds
+that raises `EnvelopeTooLargeError` (`code: 'ERR_ENVELOPE_TOO_LARGE'`, carrying
+`sessionId` and `bytes`) **before anything is sent**, rather than arriving as an
+opaque `INVALID_ARGUMENT` from the wire. Nothing is ever truncated: half a
+conversation stored as if it were whole is the failure this store's other laws
+exist to prevent. The refusal names the three ways out — compact the conversation
+before persisting it (an agent built with [`.compaction({...})`](doc:compaction)
+folds its own history and never reaches this), keep large payloads in the
+[artifact store](#cloud-storage--the-artifact-store-gcsartifacts-9250) with the
+conversation carrying only a ref, or use a store with no per-record ceiling.
+
+**The reading law is inherited, not re-implemented.** A session that was never
+written hydrates as `undefined` — and *only* that one. A document that exists but
+whose payload is not text, or is not JSON, or is not an envelope at all, is
+refused by name with `UnreadableEnvelopeError`; one whose envelope carries a
+`format` this runtime does not know is refused too, naming the formats it does
+read. A conversation that exists and cannot be read must never be answered with a
+fresh start, because from the outside that is indistinguishable from a brand-new
+user. The same check runs on the way **in**, so a document this store could not
+read back is one it never writes.
+
+**The surface.** `FirestoreSessionsOptions` is
+`{ project?, database?, collection?, firestore? }`. `project` and `database`
+default to the ambient environment and `'(default)'`; both are worth setting
+deliberately, because "conversations went to the wrong database" looks exactly
+like "conversations were lost". `firestore` takes a client you already built —
+most applications that reach for this adapter have one, and two clients in one
+process means two sets of gRPC channels for nothing. Passing it *together with*
+`project` or `database` is refused rather than silently ignored, because those
+settings belong to whoever constructed the client. It does not remove the need
+for the package to be installed: `FieldPath.documentId()` is a static on the
+module and there is no string spelling of `__name__` the client accepts in
+`orderBy`.
+
+What comes back is a `FirestoreSessions` — the port, plus the things a real store
+owns beyond it:
+
+| | |
+|---|---|
+| `hydrate` / `persist` | the `SessionLifecycle` port, unchanged |
+| `listByUser` / `ownerOf` | the optional ownership index, described above |
+| `collection` | the collection these sessions live in — useful in an incident |
+| `documentIdFor(sessionId)` | the document name one session id maps to |
+| `forget(sessionId)` | drop one session; forgetting nothing is not an error |
+| `close()` | **async**, idempotent and final |
+
+`close()` being async is the one shape that differs from the other stores, and it
+is not inconsistency for its own sake: terminating a Firestore client closes gRPC
+channels, and a Node process holding an open channel does not exit — a `void`
+return would be a promise this adapter could not keep. It is **final**: reading
+or writing afterwards refuses by name rather than quietly reconnecting, because a
+store that reopened behind you would hide a shutdown-ordering bug instead of
+surfacing it. A client you passed in yourself is **not** terminated; this store
+did not open it.
+
+**The driver-shape types are exported too, and here is why they exist.** Nothing
+in this package takes a hard type dependency on `@google-cloud/firestore` — it is
+an optional peer most consumers never install, so a hard import would break
+type-checking for everyone who does not have it. Instead the adapter declares,
+locally, the exact slice of the driver's surface it touches, each shape read off
+the installed `types/firestore.d.ts` (9.0.0). They are exported so you can type a
+wrapper, a fake or a mapping of your own without reaching into `dist`:
+
+| Type | What it is |
+|---|---|
+| `FirestoreLike` | One connected database — `collection()`, `runTransaction()`, `terminate()`. **This is the shape a pre-built client passed as `firestore` has to satisfy.** |
+| `FirestoreCollectionLike` | A query that can also mint document handles: `FirestoreQueryLike` plus `doc()` |
+| `FirestoreQueryLike` | The query builder — `where`, `orderBy`, `startAfter` and `limit` are synchronous and each returns a *new* query; only `get()` is async |
+| `FirestoreQuerySnapshotLike` | The answer to a query: `docs`, an already-materialised array — not a stream, and not an async iterable |
+| `FirestoreDocumentReferenceLike` | A handle on one document: `id`, `get()`, `delete()` |
+| `FirestoreDocumentSnapshotLike` | One document as it came back: `exists` (a **property**, not a method), `id`, and `data()` |
+| `FirestoreTransactionLike` | The transaction handle, whose asymmetry a fake has to get right: `get()` is async and answers a snapshot, `set()` is synchronous and answers the transaction |
+| `FirestoreConstructorLike` | The `Firestore` class itself — `new (settings?) => FirestoreLike` |
+| `FirestoreSdkModule` | The module as this adapter loads it: `Firestore` and `FieldPath.documentId()`, the two members it needs |
+
+What it costs to run is [in the cost list](#what-these-adapters-cost-to-run) with
+the others.
 
 ## Memory Bank — `memoryBankStore()`
 
@@ -1272,6 +1588,13 @@ No invented numbers — the shapes, so you can price them against your own tarif
   of a conversation, one failed append plus one `get` plus a `create` and its
   operation wait), one `get` per hydrate, one `list` per history listing. Storage
   is whatever `sessionState` holds, plus one small event per persisted turn.
+- **Firestore sessions**: one transaction per persisted turn — one document read
+  then one write, where the read *is* the write-once ownership rule and not an
+  overhead you could optimise away. One document read per hydrate and per
+  `ownerOf`. One indexed query per `listByUser` page, whose cost is the page
+  rather than the collection — which is the whole reason the listing is indexed
+  and cursored. One delete per `forget`. Storage is the serialized envelope plus
+  five small fields, and the one composite index.
 - **Memory Bank**: one `get` plus one `patch` (or `create` + wait) per `put` —
   the `get` is the tenant check described above, not an optimisation — one
   `retrieve` per `search` **or** per `list` page, and **one delete per memory**
@@ -1352,7 +1675,7 @@ after.
 | Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | **Field-validated as the corrected recipe** — 2026-08, one six-span trace read back. The pre-trial recipe on this page did not work |
 | Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | **Field-validated for an ordinary bearer gateway** (2026-08). **Still not Google's identity-enforced path** — that path is mTLS + DPoP and this library implements neither; 9.32 adds a `fetch` seam so your own signer composes UNDER the vending instead of forcing you onto the `http` transport and losing rotation |
 | Agent Runtime hosting | — | No adapter — but **Node deploys, verified** (2026-08). [Recipe above](#agent-runtime-on-nodejs--the-verified-recipe). The remaining work is a **tracked ticket**, not an unknown: the contract's second route is NDJSON at its own path and `httpHost` serves one path framed as SSE, so a host adapter is a port-shape change and its own release |
-| `firestoreSessions` — a `SessionLifecycle` on Firestore | — | **Tracked ticket, not scheduled here.** An independent field trial's own adapter passed a live multi-user run against a real Firestore (2026-08-13) and proved the 9.26 ownership CONTRACT — but a shipped one needs a new optional peer (`@google-cloud/firestore`), an SDK pin test before any adapter code, an indexed `orderBy` + document cursor (the trial's `listByUser` sorted client-side), a TTL policy and a write-once owner. Its own release. The port is two methods meanwhile |
+| `firestoreSessions()` — a `SessionLifecycle` on Firestore | `agentfootprint/hosting` | **9.33.0 — contract-shaped and tested; NOT field-validated.** Nothing here has been run against a live Firestore by this repository; the eighteen pinned SDK members were hand-verified against a real `@google-cloud/firestore` 9.0.0 install outside the repo, and the reality assertion **skips** in CI while the dispatch pin runs everywhere. The design is informed by an independent field trial of a *different* adapter (2026-08-13) that proved the ownership and history contract against a real Firestore — and that had no indexed query, no cursor, no transaction and no index requirement, so it says nothing about this one. [Full account](#firestore-sessions--firestoresessions) |
 | Agent Retrieval · Agent Identity auth manager | — | Parked 2026-08-12 — no Node surface |
 | `SecurityStrategy` for Model Armor / Semantic Governance | — | **Will not be built** — gateway-enforced, no data-plane call |
 
