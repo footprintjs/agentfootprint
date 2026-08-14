@@ -5,7 +5,9 @@
  * as a deprecated alias. 9.0.0 executed that ledger: sixteen alias subpaths
  * left `package.json`. What ships now is exactly
  *
- *   root  +  the ten doors  +  `./reliability`  +  `./package.json`
+ *   root  +  the eleven doors  +  `./reliability`  +  `./package.json`
+ *
+ * (The eleventh, `./skill-graph`, arrived in 9.34.0 — see the list below.)
  *
  * This file is the MANIFEST half of the pin. Its sibling
  * `door-aliases.test.ts` reads the built `.d.ts` files and pins the SURFACE
@@ -205,6 +207,10 @@ const SURVIVING_SUBPATHS = [
   './hosting',
   './security',
   './reliability',
+  // 9.34.0 — added, not resurrected: `./skill-graph` was never one of the
+  // sixteen. It publishes the skill-graph decision layer whose framework
+  // neutrality `test/lib/injection-engine/skill-graph-fence.test.ts` proves.
+  './skill-graph',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────

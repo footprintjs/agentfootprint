@@ -37,12 +37,11 @@
  * resolves correctly.
  */
 
-import { buildReadSkillTool } from '../../lib/injection-engine/skillTools.js';
 import {
+  buildReadSkillTool,
   buildSkipStepTool,
-  stepsOf,
-  SKIP_STEP_TOOL_NAME,
-} from '../../lib/injection-engine/skillSteps.js';
+} from '../../lib/injection-engine/skillTools.js';
+import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../lib/injection-engine/skillSteps.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';

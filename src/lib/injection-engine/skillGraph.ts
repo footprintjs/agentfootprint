@@ -58,8 +58,8 @@
  * per-hop cause, so a model pick was recorded under a declared edge's label).
  */
 
-import { isDevMode } from 'footprintjs';
-
+import { devMode, devWarn } from './devWarn.js';
+import type { ToolResultStatus } from './toolOutcome.js';
 import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';
@@ -305,7 +305,7 @@ export interface SkillRouteOptions {
   readonly when?: (result: {
     readonly toolName: string;
     readonly result: string;
-    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+    readonly status?: ToolResultStatus;
   }) => boolean;
   /** Sugar for "activate whenever this tool returns (any result)". String is an
    *  exact match; RegExp is tested against the tool name. */
@@ -321,9 +321,7 @@ export interface SkillRouteOptions {
    * Data — comparable, drawable (`toMermaid()` captions it), stored. At
    * most one of `when` / `onToolStatus`: code or data, never both.
    */
-  readonly onToolStatus?:
-    | import('../../core/agent/toolEffects.js').ToolResultStatus
-    | ReadonlyArray<import('../../core/agent/toolEffects.js').ToolResultStatus>;
+  readonly onToolStatus?: ToolResultStatus | ReadonlyArray<ToolResultStatus>;
   /** Caption rendered on the edge. Defaults to a derived label. */
   readonly label?: string;
 }
@@ -1493,11 +1491,8 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         if (check === 'throw' && !reported.ok) {
           throw new Error(`skillGraph: build-time check-up failed:\n${formatCheckup(reported)}`);
         }
-        if (reported.problems.length > 0 && isDevMode()) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `skillGraph: build-time check-up found problems:\n${formatCheckup(reported)}`,
-          );
+        if (reported.problems.length > 0) {
+          devWarn(`skillGraph: build-time check-up found problems:\n${formatCheckup(reported)}`);
         }
       }
 
@@ -1750,7 +1745,7 @@ function routeMatches(
   res: {
     readonly toolName: string;
     readonly result: string;
-    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+    readonly status?: ToolResultStatus;
   },
 ): boolean {
   if (r.onToolStatus !== undefined) {
@@ -2050,9 +2045,7 @@ function memoizePerPass(
 }
 
 function warnMatcherThrew(edge: string, err: unknown): void {
-  if (!isDevMode()) return;
-  // eslint-disable-next-line no-console
-  console.warn(
+  devWarn(
     `agentfootprint skillGraph: ${edge} predicate threw — treated as no-match. ` +
       `Predicates must be pure + total. ${err instanceof Error ? err.message : String(err)}`,
   );
@@ -2270,7 +2263,7 @@ function compileTree(
  * identity — `evaluateInjections` passes one ctx object to every trigger in a
  * pass). When all leaves have been evaluated for one ctx and the fired count
  * is not exactly 1, a console.warn names the leaves. Production pays one
- * `isDevMode()` check per evaluation; a throwing predicate is excluded here
+ * `devMode()` check per evaluation; a throwing predicate is excluded here
  * because the evaluator already reports it (`skipped: 'predicate-threw'`).
  */
 function attachExactlyOneLeafMonitor(skills: Injection[]): void {
@@ -2285,7 +2278,7 @@ function attachExactlyOneLeafMonitor(skills: Injection[]): void {
       trigger: {
         kind: 'rule',
         activeWhen: (ctx: InjectionContext): boolean => {
-          if (!isDevMode()) return inner(ctx);
+          if (!devMode()) return inner(ctx);
           const fired = inner(ctx); // may throw → evaluator reports 'predicate-threw'
           let pass = passes.get(ctx);
           if (!pass) {
@@ -2297,8 +2290,7 @@ function attachExactlyOneLeafMonitor(skills: Injection[]): void {
           if (pass.evaluated === total) {
             passes.delete(ctx); // reset so a reused ctx object starts a fresh pass
             if (pass.fired.length !== 1) {
-              // eslint-disable-next-line no-console
-              console.warn(
+              devWarn(
                 pass.fired.length === 0
                   ? `agentfootprint skillGraph.tree: NO leaf fired this iteration (expected exactly one). ` +
                       `The tree is exhaustive by construction, so a decide() predicate likely returned ` +

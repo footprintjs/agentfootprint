@@ -39,8 +39,7 @@
  * entirely on agents with no stepped skill (zero-cost-when-unused).
  */
 
-import { defineTool } from '../../core/tools.js';
-import type { Tool } from '../../core/tools.js';
+import type { SkillToolDescriptor } from './hostContract.js';
 import { assertArtifactVocabulary } from './skillVocabulary.js';
 import type { Injection } from './types.js';
 
@@ -283,17 +282,23 @@ export function rekeyStepPointer(args: {
 // ─── The skip_step integrity tool ─────────────────────────────────────
 
 /**
- * Build the `skip_step` tool. Auto-attached to the dispatch registry when
- * ≥1 registered skill declares steps (the `read_skill` auto-attach seam) —
- * always dispatchable, but OFFERED (schema in the request) only while a
- * stepped tenure is active and unfinished. Its execute returns a
- * placeholder; the tool-calls stage overwrites the model-visible result
- * with the authoritative sentence, exactly as the skill-graph gate
- * overwrites `read_skill` refusals — bookkeeping lives where the batch
- * order lives.
+ * DESCRIBE the `skip_step` tool — name, schema, and the placeholder result.
+ *
+ * A description, not a tool: this module owns every sentence the model reads
+ * about a procedure, and that includes this one, but building the framework's
+ * tool object would mean importing the framework's tool factory into the
+ * grammar. `skillTools.ts#buildSkipStepTool` does the wrapping (9.34.0).
+ *
+ * The tool is auto-attached to the dispatch registry when ≥1 registered skill
+ * declares steps (the `read_skill` auto-attach seam) — always dispatchable,
+ * but OFFERED (schema in the request) only while a stepped tenure is active
+ * and unfinished. Its execute returns a placeholder; the tool-calls stage
+ * overwrites the model-visible result with the authoritative sentence,
+ * exactly as the skill-graph gate overwrites `read_skill` refusals —
+ * bookkeeping lives where the batch order lives.
  */
-export function buildSkipStepTool(): Tool {
-  return defineTool<{ reason: string }, string>({
+export function skipStepDescriptor(): SkillToolDescriptor<{ reason: string }, string> {
+  return {
     name: SKIP_STEP_TOOL_NAME,
     description:
       'Skip the current step of the active skill procedure, with the reason on the record. ' +
@@ -313,7 +318,7 @@ export function buildSkipStepTool(): Tool {
       'skip_step noted. (Raw placeholder — the agent loop replaces this result with the ' +
       'authoritative step record; reading it verbatim means the runner that dispatched ' +
       'skip_step does not track step procedures.)',
-  }) as unknown as Tool;
+  };
 }
 
 // ─── Every sentence the model reads ───────────────────────────────────

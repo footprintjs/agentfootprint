@@ -10,8 +10,12 @@
 import { describe, it, expect } from 'vitest';
 import { defineTool } from '../../../src/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
+// `buildSkipStepTool` moved to the tool ADAPTER module in 9.34.0 (it calls
+// `defineTool`, which the pure procedure grammar may no longer import — see
+// `test/lib/injection-engine/skill-graph-fence.test.ts`). Same function, same
+// behavior, same barrel export; only the internal home changed.
+import { buildSkipStepTool } from '../../../src/lib/injection-engine/skillTools.js';
 import {
-  buildSkipStepTool,
   foldStepPlans,
   nudgeTeachingMessage,
   pointerOf,

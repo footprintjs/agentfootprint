@@ -11,11 +11,11 @@
  * the injection-context type.
  */
 
-import { isDevMode } from 'footprintjs';
 import type { InjectionContext } from './types.js';
 import type { RouteWitness, SkillMatchData } from './skillMatch.js';
 import type { IntentCandidate, IntentScorer } from './intentScorer.js';
 import { validateIntentScores } from './intentScorer.js';
+import { devWarn } from './devWarn.js';
 import { decideTier2, type RoutingPolicy } from './routingPolicy.js';
 import type { GraphCheckup, GraphProblem } from './skillGraphCheckup.js';
 
@@ -92,14 +92,11 @@ export function buildTurnRoutingPlan(input: {
           }
           return { id: e.id, ...(witness !== undefined && { witness }) };
         } catch (err) {
-          if (isDevMode()) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `agentfootprint skillGraph: entry "${e.id}" predicate threw during the ` +
-                `turn-start cascade — treated as no-match. Predicates must be pure + total. ` +
-                `${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
+          devWarn(
+            `agentfootprint skillGraph: entry "${e.id}" predicate threw during the ` +
+              `turn-start cascade — treated as no-match. Predicates must be pure + total. ` +
+              `${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
       return undefined;

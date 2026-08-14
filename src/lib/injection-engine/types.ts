@@ -17,8 +17,9 @@
  *          for each InjectionRecord they place.
  */
 
-import type { Tool } from '../../core/tools.js';
 import type { ContextRole, ContextSource } from '../../events/types.js';
+import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
+import type { ToolResultStatus } from './toolOutcome.js';
 
 // ─── Trigger — WHEN does this Injection activate? ──────────────────
 
@@ -94,8 +95,15 @@ export interface InjectionContent {
    * and are visible to the model from iteration 1 — activation adds the body,
    * not the tools. Only a Skill with `autoActivate: 'currentSkill'` has its
    * tools held back and readmitted through the tools slot while it is active.
+   *
+   * Typed as the NARROW {@link SkillTool} — a schema and something to run —
+   * rather than agentfootprint's own `Tool` (9.34.0). Every other member of
+   * `Tool` is optional, so a `Tool` satisfies this and this is accepted
+   * everywhere a `Tool` is; what changes is that DECLARING a skill no longer
+   * needs the framework's tool type, which is what lets this engine be read
+   * by a host that has its own.
    */
-  readonly tools?: readonly Tool[];
+  readonly tools?: readonly SkillTool[];
 }
 
 // ─── Context — read-only state predicates can inspect ─────────────
@@ -150,7 +158,7 @@ export interface InjectionContext {
      *  tool returned a result envelope carrying `status`. `onToolStatus`
      *  route edges key on it; a result without one can never match a
      *  status edge (an undeclared outcome is not evidence). */
-    readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+    readonly status?: ToolResultStatus;
   }>;
   /**
    * IDs of LLM-activated injections that the LLM has activated this
@@ -265,7 +273,7 @@ export function toolResultsOf(ctx: InjectionContext): ReadonlyArray<{
   readonly toolName: string;
   readonly result: string;
   readonly toolCallId?: string;
-  readonly status?: import('../../core/agent/toolEffects.js').ToolResultStatus;
+  readonly status?: ToolResultStatus;
 }> {
   return ctx.toolResults ?? (ctx.lastToolResult ? [ctx.lastToolResult] : []);
 }
@@ -341,17 +349,33 @@ export interface InjectionEvaluation {
 }
 
 /**
- * POJO projection of an active Injection — flows through footprintjs
- * scope (which cannot serialize functions) so that slot subflows can
- * read it across the subflow boundary.
+ * THE BOUNDARY CONTRACT — an active Injection as plain, serializable data.
  *
- * Drops the `trigger` (already evaluated) and projects `inject.tools`
- * to schemas only (the Tool's `execute` function lives on the Agent's
- * closure-held registry, looked up by injection id at exec time).
+ * POJO projection of an active Injection: it flows through footprintjs scope
+ * (which cannot serialize functions) so that slot subflows can read it across
+ * the subflow boundary. It drops the `trigger` (already evaluated) and
+ * projects `inject.tools` to SCHEMAS ONLY — the tool's `execute` lives on the
+ * host's closure-held registry, looked up by injection id at exec time.
+ *
+ * That description is also, exactly, what a host on ANOTHER framework needs
+ * (9.34.0). This is the shape the injection engine hands out: no predicates,
+ * no closures, no framework tool objects, nothing that has to survive a
+ * `structuredClone` and doesn't. A host reads `inject.systemPrompt` into its
+ * own system message, `inject.messages` into its own history, and
+ * `inject.tools[].schema` into its own tool list — resolving `execute` by
+ * `injectionId` in whatever registry it keeps. Which is why the two fields
+ * that used to name our own layers by inline import — the tool schema and the
+ * cache directive — are now the structural {@link SkillToolSchema} and
+ * {@link SkillCachePolicy} from `hostContract.ts`: the same shapes, spelled
+ * without reaching for an adapter or a cache implementation.
+ *
+ * It is a PROJECTION, not a second source of truth. `projectActiveInjection`
+ * below is the only thing that builds one, and a field that is not on its
+ * copy list does not cross — see `cache` for what that cost once.
  */
 export interface ActiveInjection {
   readonly id: string;
-  readonly flavor: import('../../events/types.js').ContextSource;
+  readonly flavor: ContextSource;
   readonly description?: string;
   /**
    * The DECLARED surfaceMode (Skill flavor only), copied through as written.
@@ -389,7 +413,7 @@ export interface ActiveInjection {
    * Absent when the injection declared none (hand-built Injections); the
    * decision's own `?? 'never'` default then applies, as it always did.
    */
-  readonly cache?: import('../../cache/types.js').CachePolicy;
+  readonly cache?: SkillCachePolicy;
   /**
    * Why THIS piece of retrieved content earned its place (8.8.0).
    *
@@ -410,12 +434,12 @@ export interface ActiveInjection {
   readonly inject: {
     readonly systemPrompt?: string;
     readonly messages?: ReadonlyArray<{
-      readonly role: import('../../events/types.js').ContextRole;
+      readonly role: ContextRole;
       readonly content: string;
     }>;
     /** Tool schemas only — `execute` lives on Agent's closure registry. */
     readonly tools?: ReadonlyArray<{
-      readonly schema: import('../../adapters/types.js').LLMToolSchema;
+      readonly schema: SkillToolSchema;
       readonly injectionId: string;
     }>;
   };

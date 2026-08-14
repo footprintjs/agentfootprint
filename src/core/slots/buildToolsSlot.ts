@@ -19,8 +19,8 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
+import { buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
 import {
-  buildSkipStepTool,
   currentStepOf,
   pointerOf,
   skipStepDescription,

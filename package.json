@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.33.0",
+  "version": "9.34.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -220,6 +220,16 @@
         "default": "./dist/reliability/index.js"
       }
     },
+    "./skill-graph": {
+      "import": {
+        "types": "./dist/esm/doors/skill-graph.d.ts",
+        "default": "./dist/esm/doors/skill-graph.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/skill-graph.d.ts",
+        "default": "./dist/doors/skill-graph.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
@@ -256,12 +266,16 @@
       ],
       "reliability": [
         "./dist/types/reliability/index.d.ts"
+      ],
+      "skill-graph": [
+        "./dist/types/doors/skill-graph.d.ts"
       ]
     }
   },
   "sideEffects": [
     "**/cache/strategies/*.js",
-    "**/cache/index.js"
+    "**/cache/index.js",
+    "**/lib/injection-engine/devWarnHost.js"
   ],
   "peerDependencies": {
     "@anthropic-ai/sdk": "*",

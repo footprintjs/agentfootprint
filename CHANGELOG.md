@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.34.0] - 2026-08-14
+
+**The skill-graph purity fence, and the `agentfootprint/skill-graph` subpath it makes safe to ship.**
+
+The skill-graph layer was already framework-neutral — by accident. Nothing
+enforced it, and three recent minors had each pushed a little loop
+vocabulary into it, because inside one package an import costs nothing to
+write and nothing to notice. A comment saying "this stays pure" is not a
+forcing function. A CI test that fails on the crossing is.
+
+### Added — `test/lib/injection-engine/skill-graph-fence.test.ts`, 30 tests
+
+Walks the TRANSITIVE import graph with the TypeScript parser itself, so
+`import type`, `export … from`, `await import()`, and an inline
+`import('…').T` are all seen — grepping for `from 'footprintjs'` would have
+missed all four shapes. Two zones, both named in the test, not inferred
+from directory structure: a PURE CORE of 18 files that may import nothing
+from `footprintjs`, the agent loop, `core/tools.ts`, or an adapter; and a
+PROVIDER LAYER of exactly two files — `constrainedEnumPick.ts` and
+`llmClassifier.ts` — allowed to see `adapters/types.ts` and nothing else,
+because a constrained-enum pick genuinely IS a model call and pretending
+otherwise would be a fake abstraction, not a purer one. Every allow-listed
+leaf is separately asserted to be a true leaf (zero imports of its own), so
+an allow-listed file can't smuggle the loop in behind it. Every file that
+lives in `injection-engine/` must land in exactly one zone, so a new file
+dropped in later can't go unclassified. A refusal names the file, the
+import, the reason, and the seam to use instead.
+
+Independently mutation-checked before release: adding
+`import { isDevMode } from 'footprintjs'` to `routingPolicy.ts` failed 11
+tests, each naming the file, the import, and the fix — and the fence caught
+it a second, harder way too, transitively through `evaluator.ts`, which
+never touched `footprintjs` itself but imports the file that now did.
+
+### Fixed — the leaks the fence found, each closed behind a pure seam
+
+- `isDevMode` (a `footprintjs` import) → a bound `devWarn()` / `devMode()`
+  reader that the host supplies; every existing warning reads verbatim, and
+  the existing `enableDevMode()` tests pass unchanged — the proof that
+  nothing about *what gets warned* moved, only *how it's asked*.
+- `ToolResultStatus` → pulled out to a zero-import leaf and re-exported from
+  its old home, so the envelope grammar is unchanged for every existing
+  caller. The fence caught four more inline crossings of this type that
+  hadn't made it into the original list.
+- `Tool` → replaced with a structural `SkillTool` (`{ schema, execute }`)
+  that the real `Tool` satisfies without changes — zero compiler errors
+  from the swap, because the graph never needed more than the shape.
+- `LLMToolSchema` / `CachePolicy` → structural mirrors, pinned two
+  independent ways: an AST field-list comparison in the fence test, and
+  real two-way assignability in a compiler test — so the mirror can't drift
+  silently in either direction.
+- `defineTool`'s value imports → the graph now exports pure descriptors;
+  one host-side file does the wrapping into a runnable `Tool`.
+
+### Added — `SkillGraphHost`
+
+A type, not a runtime — it names what a host owes the graph: advance the
+cursor exactly once per iteration using the same `ctx` its triggers read,
+enforce reachability at pick time, set the pending pick only after
+acceptance, carry the cursor across iterations, emit the skill events.
+There is no second run door behind it; `buildInjectionEngineSubflow.ts` is
+now labelled what it always was — one reference implementation of this
+contract, not the contract itself.
+
+### Added — `agentfootprint/skill-graph`
+
+A new subpath that ships the pure core on its own. Proven on the built
+output, not asserted: loading `dist/doors/skill-graph.js` pulls zero
+modules of the `footprintjs` package, where `require('footprintjs')`
+explicitly pulls 104.
+
+**The honest cost:** `footprintjs` is still a REQUIRED peer of this
+package, so a host on another framework installs it even though this
+subpath never loads a line of it — the fence buys you the import, not the
+install. And nobody has run this door from outside agentfootprint yet.
+Say so rather than imply otherwise.
+
+### Changed — additive only
+
+`buildReadSkillTool`, `buildListSkillsTool`, and `buildSkipStepTool` are
+byte-identical and still return `Tool`; turning them into descriptors
+directly would have been a breaking change, so the descriptor shape was
+added beneath them instead. Three existing test files changed, and all
+three changes are mechanical: two are export-map inventories that needed
+an eleventh door listed, one moved an import between internal modules. No
+assertion changed.
+
 ## [9.33.0] - 2026-08-14
 
 **A fourth rung on the session ladder — Firestore — built around the one

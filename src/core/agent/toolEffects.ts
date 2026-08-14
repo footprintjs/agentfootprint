@@ -43,22 +43,24 @@
 // ─── The outcome-status vocabulary ─────────────────────────────────────
 
 /**
- * Normalized outcome of one tool call, declared by the tool itself. Six
- * values, deliberately closed: routing keyed on meaning needs a vocabulary
- * both sides spell identically. A string outside this set makes the value
- * NOT an envelope (data path, unchanged).
+ * The six outcome words, re-exported under the names they have always had.
+ *
+ * They are DECLARED in `lib/injection-engine/toolOutcome.ts` (9.34.0) — a
+ * zero-import leaf — because a skill-graph route edge keys on them
+ * (`onToolStatus`) and `InjectionContext.toolResults[].status` is typed by
+ * them. Leaving the declaration here meant the graph's own context type
+ * reached into the agent loop for one string union, which points the
+ * dependency backwards: the loop depends on the graph, never the reverse.
+ *
+ * This module remains the owner of the ENVELOPE grammar below — the two
+ * effect kinds, the recognizer, the lease shapes — all of which are
+ * genuinely loop-side. Only the vocabulary moved down.
  */
-export type ToolResultStatus = 'success' | 'failure' | 'denied' | 'invalid' | 'partial' | 'pending';
+export type { ToolResultStatus } from '../../lib/injection-engine/toolOutcome.js';
+export { TOOL_RESULT_STATUSES } from '../../lib/injection-engine/toolOutcome.js';
 
-/** The closed set, as data — validators and docs read one list. */
-export const TOOL_RESULT_STATUSES: readonly ToolResultStatus[] = [
-  'success',
-  'failure',
-  'denied',
-  'invalid',
-  'partial',
-  'pending',
-];
+import type { ToolResultStatus } from '../../lib/injection-engine/toolOutcome.js';
+import { TOOL_RESULT_STATUSES } from '../../lib/injection-engine/toolOutcome.js';
 
 // ─── The two effect kinds ──────────────────────────────────────────────
 

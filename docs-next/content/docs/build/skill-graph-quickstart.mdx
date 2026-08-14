@@ -228,6 +228,78 @@ Every choice is on the record: `llm_start.brain` says which rung answered,
 `stream.tool_end` and the routed edge. None declared = byte-identical,
 events included.
 
+## Running the graph without our agent (9.34.0)
+
+The skill graph is a **decision layer**, not a runtime. Given one iteration's
+`InjectionContext` it says where the cursor goes, what is reachable from
+there, and which injections are active — plain functions over plain data.
+That layer ships at its own subpath:
+
+```ts
+import { skillGraph, readSkillDescriptor } from 'agentfootprint/skill-graph';
+```
+
+Three things are worth stating plainly.
+
+**The neutrality is proved, not claimed.** A test —
+`test/lib/injection-engine/skill-graph-fence.test.ts` — walks the *transitive*
+import graph of everything this subpath exports and fails if any of it
+reaches `footprintjs`, the agent loop, the tool factory, an adapter or a
+recorder. It is a fence, and it is the actual feature: the boundary already
+pointed the right way, but nothing enforced it, so it had been eroding one
+free import at a time.
+
+**`footprintjs` is still a required peer dependency of this package.** It is
+not marked optional, so npm installs the flowchart engine beside you even if
+this subpath is the only path you import. The door never *loads* it — that is
+what the fence proves — but the package is not split, and the rest of
+agentfootprint needs the engine. You pay the install, not the import.
+
+**The provider layer is deliberately outside the boundary.** `llmClassifier`
+and `constrainedEnumPick` make a model call, so they need an `LLMProvider`;
+they live on `agentfootprint/context` instead. So do the sugar factories
+(`defineSkill` and friends), which validate against the framework's `Tool`. A
+foreign host builds `Injection` objects directly — five fields, all data.
+
+What a host owes the graph is written down as a type, `SkillGraphHost`: five
+obligations (advance the cursor once per iteration off the same context the
+triggers read; enforce `reachableSkills` at pick time; publish an accepted
+pick only after acceptance; carry the cursor forward; emit the decisions),
+each naming the code in this package that implements it. It is documentation
+that typechecks — not a second way to run an agent.
+
+### The boundary contract, name by name
+
+Everything the subpath adds is data or a description — nothing here runs a
+loop.
+
+- `SkillGraphHost` is the obligations interface above. `SkillGraphIterationContext`
+  is the small per-iteration shape its `advanceCursor` reads (your real
+  `InjectionContext` satisfies it).
+- `SkillTool` is the narrow tool shape a skill carries — a `schema` and an
+  `execute`, nothing else required — so `defineSkill({ tools })` no longer
+  needs the framework's own `Tool` type. `SkillToolSchema` is the `{ name,
+  description, inputSchema }` triple inside it.
+- `SkillToolDescriptor` is a tool the graph *describes* rather than builds.
+  `readSkillDescriptor(skills, offer?)` and `listSkillsDescriptor(skills)`
+  return the `read_skill` / `list_skills` descriptors — enum, reachability
+  offer, turn-start menu, result sentences — and `skipStepDescriptor()` returns
+  the `skip_step` one. Hand any of them to your own tool factory; inside
+  agentfootprint, `buildReadSkillTool` is the one line that passes it to
+  `defineTool`. `ReadSkillOffer` is the shape that narrows the description to
+  what the gate will actually grant.
+- `SkillCachePolicy` (with its `SkillCachePolicyContext`) is the cache
+  directive an `ActiveInjection` carries across the boundary — the same
+  `'always' | 'never' | 'while-active' | { until }` your cache layer knows,
+  spelled without importing one. A host with no prefix cache ignores it.
+- `useSkillGraphDevMode(read)` turns the graph's dev warnings on in a host that
+  is not ours; `DevModeReader` is the `() => boolean` it takes. Inside
+  agentfootprint this is already wired to `enableDevMode()`, so you never call
+  it.
+
+Nobody has yet driven this from another framework. The fence is a fact about
+the code, not about that experience.
+
 ## Next steps
 
 - [Skills](doc:skills) — `defineSkill` itself, plus the full graph surface: `match` details, `scopeTools`, the check-up codes, `steps` for mid-turn hand-offs

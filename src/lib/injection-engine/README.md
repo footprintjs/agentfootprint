@@ -325,6 +325,10 @@ this table (a lower row never imports a higher one):
 | `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap (re-enabled under a classifier — declaration order is back), `intent-without-classify`. Pure over strings — never imports engine types (`skillContract`/`skillIntent` borrow its `GraphProblem` shape so all checks report in one voice) |
 | `skillExamples.ts` | the declared-phrasings domain (SG-G): `validateStartRuleExamples` (every teaching refusal for a rule-level `examples` list) + `checkStartRuleExamples` (the witness properties — `example-misses-own-rule`, `example-shadowed-by-earlier`, `example-shadowed-by-default`, `example-unclaimed` — by RUNNING the compiled predicates in declaration order under BOTH start laws, the cold walk and tier-1 `firstRuleMatch`, and asserting an ERROR only where they agree) + `EXAMPLES_BOUNDARY` (the report's statement about its own reach, carried on `GraphCheckup.notes`). Reads declarations only; runs nothing at run time |
 | `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData` (regex · keywords · intent), `compileMatch` (ONE compilation → the predicate that routes + the data that describes it; the intent arm compiles to NO predicate — the classifier judges it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
+| `hostContract.ts` | the BOUNDARY contract (9.34.0): `SkillTool` / `SkillToolSchema` / `SkillToolDescriptor` (what a tool looks like to the graph, and how the graph describes one without building it), `SkillCachePolicy` (structural mirror of `cache/types.ts`), and `SkillGraphHost` — the five obligations a host owes the graph, as documentation-that-typechecks. Zero imports, by construction |
+| `skillToolDescriptors.ts` | the graph DESCRIBING `list_skills` + `read_skill`: the enum, the reachability offer, the turn-start menu, the per-`surfaceMode` result. `skillTools.ts` is the one line that wraps each descriptor in `defineTool` |
+| `toolOutcome.ts` | the six-value `ToolResultStatus` vocabulary `onToolStatus` edges key on. A zero-import leaf both sides read; `core/agent/toolEffects.ts` re-exports it and keeps the envelope grammar |
+| `devWarn.ts` | the dev-warning seam: the pure core asks a bound reader instead of importing footprintjs's `isDevMode`. `devWarnHost.ts` (host zone, side-effect module) does the binding for this package |
 
 Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
 `SkillMatchData` + `compileMatch` + optionally `compareMatchers`) — no
@@ -343,7 +347,7 @@ when the answer is one-id-or-none).
 Two 9.19.0 seams worth naming. **Route edges take a third condition**,
 `onToolStatus` (data, drawable — `on … status=denied` in `toMermaid()`):
 route on a tool result's DECLARED outcome (the six-value `ToolResultStatus`
-vocabulary from `core/agent/toolEffects.ts`) instead of its prose; a result
+vocabulary from `toolOutcome.ts`, re-exported by `core/agent/toolEffects.ts`) instead of its prose; a result
 with no declared status can never match, `when` + `onToolStatus` together is
 refused, and every determinism filter goes through the ONE
 `isDeterministicRoute` predicate. **The cursor resolver takes a fourth
@@ -361,6 +365,83 @@ under `nextInstructionLeases` (the cursor's alias round trip — the mount
 mappers carry them back onto the parent key), so an `'until-skill-exit'`
 lease leaves the record the same pass its tenure ends and a cyclic graph's
 re-entry into the granting skill finds nothing to resurrect.
+
+---
+
+## The fence — `agentfootprint/skill-graph` (9.34.0)
+
+**What the subpath is for.** A skill graph is a decision layer, not a
+runtime. Given one iteration's `InjectionContext` it answers three questions
+— where is the cursor, what is reachable from here, which injections are
+active — with plain functions over plain data. `agentfootprint/skill-graph`
+publishes exactly that layer, so a host that is **not** our agent (another
+agent framework, a router, a test harness) can import it and route with it.
+
+**The claim is proved, not asserted.**
+`test/lib/injection-engine/skill-graph-fence.test.ts` walks the *transitive*
+import graph of everything reachable from `src/doors/skill-graph.ts` — using
+the TypeScript parser, so `import type`, `export … from`, `await import()`
+and inline `` import('…').T `` are all seen — and fails on any edge that
+reaches `footprintjs`, `core/agent/*`, `core/tools.ts`, an adapter or a
+recorder. It names the offending file, the offending import, and what to do
+instead.
+
+That test is the actual feature. The boundary was already pointing the right
+way — the loop depends on the graph, never the reverse — but nothing
+*enforced* it, so it eroded one free import at a time: `isDevMode` for a dev
+warning, the loop's `ToolResultStatus` inside the graph's own context type,
+the framework's `Tool` (and behind it artifacts, credentials, check-in, tool
+sessions) for a five-field tool shape. A comment saying "keep this pure" does
+not survive three minor releases. A fence does.
+
+**Two zones, because one of them honestly cannot be pure.**
+
+| zone | files | may import |
+|---|---|---|
+| PURE CORE | the 18 files in the module map above, plus `types.ts` / `evaluator.ts` / `softmax.ts` | each other, and three verified zero-import leaves: `events/types.ts` (`ContextRole`/`ContextSource`), `memory/embedding/types.ts` (`Embedder`), `memory/embedding/cosine.ts` |
+| PROVIDER LAYER | `constrainedEnumPick.ts`, `llmClassifier.ts` | the above **plus** `adapters/types.ts` |
+
+The provider layer is deliberately outside the pure boundary, and
+deliberately **not** on the door. Both files make a MODEL CALL — a
+constrained-enum pick *is* one — so they need an `LLMProvider`. A port that
+pretended otherwise would be a fake abstraction: it would move the
+dependency, not remove it. Import them from `agentfootprint/context` when you
+want the turn-start classifier cascade.
+
+Everything else in this folder is the HOST zone (the factories, the subflow,
+`skillTools.ts`, `SkillRegistry.ts`), where importing the framework is the
+job. The fence does not inspect those, but it does insist every file in the
+folder is *placed* in exactly one zone — a new file cannot arrive
+unclassified.
+
+**The honest cost: `footprintjs` is still a required peer dependency.** It is
+listed in `peerDependencies` and is *not* marked optional in
+`peerDependenciesMeta`, so npm installs it beside you even if
+`agentfootprint/skill-graph` is the only path you ever import. This door never
+loads it — that is what the fence proves — but the package is not split, and
+the rest of agentfootprint genuinely needs the engine. You pay the install,
+not the import. Splitting the package is the only thing that would change
+that, and it is not on the table for a 9.x minor.
+
+**What a host owes the graph** is written down as a type: `SkillGraphHost`,
+five obligations, each naming the code in this package that implements it.
+Advance the cursor exactly once per iteration off the SAME ctx the triggers
+read (the keystone); enforce `reachableSkills` at pick time; publish
+`pendingSkillPick` only after acceptance, and clear it every iteration; carry
+the advanced cursor into the next iteration; emit the routing decisions.
+`buildInjectionEngineSubflow.ts` + `core/agent/stages/toolCalls.ts` are its
+reference implementation. It is documentation-as-a-type — nothing constructs
+one, nothing consumes one, and implementing it does not start a run. This
+package still has exactly one run door.
+
+**Not claimed:** nobody has yet run this from another framework. The fence
+proves the import graph, which is a fact about the code; it does not prove
+ergonomics, which is a fact about experience we do not have.
+
+**Also not on the door:** the sugar factories (`defineSkill`,
+`defineInstruction`, …). They resolve cache policies and validate against the
+framework's `Tool`, so they stay host-side on `agentfootprint/context`. A
+foreign host builds `Injection` objects directly — five fields, all data.
 
 ---
 

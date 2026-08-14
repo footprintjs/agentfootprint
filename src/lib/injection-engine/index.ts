@@ -6,6 +6,15 @@
  * factories. See `README.md` in this folder for the full concept.
  */
 
+// Bind the pure core's dev-warn seam to footprintjs's `isDevMode` (9.34.0).
+// Side-effect import, on purpose: the skill-graph core no longer imports the
+// engine, so SOMEONE has to hand it the dev flag, and this barrel is on every
+// path inside this package that can reach `skillGraph()`. Without it,
+// `enableDevMode()` would stop switching skill-graph warnings on — the one
+// behavior the fence refactor must not change. `agentfootprint/skill-graph`
+// deliberately skips it; see `devWarn.ts`.
+import './devWarnHost.js';
+
 // Primitive types
 export type {
   Injection,
@@ -59,9 +68,9 @@ export {
 // pointer off a snapshot (`pointerOf(sharedState.stepPointer)`), and compose
 // the integrity tool into custom wiring (the buildReadSkillTool precedent).
 export {
-  buildSkipStepTool,
   pointerOf,
   SKIP_STEP_TOOL_NAME,
+  skipStepDescriptor,
   type OnSkipPolicy,
   type SkillStep,
   type StepPlan,
@@ -97,7 +106,31 @@ export { skillsFromDir, type SkillsFromDirOptions } from './skillsFromDir.js';
 // auto-attach path. Exported so consumers building custom tool wiring
 // (e.g., gatedTools chains) can compose the same `list_skills` /
 // `read_skill` tools directly.
-export { buildListSkillsTool, buildReadSkillTool, type SkillToolPair } from './skillTools.js';
+export {
+  buildListSkillsTool,
+  buildReadSkillTool,
+  buildSkipStepTool,
+  type ReadSkillOffer,
+  type SkillToolPair,
+} from './skillTools.js';
+
+// The graph's own DESCRIPTIONS of the tools it needs (9.34.0) — the POJOs the
+// builders above wrap. Exported because a host composing its own tool objects
+// (another framework, a custom ToolProvider) should read `read_skill`'s enum,
+// reachability offer and result sentences from the library rather than
+// re-writing them. Also the whole surface of `agentfootprint/skill-graph`.
+export { listSkillsDescriptor, readSkillDescriptor } from './skillToolDescriptors.js';
+export type {
+  SkillCachePolicy,
+  SkillCachePolicyContext,
+  SkillGraphHost,
+  SkillGraphIterationContext,
+  SkillTool,
+  SkillToolDescriptor,
+  SkillToolSchema,
+} from './hostContract.js';
+export { TOOL_RESULT_STATUSES, type ToolResultStatus } from './toolOutcome.js';
+export { useSkillGraphDevMode, type DevModeReader } from './devWarn.js';
 
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 
