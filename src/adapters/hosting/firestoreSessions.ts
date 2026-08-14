@@ -101,7 +101,11 @@
  * ({@link EnvelopeTooLargeError}) rather than being sent and rejected as an
  * opaque `INVALID_ARGUMENT`. Nothing is ever truncated: half a conversation
  * stored as if it were whole is the failure this whole file exists to avoid.
- * Compaction (`agent.compact()`) is the answer, and the refusal says so.
+ * Compaction (the builder's `.compaction({ … })`, or `.window()`) is the
+ * answer, and the refusal says so. Named from the builder deliberately: there
+ * is no `agent.compact()` to call, and a doc comment ships into the emitted
+ * `.d.ts`, so a method named here that does not exist is a method somebody
+ * types on hover.
  *
  * ── The laws it inherits rather than re-implements ──────────────────────────
  * `checkEnvelope` runs on the way OUT and on the way IN, so an envelope whose
