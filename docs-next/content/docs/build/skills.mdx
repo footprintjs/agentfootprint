@@ -158,7 +158,15 @@ from there) and `model-edge-only` (the only way in is a bare step `{ from, to }`
 `when`/`onToolReturn`, which compiles to no trigger at all — the model has to ask, and
 only from `from`). Start rules declared as data add three more codes —
 `rule-id-exists`, `overlapping-rules` and `rules-shadowed-by-order` — covered in
-[Start rules as data](#start-rules-as-data--match-beside-when) below.
+[Start rules as data](#start-rules-as-data--match-beside-when) below. Declaring
+`examples` on a rule adds four more again — `example-misses-own-rule`,
+`example-shadowed-by-earlier`, `example-shadowed-by-default` and `example-unclaimed` —
+covered in [Examples on a start rule](#examples-on-a-start-rule--the-phrasings-it-claims).
+
+A report can also carry `notes`: statements about what the report does **not** cover.
+They are present only when a check ran whose silence could be misread as proof (today,
+the example checks), and `formatCheckup` prints them after the problems, tagged
+`[note]`.
 
 Pass `CheckupOptions` — today, `knownTools` — to tell it about the tools the AGENT
 registers with `.tool()`. A graph knows only the tools its own skills carry, so without
@@ -233,6 +241,127 @@ and stays silent; no overlap is ever claimed for a pair involving `all` (a conju
 can be unsatisfiable, so no witness message is provable).
 And a router where every entry carries a `when` or a `match` is a supported design:
 it never trips `multi-entry-fanout`.
+
+### Examples on a start rule — the phrasings it claims
+
+`examples` is an optional list of real phrasings a rule says it claims. It is **test
+material**: read at build time by the check-up, fed to nothing at run time. A rule with
+examples routes byte-identically to the same rule without them.
+
+```ts
+const graph = skillGraph({
+  skills: [powerstoreHealth, arrayInventory],
+  start: {
+    rules: [
+      {
+        use: 'powerstore-health',
+        match: /\bpowerstore\b|\bshpstr[a-z]*\d+\b/i,
+        examples: ['is powerstore healthy'],
+      },
+      {
+        use: 'array-inventory',
+        match: /\b(array|volume|pool|shpstrprncl\d+)\b/i,
+        examples: ["what's running on shpstrprncl101"],
+      },
+    ],
+  },
+});
+```
+
+**Why.** Two failures from one production deployment, in one evening — neither of them
+catchable by comparing matchers:
+
+- **Shadowing by different regexes.** A rule matching one product name sat above an
+  inventory rule whose matcher is a longer alternation. A real phrase — *"what's running
+  on shpstrprncl101"*, an array named like one of that product's boxes — was claimed by
+  the earlier rule, so the later rule could never win on its own phrasings.
+  `compareMatchers` deliberately answers "not decided" for two **different** regex
+  sources (intersection is never decided in this library — only identity is provable),
+  so the check-up was honestly silent. Correct behavior, real gap.
+- **Absence.** A second phrase matched **no rule at all**, fell through to the model
+  tier, and the model picked the wrong skill because an array name looked like a
+  hostname. Not shadowing — absence. No matcher-vs-matcher analysis can ever catch it.
+
+A declared phrase turns both into arithmetic. The check-up runs the compiled predicates
+over the phrase in declaration order, exactly as the cold start does, and reports a
+witness rather than a theory:
+
+| code | severity | what it proves |
+|---|---|---|
+| `example-misses-own-rule` | error / warning | The rule does not claim its own example. An **error** when the rule is a data `match` (a data matcher reads the user message and nothing else, so the no-match holds under every context) or when the predicate **threw**; a **warning** when an opaque `when` merely returned false — see [the context every predicate is judged on](#the-context-every-predicate-is-judged-on) below. |
+| `example-shadowed-by-earlier` | error | An earlier **conditional** rule claims the phrase first, so the turn starts where the author's own example denies. Names N, M and the phrase. This is the case `rules-shadowed-by-order` must stay silent about. |
+| `example-shadowed-by-default` | warning | The earlier claimant is an **unconditional** entry — the one place the two start laws differ, and which law applies is decided at agent mount. The message names both readings instead of asserting one. |
+| `example-unclaimed` | warning | No rule claims the phrase on that context, so the turn falls through to the model tier (or, with a classifier, past tier 1 to it). A warning: the run is not broken, the next tier may still answer well — what is proven is that nothing declared claims it. |
+
+Where a graph's own examples are the corpus, `example-unclaimed` proves **coverage**,
+not merely non-overlap.
+
+#### The context every predicate is judged on
+
+The check runs each condition on exactly one context: **iteration 1, the phrase as
+`userMessage`, empty `history`, no cursor and no activated injections** — the context a
+turn's first iteration really hands a start rule. Every message says so, because a check
+that hides its inputs can only be guessed at.
+
+That context is real but not the only one. Turn 2 of a conversation also starts cold in
+cursor terms while **carrying history**, so a `when` gated on conversation state —
+`ctx.history.length > 0 && /refund/i.test(ctx.userMessage)` — legitimately claims the
+phrase on a later turn and cannot claim it here. That is why severity follows
+provability: a data `match` reads the user message and nothing else (error), an opaque
+`when` might be right on a turn this check cannot run (warning). A predicate that
+**throws** stays an error either way — turn 1 really hands it that context, so it throws
+in production too.
+
+#### Two start laws, and why the check-up will not pick one
+
+Which entry claims a phrase is decided by one of two laws:
+
+- the **declaration-order cold start** (the default mount, `continuity: 'turn'`) returns
+  at the first entry with no condition, or the first whose condition passes — so an
+  unconditional entry claims every message from its position onward;
+- the **turn-start cascade**'s tier 1 reads the **conditional** entries only — an
+  unconditional entry is a default, not a rule, and never wins the turn there. That
+  cascade is mounted by `.classify()` **and** by
+  `.skillGraph(graph, { continuity: 'conversation' })`.
+
+They differ in exactly one place: whether an unconditional entry claims. `continuity` is
+an agent-mount option that does not exist yet when the graph is built, so when the
+earlier claimant is unconditional the report warns (`example-shadowed-by-default`) and
+names both readings; the error is kept for what both laws agree on. Asserting one would
+put the check-up in disagreement with the router — under `continuity: 'conversation'` the
+turn really does start on the later rule.
+
+**The tier difference, and it matters.** Both spellings mean "the phrasings this rule
+claims", and their runtime roles are opposites:
+
+| where | role | when it is read |
+|---|---|---|
+| `match: { intent, examples }` (tier 2) | **scoring** material — the classifier judges new messages against them | every turn, at run time |
+| `examples: [...]` beside `match`/`when` (tier 1) | **test** material — the check-up runs the matcher over them | build time only, never at run time |
+
+Tier-1 examples do **not** widen matching. Nothing is fed to any scorer, and no message
+is matched against them. A rule may not carry both lists: `match: { intent, examples }`
+plus a rule-level `examples` is a build-time refusal that names the two jobs.
+
+Every unusable declaration is refused where it is written, naming the fix: an empty list
+(nothing to prove — and a check-up that passes in silence reads as coverage), a blank or
+non-string entry, and examples on an **unconditional** entry (it claims every message,
+so every example passes by construction).
+
+**The boundary, stated by the check-up itself.** These checks prove things about the
+phrases you declared and nothing about phrases nobody wrote — no warning is not proof of
+coverage. That sentence rides `graph.checkup().notes`, so a clean report carries it too:
+
+```ts
+const report = graph.checkup();
+report.notes;
+// [ 'These example checks prove things about the phrases you DECLARED and nothing
+//    about phrases nobody wrote — no warning here is not proof of coverage.' ]
+```
+
+Under `.entryBy()` / `.entryByRead()`, declaration order does not decide the turn start,
+so only the order-independent check (self-match) runs — and a note says which checks were
+skipped rather than leaving the silence to be read as a pass.
 
 ### Scoping tools on the flat arm — `scopeTools`
 

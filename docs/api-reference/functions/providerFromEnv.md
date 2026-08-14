@@ -8,7 +8,7 @@
 
 > **providerFromEnv**(`opts?`): [`ProviderFromEnv`](/agentfootprint/api/generated/interfaces/ProviderFromEnv.md)
 
-Defined in: [src/adapters/llm/createProvider.ts:138](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/llm/createProvider.ts#L138)
+Defined in: [src/adapters/llm/createProvider.ts:142](https://github.com/footprintjs/agentfootprint/blob/1400b0ff7ccde4a1c632ce6b1237ccae9e2fdbe6/src/adapters/llm/createProvider.ts#L142)
 
 Resolve an `LLMProvider` from environment variables — drop your company's
 values in `.env` and the right provider is configured automatically, with no
@@ -19,7 +19,11 @@ Detection order (first match wins):
   1. **Ollama (local)** — `OLLAMA_MODEL` names a model, e.g. `qwen3`
      [+ `OLLAMA_HOST` for a runtime that isn't on localhost]
   2. **Azure OpenAI** — `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` |
-     `OPENAI_BASE_URL`) [+ `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT`|`MODEL_NAME`]
+     `OPENAI_BASE_URL`) + `AZURE_OPENAI_API_VERSION`
+     + (`AZURE_OPENAI_DEPLOYMENT` | `MODEL_NAME`).
+     `AZURE_OPENAI_ENDPOINT` and `OPENAI_BASE_URL` are two spellings of the
+     same resource root and reach the identical URL; the returned `model` is
+     the deployment you named.
   3. **Anthropic** — `ANTHROPIC_API_KEY`
   4. **OpenAI** — `OPENAI_API_KEY`
 Otherwise throws (or returns the mock when `{ fallbackToMock: true }`).

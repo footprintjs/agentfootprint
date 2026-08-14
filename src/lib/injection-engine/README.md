@@ -323,6 +323,7 @@ this table (a lower row never imports a higher one):
 | `factories/defineMenuHint.ts` | the tier-3 envelope's system-prompt half — advisory note while a menu is outstanding; auto-registered by Agent build on cascade graphs (marker `MENU_HINT_METADATA_KEY`, never the id) |
 | `skillContract.ts` | skill-body ↔ tool-contract checks (`body-foreign-tool` / `body-unknown-tool`). When a graph builds WITHOUT `knownTools`, these are DEFERRED via `SkillGraph.deferredBodyContract` — the note also rides each compiled skill's metadata (`SKILL_GRAPH_DEFERRED_CONTRACT_KEY`), so Agent build runs them once against the real registry whichever door the skills arrive through (`.skillGraph(graph)` or `.skills({ list: () => graph.skills })`; one problem, one report) |
 | `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap (re-enabled under a classifier — declaration order is back), `intent-without-classify`. Pure over strings — never imports engine types (`skillContract`/`skillIntent` borrow its `GraphProblem` shape so all checks report in one voice) |
+| `skillExamples.ts` | the declared-phrasings domain (SG-G): `validateStartRuleExamples` (every teaching refusal for a rule-level `examples` list) + `checkStartRuleExamples` (the witness properties — `example-misses-own-rule`, `example-shadowed-by-earlier`, `example-shadowed-by-default`, `example-unclaimed` — by RUNNING the compiled predicates in declaration order under BOTH start laws, the cold walk and tier-1 `firstRuleMatch`, and asserting an ERROR only where they agree) + `EXAMPLES_BOUNDARY` (the report's statement about its own reach, carried on `GraphCheckup.notes`). Reads declarations only; runs nothing at run time |
 | `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData` (regex · keywords · intent), `compileMatch` (ONE compilation → the predicate that routes + the data that describes it; the intent arm compiles to NO predicate — the classifier judges it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
 
 Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
@@ -330,7 +331,10 @@ Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
 reshape anywhere else. A new checkup code = `GraphProblemCode` +
 a numbered block in `checkupGraph` (build refusals that cannot compile at
 all, like `rule-id-exists`, throw from `skillGraph.ts`'s config
-translation instead). The check-up compares only DATA — `when`
+translation instead) — or, when the check needs more than strings (running a
+predicate, reading a skill body), a DOMAIN module composed into `checkup()`
+beside `skillContract`/`skillIntent`/`skillVocabulary`/`skillExamples`, which
+owns both the rule and the statement of its boundaries. The check-up compares only DATA — `when`
 predicates are opaque, and every message says so. A new intent scorer =
 implement `IntentScorer` (numbers for EVERY candidate; declare `floor` only
 when a low score honestly means "did not match at all", `categorical` only
@@ -404,6 +408,78 @@ slot); iterations 2..N keep the 8.x law byte-for-byte. `graph.checkupIntents()`
 audits the declared examples with the CONFIGURED scorer (leave-one-out).
 Everything is zero-cost when unused: a graph without `classify`/`continuity`
 mounts no stage, writes no key and emits no new event.
+
+---
+
+## Examples on start rules (SG-G)
+
+**Why:** `compareMatchers` claims only what matcher-vs-matcher analysis proves,
+and says so — two DIFFERENT regex sources return `undefined` ("regex
+intersection is not decided here — only identity is provable"). One production
+deployment hit two failures in one evening that this honesty could not report:
+an earlier product-name rule that swallowed an inventory rule's phrase (two
+different regexes — correctly silent), and a phrase that matched **no** rule at
+all and fell through to the model tier, which then picked the wrong skill
+(absence — nothing about comparing matchers could ever catch it).
+
+A declared phrase turns both into arithmetic. `examples: [...]` beside a rule's
+`match`/`when` is the phrasings that rule CLAIMS; the check-up runs the compiled
+predicates over each phrase in declaration order, on ONE context — iteration 1,
+the phrase as `userMessage`, empty `history`, no cursor — and reports a WITNESS:
+
+| code | severity | proves |
+|---|---|---|
+| `example-misses-own-rule` | error / warning | the rule does not claim its own example. ERROR for a DATA matcher (it reads the user message and nothing else, so the no-match holds under every context) or a predicate that THREW; WARNING for an opaque `when` that returned false — it may be gated on conversation state (`ctx.history.length > 0`) and claim the phrase on a later turn, which a build-time check cannot run. The message names the context it judged under |
+| `example-shadowed-by-earlier` | error | an earlier rule claims the phrase first — the case matcher comparison must stay silent about. Claimed only where BOTH start laws agree |
+| `example-shadowed-by-default` | warning | the earlier claimant is an UNCONDITIONAL entry, the ONE place the two laws differ — the report names both readings instead of asserting one |
+| `example-unclaimed` | warning | nothing claims the phrase on that context; the turn falls to the next tier. Where the graph's examples are the corpus, this is COVERAGE |
+
+**Two start laws, and why the check-up will not pick one.** The declaration-order
+cold walk (`makeResolveCursor`, the default mount) stops at the first entry with
+no condition; the turn-start cascade's tier 1 (`firstRuleMatch`) reads the
+CONDITIONAL non-intent entries only, and that cascade is mounted by `.classify()`
+**and** by `.skillGraph(g, { continuity: 'conversation' })` — an AGENT-MOUNT
+option that does not exist when the graph is built. The two differ in exactly one
+place: whether an unconditional entry claims. So a default earlier than the owner
+is reported as `example-shadowed-by-default` (warning, both readings named), and
+the ERROR is kept for what both laws agree on. A check-up that contradicts the
+router is worse than no check-up: with `continuity: 'conversation'` the router
+really does start that turn on the later rule.
+
+Zero-cost when unused (one `Array.some` and out), and **fed to nothing at run
+time**: a rule with examples routes byte-identically. The tier difference is
+load-bearing and refused at build if blurred — `match: { intent, examples }`
+examples are SCORING material the classifier reads every turn; a rule-level
+`examples` list is TEST material read once at build. One rule may not carry both.
+
+The boundary rides the report itself (`GraphCheckup.notes`, rendered by
+`formatCheckup` as `[note]`): *these checks prove things about the phrases you
+DECLARED and nothing about phrases nobody wrote — no warning here is not proof of
+coverage.* Same voice as "absence of a refusal is not consent": a reader who
+meets that sentence only in prose docs meets a clean report first.
+
+### The second door, designed and NOT built: a detached corpus
+
+The planned second spelling is a corpus passed to the check — entries carrying
+`{ phrase, expect: skillId }` — proving the same three properties over phrases
+that no rule had to own:
+
+```ts
+// DESIGN ONLY — not implemented.
+graph.checkup({ corpus: [{ phrase: "what's running on shpstrprncl101", expect: 'array-inventory' }] });
+```
+
+The rule form ships first for two reasons. First, the corpus form needs an
+`expect` per entry, which the rule form gives BY CONSTRUCTION — an example
+written on a rule already names the skill that should claim it, so there is no
+second field to keep true. Second, a detached corpus DRIFTS: it lives away from
+the rules it tests, so renaming a skill or deleting a rule leaves entries
+asserting about a graph that no longer exists, and the check would then be
+reporting on the corpus rather than on the graph. The rule form cannot drift —
+delete the rule and its examples go with it. The corpus door earns its keep only
+where the phrases outnumber the rules (a captured-traffic file), and it should
+arrive as a separate input to the same three checks, never as a second
+implementation of them.
 
 ---
 

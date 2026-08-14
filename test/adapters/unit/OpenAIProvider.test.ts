@@ -405,6 +405,48 @@ describe('OpenAIProvider — integration (stream)', () => {
     }
     expect(final?.toolCalls).toEqual([{ id: 'c1', name: 'weather', args: { city: 'SF' } }]);
   });
+
+  it('awaits a create() that returns a PROMISE of the stream (the real SDK shape)', async () => {
+    // `openai`'s `create({stream:true})` hands back an `APIPromise` — a Promise
+    // that RESOLVES to the async iterable. Every double in this repo returned
+    // the iterable directly, so iterating it unawaited passed here for a year
+    // and died on the first real streamed turn as `stream is not async
+    // iterable`. Both shapes are supported; this pins the promise one.
+    const inner = makeFakeClient(baseResponse);
+    const p = openai({
+      _client: {
+        chat: {
+          completions: {
+            create: (params: Parameters<typeof inner.chat.completions.create>[0]) =>
+              Promise.resolve(inner.chat.completions.create(params)) as never,
+          },
+        },
+      },
+    });
+    const text: string[] = [];
+    let final: { content: string } | undefined;
+    for await (const c of p.stream!(baseRequest)) {
+      if (c.done && c.response) final = { content: c.response.content };
+      else text.push(c.content);
+    }
+    expect(text.join('')).toBe('hello');
+    expect(final?.content).toBe('hello');
+  });
+
+  it('refuses a non-stream by name instead of dying on a TypeError', async () => {
+    // The raw failure quoted a local variable (`stream is not async iterable`)
+    // and named neither the endpoint nor a fix.
+    const p = openai({
+      _client: {
+        chat: { completions: { create: () => Promise.resolve(baseResponse) as never } },
+      },
+    });
+    const run = async () => {
+      for await (const _ of p.stream!(baseRequest)) void _;
+    };
+    await expect(run()).rejects.toThrow(/ignored `stream: true`/);
+    await expect(run()).rejects.toThrow(/Fix:/);
+  });
 });
 
 // ─── Property — invariants ─────────────────────────────────────────

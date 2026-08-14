@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.31.0] - 2026-08-14
+
+**Two doors the field found shut: an Azure config our own docs advertised
+could never boot, and streaming that no test could see was broken.**
+
+An independent field trial and one production consumer drove this release.
+
+### Fixed — the Azure door
+
+The SDK's `AzureOpenAI` constructor defaults `baseURL` from `OPENAI_BASE_URL`
+and refuses an `endpoint` alongside it — so the `OPENAI_BASE_URL` spelling
+named in our own docs, help text and examples handed the SDK the value
+twice and could not boot at all. We now compute the base URL ourselves and
+never pass `endpoint`, so both spellings work and produce a byte-identical
+request URL — asserted from what a fake Azure server actually receives,
+including the `/openai` segment, trailing slashes, and an endpoint already
+ending in `/openai`.
+
+### Fixed — streaming was broken for every OpenAI-door consumer, not just Azure
+
+The stream path iterated the SDK's `create()` return without awaiting it,
+and the real SDK returns a promise that resolves to the async iterable.
+Every test double in the repo returned the iterable directly, which hid the
+defect from the entire suite. A non-iterable now yields a teaching refusal
+instead of a `TypeError`.
+
+### Changed — `providerFromEnv`'s Azure arm
+
+Returns the DEPLOYMENT as `model` (it previously returned the literal kind
+label `'azure'`), and refuses by name when Azure credentials arrive with no
+deployment. Note for consumers who read that field: the value changed from
+a constant to your deployment id.
+
+### Added — examples on start rules
+
+`examples: [...]` on a start rule declares the phrasings that rule claims,
+and the check-up proves three things by running the compiled predicates in
+declaration order — a witness, not regex theory: a rule whose example its
+own matcher rejects; an example an earlier rule claims first; and an example
+nothing claims at all. The last is coverage, which no matcher-vs-matcher
+analysis can prove. Severity tracks provability — a data matcher rejecting
+its own phrase is an error, an opaque `when` predicate that merely did not
+match this turn is a warning; where the cold walk and the cascade would read
+an unconditional entry differently, it reports a warning naming both
+readings rather than asserting one. Tier note: on a tier-1 data rule,
+examples are test material read once at build; in `match: { intent,
+examples }` they remain scoring material read by the classifier at run
+time — declaring both on one rule is refused.
+
+The check-up now carries notes on the report itself: examples prove things
+about the phrases you declared and nothing about the phrases nobody wrote —
+no warning is not proof of coverage.
+
 ## [9.30.0] - 2026-08-14
 
 **The field answered back: one adapter wrote with the wrong verb, another

@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.30.0",
+  "version": "9.31.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -373,6 +373,7 @@
     "footprintjs": "^9.15.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
+    "openai": "^7.4.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

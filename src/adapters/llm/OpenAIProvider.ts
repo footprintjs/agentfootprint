@@ -31,6 +31,7 @@ import type {
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { azureBaseUrl } from './azureUrl.js';
 
 // ─── OpenAI SDK shape (duck-typed) ─────────────────────────────────
 
@@ -250,7 +251,15 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
       const client = await connect();
       let stream: AsyncIterable<OpenAIStreamChunk>;
       try {
-        stream = client.chat.completions.create(params) as AsyncIterable<OpenAIStreamChunk>;
+        // AWAIT, then check. The SDK's `create()` returns an `APIPromise` — a
+        // Promise subclass that RESOLVES to the async-iterable stream. Iterating
+        // it unawaited died as `stream is not async iterable`, a TypeError that
+        // named a local variable and no cause; the first real streamed turn
+        // through this adapter is where one production consumer met it. Test
+        // doubles hid it for a year by returning an async generator directly
+        // from `create()`, which is why the guard accepts BOTH shapes: `await`
+        // on a non-thenable is the identity.
+        stream = await asChunkStream(client.chat.completions.create(params));
       } catch (err) {
         throw wrapError(err);
       }
@@ -354,8 +363,14 @@ export class OpenAIProvider implements LLMProvider {
 // ─── Azure OpenAI ───────────────────────────────────────────────────
 
 export interface AzureOpenAIProviderOptions {
-  /** Resource endpoint, e.g. `https://my-co.openai.azure.com`. Env fallbacks:
-   *  `AZURE_OPENAI_ENDPOINT`, then `OPENAI_BASE_URL`. */
+  /**
+   * Resource endpoint, e.g. `https://my-co.openai.azure.com`. Env fallbacks:
+   * `AZURE_OPENAI_ENDPOINT`, then `OPENAI_BASE_URL` — the two spellings are
+   * interchangeable HERE and produce the same URL, whichever one your gateway
+   * config already uses. A value that already ends in `/openai` is taken as-is;
+   * anything else gets `/openai` appended, which is the path Azure serves
+   * deployments under.
+   */
   readonly endpoint?: string;
   /** API key. Env fallbacks: `AZURE_OPENAI_API_KEY`, then `OPENAI_API_KEY`. */
   readonly apiKey?: string;
@@ -392,6 +407,13 @@ const AZURE_MODEL_SHORTHANDS = new Set(['azure', 'azure-openai', 'openai']);
  * The request's `model` is the Azure **deployment** name. Pass a deployment id
  * to target it; the shorthands `'azure'` / `'azure-openai'` resolve to the
  * configured default `deployment`.
+ *
+ * `endpoint` is the resource ROOT (`https://my-co.openai.azure.com`), and
+ * `AZURE_OPENAI_ENDPOINT` and `OPENAI_BASE_URL` are two names for it that
+ * resolve to the identical final URL. Setting `OPENAI_BASE_URL` no longer
+ * collides with the SDK's own reading of that variable — this factory hands the
+ * SDK a `baseURL` it computed rather than an `endpoint` the SDK would have to
+ * reconcile with the environment.
  *
  * @example
  *   import { azureOpenai } from 'agentfootprint/providers';
@@ -445,10 +467,28 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
   };
 }
 
+/**
+ * Build the SDK's `AzureOpenAI` client — always via `baseURL`, never `endpoint`.
+ *
+ * The SDK's constructor defaults `baseURL` to `process.env.OPENAI_BASE_URL`
+ * and then refuses a `baseURL` and an `endpoint` together
+ * ("baseURL and endpoint are mutually exclusive"). We document
+ * `OPENAI_BASE_URL` as an alias for the Azure endpoint, so the path our own
+ * docs advertise handed the SDK the value twice — once explicitly as
+ * `endpoint`, once invisibly out of the environment — and could not boot.
+ * One production consumer met that on their first server-side Azure run with
+ * the same gateway and key their browser app had used for months.
+ *
+ * Passing `baseURL` ourselves settles it for good: the ambient read is
+ * overridden rather than fought with, `endpoint` is never passed so the
+ * collision cannot occur, and both spellings survive. The `/openai` suffix the
+ * SDK would have appended is appended by `azureBaseUrl`, so the final URL is
+ * byte-identical either way — pinned by test/adapters/integration/azure-openai-wire.test.ts.
+ */
 function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
   if (options._client) return options._client;
   let AzureOpenAI: new (opts: {
-    endpoint: string;
+    baseURL: string;
     apiKey?: string;
     apiVersion: string;
     deployment?: string;
@@ -458,7 +498,7 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
       'openai',
     );
     AzureOpenAI = (mod.AzureOpenAI ?? mod.default?.AzureOpenAI) as new (opts: {
-      endpoint: string;
+      baseURL: string;
       apiKey?: string;
       apiVersion: string;
       deployment?: string;
@@ -491,7 +531,10 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
     );
   }
   return new AzureOpenAI({
-    endpoint,
+    // NOT `endpoint` — see the note on this function. `baseURL` is passed
+    // explicitly so the SDK's own `OPENAI_BASE_URL` default is overridden
+    // instead of colliding with an `endpoint` we also passed.
+    baseURL: azureBaseUrl(endpoint),
     ...(apiKey && { apiKey }),
     apiVersion,
     ...(deployment && { deployment }),
@@ -598,6 +641,46 @@ function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
   const apiKey =
     (typeof options.apiKey === 'string' ? options.apiKey : undefined) ?? process.env.OPENAI_API_KEY;
   return new OpenAI({ apiKey, ...(options.baseURL && { baseURL: options.baseURL }) });
+}
+
+/**
+ * Whatever `create({ stream: true })` handed back → the token stream.
+ *
+ * Two shapes reach here and both are legitimate:
+ *   • the real SDK returns an `APIPromise<Stream<…>>` — a Promise that RESOLVES
+ *     to the async iterable, so it has to be awaited before it can be iterated;
+ *   • an injected `_client` double (and some OpenAI-compatible wrappers) return
+ *     the async iterable directly. `await` on a non-thenable is the identity,
+ *     so one line covers both.
+ *
+ * Anything else is refused HERE, by name. The raw failure was
+ * `TypeError: stream is not async iterable` — a message that quotes a local
+ * variable, names no endpoint and suggests no fix.
+ */
+async function asChunkStream(
+  created: Promise<OpenAIChatCompletion> | AsyncIterable<OpenAIStreamChunk>,
+): Promise<AsyncIterable<OpenAIStreamChunk>> {
+  const resolved: unknown = await created;
+  if (typeof resolved === 'object' && resolved !== null && Symbol.asyncIterator in resolved) {
+    return resolved as AsyncIterable<OpenAIStreamChunk>;
+  }
+  // A completed chat completion means the endpoint ignored `stream: true` —
+  // the commonest way an OpenAI-COMPATIBLE server differs from OpenAI. Said
+  // plainly, because the fix is different from "the SDK is old".
+  const looksComplete = typeof resolved === 'object' && resolved !== null && 'choices' in resolved;
+  throw new Error(
+    'a streaming request came back as ' +
+      (looksComplete
+        ? 'a finished chat completion, so the endpoint ignored `stream: true`'
+        : `a ${resolved === null ? 'null' : typeof resolved}, which is not a token stream`) +
+      '.\n' +
+      (looksComplete
+        ? '  Fix:  point this provider at an endpoint that streams, or drop stream() from it ' +
+          '(an Agent falls back to complete() when a provider has no stream()).'
+        : '  Fix:  `chat.completions.create({ stream: true })` must resolve to an async iterable. ' +
+          'A custom `_client` double has to return one (or a promise of one); the real `openai` ' +
+          'package has since 4.x.'),
+  );
 }
 
 /** o-series reasoning ids (o1, o1-mini, o3, o3-mini, o4-mini, o5, …). `gpt-4o`

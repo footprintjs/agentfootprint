@@ -61,6 +61,9 @@ const gpt = openai({ model: 'gpt-4o', apiKey: process.env.OPENAI_API_KEY });
 // Azure OpenAI — a company resource. The request's `model` is the DEPLOYMENT name;
 // the shorthand 'azure' resolves to the configured `deployment`.
 const azure = azureOpenai({
+  // The resource ROOT. `OPENAI_BASE_URL` and `AZURE_OPENAI_ENDPOINT` are two
+  // names for it and reach the identical URL; a trailing slash, or a value that
+  // already ends in `/openai`, is handled.
   endpoint: process.env.OPENAI_BASE_URL,            // https://my-co.openai.azure.com
   apiKey: process.env.AZURE_OPENAI_API_KEY,
   apiVersion: process.env.AZURE_OPENAI_API_VERSION, // e.g. 2024-12-01-preview
@@ -124,19 +127,28 @@ Detection order (first match wins):
 
 | If these env vars are set | Resolves to | `model` returned |
 |---|---|---|
-| `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` \| `OPENAI_BASE_URL`) | `azureOpenai()` | `'azure'` (→ the deployment) |
+| `OLLAMA_MODEL` (+ optional `OLLAMA_HOST`) | `ollama()` | `OLLAMA_MODEL` |
+| `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` \| `OPENAI_BASE_URL`) | `azureOpenai()` | the deployment (`AZURE_OPENAI_DEPLOYMENT` ?? `MODEL_NAME`) |
 | `ANTHROPIC_API_KEY` | `anthropic()` | `LLM_MODEL` ?? `'anthropic'` |
 | `OPENAI_API_KEY` | `openai()` | `LLM_MODEL` ?? `'openai'` |
 | *(none)* | throws — or the mock with `{ fallbackToMock: true }` | `'mock'` |
 
+The local model goes first on purpose: every other arm triggers on a credential,
+and credentials linger in a shell by accident. `OLLAMA_MODEL` is a name someone
+chose and typed.
+
 For Azure it also reads `AZURE_OPENAI_API_VERSION` and `AZURE_OPENAI_DEPLOYMENT`
-(or `MODEL_NAME` as the deployment). A typical company `.env`:
+(or `MODEL_NAME` as the deployment). **`AZURE_OPENAI_ENDPOINT` and
+`OPENAI_BASE_URL` are two spellings of the same resource root** — either works,
+both reach the identical URL, and setting both is fine. Azure routes by
+deployment and has no default, so a run with Azure credentials and no deployment
+named is refused rather than guessed. A typical company `.env`:
 
 ```bash
-OPENAI_BASE_URL=https://your-co.openai.azure.com
+OPENAI_BASE_URL=https://your-co.openai.azure.com    # or AZURE_OPENAI_ENDPOINT — same thing
 AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_API_VERSION=2024-12-01-preview
-MODEL_NAME=gpt-4o-128k          # the Azure DEPLOYMENT name
+MODEL_NAME=gpt-4o-128k          # the Azure DEPLOYMENT name — and the `model` you get back
 ```
 
 `providerFromEnv()` is **Node-only** (it reads `process.env`); it lazy-loads only

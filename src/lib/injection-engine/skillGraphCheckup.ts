@@ -70,6 +70,31 @@ export type GraphProblemCode =
   // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency (WARNINGS):
   | 'body-foreign-tool' // body names a tool that belongs to another skill (not callable here)
   | 'body-unknown-tool' // body has a `tool_name(` reference to a tool that exists nowhere
+  // Examples on start rules — the three properties a declared phrase makes
+  // PROVABLE by running the compiled matchers (skillExamples.ts owns all three,
+  // and its header owns the boundary they stop at):
+  | 'example-misses-own-rule' // ERROR for a DATA matcher (it reads the user message and
+  //   nothing else, so its no-match holds under every context) or for a predicate that
+  //   THREW; WARNING for an opaque `when` that merely returned false — that one may be
+  //   gated on conversation state and claim the phrase on a later turn, which a build-time
+  //   check cannot run. The message names the cold-start context it judged under either way.
+  | 'example-shadowed-by-earlier' // ERROR — an EARLIER rule claims a later rule's
+  //   example first, so the turn starts somewhere the author's own example denies.
+  //   Proof by WITNESS (both predicates run on one phrase), which is why it can
+  //   report the case `rules-shadowed-by-order` must stay silent about: two
+  //   DIFFERENT regexes, whose intersection this library never decides. Claimed only
+  //   where BOTH start laws agree (the declaration-order cold walk AND the turn-start
+  //   cascade's tier 1) — where they disagree, see `example-shadowed-by-default`.
+  | 'example-shadowed-by-default' // WARNING — the earlier claimant is an UNCONDITIONAL
+  //   entry, the one place the two start laws differ: the cold walk stops at a default,
+  //   the cascade's tier 1 (mounted by `.classify()` OR by `continuity: 'conversation'`)
+  //   reads conditional rules only and skips it. Which law applies is decided at AGENT
+  //   MOUNT, which does not exist when the graph is built, so the report names BOTH
+  //   readings instead of asserting one — a check-up that contradicts the router is
+  //   worse than no check-up.
+  | 'example-unclaimed' // WARNING — an example matches NO rule, so the deterministic
+  //   layer declines and the turn falls onward (to the classifier, or to the model
+  //   tier). Absence, which no matcher-vs-matcher analysis can ever catch.
   // The artifact vocabularies (SG-F, 9.25.0) — WARNING, and never more:
   | 'artifact-kind-unsatisfied'; // a skill/step consumes a kind nothing on the agent produces.
 //   Produced by skillVocabulary.ts, which owns the rule AND its boundaries: it reads
@@ -86,12 +111,29 @@ export interface GraphProblem {
   readonly skill?: string;
   readonly from?: string;
   readonly to?: string;
+  /**
+   * The declared example phrase this problem is about — present only on the
+   * `example-*` codes, which are the only checks that reason about a concrete
+   * phrase. The message always quotes it too; this is the same string as data,
+   * so a tool can group by phrase without parsing prose.
+   */
+  readonly example?: string;
 }
 
 /** Result of `graph.checkup()`. `ok` is false iff there is ≥1 `error`. */
 export interface GraphCheckup {
   readonly ok: boolean;
   readonly problems: readonly GraphProblem[];
+  /**
+   * What this report does NOT cover — present only when a check ran whose
+   * SILENCE could be misread as proof. Today that is the start-rule examples
+   * (skillExamples.ts): they prove things about the phrases the author
+   * declared and nothing about phrases nobody wrote, so a clean report is not
+   * proof of coverage — and the report says so itself rather than leaving it
+   * to prose docs. Absent (not empty) when nothing needed saying, so a graph
+   * that never heard of examples reports the exact same object as always.
+   */
+  readonly notes?: readonly string[];
 }
 
 /** One declared entry, in declaration order. */
@@ -531,7 +573,15 @@ function quoteList(ids: readonly string[]): string {
   return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
-/** Format a check-up for a thrown error / console warning. */
+/**
+ * Format a check-up for a thrown error / console warning.
+ *
+ * Notes render AFTER the problems, tagged `[note]`: they are statements about
+ * the report's own reach, not findings. A check-up with no notes formats
+ * byte-identically to every version before them.
+ */
 export function formatCheckup(checkup: GraphCheckup): string {
-  return checkup.problems.map((p) => `  [${p.kind}] ${p.code}: ${p.message}`).join('\n');
+  const lines = checkup.problems.map((p) => `  [${p.kind}] ${p.code}: ${p.message}`);
+  for (const note of checkup.notes ?? []) lines.push(`  [note] ${note}`);
+  return lines.join('\n');
 }

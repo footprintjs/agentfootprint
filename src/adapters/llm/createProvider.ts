@@ -109,7 +109,11 @@ export interface ProviderFromEnv {
  *   1. **Ollama (local)** — `OLLAMA_MODEL` names a model, e.g. `qwen3`
  *      [+ `OLLAMA_HOST` for a runtime that isn't on localhost]
  *   2. **Azure OpenAI** — `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` |
- *      `OPENAI_BASE_URL`) [+ `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT`|`MODEL_NAME`]
+ *      `OPENAI_BASE_URL`) + `AZURE_OPENAI_API_VERSION`
+ *      + (`AZURE_OPENAI_DEPLOYMENT` | `MODEL_NAME`).
+ *      `AZURE_OPENAI_ENDPOINT` and `OPENAI_BASE_URL` are two spellings of the
+ *      same resource root and reach the identical URL; the returned `model` is
+ *      the deployment you named.
  *   3. **Anthropic** — `ANTHROPIC_API_KEY`
  *   4. **OpenAI** — `OPENAI_API_KEY`
  * Otherwise throws (or returns the mock when `{ fallbackToMock: true }`).
@@ -151,16 +155,32 @@ export function providerFromEnv(opts: { readonly fallbackToMock?: boolean } = {}
   }
   const azureEndpoint = env.AZURE_OPENAI_ENDPOINT ?? env.OPENAI_BASE_URL;
   if (env.AZURE_OPENAI_API_KEY && azureEndpoint) {
+    const azureDeployment = env.AZURE_OPENAI_DEPLOYMENT ?? env.MODEL_NAME;
+    if (!azureDeployment) {
+      // The credentials say Azure; nothing says WHICH deployment. Azure routes
+      // by deployment, so there is no default to fall back to — refuse here,
+      // naming the variable to set, rather than guess or send a kind label.
+      throw new Error(
+        'providerFromEnv: Azure credentials are set, but no deployment is named.\n' +
+          '  Azure routes by DEPLOYMENT (its name for the model), and there is no default.\n' +
+          '  Fix:  set AZURE_OPENAI_DEPLOYMENT (or MODEL_NAME) to your deployment id, e.g. gpt-4o-128k.',
+      );
+    }
     return {
       provider: azureOpenai({
         endpoint: azureEndpoint,
         apiKey: env.AZURE_OPENAI_API_KEY,
         ...(env.AZURE_OPENAI_API_VERSION && { apiVersion: env.AZURE_OPENAI_API_VERSION }),
-        ...((env.AZURE_OPENAI_DEPLOYMENT ?? env.MODEL_NAME) && {
-          deployment: env.AZURE_OPENAI_DEPLOYMENT ?? env.MODEL_NAME,
-        }),
+        deployment: azureDeployment,
       }),
-      model: 'azure',
+      // The DEPLOYMENT, not the kind label `'azure'`. This value is handed to
+      // `Agent.create({ provider, model })` and from there into traces, budgets
+      // and logs, where a kind label reads like a model id and names nothing a
+      // reader could look up. (The other arms return `LLM_MODEL` when it is set
+      // and otherwise a shorthand the adapter itself resolves to its declared
+      // default model — there is no user-named model to prefer. Azure has one,
+      // sitting right there in AZURE_OPENAI_DEPLOYMENT / MODEL_NAME.)
+      model: azureDeployment,
       kind: 'azure-openai',
     };
   }
@@ -188,7 +208,8 @@ export function providerFromEnv(opts: { readonly fallbackToMock?: boolean } = {}
   throw new Error(
     'providerFromEnv: no provider declared in the environment. Set one of:\n' +
       '  • Ollama:    OLLAMA_MODEL (a local model, e.g. qwen3 — free, no API key)\n' +
-      '  • Azure:     AZURE_OPENAI_API_KEY + (AZURE_OPENAI_ENDPOINT | OPENAI_BASE_URL)\n' +
+      '  • Azure:     AZURE_OPENAI_API_KEY + (AZURE_OPENAI_ENDPOINT | OPENAI_BASE_URL —\n' +
+      '               either spelling of the resource root, e.g. https://my-co.openai.azure.com)\n' +
       '               + AZURE_OPENAI_API_VERSION + (AZURE_OPENAI_DEPLOYMENT | MODEL_NAME)\n' +
       '  • Anthropic: ANTHROPIC_API_KEY\n' +
       '  • OpenAI:    OPENAI_API_KEY\n' +

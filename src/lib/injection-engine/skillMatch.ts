@@ -530,13 +530,18 @@ function compareWithAll(
  * before.
  */
 export function mermaidMatchCaption(m: SkillMatchData): string {
-  return rawCaption(m).replace(/\|/g, '#124;').replace(/"/g, '#quot;');
+  return plainMatchCaption(m).replace(/\|/g, '#124;').replace(/"/g, '#quot;');
 }
 
-/** The unescaped caption — recursion for the `all` arm escapes ONCE, at the top. */
-function rawCaption(m: SkillMatchData): string {
+/**
+ * The UNESCAPED caption — one grammar for naming a matcher, shared by the
+ * mermaid label (which escapes it once, at the top) and by prose that quotes a
+ * matcher back to its author (`skillExamples.ts`'s messages). Recursion for the
+ * `all` arm happens here so the escaping stays a single outer pass.
+ */
+export function plainMatchCaption(m: SkillMatchData): string {
   return m.kind === 'all'
-    ? m.parts.map(rawCaption).join(' AND ')
+    ? m.parts.map(plainMatchCaption).join(' AND ')
     : m.kind === 'regex'
     ? `/${m.source}/${m.flags}`
     : m.kind === 'intent'

@@ -28,6 +28,7 @@ import type {
   WireRole,
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { azureChatCompletionsUrl } from './azureUrl.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -343,10 +344,10 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
   if (!options.deployment) {
     throw new Error('browserAzureOpenai requires `deployment` (the Azure deployment name).');
   }
-  const base = options.endpoint.replace(/\/+$/, '');
-  const apiUrl =
-    `${base}/openai/deployments/${encodeURIComponent(options.deployment)}` +
-    `/chat/completions?api-version=${encodeURIComponent(options.apiVersion)}`;
+  // Shared with the Node `azureOpenai()` door, so the same endpoint value —
+  // trailing slash, or with `/openai` already written on it — reaches the same
+  // URL through either. See ./azureUrl.ts.
+  const apiUrl = azureChatCompletionsUrl(options.endpoint, options.deployment, options.apiVersion);
 
   const inner = browserOpenai({
     apiKey: options.apiKey,

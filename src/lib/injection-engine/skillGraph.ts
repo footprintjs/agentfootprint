@@ -74,6 +74,7 @@ import {
 } from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
 import { checkArtifactVocabularies } from './skillVocabulary.js';
+import { checkStartRuleExamples, validateStartRuleExamples } from './skillExamples.js';
 import {
   compileMatch,
   mermaidMatchCaption,
@@ -174,12 +175,18 @@ export type SkillStartRule =
       /** The code form — an opaque predicate over the iteration context. */
       readonly when: (ctx: InjectionContext) => boolean;
       readonly match?: never;
+      /** The phrasings this rule claims — build-time TEST material. See
+       *  {@link SkillEntryOptions.examples}. */
+      readonly examples?: readonly string[];
     }
   | {
       readonly use: string;
       /** The data form — comparable, drawable, stored. See {@link SkillMatch}. */
       readonly match: SkillMatch;
       readonly when?: never;
+      /** The phrasings this rule claims — build-time TEST material. See
+       *  {@link SkillEntryOptions.examples}. */
+      readonly examples?: readonly string[];
     };
 
 /** Where a turn starts, in the object-literal (flat) form. */
@@ -351,6 +358,63 @@ export interface SkillEntryOptions {
    * exactly as before.
    */
   readonly match?: SkillMatch;
+  /**
+   * The phrasings this rule CLAIMS — real messages a user would type that
+   * should start the turn here. Optional, additive, and **fed to nothing at
+   * run time**: the check-up reads them at build time and the routing never
+   * sees them, so a rule with examples routes byte-identically to the same
+   * rule without them.
+   *
+   * Things become PROVABLE once a phrase is declared, by RUNNING the compiled
+   * matchers rather than comparing them:
+   *
+   *   • `example-misses-own-rule` — this rule does not claim its own example.
+   *     An ERROR for a data `match` (it reads the user message and nothing
+   *     else, so the no-match holds under every context) or for a predicate
+   *     that THREW; a WARNING for an opaque `when` that returned false, which
+   *     may be gated on conversation state and claim the phrase on a later
+   *     turn (see the context note below);
+   *   • `example-shadowed-by-earlier` (error) — an EARLIER rule claims the
+   *     phrase first, so the turn starts somewhere your own example denies.
+   *     This is the one `rules-shadowed-by-order` must stay silent about when
+   *     the two rules use different regexes (intersection is not decided
+   *     anywhere in this library) — a witness phrase decides it instead;
+   *   • `example-shadowed-by-default` (warning) — the earlier claimant is an
+   *     UNCONDITIONAL entry. The declaration-order cold start stops at a
+   *     default; the turn-start cascade (a classifier, or `continuity:
+   *     'conversation'`) reads the conditional rules only and skips it — and
+   *     which one applies is decided at AGENT MOUNT, so the report names both
+   *     readings instead of asserting one against the router;
+   *   • `example-unclaimed` (warning) — NO rule claims the phrase, so the turn
+   *     falls through to the model tier. Absence, which no matcher-vs-matcher
+   *     analysis can catch.
+   *
+   * **The context they are judged on.** Every condition here runs on ONE
+   * context — iteration 1, the phrase as `userMessage`, empty `history`, no
+   * cursor — the context a turn's FIRST iteration hands a start rule. Turn 2 of
+   * a conversation also starts cold in cursor terms while CARRYING history, so
+   * a `when` gated on conversation state may claim the phrase on a turn this
+   * check cannot run. That is why its no-match is a warning, and why every
+   * message names the context it judged under.
+   *
+   * **Tier difference, and it matters.** In `match: { intent, examples }`
+   * (tier 2) the examples are SCORING material: the classifier reads them at
+   * RUN time to judge new messages. Here (tier 1) they are TEST material only.
+   * The author-facing meaning is the same — "the phrasings this rule claims" —
+   * the runtime role is not, and a rule may not carry both lists (refused at
+   * build, naming the difference).
+   *
+   * The boundary: these checks prove things about the phrases you declared and
+   * nothing about phrases nobody wrote. No warning is not proof of coverage —
+   * `graph.checkup().notes` says so on the report itself.
+   *
+   * @example
+   *   .entry(arrayInventory, {
+   *     match: /\b(array|volume|pool)\b/i,
+   *     examples: ["what's running on shpstrprncl101"],
+   *   })
+   */
+  readonly examples?: readonly string[];
   readonly label?: string;
 }
 
@@ -845,6 +909,9 @@ interface EntryDecl {
    *  message made `when` true. Present only for the data forms; a `when`
    *  predicate is opaque code and has none. Called ONLY on the rule that won. */
   readonly witness?: (ctx: InjectionContext) => RouteWitness | undefined;
+  /** The phrasings this rule claims (validated at declaration). Build-time TEST
+   *  material — never read by the resolver, never on the wire. */
+  readonly examples?: readonly string[];
   readonly label?: string;
 }
 interface RouteDecl {
@@ -954,11 +1021,19 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       }
       const compiled =
         opts?.match !== undefined ? compileMatch(opts.match, `entry "${id}"`) : undefined;
+      // The phrasings this rule claims — validated where they are declared, so
+      // an unusable list is refused at the keystroke instead of quietly proving
+      // nothing at check-up time (skillExamples.ts owns every refusal).
+      const examples = validateStartRuleExamples(opts?.examples, `entry "${id}"`, {
+        hasCondition: opts?.when !== undefined || opts?.match !== undefined,
+        isIntent: compiled?.data.kind === 'intent',
+      });
       entries.push({
         id,
         when: compiled ? compiled.predicate : opts?.when,
         ...(compiled && { match: compiled.data }),
         ...(compiled?.witness && { witness: compiled.witness }),
+        ...(examples && { examples }),
         label: opts?.label,
       });
       return builder;
@@ -1156,8 +1231,32 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // the moment nothing declares a vocabulary, so a graph that never
         // heard of the feature pays one `Array.some`.
         const vocabularies = checkArtifactVocabularies([...skillsById.values()]);
-        const problems = [...wiring.problems, ...intentDuplicates, ...contract, ...vocabularies];
-        return { ok: !problems.some((p) => p.kind === 'error'), problems };
+        // The declared phrasings (SG-G) — the three properties a witness phrase
+        // makes provable. `orderDecides` is the SAME gate the pairwise rule
+        // checks use: declaration order decides the turn start under the default
+        // form and under a classifier's tier 1, and does not under a scorer /
+        // `.entryByRead()` — where only the order-independent property is
+        // claimed, and a note says which one was skipped. Returns frozen empties
+        // the moment no rule declared examples, so a graph that never heard of
+        // the feature pays one `Array.some` and reports the identical object.
+        const examples = checkStartRuleExamples({
+          entries,
+          orderDecides:
+            !(entryScorer !== undefined || entryByReadFlag) || classifyScorer !== undefined,
+          hasClassifier: classifyScorer !== undefined,
+        });
+        const problems = [
+          ...wiring.problems,
+          ...intentDuplicates,
+          ...contract,
+          ...vocabularies,
+          ...examples.problems,
+        ];
+        return {
+          ok: !problems.some((p) => p.kind === 'error'),
+          problems,
+          ...(examples.notes.length > 0 && { notes: examples.notes }),
+        };
       };
 
       // The cursor resolver — the single source of truth for `from`-gated, sticky
@@ -1384,6 +1483,11 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
               problems: result.problems.filter(
                 (p) => p.code !== 'body-foreign-tool' && p.code !== 'body-unknown-tool',
               ),
+              // A deferred pass filters PROBLEMS, never the report's statement
+              // about its own reach — dropping the notes here would make the
+              // build-time surface quieter than `graph.checkup()` about exactly
+              // the thing a clean report must not be read as.
+              ...(result.notes && { notes: result.notes }),
             }
           : result;
         if (check === 'throw' && !reported.ok) {
@@ -1530,6 +1634,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           builder.entry(resolve(r.use), {
             ...(r.when && { when: r.when }),
             ...(r.match !== undefined && { match: r.match }),
+            ...(r.examples !== undefined && { examples: r.examples }),
           });
         }
         // The classifier + its tie policy (SG-C) — the rules form is where

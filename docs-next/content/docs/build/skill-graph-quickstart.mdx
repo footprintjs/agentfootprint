@@ -77,6 +77,36 @@ provably overlap or shadow each other get a warning naming both — and skill
 bodies that mention tools are checked against the agent's **real** tool registry
 at `Agent....build()`, automatically.
 
+## Write down the phrasings — `examples`
+
+Two rules can use two different regexes and still fight over one sentence, and
+comparing the regexes cannot settle it: this library never decides regex
+intersection, only identity. So write the sentence down instead. `examples` is the
+list of phrasings a rule **claims** — read at build time, fed to nothing at run time:
+
+```ts
+{ use: 'refunds', match: /refund|money back/i, examples: ['I want my money back'] },
+```
+
+The check-up then runs the compiled matchers over each phrase, in declaration order,
+exactly as the cold start does, and reports a witness instead of a theory: the rule
+that misses its own example (`example-misses-own-rule`, error for a data `match`), the
+earlier rule that claims a later rule's phrase (`example-shadowed-by-earlier`, error — a
+real production bug that matcher-comparison had to stay silent about), and the phrase
+**no** rule claims at all, which falls through to the model tier (`example-unclaimed`,
+warning — absence, which no matcher-vs-matcher analysis can catch). Where the answer
+depends on how the graph is MOUNTED — an earlier unconditional entry, which the
+declaration-order cold start honors and a `continuity: 'conversation'` cascade skips —
+the report warns with both readings (`example-shadowed-by-default`) rather than assert
+one against the router.
+
+These are TEST material, not scoring material: unlike the `examples` inside
+`match: { intent, examples }` below, they never widen matching and the classifier
+never sees them. And the report states its own boundary in `checkup().notes` — these
+checks prove things about the phrases you declared and nothing about phrases nobody
+wrote, so no warning is not proof of coverage. Full surface in
+[Skills](doc:skills#examples-on-a-start-rule--the-phrasings-it-claims).
+
 ## The routing cascade (9.17.0)
 
 Regex and keywords route the *phrasings you predicted*. For everything else,

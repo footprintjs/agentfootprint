@@ -15,6 +15,12 @@
  * Run:  npx tsx examples/features/16-providers.ts
  *   (set AZURE_OPENAI_API_KEY + OPENAI_BASE_URL + MODEL_NAME + AZURE_OPENAI_API_VERSION
  *    to drive a real Azure deployment; otherwise it runs on the mock.)
+ *
+ * `OPENAI_BASE_URL` above is the Azure resource ROOT, e.g.
+ * `https://my-co.openai.azure.com`. `AZURE_OPENAI_ENDPOINT` is the other name
+ * for the same thing — either works, both reach the identical URL, and setting
+ * both is fine. The `model` you get back is the DEPLOYMENT you named
+ * (`AZURE_OPENAI_DEPLOYMENT` or `MODEL_NAME`), not a kind label.
  */
 
 import { Agent, providerFromEnv, type LLMProvider } from '../../src/index.js';
