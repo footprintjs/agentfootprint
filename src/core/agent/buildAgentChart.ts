@@ -206,6 +206,29 @@ export interface AgentChartDeps {
   readonly stepNudgeStage?: (scope: never) => void;
 
   /**
+   * The evidence recheck branch (9.35.0). Present ONLY on an agent built with
+   * `.namesAndNumbersFromEvidence({ posture: 'guard' | 'rails' })` — the
+   * `'assist'` posture records and never loops, so it mounts no branch. One
+   * more branch of the Route decider carrying the same `{ loopTo }` the tool
+   * branch does, because a correction is one more ordinary turn (the
+   * SchemaRetry mechanism verbatim). Absent → no branch, no stage, no event.
+   */
+  readonly evidenceRecheckStage?: (scope: never) => void;
+
+  /**
+   * The evidence gate is mounted (9.35.0), at ANY posture. In the GROUPED
+   * chart this gates bubbling `systemPromptInjections` out of `sf-llm-call`:
+   * the slot writes it INSIDE the subflow and the outer Route decider needs
+   * it to exempt values the app's own prompt (base prompt, skill body, a
+   * retrieved passage) supplied — without the mapper key the gate would flag
+   * the prompt's own identifiers in the default grouped shape (the
+   * `hasEscalation` blast-radius lesson, one field down). The flat chart
+   * shares one scope and needs no key; the flag is still threaded there so
+   * both builders read the same deps object.
+   */
+  readonly hasEvidenceGate?: boolean;
+
+  /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
    * the flip is written by tool-calls on the OUTER scope and read by
@@ -719,6 +742,21 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'StepNudge',
       deps.stepNudgeStage as never,
       'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The evidence recheck — conditional mount (9.35.0) ───────────────
+  // The SchemaRetry mechanism a third time: same loop target, same "a re-ask
+  // is one more ordinary turn" reasoning, same conditional mount. Absent for
+  // `posture: 'assist'` (which records and never loops) and for every agent
+  // that did not ask for the check at all.
+  if (deps.evidenceRecheckStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.EVIDENCE_RECHECK,
+      'EvidenceRecheck',
+      deps.evidenceRecheckStage as never,
+      'Answer stated values no tool result carried — naming them back for one revision',
       { loopTo: loopTarget },
     );
   }

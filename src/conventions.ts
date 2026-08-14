@@ -100,6 +100,13 @@ export const STAGE_IDS = {
    *  the SchemaRetry mechanism verbatim (an ordinary iteration, not a mode).
    *  At most once per turn; never a forced continue. */
   STEP_NUDGE: 'step-nudge',
+  /** The Route decider's evidence branch (9.35.0), mounted ONLY on an agent
+   *  built with `.namesAndNumbersFromEvidence({ posture: 'guard' | 'rails' })`.
+   *  When a would-be-final answer states names or numbers that appear in no
+   *  tool result, they are named back to the model and the loop turns once
+   *  more — the SchemaRetry mechanism verbatim (an ordinary iteration, not a
+   *  mode). At most once per turn. */
+  EVIDENCE_RECHECK: 'evidence-recheck',
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
@@ -255,6 +262,9 @@ const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
   // Same reasoning for the unfinished-steps nudge (9.18.0): the run telling
   // the model its declared procedure is not done is a stop worth reading.
   STAGE_IDS.STEP_NUDGE,
+  // And for the evidence recheck (9.35.0): the run telling the model it made
+  // a value up is the single most interesting stop a reader can find.
+  STAGE_IDS.EVIDENCE_RECHECK,
 ]);
 
 /**
@@ -348,6 +358,10 @@ export function milestoneFor(id: string): Milestone | null {
     // explaining) its procedure.
     case STAGE_IDS.STEP_NUDGE:
       return { kind: 'decision', label: 'Step nudge' };
+    // The answer stated values no tool result carried and the one revision
+    // went back (9.35.0) — everything after it is the model's second try.
+    case STAGE_IDS.EVIDENCE_RECHECK:
+      return { kind: 'decision', label: 'Evidence recheck' };
     default:
       return null;
   }

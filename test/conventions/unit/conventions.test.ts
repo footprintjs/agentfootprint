@@ -49,7 +49,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 19 known stage IDs', () => {
+  it('has the 20 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -78,6 +78,11 @@ describe('STAGE_IDS — single source of truth', () => {
         // The unfinished-steps nudge (9.18.0) — mounted only on an agent with
         // ≥1 stepped skill; one teaching re-ask per turn, never forced:
         'step-nudge',
+        // The evidence recheck (9.35.0) — mounted only with
+        // `.namesAndNumbersFromEvidence({ posture: 'guard' | 'rails' })`; one
+        // bounded revision per turn when the answer states values no tool
+        // result carried:
+        'evidence-recheck',
         // Cache layer (v2.6+):
         'update-skill-history',
         'cache-gate',

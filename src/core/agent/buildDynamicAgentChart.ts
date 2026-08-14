@@ -615,6 +615,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // record that only exists inside the subflow would answer the
           // question everywhere except where it tells you to look.
           messagesDelivery: s.messagesDelivery,
+          // The composed system prompt's records (9.35.0) — bubbled ONLY for
+          // an agent with the evidence gate mounted. The outer Route decider
+          // exempts values the APP supplied (base prompt, skill body, a
+          // retrieved passage) from the check, and in this chart shape the
+          // slot that produced them ran in here. Value-conditional, so every
+          // other agent's boundary mapper is byte-identical to what it was.
+          ...(deps.hasEvidenceGate === true && {
+            systemPromptInjections: s.systemPromptInjections,
+          }),
           // NOTE: dynamicToolSchemas is intentionally NOT bubbled out — it
           // is written by the Tools slot and read ONLY by callLLM, both
           // inside sf-llm-call. The outer Route reads llmLatestToolCalls
@@ -687,6 +696,20 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'StepNudge',
       deps.stepNudgeStage as never,
       'Answer left declared steps unrun — one teaching nudge goes back (once per turn)',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The evidence recheck — conditional mount (9.35.0) ───────────────
+  // Byte-twin of the flat chart's mount: same loop target, same "one more
+  // ordinary turn" mechanism, absent under `posture: 'assist'` and absent
+  // entirely without the gate.
+  if (deps.evidenceRecheckStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.EVIDENCE_RECHECK,
+      'EvidenceRecheck',
+      deps.evidenceRecheckStage as never,
+      'Answer stated values no tool result carried — naming them back for one revision',
       { loopTo: loopTarget },
     );
   }

@@ -30,6 +30,7 @@
     "output-schema",
     "strict-output",
     "grounding",
+    "evidence-gate",
     "---[Database]Memory---",
     "memory",
     "auto-memory",

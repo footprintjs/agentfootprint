@@ -128,6 +128,10 @@ import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
 import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
+import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
+import { evidenceRefusalSentence } from './agent/evidence/gate.js';
+import { UnsupportedValuesError } from './agent/evidence/errors.js';
+import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
 import { checkerGoverns } from '../adapters/types.js';
 import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
@@ -354,6 +358,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  validated at `AgentBuilder.build()`. Undefined = no brain anywhere:
    *  callLLM, the gate, seed and RouteTurn wire nothing new. */
   private readonly skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains;
+  /**
+   * The evidence gate (9.35.0) — `.namesAndNumbersFromEvidence()`, resolved by
+   * the builder. Undefined for every agent that did not ask for it, and that
+   * undefined is the whole zero-cost guarantee: no decider change, no branch,
+   * no scope key, no event.
+   */
+  private readonly evidenceGate?: ResolvedEvidenceGate;
   private readonly skillGraphCascade?: {
     readonly turnRouting?: TurnRoutingPlan;
     readonly strictness: 'assist' | 'guard' | 'rails';
@@ -657,6 +668,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       readonly nodeIds: ReadonlySet<string>;
     },
     skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains,
+    evidenceGate?: ResolvedEvidenceGate,
   ) {
     super();
     this.provider = opts.provider;
@@ -687,6 +699,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.skillGraphCascade = skillGraphCascade;
     this.skillBrains = skillBrains;
+    this.evidenceGate = evidenceGate;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -1359,7 +1372,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // checkpoint would hand the caller a retry handle for a wall, and
           // would bury the `authorizationUrl` one `.cause` deep where the
           // person who has to click it will not look.
-          cause instanceof CredentialConsentRequiredError);
+          cause instanceof CredentialConsentRequiredError ||
+          // 9.35.0 — an evidence refusal is a VERDICT, not a crash: the run
+          // finished, the loop already spent its one revision, and resuming
+          // would put the same model in front of the same evidence. Wrapping
+          // it would hand the caller a retry handle for a wall and bury the
+          // named values one `.cause` deep, where the person deciding what to
+          // do about them will not look.
+          cause instanceof UnsupportedValuesError);
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
         // Observation beats the heuristic: if a bracket was open, it says
         // exactly what the run was doing. `classifyFailurePhase` only decides
@@ -2589,6 +2609,37 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return state?.outputContractUnmet;
   }
 
+  /**
+   * Did the last turn's answer state names or numbers that appear in NO tool
+   * result (9.35.0)?
+   *
+   * `undefined` when every value was grounded — and on any agent without
+   * `.namesAndNumbersFromEvidence()`. Set on a turn that shipped flagged
+   * (`'assist'` / `'guard'`) and on one that was refused (`'rails'`, where
+   * `run()` also raised `UnsupportedValuesError`, so this is what a caller
+   * reads in the `catch`).
+   *
+   * `revised: true` means the model was asked once to correct the values and
+   * they survived that turn — the fact worth alerting on, because it is a
+   * model that cannot ground its own claims rather than one that slipped.
+   *
+   * Remember what the verdict does NOT say: values were invented. It cannot
+   * tell you whether a claim built from real values is true.
+   *
+   * @example
+   * ```ts
+   * const answer = await agent.run({ message: 'which port is down?' });
+   * const bad = agent.unsupportedValues();
+   * if (bad) log.warn({ values: bad.values.map((v) => v.value), revised: bad.revised });
+   * ```
+   */
+  unsupportedValues(): AgentState['unsupportedValues'] {
+    const state = this.getLastSnapshot()?.sharedState as
+      | Pick<AgentState, 'unsupportedValues'>
+      | undefined;
+    return state?.unsupportedValues;
+  }
+
   private finalizeResult(
     executor: FlowChartExecutor,
     result: unknown,
@@ -2692,6 +2743,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           reason: state.messageDeniedReason,
           phase: state.messageDeniedPhase ?? 'output',
           middleware: state.messageDeniedBy ?? 'middleware',
+        });
+      }
+    }
+    // Evidence refusal (9.35.0, `posture: 'rails'` only) — the final answer
+    // still states values that appear in no tool result, after the one
+    // revision the posture allows. Surfaced the way a denied message is, and
+    // for the same reason: `rails` was chosen precisely so an answer carrying
+    // invented identifiers cannot reach the caller as a string they are free
+    // to ignore. `'assist'` and `'guard'` never reach here — their verdict is
+    // committed state and an event, and `run()` returns the answer.
+    if (this.evidenceGate?.posture === 'rails') {
+      const state = executor.getSnapshot().sharedState as Pick<AgentState, 'unsupportedValues'>;
+      const verdict = state.unsupportedValues;
+      if (verdict !== undefined && verdict.refused) {
+        throw new UnsupportedValuesError({
+          values: verdict.values,
+          candidates: verdict.candidates,
+          revised: verdict.revised,
+          message: evidenceRefusalSentence(verdict.values, 'rails', verdict.revised),
         });
       }
     }
@@ -2810,6 +2880,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Escalation (9.19.0): same gate discipline — the per-run counter/flip
       // reset exists only when the policy does (de-escalation IS the seed).
       ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
+      // The evidence gate's one bounded revision (9.35.0) — a per-turn budget,
+      // reset here. Only a posture that can revise writes the key.
+      ...(this.evidenceGate !== undefined &&
+        this.evidenceGate.posture !== 'assist' && { hasEvidenceRevision: true }),
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -3065,10 +3139,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // active step procedure (nudge once / accept / cut-short) when a stepped
     // skill is registered. Without steps this is the same function reference
     // the chart has always been handed.
+    // 9.35.0 — and the decider grounds the would-be-final answer in the
+    // turn's own tool results when `.namesAndNumbersFromEvidence()` is
+    // configured. Without it this is the same function reference the chart
+    // has always been handed.
     const routeDecider = buildRouteDeciderStage(
       this.messageMiddleware,
       this.outputEnforcement,
       stepPlanFor,
+      this.evidenceGate,
     );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
@@ -3209,6 +3288,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(stepPlanFor !== undefined && {
         hasSteps: true,
         stepNudgeStage: buildStepNudgeStage(stepPlanFor) as (scope: never) => void,
+      }),
+      // The evidence gate (9.35.0). `hasEvidenceGate` rides ANY posture (the
+      // grouped chart needs the system-prompt records bubbled out to exempt
+      // what the app itself supplied); the BRANCH is mounted only for a
+      // posture that can revise — `'assist'` records and never loops, so it
+      // gets no branch and no stage, the same conditional-mount law as above.
+      ...(this.evidenceGate !== undefined && {
+        hasEvidenceGate: true,
+        ...(this.evidenceGate.posture !== 'assist' && {
+          evidenceRecheckStage: buildEvidenceRecheckStage(this.evidenceGate) as (
+            scope: never,
+          ) => void,
+        }),
       }),
       // Escalation (9.19.0): the grouped chart threads `skillEscalated`
       // across the sf-llm-call boundary only when the policy exists.

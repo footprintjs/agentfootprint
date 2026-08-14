@@ -21,6 +21,8 @@ import {
   SCHEMA_TOOL_NAME,
   type ResolvedOutputEnforcement,
 } from './outputEnforcement.js';
+import { resolveEvidenceGate } from './evidence/gate.js';
+import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
 import {
   validateCannedAgainstSchema,
   type OutputFallbackFn,
@@ -267,6 +269,12 @@ export class AgentBuilder {
   /** Corrective re-asks the loop may spend. `0` (the default) means the
    *  schema is judged once, at the caller's boundary, exactly as it always
    *  was — and no enforcement is mounted in the chart at all. */
+  /** The evidence gate (9.35.0) — set by `.namesAndNumbersFromEvidence()`,
+   *  resolved at the call site so a bad posture throws where it was typed.
+   *  Undefined for every agent that did not ask for it, which is what makes
+   *  the feature byte-identical when unused. */
+  private evidenceGate?: ResolvedEvidenceGate;
+
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
   private outputSchemaJson?: Readonly<Record<string, unknown>>;
@@ -1363,6 +1371,78 @@ export class AgentBuilder {
    *   const typed = await agent.runTyped({ message: '...' });
    *   typed.status; // narrowed to 'ok' | 'err'
    */
+  /**
+   * Require every **name and number in the final answer** to appear in a tool
+   * result the run actually read (9.35.0). If one does not, the model typed it
+   * rather than read it.
+   *
+   * ## What it is — and what it provably is not
+   *
+   * It is a **fabrication detector, not a correctness judge.** It catches
+   * invented values. It CANNOT catch a false claim assembled from real values:
+   * *"fc1/3 is healthy"* when the data says the port is down uses entirely
+   * grounded tokens, and this check passes it without a murmur. Anyone who
+   * reads it as a hallucination check will trust it for the one thing it
+   * cannot do. It is also conservative by design (small numbers, all-letters
+   * names and units are not examined), because a false accusation costs a real
+   * turn and can refuse a good answer.
+   *
+   * The check is **deterministic** — set membership over normalized tokens. No
+   * second model, no embedding, no judge. A guard that needed a bigger model
+   * to police a smaller one would invert this library's whole thesis and would
+   * fail exactly where the small model is deployed.
+   *
+   * ## The three postures
+   *
+   * Same three words as `.skillGraph({ strictness })`, deliberately — and a
+   * SEPARATE setting, because routing authority and evidence discipline are
+   * different decisions:
+   *
+   *   • `'assist'` (**default**) — record and flag. The answer goes out
+   *     unchanged; you learn how often it happens before you act on it.
+   *   • `'guard'` — the unsupported values are named back to the model, which
+   *     gets ONE more ordinary turn (tools still on the wire, so it can go and
+   *     fetch what it guessed). Survivors ship flagged. **This is the
+   *     recommended posture for a weaker model.**
+   *   • `'rails'` — the same one revision, then `run()` raises
+   *     `UnsupportedValuesError` rather than return an answer that still
+   *     carries them.
+   *
+   * Values the USER supplied — this turn's message, the conversation, the
+   * system prompt and skill bodies — are exempt without being declared: the
+   * user gave them, so they were not invented.
+   *
+   * Every judgement lands on the emit channel as
+   * `agentfootprint.agent.evidence_checked`, whatever the posture, so a
+   * debugger can show the answer, the values and whether the revision fixed
+   * them. The terminal verdict is readable after the run with
+   * `agent.unsupportedValues()`.
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(showInterface)
+   *     .namesAndNumbersFromEvidence({
+   *       posture: 'guard',
+   *       // The default extractor guesses from digits and punctuation; teach
+   *       // it your domain's shapes and they are checked by name.
+   *       shapes: [{ name: 'wwn', match: /(?:[0-9a-f]{2}:){7}[0-9a-f]{2}/ }],
+   *       exempt: ['v9.35.0'],
+   *     })
+   *     .build();
+   */
+  namesAndNumbersFromEvidence(opts?: NamesAndNumbersOptions): this {
+    if (this.evidenceGate) {
+      throw new Error(
+        'AgentBuilder.namesAndNumbersFromEvidence: already set. Each agent has at most one ' +
+          'evidence gate — pass every shape and exemption in the one call.',
+      );
+    }
+    // Resolved (and refused) HERE rather than at build: a posture typo is a
+    // mistake in the line you just wrote, and the stack should say so.
+    this.evidenceGate = resolveEvidenceGate(opts);
+    return this;
+  }
+
   outputSchema<T>(parser: OutputSchemaParser<T>, opts?: OutputSchemaOptions): this {
     if (this.outputSchemaParser) {
       throw new Error(
@@ -2352,6 +2432,7 @@ export class AgentBuilder {
       this.skillGraphSupersededEntries,
       this.skillGraphCascade,
       skillBrains,
+      this.evidenceGate,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

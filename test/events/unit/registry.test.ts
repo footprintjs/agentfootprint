@@ -135,7 +135,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     way to see a trip, and it fires at consumer level where the run
     //     ids are synthetic. Transitions only — a request rejected while the
     //     breaker is already open is not a change.)
-    expect(ALL_EVENT_TYPES.length).toBe(92);
+    //    (agent.evidence_checked added with 9.35.0 — one verdict per
+    //     would-be-final answer the evidence gate judged
+    //     (`.namesAndNumbersFromEvidence()`), whatever the posture and
+    //     whatever the outcome. Names and numbers in the answer that appear
+    //     in no tool result were TYPED, not read. A per-attempt fact, so it
+    //     rides this channel; only the terminal verdict is committed.)
+    expect(ALL_EVENT_TYPES.length).toBe(93);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

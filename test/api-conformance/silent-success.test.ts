@@ -668,6 +668,7 @@ const REFUSES_A_SECOND_CALL = [
   'checkIn',
   'compaction',
   'configure',
+  'namesAndNumbersFromEvidence',
   'outputFallback',
   'outputSchema',
   'reliability',
@@ -796,6 +797,8 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .configure(() => ({}))
           .configure(() => ({})),
+      namesAndNumbersFromEvidence: () =>
+        base().namesAndNumbersFromEvidence().namesAndNumbersFromEvidence({ posture: 'guard' }),
       outputFallback: () =>
         base()
           .outputSchema({ parse: (v: string) => JSON.parse(v) })

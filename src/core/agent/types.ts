@@ -38,6 +38,7 @@ import type { FoldedSpan, WindowRecord } from './window/types.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
 import type { OutputAttempt } from './outputEnforcement.js';
+import type { UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
@@ -854,6 +855,51 @@ export interface AgentState {
     /** Set when an `act({ output })` middleware's own rewrite broke an answer
      *  that HAD satisfied the schema — the name of that middleware. */
     readonly brokenBy?: string;
+  };
+
+  // ── The evidence gate (`.namesAndNumbersFromEvidence()`, 9.35.0) ────────
+  /** In-flight hand-off from the Route decider (which finds the values and
+   *  picks the branch) to the recheck stage (which writes the correction).
+   *  Not a record — the per-check record rides the emit channel as
+   *  `agentfootprint.agent.evidence_checked`, because a per-attempt fact
+   *  belongs on that channel and not in a CommitBundle. Always freshly
+   *  written by the decider immediately before the branch runs, so it is
+   *  never read stale. Absent on an agent without the gate. */
+  evidenceUnsupported?: {
+    readonly values: readonly UnsupportedValue[];
+    /** How many distinct values the answer had to ground, flagged included. */
+    readonly candidates: number;
+  };
+  /** The one bounded revision has been spent this turn (9.35.0). Written by
+   *  the EvidenceRecheck branch; reset at seed. Absent on an agent without
+   *  the gate, and on one whose posture is `'assist'` (which never revises). */
+  evidenceRevisionSpent?: boolean;
+  /**
+   * The answer this run hands back states values that appear in no tool
+   * result (9.35.0).
+   *
+   * Written by the Route decider on the one occasion the check ran and the
+   * answer still carried unsupported values with no revision left. Absent on
+   * every clean answer and on every agent without the gate.
+   *
+   * Committed rather than returned for the reason `outputContractUnmet` is:
+   * `run()` returns a bare string with nowhere to carry the fact, and under
+   * `'assist'` / `'guard'` the library does not get to raise on its own. Under
+   * `'rails'` it does, and this is what the boundary reads to do it. Read it
+   * after the run with `agent.unsupportedValues()`.
+   */
+  unsupportedValues?: {
+    /** The flagged values, normalized and truncated. */
+    readonly values: readonly UnsupportedValue[];
+    /** How many distinct values the answer had to ground in total. */
+    readonly candidates: number;
+    /** True when a revision was asked for and the values survived it. */
+    readonly revised: boolean;
+    /** True when the answer was WITHHELD (`posture: 'rails'`) rather than
+     *  returned with a flag. */
+    readonly refused: boolean;
+    /** The posture in force, so a reader knows why the answer shipped. */
+    readonly posture: 'assist' | 'guard' | 'rails';
   };
   /** Set by the seed / prepare-final stage when a `messageMiddleware` returned
    *  `deny`. Read at the API boundary, where it becomes a `MessageDeniedError`.

@@ -143,9 +143,12 @@ export interface AgentRouteDecidedPayload {
    * about to ask again rather than finish. `'step-nudge'` (9.18.0) appears
    * only on an agent with a stepped skill, and only on a turn whose
    * would-be-final answer left declared steps unrun with the one teaching
-   * nudge still unspent.
+   * nudge still unspent. `'evidence-recheck'` (9.35.0) appears only on an
+   * agent built with `.namesAndNumbersFromEvidence({ posture: 'guard' |
+   * 'rails' })`, and only on a turn whose would-be-final answer stated values
+   * no tool result carried, with the one revision still unspent.
    */
-  readonly chosen: 'tool-calls' | 'final' | 'output-retry' | 'step-nudge';
+  readonly chosen: 'tool-calls' | 'final' | 'output-retry' | 'step-nudge' | 'evidence-recheck';
   readonly rationale?: string;
 }
 
@@ -1472,6 +1475,52 @@ export interface AgentOutputSchemaRetryPayload {
   /** `fnv1a` of the corrective message that went back to the model — the
    *  join to the message in `history` and to the `outputAttempts` row. */
   readonly correctiveMessageHash: string;
+}
+
+/**
+ * One verdict from the evidence gate (`.namesAndNumbersFromEvidence()`,
+ * 9.35.0) — fired once per would-be-final answer the gate judged, whatever
+ * the posture and whatever the outcome.
+ *
+ * It rides the emit channel rather than a CommitBundle because it is a fact
+ * about ONE attempt, not conversation state; the only thing that reaches the
+ * commit log is the terminal verdict (`unsupportedValues`), which the boundary
+ * needs.
+ *
+ * **What this event does NOT claim:** the check catches values that appear in
+ * no tool result. It cannot see a false statement assembled from real values,
+ * so `action: 'grounded'` means "every name and number was read from
+ * somewhere", never "the answer is true".
+ */
+export interface AgentEvidenceCheckedPayload {
+  /** The ReAct iteration that produced the judged answer. */
+  readonly iteration: number;
+  /** The posture in force — `'assist'` records only, `'guard'` may revise
+   *  once, `'rails'` may withhold the answer. */
+  readonly posture: 'assist' | 'guard' | 'rails';
+  /** How many distinct values the answer had to ground. `0` means the answer
+   *  asserted nothing the extractor treats as data. */
+  readonly candidates: number;
+  /** The values that appear in no tool result, truncated to a readable list.
+   *  Empty when `action` is `'grounded'`. */
+  readonly unsupported: readonly { readonly value: string; readonly shape: string }[];
+  /**
+   *   • `'grounded'`       — every value was found; the answer stands.
+   *   • `'revision-asked'` — the values went back to the model for one more
+   *                          turn (emitted by the EvidenceRecheck branch).
+   *   • `'flagged'`        — the answer ships carrying them, on the record.
+   *   • `'refused'`        — `'rails'`: the answer was withheld and the
+   *                          boundary raises `UnsupportedValuesError`.
+   */
+  readonly action: 'grounded' | 'flagged' | 'revision-asked' | 'refused';
+  /** True when this judgement ran on an answer a revision already corrected —
+   *  which is how a reader tells "the revision fixed it" (`grounded`, after
+   *  revision) from "it did not" (`flagged`/`refused`, after revision). */
+  readonly afterRevision: boolean;
+  /** Set when the evidence index hit its ceiling and could not hold every
+   *  tool result. The gate then records its verdict WITHOUT acting on it —
+   *  a partial corpus can call a grounded value fabricated. */
+  readonly evidenceTruncated?: boolean;
 }
 
 export interface AgentOutputSchemaValidationFailedPayload {

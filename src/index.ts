@@ -443,6 +443,25 @@ export {
   type OutputAttempt,
 } from './core/agent/outputEnforcement.js';
 export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
+// 9.35.0 — the evidence gate (`.namesAndNumbersFromEvidence()`). Every name
+// and number in the final answer must appear in a tool result the run really
+// read; one that does not was typed rather than read. It is a FABRICATION
+// detector, not a correctness judge — it cannot see a false claim built out of
+// real values — and it is deterministic on purpose: a guard that needed a
+// bigger model to police a smaller one would invert this library's thesis.
+// The frame prefix is exported so a reader (or a test) can recognise the
+// correction this feature puts into a conversation without matching on prose.
+export {
+  EVIDENCE_CHECK_FRAME_PREFIX,
+  type EvidencePosture,
+  type EvidenceShape,
+  type NamesAndNumbersOptions,
+  type UnsupportedValue,
+} from './core/agent/evidence/index.js';
+export {
+  UnsupportedValuesError,
+  type UnsupportedValuesContext,
+} from './core/agent/evidence/errors.js';
 export {
   canResume,
   ConversationMismatchError,

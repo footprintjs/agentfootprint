@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.35.0] - 2026-08-14
+
+**`.namesAndNumbersFromEvidence()` — every name and number in the final
+answer must appear in a tool result this turn actually read.**
+
+Two engineering conventions, arrived at independently, said the same thing
+about the same failure. The architecture guide promised this as a runtime
+invariant — twice — and the runtime did nothing of the kind. On a
+production consumer app, the same class of question produced a fabricated
+port row: an alias and an FCID that appeared in no tool result, stated as
+fact. That app's own house rule reads "facts come from data, never from
+labels." Ours had no rule at all. Now it does, and it is enforced, not
+promised.
+
+### What it is, and — because the name invites the wrong reading — what it
+### is provably not
+
+It is a **fabrication detector, not a correctness judge.** If a value in
+the answer never appeared in anything a tool returned this turn, the model
+typed it rather than read it, and that is all this checks. It cannot catch
+a false claim built entirely from real values — *"fc1/3 is healthy"* when
+the data says the port is down uses two grounded tokens and sails through.
+It cannot catch a real value attached to the wrong thing, a fabricated
+quantity under the digit threshold, or a fabricated name spelled in
+letters only — which is exactly what declaring a `shapes` pattern is for.
+`.factsFromEvidence()` was the name on the table first and was rejected
+for promising exactly this: "facts" says more than the check can stand
+behind. Say the limits plainly, because a reader who assumes this is a
+hallucination checker will trust it for the one job it cannot do.
+
+### The governing constraint: deterministic, on purpose
+
+The check is set membership over normalized tokens — no LLM judge, no
+embedding, no model call of any kind. This library's whole thesis is that
+structure lets a small model perform like a large one; a gate that needed
+a strong model to police a weak one would invert that thesis at the exact
+place it is supposed to hold. The clean-room probe proves this the hard
+way, not the easy one: the gate still flags a fabricated value after the
+mock provider's scripted responses are exhausted.
+
+### Three postures — a SEPARATE dial from routing strictness
+
+Same vocabulary as `.skillGraph({ strictness })`, because it reads the
+same way, but a different setting: routing authority and evidence
+enforcement are different concerns, and an app may want strict routing
+with loose evidence, or the reverse.
+
+- `'assist'` (**default**) — record and flag; the answer ships unchanged.
+  Every agent that does not ask for this feature is byte-identical to
+  9.34.0 — no branch mounted, no event emitted.
+- `'guard'` — the unsupported values are named back to the model for ONE
+  bounded revision, tools still on the wire, so it can go fetch what it
+  guessed instead of restating it. This is the posture that makes a
+  smaller model behave like a bigger one, and it is the recommended one
+  for a weaker model.
+- `'rails'` — the same one revision, then a refusal: `run()` raises
+  `UnsupportedValuesError`, naming the values, rather than return an
+  answer that still carries them.
+
+Every check lands on the emit channel as `agentfootprint.agent
+.evidence_checked`, in every posture — `assist` is not a silent mode, it
+is a recording one.
+
+### The mechanism — a SIBLING branch, not a second loop
+
+Evidence-checking rides the exact machinery `outputRetry` already built:
+the same `{loopTo}`, the same conditional mount (nothing changes shape for
+an agent that never calls `.namesAndNumbersFromEvidence()`), its own
+`iteration_end`, its own cost tick. The route decider judges in a fixed
+order — schema, then declared steps, then evidence — so an answer already
+being replaced by a schema retry is never evidence-judged, a denied answer
+is not judged at all, and a turn the iteration or cost limit just cut
+short does not get to spend a revision it can't afford. It composes with,
+rather than collides with, `.reliability()`: reliability governs whether a
+call is retried before anything is committed; this governs an answer
+*after* it has already been committed to the transcript.
+
+### Measured, not assumed
+
+Two corpora, both built from real SAN inventory shapes, written the way
+models actually write:
+
+- **12 correct answers, 32 distinct grounded values — 0 false positives.**
+- **4 fabricated answers, including the field's own port-row example, 5
+  planted unsupported values — 5 flagged, 0 missed, 0 collateral.**
+
+Both directions are pinned so an extractor going blind and an extractor
+over-flagging fail equally loudly; a gate that only proved the flag proves
+nothing about the answers it must leave alone.
+
+### The lesson the mutation check found mid-development
+
+The `guard` correction is a user-role turn that quotes the flagged values
+back at the model — which means, before this was caught, the exempt
+corpus exempted exactly the values it had just accused. The second pass
+always came back clean, and `rails` could never refuse anything, because
+by its own second look nothing was ever wrong. Library-authored evidence
+frames are now excluded from the exempt corpus by construction, pinned by
+a regression test. A gate that absolves itself on the second attempt is
+worse than shipping no gate at all.
+
+### Also in this release
+
+- `UnsupportedValuesError` joins `run()`'s terminal-typed-error list. A
+  verdict is not a crash, and wrapping it in something generic would bury
+  the named values one `.cause` deep exactly when a caller most needs
+  them at the top.
+- Three anti-drift registries were extended, none weakened: the event
+  registry (`agentfootprint.agent.evidence_checked`), `STAGE_IDS`
+  (`evidence-recheck`, a boundary-local milestone — the run telling the
+  model it made a value up is the single most interesting stop a reader
+  can find), and the silent-success classification (this builder method
+  refuses a second call by name, like every other one-shot configuration
+  method on `AgentBuilder`).
+
 ## [9.34.0] - 2026-08-14
 
 **The skill-graph purity fence, and the `agentfootprint/skill-graph` subpath it makes safe to ship.**

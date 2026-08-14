@@ -145,6 +145,14 @@ export interface SeedStageDeps {
    * exactly the keys it always did.
    */
   readonly hasEscalation?: boolean;
+  /**
+   * The evidence gate is mounted with a posture that can revise (9.35.0).
+   * Gates the per-run reset of `evidenceRevisionSpent` — the one bounded
+   * revision is a per-TURN budget, so the next turn gets its own. Written
+   * only when true (the `hasSteps` discipline, two fields up), so every
+   * other agent commits exactly the keys it always did.
+   */
+  readonly hasEvidenceRevision?: boolean;
 }
 
 /**
@@ -403,6 +411,13 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   if (deps.hasEscalation === true) {
     scope.skillRefusalsThisTurn = 0;
     scope.skillEscalated = false;
+  }
+  // The evidence gate's one bounded revision (9.35.0) — a per-TURN budget,
+  // so it is spent fresh here. Written only when the posture can revise, so
+  // an `'assist'` agent (and every agent without the gate) commits exactly
+  // the keys it always did.
+  if (deps.hasEvidenceRevision === true) {
+    scope.evidenceRevisionSpent = false;
   }
 
   // `.configure()` — resolved ONCE here (seed runs exactly once per run)

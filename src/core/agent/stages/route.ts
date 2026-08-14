@@ -31,8 +31,17 @@ import {
   stepInProgress,
   type StepPlanFor,
 } from '../../../lib/injection-engine/skillSteps.js';
+import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import type { ResolvedEvidenceGate } from '../evidence/types.js';
+import type { InjectionRecord } from '../../../recorders/core/types.js';
 
-export type RouteBranch = 'tool-calls' | 'final' | 'output-retry' | 'step-nudge';
+export type RouteBranch =
+  | 'tool-calls'
+  | 'final'
+  | 'output-retry'
+  | 'step-nudge'
+  | 'evidence-recheck';
 
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
@@ -218,6 +227,134 @@ function judgeUnfinishedSteps(
   return 'step-nudge';
 }
 
+/**
+ * Judge a WOULD-BE-FINAL answer against the evidence this turn actually read
+ * (9.35.0) — `.namesAndNumbersFromEvidence()`.
+ *
+ * Called only at a moment the decider is about to return `'final'`, and never
+ * on a denied answer (a withheld answer is not re-asked and not flagged) nor
+ * on one that already failed its output schema (it is about to be replaced
+ * wholesale, so grounding it would be paying for a turn twice). It runs AFTER
+ * the step judge for the same reason: an answer that is about to be nudged is
+ * not the final answer yet.
+ *
+ * The check itself is deterministic set membership — no model call, no
+ * embedding, no judge. See `../evidence/gate.ts` for why that is the one
+ * non-negotiable property of this feature.
+ *
+ * Four outcomes, one `evidence_checked` event each (the `'revision-asked'`
+ * one is emitted by the branch stage, where the work is — the `steps_unfinished
+ * { action: 'nudged' }` precedent):
+ *
+ *   • clean → `'grounded'`, nothing else happens;
+ *   • unsupported values, posture can revise, revision unspent, no limit fired
+ *     → `'evidence-recheck'`: the branch names them back and loops once;
+ *   • unsupported values, nothing left to try, posture `'rails'` → `'refused'`:
+ *     the verdict is committed and the boundary raises instead of returning;
+ *   • otherwise → `'flagged'`: the answer ships unchanged with the fact on the
+ *     record and one warning naming the values.
+ */
+function judgeEvidence(
+  scope: TypedScope<AgentState>,
+  gate: ResolvedEvidenceGate | undefined,
+  earlyStop: 'max-iterations' | 'cost-budget' | undefined,
+): 'evidence-recheck' | undefined {
+  if (gate === undefined) return undefined;
+  const answer = (scope.llmLatestContent as string | undefined) ?? '';
+  const iteration = scope.iteration as number;
+  const afterRevision = scope.evidenceRevisionSpent === true;
+  // An empty answer states nothing. `stoppedEarly` already reports why it is
+  // empty; adding "and it cited nothing" would be noise about a non-answer.
+  if (answer === '') return undefined;
+
+  const history = scope.history as readonly LLMMessage[];
+  const verdict = checkAnswer(answer, {
+    gate,
+    evidence: evidenceFromHistory(history),
+    exempt: exemptFromRun({
+      userMessage: scope.userMessage as string | undefined,
+      history,
+      systemPromptInjections: scope.systemPromptInjections as
+        | readonly InjectionRecord[]
+        | undefined,
+    }),
+  });
+
+  if (verdict.unsupported.length === 0) {
+    typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
+      iteration,
+      posture: gate.posture,
+      candidates: verdict.candidates,
+      unsupported: [],
+      action: 'grounded',
+      afterRevision,
+    });
+    return undefined;
+  }
+
+  // A revision is worth asking for only when the posture allows one, the turn
+  // has not already spent it, and no LIMIT just refused to run another turn
+  // (a correction would spend an iteration the limit denied — the step
+  // nudge's `cut-short` reasoning).
+  const mayRevise =
+    gate.posture !== 'assist' &&
+    !afterRevision &&
+    earlyStop === undefined &&
+    // A partial evidence index can call a grounded value fabricated. Acting
+    // on one would be an accusation from a half-read corpus, so a truncated
+    // index downgrades every posture to record-only.
+    !verdict.evidenceTruncated;
+
+  if (mayRevise) {
+    scope.evidenceUnsupported = {
+      values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
+      candidates: verdict.candidates,
+    };
+    return 'evidence-recheck';
+  }
+
+  const refused = gate.posture === 'rails' && !verdict.evidenceTruncated;
+  scope.unsupportedValues = {
+    values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
+    candidates: verdict.candidates,
+    revised: afterRevision,
+    refused,
+    posture: gate.posture,
+  };
+  typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
+    iteration,
+    posture: gate.posture,
+    candidates: verdict.candidates,
+    unsupported: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
+    action: refused ? 'refused' : 'flagged',
+    afterRevision,
+    ...(verdict.evidenceTruncated && { evidenceTruncated: true }),
+  });
+  if (!refused) {
+    // Only on the shipping path: a refusal raises a teaching error at the
+    // boundary, and warning about an answer nobody receives is noise.
+    // eslint-disable-next-line no-console
+    console.warn(
+      evidenceRefusalSentence(verdict.unsupported, gate.posture, afterRevision) +
+        (verdict.evidenceTruncated
+          ? ' NOTE: this turn read more evidence than the index holds, so the check ' +
+            'recorded its verdict without acting on it.'
+          : ''),
+    );
+  }
+  return undefined;
+}
+
+/** The `route_decided` rationale for an evidence recheck. */
+function evidenceRecheckRationale(scope: TypedScope<AgentState>): string {
+  const pending = scope.evidenceUnsupported;
+  const count = pending?.values.length ?? 0;
+  return (
+    `final answer states ${count} value(s) that appear in no tool result — ` +
+    `naming them back to the model for one revision (at most once per turn)`
+  );
+}
+
 /** The `route_decided` rationale for a step nudge. */
 function stepNudgeRationale(scope: TypedScope<AgentState>): string {
   const ptr = pointerOf(scope.stepPointer)!;
@@ -281,13 +418,21 @@ export function buildRouteDeciderStage(
   messageMiddleware?: readonly MessageMiddleware[],
   enforcement?: ResolvedOutputEnforcement,
   stepPlanFor?: StepPlanFor,
+  evidence?: ResolvedEvidenceGate,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
-  if (chain.length === 0 && enforcement === undefined && stepPlanFor === undefined) {
+  if (
+    chain.length === 0 &&
+    enforcement === undefined &&
+    stepPlanFor === undefined &&
+    evidence === undefined
+  ) {
     return routeDeciderStage;
   }
-  if (enforcement !== undefined) return buildEnforcingDecider(chain, enforcement, stepPlanFor);
-  if (stepPlanFor !== undefined) return buildStepsAwareDecider(chain, stepPlanFor);
+  if (enforcement !== undefined)
+    return buildEnforcingDecider(chain, enforcement, stepPlanFor, evidence);
+  if (stepPlanFor !== undefined || evidence !== undefined)
+    return buildJudgingDecider(chain, stepPlanFor, evidence);
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
     emitRouteDecided(scope, chosen, rationale);
@@ -321,20 +466,22 @@ export function buildRouteDeciderStage(
 }
 
 /**
- * The decider an agent with a STEPPED skill runs (9.18.0), without schema
- * enforcement: decide, run the output chain if there is one, judge the
- * would-be-final answer against the active procedure, THEN announce the
- * branch once — so `route_decided` names the branch the run actually took
- * (the enforcing decider's discipline). A DENIED answer is neither judged
- * nor nudged: it was withheld on purpose, and looping it would re-ask for
- * an answer the app refused to release.
+ * The decider an agent with a STEPPED skill (9.18.0) and/or the evidence gate
+ * (9.35.0) runs, without schema enforcement: decide, run the output chain if
+ * there is one, judge the would-be-final answer against the active procedure
+ * and then against the evidence, THEN announce the branch once — so
+ * `route_decided` names the branch the run actually took (the enforcing
+ * decider's discipline). A DENIED answer is neither judged nor nudged nor
+ * grounded: it was withheld on purpose, and looping it would re-ask for an
+ * answer the app refused to release.
  *
- * Only stepped agents receive this function — everyone else keeps the exact
- * decider (and event timing) they always had.
+ * Only agents that asked for one of those two receive this function —
+ * everyone else keeps the exact decider (and event timing) they always had.
  */
-function buildStepsAwareDecider(
+function buildJudgingDecider(
   chain: readonly MessageMiddleware[],
-  stepPlanFor: StepPlanFor,
+  stepPlanFor: StepPlanFor | undefined,
+  evidence: ResolvedEvidenceGate | undefined,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -364,6 +511,12 @@ function buildStepsAwareDecider(
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
     }
+    // AFTER the step judge: an answer about to be nudged is not the final
+    // answer, and grounding it would pay for a turn that is being replaced.
+    if (!denied && judgeEvidence(scope, evidence, earlyStop) === 'evidence-recheck') {
+      emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
+      return 'evidence-recheck';
+    }
     emitRouteDecided(scope, 'final', rationale);
     if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
     return 'final';
@@ -380,6 +533,7 @@ function buildEnforcingDecider(
   chain: readonly MessageMiddleware[],
   enforcement: ResolvedOutputEnforcement,
   stepPlanFor?: StepPlanFor,
+  evidence?: ResolvedEvidenceGate,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -438,6 +592,13 @@ function buildEnforcingDecider(
       if (judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop) === 'step-nudge') {
         emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
         return 'step-nudge';
+      }
+      // The evidence gate is last of the three judges: it grounds the answer
+      // the schema accepted and the procedure finished — the one that is
+      // really about to be handed back.
+      if (judgeEvidence(scope, evidence, base.earlyStop) === 'evidence-recheck') {
+        emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
+        return 'evidence-recheck';
       }
       emitRouteDecided(scope, 'final', base.rationale);
       if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
@@ -502,6 +663,11 @@ function buildEnforcingDecider(
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
     }
+    // The evidence gate deliberately does NOT run here. This answer already
+    // failed its own contract and the caller is being told so; grounding the
+    // values inside a shape the app has declared invalid would file a second
+    // verdict about a string nobody is going to use, and under `guard` it
+    // would buy a revision for an answer that cannot pass anyway.
     emitRouteDecided(
       scope,
       'final',
