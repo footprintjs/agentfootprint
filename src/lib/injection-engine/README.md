@@ -3,6 +3,22 @@
 The heart of agentfootprint context engineering: one primitive that
 does one thing, exhaustively.
 
+> **Reader-facing docs live on the site, not here.** The architecture of the
+> skill graph — the three surfaces, the authority rule, the nine cursor causes,
+> the three-way `read_skill` design, and a worked refusal from a real run — is
+> **`docs-next/content/docs/build/skill-graph-architecture.mdx`**, published at
+> `/docs/build/skill-graph-architecture`. That page is CANONICAL: every claim
+> there carries a status (`shipped` / `opt-in` / `application-provided` /
+> `planned`) and every code block is type-checked against the shipped types at
+> build time, so it cannot drift. Companion pages:
+> `build/skill-graph-quickstart.mdx` (the 5-minute version),
+> `build/skills.mdx` (the full API), `build/skills-explained.mdx` (the concept).
+>
+> **This README is the maintainer's map**: the module boundaries, the import
+> zones, the seams where a new matcher / checkup code / scorer goes, and the
+> design rationale behind each. When it and the site both describe a behaviour,
+> the site is the one to keep true; when they disagree, trust the code.
+
 > **Every piece of content reaching an LLM is either:**
 > **(a) baseline** — the user's message, a tool's return — or
 > **(b) an Injection: content YOU engineered into one of the LLM's
@@ -458,37 +474,22 @@ menu the model resolves. Scorers are a tier, never a correctness dependency:
 near-ties fall through, and every verdict (winners, losers, thresholds) lands
 on `agentfootprint.skill.turn_routed`.
 
-```typescript
-import { Agent } from 'agentfootprint';
-import { skillGraph, keywordScorer } from 'agentfootprint/context';
+**The declaration and the three tiers are on the site** — see *Skill graph
+architecture* → "Where the tiers actually are", and the type-checked
+`skillGraph({ start: { rules, classify } })` sample beside it. One correction
+worth repeating because it is easy to get backwards: the LLM classifier is a
+**tier-2 STRATEGY** (interchangeable with `keywordScorer()` /
+`embeddingScorer(e)` / the entry scorer), never tier 3. Tier 3 is the menu the
+model resolves in-band, reached only when tier 2 was NOT decisive.
 
-const graph = skillGraph({
-  skills: [billing, shipping],
-  start: {
-    rules: [
-      { use: 'billing',  match: { intent: 'customer wants a refund',
-                                  examples: ['refund my order', 'charged twice'] } },
-      { use: 'shipping', match: { intent: 'customer asks where a delivery is',
-                                  examples: ['track my parcel'] } },
-    ],
-    classify: keywordScorer(),           // or embeddingScorer(e) / llmClassifier(p)
-    // routing: { nearTieMargin: 0.2 },  // the ONE override home, beside its scorer
-  },
-});
-
-const agent = Agent.create({ provider, model })
-  .skillGraph(graph, {
-    continuity: 'conversation', // followUp() starts where the last turn ended
-    strictness: 'guard',        // the model routes only from an offered menu
-  })
-  .build();
-```
-
-Runs once per turn, off the hot loop (the RouteTurn stage in PickEntry's
-slot); iterations 2..N keep the 8.x law byte-for-byte. `graph.checkupIntents()`
-audits the declared examples with the CONFIGURED scorer (leave-one-out).
-Everything is zero-cost when unused: a graph without `classify`/`continuity`
-mounts no stage, writes no key and emits no new event.
+Maintainer facts, which are what this file is for. The cascade runs once per
+turn, off the hot loop (the RouteTurn stage in PickEntry's slot); iterations
+2..N keep the 8.x law byte-for-byte. `routing:` beside `classify` is the ONE
+override home for the tie policy (mirrors the one-dial-one-home law
+`scopeTools` follows). `graph.checkupIntents()` audits the declared examples
+with the CONFIGURED scorer (leave-one-out). Everything is zero-cost when
+unused: a graph without `classify`/`continuity` mounts no stage, writes no key
+and emits no new event.
 
 ---
 

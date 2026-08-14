@@ -431,15 +431,27 @@ body-contract checks — runs end to end in
 ### Where the graph stands, and why it resets — `CursorMove`
 
 `graph.explainNextSkill(ctx)` returns a `CursorMove`: where the cursor landed and, in
-`by`, the `CursorMoveCause` that decided it — `'entry'`, `'route'`, `'model-pick'`,
-`'stay'` or `'none'`. That is what lets `routeRecorder()` tell a model's `read_skill`
-pick from a declared edge that happens to point at the same skill.
+`by`, the `CursorMoveCause` that decided it. That is what lets `routeRecorder()` tell a
+model's `read_skill` pick from a declared edge that happens to point at the same skill.
 
-**The cursor is per run.** It tracks position across the iterations of ONE `agent.run()`;
-a second run starts cold, at the entry, whatever the first ended on. A skill graph
-declares how one turn is routed, so a cursor that survived would make turn two start
-somewhere nobody declared. To carry a position between turns, persist the id yourself
-and start the next turn's graph from it.
+**There are nine causes**, not the five this page listed before 9.36.0 —
+`'entry'`, `'route'`, `'tool-proposal'`, `'model-pick'`, `'intent'`, `'continuity'`,
+`'decider'`, `'stay'` and `'none'`. `routeRecorder()`'s `RouteOutcome` is those eight
+that name a hop — `'none'` is absent, because no cursor means no hop — plus
+`'rejected'` for a refused pick, so an exhaustive `switch` over `RouteOutcome` needs
+nine cases. Each cause is explained, with its status and what turns it on, in
+[Skill graph architecture](doc:skill-graph-architecture#nine-causes-for-a-cursor-move).
+
+**The cursor is per run by default.** It tracks position across the iterations of ONE
+`agent.run()`; a second run starts cold, at the entry, whatever the first ended on. A
+skill graph declares how one turn is routed, so a cursor that survived by accident would
+make turn two start somewhere nobody declared.
+
+**To make it span the conversation, ask for it**: `.skillGraph(graph, { continuity:
+'conversation' })` restores the inherited cursor and judges it as a candidate — the
+incumbent is beaten only by a decisive verdict, ambiguity means stay, and an inherited id
+the mounted graph does not know is dropped to a cold start, dev-warned, and recorded on
+`turn_routed.droppedResume` rather than silently parked on a node that does not exist.
 
 ### When a hint cannot fire
 
