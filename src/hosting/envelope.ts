@@ -183,6 +183,16 @@ export function checkEnvelope(envelope: unknown, sessionId?: string): Checkpoint
  * session nobody signed for is a session nobody can list, and inventing an
  * owner would be inventing an entitlement.
  *
+ * **Status: the CONTRACT is field-validated — an independent field trial,
+ * 2026-08-13.** A live multi-user run against a real Firestore: an owner
+ * written once and never moved, a cross-user transcript answering the same
+ * not-found a missing session gets, one caller's own two sessions listed over
+ * two pages, `listByUser` / `ownerOf` feature detection, and `mayOpenSession`
+ * refusing an ordinary turn on somebody else's conversation. The store
+ * underneath was **the trial's own Firestore `SessionLifecycle`**, not one this
+ * package ships — so the rung belongs to this derivation and the rules above
+ * it, and no shipped Google adapter may borrow the credit.
+ *
  * Reads both formats, so a session that is mid-question is owned exactly as
  * firmly as one that is finished. Returns `undefined` rather than throwing on
  * a shape it cannot read — an index is a convenience, and refusing to WRITE a

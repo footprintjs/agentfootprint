@@ -371,6 +371,137 @@ describe('gatewayTransport — the token never leaks', () => {
   });
 });
 
+// ── the mTLS / DPoP seam (9.32.0) ───────────────────────────────────
+//
+// An independent field trial (2026-08-13) got the generic bearer half working
+// end to end — five requests, five freshly vended credentials, none stored —
+// and then hit the wall: a managed identity path wanting mTLS and DPoP had
+// nowhere to go, because this transport exposed "bearer-credential, header and
+// scope options, but no certificate, DPoP or custom-fetch seam". The only
+// workaround was the generic `http` transport, which HAS a fetch seam and fixes
+// its headers at connect time — trading away rotation to get a certificate.
+//
+// The fix is one option. What these pin is that it composes the right way
+// round: vending UNDER the caller's fetch, never instead of it.
+
+describe('gatewayTransport — the injected fetch', () => {
+  it('is carried only when given, so an unused seam changes no bytes', () => {
+    const credentials = staticTokens({ gateway: SECRET });
+    expect(gatewayTransport({ url: 'https://x/', credentials })).not.toHaveProperty('fetch');
+    const signer: FetchLike = async () => new Response('{}');
+    expect(gatewayTransport({ url: 'https://x/', credentials, fetch: signer }).fetch).toBe(signer);
+  });
+
+  it('THE ORDER: the credential is vended and applied BEFORE the signer runs', async () => {
+    // A DPoP signer has to see the request it is signing, headers included.
+    // Calling it first — or instead — would sign something the server never
+    // receives, which is a signature that verifies against nothing.
+    const seen: Headers[] = [];
+    const signer: FetchLike = async (input, init) => {
+      const headers = new Headers(init?.headers ?? {});
+      seen.push(new Headers(headers));
+      headers.set('dpop', `pop-over-${String(input)}`);
+      return new Response('{}');
+    };
+    const transport = gatewayTransport({
+      url: 'https://gw/',
+      credentials: staticTokens({ gateway: SECRET }),
+      fetch: signer,
+    });
+    await createVendingFetch(transport, transport.fetch)('https://gw/', { method: 'POST' });
+    expect(seen[0].get('authorization')).toBe(`Bearer ${SECRET}`);
+  });
+
+  it('rotation survives the seam — every request still vends again', async () => {
+    // The whole reason not to send people to the `http` transport.
+    const credentials = rotatingProvider();
+    const sent: string[] = [];
+    const mtls: FetchLike = async (_input, init) => {
+      sent.push(new Headers(init?.headers ?? {}).get('authorization') ?? '');
+      return new Response('{}');
+    };
+    const transport = gatewayTransport({ url: 'https://gw/', credentials, fetch: mtls });
+    const vending = createVendingFetch(transport, transport.fetch);
+    await vending('https://gw/');
+    await vending('https://gw/');
+    expect(credentials.vends).toBe(2);
+    expect(sent).toEqual([`Bearer ${SECRET}-1`, `Bearer ${SECRET}-2`]);
+  });
+
+  it('THE REGRESSION PIN: mcpClient really threads it — through the SDK, not just the helper', async () => {
+    // The defect was not a missing option, it was a CALL SITE that dropped one:
+    // `createVendingFetch(t)` was built with no base fetch even though the
+    // helper had always accepted one. An option added to the type without
+    // fixing that line would be accepted and silently ignored — so this drives
+    // the real `mcpClient` path rather than the helper directly.
+    const { mcpClient } = await import('../../../src/lib/mcp/mcpClient.js');
+    const seen: string[] = [];
+    const signer: FetchLike = async (_input, init) => {
+      seen.push(new Headers(init?.headers ?? {}).get('authorization') ?? '(none)');
+      throw new Error('MTLS_SEAM_REACHED');
+    };
+    await expect(
+      mcpClient({
+        name: 'gw',
+        transport: gatewayTransport({
+          url: 'https://gw.example/mcp',
+          credentials: staticTokens({ gateway: SECRET }),
+          fetch: signer,
+        }),
+      }).then((c) => c.tools()),
+    ).rejects.toThrow(/MTLS_SEAM_REACHED/);
+    // Reached — and the credential was already on the request when it was.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]).toBe(`Bearer ${SECRET}`);
+  });
+
+  it('a signer that throws fails the request rather than sending it unsigned', async () => {
+    const transport = gatewayTransport({
+      url: 'https://gw/',
+      credentials: staticTokens({ gateway: SECRET }),
+      fetch: async () => {
+        throw new Error('client certificate not loaded');
+      },
+    });
+    await expect(createVendingFetch(transport, transport.fetch)('https://gw/')).rejects.toThrow(
+      'client certificate not loaded',
+    );
+  });
+
+  it('SECURITY: the vended value still never reaches a console, an error or the descriptor', async () => {
+    // The seam widens what a CONSUMER'S OWN code sees — that is the point of a
+    // signer — and it must not widen what this LIBRARY says. A hostile fetch
+    // that logs its own headers is the consumer publishing their credential in
+    // their own code; everything this module controls stays shut.
+    const recorded: string[] = [];
+    for (const channel of ['log', 'info', 'warn', 'error', 'debug', 'trace'] as const) {
+      vi.spyOn(console, channel).mockImplementation((...args: unknown[]) => {
+        recorded.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+      });
+    }
+    const transport = gatewayTransport({
+      url: 'https://gw/',
+      credentials: staticTokens({ gateway: SECRET }),
+      fetch: async (_input, init) => {
+        // A signer doing the ordinary thing: read the headers, add its own.
+        const headers = new Headers(init?.headers ?? {});
+        headers.set('dpop', 'signed');
+        throw new Error('gateway returned 500');
+      },
+    });
+    const error = await createVendingFetch(
+      transport,
+      transport.fetch,
+    )('https://gw/').catch((e: unknown) => e as Error);
+
+    expect(recorded.join('\n')).not.toContain(SECRET);
+    expect(`${error.message}${error.stack ?? ''}`).not.toContain(SECRET);
+    // And nothing was written back onto the descriptor, seam or no seam.
+    expect(JSON.stringify(transport)).not.toContain(SECRET);
+    expect(JSON.stringify(Object.getOwnPropertyDescriptors(transport))).not.toContain(SECRET);
+  });
+});
+
 // ── ROI: the existing transports are untouched ──────────────────────
 
 describe('gatewayTransport — additive, not a rewrite', () => {

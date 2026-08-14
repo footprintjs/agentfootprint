@@ -1413,31 +1413,139 @@ for a new conversation.
 Unset, no ledger is built, no listener is installed, and not one line of this
 runs.
 
-<Callout type="warn" title="Ingress refusals are outside `auditExport` — the gap, and what to do today">
-An independent field trial checked this twice (2026-08, again 2026-08-14) and it
-is still true: a **401** from `identity.verify` and a **429** from `admission`
-happen *before a run exists*. No agent has been built, no observer is attached,
-and no typed event is emitted — so `auditExport()`'s hash chain, which is a
-record of **runs**, does not contain them. A compliance reviewer asking "who was
-turned away, and why?" cannot answer it from the bundle.
+## The ingress record — `onIngressDecision`
 
-That is a real gap and it is not closed by this release. What is honest today:
+`auditExport()` is a record of **runs**. A 401 from `identity.verify` and a 429
+from `admission.decide` both happen *before a run exists*: no agent has been
+built, no observer is attached, no typed event is emitted. So neither is in the
+bundle, and the consequence is the sharp one — **an empty bundle is not evidence
+that nobody was turned away.** It is evidence that nobody ran.
 
-- **Both refusals pass through seams you own.** Your `verify` function sees every
-  token it rejects, and your `admission.decide` sees every verdict it returns,
-  refusals included. Writing your own record there — one line per decision, to
-  the same sink your runs go to — is the recipe, and it is the only one that does
-  not require this library to invent an event it does not have.
-- **Keep the two records joinable.** Record the same principal your verifier
-  proves (`identity.principal`), so an ingress refusal and a later run by the
-  same caller line up in whatever you query.
-- **Do not read a refusal's absence as consent.** An empty audit bundle means no
-  run happened, not that nobody was turned away.
+Two independent field rounds wrote that down as the same finding (2026-08-13,
+again 2026-08-14), from two different angles: *"the JWKS identity and admission
+decisions occur before the Agent runs, so they do not automatically appear in an
+Agent-level `auditExport` chain"*, and *"the bounded audit bundle does not
+replace gateway/HTTP security logs."*
 
-A unified gateway-plus-agent record — ingress decisions inside the same
-tamper-evident chain — is the shape this wants, and it is a design question
-(what is a "record" when there is no run id?) rather than a missing line of code.
-It is not scheduled here rather than half-shipped quietly.
+Since 9.32 there is somewhere for them to go:
+
+```ts
+await standingAgent({
+  agent, sessions, host,
+  identity: { verify },
+  admission: turnsPerHour({ limit: 60 }),
+  onIngressDecision: (record) => securityLog.write(record),
+});
+```
+
+One `IngressRecord` per request, handed to your sink at the moment the reply
+reaches its terminal:
+
+```ts
+{
+  at: 1755100000000,
+  door: 'turn',                          // 'turn' | 'session-op' | 'artifact'
+  outcome: 'identity-refused',           // see below
+  errorCode: 'ERR_IDENTITY_NOT_VERIFIED',
+  identityFailure: 'expired',            // the class, never the token
+  claimedUser: false,
+  sessionId: 's-42',
+  bearerPresent: true,
+  admission: undefined,                  // 'allow' | 'queue' | 'refuse'
+}
+```
+
+The whole vocabulary is four exported types. `IngressSink` is the callback
+`onIngressDecision` takes — `(record: IngressRecord) => void`, called
+synchronously, so buffer and batch inside it rather than awaiting a network.
+`IngressDoor` is `'turn' | 'session-op' | 'artifact'`. `IngressAdmissionVerdict`
+is `'allow' | 'queue' | 'refuse'`, what the policy answered when one was
+consulted.
+
+`IngressOutcome` is the field a dashboard groups by: `'served'`,
+`'identity-refused'`, `'verifier-unavailable'`, `'admission-refused'`,
+`'session-refused'`, `'refused'` (every other refusal the door made by name) and
+`'failed'`. `errorCode` carries the precision beside it.
+
+`'served'` means **delivered**, not *admitted*. The record is filed at the
+terminal the reply actually reached, so a request the door let through whose
+run, store or provider then broke ends at `fail` and is recorded as `'failed'`
+(or `'refused'`, when that error names itself with an `ERR_…` code) with the
+error's class beside it. To count what the door admitted, count everything that
+is not one of the door's own refusals — `'identity-refused'`,
+`'verifier-unavailable'`, `'admission-refused'`, `'session-refused'` — or read
+`admission`, the verdict your policy actually returned, which is on a refused
+record and a broken one alike.
+
+### It is a stream, not a chain
+
+**It does not join the audit hash chain.** Nothing here is hashed, sequenced
+against `auditExport()`'s records, or verifiable by `verifyAuditBundle`. Saying
+otherwise would make this fix the exact failure it exists to close — a mechanism
+that *looks* like evidence and is not. If you want ingress decisions inside a
+tamper-evident chain, write them into the same store your audit bundle lands in
+and chain them there, where the sequence is yours to define.
+
+### Why the composer, and not your own `verify`
+
+Some of these refusals never reach a seam you own:
+
+- **A request with no `Authorization: Bearer …`.** Your `verify` is never
+  called, so no log you could have written contains it.
+- **A verifier outage (503).** A different fact from a bad credential, and one
+  a 401 counter would misfile.
+- **A turn or transcript naming somebody else's session.** The token verified
+  perfectly and admission said yes; the refusal happens afterwards, at a door
+  only the composer owns.
+- **A session op at a door with no verifier, a store with no owner index, a
+  concurrent-run refusal, an artifact ref that did not resolve.**
+
+And **served requests are recorded too**, because an absence is only readable
+against a census.
+
+### What it never carries, and what it cannot see
+
+The record holds classes and identifiers — never the bearer token, never a
+header, never a claim set, and never an *error's message* (a message may carry
+an SDK's text, a store's detail or your own admission sentence, so none is
+copied). The one identity field is `userId`, and it is the id the token
+**proved**; a merely claimed one is never written down as if it were.
+
+One boundary, stated rather than implied: a body the **transport** refused
+before the composer saw it — unparseable JSON, or an `op` this host's wire
+grammar does not speak (`InvalidWireOpError`, answered 400 by `httpHost` inside
+its own request reader) — is not in this stream. That is a malformed request
+rather than a decision about a caller, and your HTTP access log has it.
+
+Unset, nothing is built, nothing is wrapped, and the reply the handler uses is
+the host's own object, to the byte. A sink that throws is contained (a broken
+log must not turn a served request into a failed one) and reported once.
+
+<Callout type="info" title="Field evidence — 2026-08-13, and what it does not reach">
+`jwksIdentity`, the `identity: { verify }` door and the `admission: { decide }`
+seam are **field-validated — an independent field trial, 2026-08-13**, run
+against a live `nodeHost` in a live Google Cloud project with sessions in a real
+Firestore: an RS256 token verified from a remote JWKS endpoint against issuer,
+audience, expiry, subject and roles; a valid token paired with a claimed other
+identity rejected; missing, expired and wrong-audience tokens answered 401; two
+admitted turns and a third answered 429 before the provider or the session store
+was touched; four different bearer tokens absent from every captured response
+body and error; and the remote key set fetched once over the network, then served
+from the verifier cache. Rejected requests made **zero** provider calls.
+
+Three bounds, so the rung is not read wider than it is. The finding does not name
+the identity provider, so what is proven is the JWKS *protocol* path, not interop
+with a particular commercial IdP. The provider behind that door was a
+deterministic mock — "before any model call" was measured as *zero provider
+calls*, a claim about where the refusal happens rather than about a real
+completion's cost. And **`turnsPerHour` itself is only contract-shaped and
+tested**: the finding records the 429 and restates the helper's per-process
+bound, but not the shipped helper as the policy under test, and a run of minutes
+cannot cross an hour boundary — so the window's roll-off and reset are proven by
+tests here, not in the field.
+
+The caveats that run raised stay exactly where they were: the `SpendLedger` is
+per process, and this record is a stream rather than a chain.
 </Callout>
 
 ## Session history — `session-list` / `session-transcript`
@@ -1723,6 +1831,13 @@ its own.
 | `standingAgent` + `durability` (`exit` / `async` / `sync`) | `agentfootprint/hosting` | — | Shipped |
 | `standingAgent({ agentFactory })` — per-session agent pool | `agentfootprint/hosting` | — | Shipped (9.10.0); parallelism, eviction→re-hydrate and both refusals pinned by test |
 | `browserSessionId()` (client half) + `nodeHost({ sessionHeader, sessionCookie })` | `agentfootprint` / `agentfootprint/hosting` | none | Shipped (9.10.0) |
+| `identity: { verify }` + `jwksIdentity` | `agentfootprint/hosting` · `agentfootprint/security` | `jose` (adapter only) | **Field-validated 2026-08-13** — an independent field trial on a live cloud-backed door: a remote JWKS fetched and cached, RS256 verified end to end, 401s with zero provider calls, and no token in any body or error. The IdP is **not named** by the finding, so this is the protocol path rather than interop with a particular vendor. See [the evidence callout](#the-ingress-record--oningressdecision) |
+| `admission: { decide }` — the seam | `agentfootprint/hosting` | — | **Field-validated 2026-08-13** — the same trial: two turns admitted, the third answered 429 before the provider or session store was invoked |
+| `turnsPerHour` — the reference policy | `agentfootprint/hosting` | — | **Contract-shaped and tested.** The trial recorded the 429 and restated this helper's per-process bound, but not the shipped helper as the policy under test — and a run of minutes cannot cross an hour, so the window's roll-off and reset are proven by tests, not in the field. **Per-process ledger** — that caveat stands |
+| Session ownership (`envelopeOwner`, write-once) + `session-list` / `session-transcript` | `agentfootprint/hosting` | — | **Contract field-validated 2026-08-13** — an independent field trial exercised write-once ownership, the cross-user 404, feature detection and `mayOpenSession` on the ordinary turn. **The store underneath was the trial's own Firestore adapter**, so the CONTRACT earned this rung and no shipped adapter borrows it |
+| `onIngressDecision` — the ingress record | `agentfootprint/hosting` | — | Shipped (9.32.0). A stream you chain into your own sink; explicitly **not** part of `auditExport()`'s hash chain |
+| `firestoreSessions` | — | — | **Tracked ticket, not scheduled here** — a `SessionLifecycle` over Firestore with an indexed `orderBy` + document cursor, a TTL policy and write-once owner. It needs a new optional peer (`@google-cloud/firestore`) and an SDK pin test before any adapter code, so it is its own release rather than a line in this one. The port is two methods in the meantime |
+| Agent Runtime host (`agentRuntimeHost`) — the second route | — | — | **Tracked ticket, deliberately unbuilt** — a Node service really does run on Vertex Agent Runtime through the custom-container door (proven by an independent field trial, 2026-08-14; the recipe is on [the Google page](doc:google-cloud)). What is missing is not the runtime but the CONTRACT: `httpHost` serves ONE invoke path and frames streams as SSE, while that runtime wants a SECOND route at its own path framed as NDJSON. That is a port-shape change, so it is its own release, gated on real demand |
 | `redisSessions` | — | — | **Bring-your-own via the port** — two methods; see the sketch above |
 | `agentCoreRuntimeHost` / `agentCoreRuntimeWire` | `agentfootprint/hosting` | none — plain HTTP, no AWS SDK on its path | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket |
 | `agentCoreSessions({ store: 'session-storage' })` | `agentfootprint/hosting` | none (`node:fs`) | Shipped |

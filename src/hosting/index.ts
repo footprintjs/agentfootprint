@@ -179,6 +179,18 @@ export type {
   TurnsPerHourOptions,
 } from './admission.js';
 
+// The ingress record (9.32.0) — one record per DOOR decision, including every
+// request that never became a run, so the 401s and 429s `auditExport()` cannot
+// see have somewhere honest to land. Types only: the seam is the
+// `onIngressDecision` option, and this package emits nothing on its own.
+export type {
+  IngressAdmissionVerdict,
+  IngressDoor,
+  IngressOutcome,
+  IngressRecord,
+  IngressSink,
+} from './ingressRecord.js';
+
 // The session-history wire operations (9.26.0) — a person's own conversations,
 // answered only for a VERIFIED caller. One grammar owner, exactly as the
 // artifact ops have.

@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.32.0] - 2026-08-14
+
+**Three questions we could not answer without an account came back
+answered — and the honesty vocabulary got audited against its own
+evidence.**
+
+An independent field trial and an independent reviewer, both 2026-08-13
+and 2026-08-14, drove this release.
+
+### Answered — a Node service IS deployable on Vertex Agent Engine
+
+Through the custom-container door: a Node image was accepted with
+`agentFramework: 'custom'` and served, and the recipe is documented on the
+Google Cloud page. We still ship no `agentRuntimeHost()`, and the reason is
+now stated rather than guessed — our `httpHost` serves one invoke path
+framed as SSE, while that contract's second route is NDJSON at its own
+path. That is a port-shape change, tracked as its own release rather than
+half-shipped here.
+
+### Answered — the gateway
+
+A plain-HTTP bearer gateway works end to end: tool discovery, a tool call,
+fresh credentials vended per request, never stored. Google's own identity
+path for Agent Gateway — mTLS + DPoP — was **not** expressible through our
+transport, and still isn't; what changed is where the seam to build one
+lives (below).
+
+### Added — `gatewayTransport({ fetch })`
+
+A consumer's own mTLS/DPoP `fetch` now composes UNDER the per-request
+credential vending, instead of forcing a drop to the generic `http`
+transport and losing rotation to get a client certificate. The credential
+is vended and applied first; your function is called with the final
+request and has the last word over the bytes. Zero vendor code lands here
+— bring-your-own, offered as a seam, never described as support.
+
+### Answered — streaming works end to end from a deployed service
+
+Over the network, from a live host, with usage totals correct — including
+the thinking count.
+
+### Added (security) — an ingress decision record, `onIngressDecision`
+
+`auditExport()` is a record of runs; a 401 out of `identity.verify` and a
+429 out of `admission.decide` both happen before a run exists, so neither
+was in the bundle — an empty bundle read as "nobody was turned away" when
+it only meant "nobody ran." `standingAgent({ onIngressDecision })` now
+hands your sink one `IngressRecord` per request, filed at the terminal the
+reply actually reached. The honest contract is stated in the type itself:
+`'served'` means **delivered**, not *admitted* — a request the door let
+through whose run, store or provider then broke files as `'failed'`, and
+the record carries the admission verdict (`allow` / `queue` / `refuse`)
+either way. It is a stream you chain into your own sink, not a join onto
+the audit hash chain — saying otherwise would make this fix the exact
+failure it exists to close.
+
+### Added — circuit-breaker state transitions on the resilience report
+
+`withCircuitBreaker` now emits `agentfootprint.error.circuit_changed`
+(`{ state, reason, providerName }`) on every transition, so a trip is
+visible on the same timeline as the tool calls it stopped instead of only
+as the `reason` string on an enclosing `withFallback`. It reports
+transitions, not calls — an open breaker rejecting a hundred requests
+produces zero events. `onStateChange` and the event are complements: the
+hook fires wherever the breaker lives, in a run or not; the event fires
+only inside a run, where it can carry real correlation ids.
+
+### Changed (status vocabulary audited) — five statuses corrected against their own evidence
+
+A review found five statuses claiming **field-validated** on evidence that
+was a deterministic local run. Corrected:
+
+- **Stay field-validated** — `jwksIdentity`, the `identity: { verify }`
+  door, and the 9.26 session-ownership / session-history contract. A real
+  remote JWKS and a real Firestore participated in the trial that earned
+  the rung.
+- **Split out** — `turnsPerHour` is now **contract-shaped and tested**,
+  not field-validated: a minutes-long run cannot cross an hour, and the
+  shipped helper was never itself named as the policy under test, only its
+  per-process bound.
+- **Moved to contract-shaped and tested**, each naming what was NOT
+  exercised — `withRetry`, `withFallback`, `withCircuitBreaker` (no live
+  provider outage retried, no failover between live providers, no live
+  breaker trip); `PermissionChecker`-as-execution-guard (no external
+  authorizer answered a `check()`); `auditExport`'s hash chain (no bundle
+  re-read from a durable store).
+
+### Docs — a dependency advisory beside `gcsArtifacts`
+
+`@google-cloud/storage`'s optional peer tree carries five transitive
+**moderate** advisories, rooted in `uuid` (`GHSA-w5hq-g745-h8pq`) through
+`gaxios` → `teeny-request` → `retry-request`. Not a defect in this
+adapter, and no line here would fix it. `npm audit fix --force`'s
+resolution installs `@google-cloud/storage@5.18.3` — a major downgrade to
+a client several majors behind the service — and we refuse to pin you to
+it. Pin the newest 7.x yourself and watch the upstream chain.
+
 ## [9.31.0] - 2026-08-14
 
 **Two doors the field found shut: an Azure config our own docs advertised

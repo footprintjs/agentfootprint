@@ -90,6 +90,7 @@ withRetry(provider, {
 | `agentfootprint.fallback.triggered` | `withFallback` — and `fallbackProvider`, once per pairwise hop | `{ kind: 'provider', primary, fallback, reason }` |
 | `agentfootprint.error.retried` | `withRetry` | `{ attempt, maxAttempts, lastError, backoffMs, reason }` |
 | `agentfootprint.error.recovered` | `withRetry` | `{ attempt, totalDurationMs }` |
+| `agentfootprint.error.circuit_changed` | `withCircuitBreaker` (9.32.0) | `{ state, reason, providerName }` |
 
 Subscribe BEFORE `run()`. The dispatcher **drops** events nobody is listening for, so a late listener looks exactly like a missing emitter:
 
@@ -106,10 +107,10 @@ Subscribe BEFORE `run()`. The dispatcher **drops** events nobody is listening fo
 
 ### One producer per fact, so nothing double-counts
 
-Each event has exactly one producer — `fallback.triggered` ← `withFallback`, `error.retried` / `error.recovered` ← `withRetry`, nothing ← `withCircuitBreaker`. Decorators only *forward* the hooks inward, never aggregate or re-emit, so a stack of three produces one concatenated stream and de-duplication is structurally unnecessary. A production stack (breaker under fallback under retry) whose primary is down and whose backup blips once reads:
+Each event has exactly one producer — `fallback.triggered` ← `withFallback`, `error.retried` / `error.recovered` ← `withRetry`, `error.circuit_changed` ← `withCircuitBreaker`. Decorators only *forward* the hooks inward, never aggregate or re-emit, so a stack of three produces one concatenated stream and de-duplication is structurally unnecessary. A production stack (breaker under fallback under retry) whose primary is down and whose backup blips once reads:
 
 ```
-fallback.triggered → error.retried → fallback.triggered → error.recovered
+error.circuit_changed → fallback.triggered → error.retried → fallback.triggered → error.recovered
 ```
 
 Two fallbacks because there really were two billed primary calls — not a duplicate. `fallbackProvider(a, b, c)` reports honest pairwise hops (`a → b|c`, then `b → c`), never the composite chain name.
@@ -117,7 +118,8 @@ Two fallbacks because there really were two billed primary calls — not a dupli
 ### The honest limits
 
 - **`error.retried.reason` classifies the ERROR, not the decision.** `shouldRetry` returns a bare boolean, so a custom predicate's reasoning is unknowable to the decorator. The value is derived from the same `status`/`statusCode` fields the default policy inspects: `'http-429'`, `'http-5xx'`, `'http-4xx'`, `` `http-${code}` ``, or `'no-status'`.
-- **`withCircuitBreaker` has no event of its own.** There is no declared payload for a breaker transition, so a trip is visible only as the `reason` on the enclosing `withFallback`'s `fallback.triggered` (the `CircuitOpenError` message). Use `onStateChange` for standalone breaker state.
+- **`error.circuit_changed` reports TRANSITIONS, not calls.** An open breaker rejecting a hundred requests produces zero events — a re-entry into the same state is not a change, and an event per rejection would turn a state log into a request log. Its `reason` is the breaker's own words (`'3 consecutive failures'`, `'cooldown elapsed'`), never the failing vendor's message: the error that tripped it is reported by whoever threw it.
+- **`onStateChange` and the event are complements, not duplicates.** The hook fires wherever the breaker lives, in a run or not, which is why a Redis-backed counter belongs on it. The event fires only inside a run, which is why it can carry real correlation ids. Outside a run nothing passes hooks and the breaker reports nothing at all — standalone behaviour is byte-identical to before 9.32.
 - **A fallback success is reported as `fallback.triggered`, not `error.recovered`.** That payload has no field for which provider served, so claiming a recovery there would be inventing data. `withRetry` is the only source of `recovered`, and only for an attempt ≥ 2.
 - **`error.recovered.totalDurationMs` is new instrumentation**, measured by the decorator from its own first attempt — not a fact recovered from somewhere else.
 - **Streaming reports only a pre-first-chunk failure.** Once the primary's stream has yielded a chunk the stream is pinned; a later error re-throws rather than failing over, so there is nothing to report. A primary with no `stream()` at all reports nothing either — nothing failed.
@@ -180,7 +182,7 @@ withFallback(primary, fallback, {
 });
 ```
 
-The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose — and since the breaker has no typed event, that hook is the only way to see its state directly. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
+The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose. It fires wherever the breaker lives — in a run or not — which is what makes it the right seam for a cluster-wide counter; since 9.32 the same transition ALSO rides `agentfootprint.error.circuit_changed` inside a run, with real correlation ids. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
 
 A caller outside a run can also opt into the *same* reports the in-run call sites receive, by passing the hooks object itself. Nothing about it is private:
 
@@ -207,6 +209,41 @@ const provider = withFallback(
 ```
 
 The breaker is **per-instance, not distributed** — each `withCircuitBreaker(...)` call holds its own state in process memory. For cluster-wide coordination, layer your own Redis-backed counter on top via the `onStateChange` hook + `shouldCount` predicate.
+
+Since 9.32 every transition is also on the typed record as
+`agentfootprint.error.circuit_changed` — `{ state, reason, providerName }`, with
+the run's real `runId` and `runtimeStageId`, because a transition always happens
+inside a call. Before that the breaker reported nothing through the in-run
+channel at all, so a trip that stopped a turn was invisible on the timeline
+beside the tool calls it stopped.
+
+<Callout type="info" title="Independently reproduced against a local harness — 2026-08-13">
+`withRetry`, `withFallback` and `withCircuitBreaker` are **contract-shaped and
+tested — independently reproduced against a local harness, 2026-08-13**. That is
+one rung below *field-validated* and the distance is worth naming: every failure
+below was SCRIPTED, every provider was a double, and the reviewer's own note is
+that those tests *"were local and deterministic, so they consumed no GCP
+credit"*. **No live provider outage has been retried, failed over or tripped
+from this repository.** What that run does buy is that the behaviour is not the
+author's own claim — somebody else drove it end to end and it held.
+
+In those deterministic failure tests: `withRetry` absorbed two HTTP
+503-shaped failures and recovered on call three, with both
+`agentfootprint.error.retried` and `agentfootprint.error.recovered` on the
+stream; `withFallback` called the failed primary once and the healthy fallback
+once, emitting `agentfootprint.fallback.triggered`; and `withCircuitBreaker`
+opened after two failures, served the next request from fallback **without
+calling the primary**, half-opened after cooldown and closed after two probes. A
+stream that failed before its first chunk moved to fallback; one that failed
+after a chunk did **not**, so no output was duplicated; and `withRetry` made
+exactly one streaming attempt.
+
+Every limit above survived that run unchanged — per-process breaker state, no
+streaming retry, fallback only before the first chunk, and a consumer-written
+wrapper that forgets to forward `hooks` going dark silently. The one gap it
+named is the one 9.32 closes: *"breaker transitions have no typed AgentFootprint
+event."* Now they do.
+</Callout>
 
 ## The rules engine, same door
 

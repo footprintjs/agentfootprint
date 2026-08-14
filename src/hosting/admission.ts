@@ -12,6 +12,31 @@
  * and cost events every run already emits). This module is the join, plus the
  * seam where an operator's own rule goes.
  *
+ * **Status, split rather than averaged, because the two halves were not earned
+ * equally:**
+ *
+ *   • **The `admission: { decide }` seam is field-validated — an independent
+ *     field trial, 2026-08-13.** Running against a real hosted door (a live
+ *     `nodeHost` in a live Google Cloud project, sessions in a real Firestore),
+ *     the trial had one caller's first two turns run and the third answer **429
+ *     before the provider or the session store was invoked** — the
+ *     cheapest-refusal claim, measured rather than asserted.
+ *
+ *   • **`turnsPerHour` itself is contract-shaped and tested.** The finding
+ *     records the refusal and restates this helper's per-process bound; it does
+ *     not record the shipped helper as the policy under test, and a run of a few
+ *     minutes cannot have crossed an HOUR boundary in any case. So the window's
+ *     own arithmetic — the roll-off, the reset a caller is told about — is
+ *     proven here by tests and not by a field run.
+ *
+ * The honest bound the trial restated is the one already on {@link RecentSpend}:
+ * `turnsPerHour` is an in-process reference policy, its counters are not shared
+ * across instances and do not survive a restart, so a fleet-wide or billing
+ * control needs a `decide` that reads a transactional store of your own.
+ *
+ * The refusal itself is invisible to `auditExport()` — it happens before a run
+ * exists. `standingAgent({ onIngressDecision })` is where it lands instead.
+ *
  * ── One decision, three answers, no fourth ───────────────────────────────────
  * `'allow'` · `{ queue: true }` · `{ refuse: '<sentence>' }`. Deliberately not
  * "delay by N ms" (a sleep is a thread the caller is paying for), not "degrade

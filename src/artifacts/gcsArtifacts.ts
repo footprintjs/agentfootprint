@@ -69,6 +69,26 @@
  * bundle nothing, and a missing install refuses where the config was written.
  * Pass `storage` to share the client your app already built.
  *
+ * ── What that peer's TREE carries, said out loud ────────────────────────────
+ * Optional means it is your dependency and not this package's — nothing here
+ * loads it unless you call `gcsArtifacts` — but you inherit its tree when you
+ * do. Two independent audits (2026-08-13, 2026-08-14) reported the same five
+ * MODERATE advisories, and they reproduce here:
+ *
+ *   `@google-cloud/storage` → `retry-request` → `teeny-request` → `gaxios` → `uuid`
+ *
+ * rooted in `uuid` (GHSA-w5hq-g745-h8pq — a missing buffer bounds check in
+ * v3/v5/v6 when `buf` is provided). It is not a defect in this adapter and
+ * there is no line here that would fix it: the chain is entirely inside
+ * Google's client.
+ *
+ * **Do not take `npm audit fix --force`.** Its resolution installs
+ * `@google-cloud/storage@5.18.3` — a major DOWNGRADE to a client from a
+ * different era of the API. Trading a bounds check in a path this adapter does
+ * not exercise for a client several majors behind the service is a different
+ * outage, not a security improvement, and this package will never pin you to
+ * it. Pin the newest 7.x yourself and watch the upstream chain.
+ *
  * ── Status ──────────────────────────────────────────────────────────────────
  * **Field-validated** (was "awaiting field use" through 9.28.0). The method
  * chain it calls is pinned against the really-installed package by

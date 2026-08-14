@@ -80,6 +80,21 @@
  * predicate (the visible-tool list is recomputed every iteration).
  * First-class per-tool breakers (state keyed by tool name; run-scoped
  * vs process-scoped TBD) are a possible future enhancement.
+ *
+ * **Status: contract-shaped and tested — independently reproduced against a
+ * local harness, 2026-08-13.** Somebody who is not this library's author drove
+ * this breaker through its whole walk: it opened after two failures, served the
+ * next request from a fallback WITHOUT calling the primary, half-opened after
+ * cooldown, and closed after two successful probes. The one gap that run named
+ * — *"breaker transitions have no typed AgentFootprint event"* — is what 9.32.0
+ * closes with the `'circuit-changed'` report below, and the per-process scope
+ * stated further down was restated there and is unchanged.
+ *
+ * The failures were SCRIPTED and the cooldown was a test clock: those tests
+ * *"were local and deterministic, so they consumed no GCP credit"*. **No live
+ * provider has tripped this breaker from this repository**, so this is not the
+ * field-validated rung — a real degradation, with a real vendor's error mix and
+ * a real recovery time, remains unexercised.
  */
 
 import type {
@@ -107,13 +122,18 @@ export interface WithCircuitBreakerOptions {
    */
   readonly shouldCount?: (error: unknown) => boolean;
   /**
-   * Hook invoked on every state transition. This is the ONLY way to
-   * observe breaker state: there is no declared event for a breaker
-   * transition, so unlike `withFallback`/`withRetry` this decorator
-   * reports nothing through the in-run `LLMCallHooks` channel. A trip
-   * becomes visible in a trace only when composed under
-   * `withFallback`, whose `agentfootprint.fallback.triggered` carries
-   * the `CircuitOpenError` message as its `reason`.
+   * Hook invoked on every state transition — your own callback, fired
+   * whether or not a run is in flight, and therefore the right place
+   * for a Redis-backed counter or a cluster-wide coordinator.
+   *
+   * Since 9.32 it is no longer the ONLY way to see a trip. Every
+   * transition is ALSO reported through the per-call `LLMCallHooks`
+   * channel as a `'circuit-changed'` `ResilienceReport`, which the
+   * in-run call site turns into
+   * `agentfootprint.error.circuit_changed` with the run's real
+   * correlation ids — the same seam `withFallback` and `withRetry`
+   * have always used. The two are complements, not duplicates: this
+   * hook fires everywhere, the event fires inside a run.
    */
   readonly onStateChange?: (state: CircuitState, reason: string) => void;
 }
@@ -190,7 +210,20 @@ export function withCircuitBreaker(
     lastError: undefined,
   };
 
-  function transition(next: CircuitState, reason: string): void {
+  /**
+   * Move the breaker, and say so on both channels.
+   *
+   * A no-op re-entry returns before either fires, which is what makes the
+   * report stream a record of TRANSITIONS rather than of calls: a hundred
+   * requests rejected while the breaker is already open produce zero events.
+   *
+   * `hooks` is the per-CALL channel, so it is threaded down from whichever
+   * `complete`/`stream` invocation caused the move. Every transition happens
+   * inside one — including `'cooldown elapsed'`, which is discovered by the
+   * next admitted call rather than by a timer — so the event always lands
+   * with the run's real correlation ids and nothing is ever synthesized.
+   */
+  function transition(next: CircuitState, reason: string, hooks?: LLMCallHooks): void {
     if (breaker.state === next) return;
     breaker.state = next;
     if (next === 'open') {
@@ -203,27 +236,33 @@ export function withCircuitBreaker(
       breaker.consecutiveSuccesses = 0;
       breaker.lastError = undefined;
     }
+    hooks?.onResilience?.({
+      kind: 'circuit-changed',
+      state: next,
+      reason,
+      providerName: inner.name,
+    });
     onStateChange?.(next, reason);
   }
 
   /** Decide whether to admit a call. Mutates state if cooldown
    *  elapsed (open → half-open). Returns true to admit, false to
    *  reject with CircuitOpenError. */
-  function admit(): boolean {
+  function admit(hooks?: LLMCallHooks): boolean {
     if (breaker.state === 'closed' || breaker.state === 'half-open') return true;
     // OPEN — check cooldown.
     if (Date.now() - breaker.openedAt >= cooldownMs) {
-      transition('half-open', 'cooldown elapsed');
+      transition('half-open', 'cooldown elapsed', hooks);
       return true;
     }
     return false;
   }
 
-  function recordSuccess(): void {
+  function recordSuccess(hooks?: LLMCallHooks): void {
     if (breaker.state === 'half-open') {
       breaker.consecutiveSuccesses += 1;
       if (breaker.consecutiveSuccesses >= halfOpenSuccessThreshold) {
-        transition('closed', `${halfOpenSuccessThreshold} probe successes`);
+        transition('closed', `${halfOpenSuccessThreshold} probe successes`, hooks);
       }
     } else if (breaker.state === 'closed') {
       // Successful call resets the failure counter.
@@ -231,24 +270,24 @@ export function withCircuitBreaker(
     }
   }
 
-  function recordFailure(err: unknown): void {
+  function recordFailure(err: unknown, hooks?: LLMCallHooks): void {
     if (!shouldCount(err)) return;
     breaker.lastError = err;
     if (breaker.state === 'half-open') {
       // Probe failed — re-open the breaker.
-      transition('open', 'half-open probe failed');
+      transition('open', 'half-open probe failed', hooks);
       return;
     }
     if (breaker.state === 'closed') {
       breaker.consecutiveFailures += 1;
       if (breaker.consecutiveFailures >= failureThreshold) {
-        transition('open', `${breaker.consecutiveFailures} consecutive failures`);
+        transition('open', `${breaker.consecutiveFailures} consecutive failures`, hooks);
       }
     }
   }
 
-  function rejectFastIfOpen(): void {
-    if (!admit()) {
+  function rejectFastIfOpen(hooks?: LLMCallHooks): void {
+    if (!admit(hooks)) {
       throw new CircuitOpenError(inner.name, breaker.lastError, breaker.openedAt + cooldownMs);
     }
   }
@@ -267,16 +306,16 @@ export function withCircuitBreaker(
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
-      rejectFastIfOpen();
+      rejectFastIfOpen(hooks);
       try {
-        // Forward `hooks` — this decorator reports nothing of its own, but
-        // it rebuilds a fresh provider object, so an inner decorator's
-        // reports are silently swallowed unless they're passed through.
+        // Forward `hooks` inward as well as using them here: this decorator
+        // rebuilds a fresh provider object, so an inner decorator's reports
+        // are silently swallowed unless they're passed through.
         const res = await inner.complete(req, hooks);
-        recordSuccess();
+        recordSuccess(hooks);
         return res;
       } catch (err) {
-        recordFailure(err);
+        recordFailure(err, hooks);
         throw err;
       }
     },
@@ -286,7 +325,7 @@ export function withCircuitBreaker(
     // (`if (provider.stream)`) still works correctly.
     ...(inner.stream && {
       async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
-        rejectFastIfOpen();
+        rejectFastIfOpen(hooks);
         let yieldedAnyChunk = false;
         try {
           // This stream() method is conditionally defined only when
@@ -298,13 +337,13 @@ export function withCircuitBreaker(
             yieldedAnyChunk = true;
             yield chunk;
           }
-          recordSuccess();
+          recordSuccess(hooks);
         } catch (err) {
           // Only count as a breaker-tripping failure if the stream
           // failed BEFORE yielding any tokens. Mid-stream errors are
           // less indicative of vendor health (could be a content-filter
           // trip on this specific request).
-          if (!yieldedAnyChunk) recordFailure(err);
+          if (!yieldedAnyChunk) recordFailure(err, hooks);
           throw err;
         }
       },

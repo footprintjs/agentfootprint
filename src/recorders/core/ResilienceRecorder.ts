@@ -3,16 +3,17 @@
  * to the dispatcher.
  *
  * Pattern: Factory (GoF) returning an EmitBridge instance.
- * Role:    Bridges the three events the resilience decorators source
- *          (`fallback.triggered` / `error.retried` / `error.recovered`,
- *          emitted in-run by `resilienceHooks` via `typedEmit`) to the
- *          EventDispatcher so typed consumer listeners
- *          (`agent.on('agentfootprint.error.retried', …)`) fire. Without
- *          this bridge those emits hit the footprintjs emit channel but
- *          never reach the dispatcher.
+ * Role:    Bridges the four events the resilience decorators source
+ *          (`fallback.triggered` / `error.retried` / `error.recovered` /
+ *          `error.circuit_changed`, emitted in-run by `resilienceHooks`
+ *          via `typedEmit`) to the EventDispatcher so typed consumer
+ *          listeners (`agent.on('agentfootprint.error.retried', …)`)
+ *          fire. Without this bridge those emits hit the footprintjs emit
+ *          channel but never reach the dispatcher.
  * Emits:   agentfootprint.fallback.triggered
  *          agentfootprint.error.retried
  *          agentfootprint.error.recovered
+ *          agentfootprint.error.circuit_changed  (9.32.0)
  *
  * Matched on EXACT full event names rather than the broader
  * `agentfootprint.error.` prefix. `error.fatal` is dispatched directly by
@@ -39,6 +40,7 @@ export function resilienceRecorder(options: ResilienceRecorderOptions): EmitBrid
       'agentfootprint.fallback.triggered',
       'agentfootprint.error.retried',
       'agentfootprint.error.recovered',
+      'agentfootprint.error.circuit_changed',
     ],
     dispatcher: options.dispatcher,
     getRunContext: options.getRunContext,

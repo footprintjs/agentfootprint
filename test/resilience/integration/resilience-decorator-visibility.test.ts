@@ -61,6 +61,7 @@ import { withRetry } from '../../../src/resilience/withRetry.js';
 import { withCircuitBreaker } from '../../../src/resilience/withCircuitBreaker.js';
 import { fallbackProvider } from '../../../src/resilience/fallbackProvider.js';
 import type {
+  ErrorCircuitChangedPayload,
   ErrorRecoveredPayload,
   ErrorRetriedPayload,
   FallbackTriggeredPayload,
@@ -166,6 +167,120 @@ describe('resilience decorators — the declared events fire in-run, with real c
       reason: 'vendor down',
     });
     expectRealCorrelation(seen[0]!.meta);
+  });
+
+  // ── error.circuit_changed (9.32.0) ────────────────────────────────
+  //
+  // The gap an independent reviewer named (2026-08-13, on a local harness of
+  // scripted failures): they watched a
+  // breaker open after two failures, serve the next request from fallback,
+  // half-open after cooldown and close after two probes — every step correct
+  // and every step INVISIBLE to the typed stream, because `onStateChange` was
+  // the only channel and it fires at consumer level. These pin the same walk
+  // on the record, with the run's real ids.
+
+  it('THE TRIAL WALK: open → half-open → closed, all four transitions on the record', async () => {
+    let mode: 'fail' | 'serve' = 'fail';
+    const inner: LLMProvider = {
+      name: 'trial-primary',
+      complete: async () => {
+        if (mode === 'fail') throw new Error('503 from the vendor');
+        return okResponse('answered');
+      },
+    };
+    const breaker = withCircuitBreaker(inner, {
+      failureThreshold: 2,
+      cooldownMs: 1,
+      halfOpenSuccessThreshold: 2,
+    });
+    const provider = withFallback(breaker, goodProvider('standby', 'from-standby'));
+
+    const seen: { payload: ErrorCircuitChangedPayload; meta: EventMeta }[] = [];
+    const runOnce = async (): Promise<unknown> => {
+      const agent = Agent.create({ provider, model: 'm', maxIterations: 2 }).build();
+      agent.on('agentfootprint.error.circuit_changed', (e) =>
+        seen.push({ payload: e.payload, meta: e.meta }),
+      );
+      return agent.run({ message: 'hi' });
+    };
+
+    // Two failures → OPEN. The fallback serves both.
+    expect(await runOnce()).toBe('from-standby');
+    expect(await runOnce()).toBe('from-standby');
+    expect(seen.map((s) => s.payload.state)).toEqual(['open']);
+    expect(seen[0]!.payload).toEqual({
+      state: 'open',
+      reason: '2 consecutive failures',
+      // The wrapped provider, never the composite `primary|fallback` name.
+      providerName: 'trial-primary',
+    });
+
+    // Cooldown elapses; the vendor is back. Next call probes → HALF-OPEN,
+    // and a second success → CLOSED.
+    mode = 'serve';
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await runOnce()).toBe('answered');
+    expect(await runOnce()).toBe('answered');
+
+    expect(seen.map((s) => s.payload.state)).toEqual(['open', 'half-open', 'closed']);
+    expect(seen[1]!.payload.reason).toBe('cooldown elapsed');
+    expect(seen[2]!.payload.reason).toBe('2 probe successes');
+    // The whole point: real ids, so a trip sits on the timeline beside the
+    // tool calls it stopped rather than in a consumer log with no run.
+    for (const s of seen) expectRealCorrelation(s.meta);
+  });
+
+  it("a re-entry into the same state is not a change — an open breaker's rejections are silent", async () => {
+    const breaker = withCircuitBreaker(deadProvider('down'), {
+      failureThreshold: 1,
+      cooldownMs: 60_000,
+    });
+    const provider = withFallback(breaker, goodProvider('standby', 'ok'));
+    const seen: ErrorCircuitChangedPayload[] = [];
+    const runOnce = async (): Promise<void> => {
+      const agent = Agent.create({ provider, model: 'm', maxIterations: 2 }).build();
+      agent.on('agentfootprint.error.circuit_changed', (e) => seen.push(e.payload));
+      await agent.run({ message: 'hi' });
+    };
+
+    await runOnce(); // trips: closed → open
+    await runOnce(); // fast-fail, already open
+    await runOnce(); // fast-fail, already open
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.state).toBe('open');
+  });
+
+  it("the consumer's own onStateChange still fires — the two are complements", async () => {
+    // A Redis-backed counter built on `onStateChange` must not start
+    // depending on whether a run happened to be in flight.
+    const consumerSaw: string[] = [];
+    const breaker = withCircuitBreaker(deadProvider('down'), {
+      failureThreshold: 1,
+      cooldownMs: 60_000,
+      onStateChange: (state) => consumerSaw.push(state),
+    });
+    const provider = withFallback(breaker, goodProvider('standby', 'ok'));
+    const agent = Agent.create({ provider, model: 'm', maxIterations: 2 }).build();
+    const eventSaw: string[] = [];
+    agent.on('agentfootprint.error.circuit_changed', (e) => eventSaw.push(e.payload.state));
+
+    await agent.run({ message: 'hi' });
+
+    expect(consumerSaw).toEqual(['open']);
+    expect(eventSaw).toEqual(['open']);
+  });
+
+  it('outside a run the breaker reports nothing — no hooks, no event, unchanged behaviour', async () => {
+    // Standalone decorator behaviour is byte-identical: nothing passes hooks,
+    // so every report site short-circuits.
+    const consumerSaw: string[] = [];
+    const breaker = withCircuitBreaker(deadProvider('down'), {
+      failureThreshold: 1,
+      onStateChange: (state) => consumerSaw.push(state),
+    });
+    await breaker.complete({ messages: [], model: 'm' } as never).catch(() => undefined);
+    expect(consumerSaw).toEqual(['open']);
   });
 
   it('error.retried + error.recovered land with real correlation', async () => {
@@ -383,13 +498,15 @@ describe('resilience decorators — stacking produces no duplicate reports', () 
     return kinds;
   }
 
-  it('breaker OPEN under a fallback reports only the fallback', async () => {
+  it('breaker OPEN under a fallback reports the fallback, and nothing again for the trip', async () => {
     const breaker = withCircuitBreaker(deadProvider('p'), { failureThreshold: 1 });
     const stack = withRetry(withFallback(breaker, goodProvider('f')), { initialDelayMs: 1 });
 
-    // First call trips the breaker (a real failure).
-    await kindsFor(stack);
-    // Second call: the breaker fast-fails, the fallback serves.
+    // First call trips the breaker (a real failure) — closed → open, once.
+    expect(await kindsFor(stack)).toEqual(['circuit-changed', 'fell-back']);
+    // Second call: the breaker is ALREADY open, so it fast-fails and reports
+    // nothing of its own. Transitions, not requests — a busy hour behind an
+    // open breaker must not produce an event per rejected call.
     expect(await kindsFor(stack)).toEqual(['fell-back']);
   });
 

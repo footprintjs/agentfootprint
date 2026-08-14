@@ -152,6 +152,33 @@ recompute every hash from the mutation onward and present a self-consistent
 forgery. Ship the bundle somewhere they do not control, and that gap closes.
 </Callout>
 
+<Callout type="info" title="Independently reproduced against a local harness — the cross-segment chain, 2026-08-13">
+`auditExport`'s hash chain is **contract-shaped and tested — independently
+reproduced against a local harness, 2026-08-13**. Two runs were captured as
+separately drained segments under
+`payloadMode: 'bounded'`: 31 records each, **62 of 62 verified across the segment
+boundary**, segment 2's chain head equal to segment 1's final hash, an exact
+prompt / tool-argument secret marker absent from all serialized output, and a
+single edited event type caught by `verifyAuditBundle` **at sequence 1** with a
+hash mismatch.
+
+The rung is stated rather than rounded up. That run was **deterministic and
+local** — two mock-provider runs in one process, verified in the same process
+(its own note: *"local and deterministic, so they consumed no GCP credit"*).
+**No bundle has been written to, re-read from, or verified out of a live
+durable store from this repository**, so this is not *field-validated*: the
+hashing law is proven, the shipping-it-somewhere-they-do-not-control half is
+still yours to prove. What the run does buy is that the chain held across a
+segment boundary under somebody else's hands, not the author's.
+
+Two sentences from that run stay exactly where they were. The chain is
+tamper-evident, not tamper-proof (above). And the strategy observes **Agent
+events**, so ingress refusals — a 401 from `identity.verify`, a 429 from
+`admission` — are not in the bundle, because they happen before a run exists.
+[`standingAgent({ onIngressDecision })`](doc:hosting-and-runtime) is the separate
+stream for those, and it deliberately does **not** join this chain.
+</Callout>
+
 ## Axis 2 — composition
 
 `composeObservability(children)` returns one `ObservabilityStrategy` named

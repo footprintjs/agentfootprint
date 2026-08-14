@@ -11,6 +11,7 @@
  * Emits:   agentfootprint.fallback.triggered
  *          agentfootprint.error.retried
  *          agentfootprint.error.recovered
+ *          agentfootprint.error.circuit_changed  (9.32.0)
  *
  * Why here and not in the decorators: a decorator is constructed by the
  * consumer BEFORE any run exists, so it can never reach a scope. Passing
@@ -64,6 +65,18 @@ export function resilienceHooks(scope: EmitableScope): LLMCallHooks {
             typedEmit(scope, 'agentfootprint.error.recovered', {
               attempt: report.attempt,
               totalDurationMs: report.totalDurationMs,
+            });
+            return;
+          case 'circuit-changed':
+            // 9.32.0 — the transition happened INSIDE this call, so the ids
+            // footprintjs stamped before the stage ran are the right ones and
+            // nothing here is synthesized. That is the whole reason the report
+            // rides the per-call hooks rather than the breaker's own
+            // `onStateChange`, which fires wherever the breaker lives.
+            typedEmit(scope, 'agentfootprint.error.circuit_changed', {
+              state: report.state,
+              reason: report.reason,
+              providerName: report.providerName,
             });
             return;
         }

@@ -35,6 +35,7 @@ import type {
   CostLimitHitPayload,
   CostTickPayload,
   EmbeddingGeneratedPayload,
+  ErrorCircuitChangedPayload,
   ErrorFatalPayload,
   ErrorRecoveredPayload,
   ErrorRetriedPayload,
@@ -221,6 +222,7 @@ export const EVENT_NAMES = {
     retried: 'agentfootprint.error.retried',
     recovered: 'agentfootprint.error.recovered',
     fatal: 'agentfootprint.error.fatal',
+    circuitChanged: 'agentfootprint.error.circuit_changed',
   },
   reliability: {
     failFast: 'agentfootprint.reliability.fail_fast',
@@ -576,6 +578,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.error.fatal',
     ErrorFatalPayload
   >;
+  'agentfootprint.error.circuit_changed': AgentfootprintEventEnvelope<
+    'agentfootprint.error.circuit_changed',
+    ErrorCircuitChangedPayload
+  >;
   // reliability (rules-based loop — distinct from error.* which is decorator-shaped)
   'agentfootprint.reliability.fail_fast': AgentfootprintEventEnvelope<
     'agentfootprint.reliability.fail_fast',
@@ -728,6 +734,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.error.retried',
   'agentfootprint.error.recovered',
   'agentfootprint.error.fatal',
+  'agentfootprint.error.circuit_changed',
   'agentfootprint.reliability.fail_fast',
   'agentfootprint.reliability.retried',
   'agentfootprint.reliability.recovered',

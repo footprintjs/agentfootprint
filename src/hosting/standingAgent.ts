@@ -130,6 +130,7 @@ import {
 } from './errors.js';
 import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
 import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
+import { beginIngress, type IngressNote } from './ingressRecord.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
 import type {
@@ -254,6 +255,13 @@ export async function standingAgent<TH extends HostHandle>(
    * server's whole traffic would be a cost nobody asked for.
    */
   const ledger: SpendLedger | undefined = admission !== undefined ? spendLedger() : undefined;
+  /**
+   * Where ingress decisions go (9.32.0), or `undefined` — the zero-delta path.
+   * With no sink nothing is wrapped and the handler uses the host's own reply
+   * object, which is what makes this option free for everyone who never asks
+   * for it.
+   */
+  const ingressSink = options.onIngressDecision;
 
   // ── Refused at construction, before a socket exists ──────────────────
   //
@@ -581,7 +589,21 @@ export async function standingAgent<TH extends HostHandle>(
     return mine;
   }
 
-  const handler = async (request: HostRequest, reply: HostReply): Promise<void> => {
+  /**
+   * The composer's whole request path — with the reply it is handed already
+   * wrapped, when an ingress record is being kept.
+   *
+   * Split out from {@link handler} for exactly one reason: the record's funnel
+   * has to be ONE place. Every exit below ends at a reply terminal, so wrapping
+   * the reply once above this function covers all of them — a refusal added
+   * later cannot forget to report, because reporting is not something any exit
+   * does.
+   */
+  const answerRequest = async (
+    request: HostRequest,
+    reply: HostReply,
+    note: IngressNote | undefined,
+  ): Promise<void> => {
     // ── The badge, before anything else ───────────────────────────────
     // FIRST, and once — so a turn, a claim-ticket redemption and a session
     // read all inherit one answer to "who is this", and a door added later
@@ -595,6 +617,10 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(err instanceof Error ? err : new Error(String(err)));
       return;
     }
+    // The PROVEN id, on the record — never the claimed one, which is the whole
+    // distinction the verifier exists to draw. Nothing is recorded when nobody
+    // was proven; absent and "anonymous" are the same fact here.
+    note?.identified(verified);
     // The user id that reaches every downstream composition. With a verifier
     // it is the one the TOKEN proved (the request's own claim was already
     // reconciled or refused); without one it is exactly what the transport
@@ -648,10 +674,15 @@ export async function standingAgent<TH extends HostHandle>(
           recentSpend: ledger.read(spendKey),
         });
         if (typeof verdict === 'object' && verdict !== null && 'refuse' in verdict) {
+          note?.admitted('refuse');
           reply.fail(new AdmissionRefusedError(verdict.refuse, userId));
           return;
         }
         queueAnyway = typeof verdict === 'object' && verdict !== null && 'queue' in verdict;
+        // An ALLOW is recorded too. A stream of refusals alone cannot answer
+        // "was anybody turned away?" — only a census can, which is the same
+        // reason an empty audit bundle is not evidence of an empty door.
+        note?.admitted(queueAnyway ? 'queue' : 'allow');
         // Counted at ADMISSION, not at completion: a turn that is running has
         // been spent whether or not it ever answers, and counting on the way
         // out would let a caller hold N runs open under a limit of one.
@@ -673,6 +704,29 @@ export async function standingAgent<TH extends HostHandle>(
       );
     } catch (err) {
       reply.fail(err instanceof Error ? err : new Error(String(err)));
+    }
+  };
+
+  /**
+   * What the host calls — {@link answerRequest} with the ingress record's one
+   * funnel around it (9.32.0).
+   *
+   * With no sink configured this is the identity function over the host's own
+   * reply: no wrapper object, no bookkeeping, no branch inside any exit path.
+   *
+   * `settle()` covers the one case a terminal cannot: a request that leaves
+   * without ending its reply at all. The composer never does that, and the
+   * `finally` is there because "never" is a claim about today's code rather
+   * than a guarantee — a census with a hole in it is what this replaces.
+   */
+  const handler = async (request: HostRequest, hostReply: HostReply): Promise<void> => {
+    const note: IngressNote | undefined =
+      ingressSink === undefined ? undefined : beginIngress(request, ingressSink);
+    const reply = note === undefined ? hostReply : note.watch(hostReply);
+    try {
+      await answerRequest(request, reply, note);
+    } finally {
+      note?.settle();
     }
   };
 

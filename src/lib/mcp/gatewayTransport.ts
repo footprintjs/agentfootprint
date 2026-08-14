@@ -58,6 +58,58 @@ export interface GatewayTransportOptions {
    * life of the transport, which is what the vended ones exist to avoid.
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Your own `fetch`, called UNDERNEATH the per-request vending (9.32.0).
+   *
+   * ── The gap this closes ──────────────────────────────────────────────────
+   * Some gateways do not authenticate with a bearer alone. A managed identity
+   * path may want a client certificate (mTLS) or a proof-of-possession
+   * signature over the request itself (DPoP) — things computed FROM the
+   * request, which no header fixed at construction can express. Until this
+   * existed the only workaround was to abandon this transport for the generic
+   * `http` one, which has a `fetch` seam and fixes its headers at connect
+   * time — so a caller traded away token rotation to get a client certificate.
+   * That is a bad trade, and it was the shape an independent field trial
+   * reported (2026-08-13): *"exposes bearer-credential, header and scope
+   * options, but no certificate, DPoP or custom-fetch seam."*
+   *
+   * ── The composition, and its order ───────────────────────────────────────
+   * The credential is vended FIRST and applied to the request; your function is
+   * then called with that request. So a signer sees the final headers and has
+   * the last word over the bytes, exactly as it does on the `http` transport —
+   * and the vending still happens on every request, so rotation is not lost.
+   *
+   * **Zero vendor code lives here.** This library ships no signer, no
+   * certificate loader and no DPoP implementation; a scheme this repo has never
+   * heard of works on the day you write it. Whatever you do inside is between
+   * you and the server.
+   *
+   * ── What the secrecy invariant still guarantees ──────────────────────────
+   * Your function sees the request it is asked to send, headers included —
+   * which is what makes signing possible and is the whole point of the seam.
+   * What is still true is everything this module controls: the vended value is
+   * never cached, never stored on the transport, and never enters an event, an
+   * error or a log. A `fetch` you inject that logs its own headers is
+   * publishing your credential, and that is your decision to make in your code
+   * rather than something this library can do behind you.
+   *
+   * @example  mTLS, through an agent you own
+   *   gatewayTransport({
+   *     url, credentials, service: 'gateway',
+   *     fetch: (input, init) => fetch(input, { ...init, dispatcher: mtlsAgent }),
+   *   })
+   *
+   * @example  Proof-of-possession over the request
+   *   gatewayTransport({
+   *     url, credentials,
+   *     fetch: async (input, init) => {
+   *       const headers = new Headers(init?.headers);
+   *       headers.set('dpop', await sign(init?.method ?? 'POST', String(input)));
+   *       return fetch(input, { ...init, headers });
+   *     },
+   *   })
+   */
+  readonly fetch?: FetchLike;
 }
 
 const DEFAULT_SERVICE = 'gateway';
@@ -90,6 +142,7 @@ export function gatewayTransport(options: GatewayTransportOptions): McpGatewayTr
     ...(options.scopes !== undefined && { scopes: options.scopes }),
     ...(options.mode !== undefined && { mode: options.mode }),
     ...(options.headers !== undefined && { headers: options.headers }),
+    ...(options.fetch !== undefined && { fetch: options.fetch }),
   };
 }
 

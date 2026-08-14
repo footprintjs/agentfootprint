@@ -16,6 +16,28 @@
  *      - sync `isAllowed(toolId)` method (consumed by `gatedTools(...)`
  *        from `agentfootprint/providers`)
  *
+ * **Status: contract-shaped and tested — independently reproduced against a
+ * local harness, 2026-08-13.** A tool declaring `memory_write` and `user_data`
+ * was put in front of two roles: the read-only role passed the tool-NAME
+ * allowlist, failed the `memory_write` capability check, and the tool executed
+ * ZERO times; the admin role cleared `tool_call`, `memory_write` and
+ * `user_data` and executed once. A separate checker that threw `simulated
+ * authorizer outage` failed CLOSED — a denial carrying the operator's error in
+ * its rationale, the model free to continue without the tool, zero executions
+ * again. The reviewer's own wording: *"the permission checker is a real
+ * execution guard, not merely tool hiding"*, which holds exactly as far as the
+ * policy inputs and the role binding are trustworthy — a fact about a
+ * deployment, not about this class.
+ *
+ * What was exercised: the guard, end to end, by somebody who is not this
+ * library's author — on a DETERMINISTIC LOCAL run whose model was a mock and
+ * whose "authorizer outage" was a thrown `Error` (those tests *"were local and
+ * deterministic, so they consumed no GCP credit"*). What was NOT: **no external
+ * authorization service has answered a `check()` from this repository**, so
+ * this is not the field-validated rung — a real IAM/OPA/entitlements backend,
+ * with its own latency, partial outages and stale caches, remains unexercised.
+ * Runnable: `examples/features/03-permissions.ts` (all four shapes).
+ *
  * Pattern: Strategy (GoF) for the role-allowlist policy + Adapter
  *          (matches `PermissionChecker` interface so it composes with
  *          existing v2.4 Agent constructor).

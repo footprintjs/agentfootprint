@@ -129,7 +129,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     framework appended a teaching note to the second result. The call
     //     still ran and nothing was refused. Fingerprints only — never the
     //     arguments and never the result.)
-    expect(ALL_EVENT_TYPES.length).toBe(91);
+    //    (error.circuit_changed added with 9.32.0 — withCircuitBreaker moved
+    //     between closed/open/half-open. Until then the breaker reported
+    //     NOTHING through the in-run channel: `onStateChange` was the only
+    //     way to see a trip, and it fires at consumer level where the run
+    //     ids are synthetic. Transitions only — a request rejected while the
+    //     breaker is already open is not a change.)
+    expect(ALL_EVENT_TYPES.length).toBe(92);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -382,10 +382,12 @@ describe('withCircuitBreaker — resilience reports', () => {
     expect(seen).toEqual([hooks]);
   });
 
-  it('reports NOTHING of its own, even when driven OPEN', async () => {
-    // There is no declared event for a breaker transition, so the
-    // breaker stays honestly silent on this channel. State remains
-    // consumer-observable via onStateChange.
+  it('reports each TRANSITION once, and a rejection from an already-open breaker never', async () => {
+    // 9.32.0 — the breaker used to report nothing at all on this channel, so
+    // a trip was visible only through `onStateChange` (consumer level, no run
+    // ids). It now reports `'circuit-changed'` per TRANSITION. Not per call:
+    // an open breaker rejecting a hundred requests is one state, and an event
+    // per rejection would turn a state log into a request log.
     const onResilience = vi.fn();
     const onStateChange = vi.fn();
     const provider = withCircuitBreaker(makeProvider('always-fail'), {
@@ -400,12 +402,33 @@ describe('withCircuitBreaker — resilience reports', () => {
       CircuitOpenError,
     );
 
-    expect(onResilience).not.toHaveBeenCalled();
+    expect(onResilience).toHaveBeenCalledTimes(1);
+    expect(onResilience.mock.calls[0][0]).toEqual({
+      kind: 'circuit-changed',
+      state: 'open',
+      reason: '2 consecutive failures',
+      providerName: 'test',
+    });
+    // The consumer's own hook is unchanged and still fires beside it: it works
+    // everywhere, the report only inside a call. Complements, not duplicates.
     expect(onStateChange).toHaveBeenCalledWith('open', expect.any(String));
   });
 
-  it('a trip becomes visible ONLY through the enclosing fallback’s reason', async () => {
-    // The breaker's one route into a trace. Must stay pinned.
+  it('reports NOTHING when nobody passes hooks — standalone behaviour is byte-identical', async () => {
+    const onStateChange = vi.fn();
+    const provider = withCircuitBreaker(makeProvider('always-fail'), {
+      failureThreshold: 1,
+      onStateChange,
+    });
+    // No second argument at all: every report site must short-circuit.
+    await expect(provider.complete(fakeRequest)).rejects.toThrow();
+    expect(onStateChange).toHaveBeenCalledWith('open', expect.any(String));
+  });
+
+  it('the trip AND the fallback both reach the trace, each from its own producer', async () => {
+    // Before 9.32 only the second of these existed, and the breaker's trip
+    // had to be read out of a fallback's `reason` string. Both are now first
+    // class, and each still has exactly ONE producer.
     const onResilience = vi.fn();
     const primary = withCircuitBreaker(makeProvider('always-fail', 'anthropic'), {
       failureThreshold: 1,
@@ -415,14 +438,20 @@ describe('withCircuitBreaker — resilience reports', () => {
       complete: async () => ({ content: 'served', usage: { input: 1, output: 1 } } as LLMResponse),
     });
 
-    // 1st call: primary fails for real → trips the breaker.
+    // 1st call: primary fails for real → trips the breaker, then falls back.
     await provider.complete(fakeRequest, { onResilience });
-    // 2nd call: primary fast-fails with CircuitOpenError.
+    // 2nd call: primary fast-fails with CircuitOpenError; already open, so the
+    // breaker says nothing and only the fallback reports.
     await provider.complete(fakeRequest, { onResilience });
 
-    expect(onResilience).toHaveBeenCalledTimes(2);
-    expect(onResilience.mock.calls[0][0].reason).toContain('vendor 503');
-    const secondReason = onResilience.mock.calls[1][0].reason;
+    const kinds = onResilience.mock.calls.map((c) => c[0].kind);
+    expect(kinds).toEqual(['circuit-changed', 'fell-back', 'fell-back']);
+    expect(onResilience.mock.calls[0][0]).toMatchObject({
+      state: 'open',
+      providerName: 'anthropic',
+    });
+    expect(onResilience.mock.calls[1][0].reason).toContain('vendor 503');
+    const secondReason = onResilience.mock.calls[2][0].reason;
     expect(secondReason).toContain('circuit breaker is OPEN');
     expect(secondReason).toContain('anthropic');
   });

@@ -188,7 +188,8 @@ export {
 } from './recorders/core/PermissionRecorder.js';
 export { skillRecorder, type SkillRecorderOptions } from './recorders/core/SkillRecorder.js';
 // Provider-decorator telemetry (fallback.triggered / error.retried /
-// error.recovered). Attached automatically by Agent / LLMCall / Parallel;
+// error.recovered / error.circuit_changed). Attached automatically by
+// Agent / LLMCall / Parallel;
 // exported so consumers running the public message-api charts on a bare
 // FlowChartExecutor can wire the bridge themselves.
 export {

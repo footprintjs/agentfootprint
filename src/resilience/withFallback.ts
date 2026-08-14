@@ -16,6 +16,17 @@
  * yielding any chunks, we restart on the fallback. Once the primary
  * has yielded chunks the stream is committed — fallback would
  * duplicate the partial output.
+ *
+ * **Status: contract-shaped and tested — independently reproduced against a
+ * local harness, 2026-08-13.** Somebody who is not this library's author called
+ * a failed primary once and a healthy fallback once, with
+ * `agentfootprint.fallback.triggered` on the typed stream; a stream that failed
+ * BEFORE its first chunk moved to the fallback, and one that failed AFTER a
+ * chunk did not — the stream-pinning law, measured rather than asserted, and
+ * the reason no output was duplicated. Both providers were SCRIPTED doubles and
+ * the run was deterministic and local (the trial's own words: it *"consumed no
+ * GCP credit"*). **No failover between two live providers has been exercised
+ * from this repository**, so this is not the field-validated rung.
  */
 
 import type {

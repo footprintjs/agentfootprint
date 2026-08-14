@@ -9,6 +9,24 @@
  *          signed by one of them.
  * Emits:   nothing. The door that called it reports the refusal — by CLASS.
  *
+ * **Status: field-validated — an independent field trial, 2026-08-13.** The
+ * trial pointed this adapter at a remote JWKS endpoint during a live,
+ * cloud-backed host run (a real `nodeHost` in a live Google Cloud project,
+ * sessions in a real Firestore) and verified an RS256 token end to end: issuer,
+ * audience, expiry, subject and roles. A valid token paired with a CLAIMED
+ * other identity was rejected; missing, expired and wrong-audience tokens each
+ * answered 401; four different bearer tokens appeared in no captured response
+ * body or error; and the remote key set was fetched once over the network, then
+ * served from the cache below.
+ *
+ * Two bounds on that rung, so nobody reads more into it than happened. The
+ * finding does not name the identity provider, so what is field-proven is the
+ * PROTOCOL path — a real fetch, a real `jose` verification, a real cache — and
+ * not interop with any particular commercial IdP. And the provider behind that
+ * door was a deterministic mock: "401 before any model call" was measured as
+ * *rejected requests made zero provider calls*, which is the cheapest-refusal
+ * claim and not a statement about a real completion's cost.
+ *
  * ── What it checks, and what it refuses to pretend to check ─────────────────
  * Signature (against the key the token's `kid` names, fetched and cached from
  * `jwksUrl`), `iss`, `aud`, `exp` and `nbf`. That is the whole list, and it is

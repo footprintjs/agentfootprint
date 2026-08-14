@@ -24,6 +24,7 @@
 import type { Tool } from '../../core/tools.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { RetryOnThrottle } from './throttleRetry.js';
+import type { FetchLike } from './gatewayTransport.js';
 
 // ─── Transport options ─────────────────────────────────────────────
 
@@ -140,6 +141,15 @@ export interface McpGatewayTransport {
    * the property the vended ones exist to avoid.
    */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * A `fetch` of your own, called UNDERNEATH the per-request vending (9.32.0)
+   * — the seam an mTLS agent or a DPoP signer goes into, so a caller no longer
+   * has to abandon this transport (and its token rotation) to get one. The
+   * credential is vended and applied FIRST, so your function sees the final
+   * headers and has the last word over the bytes. Zero vendor code lives here.
+   * See {@link GatewayTransportOptions.fetch} for the full contract.
+   */
+  readonly fetch?: FetchLike;
 }
 
 export type McpTransport = McpStdioTransport | McpHttpTransport | McpGatewayTransport;

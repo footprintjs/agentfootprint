@@ -183,8 +183,15 @@ async function buildTransport(
   // transport with no custom fetch still passes none and behaves exactly as it
   // did before 8.11.0.
   if (t.transport === 'gateway') {
+    // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
+    // beside it: `createVendingFetch` resolves the credential, applies it to
+    // this one request, and then calls the base fetch — so an mTLS agent or a
+    // DPoP signer sees the final headers and has the last word, while the
+    // credential is still vended per request. Passing `undefined` is the
+    // default global `fetch`, which is byte-identical to every release before
+    // the seam existed.
     return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
-      fetch: retryingFetch(createVendingFetch(t), retryOnThrottle),
+      fetch: retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle),
     });
   }
   // Both options ride the SAME SDK transport, and both are forwarded when both

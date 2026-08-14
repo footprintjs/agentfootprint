@@ -214,6 +214,70 @@ ends the run**: the synthetic result lands, the halt event fires, state is
 committed, then `$break` — and `agent.run()` raises `PolicyHaltError` at the API
 boundary. Use `halt` when continuing would itself be the incident.
 
+### Two vocabularies on one decision — `reason` and `tellLLM`
+
+A refusal has two audiences and they need different words:
+
+```ts
+return {
+  result: 'halt',
+  policyRuleId: 'no-bulk-export-v3',            // WHICH rule decided
+  reason: 'security:exfiltration',              // MACHINE — routes the alert
+  rationale: 'bulk write outside an approved workflow',  // human, on the event
+  tellLLM: 'That action needs a human approver. Stopping here.',  // the MODEL reads this
+};
+```
+
+`reason` is a stable telemetry tag: it rides
+`agentfootprint.permission.halt` and `PolicyHaltError.reason`, so
+`'security:*'` can page somebody while `'cost:*'` goes to a channel. `tellLLM`
+is the synthetic `tool_result` the model is shown, on `deny` and `halt` alike.
+
+**`tellLLM` never falls back to `reason`.** A routing tag is telemetry, not an
+explanation, and a model handed `'security:exfiltration'` as its tool result
+will try to reason about a string that was never written for it. Omit `tellLLM`
+and the model gets a deliberately generic
+`"Tool '<name>' is not available in this context."`
+
+### The runnable file
+
+[`examples/features/03-permissions.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/03-permissions.ts)
+runs all four shapes on this page in one deterministic, key-free file — and they
+are the shapes an independent reviewer exercised on 2026-08-13:
+
+1. a read-only role passing the tool-name allowlist and still failing the
+   `memory_write` capability the tool declares — **zero** executions;
+2. an admin role clearing `tool_call`, `memory_write` and `user_data` — one;
+3. a checker throwing `simulated authorizer outage` — fail-closed, zero
+   executions, the operator's error in the `rationale`, the model carrying on
+   without the tool;
+4. a `halt` decision — the run ending with `PolicyHaltError` carrying both
+   vocabularies above.
+
+<Callout type="info" title="Independently reproduced against a local harness — the gate is an execution guard, 2026-08-13">
+`PermissionChecker`-as-execution-guard is **contract-shaped and tested —
+independently reproduced against a local harness, 2026-08-13**. A tool declaring
+`memory_write` and `user_data` was put in front of two roles: the read-only role
+passed the tool-name allowlist, failed the `memory_write` check, and the tool
+executed **zero** times; the admin role passed all three checks and executed
+once. A separate checker that threw `simulated authorizer outage` failed
+**closed** — a denial with the operator error in its rationale, the model free to
+continue without the tool, and again zero executions.
+
+The reviewer's own summary is worth keeping verbatim: *"The permission checker is
+a real execution guard, not merely tool hiding."* Its caveat is kept too — that
+holds when the policy inputs and the role binding are themselves trustworthy,
+which is a fact about your deployment rather than about this port.
+
+And the rung is stated rather than rounded up. That run was **deterministic and
+local**: the model was a mock and the "authorizer outage" was a thrown `Error`
+(its own note — *"local and deterministic, so they consumed no GCP credit"*).
+**No external authorization service has answered a `check()` from this
+repository**, so this is not *field-validated*; a real IAM / OPA / entitlements
+backend, with its latency and its partial outages, is still unexercised. What the
+run does buy is that the guard is not the author's own claim.
+</Callout>
+
 ## 2. `ToolMiddleware` — the separate layer
 
 Middleware is not the permission gate with more features. It is a different
@@ -311,7 +375,7 @@ For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
 
 | Piece | Door | Status |
 |---|---|---|
-| `PermissionChecker` port, `PermissionPolicy.fromRoles` | `agentfootprint/security` | Shipped |
+| `PermissionChecker` port, `PermissionPolicy.fromRoles` | `agentfootprint/security` | **Contract-shaped and tested — independently reproduced against a local harness, 2026-08-13**: a declared capability refused a tool the allowlist had already passed, zero executions; a throwing checker failed closed with the operator error in its rationale. Deterministic and local — **no external authorization service has answered a `check()` from this repository**, so not *field-validated* |
 | `halt` + `PolicyHaltError`, `SYNTHETIC_DENY_PREFIX`, `extractSequence` | `agentfootprint/security` | Shipped |
 | `.toolMiddleware()` / `.messageMiddleware()`, `allow` / `deny` / `ask` | `agentfootprint` | Shipped |
 | `gatedTools` / `skillScopedTools` visibility layer | `agentfootprint/providers` | Shipped |

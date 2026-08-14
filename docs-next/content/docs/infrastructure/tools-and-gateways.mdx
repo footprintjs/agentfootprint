@@ -112,12 +112,59 @@ freshly vended credentials, none retained on the transport.**
 
 The same trial answered the open question about **Google's** Agent Gateway the
 other way. Its agent identities use **mTLS and DPoP** — a client certificate and a
-per-request proof — and `GatewayTransportOptions` can vend headers only. There is
-no certificate, no signer and no `fetch` hook here, so this transport is **not**
-the path for Google's identity-enforced traffic. The next section is: build the
-signer on the generic `http` transport's `fetch`. See
-[Google Cloud & Gemini](doc:google-cloud).
+per-request proof — and `GatewayTransportOptions` could vend headers only. This
+transport is **not** support for Google's identity-enforced path, and 9.32 does
+not change that: what it adds is a seam so you can build one yourself without
+giving up rotation. See below, and [Google Cloud & Gemini](doc:google-cloud).
 </Callout>
+
+### `fetch` — bring your own signer, and keep the rotation (9.32.0)
+
+Until 9.32 a caller who needed mTLS or DPoP had exactly one route: abandon
+`gatewayTransport` for the generic `http` transport, which *has* a `fetch` seam
+and fixes its headers at connect time. That trade is backwards — you give up
+token rotation to get a client certificate — and it was the shape the trial
+above reported. So `gatewayTransport` takes a `fetch` too:
+
+```ts
+transport: gatewayTransport({
+  url, credentials, service: 'gateway',
+  // mTLS through an agent you own …
+  fetch: (input, init) => fetch(input, { ...init, dispatcher: mtlsAgent }),
+}),
+```
+
+```ts
+transport: gatewayTransport({
+  url, credentials,
+  // … or a proof computed FROM the request
+  fetch: async (input, init) => {
+    const headers = new Headers(init?.headers);
+    headers.set('dpop', await sign(init?.method ?? 'POST', String(input)));
+    return fetch(input, { ...init, headers });
+  },
+}),
+```
+
+**The order is the feature.** The credential is vended and applied *first*, then
+your function is called with that request — so a signer sees the final headers
+and has the last word over the bytes, exactly as it does on the `http`
+transport, while the vend still happens on every request. Rotation is not lost.
+
+**Zero vendor code lands here.** This library ships no signer, no certificate
+loader and no DPoP implementation, and it never will: a scheme this repo has
+never heard of works on the day you write it. This is bring-your-own, offered as
+a seam — never as support for anybody's identity path.
+
+One honest note about secrecy. Your function sees the request it is asked to
+send, headers included, because that is what makes signing possible. Everything
+this module controls is unchanged: the vended value is never cached, never
+stored on the transport, and never enters an event, an error or a log — pinned
+by the same hostile-observer test that covers the rest of this transport. A
+`fetch` you inject that logs its own headers publishes your credential in your
+own code, which is a decision this library cannot make for you.
+
+Omit it and behaviour is byte-identical to every release before it existed.
 
 ### The fourth option: sign it yourself
 

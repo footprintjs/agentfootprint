@@ -31,6 +31,7 @@ import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import type { IdentityVerificationOptions } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
+import type { IngressSink } from './ingressRecord.js';
 import type { SessionSummary, SessionWireRequest, SessionWireResult } from './sessionWire.js';
 
 export type { Unsubscribe };
@@ -852,6 +853,36 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    * decided against a window none of them had joined.
    */
   readonly admission?: AdmissionPolicy;
+  /**
+   * Where this door's ingress decisions go (9.32.0) — one record per request,
+   * including every request that never became a run.
+   *
+   * `auditExport()` is a record of RUNS, so a 401 from `identity.verify` and a
+   * 429 from `admission.decide` are not in it: they happen before an agent
+   * exists. Two independent review rounds named that gap. This is where the
+   * turned-away go — and where the SERVED are recorded too, because an absence
+   * is only readable against a census.
+   *
+   * **It does not join the audit hash chain.** Nothing here is hashed,
+   * sequenced or verifiable by `verifyAuditBundle`; it is a stream you chain
+   * into your own sink. Claiming otherwise would make this the very
+   * looks-like-evidence failure it exists to close.
+   *
+   * The record carries classes and identifiers only — never the token, never a
+   * header, never a claim set, never an error's message. See
+   * {@link IngressRecord} for the field-by-field contract and for the one thing
+   * it deliberately does not cover (a body the transport's own wire grammar
+   * refused before this composer ever saw it).
+   *
+   * Unset — the default — nothing is built, nothing is wrapped, and the reply
+   * the handler uses is the host's own object, to the byte.
+   *
+   * @example
+   *   onIngressDecision: (record) => {
+   *     if (record.outcome !== 'served') securityLog.write(record);
+   *   }
+   */
+  readonly onIngressDecision?: IngressSink;
   /**
    * How often a run's progress becomes crash-survivable. Default `'exit'` —
    * one write when the run finishes, which is what every release before this

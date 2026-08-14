@@ -17,6 +17,18 @@
  *   • shouldRetry: rejects 4xx-class errors (client mistakes don't
  *                  benefit from retry) and AbortError; retries 5xx,
  *                  network errors, and unknown shapes.
+ *
+ * **Status: contract-shaped and tested — independently reproduced against a
+ * local harness, 2026-08-13.** Somebody who is not this library's author ran
+ * the behaviour end to end and it held: this decorator absorbed two HTTP
+ * 503-shaped failures and recovered on call three, with both
+ * `agentfootprint.error.retried` and `agentfootprint.error.recovered` on the
+ * typed stream, and it made exactly ONE streaming attempt, the limit as
+ * designed. What was exercised was a SCRIPTED failing provider — the trial's
+ * own note is that those tests *"were local and deterministic, so they consumed
+ * no GCP credit"*. **No live provider outage has been retried from this
+ * repository**, so this is not the field-validated rung: a real 503 from a real
+ * vendor, with a real Retry-After and real latency, remains unexercised.
  */
 
 import type {

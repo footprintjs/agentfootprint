@@ -1520,6 +1520,43 @@ export interface ErrorRecoveredPayload {
   readonly totalDurationMs: number;
 }
 
+/**
+ * v9.32 — `withCircuitBreaker` moved between states.
+ *
+ * The gap this fills, named: until 9.32 the breaker reported nothing at all
+ * through the in-run channel. `onStateChange` was the only way to see a trip,
+ * and that is a consumer-level callback where a run's correlation ids are not
+ * available — so a breaker that opened mid-run was invisible in the trace
+ * beside the tool calls it stopped. An independent reviewer (2026-08-13, on a
+ * local harness of scripted failures) watched a breaker open after two
+ * failures, serve the next request from fallback, half-open after cooldown and
+ * close after two probes: every step correct, every step off the record.
+ *
+ * Transitions ONLY. A hundred requests rejected while the breaker is already
+ * open produce zero events — a re-entry into the same state is not a change,
+ * and reporting it would turn a state log into a request log.
+ *
+ * On the `error.*` domain because that is where the provider decorators
+ * already report; `reliability.*` is the separate rules-based loop.
+ */
+export interface ErrorCircuitChangedPayload {
+  /** The state entered. */
+  readonly state: 'closed' | 'open' | 'half-open';
+  /**
+   * WHY, in the breaker's own words — `'3 consecutive failures'`,
+   * `'cooldown elapsed'`, `'2 probe successes'`, `'half-open probe failed'`.
+   *
+   * Never an error's message: the failure that tripped it is reported by
+   * whoever threw it, and copying it here would attribute one vendor's text to
+   * a state machine that only counted.
+   */
+  readonly reason: string;
+  /** WHICH provider this breaker wraps — `inner.name`, not a composite chain
+   *  name. Two breakers under one fallback produce one stream, and this is
+   *  what tells them apart. */
+  readonly providerName: string;
+}
+
 // reliability.* — the RULES-BASED reliability loop's telemetry family
 // (Agent.create(...).reliability({...})). Distinct from error.* (which is
 // for the provider decorators). Pure telemetry on the emit channel; the

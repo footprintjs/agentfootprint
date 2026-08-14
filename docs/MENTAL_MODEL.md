@@ -447,9 +447,9 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**91 typed events / 21 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(10)
+**92 typed events / 21 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(10)
 `stream.*`(7) `context.*`(5 — the thesis) `memory.*`(5) `tools.*`(13) `validation.*`(1) `skill.*`(10) `permission.*`(4)
-`credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(3) `reliability.*`(3) `pause.*`(2)
+`credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `pause.*`(2)
 `checkin.*`(2) `middleware.*`(1) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(4 — the claim-check lifecycle).
 Emitted via `typedEmit(scope,name,payload)` (compile-time-safe) → EmitRecorder →
 **`EmitBridge`** (prefix-match per domain) → `buildEventMeta` enriches
@@ -693,10 +693,14 @@ Five places where reality bends the rule (each is a backlog task):
        fallback success is described by `fallback.triggered` alone. Inventing a `via` would mean a new
        event (and the 9-file event-count edit).
      · `totalDurationMs` is **new instrumentation** — `withRetry` had no `t0` before v7.8.
-     · **`withCircuitBreaker` gets no event of its own** (no declared payload for a breaker transition;
-       its old comment named the unregistered `resilience.circuit_state_changed`). A trip is visible only
-       under `withFallback`, via `reason` carrying the `CircuitOpenError` message. Standalone breaker
-       state stays consumer-wired via `onStateChange`. Registering the event is its own packet.
+     · **`withCircuitBreaker` reports `'circuit-changed'` since 9.32.0** → `error.circuit_changed`
+       `{state, reason, providerName}`. Transitions ONLY — an already-open breaker rejecting requests
+       says nothing, because a re-entry into the same state is not a change. `reason` is the breaker's
+       own words, never the failing vendor's message. `onStateChange` is unchanged and fires beside it:
+       the hook works everywhere (a cluster counter belongs on it), the event only inside a call, which
+       is what lets it carry real correlation ids. Outside a run nothing passes hooks and the breaker
+       reports nothing — standalone behaviour byte-identical to before. (Before 9.32.0 a trip was
+       visible only under `withFallback`, via `reason` carrying the `CircuitOpenError` message.)
      · **Blind spot:** `memory/beats/llmExtractor.ts` and `memory/facts/llmFactExtractor.ts` call
        `complete()` inside extractor ports with no scope and no dispatcher — permanently out of reach.
      · **Non-duplication is structural; non-*drop* is only a convention.** Forwarding cannot be

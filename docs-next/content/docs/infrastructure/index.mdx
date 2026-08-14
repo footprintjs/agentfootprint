@@ -89,7 +89,8 @@ Start from what you are trying to do, not from which cloud you are on.
 | **Telemetry where there is no collector to ship to** | `fileObservability({ path })` | NDJSON on a local disk, one line per event — the format every log shipper already reads, and zero dependencies |
 | **Tokens out of the vault you already run** | `vaultCredentials({ address })` | KV v2 over Vault's own HTTP API — no SDK, and the token never reaches an error message |
 | **Two sinks at once** | `composeObservability([a, b])` | One strategy that fans out; `flush` and `stop` reach both |
-| A **tamper-evident** record | `auditExport()` | Hash-chained records; `verifyAuditBundle` names the exact record that broke |
+| A **tamper-evident** record | `auditExport()` | Hash-chained records; `verifyAuditBundle` names the exact record that broke. A record of **runs** — see the row below for the requests that never became one |
+| A record of **who was turned away at the door** | `standingAgent({ onIngressDecision })` | One record per ingress decision — 401s, 429s, cross-owner 404s and served requests alike. A stream you chain into your own sink; deliberately **not** part of `auditExport()`'s chain |
 
 ## Dev → prod is one line per port
 

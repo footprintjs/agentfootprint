@@ -57,7 +57,7 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 | **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **Field-validated on the Vertex door** — 2026-08: `gemini-embedding-001` at 768 dimensions, indexed through `defineRAG`. The Gemini-API door was blocked by billing, not by code — see [the matrix](#the-doormodel-matrix) | [Embedders](doc:embedders) |
 | **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **Field-validated** — 2026-08: nine live checks against a real bucket, including scope isolation, native streaming, TTL expiry, budget eviction and the sanitized 404 | [Artifacts](doc:artifacts) |
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | **Field-validated as the corrected recipe below** — 2026-08: one six-span trace read back from Cloud Trace. The recipe this page shipped before that trial did **not** work; what changed is written out in full | [Observability sinks](doc:observability-sinks) |
-| **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this transport has no certificate, signer or custom-`fetch` hook — see below | [Tools & gateways](doc:tools-and-gateways) |
+| **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers, plus a custom `fetch` seam (9.32.0) | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this library implements neither. Since 9.32 you can supply your own signer through `fetch` and keep the rotation — bring-your-own, never support — see below | [Tools & gateways](doc:tools-and-gateways) |
 | **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .appendEvent / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. State is written by **appending an event** — the service forbids patching it. Reads never touch the event log: one envelope per session, read out of `sessionState` | **Field-validated, with the write verb field-CORRECTED (9.30.0).** The 2026-08-14 trial ran this adapter live: create, hydrate through a fresh instance, owners, paged `listByUser`, `ownerOf`, an unknown envelope format refused before storage, idempotent forget — all PASS. The **second** write failed, because 9.29.0 patched `sessionState` and Google refuses that; 9.30.0 appends an event instead (the repair the same trial verified on the wire). The corrected write has not itself been re-run live | [Hosting & runtime](doc:hosting-and-runtime) |
 | **Agent Runtime Memory Bank** | `memoryBankStore()` | `agentfootprint/memory` | `@googleapis/aiplatform` | `memories.create / .get / .patch / .delete / .retrieve`, `memories.operations.wait`. **Not** `putIfVersion` / `seen` / `recordSignature` / `feedback` / `getFeedback` — refused by name, no primitive exists. **Not** `purge` — see below | **Field-validated on the data plane** — 2026-08-14, this adapter against a real Memory Bank: cross-conversation recall under a widened scope, two identities sharing one entry id without collision, string and JSON values, pagination cursors, tier filtering, similarity with correctly *ordered* scores, scoped delete and `forget()`, and the five unsupported ops refusing by name. The same trial found entries losing `source` and caller `metadata`; **9.30.0 carries them** (that fix is tested, not yet re-run live) | [Memory & stores](doc:memory-and-stores) |
 | **Agent Runtime** (hosting) | — | `agentfootprint/hosting` | — | — | 🔴 No adapter — but **Node deploys**, verified: the 2026-08 trial ran a Node container through both Agent Runtime routes. The [recipe](#agent-runtime-on-nodejs--the-verified-recipe) is below; run it on Cloud Run instead if you would rather not own the contract | [Hosting & runtime](doc:hosting-and-runtime) |
@@ -277,6 +277,36 @@ did not leak the object key or scope; and delete being idempotent.
 
 Every one of those is a law stated below. That is the point of the list: they
 were checked in the field in the same words the docs use.
+</Callout>
+
+<Callout type="warn" title="The optional peer carries five transitive advisories — and what we will not do about them">
+`@google-cloud/storage` is an **optional peer**, so it is your dependency, not
+this library's: nothing here loads it unless you call `gcsArtifacts`. But you
+inherit its tree when you do, and two independent audits (2026-08-13 and again
+2026-08-14) reported the same five **moderate** advisories, reproduced here:
+
+```
+@google-cloud/storage → retry-request → teeny-request → gaxios → uuid
+```
+
+The root is `uuid` (`GHSA-w5hq-g745-h8pq`, a missing buffer bounds check in
+v3/v5/v6 when `buf` is provided), reached through `gaxios`, `teeny-request` and
+`retry-request`. **This is not a defect in agentfootprint**, and there is no line
+of code here that would fix it — the chain is entirely inside Google's client.
+
+`npm audit fix --force` offers a resolution and it is the wrong one: it installs
+**`@google-cloud/storage@5.18.3`**, a major downgrade to a client from a
+different era of the API. Trading a bounds check in a code path this adapter does
+not exercise for a client several majors behind the service is not a security
+improvement, it is a different outage. **Do not take it**, and this library will
+not pin you to it.
+
+What to do instead: pin `@google-cloud/storage` yourself at the newest 7.x, watch
+the upstream chain, and read the advisory in the context of what the adapter
+actually calls. For completeness, an audit of this repo also shows five **high**
+advisories (`postcss`, `js-yaml`, `nanoid`, `linkify-it`, `brace-expansion`,
+`hono`) — every one of them is dev tooling, none ships in the published package,
+and none is on any runtime path. The trial found **no secrets** in either round.
 </Callout>
 
 ```ts
@@ -1154,11 +1184,26 @@ a `fetch` to do either. So the earlier *"should work unchanged"* line was wrong 
 the identity-enforced Google path, and the *"whether the gateway demands a client
 certificate is unverified"* hedge has an answer now: **it does.**
 
-**The seam if you need it today.** The generic `http` MCP transport *does* accept a
-custom `fetch`, which is where a Google-specific signer belongs — you build the
-mTLS agent and the DPoP proof, this library carries the MCP session over it. That
-is bring-your-own, and it is offered as a seam rather than described as support.
-See [Tools & gateways](doc:tools-and-gateways).
+**The seam, on the right transport (9.32.0).** The refutation above stands
+unchanged — this is not support for Google's identity path and will never be
+described as one. What changed is where the seam lives. Until 9.32 the only
+route was the generic `http` transport, which *has* a custom `fetch` and fixes
+its headers at connect time: you gave up **token rotation** to get a client
+certificate, which is a bad trade nobody should have to make. `gatewayTransport`
+now takes a `fetch` of your own, called *underneath* the per-request vending:
+
+```ts
+transport: gatewayTransport({
+  url, credentials, service: 'gateway',
+  fetch: (input, init) => fetch(input, { ...init, dispatcher: mtlsAgent }),
+}),
+```
+
+The credential is vended and applied first, so your signer sees the final
+headers and has the last word over the bytes — and the vend still happens on
+every request. **Zero vendor code lands here:** you build the mTLS agent and the
+DPoP proof, this library carries the MCP session over it. Bring-your-own,
+offered as a seam. See [Tools & gateways](doc:tools-and-gateways).
 
 ## Governance — enforced at the Gateway, not here
 
@@ -1185,9 +1230,11 @@ Absences are facts, so here they are stated rather than discovered:
   but because the contract's second route is NDJSON at its own path, which
   `httpHost` does not serve. The unary route is a `wire` today; the recipe is
   above.
-- **No mTLS or DPoP on `gatewayTransport`**, which is what Google's Agent Gateway
-  requires of an agent identity. Header vending only; the generic `http`
-  transport's custom `fetch` is the seam.
+- **No mTLS or DPoP implementation, anywhere.** That is what Google's Agent
+  Gateway requires of an agent identity, and this library ships no certificate
+  loader and no signer for it — nor will it. Since 9.32 `gatewayTransport` takes
+  a `fetch` of your own so you can build one *without* losing per-request
+  vending; the seam is the whole of what is offered.
 - **No thought signature on a plain TEXT answer.** The function-call signature —
   the one whose absence broke a current-model tool loop in the field — *is*
   carried back byte-for-byte. A signature attached to a text part with no
@@ -1296,15 +1343,16 @@ after.
 |---|---|---|
 | `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **Field-validated on the Vertex door** — an independent field trial, 2026-08 (`gemini-2.5-flash`: tool loop, streaming, usage). Gemini-API door and current-generation tool calls: see [the matrix](#the-doormodel-matrix) |
 | `geminiEmbedder()` | `agentfootprint/providers` | **Field-validated on the Vertex door** — 2026-08, `gemini-embedding-001` at 768 dimensions through `defineRAG` |
-| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **Field-validated** — 2026-08, nine live checks against a real bucket |
+| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **Field-validated** — 2026-08, nine live checks against a real bucket. Its optional peer carries [five transitive moderate advisories](#cloud-storage--the-artifact-store-gcsartifacts-9250); the offered `--force` downgrade will not be taken |
 | `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | **field-validated 2026-08-14** (create, hydrate, listing, owners, forget). The write verb is **field-corrected in 9.30.0**: state is appended as an event, because the service refuses a `sessionState` patch |
 | `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | **field-validated on the data plane 2026-08-14**. Entry fidelity is **field-corrected in 9.30.0**: `source`, caller `metadata` and `decayPolicy` are carried instead of dropped |
 | `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | **field-validated 2026-08-14** — a real bearer authorized a Vertex call, both fail-closed refusals held, and the credential does not serialize its token. **Expiry-triggered refresh is still unproven for this door** |
 | The Google surface pin (dispatch · method-name reality · **API-version reality** · completeness) | — | **9.13.0** — runs in CI against the really-installed packages, now including `@googleapis/aiplatform` |
 | `ContextWindowExceededError` from Gemini's over-long-request sentence | `agentfootprint` | **9.13.0** — contract-shaped and tested; awaiting field use |
 | Cloud Trace / Cloud Logging via `otelObservability()` + OTLP | `agentfootprint/observe` | **Field-validated as the corrected recipe** — 2026-08, one six-span trace read back. The pre-trial recipe on this page did not work |
-| Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | **Field-validated for an ordinary bearer gateway** (2026-08). **Incompatible with Google's identity-enforced path** — that path is mTLS + DPoP, and this transport vends headers only |
-| Agent Runtime hosting | — | No adapter — but **Node deploys, verified** (2026-08). [Recipe above](#agent-runtime-on-nodejs--the-verified-recipe) |
+| Agent Gateway via `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | **Field-validated for an ordinary bearer gateway** (2026-08). **Still not Google's identity-enforced path** — that path is mTLS + DPoP and this library implements neither; 9.32 adds a `fetch` seam so your own signer composes UNDER the vending instead of forcing you onto the `http` transport and losing rotation |
+| Agent Runtime hosting | — | No adapter — but **Node deploys, verified** (2026-08). [Recipe above](#agent-runtime-on-nodejs--the-verified-recipe). The remaining work is a **tracked ticket**, not an unknown: the contract's second route is NDJSON at its own path and `httpHost` serves one path framed as SSE, so a host adapter is a port-shape change and its own release |
+| `firestoreSessions` — a `SessionLifecycle` on Firestore | — | **Tracked ticket, not scheduled here.** An independent field trial's own adapter passed a live multi-user run against a real Firestore (2026-08-13) and proved the 9.26 ownership CONTRACT — but a shipped one needs a new optional peer (`@google-cloud/firestore`), an SDK pin test before any adapter code, an indexed `orderBy` + document cursor (the trial's `listByUser` sorted client-side), a TTL policy and a write-once owner. Its own release. The port is two methods meanwhile |
 | Agent Retrieval · Agent Identity auth manager | — | Parked 2026-08-12 — no Node surface |
 | `SecurityStrategy` for Model Armor / Semantic Governance | — | **Will not be built** — gateway-enforced, no data-plane call |
 
