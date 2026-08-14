@@ -269,8 +269,29 @@ const agentEngineHarness: SessionStoreHarness = {
 
 const HARNESSES = [memoryHarness, sqliteHarness, firestoreHarness, agentEngineHarness];
 
+/**
+ * `node:sqlite` ships from Node 22.5; this repository's CI matrix also runs
+ * Node 20, where `sqliteSessions()` cannot be CONSTRUCTED at all.
+ *
+ * That is a missing runtime, not a store failing a law, so it is the one thing
+ * the suite's own `declared` mechanism must NOT be used for: a declaration says
+ * "this store cannot satisfy this case", and answers a question about the port.
+ * Here there is no store to ask. The battery is skipped WHOLE, and visibly —
+ * the same `describe.skipIf` shape `sqliteSessions.test.ts` already uses — so a
+ * runner reports it as skipped rather than as quietly absent.
+ */
+const sqliteAvailable = await (async (): Promise<boolean> => {
+  try {
+    const mod = (await import('node:sqlite')) as { DatabaseSync?: unknown };
+    return typeof mod.DatabaseSync === 'function';
+  } catch {
+    return false;
+  }
+})();
+
 for (const harness of HARNESSES) {
-  describe(`SessionLifecycle conformance — ${harness.name}`, () => {
+  const on = harness === sqliteHarness && !sqliteAvailable ? describe.skip : describe;
+  on(`SessionLifecycle conformance — ${harness.name}`, () => {
     for (const testCase of sessionLifecycleConformance) {
       it(testCase.name, async () => {
         const outcome = await runSessionLifecycleCase(testCase, harness);
@@ -297,7 +318,7 @@ for (const harness of HARNESSES) {
   });
 }
 
-describe('the one-call entry point an out-of-tree store uses', () => {
+describe.skipIf(!sqliteAvailable)('the one-call entry point an out-of-tree store uses', () => {
   it('runs the whole battery and reports what happened, per store', async () => {
     // The shape a consumer actually reaches for — `if (!report.ok) throw` — so
     // the counts and the formatter are exercised rather than merely exported.
