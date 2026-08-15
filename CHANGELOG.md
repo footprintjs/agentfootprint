@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.46.1] - 2026-08-15
+
+### Fixed
+
+- **`codeShape` and `codeRunsOf` are exported.** 9.46.0 registered the event and
+  shipped the normaliser it is built on without a public door to it, which the
+  clean-room probe caught and the test suite could not: the tests import from
+  source. The event alone covers runs from now on, because it carries the hash —
+  but the whole point of the loop is reading recordings you ALREADY have, and
+  normalising months of logged `args.code` needs the same function that produced
+  those hashes. Shipping the second half of a loop is not shipping the loop.
+
 ## [9.46.0] - 2026-08-15
 
 **Three gaps that had all been written down and left open.** Each one existed as a

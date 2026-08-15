@@ -589,11 +589,14 @@ export {
 } from './core/toolSessions.js';
 export {
   codeRunnerTool,
+  codeShape,
+  codeRunsOf,
   toolSessionsOf,
   TOOL_SESSIONS,
   type CodeRunnerToolOptions,
   type CodeRunnerToolScope,
   type HoldsToolSessions,
+  type CodeRunFacts,
 } from './core/codeRunnerTool.js';
 export {
   toolContractCheckup,
