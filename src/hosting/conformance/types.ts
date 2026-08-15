@@ -26,6 +26,7 @@ export type SessionLifecycleCaseName =
   | 'contested-write-leaves-no-split-brain'
   | 'owner-of-is-undefined-for-missing-and-unowned'
   | 'list-by-user-pages-with-a-stable-tie-break'
+  | 'list-by-user-is-newest-first'
   | 'awkward-session-ids-round-trip'
   | 'retention-says-who-deletes-and-deletes-only-the-old'
   | 'optional-members-are-feature-detected';

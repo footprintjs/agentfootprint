@@ -85,6 +85,12 @@ export type DomainWildcard =
   | 'agentfootprint.cost.*'
   | 'agentfootprint.eval.*'
   | 'agentfootprint.error.*'
+  // 9.44.0 — the outputSchema fallback ladder. Both `resilience.*` events had
+  // been emitted since 8.18.0 through a loosely typed `emit(type: string, …)`
+  // parameter with no registry entry at all, so `.on()` rejected them by name
+  // and no wildcard could reach them either. The credential-domain lesson
+  // applies: the wildcard ships WITH the domain.
+  | 'agentfootprint.resilience.*'
   | 'agentfootprint.pause.*'
   | 'agentfootprint.checkin.*'
   | 'agentfootprint.middleware.*'

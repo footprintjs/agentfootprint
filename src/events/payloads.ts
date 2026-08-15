@@ -1919,6 +1919,53 @@ export interface ReliabilityRecoveredPayload {
   readonly errorKind: string;
 }
 
+// resilience.* (2) — the OUTPUT-fallback ladder, distinct from both
+// `error.*` (decorator-shaped) and `reliability.*` (the rules loop). These
+// two fire when a typed answer failed its own `outputSchema` and the
+// 3-tier `outputFallback` ladder took over: tier 2 (the fallback function)
+// and tier 3 (the canned value). Emitted since 8.18.0 through a loosely
+// typed `emit(eventType: string, …)` parameter, which is how they shipped
+// for months without a payload interface or an `ALL_EVENT_TYPES` entry —
+// registered here so `runner.on(...)` accepts them like every other event.
+
+/**
+ * Tier 2 engaged: `parseOutput()` / `runTyped()` could not validate the
+ * model's answer against `outputSchema`, and the consumer-supplied
+ * `fallback` function is about to run. Fires BEFORE the fallback executes,
+ * so it is a record of degradation starting — not of it succeeding.
+ */
+export interface ResilienceOutputFallbackTriggeredPayload {
+  /** Which half of validation failed: bad JSON, or good JSON of the wrong shape. */
+  readonly stage: 'json-parse' | 'schema-validate';
+  /** First 200 chars of the model's raw answer. Truncated by construction —
+   *  never the whole output. */
+  readonly rawOutputPreview: string;
+  /** Message of the `OutputSchemaError` that opened the ladder. */
+  readonly primaryErrorMessage: string;
+  /** Corrective re-asks this run already paid for before the answer reached
+   *  the ladder (the `outputAttempts` ledger minus the first attempt).
+   *  ABSENT when the caller parsed a string that did not come from this
+   *  agent's last run — absent means unknown, never zero. */
+  readonly retriesSpent?: number;
+}
+
+/**
+ * Tier 3 engaged: the fallback function itself failed (threw, or returned a
+ * value that also failed the schema) and the static `canned` value is being
+ * returned instead. This is the event that says a run billed real tokens and
+ * ended in a constant — with `canned` configured, `runTyped()` is
+ * structurally unable to throw, so this event is the ONLY signal.
+ */
+export interface ResilienceOutputCannedUsedPayload {
+  /** First 200 chars of the model's raw answer. Truncated by construction. */
+  readonly rawOutputPreview: string;
+  /** Why tier 2 did not hold — the fallback's own throw, or the validation
+   *  error its return value produced. */
+  readonly fallbackErrorMessage: string;
+  /** Corrective re-asks this run already paid for. ABSENT when unknown. */
+  readonly retriesSpent?: number;
+}
+
 // embedding.* (1)
 export interface EmbeddingGeneratedPayload {
   readonly model: string;

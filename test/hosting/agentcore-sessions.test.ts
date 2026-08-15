@@ -551,3 +551,127 @@ describe("agentCoreSessions({ store: 'memory' }) — an unreadable blob", () => 
     expect((await sessions.hydrate('c-1'))?.data.history[0]).toMatchObject({ content: 'healthy' });
   });
 });
+
+// ── the session id is a KEY, and two of them may never become one ────
+
+/**
+ * `safeSessionId` makes a caller's id legal for AgentCore, and the whole risk
+ * of that job is that making something legal is easy to do by FOLDING — replace
+ * every illegal character with `-` and `a:b`, `a/b` and `a-b` are one key, and
+ * one key is one conversation. The id arrives in
+ * `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`, so it is chosen by whoever is
+ * calling: a fold is not a rare accident, it is something a caller can go and
+ * look for. Same defect class as the identity namespace fixed in 9.40.0, with
+ * the collision moved from server-side identity to the whole key.
+ *
+ * These assert on the id the adapter actually SENT, because that string is the
+ * storage key and nothing downstream can recover a distinction lost here.
+ */
+describe("agentCoreSessions({ store: 'memory' }) — the session id mapping is injective", () => {
+  /** Ids chosen so that a plausible normalisation folds at least one pair. */
+  const corpus = [
+    'a-b',
+    'a_b',
+    'a:b',
+    'a/b',
+    'a%2Fb',
+    'a.b',
+    'a b',
+    'AB',
+    'ab',
+    '..',
+    './..',
+    'ünïcødé-😀-id',
+    `quote'and"double`,
+    "'; DROP TABLE agent_sessions; --",
+    '\0-ish-but-not-really',
+    '_enc_a-b',
+    '_enc_a_u002fb',
+    'x'.repeat(400),
+    `${'x'.repeat(400)}A`,
+    `${'x'.repeat(400)}B`,
+    `${'y'.repeat(400)}:1`,
+    `${'y'.repeat(400)}-1`,
+  ];
+
+  it('maps every distinct id to a distinct storage key', async () => {
+    const client = fakeMemoryClient();
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _client: client });
+    for (const id of corpus) {
+      await sessions.persist(id, toEnvelope(conversation(id)));
+    }
+    const keys = client.appended.map((event) => event.sessionId);
+    expect(new Set(keys).size).toBe(new Set(corpus).size);
+  });
+
+  it('answers each id with its OWN conversation', async () => {
+    const client = fakeMemoryClient();
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _client: client });
+    for (const id of corpus) {
+      await sessions.persist(id, toEnvelope(conversation(id)));
+    }
+    for (const id of corpus) {
+      const back = await sessions.hydrate(id);
+      expect(back?.data.history[0]).toMatchObject({ content: id });
+    }
+  });
+
+  it('never sends a key AgentCore would reject, and never sends an over-long one', async () => {
+    const client = fakeMemoryClient();
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _client: client });
+    for (const id of corpus) {
+      await sessions.persist(id, toEnvelope(conversation(id)));
+    }
+    for (const key of client.appended.map((event) => event.sessionId)) {
+      expect(key).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(key.length).toBeLessThanOrEqual(99);
+    }
+  });
+
+  it('leaves an id that was already legal exactly as it found it', async () => {
+    // The migration promise: this fix re-keys nothing that used to work. An id
+    // already inside `[A-Za-z0-9_-]` was stored verbatim before and still is,
+    // so no deployment loses a session to the encoder.
+    const client = fakeMemoryClient();
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _client: client });
+    const legal = ['c-1', 'user_123', 'a-b', '9f8e7d6c-1234-4abc-9def-000000000000', 'A_-9'];
+    for (const id of legal) {
+      await sessions.persist(id, toEnvelope(conversation(id)));
+    }
+    expect(client.appended.map((event) => event.sessionId)).toEqual(legal);
+  });
+});
+
+// ── a session id is data, not a property name ───────────────────────
+
+describe("agentCoreSessions({ store: 'session-storage' }) — prototype names are not sessions", () => {
+  // The file-backed mode keeps every session as a property of one JSON object,
+  // and the session id arrives in a caller-controlled header. A bare lookup
+  // therefore answers for ids that name `Object.prototype` members — so an
+  // EMPTY store refused `constructor` by name, telling a caller their session
+  // held "a STORED conversation this runtime cannot read". Permanently, for
+  // that id, on a store that had never been written to.
+  const prototypeNames = ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'];
+
+  for (const name of prototypeNames) {
+    it(`answers undefined for '${name}' on a store that has never been written to`, async () => {
+      const sessions = agentCoreSessions({
+        store: 'session-storage',
+        path: await tempPath(),
+      });
+      await expect(sessions.hydrate(name)).resolves.toBeUndefined();
+    });
+  }
+
+  it('still round-trips a session whose id happens to be a prototype name', async () => {
+    const sessions = agentCoreSessions({ store: 'session-storage', path: await tempPath() });
+    for (const name of prototypeNames) {
+      await sessions.persist(name, toEnvelope(conversation(`stored under ${name}`)));
+    }
+    for (const name of prototypeNames) {
+      expect((await sessions.hydrate(name))?.data.history[0]).toMatchObject({
+        content: `stored under ${name}`,
+      });
+    }
+  });
+});

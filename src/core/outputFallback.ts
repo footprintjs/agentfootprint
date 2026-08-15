@@ -73,8 +73,30 @@
  */
 
 import type { OutputSchemaError, OutputSchemaParser } from './outputSchema.js';
+import type { AgentfootprintEventMap } from '../events/registry.js';
 
 // ─── Public types ────────────────────────────────────────────────────
+
+/**
+ * The dispatcher entry this module emits through. TYPE-ONLY coupling to the
+ * registry: no runtime import, so the module still stays free of the
+ * dispatcher itself — but the event names and their payloads are now checked
+ * by the compiler.
+ *
+ * Why this is not `(eventType: string, payload: Record<string, unknown>)`:
+ * it was, and that is precisely how both `resilience.*` events shipped for
+ * months while being absent from `ALL_EVENT_TYPES`. A loosely typed emit
+ * parameter means the registry cannot enforce anything, so the only thing
+ * standing between a real emit and a nonexistent contract was a grep.
+ */
+export type OutputFallbackEmit = <
+  K extends
+    | 'agentfootprint.resilience.output_fallback_triggered'
+    | 'agentfootprint.resilience.output_canned_used',
+>(
+  eventType: K,
+  payload: AgentfootprintEventMap[K]['payload'],
+) => void;
 
 /**
  * Tier-2 fallback function. Receives the original validation error +
@@ -162,7 +184,7 @@ export async function applyOutputFallback<T>(
   raw: string,
   parser: OutputSchemaParser<T>,
   fallbackCfg: ResolvedOutputFallback<T>,
-  emit: (eventType: string, payload: Record<string, unknown>) => void,
+  emit: OutputFallbackEmit,
   primaryError: OutputSchemaError,
   /** Corrective re-asks the run paid for before the answer reached here — the
    *  `outputAttempts` ledger, minus the first attempt. `0` when the agent had
@@ -196,7 +218,7 @@ export async function applyOutputFallback<T>(
 function cannedOrRethrow<T>(
   parser: OutputSchemaParser<T>,
   fallbackCfg: ResolvedOutputFallback<T>,
-  emit: (eventType: string, payload: Record<string, unknown>) => void,
+  emit: OutputFallbackEmit,
   failureCause: unknown,
   raw: string,
   retriesSpent?: number,

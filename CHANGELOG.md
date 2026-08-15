@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.44.0] - 2026-08-15
+
+**Two cross-tenant collisions, and the batteries that certified them green.** Both
+defects are the same shape as the two fixed in 9.37.0 and 9.40.0 — a mapping that
+turns two different identifiers into one key — and in both cases a shipped
+conformance battery passed the broken code, because each battery's collision case
+varied the identifiers in a dimension the defect did not live in. The fixes are
+here; so are the missing cases, and a test that proves those cases catch what they
+claim to.
+
+### Security
+
+- **Artifact scopes no longer share a directory with their own case variants.**
+  `scopeSegment` encoded a scope field with `encodeURIComponent`, which is
+  injective as a STRING — and macOS/APFS and Windows/NTFS are case-insensitive by
+  default, so a tenant of `Acme` and a tenant of `acme` encoded to two distinct
+  segments and landed in **one directory**. Since an artifact ref is a content
+  address that both scopes then resolve, the neighbour could `get`, `list` and
+  `delete`. All three scope fields were affected, and all three are caller data:
+  `standingAgent` sets `principal` from the request's user id and
+  `conversationId` from the caller-chosen session header, so flipping one letter's
+  case was enough to enumerate a neighbour's refs and then read their bytes.
+
+  An uppercase ASCII letter is now escaped before `encodeURIComponent` (`~` as the
+  escape, doubled when it appears in the input — the same escape-the-escape shape
+  `identityNamespace` uses, so a decoder is a left inverse). Every output letter is
+  then lowercase except the hex inside `%XX` escapes, which is always uppercase and
+  never otherwise preceded by a lone `%`, so no two distinct outputs can differ by
+  case alone.
+
+  **What re-keys:** only a scope field containing an uppercase ASCII letter. Every
+  all-lowercase field — including one carrying `/`, spaces, dots or non-ASCII —
+  encodes to exactly the bytes it did before. A field that DID contain an uppercase
+  letter was sharing a directory with its case variants on two of the three major
+  platforms, which is the condition being fixed.
+
+- **`agentCoreSessions({ store: 'memory' })` no longer folds distinct session ids
+  onto one conversation.** `safeSessionId` replaced every character outside
+  `[A-Za-z0-9_-]` with `-`, so `a:b`, `a/b` and `a-b` were one storage key. The id
+  arrives in `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`, making it caller data,
+  so this was a session someone could choose their way into. Logged as "Known, not
+  fixed" in 9.42.0; fixed now.
+
+  The mapping encodes instead of sanitising, in two arms whose outputs cannot meet:
+  an id already legal (and not already claiming to be an encoded one) is returned
+  byte for byte, and anything else becomes `_enc_` plus an escaped form. Past the
+  provider's 99-character ceiling no mapping can stay injective, so that arm ends
+  in a SHA-256 digest of the whole raw id rather than the previous 32-bit FNV-1a —
+  a 32-bit hash over caller-controlled input is a collision somebody can go and
+  find.
+
+  **What re-keys:** only ids containing a character outside `[A-Za-z0-9_-]`, ids
+  over 99 characters, or ids beginning `_enc_`. Every UUID and every `user_123`
+  keeps the exact key it had. Ids in the first group were already sharing a key
+  with everything that folded onto them.
+
+### Fixed
+
+- **A session id that names a prototype member is data, not a lookup.**
+  `agentCoreSessions({ store: 'session-storage' })` keeps sessions as properties of
+  one JSON object, so `hydrate('constructor')` on a store that had never been
+  written to reached `Object.prototype` and refused BY NAME — telling a caller their
+  session held "a STORED conversation this runtime cannot read", permanently, for
+  any id naming a prototype member. Now an own-property test. Writes were always
+  fine; this only ever bit the never-written case.
+
+- **`agentfootprint.resilience.output_fallback_triggered` and
+  `…output_canned_used` are registered events.** Both have been emitted since
+  8.18.0 through a loosely typed `emit(type: string, …)` parameter that reached the
+  dispatcher via `as never` — a cast that erased the only check that could have
+  objected — so neither had a registry entry, a payload type, or a wildcard. They
+  are now in `AgentfootprintEventMap` and `ALL_EVENT_TYPES`, the emit site is typed
+  against the registry rather than taking a bare string, and
+  `agentfootprint.resilience.*` joins `DomainWildcard`: the credential-domain lesson
+  from 9.4.0 says a wildcard ships WITH its domain.
+
+### Changed
+
+- **The session battery's collision case is a fixture of fold BUILDERS, not
+  suffixes.** It previously drew its base twice from a counter, so the two ids of a
+  pair differed in their prefix as well and no fold could collapse them — the case
+  could not fail. Rebuilt around one shared base and thirteen fold classes,
+  including two whole families it could not previously express: mappings that
+  discard the HEAD (a store keying on a last path segment, because its backend
+  refuses `/` in a key) and Unicode normalisation (NFC/NFD, NFKC, non-ASCII case
+  folding, zero-width stripping).
+
+- **A store that REFUSES an id it cannot hold faithfully is conformant.** The
+  collision case persisted ids of 1000+ characters and required every one to
+  round-trip, so a store with an honest column width — one that raises rather
+  than truncating, which is the SAFE behaviour, because truncation is exactly how
+  two ids become one — was reported non-conformant for doing the right thing. Its
+  only escape was declaring the whole case and losing every fold check with it.
+  The law is now "every id the store ACCEPTED comes back as its own
+  conversation": a write that never happened collides with nothing. Found by a
+  field trial running this battery against a store with `NVARCHAR(400)` session
+  ids.
+
+- **The artifact battery gained the case pair it never had**, in all three scope
+  fields. It carried pairs for separators, absence markers and pre-escaped values,
+  and ran 106 green for months with the leak above live in the same process.
+
+- **`list-by-user-is-newest-first` is its own case.** The paging case was holding
+  three separate laws — no cross-user rows, complete paging with an honest cursor,
+  and newest-first order — and a declaration is all-or-nothing, so a store with one
+  real ceiling had to forfeit checks it passes, including the cross-user leak check.
+  One case, one law. Its check now runs twice with the confounders inverted, because
+  ids count up and writes are ordered: in any single arrangement the newest row is
+  also the later-written row and the larger id, so a store that never reads the
+  timestamp lands on the right answer for the wrong reason.
+
+  `agentEngineSessions` **declares** it: the service orders a listing by its own
+  immutable `update_time`, which the adapter also reports as `savedAt`, so a
+  timestamp inside the envelope cannot influence the order.
+
+### Added
+
+- **`SECURITY.md`** — private reporting route, what to expect and when, and a
+  finding-class list specific to this library (isolation, scope escape, ownership,
+  redaction, evidence integrity) plus an explicit list of what is NOT a
+  vulnerability, so nobody spends a weekend on a report that comes back "working as
+  designed".
+
+- **An adapter-trial issue form** that asks for `formatConformanceReport()` output
+  rather than prose, and treats a declared provider limitation as a first-class
+  outcome rather than a failure to excuse.
+
+- **`docs/ADAPTER_STATUS.md`** — every hosting adapter, its rung
+  (`contract-shaped and tested` → `field-validated` → `field-corrected`), and the
+  rule that any rung above the first cites the evidence that earned it. No adjective
+  without a link.
+
+- **A test that the collision case catches what it claims to** — twelve stores,
+  each non-injective in exactly one way, each of which must fail it, plus a control
+  that must pass so the file cannot be satisfied by a case that always fails. It
+  caught two of the new fold pairs being decorative on its first run: a pair meant
+  to catch a tail-window store is useless unless its difference sits far from the
+  end.
+
 ## [9.43.0] - 2026-08-15
 
 **Five primitives that came out of field use.** A review of a live incident-triage

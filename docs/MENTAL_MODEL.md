@@ -447,10 +447,11 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**96 typed events / 21 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(12 — incl.
+**98 typed events / 22 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(12 — incl.
 `run_configured`, the run-configuration manifest)
 `stream.*`(7) `context.*`(5 — the thesis) `memory.*`(5) `tools.*`(16) `validation.*`(1) `skill.*`(10) `permission.*`(4)
-`credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `pause.*`(2)
+`credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `resilience.*`(2 — the
+outputSchema fallback ladder; dispatched directly, not via `typedEmit`) `pause.*`(2)
 `checkin.*`(2) `middleware.*`(1) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(5 — the claim-check lifecycle).
 Emitted via `typedEmit(scope,name,payload)` (compile-time-safe) → EmitRecorder →
 **`EmitBridge`** (prefix-match per domain) → `buildEventMeta` enriches

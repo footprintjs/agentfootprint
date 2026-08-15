@@ -436,21 +436,155 @@ const listPages: SessionLifecycleCase = {
         'a non-final page carried no cursor, so the rows after it are unreachable.',
       );
     }
-
-    // Newest first, when the timestamps actually differ.
-    const older = kit.id('older');
-    const newer = kit.id('newer');
-    await store.persist(older, kit.envelope('older', 'carol', tied - 60_000));
-    await store.persist(newer, kit.envelope('newer', 'carol', tied + 60_000));
-    const carol = await store.listByUser!('carol', { limit: 10 });
-    check(
-      carol.sessions[0]?.sessionId === newer,
-      `the listing did not put the newest conversation first (got ` +
-        `${JSON.stringify(carol.sessions.map((s) => s.sessionId))}). Newest-first is the ` +
-        `order a sidebar draws in and the one every listing in this package promises.`,
-    );
   },
 };
+
+/**
+ * Split out of the paging case deliberately.
+ *
+ * That case holds three separate laws — nobody else's rows, complete paging
+ * with an honest cursor, and newest-first order — and one store can hold two of
+ * them while genuinely being unable to hold the third. Declaring a case is
+ * all-or-nothing, so a combined case forces a store with ONE real ceiling to
+ * forfeit checks it passes, including the cross-user leak check, which is the
+ * single most valuable assertion in the battery. One case, one law.
+ */
+const listNewestFirst: SessionLifecycleCase = {
+  name: 'list-by-user-is-newest-first',
+  law: 'A listing is ordered newest first, by the conversation’s own timestamp rather than by the order rows happened to be written.',
+  members: ['listByUser'],
+  async run(store, kit) {
+    const tied = 1_700_000_000_000;
+    // Checked TWICE, with the two confounders inverted between the rounds.
+    //
+    // One round cannot hold this law. Ids from `kit.id` count up and writes are
+    // ordered, so in any single arrangement the newest row is ALSO the
+    // later-written row and the lexicographically larger id — three signals
+    // pointing the same way. A store that never reads the timestamp and simply
+    // sorts by insertion order, or by id, then lands on the right answer for
+    // the wrong reason. Inverting both between the rounds means any such store
+    // gets exactly one of them backwards.
+    const rounds = [
+      { user: 'carol', newestIsWrittenFirst: true },
+      { user: 'dave', newestIsWrittenFirst: false },
+    ];
+    for (const { user, newestIsWrittenFirst } of rounds) {
+      const written = [kit.id('ordered-a'), kit.id('ordered-b')] as const;
+      const newest = newestIsWrittenFirst ? written[0] : written[1];
+      for (const id of written) {
+        const age = id === newest ? tied + 60_000 : tied - 60_000;
+        await store.persist(id, kit.envelope(id === newest ? 'newer' : 'older', user, age));
+      }
+      const listed = await store.listByUser!(user, { limit: 10 });
+      check(
+        listed.sessions[0]?.sessionId === newest,
+        `the listing did not put the newest conversation first (got ` +
+          `${JSON.stringify(listed.sessions.map((s) => s.sessionId))}, newest is ` +
+          `${JSON.stringify(newest)}, which was written ` +
+          `${
+            newestIsWrittenFirst ? 'FIRST and has the smaller id' : 'LAST and has the larger id'
+          }). ` +
+          `Newest-first is the order a sidebar draws in — and it has to come from the ` +
+          `conversation's timestamp, not from the order rows happened to be inserted in. ` +
+          `A store whose backend orders by its own write time cannot hold this and should ` +
+          `DECLARE it rather than appear to pass.`,
+      );
+    }
+  },
+};
+
+/**
+ * Two session ids a store must keep apart, and the normalisation that folds
+ * them together.
+ *
+ * Both halves are built from ONE base, so a pair differs only where its fold
+ * is. That is the whole shape of the thing: this case once drew `kit.id('fold')`
+ * separately for each half, and since `kit.id` counts up on every call the two
+ * ids differed in their PREFIX as well — so a store that folded the part under
+ * test went on passing. A collision case has to vary the fold-sensitive
+ * characters and nothing else, or it cannot fail.
+ *
+ * `left`/`right` take the base rather than being suffixes because **a fold can
+ * live anywhere in an id**. A store keying on the last path segment discards
+ * the HEAD, and a suffix table cannot express a pair that differs there — which
+ * is exactly how a suffix-only version of this table stayed blind to the single
+ * most likely real mapping.
+ */
+interface FoldPair {
+  /** The normalisation this pair exists to catch, named for the failure message. */
+  readonly fold: string;
+  readonly left: (base: string) => string;
+  readonly right: (base: string) => string;
+}
+
+/** Long enough to cross any plausible key-length ceiling. */
+const PAST_ANY_CEILING = 1000;
+
+const FOLD_PAIRS: readonly FoldPair[] = [
+  // ── characters rewritten or decoded ──
+  { fold: 'percent-decoding', left: (b) => `${b}a/b`, right: (b) => `${b}a%2Fb` },
+  {
+    fold: 'every illegal character replaced by one filler',
+    left: (b) => `${b}a/b`,
+    right: (b) => `${b}a-b`,
+  },
+  {
+    fold: 'a different illegal character, the same filler',
+    left: (b) => `${b}a:b`,
+    right: (b) => `${b}a-b`,
+  },
+  {
+    fold: 'underscore and dash treated as the same character',
+    left: (b) => `${b}a_b`,
+    right: (b) => `${b}a-b`,
+  },
+  // ── case and Unicode ──
+  // An id is bytes somebody chose. macOS stores NFD, a database column may
+  // collate NFC, and two ids a person reads as identical swap places in
+  // between — the classic silent id collision, and one no ASCII pair can see.
+  { fold: 'case folding', left: (b) => `${b}AB`, right: (b) => `${b}ab` },
+  {
+    fold: 'Unicode normalisation (NFC against NFD)',
+    left: (b) => `${b}café`,
+    right: (b) => `${b}café`,
+  },
+  {
+    fold: 'case folding applied outside ASCII',
+    left: (b) => `${b}ÜSER`,
+    right: (b) => `${b}üSER`,
+  },
+  {
+    fold: 'compatibility normalisation (NFKC)',
+    left: (b) => `${b}ａｂ`,
+    right: (b) => `${b}ab`,
+  },
+  {
+    fold: 'zero-width characters stripped',
+    left: (b) => `${b}chat​1`,
+    right: (b) => `${b}chat1`,
+  },
+  // ── position: which END of an id a store keeps ──
+  {
+    fold: 'truncation at a length ceiling',
+    left: (b) => `${b}${'x'.repeat(PAST_ANY_CEILING)}A`,
+    right: (b) => `${b}${'x'.repeat(PAST_ANY_CEILING)}B`,
+  },
+  // Both of the next two are PADDED past any window a store might keep. A pair
+  // that differs near one end is invisible to a store that keeps the other end,
+  // so the difference and the padding have to sit on opposite sides — without
+  // the padding these two read correctly and catch nothing.
+  {
+    fold: 'anything that discards the HEAD, such as keying on a last path segment',
+    left: (b) => `alice/${b}${'p'.repeat(PAST_ANY_CEILING)}`,
+    right: (b) => `bob/${b}${'p'.repeat(PAST_ANY_CEILING)}`,
+  },
+  { fold: 'a stripped leading prefix', left: (b) => `session-${b}`, right: (b) => b },
+  {
+    fold: 'truncation from the FRONT',
+    left: (b) => `A${'q'.repeat(PAST_ANY_CEILING)}${b}`,
+    right: (b) => `B${'q'.repeat(PAST_ANY_CEILING)}${b}`,
+  },
+];
 
 const awkwardIds: SessionLifecycleCase = {
   name: 'awkward-session-ids-round-trip',
@@ -464,12 +598,21 @@ const awkwardIds: SessionLifecycleCase = {
       'ünïcødé-😀-id',
       `quote'and"double`,
       "'; DROP TABLE agent_sessions; --",
-      ' -ish-but-not-really',
+      '\u0000-ish-but-not-really',
       'a'.repeat(1000),
     ];
+    // A store may REFUSE an id it cannot hold faithfully — a column has a width,
+    // and refusing beats truncating, which is exactly how two ids become one. So
+    // the law is not "every id round-trips"; it is "every id the store ACCEPTED
+    // comes back as its own conversation". A write that never happened collides
+    // with nothing, and a store with an honest ceiling should not have to choose
+    // between declaring this whole case and looking non-conformant.
+    const accepted = async (id: string, text: string): Promise<boolean> =>
+      (await attempt(() => store.persist(id, kit.envelope(text, 'alice')))) === undefined;
+
     for (const [index, raw] of awkward.entries()) {
       const id = `${kit.id('awkward')}${raw}`;
-      await store.persist(id, kit.envelope(`conversation ${index}`, 'alice'));
+      if (!(await accepted(id, `conversation ${index}`))) continue;
       const back = await store.hydrate(id);
       check(
         textOf(back) === `conversation ${index}`,
@@ -478,18 +621,24 @@ const awkwardIds: SessionLifecycleCase = {
           `store that mangles it hands them a different conversation.`,
       );
     }
-    // Two ids that a naive normalisation would fold together.
-    const left = `${kit.id('fold')}a/b`;
-    const right = `${kit.id('fold')}a%2Fb`;
-    await store.persist(left, kit.envelope('left', 'alice'));
-    await store.persist(right, kit.envelope('right', 'alice'));
-    check(
-      textOf(await store.hydrate(left)) === 'left' &&
-        textOf(await store.hydrate(right)) === 'right',
-      'two different session ids collided onto one conversation. Whatever mapping a store ' +
-        'uses to make an id legal for its backend has to be injective, or one person’s ' +
-        'turn lands in another’s conversation.',
-    );
+    for (const { fold, left, right } of FOLD_PAIRS) {
+      const base = kit.id('fold');
+      const [leftId, rightId] = [left(base), right(base)];
+      const stored = [
+        await accepted(leftId, `left ${fold}`),
+        await accepted(rightId, `right ${fold}`),
+      ];
+      // Only the ids this store took are held to the law. If it refused one,
+      // there is no second write to collide with the first.
+      check(
+        (!stored[0] || textOf(await store.hydrate(leftId)) === `left ${fold}`) &&
+          (!stored[1] || textOf(await store.hydrate(rightId)) === `right ${fold}`),
+        `two different session ids collided onto one conversation — ${fold}. The two ids ` +
+          `differ only where that fold applies, and after this store mapped them they were ` +
+          `the same key. Whatever mapping a store uses to make an id legal for its backend ` +
+          `has to be injective, or one person’s turn lands in another’s conversation.`,
+      );
+    }
   },
 };
 
@@ -665,6 +814,7 @@ export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   contestedWrite,
   ownerOfAmbiguity,
   listPages,
+  listNewestFirst,
   awkwardIds,
   retentionHonesty,
   featureDetected,

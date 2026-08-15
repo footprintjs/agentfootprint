@@ -71,6 +71,21 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
+  // WHAT THIS NUMBER IS: a RATCHET against accidental REMOVAL, not a cap on
+  // how many events may exist. Events are additive within a major, so growing
+  // this number is routine — you add an event, this test tells you to bump it,
+  // you bump it in the same commit. What it exists to catch is the number
+  // going DOWN, or staying flat while `ALL_EVENT_TYPES` is edited: a deleted
+  // or renamed entry silently breaks every consumer's `.on()` call, and this
+  // assertion is the only place that notices.
+  //
+  // What it explicitly does NOT do is prove the list is COMPLETE. A count
+  // cannot see an event that is emitted but was never listed — that failure is
+  // invisible to every assertion in this file, which is how both
+  // `resilience.*` events shipped for months while `runner.on()` rejected
+  // them by name. Completeness is proven by
+  // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
+  // the emitted set from src/ instead of trusting a hand-maintained number.
   it('ALL_EVENT_TYPES has exactly 91 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
@@ -152,7 +167,14 @@ describe('event registry — names + exhaustiveness', () => {
     //     of what a clean result does NOT rule out. Both are RECORDED
     //     unconditionally; only the appending of limits to the final answer is
     //     opt-in, so the record can be measured before it is acted on.)
-    expect(ALL_EVENT_TYPES.length).toBe(96);
+    //    (resilience.output_fallback_triggered + resilience.output_canned_used
+    //     REGISTERED in 9.44.0 — not new behavior. Both had been emitted since
+    //     8.18.0 from src/core/outputFallback.ts through a loosely typed
+    //     `emit(eventType: string, …)` parameter, with no payload interface,
+    //     no EVENT_NAMES group and no ALL_EVENT_TYPES entry — so the docs
+    //     described two events that `.on()` refused to accept. A truth
+    //     correction: the list now matches what the runtime already emits.)
+    expect(ALL_EVENT_TYPES.length).toBe(98);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

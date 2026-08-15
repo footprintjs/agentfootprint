@@ -274,6 +274,11 @@ const agentEngineHarness: SessionStoreHarness = {
     // service-side index that `ownerOf` and `listByUser` answer from cannot be
     // moved. Such a session appears in nobody's list until it is written under
     // a new id.
+    'list-by-user-is-newest-first':
+      'the service orders a listing by its own immutable update_time, and that is also what ' +
+      'this adapter reports as savedAt, so a timestamp carried inside the envelope cannot ' +
+      'influence the order — the two coincide whenever a session is written because it ' +
+      'changed, and diverge only when an older conversation is re-persisted',
     'ownership-fills-in-on-a-later-signed-turn':
       'the service pins userId at create and refuses to change it, so a conversation that ' +
       'ran anonymously cannot be moved into somebody’s index on a later turn',
@@ -463,7 +468,7 @@ describe.skipIf(!sqliteAvailable)('the one-call entry point an out-of-tree store
   it('a store with a stated limitation is conformant WITH LIMITS, and the report says which', async () => {
     const report = await runSessionLifecycleConformance(agentEngineHarness);
     expect(report.ok).toBe(true);
-    expect(report.declared).toBe(1);
+    expect(report.declared).toBe(2);
     const text = formatConformanceReport(report);
     // Declared cases are printed with their reason. A limitation nobody can
     // read in the output is a limitation nobody will ever argue with.
@@ -515,7 +520,7 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     expect(report.passed).toBe(6);
     // It keeps no owner index and no listing — six ownership cases, the
     // listing, and `forget`, none of which the port demands of it.
-    expect(report.notApplicable).toBe(8);
+    expect(report.notApplicable).toBe(9);
   });
 
   it('the event-backed mode holds the same laws, minus the retention it cannot honestly offer', async () => {
@@ -523,7 +528,7 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     expect(formatConformanceReport(report)).toContain('0 FAILED');
     expect(report.declared).toBe(0);
     expect(report.passed).toBe(5);
-    expect(report.notApplicable).toBe(9);
+    expect(report.notApplicable).toBe(10);
     // The one difference between the two modes, asserted rather than implied:
     // this store has no way to delete an event it wrote, so it implements no
     // retention member and the case is n/a — never a sweep that reports zero.
@@ -569,6 +574,7 @@ describe('the declarations are the whole list, and each one is argued', () => {
       Object.entries(harness.declared ?? {}).map(([name]) => `${harness.name}: ${name}`),
     );
     expect(declarations).toEqual([
+      'agentEngineSessions (fake service): list-by-user-is-newest-first',
       'agentEngineSessions (fake service): ownership-fills-in-on-a-later-signed-turn',
     ]);
   });
@@ -588,7 +594,7 @@ describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law', () => {
     // A battery that quietly lost a case would pass every store trivially —
     // the same vacuous-pass shape `no-vendor-names` guards against.
-    expect(sessionLifecycleConformance.length).toBe(14);
+    expect(sessionLifecycleConformance.length).toBe(15);
     for (const testCase of sessionLifecycleConformance) {
       expect(testCase.law.length, `${testCase.name} has no law`).toBeGreaterThan(20);
     }

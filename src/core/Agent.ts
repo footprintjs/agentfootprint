@@ -154,7 +154,11 @@ import type {
 } from '../lib/injection-engine/skillGraph.js';
 import { makePickEntryStage } from './agent/stages/pickEntry.js';
 import { makeRouteTurnStage } from './agent/stages/routeTurn.js';
-import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
+import {
+  applyOutputFallback,
+  type ResolvedOutputFallback,
+  type OutputFallbackEmit,
+} from './outputFallback.js';
 import {
   assertContinuable,
   buildCheckpoint,
@@ -1181,13 +1185,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Engage the 3-tier fallback. The dispatcher gives us the
       // typed-event entry; we synthesize a minimal event shape since
       // these events have no per-stage anchor.
-      const emit = (eventType: string, payload: Record<string, unknown>): void => {
+      // Typed via `OutputFallbackEmit`, so the registry — not a grep — is what
+      // decides these two names are real. The cast is now only the envelope
+      // assembly (type + payload are already checked against the event map).
+      const emit: OutputFallbackEmit = (eventType, payload): void => {
         try {
           this.dispatcher.dispatch({
             type: eventType,
             timestamp: Date.now(),
             payload,
-          } as never);
+          } as unknown as AgentfootprintEventMap[typeof eventType]);
         } catch {
           /* observability errors must not poison the fallback path */
         }

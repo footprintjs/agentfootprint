@@ -369,6 +369,26 @@ const confusableScopes: ArtifactStoreCase = {
         { tenant: 'a%2Fb', conversationId: t },
         { tenant: 'a/b', conversationId: t },
       ],
+      // Case, in all three fields. A scope encoding can be injective as a
+      // STRING and still put two tenants in one directory, because macOS and
+      // Windows are case-insensitive by default — so the name the filesystem
+      // actually distinguishes is the one that has to differ. This battery ran
+      // green for months with that leak live, for want of these three rows.
+      [
+        'a tenant differing only in case',
+        { tenant: 'Acme', principal: 'alice', conversationId: t },
+        { tenant: 'acme', principal: 'alice', conversationId: t },
+      ],
+      [
+        'a principal differing only in case',
+        { tenant: t, principal: 'Alice', conversationId: 'c1' },
+        { tenant: t, principal: 'alice', conversationId: 'c1' },
+      ],
+      [
+        'a conversation differing only in case',
+        { tenant: t, principal: 'alice', conversationId: 'C1' },
+        { tenant: t, principal: 'alice', conversationId: 'c1' },
+      ],
     ];
 
     for (const [what, left, right] of pairs) {

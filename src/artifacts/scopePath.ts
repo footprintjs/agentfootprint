@@ -31,15 +31,56 @@
  * an already-escaped-looking value cannot land on the value that produced
  * it); {@link distinctFromAbsent} supplies it for the absence marker, which
  * `encodeURIComponent` passes through untouched because `_` is unreserved.
+ *
+ * ── Injective is not enough: the NAME has to be case-unambiguous too ─────────
+ * Two different strings are two different names only where the namer agrees.
+ * macOS/APFS and Windows/NTFS are **case-insensitive by default**, so a scope
+ * encoding that is injective as a string can still put two tenants in one
+ * directory — which is what this file did until 9.44.0. A tenant of `Acme` and
+ * a tenant of `acme` encoded to two distinct segments and landed in one folder,
+ * and since the ref is a content address that both scopes then resolve, the
+ * neighbour could read, LIST and delete. Reproduced on a stock Mac; the store
+ * conformance battery passed all 106 cases in the same process, because it had
+ * pairs for separators, absence markers and pre-escaped values, and no pair
+ * that differed only in case.
+ *
+ * So an uppercase ASCII letter is escaped BEFORE `encodeURIComponent`, leaving
+ * an output whose every letter is lowercase except the hex digits inside
+ * `%XX` escapes, which are always uppercase and can never be preceded by a
+ * lone `%` in any other way. No two distinct outputs can differ by case alone,
+ * so folding them is not something a filesystem is able to do.
+ *
+ * The escape is `~`, doubled when it appears in the input — the same
+ * escape-the-escape shape `identityNamespace` uses (9.40.0) and for the same
+ * reason: it makes a decoder a left inverse, which is what "injective" means
+ * when you have to prove it rather than assert it. `~` survives
+ * `encodeURIComponent` untouched because it is unreserved.
+ *
+ * **What re-keys.** Only a scope field containing an uppercase ASCII letter
+ * moves. Every all-lowercase field — including one carrying `/`, spaces, dots
+ * or non-ASCII — encodes to exactly the bytes it did before, so the ordinary
+ * deployment migrates nothing. A field that DID contain an uppercase letter was
+ * sharing a directory with its case variants on two of the three major
+ * platforms, which is the condition being fixed.
  */
 
 import { distinctFromAbsent, IDENTITY_ABSENT } from '../memory/identity/index.js';
 import type { ArtifactScope } from './types.js';
 
+/**
+ * `~` → `~~`, then every uppercase ASCII letter → `~` + its lowercase form.
+ *
+ * Escaping the escape first is what makes this reversible: a decoder reads `~~`
+ * as a literal tilde and `~x` as the uppercase of `x`, and never has to guess.
+ */
+function escapeUppercase(raw: string): string {
+  return raw.replace(/~/g, '~~').replace(/[A-Z]/g, (letter) => `~${letter.toLowerCase()}`);
+}
+
 /** One RAW tuple field → one inert path/key segment. */
 export function scopeSegment(raw: string | undefined): string {
   if (raw === undefined || raw === '') return IDENTITY_ABSENT;
-  return distinctFromAbsent(encodeURIComponent(raw).replace(/\./g, '%2E'));
+  return distinctFromAbsent(encodeURIComponent(escapeUppercase(raw)).replace(/\./g, '%2E'));
 }
 
 /** The three encoded segments of a scope, in the fixed tenant/principal/

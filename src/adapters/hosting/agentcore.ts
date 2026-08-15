@@ -726,7 +726,15 @@ function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
   return {
     async hydrate(sessionId: string): Promise<CheckpointEnvelope | undefined> {
       const file = await readFile();
-      const stored = file.sessions[sessionId];
+      // `hasOwn`, not a bare lookup. A session id is caller data — on this
+      // runtime it arrives in a header — and the sessions map is a plain object
+      // parsed from JSON, so `file.sessions['constructor']` answers with
+      // something off `Object.prototype` on a store that has never been
+      // written to. That reached `checkEnvelope`, which refused BY NAME: an
+      // empty store telling a caller their session "has a STORED conversation
+      // this runtime cannot read", permanently, for any id that happens to name
+      // a prototype member. An own-property test is the whole fix.
+      const stored = Object.hasOwn(file.sessions, sessionId) ? file.sessions[sessionId] : undefined;
       if (stored === undefined) return undefined;
       // Validate HERE as well as in the composer, so a refusal points at the
       // store that produced the bytes rather than at whoever read them next.
@@ -845,21 +853,99 @@ function memoryEventSessions(options: AgentCoreMemorySessionsOptions): SessionLi
 
 const SESSION_ID_MAX = 99;
 
-/** AgentCore ids accept `[A-Za-z0-9_-]`; a session id is caller data and need not. */
+/** Marks an id this adapter had to rewrite. Nothing else in arm A may start with it. */
+const ENCODED_PREFIX = '_enc_';
+
+/** Legal for AgentCore verbatim. */
+const ID_ALREADY_LEGAL = /^[A-Za-z0-9_-]+$/;
+
+/** Legal AND not the escape character — the set `encodeSessionId` passes through. */
+const CHAR_PASSES_THROUGH = /[A-Za-z0-9-]/;
+
+/**
+ * A session id, made legal for AgentCore **without ever folding two ids into one**.
+ *
+ * AgentCore ids accept `[A-Za-z0-9_-]`. A session id does not have to: it arrives
+ * in the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header, so it is caller
+ * data, chosen by whoever is calling. The old version of this function replaced
+ * every illegal character with `-`, which meant `a:b`, `a/b` and `a-b` all became
+ * `a-b` and therefore all became ONE stored conversation. A caller who picks the
+ * right id reads somebody else's session. This is the same defect the memory
+ * identity namespace had in 9.40.0, and worse, because there the colliding parts
+ * were server-side identity and here the whole key is caller-supplied.
+ *
+ * So this ENCODES instead of sanitising, in two arms whose outputs cannot meet:
+ *
+ *   A. already legal, and not claiming to be an encoded id → returned byte for
+ *      byte. This is what keeps the fix from re-keying anybody's stored sessions:
+ *      every id that used to round-trip correctly still maps to exactly the key
+ *      it mapped to before.
+ *   B. anything else → `_enc_` + an escaped form, where `_` is the escape
+ *      character (`_` → `__`, any other illegal UTF-16 unit → `_uXXXX`). A
+ *      decoder is a left inverse of that, which is what makes it injective.
+ *
+ * Arm A never starts with `_enc_` (it is excluded by construction) and every arm
+ * B output does, so no id from one arm can collide with an id from the other.
+ *
+ * **What this re-keys, stated exactly.** A stored session moves to a new key if
+ * and only if its id contains a character outside `[A-Za-z0-9_-]`, is longer
+ * than {@link SESSION_ID_MAX} characters, or begins with `_enc_`. Ids in the
+ * first group were sharing a key with every other id that folded onto it, so
+ * there was no single conversation there to preserve. Everything else — every
+ * UUID, every `user_123` — keeps the exact key it had, so the ordinary
+ * deployment migrates nothing.
+ */
 function safeSessionId(raw: string): string {
-  const slug = raw.replace(/[^A-Za-z0-9_-]/g, '-');
-  if (slug.length <= SESSION_ID_MAX) return slug;
-  // Keep a readable head plus a stable tail so two long ids stay distinct.
-  return `${slug.slice(0, SESSION_ID_MAX - 9)}-${fnv1a(raw)}`;
+  if (
+    raw.length <= SESSION_ID_MAX &&
+    ID_ALREADY_LEGAL.test(raw) &&
+    !raw.startsWith(ENCODED_PREFIX)
+  ) {
+    return raw;
+  }
+  const encoded = ENCODED_PREFIX + encodeSessionId(raw);
+  // Strictly less, so the two shapes below are told apart by LENGTH alone: a
+  // digested id is always exactly SESSION_ID_MAX and an escaped one never is.
+  if (encoded.length < SESSION_ID_MAX) return encoded;
+  // Past the provider's ceiling no mapping can stay injective — there are more
+  // ids than there are keys — so the tail becomes a digest of the WHOLE raw id.
+  // SHA-256 rather than FNV-1a because this input is caller-controlled: a
+  // 32-bit hash is a collision somebody can go and FIND in a few seconds, which
+  // for a session key is the same defect this function exists to close.
+  const digest = sha256Hex(raw).slice(0, 32);
+  return `${encoded.slice(0, SESSION_ID_MAX - digest.length - 2)}_z${digest}`;
 }
 
-function fnv1a(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
+/** `_` → `__`, anything else illegal → `_uXXXX`. Injective by construction. */
+function encodeSessionId(raw: string): string {
+  let out = '';
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (ch === '_') out += '__';
+    else if (CHAR_PASSES_THROUGH.test(ch)) out += ch;
+    else out += `_u${raw.charCodeAt(i).toString(16).padStart(4, '0')}`;
   }
-  return (h >>> 0).toString(36);
+  return out;
+}
+
+type NodeCryptoModule = typeof import('node:crypto');
+
+let cryptoModule: NodeCryptoModule | undefined;
+
+function sha256Hex(text: string): string {
+  if (!cryptoModule) {
+    try {
+      cryptoModule = lazyRequire<NodeCryptoModule>('node:crypto');
+    } catch {
+      throw new Error(
+        `agentCoreSessions cannot store a session id longer than ${SESSION_ID_MAX} characters ` +
+          'without `node:crypto`, which it needs to keep two long ids from becoming one ' +
+          'conversation. AgentCore runs on Node, so this should not happen — if you are ' +
+          'exercising this adapter somewhere else, shorten the session id instead.',
+      );
+    }
+  }
+  return cryptoModule.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
 /** The slice of `@aws-sdk/client-bedrock-agentcore` this shim touches. */

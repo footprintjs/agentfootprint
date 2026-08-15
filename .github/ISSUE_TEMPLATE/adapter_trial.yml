@@ -1,0 +1,140 @@
+name: Adapter Field Trial
+description: Report evidence from exercising an agentfootprint adapter against a real service (not a double/emulator-only run)
+labels: ["adapter-trial"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for running an adapter against the real thing. This form is for **evidence**, not
+        prose impressions — the goal is a report someone else can act on without re-running your trial.
+
+        **Before you file:** run the shipped conformance battery for the port you exercised, and
+        paste its own formatted output rather than describing the results in your own words. For a
+        `SessionLifecycle` store, that looks like:
+
+        ```ts
+        import { runSessionLifecycleConformance, formatConformanceReport } from 'agentfootprint/hosting';
+
+        const report = await runSessionLifecycleConformance({
+          name: '<adapter>',
+          createStore: () => <adapter>({ /* config */ }),
+          disposeStore: (s) => s.close?.(),
+        });
+        console.log(formatConformanceReport(report));
+        ```
+
+        A **declared limitation** — something the underlying provider makes impossible — is a
+        first-class, useful outcome of a trial. It is not a failure and does not need to be excused.
+
+        **Found something security-sensitive?** Stop here and use
+        [private vulnerability reporting](https://github.com/footprintjs/agentfootprint/security/advisories/new)
+        instead. Do not describe a live exploit, a reproduction, or a mechanism in this public form.
+
+  - type: input
+    id: version
+    attributes:
+      label: agentfootprint version
+      description: The published npm version you tested (not a local checkout SHA, unless that's what you ran).
+      placeholder: "e.g. 9.43.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: adapters
+    attributes:
+      label: Which adapter(s) were exercised
+      description: |
+        One per line, by their exported factory name — e.g. `firestoreSessions`, `agentEngineSessions`,
+        `agentCoreSessions`, `agentCoreRuntimeHost`. Include every adapter your trial touched, not only
+        the one you're reporting a finding about.
+      placeholder: |
+        firestoreSessions
+        agentEngineSessions
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Real service or emulator, region, SDK/client versions, runtime version.
+      placeholder: |
+        - Real service (not an emulator)
+        - Region: us-central1
+        - Node.js 22
+        - @google-cloud/firestore@9.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contract
+    attributes:
+      label: Which contract was tested
+      description: The shipped proof obligation your trial ran, if any. Pick "Other" and say what in the report below if it isn't listed.
+      options:
+        - SessionLifecycle conformance battery
+        - ArtifactStore conformance battery
+        - Ownership invariants (concurrent/interleaved writers)
+        - Other (specify in the conformance report / operational observations below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: conformance-report
+    attributes:
+      label: Conformance report output
+      description: |
+        Paste the actual output of `formatConformanceReport(report)` (or the equivalent for the
+        battery you ran). Please paste the tool's own output, not a prose summary of it — a summary
+        can silently drop a case nobody meant to skip.
+      render: text
+      placeholder: |
+        SessionLifecycle conformance — firestoreSessions: 13 passed, 0 declared, 1 n/a, 0 FAILED
+          ok        absent-session-hydrates-undefined
+          ok        persist-hydrate-round-trip
+          ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: declared-limitations
+    attributes:
+      label: Declared provider limitations observed
+      description: |
+        Anything the provider itself makes impossible — not a bug, not a gap in this library, a fact
+        about the service. A declared limitation is a first-class outcome of a trial, not a failure to
+        excuse. Say what's impossible and why (a field the provider fixes at creation, a verb the API
+        doesn't expose, a check the service doesn't perform, etc).
+      placeholder: |
+        A session created anonymously cannot later move into a signed user's listing, because the
+        provider fixes Session.userId at creation.
+    validations:
+      required: false
+
+  - type: textarea
+    id: operational
+    attributes:
+      label: Operational observations
+      description: |
+        Behaviour that passed but is worth recording anyway — TTL/expiry behaviour, latency, quota
+        limits, cleanup behaviour, anything an operator would want to know before depending on this
+        in production.
+      placeholder: |
+        Appending a later session event did not renew the session's expireTime; TTL behaves as
+        creation-based, not sliding, unless documented otherwise.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Trial safety
+      options:
+        - label: This report contains no credentials, access tokens, or other secrets.
+          required: true
+        - label: |
+            Any security-sensitive finding (an ownership/authorization defect, a data leak, a way to
+            access another caller's data, etc.) has been reported privately via
+            [security advisory reporting](https://github.com/footprintjs/agentfootprint/security/advisories/new)
+            and is NOT described in this public issue.
+          required: true

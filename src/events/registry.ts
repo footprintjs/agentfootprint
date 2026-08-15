@@ -78,6 +78,8 @@ import type {
   ReliabilityFailFastPayload,
   ReliabilityRetriedPayload,
   ReliabilityRecoveredPayload,
+  ResilienceOutputFallbackTriggeredPayload,
+  ResilienceOutputCannedUsedPayload,
   RiskFlaggedPayload,
   SkillActivatedPayload,
   SkillDeactivatedPayload,
@@ -236,6 +238,10 @@ export const EVENT_NAMES = {
     failFast: 'agentfootprint.reliability.fail_fast',
     retried: 'agentfootprint.reliability.retried',
     recovered: 'agentfootprint.reliability.recovered',
+  },
+  resilience: {
+    outputFallbackTriggered: 'agentfootprint.resilience.output_fallback_triggered',
+    outputCannedUsed: 'agentfootprint.resilience.output_canned_used',
   },
   pause: {
     request: 'agentfootprint.pause.request',
@@ -619,6 +625,15 @@ export interface AgentfootprintEventMap {
     'agentfootprint.reliability.recovered',
     ReliabilityRecoveredPayload
   >;
+  // resilience (the outputSchema fallback ladder — tiers 2 and 3)
+  'agentfootprint.resilience.output_fallback_triggered': AgentfootprintEventEnvelope<
+    'agentfootprint.resilience.output_fallback_triggered',
+    ResilienceOutputFallbackTriggeredPayload
+  >;
+  'agentfootprint.resilience.output_canned_used': AgentfootprintEventEnvelope<
+    'agentfootprint.resilience.output_canned_used',
+    ResilienceOutputCannedUsedPayload
+  >;
   // pause
   'agentfootprint.pause.request': AgentfootprintEventEnvelope<
     'agentfootprint.pause.request',
@@ -766,6 +781,8 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.reliability.fail_fast',
   'agentfootprint.reliability.retried',
   'agentfootprint.reliability.recovered',
+  'agentfootprint.resilience.output_fallback_triggered',
+  'agentfootprint.resilience.output_canned_used',
   'agentfootprint.pause.request',
   'agentfootprint.pause.resume',
   'agentfootprint.checkin.request',

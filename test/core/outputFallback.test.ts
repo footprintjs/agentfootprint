@@ -250,7 +250,18 @@ describe('outputFallback — P7 ROI', () => {
       fallback: () => ({ amount: 0, reason: 'recovered' }),
       canned: { amount: 0, reason: 'canned' },
     });
-    agent.on('agentfootprint.resilience.output_fallback_triggered' as never, (event) => {
+    // No `as never`. That cast was the SHAPE of the defect: these two names
+    // were emitted with no registry entry at all, and the cast is what let the
+    // call compile anyway. They are registered now, so it is simply not needed.
+    //
+    // What the removal is NOT is a guard. This file is typechecked by nothing —
+    // the root tsconfig covers `src/**/*` and `test:types` covers only
+    // `test/type-regressions/` — so no cast here could ever have failed a
+    // build. The enforcement lives in two places that DO get checked: the emit
+    // site in `src/core/outputFallback.ts`, now typed against the registry
+    // instead of taking a bare `string`, and
+    // `test/type-regressions/ResilienceEvents.assignability.test.ts`.
+    agent.on('agentfootprint.resilience.output_fallback_triggered', (event) => {
       events.push(event as AgentfootprintEvent);
     });
     await agent.runTyped<Refund>({ message: '...' });
@@ -267,7 +278,7 @@ describe('outputFallback — P7 ROI', () => {
       },
       canned: { amount: 0, reason: 'safety net' },
     });
-    agent.on('agentfootprint.resilience.output_canned_used' as never, (event) => {
+    agent.on('agentfootprint.resilience.output_canned_used', (event) => {
       events.push(event as AgentfootprintEvent);
     });
     await agent.runTyped<Refund>({ message: '...' });
