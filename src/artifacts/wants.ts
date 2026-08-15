@@ -218,7 +218,7 @@ function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
  * Resolve one tool's declared `wants` against the run's scope — the whole
  * Leg-1 law in one place, shared by every dispatch door.
  *
- * An ABSENT declared argument is judged by the tool's own schema (9.37.2):
+ * An ABSENT declared argument is judged by the tool's own schema (9.38.0):
  * `required` there means the tool cannot do its job without the data, so
  * dispatch refuses BY NAME rather than executing a handler that believes its
  * payload was resolved; anything else is optional, and the model choosing not

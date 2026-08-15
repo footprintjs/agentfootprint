@@ -1,0 +1,615 @@
+---
+title: Artifact architecture
+description: The five-verb port, the three dispatch legs, and what a ref is allowed to move — every claim carrying a status, three named gaps, and one worked refusal taken from a real run.
+---
+
+Two tools need the same six megabytes and the only road between them runs
+through the model. It reads the data it never needed, paraphrases it
+imperfectly back out, and the bill arrives twice. Enterprise messaging solved
+this decades ago and named the law the **claim check**: the expensive channel
+carries a ticket plus enough description to decide; the payload never rides the
+channel.
+
+This page is the architecture of that law in agentfootprint: **what a reference
+is, who is allowed to redeem one, what happens at dispatch when the model
+routes one, and — precisely — what a reference is not allowed to move.**
+
+It is the long-form companion to [Artifacts](doc:artifacts), which is the
+feature surface: the adapters, the option shapes, the event table, the runnable
+examples. Read that one to *use* the store. Read this one to know why it has
+five verbs and not six, and what it refuses to do for you.
+
+## How to read the status column
+
+Every capability claim on this page carries a status. That is deliberate. An
+architecture chapter written in specification voice makes an aspiration and a
+shipped behaviour read identically, and the difference is exactly what a reader
+needs. A status column cannot fix a wrong sentence, but it stops an aspiration
+wearing the same clothes as a fact.
+
+| Status | Means |
+|---|---|
+| **shipped** | Present in 9.38.0 and on by default. Calling it is enough. |
+| **opt-in** | Present in 9.38.0 and **off** until you ask for it by name. The default behaviour is the older one. |
+| **application-provided** | The library gives you the seam and the vocabulary. The behaviour is code you write. |
+| **planned** | Designed and **not built**. Do not call it; it does not exist. |
+
+Where something is limited, the limit is in the sentence that makes the claim,
+not in a footnote at the bottom.
+
+---
+
+# Chapter 0 — Five verbs, and the sixth that will never arrive
+
+## The port
+
+`ArtifactStore` is the vendor-neutral port every adapter implements. Scope is
+**always the first argument** — the same constitution `MemoryStore` follows, so
+isolation is enforced at the boundary rather than remembered at each call site.
+
+| Verb | Returns | The law it carries | Status |
+|---|---|---|---|
+| `put(scope, input)` | `ArtifactPutResult` — the minted `ArtifactMeta`, plus every `SweptArtifact` retention evicted to admit it | validates the input, proves `parentRefs` resolve in the same scope, measures `bytes`, stamps `expiresAt` | **shipped** |
+| `head(scope, ref)` | `ArtifactMeta \| null` | the ticket without the bytes — this IS the render-by-ref decision | **shipped** |
+| `get(scope, ref)` | `ArtifactRecord \| null` | ticket + payload, and it **verifies the digest** when the meta carries one | **shipped** |
+| `delete(scope, ref)` | `void` | removing an absence is agreement, not an error | **shipped** |
+| `list(scope, options)` | `ArtifactListResult` | cursored pages, newest first, **meta only** | **shipped** |
+
+`head` earns its place because a consumer picks what to do from `kind` and
+`bytes` without paying for the payload. That is the whole of render-by-ref, and
+it is one round trip.
+
+**The refusal, written down so a later round can be refused by citation: the
+port will never grow `query()` or `transform()`.** The moment it does, this is a
+database — and a database wearing a claim-check name is worse than either. A
+store answers "what is this, and give me the bytes." Compute over artifacts
+belongs to code that runs somewhere else (chapter 3). Five verbs is the ceiling,
+not the current state.
+
+## A ref is minted, never derived
+
+An `ArtifactRef` is `art_` plus 22 crypto-random characters — about 26 in total.
+It is **opaque and minted**, never content-addressed, and that is a decision
+with two reasons stated at the type: the same bytes stored by two tenants must
+be two objects, and a digest can never name two generations of "the current
+dataset". **shipped**
+
+The content digest (`sha-256`, computed at `put` when you ask for it) is
+*metadata*. It buys integrity checking, and a mismatch on `get` throws
+`ArtifactIntegrityError` rather than handing back corrupt bytes as if whole. It
+is never the key. **opt-in** (ask with `digest: 'sha-256'`).
+
+## …and two optional members, one of which cannot keep a promise
+
+`putStream` and `getStream` let a payload move without either side holding it
+whole. They are **optional members, not a sixth and seventh verb**: a store that
+cannot honour the promise leaves them **absent** rather than faking it, and you
+feature-detect with narrowing guards.
+
+```ts twoslash
+import { fileArtifacts, canGetArtifactStream, type ArtifactScope } from 'agentfootprint';
+declare const scope: ArtifactScope;
+declare const ref: string;
+// ---cut---
+const store = fileArtifacts({ directory: './artifacts' });
+
+if (canGetArtifactStream(store)) {
+  const streamed = await store.getStream(scope, ref);
+  // `meta.digest` rides — but NOTHING here checked it. See below.
+  streamed?.meta.digest;
+}
+```
+
+After the guard the call compiles with no `!` and no cast, so the honest branch
+is also the comfortable one. Calling an undetected member is a **type error, not
+a runtime surprise.**
+
+| Store | Streams? | Why | Status |
+|---|---|---|---|
+| `fileArtifacts` | **yes** | bytes go to a sibling `<ref>.bin` as they arrive | **shipped** |
+| `s3Artifacts` / `gcsArtifacts` | **yes** | the SDKs' own streaming upload and download | **shipped** |
+| `sqliteArtifacts` | **no — absent** | `node:sqlite` reads and writes a BLOB whole; a "stream" here would buffer everything and call itself a stream | **shipped** (the absence is the feature) |
+| `inMemoryArtifacts` | **no — absent** | it holds payloads whole under a byte budget; streaming into it would defeat both | **shipped** (the absence is the feature) |
+
+Two costs ride a streamed put, and both are stated rather than traded quietly.
+**`bytes` is required** — it is *stated*, not measured, because retention has to
+plan an eviction and an object store has to declare a content length before the
+first chunk arrives; a payload that does not match what it declared is refused
+rather than stored under a meta that lies about it. And:
+
+> **`getStream` does not verify the digest. `get` does.** Verification needs the
+> whole payload, which is the exact thing streaming exists to avoid holding.
+> `meta.digest` rides on the record anyway, so a caller who needs the guarantee
+> can hash what it collected and compare — the loss is named, never silently
+> swapped in. If you need a verified read, use `get`. **shipped, with the gap in
+> the same sentence.**
+
+`ctx.artifacts` does **not** grow streaming, and that is a decision rather than
+an omission: a tool receives its artifacts pre-scoped and answers a model, and a
+model cannot hold a stream. A tool genuinely moving gigabytes holds the *store*
+— it constructed it — and calls that directly. **planned** (streaming on the
+tool capability): not designed, not wanted.
+
+---
+
+# Chapter 1 — Who holds the scope
+
+## The capability a tool gets
+
+Every tool's execute context carries `ctx.artifacts` (a `ToolArtifacts`) and
+`ctx.hasArtifacts`. It is shaped exactly like `ctx.credentials`, and the shape
+carries three guarantees.
+
+| Guarantee | What it means | Status |
+|---|---|---|
+| always present, **fail-closed** | with no store attached, every method throws a teaching refusal naming the fix. A missing store can never read as an empty one, and a tool can never optional-chain past it. | **shipped** |
+| **scope is composed by the framework** | the capability *closes over* the run's tenant/principal/conversation tuple. The five verbs here take no scope argument on purpose: that argument was already answered by whoever built the context. A tool cannot name, widen, or replace the scope it resolves under. | **shipped** |
+| `origin` is stamped, not supplied | every mint carries `{ runId, toolCallId }` from the run's own facts. A caller-supplied `origin` is **discarded**. | **shipped** |
+
+The middle row is the security property. A ref pasted into a log, a model
+response, or a bug report opens nothing: resolution takes the ref *and* the
+caller's scope, and under any other session's scope the same ref answers `null`.
+
+```ts twoslash
+import { defineTool } from 'agentfootprint';
+// ---cut---
+const getSales = defineTool({
+  name: 'get_sales',
+  description: 'Fetch Q3 sales and check them into the artifact store.',
+  execute: async (_args, ctx) => {
+    if (!ctx.hasArtifacts) {
+      // The branchable fact, for a tool that genuinely supports both modes.
+      // Everything else should just let the fail-closed refusal happen.
+      return 'no artifact store attached — returning a summary instead';
+    }
+    const rows = Array.from({ length: 48_000 }, (_, i) => ({ order: i, amount: (i % 97) + 1 }));
+    const meta = await ctx.artifacts.put({
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: rows,
+      label: 'Q3 sales by region',
+    });
+    // The model reads THIS — one line, about 30 tokens.
+    return `stored ${meta.ref} [${meta.kind} · ${meta.bytes} bytes]`;
+  },
+});
+```
+
+Note what the tool did *not* do: it never named a tenant, never composed a key,
+and never decided who may read this back. Those are not its questions.
+
+## One absence, four causes
+
+`get` and `head` return `null` for missing **or** expired. The ambiguity is
+deliberate, and it is wider than it first looks: **four different situations end
+in exactly the same answer.**
+
+| What actually happened | What the caller sees |
+|---|---|
+| the ref was never stored | `null` |
+| it was stored and the ttl swept it | `null` |
+| it belongs to another tenant or principal | `null` |
+| it belongs to another conversation | `null` |
+
+Distinguishing them would let a caller probe another scope's contents — "not
+found" versus "not yours" is an oracle, and possession of a ref is the whole
+entitlement this system honours. So "no data" is the only actionable fact the
+caller gets. **shipped**
+
+The same single answer reaches the screen. A hosting door that cannot resolve a
+ticket raises `ArtifactNotFoundError`, whose message covers all four causes in
+one sentence — *missing, expired, swept, or never stored under this session's
+scope* — and tells the reader what to do instead. **shipped**
+
+**The record still tells the truth.** Every miss lands as
+`agentfootprint.artifacts.refused` with `reason: 'missing-or-expired'`, so an
+operator reading the trace sees the event the caller was not given. That split —
+opaque to the caller, legible to the operator — is the design, not an accident
+of implementation.
+
+---
+
+# Chapter 2 — Three legs at dispatch
+
+The store alone still leaves the model redeeming tickets by hand inside a tool
+body. Three legs make a ref a first-class citizen of dispatch itself.
+
+## Leg 1 — `wants`: refs as tool arguments
+
+A tool declares which of its arguments are claim tickets and what kind each must
+redeem to. The framework resolves them **before `execute`**, and the handler
+receives the **data**; the ticket rides `ctx.wanted`.
+
+```ts twoslash
+import { Agent, defineTool, inMemoryArtifacts } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+
+const provider = mock({ reply: 'demo' });
+const getData = defineTool({
+  name: 'get_data',
+  description: 'Fetch the Q3 sales rows (large).',
+  execute: () => Array.from({ length: 48_000 }, (_, i) => ({ order: i, amount: (i % 97) + 1 })),
+});
+// ---cut---
+const transformReport = defineTool<{ dataset: string }, string>({
+  name: 'transform_report',
+  description: 'Aggregate a stored dataset. Pass the art_… ref from get_data.',
+  inputSchema: {
+    type: 'object',
+    properties: { dataset: { type: 'string' } },
+    required: ['dataset'], // ← load-bearing; see below
+  },
+  wants: { dataset: 'tool-result/get_data' },
+  execute: async (args, ctx) => {
+    // args.dataset is the resolved DATA, not the ticket.
+    const rows = JSON.parse(args.dataset) as ReadonlyArray<{ amount: number }>;
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    return `total: ${total} (from ${ctx.wanted?.dataset?.ref})`;
+  },
+});
+
+const agent = Agent.create({
+  provider,
+  model: 'claude-sonnet-4-5',
+  artifacts: { store: inMemoryArtifacts(), placement: { maxInlineChars: 2_000 } },
+})
+  .tool(getData)
+  .tool(transformReport)
+  .build();
+```
+
+The declaration's shape is the exported `ToolWants` type —
+`Readonly<Record<argName, kind>>`. Its law, verb for verb the `needs`
+(credentials) precedent:
+
+| Rule | Why it is that way | Status |
+|---|---|---|
+| resolution happens at dispatch, **before `execute` and before credentials** | a call whose data cannot be delivered never acquires a secret and never runs | **shipped** |
+| a stale, unknown, or wrong-kind ref **never reaches the tool** | the model reads a teaching refusal that lists the **live refs of the wanted kind in scope** — correcting by naming what *can* resolve, bounded at 10 shown from 200 scanned | **shipped** |
+| the kind check is **exact string equality** | `'dataset/rows'` matches only `'dataset/rows'`. No wildcards, no hierarchy — a kind is an id, not a family | **shipped** |
+| **all** declared arguments are judged before answering | one refusal teaches the whole correction instead of one argument per retry loop | **shipped** |
+| declared honestly or refused at `defineTool` | a wants-argument must exist in `inputSchema.properties` and be `type: 'string'` — the model speaks the ref, never the bytes | **shipped** |
+| a statically registered wants-tool on a **storeless** agent refuses at **build** | configuration that could never work should not wait for the first oversized run to say so. `mcpServe` refuses wants-tools by name at its own door | **shipped** |
+| `ctx.wanted` is **absent**, not empty, when nothing resolved | absent and empty are different facts | **shipped** |
+| a tool without `wants` takes the exact path it always took | zero-cost when unused | **shipped** |
+
+### A required ref, omitted, is now refused by name (9.38.0)
+
+This is the correction most likely to change what you see in a transcript.
+
+A `wants` declaration names an argument. Whether omitting that argument is a
+*choice* or a *hole* is answered by the tool's own `inputSchema.required` — and
+until 9.38.0 that question was effectively delegated to `toolArgValidation`, an
+**agent-wide** dial an operator may set to `'warn'` or `'off'`. Under those
+settings a required, declared ref could be omitted and the tool would run
+anyway, with the argument simply absent: the handler believing the framework
+resolved its payload, and holding nothing. Accepted-and-silently-wrong, in the
+one place this feature exists to make impossible.
+
+Now the resolver reads `inputSchema.required` **itself**:
+
+- **required and omitted** → dispatch refuses by name, listing the live refs of
+  the wanted kind. The tool does not run. **shipped**
+- **optional and omitted** → the model legitimately chose not to pass one. The
+  call runs and `ctx.wanted` simply has no entry for it. **shipped** (unchanged)
+
+Two things worth being precise about. First, this does not *replace*
+`toolArgValidation`: under its `'enforce'` default the args gate still runs
+first and answers a missing required argument with its own structured retry
+message. The `wants` belt is what makes the refusal survive an operator turning
+that dial down — which is exactly the configuration where a silent hole was
+possible before.
+
+Second, **both dispatch doors enforce it.** The batch loop enforces it, and so
+does the resume path a human approval comes back through: an approved call is
+not a waived one. A person clicking "approve" agreed to the *call*, not to the
+framework skipping the delivery it promised.
+
+## Leg 2 — placement: an oversized result becomes a ticket
+
+`artifacts: { store, placement: { maxInlineChars: N } }` is the **operator's**
+dial. Any tool result whose finalized text **strictly exceeds** N is checked into
+the store as kind `tool-result/<toolName>` and the model reads a short
+substitute instead.
+
+| Rule | Detail | Status |
+|---|---|---|
+| the dial | `{ maxInlineChars }`, a positive whole number, refused at build otherwise. Placement cannot be *spelled* without a store — the option's own shape prevents it | **opt-in** |
+| the threshold | **strictly exceeds**: a result exactly at N is not placed | **shipped** |
+| the kind | `tool-result/<toolName>`, composed by the exported `placedResultKind(toolName)` so a `wants` declaration can name it without spelling the prefix | **shipped** |
+| the payload | the **exact text the model would have read** — not a summary, not a re-encoding | **shipped** |
+| the substitute | one shape, always an object: `{ placed: true, ref, kind, mediaType, bytes, reason }`. Branch on `.placed` with `isPlacedToolResult` | **shipped** |
+| when it is judged | only on a **finalized** result, and never on an errored, denied, or ceiling-refused call — `tool-result/<name>` must never claim an error is the tool's result | **shipped** |
+| where it is judged | at **all five** places a tool result is finalized: the batch loop, and the four pause/resume paths (an approved ask, a decision, a consent, and a human's own pasted answer — which costs a window exactly what a tool's rows do) | **shipped** |
+| a placed result is a ticket, **not** a refusal | declared tool effects are still judged and procedure steps still advance — the result arrived; it just travels by reference | **shipped** |
+
+Precedence with the other two ceilings, since all three measure the same string:
+
+1. the tool's own `resultCeiling` — the **author's** refusal — is judged first,
+   at the execute boundary, so a refused result is already short and placement
+   never sees the payload;
+2. **placement** — the **operator's** ref-ing — is judged next, on whatever the
+   after-tool governance chain let through;
+3. the agent-level `maxToolResultChars` truncation net runs last, and with
+   placement on it measures the ticket, so it should rarely fire.
+
+### The footgun: placement rewrites the string your routing reads
+
+Stated here because it is not guessable from a number.
+
+> The substitute **replaces the result string everywhere downstream** — message
+> history, `lastToolResult`, `toolResults`. That is precisely where skill-graph
+> `when` edges and `rule` triggers look. **Turning placement on, or changing
+> `maxInlineChars`, can therefore change which edge fires** for any graph that
+> matches on result *text*.
+
+This is intentional, and the alternative is worse: routing judges what the model
+was told, and predicates reading a string the conversation never contained would
+be a lie in the other direction. But it is a real trap, so: **an edge that must
+survive the dial should key on the tool name (`onToolReturn`) or a declared
+status (`onToolStatus`), not on result text.** **shipped** (the coupling);
+**application-provided** (choosing edges that survive it).
+
+## Leg 3 — `present`: hand a ref to the screen
+
+When a store is attached, one more tool is auto-attached and its name is
+reserved exactly then (`PRESENT_TOOL_NAME`): `present({ ref, as, label? })`. A
+storeless agent may keep its own `present`, because the framework attaches
+nothing there.
+
+**It `head`s the ref. It never `get`s it.** Presenting is the render-by-ref
+decision; the screen pays for the bytes later, under its own identity. What the
+model — and therefore the transcript — keeps is a `PresentedResult` carrying a
+**description snapshot**: `{ kind, mediaType, bytes, label }`.
+
+The snapshot lives *inside the tool result*, the one thing provider message
+history keeps typed and durable. So a conversation reloaded long after the
+artifact expired can still render an honest placeholder from history alone —
+*"Chart — 'Q3 sales by region' (bar-chart, 41 KB) — expired; re-run to
+regenerate"* — instead of a blank pane. **shipped**
+
+A miss is a teaching refusal listing the live refs in scope, sets `error: true`
+on the call (so a procedure step whose tool presented nothing does not advance),
+and lands as `artifacts.refused`. A hit emits
+`agentfootprint.artifacts.presented`. **shipped**
+
+`as` is consumer vocabulary — `'bar-chart'`, `'table'`, `'image'` — and it is
+**stored as data, deliberately unvalidated**. What that does and does not buy is
+chapter 4.
+
+---
+
+# Chapter 3 — The code leg, and what lineage is allowed to do
+
+## Data goes in
+
+`codeRunnerTool({ wants })` is the `wants` leg pointed at an interpreter: the
+resolved payload is staged **into** the session as a file through
+`CodeSession.stageInputs`, and the model is told the paths through an
+environment variable naming a JSON manifest keyed by argument name. A dataset
+reaches the interpreter without one byte of it entering the prompt. **shipped**
+
+A runner whose sessions cannot stage refuses **by name**, naming both the runner
+and the tool, rather than running code against files that are not there.
+**shipped**
+
+## Outputs are a gap, and the gap is named
+
+`CodeResult.artifacts` is the field an adapter fills with the files a run
+produced; `codeRunnerTool` mints every entry that carries `data` into the store
+with no further wiring, and the rendered result names the ref.
+
+> **No shipped runner populates it.** `localCodeRunner` leaves the field
+> **absent** — never `[]` — and that distinction is the whole point: `[]` says
+> *this execution produced no files*, while absent says *this runner does not
+> report produced files at all*. It has no declared output location to collect
+> from; the child's working directory is the caller's own cwd, so "files the code
+> wrote" is not a set it can identify without guessing which of a developer's
+> files were meant. A dev-loop runner that quietly uploaded whatever appeared
+> beside your source would be the worse failure.
+
+A runner that wants to produce outputs owes exactly three things, and then the
+minting works with no further wiring:
+
+1. **a declared output location the model is told about** — so "what the code
+   wrote" is a set, not a guess;
+2. **a bounded read-back** of what landed there — so one runaway loop cannot
+   hand back a directory;
+3. **a real byte count** — `bytes` must be the payload's true length, because
+   retention plans evictions against it.
+
+Status: **shipped** (the minting path, `codeRunnerTool` side) ·
+**application-provided** (a runner that fills the field) · **planned** (a shipped
+runner that does).
+
+## Lineage is stamped automatically now (9.38.0)
+
+When code produces a file and the same call resolved input refs, the mint
+carries `parentRefs` **stamped from those inputs**, deduplicated. The framework
+already redeemed them — that is what `ctx.wanted` is — so the lineage is a fact
+it holds, not an inference. A consumer folding `head()` over `parentRefs` walks
+from the chart back to the dataset without the tool author having remembered to
+wire it. **shipped**
+
+Two details that are decisions rather than implementation noise:
+
+- **absent, not `[]`, when nothing resolved.** An empty array reads as "derived
+  from nothing", which is a different statement from "nothing said where this
+  came from".
+- **a parent that expired mid-call fails that mint** rather than silently
+  dropping the lineage. `parentRefs` are validated at mint — a foreign key that
+  cannot dangle at birth — and an artifact minted with an unprovable derivation
+  is exactly the lie the validation exists to refuse. The failure is contained
+  per entry and stated in the line the model reads; the code's success is not
+  turned into a throw.
+
+## …and lineage moves nothing
+
+This is the claim worth being loudest about, because it is the one a reader will
+assume otherwise.
+
+> **`parentRefs` does not move the cursor, gate a tool, satisfy a step, or
+> influence routing in any way.** It is recorded at mint, validated at mint,
+> stored, carried on the `artifacts.minted` event, and drawn on a read-only lens
+> card. That is the complete list of what reads it.
+
+It was worth trying to falsify, and it does not falsify: outside minting,
+storage, its event and that card, nothing in the runtime reads the field.
+Derivation is a **fact**, not an engine. There is deliberately no lineage-graph
+walker, because the moment your question becomes "*why* does this chart disagree
+with that dataset", that is causation — and causation is what the trace already
+owns. **shipped** (the fact) · **planned** (nothing: a lineage engine is
+refused, not deferred).
+
+---
+
+# Chapter 4 — The screen
+
+The frontend half ships in a **separate package**, `agentfootprint-lens`
+(0.34.0 and later). Naming it precisely matters here, because a plausible-
+sounding component name that does not exist costs a reader an afternoon.
+
+| What ships | What it is | Status |
+|---|---|---|
+| `ArtifactResolver` | the abstraction a pane redeems through — `head` then `get` | **shipped** (in `agentfootprint-lens`) |
+| `httpArtifactResolver({ url, sessionId })` | redeems against a served agent, carrying session identity on every request | **shipped** (in `agentfootprint-lens`) |
+| `storeArtifactResolver({ … })` | redeems against a same-process store | **shipped** (in `agentfootprint-lens`) |
+| `registerArtifactComponent({ kind, component })` | a **module-level** registry: one page has one vocabulary. Returns an unregister function | **shipped** (in `agentfootprint-lens`) |
+| `<ArtifactPane presented resolver />` | renders one `present` call: live → the registered component; absent → the stated placeholder built from the snapshot alone; failed → the door's own refusal, verbatim | **shipped** (in `agentfootprint-lens`) |
+| `humanizeArtifactMinted` / `…Resolved` / `…Expired` / `…Refused` / `…Presented` | the five-verb narration vocabulary, one function per lifecycle event | **shipped** (in `agentfootprint-lens`) |
+
+The wire underneath is two read-only operations — `artifact-head` and
+`artifact-get` — answered by a served agent on its invoke path. There is
+deliberately **no** put, delete, or list over the wire: a screen redeems
+tickets; it does not mint or sweep, and `list` over a wire would let a caller
+enumerate a scope. **shipped**
+
+## "The model cannot invent a component" — true, but not for the reason you would guess
+
+It is tempting to say the model cannot summon an arbitrary renderer because `as`
+is validated against a registry. That is **not** what happens.
+
+**Renderer selection is by `kind` alone.** The registry keys on the artifact's
+`kind` — the *producer's* vocabulary, stamped at mint by the tool that stored
+the data. `as` is the *model's* hint, it is never validated anywhere, and it
+never selects anything. It travels through to the component as context and shows
+up in the narration.
+
+So the safety claim survives, by a stronger mechanism than validation: the model
+cannot summon a component the producing tool did not describe, because the model
+is not the one choosing. A kind nothing is registered for renders the honest
+metadata card plus a line naming the gap — never a blank pane, never a crash.
+**shipped** (kind-keyed selection) · **planned** (validating `as`: not built,
+and on this reading not needed).
+
+---
+
+# One worked failure
+
+Every example above succeeds. This one does not, which is the point: the `wants`
+refusal is the mechanism you will actually meet in a transcript, and it is the
+one almost never shown. Everything below was captured from a real run against
+this repository's source, not composed by hand.
+
+The setup: three tools and a placement dial. `fetch_sales` returns a large
+result that placement checks in as `tool-result/fetch_sales`. `fetch_regions`
+mints a `dataset/rows` artifact explicitly. `summarize` declares
+`wants: { dataset: 'dataset/rows' }` with `dataset` **required** in its schema.
+The agent runs with `toolArgValidation: 'off'` — deliberately, because that is
+the configuration in which the pre-9.38.0 hole existed.
+
+The model then makes the two mistakes models make: it grabs the first ref it
+saw, and then it calls the tool with no ref at all.
+
+## What placement told it in the first place
+
+The `role: 'tool'` message after `fetch_sales`, verbatim:
+
+```json
+{"placed":true,"ref":"art_eTDFC0vngTcQaQGPMc4YuT","kind":"tool-result/fetch_sales","mediaType":"application/json","bytes":165179,"reason":"fetch_sales returned 165179 chars, over the 2000-char placement threshold, so the full result was stored as artifact 'art_eTDFC0vngTcQaQGPMc4YuT' (tool-result/fetch_sales) instead of entering this conversation. Route the ref: pass the string 'art_eTDFC0vngTcQaQGPMc4YuT' to a tool whose argument wants 'tool-result/fetch_sales', or call present({ ref: 'art_eTDFC0vngTcQaQGPMc4YuT', as: … }) to hand it to the screen. Do not retype or summarize content you have not read."}
+```
+
+165,179 characters became one line. The `reason` field names the ref twice and
+says what to do with it, because a ticket the model cannot route is just a
+truncation with better manners.
+
+## Failure 1 — the wrong parcel
+
+The model passed that ref to `summarize`, which wants `'dataset/rows'`. Verbatim,
+the entire feedback the model receives:
+
+```text
+Tool 'summarize' was not executed — its declared artifact argument did not resolve. 'dataset' = art_eTDFC0vngTcQaQGPMc4YuT resolves, but it is 'tool-result/fetch_sales' and this argument wants 'dataset/rows' — the wrong parcel for this ticket window. Live 'dataset/rows' refs in scope: art_zaObKXGSPDxwSf2btQf95w ('region table', 72 bytes). Pass one of these.
+```
+
+Three things are doing work in that sentence. It says the tool **was not
+executed**, so the model does not reason about a result that never existed. It
+names both kinds, so the mistake is legible rather than mysterious. And it ends
+by **listing what would fit** — the live `dataset/rows` refs in scope, with
+labels and sizes — because a refusal that only says "no" moves the puzzle
+without solving it.
+
+## Failure 2 — the hole that used to be silent
+
+Corrected but overcorrecting, the model called `summarize` with no `dataset` at
+all. This is the case 9.38.0 fixed. Verbatim:
+
+```text
+Tool 'summarize' was not executed — its declared artifact argument did not resolve. 'dataset' is required and no value was passed — this tool declares it wants a 'dataset/rows' artifact there, and the framework resolves the ref BEFORE the tool runs, so the tool is never executed without it. Pass the art_… ref as 'dataset'. Live 'dataset/rows' refs in scope: art_zaObKXGSPDxwSf2btQf95w ('region table', 72 bytes). Pass one of these.
+```
+
+Before 9.38.0, with `toolArgValidation` at `'off'` or `'warn'`, that call
+**ran** — the handler executing with `args.dataset` undefined, believing the
+framework had resolved it.
+
+## What the record says
+
+Both refusals landed on the causal record as
+`agentfootprint.artifacts.refused`, at the framework's own door:
+
+```json
+[
+  {
+    "op": "dispatch",
+    "reason": "kind-mismatch",
+    "ref": "art_eTDFC0vngTcQaQGPMc4YuT",
+    "detail": "'dataset' = art_eTDFC0vngTcQaQGPMc4YuT resolves, but it is 'tool-result/fetch_sales' and this argument wants 'dataset/rows' — the wrong parcel for this ticket window. Live 'dataset/rows' refs in scope: art_zaObKXGSPDxwSf2btQf95w ('region table', 72 bytes). Pass one of these.",
+    "tool": "summarize"
+  },
+  {
+    "op": "dispatch",
+    "reason": "invalid-input",
+    "detail": "'dataset' is required and no value was passed — this tool declares it wants a 'dataset/rows' artifact there, and the framework resolves the ref BEFORE the tool runs, so the tool is never executed without it. Pass the art_… ref as 'dataset'. Live 'dataset/rows' refs in scope: art_zaObKXGSPDxwSf2btQf95w ('region table', 72 bytes). Pass one of these.",
+    "tool": "summarize"
+  }
+]
+```
+
+`op: 'dispatch'` is the marker worth knowing: it is not one of the five store
+verbs. It means the tool-calls stage declined to run a tool whose declared data
+could not be delivered. Two refusals, no execution, no invented data, and every
+hop on the same record as the rest of the run.
+
+That is the whole invariant in one run: **a ref the framework cannot deliver is
+answered in words the model can act on, is on the record as an event, and the
+tool does not run.**
+
+---
+
+# What does not exist
+
+Named plainly, because an absence described in the present tense is the most
+expensive kind of documentation error.
+
+| The thing | The reality |
+|---|---|
+| a runner that reports produced files | **None ships.** `localCodeRunner` leaves `CodeResult.artifacts` absent by design (chapter 3). The minting path is real and works the moment a runner fills the field. **planned.** |
+| `getStream` verifying integrity | **It does not, and cannot cheaply.** `get` is the verifying read. `meta.digest` rides so you can check it yourself. **shipped limitation.** |
+| a registry that validates `as` | **Not built, and on chapter 4's reading not needed** — selection is by `kind`, so `as` never chooses anything. **planned.** |
+| `defineArtifactKind` | **Does not exist.** A proposed way to declare a kind's schema once. Do not import it. **planned.** |
+| `artifactComputeTool` | **Does not exist.** A proposed compute-over-artifacts tool. Note that any such thing must live *outside* the port — see chapter 0's refusal. **planned.** |
+| a lineage-graph engine | **Refused, not deferred.** Walking parents is a fold over `head()`; asking *why* two artifacts disagree is a question for the trace. |
+| `query()` / `transform()` on the port | **Refused, permanently.** Adding either makes this a database. |
+
+For the adapters, the option shapes, retention dials, the full event table and
+the runnable examples, go to [Artifacts](doc:artifacts).
