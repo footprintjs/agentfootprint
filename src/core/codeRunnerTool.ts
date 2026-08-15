@@ -183,27 +183,35 @@ export interface RecordsCodeRuns {
  * reduce to one shape; a totals-then-threshold written eleven times this month
  * hashes to one value eleven times, which is the signal worth having.
  *
+ * **The callee names are KEPT, and that is the point.** The operation IS the
+ * signal. The first version of this erased them too, which made `groupBy` and
+ * `sortBy` one shape and collapsed the whole backlog into a single meaningless
+ * bucket — caught by a clean-room probe on the published package, and missed by
+ * a test whose two examples happened to differ elsewhere as well. A function
+ * name is code, not data; the data lives in the literals and the variable
+ * names, and those are what go.
+ *
  * Deliberately crude — a lexical reduction, not a parse. It has to work on
  * whatever language the runner was configured for, and a wrong parse would be a
  * worse answer than a coarse one.
  */
 export function codeShape(code: string): string {
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-    .replace(/#[^\n]*/g, ' ')
-    .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, 'S')
-    .replace(/\b\d[\d_.eE+-]*\b/g, 'N')
-    .replace(
-      /\b(?!if|else|for|while|return|function|const|let|var|def|import|from|class|try|catch|await|async|in|of|new|not|and|or)[A-Za-z_$][\w$]*\b(?=\s*\()/g,
-      'F',
-    )
-    .replace(
-      /\b(?!if|else|for|while|return|function|const|let|var|def|import|from|class|try|catch|await|async|in|of|new|not|and|or|F|S|N)[A-Za-z_$][\w$]*\b/g,
-      'V',
-    )
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    code
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+      .replace(/#[^\n]*/g, ' ')
+      .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, 'S')
+      .replace(/\b\d[\d_.eE+-]*\b/g, 'N')
+      // Only identifiers that are NOT callees. The operation name is the whole
+      // signal, so it stays.
+      .replace(
+        /\b(?!if|else|for|while|return|function|const|let|var|def|import|from|class|try|catch|await|async|in|of|new|not|and|or|S|N)[A-Za-z_$][\w$]*\b(?!\s*\()/g,
+        'V',
+      )
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 /** A `Tool` that holds live sessions, keyed by isolation key. */

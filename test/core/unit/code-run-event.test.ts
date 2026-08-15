@@ -37,8 +37,11 @@ describe('codeShape — two runs of one computation reduce to one shape', () => 
   });
 
   it('keeps genuinely different computations apart', () => {
-    const grouped = `const g = groupBy(rows, 'a'); console.log(g);`;
-    const sorted = `const s = sortBy(rows, 'a'); console.log(s.slice(0, 10));`;
+    // A MINIMAL pair — identical but for the operation. The first version of
+    // this test differed in the tail as well, so it passed against a normaliser
+    // that erased the operation name entirely.
+    const grouped = `groupBy(rows, 'a')`;
+    const sorted = `sortBy(rows, 'a')`;
     expect(codeShape(grouped)).not.toBe(codeShape(sorted));
   });
 

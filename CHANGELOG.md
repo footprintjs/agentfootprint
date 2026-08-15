@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.46.2] - 2026-08-15
+
+### Fixed
+
+- **`codeShape` erased the operation name, which was the entire signal.** It
+  replaced every callee with a placeholder, so `groupBy(rows, x)` and
+  `sortBy(rows, x)` hashed identically and the backlog the shape hash exists to
+  build collapsed into one meaningless bucket. Callee names are kept now; a
+  function name is code, not data, and the data lives in the literals and
+  variable names that still go.
+
+  Found by the clean-room probe on the published package, using a minimal pair.
+  The unit test missed it because its two examples differed in their tails as
+  well as their operation — a test that varies more than the thing under test
+  cannot fail for the right reason, which is the same defect this release train
+  has now found in a conformance case, a listing check and a normaliser.
+
 ## [9.46.1] - 2026-08-15
 
 ### Fixed
