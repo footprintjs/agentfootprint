@@ -78,7 +78,16 @@ export type DomainWildcard =
   // watching "is anything failing to authenticate?") could not subscribe to
   // them as a group. That is how a credential adapter can fail every call and
   // nobody notices: the events were on the wire, and nothing was listening to
-  // the wire. `validation.*` and `reliability.*` are still missing here.
+  // the wire.
+  //
+  // 9.45.1 — and `validation.*` and `reliability.*` were "still missing here"
+  // for three releases after that sentence was written, which is its own small
+  // lesson: a comment naming a gap is not a mechanism for closing one. Both
+  // domains emit, both were subscribable one event at a time, and neither could
+  // be watched as a GROUP — so the operator asking "is anything failing
+  // validation?" had to know every member name in advance.
+  | 'agentfootprint.validation.*'
+  | 'agentfootprint.reliability.*'
   | 'agentfootprint.credential.*'
   | 'agentfootprint.risk.*'
   | 'agentfootprint.fallback.*'

@@ -52,6 +52,7 @@
  *   conversation.onClose(() => void agent.closeToolSessions({ sessionId }));
  */
 
+import { fnv1a } from '../lib/fnv1a.js';
 import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../adapters/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
@@ -146,9 +147,75 @@ const DEFAULT_MAX_OUTPUT_CHARS = 4_000;
  */
 export const TOOL_SESSIONS: unique symbol = Symbol.for('agentfootprint.tools.sessions');
 
+/**
+ * Where a finished code run leaves its facts, keyed by `toolCallId`.
+ *
+ * `Symbol.for` for the same CJS/ESM reason as {@link TOOL_SESSIONS}, and keyed
+ * by the CALL rather than stored as "the last run" because two tool calls in one
+ * iteration run concurrently — a single slot would report one call's facts under
+ * the other's name. The dispatch loop takes the entry and deletes it.
+ */
+export const CODE_RUNS: unique symbol = Symbol.for('agentfootprint.tools.codeRuns');
+
+/** What one finished code run is worth reporting, minus the code itself. */
+export interface CodeRunFacts {
+  readonly tool: string;
+  readonly language: string;
+  readonly stagedInputs: number;
+  readonly outputChars: number;
+  readonly truncated: boolean;
+  readonly ok: boolean;
+  readonly shapeHash: string;
+}
+
+/** A `Tool` that records what its code runs were shaped like. */
+export interface RecordsCodeRuns {
+  readonly [CODE_RUNS]: ReadonlyMap<string, CodeRunFacts>;
+}
+
+/**
+ * A program reduced to its CALL SHAPE: which operations, in what order.
+ *
+ * Strings, numbers, comments and identifier names are what make two runs of the
+ * same computation look different, and they are also the half that quotes the
+ * data — so removing them is both what makes the hash group correctly and what
+ * makes it safe to emit. `groupBy(rows, 'wwn')` and `groupBy(items, 'serial')`
+ * reduce to one shape; a totals-then-threshold written eleven times this month
+ * hashes to one value eleven times, which is the signal worth having.
+ *
+ * Deliberately crude — a lexical reduction, not a parse. It has to work on
+ * whatever language the runner was configured for, and a wrong parse would be a
+ * worse answer than a coarse one.
+ */
+export function codeShape(code: string): string {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/#[^\n]*/g, ' ')
+    .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, 'S')
+    .replace(/\b\d[\d_.eE+-]*\b/g, 'N')
+    .replace(
+      /\b(?!if|else|for|while|return|function|const|let|var|def|import|from|class|try|catch|await|async|in|of|new|not|and|or)[A-Za-z_$][\w$]*\b(?=\s*\()/g,
+      'F',
+    )
+    .replace(
+      /\b(?!if|else|for|while|return|function|const|let|var|def|import|from|class|try|catch|await|async|in|of|new|not|and|or|F|S|N)[A-Za-z_$][\w$]*\b/g,
+      'V',
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** A `Tool` that holds live sessions, keyed by isolation key. */
 export interface HoldsToolSessions {
   readonly [TOOL_SESSIONS]: ReadonlyMap<string, CodeSession>;
+}
+
+/** Read the code-run facts off a candidate, or `undefined` when it records none. */
+export function codeRunsOf(candidate: unknown): Map<string, CodeRunFacts> | undefined {
+  if (candidate === null || typeof candidate !== 'object') return undefined;
+  const held = (candidate as Partial<RecordsCodeRuns>)[CODE_RUNS];
+  return held instanceof Map ? (held as Map<string, CodeRunFacts>) : undefined;
 }
 
 /** Read the live-session map off a candidate, or `undefined` when it holds none. */
@@ -160,7 +227,7 @@ export function toolSessionsOf(candidate: unknown): ReadonlyMap<string, CodeSess
 
 export function codeRunnerTool(
   options: CodeRunnerToolOptions,
-): Tool<{ code: string }, string> & HoldsToolSessions {
+): Tool<{ code: string }, string> & HoldsToolSessions & RecordsCodeRuns {
   const name = options.name ?? 'run_code';
   const scope: CodeRunnerToolScope = options.scope ?? 'run';
   const language = options.language ?? 'python';
@@ -177,6 +244,8 @@ export function codeRunnerTool(
   const sessions = new Map<string, CodeSession>();
   /** In-flight starts, so two parallel tool calls under one key open ONE session. */
   const starting = new Map<string, Promise<CodeSession>>();
+  /** Facts of finished runs, taken and deleted by the dispatch loop. */
+  const codeRuns = new Map<string, CodeRunFacts>();
 
   const wants = options.wants;
   const wantNames = wants === undefined ? [] : Object.keys(wants);
@@ -231,7 +300,19 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      return render(result, maxOutputChars, minted, stagedNames, wantNames);
+      const rendered = render(result, maxOutputChars, minted, stagedNames, wantNames);
+      // Facts only, never `args.code` — generated code quotes the data it was
+      // handed, so the code is the one part of this that must not travel.
+      codeRuns.set(ctx.toolCallId, {
+        tool: name,
+        language,
+        stagedInputs: stagedNames.length,
+        outputChars: rendered.length,
+        truncated: rendered.length >= maxOutputChars,
+        ok: result.ok !== false,
+        shapeHash: fnv1a(codeShape(args.code)),
+      });
+      return rendered;
     },
   });
 
@@ -277,7 +358,7 @@ export function codeRunnerTool(
   };
 
   // The live map rides the Tool under a registry symbol — see TOOL_SESSIONS.
-  return { ...tool, [TOOL_SESSIONS]: sessions };
+  return { ...tool, [TOOL_SESSIONS]: sessions, [CODE_RUNS]: codeRuns };
 }
 
 /**

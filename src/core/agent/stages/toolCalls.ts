@@ -43,6 +43,7 @@
  * activates that Skill (lifetime: turn).
  */
 
+import { codeRunsOf } from '../../codeRunnerTool.js';
 import { isDevMode } from 'footprintjs';
 import type { PausableHandler, TypedScope } from 'footprintjs';
 import type {
@@ -2599,6 +2600,20 @@ export function buildToolCallsHandler(
                 ...(wantedMeta !== undefined && { wanted: wantedMeta }),
                 ...sessionContext(scope, tc.name, tc.id),
               });
+              // A code-runner tool leaves the SHAPE of what it just ran, keyed by
+              // this call. Taken and deleted here so the map cannot grow across
+              // a long run, and emitted from the dispatch loop rather than from
+              // the tool because this is the layer that holds `typedEmit`.
+              //
+              // The code itself is never on this channel — the same rule the
+              // session events follow with `keyHash`, never the key. Generated
+              // code quotes the data it was handed, so the program is the one
+              // part of a code run that must not reach an exporter.
+              const ranCode = codeRunsOf(tool)?.get(tc.id);
+              if (ranCode !== undefined) {
+                (codeRunsOf(tool) as Map<string, unknown> | undefined)?.delete(tc.id);
+                typedEmit(scope, 'agentfootprint.tools.code_run', ranCode);
+              }
               // The typed effects channel (9.19.0): a recognized envelope is
               // unwrapped HERE, at the one boundary the raw return crosses —
               // everything downstream (governance rules, the cap, history,

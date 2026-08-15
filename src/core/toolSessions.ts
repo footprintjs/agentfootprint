@@ -55,6 +55,7 @@
  * the terminal path is one `undefined` check.
  */
 
+import { encodeIdentityField } from '../memory/identity/index.js';
 import { fnv1a } from '../lib/fnv1a.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import type { ToolExecutionContext } from './tools.js';
@@ -189,15 +190,28 @@ export function toolSessionKey(
   ctx: Pick<ToolExecutionContext, 'toolCallId' | 'runId' | 'sessionId' | 'identity'>,
   scope: TeardownScope,
 ): string | undefined {
-  if (scope === 'call') return `c=${ctx.toolCallId}`;
+  // Every field goes through the SHARED identity encoder rather than being
+  // joined raw. This key holds a live interpreter sandbox, so two identities
+  // that produce one key share a filesystem — and joining unescaped fields with
+  // `/` and `=` markers meant a value could donate a marker and shift a
+  // boundary: tenant `acme/p=bob` with principal `x` composed the same string
+  // as tenant `acme` with principal `bob/p=x`. The absent-versus-`_` pair was
+  // the same collision `identityNamespace` was fixed for in 9.40.0, one module
+  // over, and this is the encoder that fix produced.
+  //
+  // No reachable attack was found — the markers are prefix-anchored, so a
+  // caller controlling only the trailing field cannot shift a boundary into
+  // somebody else's key. It is closed anyway: "no attack today" is a property
+  // of the current call sites, not of the function.
+  if (scope === 'call') return `c=${encodeIdentityField(ctx.toolCallId)}`;
   if (scope === 'shutdown') return undefined;
-  const tenant = ctx.identity?.tenant || '_';
-  const principal = ctx.identity?.principal || '_';
-  const prefix = `t=${tenant}/p=${principal}`;
+  const prefix = `t=${encodeIdentityField(ctx.identity?.tenant)}/p=${encodeIdentityField(
+    ctx.identity?.principal,
+  )}`;
   if (scope === 'session') {
-    return ctx.sessionId ? `${prefix}/s=${ctx.sessionId}` : undefined;
+    return ctx.sessionId ? `${prefix}/s=${encodeIdentityField(ctx.sessionId)}` : undefined;
   }
-  return ctx.runId ? `${prefix}/r=${ctx.runId}` : undefined;
+  return ctx.runId ? `${prefix}/r=${encodeIdentityField(ctx.runId)}` : undefined;
 }
 
 /**

@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.46.0] - 2026-08-15
+
+**Three gaps that had all been written down and left open.** Each one existed as a
+comment naming itself — which is the small lesson here: a comment that names a gap
+is not a mechanism for closing one.
+
+### Added
+
+- **`agentfootprint.tools.code_run` — every program a model writes is a request for
+  a tool nobody built.** The code has always been in the recordings as an ordinary
+  tool argument, so the loop worked for anyone who knew to go looking. This makes it
+  discoverable, and the payload carries what makes it countable: language, how many
+  artifact inputs were staged, output size, whether the output was truncated, and a
+  **normalized shape hash**.
+
+  `codeShape()` reduces a program to its CALL SHAPE — strings, numbers, comments and
+  identifier names removed, operations kept. `groupBy(rows, 'wwn')` and
+  `groupBy(items, 'serial')` hash to one value, so a totals-then-threshold written
+  eleven times this month is one number eleven times rather than eleven clever
+  answers. Rank the shapes by frequency and the top of the list is a build queue in
+  build order; two things outrank frequency, and both are about consequence rather
+  than volume: shapes on the path to a verdict somebody acts on, and shapes that
+  re-derive an identifier a tool should have returned directly.
+
+  **The code itself is never on this channel.** Generated code quotes the data it was
+  handed, and this payload reaches every attached exporter — so the program is the
+  one part of a code run that must not travel. Same rule the tool-session events
+  already follow by publishing `keyHash` and never the key. The load-bearing test
+  asserts a script containing an address and an email produces a shape holding
+  neither.
+
+  Emitted from the dispatch loop rather than from the tool, because that is the layer
+  holding `typedEmit`; the facts are left on a symbol-keyed map under the
+  `toolCallId` and taken there, since two tool calls in one iteration run
+  concurrently and a single "last run" slot would file one call's facts under the
+  other's name.
+
+- **`agentfootprint.validation.*` and `agentfootprint.reliability.*` wildcards.**
+  `dispatcher.ts` has carried the sentence "`validation.*` and `reliability.*` are
+  still missing here" since 9.4.0, when the credential domain taught that a wildcard
+  ships WITH its domain. Both domains emit; both were subscribable one event at a
+  time; neither could be watched as a group — so an operator asking "is anything
+  failing validation?" had to know every member name in advance.
+
+### Fixed
+
+- **`toolSessionKey` composes through the shared identity encoder.** It joined
+  `tenant`, `principal` and the session or run id with `/` and `=` markers and no
+  escaping, so a value could donate a marker and shift a boundary: tenant `acme/p=bob`
+  with principal `x` composed the same string as tenant `acme` with principal
+  `bob/p=x`. The absent-versus-`_` pair was the same collision `identityNamespace`
+  was fixed for in 9.40.0, one module over, and `encodeIdentityField` is the encoder
+  that fix produced.
+
+  This key holds a live interpreter sandbox, so two identities that produce one key
+  share a filesystem. **No reachable attack was found** — the markers are
+  prefix-anchored, so a caller controlling only the trailing field cannot shift a
+  boundary into somebody else's key. Closed anyway: "no attack today" is a property
+  of the current call sites, not of the function.
+
 ## [9.45.0] - 2026-08-15
 
 **Two more of the same defect, and the release that carries a correction 9.44.0 missed.**

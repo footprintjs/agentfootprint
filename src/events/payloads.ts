@@ -1263,6 +1263,38 @@ export interface ToolAbsentPayload {
  * is set to — the recording half is unconditional, only the appending half is
  * opt-in.
  */
+/**
+ * A code-runner tool ran a program the model wrote.
+ *
+ * **The code itself is deliberately NOT here.** Generated code quotes the data
+ * it was given — a row, a serial, an address — so shipping it to every attached
+ * exporter would put customer data on a wire nobody audited for it. This is the
+ * same rule the session events already follow with `keyHash`, never the key.
+ *
+ * What travels instead is `shapeHash`: the program with its string literals,
+ * numbers and identifier names stripped, leaving the CALL SHAPE — which
+ * operations, in what order. Two runs that compute the same thing over
+ * different data share a shape hash, which is exactly the grouping that makes
+ * this useful: rank the shapes by how often they recur and the top of that list
+ * is a backlog of tools somebody keeps having to write by hand.
+ */
+export interface ToolsCodeRunPayload {
+  /** The code-runner tool's own name, since an app may mount more than one. */
+  readonly tool: string;
+  /** The language the runner was configured for. */
+  readonly language: string;
+  /** How many declared artifact inputs were staged as files for this run. */
+  readonly stagedInputs: number;
+  /** Characters of stdout returned, AFTER the runner's cap. */
+  readonly outputChars: number;
+  /** True when the output hit `maxOutputChars` and was cut. */
+  readonly truncated: boolean;
+  /** Whether the program ran to completion. */
+  readonly ok: boolean;
+  /** A stable hash of the normalized call shape. Never the code. */
+  readonly shapeHash: string;
+}
+
 export interface ToolCoverageDeclaredPayload {
   readonly toolName: string;
   readonly toolCallId: string;
