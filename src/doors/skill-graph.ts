@@ -39,17 +39,66 @@
  * they live host-side, on `agentfootprint/context`. A foreign host builds
  * `Injection` objects directly — five fields, all data.
  *
+ * THE EXAMPLE BELOW IS CHECKED, not typed out. Doc comments are emitted into
+ * the `.d.ts`, so this block is what a consumer reads on hover — and the one
+ * that shipped before 9.37.x could not compile three ways over (a config key
+ * that does not exist, chaining the builder's methods off the finished graph
+ * the object form returns, and passing ids to a `.route()` that takes skill
+ * objects). It is now the `doc-example` region of
+ * `examples/context-engineering/19-skill-graph-host.ts` — typechecked by
+ * `npm run test:examples:typecheck`, RUN by `scripts/run-all-examples.sh`, and
+ * pinned byte-for-byte to these lines by
+ * `test/lib/injection-engine/skill-graph-doc-example.test.ts`. Edit it there;
+ * the test will tell you to bring this copy along.
+ *
  * @example routing a turn from a host that is not our agent
  * ```ts
- * import { skillGraph, readSkillDescriptor } from 'agentfootprint/skill-graph';
+ * import {
+ *   readSkillDescriptor,
+ *   skillGraph,
+ *   type Injection,
+ *   type InjectionContext,
+ * } from 'agentfootprint/skill-graph';
  *
- * const graph = skillGraph({ skills, entry: 'triage' })
- *   .route('triage', 'billing', { when: (ctx) => /invoice/i.test(ctx.userMessage) })
+ * // A foreign host builds `Injection` objects directly — five fields, all data.
+ * // (`defineSkill` and friends live host-side, on `agentfootprint/context`.)
+ * const triage: Injection = {
+ *   id: 'triage',
+ *   flavor: 'skill',
+ *   description: 'Find the order the customer is talking about.',
+ *   trigger: { kind: 'llm-activated', viaToolName: 'read_skill' },
+ *   inject: { systemPrompt: 'Ask for the order id, then call lookup_order.' },
+ * };
+ * const billing: Injection = {
+ *   id: 'billing',
+ *   flavor: 'skill',
+ *   description: 'Refunds, double charges, invoices.',
+ *   trigger: { kind: 'llm-activated', viaToolName: 'read_skill' },
+ *   inject: { systemPrompt: 'Confirm the charge history before promising a refund.' },
+ * };
+ *
+ * // The FLUENT builder takes the skill OBJECTS (not their ids) and ends in
+ * // `.build()`. `skillGraph({ skills, start, steps })` is the OTHER door: it
+ * // returns a finished `SkillGraph`, with nothing to chain.
+ * const graph = skillGraph()
+ *   .entry(triage)
+ *   .route(triage, billing, { onToolReturn: 'lookup_order' })
  *   .build();
  *
- * // per iteration — ONE ctx, built once (obligation 1)
- * const move = graph.explainNextSkill(ctx);
- * const offered = graph.reachableSkills(ctx.currentSkillId);   // obligation 2
+ * // Per iteration — ONE ctx, built once and asked every question below: a
+ * // cursor derived from a different ctx than the triggers can disagree with
+ * // them (obligation 1 of `SkillGraphHost`).
+ * const ctx: InjectionContext = {
+ *   iteration: 2,
+ *   userMessage: 'I was charged twice for order 4021',
+ *   history: [{ role: 'user', content: 'I was charged twice for order 4021' }],
+ *   activatedInjectionIds: [],
+ *   currentSkillId: 'triage',
+ *   toolResults: [{ toolName: 'lookup_order', result: 'order 4021 · charged twice' }],
+ * };
+ *
+ * const move = graph.explainNextSkill(ctx); // where the cursor goes, and WHY
+ * const offered = graph.reachableSkills(move.to); // obligation 2 — gate read_skill on this
  * const readSkill = readSkillDescriptor(graph.skills, { grantable: offered });
  * ```
  */

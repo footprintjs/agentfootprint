@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.37.1] - 2026-08-14
+
+**A hygiene release — nothing new is exported, nothing behaves differently.
+Three things that already shipped are now trustworthy: a doc comment that
+could not compile, a measurement that lived only in prose, and an
+agent-facing file that had drifted two eras behind the library.**
+
+### Fixed — the `/skill-graph` door's `@example` could not compile
+
+It named `entry:` where the flat config takes `start:`, chained
+`.route()`/`.build()` off a value that returns neither, and passed skill ids
+to a `.route()` that takes `Injection` objects. Three ways broken and nothing
+caught it: doc comments are not typechecked, and this repo has no twoslash
+over `src/**`, so the block just shipped into `dist/**/*.d.ts` and became
+what a consumer read on hover.
+
+The fix is structural, not textual. The example is now a real file —
+`examples/context-engineering/19-skill-graph-host.ts` — typechecked by the
+examples typecheck and executed by the example runner, and the docblock is
+pinned byte-for-byte to a region of it
+(`test/lib/injection-engine/skill-graph-doc-example.test.ts`). The pin also
+refuses if a second `@example` ever appears above this one, since it would
+otherwise guard the wrong block silently.
+
+### Added — evidence for the 18,225-tuple migration claim, and a correction to it
+
+The 9.37.0 entry stated "18,225 realistic tuples identical" for the
+identity-namespace re-encoding. That number lived only in prose — no
+committed script, no fixture, nothing re-runnable. It is now a test
+(`test/memory/identity/identity-migration.test.ts`), expressed as the LAW
+rather than the count: a tuple whose fields carry none of the three reserved
+characters encodes byte-identically to the pre-9.37 encoder, AND — the half
+that makes the class tight rather than merely sufficient — every tuple that
+DID change has a field in that class. Asserted as a biconditional, with a
+non-vacuity guard. The pre-9.37 encoder is carried inline as a reference
+implementation with its bugs deliberately intact, because a "cleaned up"
+copy would prove nothing about the bytes actually on disk before this
+release.
+
+**And it corrects the published claim** — said plainly, because a quiet
+correction to a shipped changelog is exactly the thing that must not be
+quiet. The stated class was incomplete: the old encoder gave `tenant` and
+`principal` an absence spelling (`_`) but never gave `conversationId` one —
+a missing conversation id became the literal string `"undefined"`, an empty
+one an empty segment, and both re-key. Neither was in the stated class. The
+law here therefore requires the conversation id to be actually given, and
+the sweep exercises both absent forms explicitly rather than excluding them
+quietly.
+
+The corpus is labelled a RECONSTRUCTION, sized to reproduce the published
+figure, since the original was never committed. What makes it evidence is
+that every tuple in it is checked, not that the total looks familiar.
+
+### Fixed — the shipped agent instructions were two eras stale
+
+`ai-instructions/claude-code/SKILL.md` — already in the published tarball,
+already what `agentfootprint-setup` copies into a consumer's editor — still
+described the v1/v2-transition library: it told readers to import only from
+the top-level barrel (the door list has grown to 13 since), listed a
+roadmap that had already shipped, and pointed at commands and subpaths that
+no longer exist.
+
+It now carries the current agent-facing reference, including a "what does
+NOT exist" section built from four measured hallucinations: there is no
+`startRun`; `RunStep` is the flowchart topology slider, not skill/route
+history; the LLM classifier is a tier-2 strategy, not tier 3; skill tools
+are not scoped by default. These are not guesses about what a model might
+get wrong — they are what a capable author, working from a correct mental
+model, actually got wrong. The negative space is the highest-value content
+in the file, and now it ships instead of living on one laptop (`.claude/`
+is gitignored).
+
+Anti-drift is dogfooded rather than invented: this is the ONE canonical
+source, and the `.claude/skills` copy is its INSTALL — byte-identical, the
+same relationship a consumer gets from the setup command — pinned by
+`test/agent-skill-ships.test.ts`, which prints the exact `cp` to run when it
+drifts. Two more tests in the same file pin the doc's FACTS to the source of
+those facts: the `RunStep` row must list exactly `RunStepKind`'s members,
+and every `CursorMoveCause` must be named with the count the union actually
+has.
+
+**Known and NOT done, said here rather than left implicit:** five sibling
+files in `ai-instructions/` — for Cline, Copilot, Cursor, Kiro, Windsurf —
+still carry the same stale document and still ship. They were deliberately
+left alone this release: copying the content into five places is how five
+documents diverge, and the real fix — one source with a per-tool render — is
+a design decision, not a mechanical edit.
+
 ## [9.37.0] - 2026-08-14
 
 **A security release — three cross-tenant defects, and the suite that

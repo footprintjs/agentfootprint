@@ -26,7 +26,7 @@ most likely to get wrong here.
 | You will reach for | The reality |
 |---|---|
 | `startRun(...)` | **No such function.** The door is `agent.run(input, options?)`, where `AgentInput = { message: string; identity?; continueFrom? }` and `AgentOutput = string`. `run()` returns `AgentOutput \| RunnerPauseOutcome` — a run paused for a human returns a checkpoint; discriminate with `isPaused(result)`. |
-| `RunStep` as skill/route history | **`RunStep` is real and it is something else** — the footprintjs flowchart TOPOLOGY slider. Its `kind` is `'sequential' \| 'fork' \| 'merge' \| 'decide' \| 'iteration' \| 'iteration-exit' \| 'react'`. Nothing in it concerns skills. Importing it succeeds, which is exactly why it is dangerous. For route history use `routeRecorder()` from `agentfootprint/observe`. |
+| `RunStep` as skill/route history | **`RunStep` is real and it is something else** — the footprintjs flowchart TOPOLOGY slider, exported from `agentfootprint/observe`. Its `kind` is `'sequential' \| 'fork' \| 'merge' \| 'decide' \| 'iteration' \| 'iteration-exit' \| 'react'`. Nothing in it concerns skills. Importing it succeeds, which is exactly why it is dangerous. For route history use `routeRecorder()` from the same door. |
 | the LLM classifier as routing "tier 3" | **It is a tier-2 strategy.** Tier 1 = declared start rules. Tier 2 = the configured scorer — `llmClassifier(provider)` OR `keywordScorer()` OR `embeddingScorer(e)` OR the entry scorer; near-ties fall through rather than argmax. Tier 3 = a menu the model resolves in-band through `read_skill`'s own description, reached only when tier 2 was NOT decisive. |
 | a skill's tools being gated to that skill automatically | **They are not, by default.** `defineSkill({ tools })` puts them in the agent's static tool list at build time — visible from iteration 1 whether the skill ever activates or not. Ask for the gate: `.toolsFromActiveSkill()` (agent-wide), `skillGraph({ scopeTools: true })` (graph-wide), or `autoActivate: 'currentSkill'` (per skill). `.tree()` leaves are the one shape scoped by default. |
 
@@ -35,9 +35,9 @@ only *labels* a spinning run; `maxIterations` is the hard stop), and there is **
 automatic re-delivery of an ageing skill body** (`refreshPolicy` is stored and never
 read on any version — use `surfaceMode: 'both'`).
 
-## Subpath map — 10 doors
+## Subpath map — 13 doors
 
-`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama` — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `skillGraph`, `skillsFromDir`) · `/memory` (`InMemoryStore`, `mockEmbedder`) · `/rag` (stores + loaders) · `/observe` (recorders, tracing) · `/resilience` · `/security` · `/hosting` · `/events`. There is also `/skill-graph` — the routing layer with no framework attached, for a host that is not this agent.
+`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama`, `mcpClient`, embedders — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `defineInstruction`, `skillGraph`, `skillsFromDir`, the scorers) · `/memory` (`defineMemory`, `InMemoryStore`, `mockEmbedder`, the stores) · `/rag` (stores + loaders; `defineRAG` itself is on the main barrel) · `/observe` (recorders, tracing, `RunStep`) · `/resilience` (provider decorators) · `/reliability` (the rules-based fail-fast gate) · `/cache` (prefix-cache strategies; importing it registers them) · `/security` · `/hosting` · `/events` · `/skill-graph` (the routing layer with no framework attached, for a host that is not this agent).
 
 ## Core Concepts
 
@@ -96,6 +96,10 @@ const graph = skillGraph()
 Agent.create({ provider, model }).skillGraph(graph).build();
 graph.toMermaid();   // declared === drawn
 ```
+
+`.entry()` and `.route()` take the skill OBJECTS, not their ids. The object form is
+the other door — `skillGraph({ skills, start, steps })` returns a finished graph with
+nothing to chain.
 
 A skill is active exactly while the cursor is on it — one skill's turn at a time. An `.entry(x)` with **no** `when` is the persistent base (`always`), on beside whatever the cursor is on.
 
@@ -201,6 +205,17 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
+**93 typed events across 21 domains.** Two subscription shapes and no third:
+`'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
+is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
+
+```typescript
+agent.on('*', (e) => log(e));
+agent.on('agentfootprint.stream.*', (e) => log(e));           // tool_start, tool_end, deltas
+agent.on('agentfootprint.agent.turn_end', (e) =>
+  console.log(`${e.payload.iterationCount} iterations`));
+```
+
 ## Human in the loop
 
 ```typescript
@@ -230,22 +245,25 @@ const resilient = withFallback(primary, backup);
 - Don't write `.entry(x, { when: () => true })` for an always-on skill — omit `when`, or use `.steering()`
 - Don't post-process execution — use recorders
 
-## Build & Test
+## Checking your own wiring
 
 ```bash
-npm run build      # tsc (CJS) + tsc -p tsconfig.esm.json + postbuild
-npm test           # vitest
-npm run docs:truth # the docs-vs-code ratchet — run it before claiming a doc is done
+npx agentfootprint-lint-tools tools.json   # confusable tool catalog — the CI gate
+npx agentfootprint-index ./docs --to ./corpus.db   # build a RAG corpus at boot time
+```
+
+```typescript
+const report = graph.checkup({ knownTools: ['lookup_order'] });   // unreachable skills, unknown edges, dead entries
+if (!report.ok) throw new Error(formatCheckup(report));
 ```
 
 ## Going deeper
 
 The full architecture of the skill graph — the three surfaces, the authority rule, the
 nine cursor causes, the three-way `read_skill`, and a worked refusal taken from a real
-run — lives on the docs site as **Skill graph architecture**
-(`docs-next/content/docs/build/skill-graph-architecture.mdx`, published at
-`/docs/build/skill-graph-architecture`). Every capability claim there carries a status —
-`shipped` / `opt-in` / `application-provided` / `planned` — and every code block is
-type-checked against the shipped types at build. Read it rather than this file when the
-question is "how does routing actually work"; read this file for what to reach for and
-what does not exist.
+run — is published as **Skill graph architecture**:
+<https://footprintjs.github.io/agentfootprint/docs/build/skill-graph-architecture/>.
+Every capability claim there carries a status — `shipped` / `opt-in` /
+`application-provided` / `planned` — and every code block is type-checked against the
+shipped types at build. Read it rather than this file when the question is "how does
+routing actually work"; read this file for what to reach for and what does not exist.
