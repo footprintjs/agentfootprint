@@ -475,7 +475,36 @@ Resilience decorators live on the `agentfootprint/resilience` subpath
 (not the main barrel). Each preserves the `LLMProvider` interface and
 stacks freely.
 
-### Observability — 94 typed events across 21 domains
+### Result primitives — an absence that names itself, a limit that travels
+
+```typescript
+import { absent, coverage } from 'agentfootprint';
+
+// A tool that found nothing, in a shape no model can read as "I could not look".
+return absent({
+  what: `FLOGI entries on ${port}`,
+  checked: [`${sw}: the live fcns database`, 'window: the last 24h'],
+  cannotCover: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
+  tryInstead: 'Ask for a different interface, or query the peer fabric by name.',
+});
+
+// A verdict with its own boundary attached.
+return coverage(verdict, {
+  checked: ['SRDF pair state on all 4 arrays'],
+  notChecked: [{ what: 'NDM migration sessions', why: 'the API timed out' }],
+  cannotCover: [{ what: 'host-side multipathing', why: 'no collector on the ESX hosts' }],
+});
+```
+
+An absence carries the delivered status `'absent'` (routable by `onToolStatus`),
+files `agentfootprint.tools.absent`, and grounds only its coverage in the
+evidence gate. It is never an error — nothing retries or refuses it. A ledger
+files `agentfootprint.tools.coverage_declared`; with
+`.limitsTravelWithTheAnswer()` the framework appends the run's declared limits
+to the final answer, which is how a limit survives a model that would rather not
+mention it.
+
+### Observability — 96 typed events across 21 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

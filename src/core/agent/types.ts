@@ -1088,6 +1088,21 @@ export interface AgentState {
    *  Absent unless a tool granted one. */
   instructionLeases?: ReadonlyArray<import('./toolEffects.js').InstructionLease>;
 
+  /**
+   * Every coverage statement the run's tools declared, in the order they
+   * landed — `absent(…)`'s "here is where I looked" and `coverage(…)`'s
+   * "here is what my verdict does not rule out".
+   *
+   * TRACKED state, unlike the repeated-call counters, and for the opposite
+   * reason: a limit is a fact ABOUT THE ANSWER, not a fact about an attempt,
+   * so it has to be in the record the answer is read beside — the commit log,
+   * the snapshot, every recording. The zero-cost guarantee holds anyway
+   * because the key is written only when a tool actually declares one: an
+   * agent whose tools never return either shape commits exactly what it
+   * always did.
+   */
+  coverageDeclared?: ReadonlyArray<import('./coverage/index.js').DeclaredCoverage>;
+
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read
    *  by CallLLM. Present only when a resolver returned one — a run that did

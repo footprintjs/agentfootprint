@@ -147,7 +147,12 @@ describe('event registry — names + exhaustiveness', () => {
     //     other event already carries. Names and ids ONLY — never an
     //     endpoint, a key or a principal — and an unconfigured field is
     //     ABSENT rather than guessed.)
-    expect(ALL_EVENT_TYPES.length).toBe(94);
+    //    (tools.absent + tools.coverage_declared added with the coverage
+    //     primitives — an absence that names its own coverage, and the ledger
+    //     of what a clean result does NOT rule out. Both are RECORDED
+    //     unconditionally; only the appending of limits to the final answer is
+    //     opt-in, so the record can be measured before it is acted on.)
+    expect(ALL_EVENT_TYPES.length).toBe(96);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -43,7 +43,7 @@
 // ─── The outcome-status vocabulary ─────────────────────────────────────
 
 /**
- * The six outcome words, re-exported under the names they have always had.
+ * The outcome words, re-exported under the names they have always had.
  *
  * They are DECLARED in `lib/injection-engine/toolOutcome.ts` (9.34.0) — a
  * zero-import leaf — because a skill-graph route edge keys on them
@@ -241,7 +241,7 @@ export function readToolResultEnvelope(result: unknown): ReadToolResultEnvelope 
  * That shape is NOT an envelope (recognition demands the `effects` array;
  * see `ToolResultEnvelope`), and it stays data byte-for-byte — but a value
  * whose only keys are envelope keys AND whose `status` speaks the closed
- * six-word vocabulary is far more likely a dropped `effects: []` than a
+ * outcome vocabulary is far more likely a dropped `effects: []` than a
  * coincidence, and letting it route like an undeclared result with no word
  * of why would be accepted-and-silently-wrong. Returns the teaching sentence
  * for the caller's dev-mode warning; `undefined` for every other value.

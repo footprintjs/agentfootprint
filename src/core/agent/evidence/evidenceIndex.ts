@@ -26,6 +26,13 @@
  *     value because the model passed it to a tool would let any invention
  *     launder itself through one failed lookup.
  *   • **The model's own earlier answers do not count**, for the same reason.
+ *   • **An `absent(…)` result grounds its COVERAGE only.** An absence names
+ *     what was looked FOR, which in practice quotes the arguments the model
+ *     passed — so indexing the whole frame would ground an invented
+ *     identifier through the one operation that proves nothing about it: a
+ *     lookup that found nothing. `checked` / `not_checked` / `cannot_cover`
+ *     are the tool's own words about the world and do count. See
+ *     `../coverage/evidence.ts`.
  *
  * The EXEMPT index is built from a different corpus with the same machinery:
  * the user's own message, the conversation's user/system turns, and the
@@ -36,6 +43,7 @@
 
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
+import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 
@@ -113,7 +121,16 @@ function indexResult(content: string, sink: Sink): void {
   const trimmed = content.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
-      walk(JSON.parse(trimmed), sink);
+      const parsed = JSON.parse(trimmed);
+      // An `absent(…)` frame grounds its COVERAGE and nothing else: the rest
+      // of it is prose about the REQUEST, which usually quotes the model's own
+      // arguments, and indexing that would ground every identifier a model
+      // invented as long as it handed the invention to one tool that found
+      // nothing. See `../coverage/evidence.ts` — it is the frames.ts argument
+      // on the tool side of the conversation. `undefined` (every other result
+      // ever returned) keeps the walk it always had.
+      const projection = absenceEvidenceProjection(parsed);
+      walk(projection ?? parsed, sink);
       return;
     } catch {
       // Not JSON after all (a truncated result, a log line that happens to

@@ -95,6 +95,32 @@ export type GraphProblemCode =
   | 'example-unclaimed' // WARNING — an example matches NO rule, so the deterministic
   //   layer declines and the turn falls onward (to the classifier, or to the model
   //   tier). Absence, which no matcher-vs-matcher analysis can ever catch.
+  // Negative routing rows — the phrases the graph declares it must claim
+  // NOWHERE (skillNeverRoutes.ts owns all three, and its header owns the
+  // boundary they stop at). Over-triggering is the failure that costs the whole
+  // answer, so the first of these is an ERROR:
+  | 'never-routes-claimed' // ERROR — a declared start RULE claims a phrase the graph
+  //   declared must route nowhere, so that turn opens with a skill's body and tools the
+  //   author personally said had no business in it. Proof by WITNESS (the compiled
+  //   condition run on the phrase), and both start laws agree: a conditional claimant is
+  //   read by the cold walk AND by the cascade's tier 1.
+  | 'never-routes-by-default' // WARNING — no RULE claims the phrase, but an UNCONDITIONAL
+  //   entry does under the declaration-order cold walk and not under the cascade's tier 1.
+  //   Which law applies is decided at AGENT MOUNT, so the report names both readings — the
+  //   same honesty `example-shadowed-by-default` applies to the positive case.
+  | 'never-routes-contradicts-example' // ERROR — the same phrase is declared BOTH as a rule's
+  //   `examples` (this rule claims it) and as a `neverRoutes` row (nobody claims it). Two of
+  //   the author's own declarations, one of which must be wrong wherever the router lands.
+  // The partition signals (skillPartition.ts) — ADVISORIES about how the graph
+  // cut the world into skills, computed from names and structure alone. Every
+  // one has a legitimate design behind it, so every one is a WARNING and every
+  // message states the signal as a FACT rather than a verdict:
+  | 'tools-share-prefix' // every tool in a skill shares one non-verb name prefix — the
+  //   skill is likely a wrapper around one SYSTEM rather than a capability.
+  | 'few-declared-edges' // many skills, almost no declared routes — the handoffs live in
+  //   prose, where nothing draws, checks, routes or offers them.
+  | 'skill-wraps-one-tool' // one tool and a body too thin to carry knowledge the tool
+  //   schema does not already have — an endpoint with a name.
   // The artifact vocabularies (SG-F, 9.25.0) — WARNING, and never more:
   | 'artifact-kind-unsatisfied'; // a skill/step consumes a kind nothing on the agent produces.
 //   Produced by skillVocabulary.ts, which owns the rule AND its boundaries: it reads
@@ -112,10 +138,11 @@ export interface GraphProblem {
   readonly from?: string;
   readonly to?: string;
   /**
-   * The declared example phrase this problem is about — present only on the
-   * `example-*` codes, which are the only checks that reason about a concrete
-   * phrase. The message always quotes it too; this is the same string as data,
-   * so a tool can group by phrase without parsing prose.
+   * The declared phrase this problem is about — present on the `example-*`
+   * codes and on the `never-routes-*` ones, the checks that reason about a
+   * concrete phrase (in the positive and the negative direction respectively).
+   * The message always quotes it too; this is the same string as data, so a
+   * tool can group by phrase without parsing prose.
    */
   readonly example?: string;
 }

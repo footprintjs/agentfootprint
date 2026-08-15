@@ -281,6 +281,8 @@ Two statuses on that snippet, and they matter:
 |---|---|
 | `skillsFromDir` loads prose bodies from `SKILL.md` files | **shipped** |
 | the same files carry `tools:`, `steps:` and `onSkip:` | **shipped** (9.36.0 — before that, prose only) |
+| the same files carry `routes:`, read by `runbookFromDir` into `{ skills, steps }` | **shipped** (9.43.0). `skillsFromDir` refuses a file that declares routing rather than dropping it |
+| a `routes:` guard can be a `when` predicate | **not supported, by design** — a predicate is code, nothing in a `SKILL.md` is evaluated; the file picks `on <tool>` / `status=<outcome>`, and any other conditional stays in `skillGraph({ steps })` |
 | `.toolsFromActiveSkill()` scopes every skill's tools to that skill's activation | **opt-in** (default flips in 10.0.0) |
 | a loaded skill can set its own `autoActivate` from frontmatter | **not supported, by design** — a directory does not decide the agent's tool posture |
 | `skillsFromDir` reads a URL | **refused by name** — authorship is a security property, so local paths only |
@@ -469,6 +471,8 @@ same thing for the common case.
 |---|---|---|---|
 | define a chapter | `defineSkill({ id, description, body, tools?, surfaceMode? })` | `agentfootprint/context` | **shipped** |
 | load chapters from files | `skillsFromDir(dir, { tools?, surfaceMode? })` | `agentfootprint/context` | **shipped** |
+| load the whole runbook — chapters AND their edges | `runbookFromDir(dir, opts?)` → `DirRunbook` | `agentfootprint/context` | **shipped** (9.43.0) |
+| pin that a phrase routes NOWHERE | `neverRoutes: [...]` / `.neverRoutes(...)` | `agentfootprint/context` | **shipped** (9.43.0) |
 | declare the book | `skillGraph()` (fluent) / `skillGraph({ skills, start?, steps? })` (object) | `agentfootprint/context` | **shipped** |
 | wire it to an agent | `.skillGraph(graph, { continuity?, strictness?, … })` | `agentfootprint` | **shipped** |
 | draw it | `graph.toMermaid()` | — | **shipped** |

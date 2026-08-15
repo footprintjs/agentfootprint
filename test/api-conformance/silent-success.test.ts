@@ -668,6 +668,7 @@ const REFUSES_A_SECOND_CALL = [
   'checkIn',
   'compaction',
   'configure',
+  'limitsTravelWithTheAnswer',
   'namesAndNumbersFromEvidence',
   'outputFallback',
   'outputSchema',
@@ -798,6 +799,8 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .configure(() => ({}))
           .configure(() => ({})),
+      limitsTravelWithTheAnswer: () =>
+        base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
       namesAndNumbersFromEvidence: () =>
         base().namesAndNumbersFromEvidence().namesAndNumbersFromEvidence({ posture: 'guard' }),
       outputFallback: () =>

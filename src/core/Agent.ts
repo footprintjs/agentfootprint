@@ -376,6 +376,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * no scope key, no event.
    */
   private readonly evidenceGate?: ResolvedEvidenceGate;
+  /**
+   * `.limitsTravelWithTheAnswer()` (this release) — whether the run's declared
+   * coverage is folded into the final answer. False for every agent that did
+   * not ask for it; the RECORDING half of the coverage primitives does not
+   * consult it.
+   */
+  private readonly limitsTravelWithTheAnswerValue: boolean = false;
   private readonly skillGraphCascade?: {
     readonly turnRouting?: TurnRoutingPlan;
     readonly strictness: 'assist' | 'guard' | 'rails';
@@ -680,6 +687,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     },
     skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains,
     evidenceGate?: ResolvedEvidenceGate,
+    limitsTravelWithTheAnswer?: boolean,
   ) {
     super();
     this.provider = opts.provider;
@@ -711,6 +719,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphCascade = skillGraphCascade;
     this.skillBrains = skillBrains;
     this.evidenceGate = evidenceGate;
+    this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -3392,6 +3401,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Escalation (9.19.0): the grouped chart threads `skillEscalated`
       // across the sf-llm-call boundary only when the policy exists.
       ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
+      // `.limitsTravelWithTheAnswer()` (this release) — value-conditional, the
+      // `resolvedModel` precedent: absent from the deps object entirely for an
+      // agent that did not ask, so both builders mount the final-branch stage
+      // function they have always mounted.
+      ...(this.limitsTravelWithTheAnswerValue && { attachCoverageLimits: true }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
       ...(routeTurnStage && { routeTurnStage: routeTurnStage as (scope: never) => Promise<void> }),

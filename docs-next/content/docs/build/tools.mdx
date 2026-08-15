@@ -281,7 +281,7 @@ Every judgment is a typed `agentfootprint.tools.effect` event —
 refusal notes join the model-visible result so the model can route around
 them. **Zero-cost when unused:** recognition is strict (an envelope needs
 `content` plus an `effects` array whose every element speaks the reserved
-`kind` vocabulary; an empty `effects: []` also needs one of the six
+`kind` vocabulary; an empty `effects: []` also needs one of the seven
 statuses to say anything — `{ content }` alone is data), so every shape
 tools return today keeps its exact bytes and fires no new events.
 
@@ -295,7 +295,7 @@ All from `agentfootprint`:
 - `ProposedEffect` — the two-kind union; `ProposeTransitionEffect` and
   `RequireInstructionEffect` are its arms, and `InstructionDeliveryLease`
   is the `'next-call' | 'until-skill-exit'` union behind the push lease.
-- `ToolResultStatus` — the closed six-value outcome vocabulary;
+- `ToolResultStatus` — the closed seven-value outcome vocabulary;
   `TOOL_RESULT_STATUSES` is the same set as data.
 - `readToolResultEnvelope` — the strict recognizer itself (exported so a
   custom runner or a test can apply exactly the framework's rule);
@@ -314,6 +314,172 @@ All from `agentfootprint`:
 - `InstructionLease` — one granted push as it rides
   `sharedState.instructionLeases`: the instruction, its lease, the tenure
   that granted it, and the granting call.
+
+## An absence that names its own coverage — `absent()`
+
+A tool that finds nothing returns *something*: an empty array, a `null`, a
+sentence. From any of those a model cannot tell **"I looked and there is
+nothing"** from **"I could not look"** — and the confusion is not symmetric. A
+*nothing-found* misread as an outage sends an engineer to investigate a healthy
+collector: expensive, and self-correcting. An *outage* misread as
+*nothing-found* declares a system healthy that was **never checked**: cheap,
+silent, and wrong in the direction that hurts.
+
+Both this and the coverage ledger below came from FIELD USE — a production
+triage agent had invented them because the framework had no answer for either.
+
+```ts
+import { absent, defineTool } from 'agentfootprint';
+
+export const flogiForPort = defineTool({
+  name: 'flogi_for_port',
+  description: 'FLOGI entries for one interface',
+  inputSchema: {
+    type: 'object',
+    properties: { switch: { type: 'string' }, port: { type: 'string' } },
+    required: ['switch', 'port'],
+  },
+  execute: ({ switch: sw, port }) => {
+    const rows = fcns.flogi(sw, port);
+    if (rows.length > 0) return rows;
+    return absent({
+      what: `FLOGI entries on ${port}`,
+      checked: [`${sw}: the live fcns database`, 'window: the last 24h'],
+      notChecked: [{ what: 'the archived FLOGI history', why: 'older than the 24h window' }],
+      cannotCover: [
+        { what: 'the peer fabric', why: 'this collector is scoped to one fabric' },
+      ],
+      tryInstead: 'Ask for a different interface, or query the peer fabric by name.',
+    });
+  },
+});
+```
+
+An `AbsenceDeclaration` needs `what` (what was looked for) and a non-empty
+`checked`: an absence that names no coverage is a `null` with extra steps, and
+it is refused where you typed it. `notChecked` and `cannotCover` take the same
+entries, a `CoverageInput` — a bare string or a `CoverageItem`
+(`{ what, why }`). Every `cannotCover` entry needs a `why`, because a permanent
+blind spot is a claim about capability and a reader cannot act on, escalate or
+disprove one with no reason.
+
+**What the framework does with it.** The returned `ToolAbsence` is
+*recognized*, not merely conventional — a shape the framework does not
+understand cannot stop a retry loop or keep a value out of the evidence corpus:
+
+- the delivered status becomes `'absent'`, the seventh `ToolResultStatus`, so an
+  `onToolStatus: 'absent'` route edge can send "we found nothing" somewhere
+  other than "the call broke";
+- `agentfootprint.tools.absent` files the coverage on the record;
+- the model reads a frame that says, in prose and as data, that a retry with the
+  same arguments returns the same result — the loop this ends is a model
+  re-asking an identical question because a mismatch looked like a fluke;
+- and the evidence gate indexes its coverage **only**. An absence quotes what
+  was looked for, which in practice quotes the arguments the model passed;
+  indexing the whole frame would ground an invented identifier through the one
+  operation that proves nothing about it.
+
+Nothing else changes: no `error: true`, no retry, no refusal, no gate flag.
+
+## What a clean result does not rule out — `coverage()`
+
+"Everything looks fine" arrives with no way to tell whether *fine* means
+**verified** or **unexamined**. A ledger is three lists the tool knows and the
+model does not — and only the tool knows the third:
+
+```ts
+import { coverage, defineTool } from 'agentfootprint';
+
+export const replicationHealth = defineTool({
+  name: 'replication_health',
+  description: 'Replication health across the estate',
+  inputSchema: { type: 'object', properties: {} },
+  execute: async () => {
+    const { verdict, ndmTimedOut } = await checkReplication();
+    return coverage(verdict, {
+      checked: ['SRDF pair state on all 4 arrays (live query)'],
+      notChecked: ndmTimedOut
+        ? [{ what: 'NDM migration sessions', why: 'the API timed out — ask again' }]
+        : [],
+      cannotCover: [
+        { what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' },
+      ],
+    });
+  },
+});
+```
+
+It is the sibling of the evidence gate: **the gate catches invented values, a
+ledger catches unstated limits.** The `CoverageDeclaration` you pass must say
+*something* — all three lists empty is refused, because a ledger that declares
+no boundary looks like one while telling a reader nothing. The `CoveredResult`
+it returns puts the boundary first and leaves your own answer untouched under
+`result`; `agentfootprint.tools.coverage_declared` files it on the record, and
+`sharedState.coverageDeclared` accumulates every `DeclaredCoverage` the run
+produced — from ledgers and absences alike.
+
+### Making the limits survive — `.limitsTravelWithTheAnswer()`
+
+A ledger the model can drop is worthless, and dropping it is invisible: an
+answer with no caveat and an answer whose caveat was omitted read identically.
+So this option does not ASK the model to state its limits — it appends them:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(replicationHealth)
+  .limitsTravelWithTheAnswer()
+  .build();
+
+await agent.run('is replication healthy?');
+// Replication is healthy. Everything looks fine.
+//
+// ---
+//
+// Coverage of this answer — declared by the tools that produced it, not by the model:
+//
+// Checked:
+// - SRDF pair state on all 4 arrays (live query)
+//
+// Not checked:
+// - NDM migration sessions — the API timed out — ask again
+//
+// Cannot cover:
+// - host-side multipathing — no collector runs on the ESX hosts
+```
+
+The framework composes the block from what the tools declared, so the model
+cannot drop what it never wrote. It is **not** a check on the model's prose: it
+does not judge whether the answer stated its limits and does not refuse one that
+did not — both would need a second model to decide what counts as "stated".
+Duplicate entries fold, so five tools naming one missing collector say it once.
+
+Off by default, because it changes the bytes of your answer; the RECORDING half
+runs either way, so you can measure how often your tools declare limits before
+you ship them to readers.
+
+### The coverage surface, named
+
+All from `agentfootprint`:
+
+- `absent` and `coverage` — the two doors, described above.
+- `CoverageItem`, `CoverageInput`, `Coverage` — one piece of ground
+  (`{ what, why? }`), what you may write in a list, and the normalized
+  three-list shape everything downstream reads.
+- `AbsenceDeclaration` and `CoverageDeclaration` — what you pass to each door.
+- `ToolAbsence` and `CoveredResult` — what each door returns, i.e. the exact
+  values your tool hands back.
+- `DeclaredCoverage` — one statement as the RUN recorded it, with the tool, the
+  call and the iteration; this is the row type in `sharedState.coverageDeclared`.
+- `readAbsence`, `readCoverageLedger` and `readCoverageResult` — the strict
+  recognizers (exported so a custom runner or a test can apply exactly the
+  framework's rule); `CoverageReading` is the last one's result: the delivered
+  status and the statements found.
+- `ABSENCE_MARKER` and `COVERAGE_MARKER` — the reserved keys (`af_absent`,
+  `af_coverage`) that make each shape recognizable on the tool-result wire.
+- `ABSENCE_NOTE` and `COVERAGE_NOTE` — the static sentences each frame carries,
+  exported because tests and readers match on them.
+- `COVERAGE_BLOCK_HEADING` — the appended block's opening line, for anything
+  that has to find or strip it downstream.
 
 ## The result ceiling — refuse, never truncate (9.20.0)
 

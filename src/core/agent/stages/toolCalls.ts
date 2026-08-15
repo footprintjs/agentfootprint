@@ -122,6 +122,11 @@ import {
   type StepPointer,
 } from '../../../lib/injection-engine/skillSteps.js';
 import {
+  readCoverageResult,
+  type CoverageFacts,
+  type DeclaredCoverage,
+} from '../coverage/index.js';
+import {
   explainStatusOnlyNearMiss,
   pruneLeases,
   readToolResultEnvelope,
@@ -686,6 +691,80 @@ export function buildToolCallsHandler(
       ...(declaredStatus !== undefined && { declaredStatus }),
     });
     return verdict.refusal;
+  };
+
+  /**
+   * Coverage declarations — `absent(…)` and `coverage(…)`, recognized at the
+   * SAME execute boundaries the ceiling is measured at (one implementation,
+   * every door: a resumed call declares its coverage exactly as an inline
+   * one).
+   *
+   * Returns the DELIVERED status: `'absent'` when an absence is in play,
+   * `undefined` otherwise. That single line is the whole downstream
+   * behavioural change, and it is deliberately narrow — an absence is not an
+   * error, so nothing here sets `error: true`, nothing refuses, nothing
+   * retries, and the value the model reads is the value the tool minted. The
+   * direction-of-error argument (see `../coverage/absent.ts`) is that a
+   * *nothing-found* routed as a *failure* sends someone to investigate a
+   * healthy collector, while a *failure* routed as *nothing-found* declares a
+   * system fine that was never checked; giving the outcome its own word is
+   * how `onToolStatus` edges stop having to guess.
+   *
+   * The RECORD keeps the coverage twice over: on the emit channel (per-call
+   * facts belong there) and, because a limit is a fact about the ANSWER
+   * rather than about an attempt, in tracked state — where the final-answer
+   * block reads it. Written only when a tool declares one, so an agent that
+   * returns neither shape commits exactly what it always did.
+   */
+  const declareCoverage = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    value: unknown,
+  ): ToolResultStatus | undefined => {
+    const reading = readCoverageResult(value);
+    if (reading === undefined) return undefined;
+    const rows: DeclaredCoverage[] = [];
+    for (const facts of reading.declared) {
+      // Copied item by item — event payloads are detached plain data, never
+      // a shared reference into a value the tool still holds.
+      const copy = (list: CoverageFacts['coverage']['checked']) =>
+        list.map((i) => ({ what: i.what, ...(i.why !== undefined && { why: i.why }) }));
+      const checked = copy(facts.coverage.checked);
+      const notChecked = copy(facts.coverage.notChecked);
+      const cannotCover = copy(facts.coverage.cannotCover);
+      if (facts.kind === 'absence') {
+        typedEmit(scope, 'agentfootprint.tools.absent', {
+          toolName: call.toolName,
+          toolCallId: call.toolCallId,
+          iteration: call.iteration,
+          ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+          checked,
+          ...(notChecked.length > 0 && { notChecked }),
+          ...(cannotCover.length > 0 && { cannotCover }),
+        });
+      } else {
+        typedEmit(scope, 'agentfootprint.tools.coverage_declared', {
+          toolName: call.toolName,
+          toolCallId: call.toolCallId,
+          iteration: call.iteration,
+          ...(checked.length > 0 && { checked }),
+          ...(notChecked.length > 0 && { notChecked }),
+          ...(cannotCover.length > 0 && { cannotCover }),
+        });
+      }
+      rows.push({
+        kind: facts.kind,
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+        checked,
+        notChecked,
+        cannotCover,
+      });
+    }
+    scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
+    return reading.status;
   };
 
   // ── Step-procedure boundary (9.18.0) — ONE implementation, five sites ──
@@ -1762,6 +1841,18 @@ export function buildToolCallsHandler(
       // judged exactly as an inline one's.
       const envelope = readToolResultEnvelope(result);
       if (envelope !== undefined) {
+        // Coverage (this release) before the ceiling, for the same reason the
+        // effects are judged even when the payload is refused: the boundary a
+        // tool declared is not the channel that can overflow, and a limit
+        // that died with an oversized result would be the silence this
+        // primitive exists to break. An absence's status is the tool's own
+        // and wins over the envelope's only when the envelope declared none.
+        const coverageStatus = declareCoverage(
+          scope,
+          { toolName, toolCallId, iteration },
+          envelope.content,
+        );
+        const declaredStatus = envelope.status ?? coverageStatus;
         // The tool's own ceiling (9.20.0) measures the CONTENT — the channel
         // that can overflow a context window. The DECLARED effects are small
         // validated data and are still judged by the caller: a tool that
@@ -1774,7 +1865,7 @@ export function buildToolCallsHandler(
           { toolName, toolCallId, iteration },
           tool,
           envelope.content,
-          envelope.status,
+          declaredStatus,
         );
         if (refusal !== undefined) {
           return {
@@ -1784,9 +1875,21 @@ export function buildToolCallsHandler(
             envelope: { ...envelope, content: refusal, status: 'invalid' },
           };
         }
-        return { result: envelope.content, executed: true, envelope };
+        return {
+          result: envelope.content,
+          executed: true,
+          envelope:
+            declaredStatus === envelope.status ? envelope : { ...envelope, status: declaredStatus },
+        };
       }
-      const refusal = refuseOverCeiling(scope, { toolName, toolCallId, iteration }, tool, result);
+      const coverageStatus = declareCoverage(scope, { toolName, toolCallId, iteration }, result);
+      const refusal = refuseOverCeiling(
+        scope,
+        { toolName, toolCallId, iteration },
+        tool,
+        result,
+        coverageStatus,
+      );
       if (refusal !== undefined) {
         // Synthesized empty-effects envelope: the resume paths read the
         // routing status off `envelope.status`, and this is how a refused
@@ -1803,6 +1906,19 @@ export function buildToolCallsHandler(
       // unchanged) — but never silently: name the dropped marker in dev mode.
       const nearMiss = explainStatusOnlyNearMiss(result);
       if (nearMiss !== undefined) warnEffect(toolName, nearMiss);
+      if (coverageStatus !== undefined) {
+        // The ceiling path's synthesized envelope, for the same reason: the
+        // resume paths read the routing status off `envelope.status`, and an
+        // absence that lost its status here would route down whichever edge a
+        // statusless result routes down — the confusion the word exists to
+        // end. Empty effects/malformed judge to nothing, so the only thing
+        // this carries is the status.
+        return {
+          result,
+          executed: true,
+          envelope: { content: result, effects: [], status: coverageStatus, malformed: [] },
+        };
+      }
       return { result, executed: true };
     } catch (err) {
       // Settled by throwing is still settled — a tool that opened a session and
@@ -2501,6 +2617,18 @@ export function buildToolCallsHandler(
                 const nearMiss = explainStatusOnlyNearMiss(result);
                 if (nearMiss !== undefined) warnEffect(tc.name, nearMiss);
               }
+              // Coverage (this release), on the UNWRAPPED content and before
+              // the ceiling — the boundary a tool declared is not the channel
+              // that can overflow. A tool that spelled its own status keeps
+              // it; otherwise an absence names the delivered outcome, so an
+              // `onToolStatus` edge can route "we looked and there was
+              // nothing" somewhere other than "the call broke".
+              const coverageStatus = declareCoverage(
+                scope,
+                { toolName: tc.name, toolCallId: tc.id, iteration },
+                result,
+              );
+              if (toolStatus === undefined) toolStatus = coverageStatus;
               // The tool's own refusing ceiling (9.20.0) — at the execute
               // boundary, BEFORE the gates and the after-tool chain, so
               // governance and the agent-level cap compose over what the

@@ -27,11 +27,24 @@
 
 import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { composeAnswerWithCoverage } from '../coverage/index.js';
 import type { AgentState } from '../types.js';
 
-export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
+/**
+ * The stage body, with the answer passed IN.
+ *
+ * One body, two entry points. The answer is a parameter rather than a read of
+ * `scope.llmLatestContent` because `.limitsTravelWithTheAnswer()` composes a
+ * different one — and everything filed here (`finalContent`, `newMessages`,
+ * which memory persists, and `turn_end.finalContent`) must agree about what
+ * the answer WAS. Note that `llmLatestContent` itself is a READ-ONLY input to
+ * this branch subflow, so there is no version of this where the composed
+ * answer is written back over it: the capture is the only place all four
+ * readers meet.
+ */
+const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void => {
   const iteration = scope.iteration;
-  scope.finalContent = scope.llmLatestContent;
+  scope.finalContent = answer;
   // v2.14 — attach thinking blocks to the assistant final message
   // (if any). For non-Anthropic providers this is informational; for
   // Anthropic + extended-thinking-with-tool-use, signature round-trip
@@ -63,4 +76,34 @@ export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
     iterationCount: iteration,
     durationMs: Date.now() - scope.turnStartMs,
   });
+};
+
+export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
+  captureTurnPayload(scope, scope.llmLatestContent);
+};
+
+/**
+ * `.limitsTravelWithTheAnswer()`'s half of prepare-final — the SAME stage,
+ * with the run's declared coverage folded into the answer first.
+ *
+ * Mounted in place of `prepareFinalStage` by both chart builders when the
+ * option is configured, and nowhere else: an agent that did not ask for it
+ * runs the function above, byte for byte. Written as one stage rather than a
+ * second one because everything the capture files must agree about what the
+ * answer WAS — a second stage afterwards would leave `turn_end` reporting an
+ * answer the caller never saw.
+ *
+ * It runs AFTER the evidence gate has judged (the gate is in the Route
+ * decider, one stage earlier). That ordering is deliberate: the block is
+ * composed by the framework out of what the TOOLS declared, so subjecting it
+ * to a check for values the MODEL could not support would be asking whether
+ * the library grounded itself.
+ */
+export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void => {
+  const declared = scope.coverageDeclared;
+  const answer =
+    declared !== undefined && declared.length > 0
+      ? composeAnswerWithCoverage(scope.llmLatestContent, declared)
+      : scope.llmLatestContent;
+  captureTurnPayload(scope, answer);
 };

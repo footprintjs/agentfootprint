@@ -162,11 +162,17 @@ only from `from`). Start rules declared as data add three more codes —
 `examples` on a rule adds four more again — `example-misses-own-rule`,
 `example-shadowed-by-earlier`, `example-shadowed-by-default` and `example-unclaimed` —
 covered in [Examples on a start rule](#examples-on-a-start-rule--the-phrasings-it-claims).
+Declaring `neverRoutes` adds three — `never-routes-claimed`,
+`never-routes-by-default` and `never-routes-contradicts-example` — covered in
+[Negative rows](#negative-rows--the-phrasings-that-must-route-nowhere-neverroutes).
+And three **advisories** about the partition itself — `tools-share-prefix`,
+`few-declared-edges` and `skill-wraps-one-tool` — run on any graph of five or more
+skills; see [Partition advisories](#partition-advisories--reading-the-shape-of-the-cut).
 
 A report can also carry `notes`: statements about what the report does **not** cover.
 They are present only when a check ran whose silence could be misread as proof (today,
-the example checks), and `formatCheckup` prints them after the problems, tagged
-`[note]`.
+the example checks and the negative rows), and `formatCheckup` prints them after the
+problems, tagged `[note]`.
 
 Pass `CheckupOptions` — today, `knownTools` — to tell it about the tools the AGENT
 registers with `.tool()`. A graph knows only the tools its own skills carry, so without
@@ -362,6 +368,87 @@ report.notes;
 Under `.entryBy()` / `.entryByRead()`, declaration order does not decide the turn start,
 so only the order-independent check (self-match) runs — and a note says which checks were
 skipped rather than leaving the silence to be read as a pass.
+
+### Negative rows — the phrasings that must route nowhere (`neverRoutes`)
+
+`examples` pins the cheap half of routing: *this rule claims this phrase*. The half that
+costs more is the opposite one. A skill that fails to trigger costs a turn — the
+deterministic layer declines and the model tier picks. A skill that triggers when it
+should not costs the **whole answer**: the wrong body goes into the system prompt and the
+wrong tools go onto the wire, and everything the model then says is shaped by a skill with
+no business in the turn.
+
+`neverRoutes` states that assertion:
+
+```ts
+const graph = skillGraph({
+  skills: [billing, shipping],
+  start: {
+    rules: [
+      { use: 'billing', match: { keywords: ['refund', 'charge', 'card'] } },
+      { use: 'shipping', match: /\b(track|parcel|delivery)\b/i },
+    ],
+  },
+  neverRoutes: ["what's the weather in Berlin", 'book me a flight'],
+});
+```
+
+Fluent: `.neverRoutes(["what's the weather in Berlin"])` — one phrase or a list, called as
+often as you like (the rows accumulate; a duplicate is refused, trimmed and case-folded,
+because one row already asserts it against every rule).
+
+**It lives on the graph, not on a skill,** and that is the whole design. A phrase that must
+route nowhere belongs to no skill: hanging it on one would read as that skill's business,
+would be checked against that one rule while another swallowed the phrase, and would be
+deleted the day that skill was — which is exactly when a graph gets re-partitioned, and
+exactly when over-triggering appears.
+
+The check runs every declared start condition over the phrase on the same cold-start
+context the example checks use, and reports the claimant **by name**:
+
+- `never-routes-claimed` (**error**) — a declared rule claims it, so a default `.build()`
+  refuses. The message names the rule, quotes its matcher, and says what the turn would
+  have opened with;
+- `never-routes-by-default` (warning) — no *rule* claims it, but an unconditional entry
+  does under the declaration-order cold start and not under the turn-start cascade. Which
+  law applies is decided at agent mount, so the report names both readings rather than
+  asserting one against the router;
+- `never-routes-contradicts-example` (**error**) — the same phrase is declared as a rule's
+  `examples` *and* as a negative row. Two of your own declarations, one of which is wrong
+  wherever the router lands.
+
+**What it proves, exactly.** That no declared start **rule** claims the phrase. Not that
+the turn routes nowhere: an intent rule is judged by a classifier at run time, a scorer or
+`.entryByRead()` menu ranks descriptions, and `read_skill` can always open an open skill by
+name. That sentence rides `graph.checkup().notes`, so a clean report carries it too. A
+`.tree()` refuses the rows outright — it has no start rules for a phrase to be judged
+against, and rows that passed in silence there would be read as proof.
+
+### Partition advisories — reading the shape of the cut
+
+Every other code on this page is a wiring fact. The **partition** — how a graph cut the
+world into skills — is upstream of all of them and has the most leverage. A graph whose
+skills follow *systems* instead of *capabilities* makes one ordinary question cross four
+skills, and the capability the user actually wanted ends up built outside the graph, by
+hand, where nothing can route or check it.
+
+Three signals are computable from names and structure alone, so `checkup()` states them:
+
+| Code | The fact it states | Threshold |
+|---|---|---|
+| `tools-share-prefix` | every tool in a skill shares one `_`-delimited name prefix (`pstore_…`) | 3+ tools, and the shared segment is not a verb (`get_`, `issue_`, `lookup_`…) |
+| `few-declared-edges` | many skills, almost no declared routes — the handoffs live in prose | fewer than one route per four skills |
+| `skill-wraps-one-tool` | one tool and a body too thin to add anything to its schema | exactly 1 tool, body under 25 words |
+
+All three are **warnings, always** — they never decide `ok` and never fail a build.
+Every one has a legitimate design behind it: a skill really can be one system's
+capability, a flat menu of independent skills really does declare no edges, and a one-call
+capability really can be one tool with a short body. So each message states the signal as a
+fact you can check against your own intent ("your 19 skills declare 1 route"; "every tool in
+`powerstore` shares the prefix `pstore_`") and names the design it is also consistent with.
+None of them fires below **five skills**: under that there is no partition to have an
+opinion about, and a check that fires on a three-skill graph teaches you to stop reading the
+check-up.
 
 ### Scoping tools on the flat arm — `scopeTools`
 
@@ -987,6 +1074,71 @@ filesystem happened to return.
 `skillsFromDir` is Node-only — it reads the filesystem — but importing
 `agentfootprint/context` in a browser bundle stays safe: `node:fs` is
 imported lazily inside the call, never at module load.
+
+### Routing on disk — `routes:` and `runbookFromDir`
+
+A runbook says what to do, what to do it with, in what order — and where the work goes
+**next**. That last part is the graph, and until 9.43.0 it had to be hand-wired in code
+even when the files said it plainly. `routes:` closes the gap, and `runbookFromDir` is the
+door that reads it:
+
+```md
+---
+name: billing
+description: Use for refunds, disputed charges and invoices.
+tools: lookup_order, issue_refund
+routes:
+  - escalation: on issue_refund status=denied
+  - receipts: on issue_refund
+  - audit
+---
+
+Confirm identity, read the last three charges, then decide.
+```
+
+```ts
+import { runbookFromDir, skillGraph } from 'agentfootprint/context';
+
+const runbook = await runbookFromDir('./skills', { tools: [lookupOrder, issueRefund] });
+const graph = skillGraph({ ...runbook, start: 'billing' });
+```
+
+`runbookFromDir` returns a `DirRunbook` — `{ skills, steps }`, the two things a graph is
+made of, with the library's own field names so the result spreads straight into
+`skillGraph`. The skills are byte-identical to what `skillsFromDir` returns for the same
+directory. (One name to keep straight: a file's own `steps:` key is that **skill's** tool
+sequence and rides on the skill unchanged; the `steps` in a `DirRunbook` are the
+**graph's** edges, read from each file's `routes:`.)
+
+`skillsFromDir` still returns skills only, and now **refuses** a file that declares
+`routes:` — pointing at `runbookFromDir` by name. A door that quietly dropped the routing
+would hand you a graph you believed was declared on disk.
+
+**The same law as `tools:` — the file picks, it never defines.** A route names a skill id
+this directory declares; an id nothing here declares is refused at load, by name, listing
+what *is* available. One bad id fails the whole load: a graph missing one edge routes
+silently wrong, which is worse than a graph that refuses to exist.
+
+**What a guard can say, and what it cannot.** A guard is one of the two **data** conditions
+a route already has, and nothing else:
+
+| On disk | Compiles to |
+|---|---|
+| `- escalation` | a bare (model) edge — drawn, and offered to `read_skill` |
+| `- escalation: on issue_refund` | `onToolReturn: 'issue_refund'` |
+| `- escalation: status=denied,failure` | `onToolStatus: ['denied', 'failure']` |
+| `- escalation: on issue_refund status=denied` | both, which is how a route already composes |
+
+The tool a guard names must be one of that file's own `tools:` — an edge out of this skill
+fires on this skill's work. Statuses come from the closed outcome vocabulary (`success`,
+`failure`, `denied`, `invalid`, `partial`, `pending`).
+
+A `when` predicate is **code**, and nothing in a `SKILL.md` is ever evaluated, so no file
+can carry one. That is a decision, not a gap: a conditional a file cannot express is a
+conditional that stays in your source, where `skillGraph({ steps: [{ from, to, when }] })`
+takes it. Anything the grammar does not recognise is refused with the whole grammar quoted
+and that sentence attached, rather than half-understood by a parser inventing a
+mini-language.
 
 ### Why it refuses a URL
 

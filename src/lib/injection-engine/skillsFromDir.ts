@@ -76,9 +76,36 @@
  *     others take `defineSkill`'s defaults.
  *   - unknown frontmatter keys are still IGNORED, not rejected, so a file
  *     carrying another tool's metadata still loads here. `name`,
- *     `description`, `tools`, `steps` and `onSkip` are the KNOWN keys — a file
- *     that used one of those five for something else is the one case this
- *     release can change, and it changes it loudly.
+ *     `description`, `tools`, `steps`, `onSkip` and `routes` are the KNOWN
+ *     keys — a file that used one of those six for something else is the one
+ *     case a release can change, and it changes it loudly.
+ *
+ * ── The routing, and the door that reads it (9.43.0) ─────────────────────────
+ * A runbook says what to do, what to do it with, in what order — and where the
+ * work goes NEXT. That last part is the graph, and until now it had to be
+ * hand-wired in code even when the files said it plainly. `routes:` closes it:
+ *
+ *   ---
+ *   name: billing
+ *   tools: lookup_order, issue_refund
+ *   routes:
+ *     - escalation: on issue_refund status=denied
+ *     - receipts: on issue_refund
+ *   ---
+ *
+ *   const runbook = await runbookFromDir('./skills', { tools: [...] });
+ *   const graph = skillGraph({ ...runbook, start: 'billing' });
+ *
+ * TWO DOORS, one truth: `skillsFromDir` returns skills and REFUSES a file that
+ * declares `routes:` (a door that dropped the routing would hand back a graph
+ * you believed was declared on disk); {@link runbookFromDir} returns
+ * `{ skills, steps }`. Same law as `tools:` — the file PICKS (a route names a
+ * skill id this directory declares; an unknown id is refused at load, by name,
+ * listing what is available), it never DEFINES. A guard is one of the two DATA
+ * conditions a route already has (`on <tool_name>`, `status=<outcome>`), and
+ * nothing else: a `when` predicate is CODE, no file can carry code, and that
+ * conditional stays in your source. See `skillsFromDirRoutes.ts` for the whole
+ * grammar and every refusal.
  *
  * A worked example feeding this into a graph:
  * `examples/features/47-skills-from-dir-graph.ts`.
@@ -113,6 +140,8 @@ import type { Injection } from './types.js';
 import type { Tool } from '../../core/tools.js';
 import type { OnSkipPolicy, SkillStep } from './skillSteps.js';
 import { defineSkill, type SurfaceMode } from './factories/defineSkill.js';
+import type { SkillGraphStep } from './skillGraph.js';
+import { readDeclaredRoutes, toGraphSteps, type DeclaredRoute } from './skillsFromDirRoutes.js';
 
 /** The file name every skill folder is expected to use. */
 const SKILL_FILE = 'SKILL.md';
@@ -170,8 +199,39 @@ interface ParsedSkillFile {
   /** Steps as data, already shaped like `defineSkill`'s `steps`. */
   readonly steps?: readonly SkillStep[];
   readonly onSkip?: OnSkipPolicy;
+  /** The ROUTING this file declared (9.43.0) — target ids + data guards, still
+   *  unresolved: a file cannot know what the rest of the directory carries.
+   *  Absent when the file declared no `routes:` key, which is what every file
+   *  written before this release does. */
+  readonly routes?: readonly DeclaredRoute[];
   /** Absolute-ish path as given to the reader — what error messages quote. */
   readonly file: string;
+}
+
+/**
+ * A whole runbook directory, read as the two things a graph is made of
+ * (9.43.0): the skills, and the edges between them.
+ *
+ * Spreads straight into the graph — the field names are the graph's own, so
+ * nothing has to be translated at the call site:
+ *
+ *   const runbook = await runbookFromDir('./skills', { tools });
+ *   const graph = skillGraph({ ...runbook, start: 'triage' });
+ */
+export interface DirRunbook {
+  /** Every `SKILL.md` under the directory, as Skill Injections — byte-identical
+   *  to what `skillsFromDir` returns for the same directory. */
+  readonly skills: readonly Injection[];
+  /**
+   * The declared edges, ready for `skillGraph({ steps })`. In skill-name order,
+   * then file order, so a graph built from a directory is stable.
+   *
+   * NAME NOTE, because two different things are spelled `steps` in this
+   * library: a file's own `steps:` key is that SKILL's tool sequence (which
+   * rides on the skill, unchanged); these `steps` are the GRAPH's edges, read
+   * from each file's `routes:` key. They never meet.
+   */
+  readonly steps: readonly SkillGraphStep[];
 }
 
 /**
@@ -199,6 +259,80 @@ export async function skillsFromDir(
   dir: string,
   opts: SkillsFromDirOptions = {},
 ): Promise<readonly Injection[]> {
+  const { parsed, skills } = await loadSkillDir(dir, opts);
+  // A file that declares `routes:` loaded through THIS door would hand back a
+  // skill set with its routing silently dropped — the same failure the tool
+  // registry refuses ("a skill that loads without the tool it asked for still
+  // runs and still sounds sure of itself"). Refused by name, pointing at the
+  // door that reads the whole runbook.
+  const routing = parsed.find((skill) => skill.routes !== undefined);
+  if (routing !== undefined) {
+    throw new Error(
+      `skillsFromDir: '${routing.file}' declares 'routes', and skillsFromDir returns SKILLS ` +
+        `only — the routing would be dropped without a word, leaving you a graph you thought ` +
+        `was declared on disk. Read the whole runbook instead: ` +
+        `const { skills, steps } = await runbookFromDir(dir, opts); ` +
+        `skillGraph({ skills, steps, start: '<entry id>' }). ` +
+        `(If 'routes' in this file belongs to another program, rename that key — it is a key ` +
+        `this loader now reads.)`,
+    );
+  }
+  return skills;
+}
+
+/**
+ * Load a directory as a whole RUNBOOK (9.43.0) — the skills AND the edges
+ * between them.
+ *
+ * `skillsFromDir` reads what one skill is; this reads what the skills are TO
+ * EACH OTHER, from each file's `routes:` key, and hands back both halves ready
+ * for `skillGraph({ ...runbook, start })`. Everything else is identical: same
+ * layouts, same frontmatter, same tool registry, same refusals.
+ *
+ * The routing a file may carry is deliberately small, and the boundary is a
+ * security property rather than a limitation — see `skillsFromDirRoutes.ts`:
+ * a route NAMES a skill this directory declares (an unknown id is refused at
+ * load, by name, listing what is available — never a half-graph), and a guard
+ * is one of the two DATA conditions a route already has (`on <tool>`,
+ * `status=<outcome>`). A `when` predicate is code, so no file can express one;
+ * that conditional stays in your source, where `skillGraph({ steps })` takes it.
+ *
+ * @param dir - A local filesystem path. Same rule as `skillsFromDir`.
+ * @param opts - Applied uniformly to every loaded skill.
+ *
+ * @throws everything `skillsFromDir` throws, plus: a route to an id no
+ *   `SKILL.md` in the directory declares (the message lists what is
+ *   available), a guard the grammar cannot express (the message quotes the
+ *   whole grammar), a guard naming a tool the file itself does not declare,
+ *   and a file routing to the same skill twice.
+ */
+export async function runbookFromDir(
+  dir: string,
+  opts: SkillsFromDirOptions = {},
+): Promise<DirRunbook> {
+  const { parsed, skills } = await loadSkillDir(dir, opts);
+  // Resolved only once every file is in hand: "which ids exist" is a fact about
+  // the DIRECTORY, and no single file can be asked it.
+  const known = new Set(parsed.map((skill) => skill.name));
+  const steps = parsed.flatMap((skill) =>
+    skill.routes === undefined ? [] : toGraphSteps(skill.name, skill.routes, skill.file, known),
+  );
+  return { skills, steps };
+}
+
+/**
+ * The shared load: read the directory, parse every file, resolve the tools,
+ * build the skills. Both doors run exactly this — they differ only in what they
+ * do with the ROUTING each file declared, which is the one thing a skill list
+ * cannot carry.
+ *
+ * Returns the parsed files and the built skills IN THE SAME ORDER (sorted by
+ * skill name), so a caller can pair them by index.
+ */
+async function loadSkillDir(
+  dir: string,
+  opts: SkillsFromDirOptions,
+): Promise<{ parsed: readonly ParsedSkillFile[]; skills: readonly Injection[] }> {
   assertLocalDirectoryArgument(dir);
   assertNoViaToolNameOption(opts);
 
@@ -272,21 +406,20 @@ export async function skillsFromDir(
   // refusals say different things, because the fixes are different.
   const registry = indexToolRegistry(opts.tools);
 
-  return parsed
-    .slice()
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    .map((skill) => {
-      const tools = resolveDeclaredTools(skill, opts.tools, registry);
-      return defineSkill({
-        id: skill.name,
-        description: skill.description,
-        body: skill.body,
-        ...(tools !== undefined && { tools }),
-        ...(skill.steps !== undefined && { steps: skill.steps }),
-        ...(skill.onSkip !== undefined && { onSkip: skill.onSkip }),
-        ...(opts.surfaceMode !== undefined && { surfaceMode: opts.surfaceMode }),
-      });
+  const sorted = parsed.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const skills = sorted.map((skill) => {
+    const tools = resolveDeclaredTools(skill, opts.tools, registry);
+    return defineSkill({
+      id: skill.name,
+      description: skill.description,
+      body: skill.body,
+      ...(tools !== undefined && { tools }),
+      ...(skill.steps !== undefined && { steps: skill.steps }),
+      ...(skill.onSkip !== undefined && { onSkip: skill.onSkip }),
+      ...(opts.surfaceMode !== undefined && { surfaceMode: opts.surfaceMode }),
     });
+  });
+  return { parsed: sorted, skills };
 }
 
 // ─── Authorship guard ──────────────────────────────────────────────
@@ -522,6 +655,7 @@ function parseSkillFile(raw: string, file: string): ParsedSkillFile {
   const toolNames = readToolNames(fields, file);
   const steps = readSteps(fields, file, toolNames);
   const onSkip = readOnSkip(fields, file, steps);
+  const routes = readRoutes(fields, file, toolNames);
 
   return {
     name,
@@ -530,6 +664,7 @@ function parseSkillFile(raw: string, file: string): ParsedSkillFile {
     ...(toolNames !== undefined && { toolNames }),
     ...(steps !== undefined && { steps }),
     ...(onSkip !== undefined && { onSkip }),
+    ...(routes !== undefined && { routes }),
     file,
   };
 }
@@ -724,6 +859,32 @@ function readSteps(
     }
     return { tool: item.key, note: item.value };
   });
+}
+
+/**
+ * `routes:` → the edges out of this skill (9.43.0), as data.
+ *
+ * A block list, like `steps:` and for the same reason: routing is an ordered
+ * list of pairs (a target and its guard), and one line cannot carry that
+ * without a separator soup. The grammar itself — and every refusal in it —
+ * lives in `skillsFromDirRoutes.ts`; this reader only decides that the key is
+ * present and shaped like a list.
+ */
+function readRoutes(
+  fields: ReadonlyMap<string, FieldValue>,
+  file: string,
+  toolNames: readonly string[] | undefined,
+): readonly DeclaredRoute[] | undefined {
+  const field = fields.get('routes');
+  if (field === undefined) return undefined;
+  if (field.kind === 'scalar') {
+    throw new Error(
+      `skillsFromDir: '${file}' writes 'routes' on one line, and routing is a LIST of edges ` +
+        `(each with its own guard). Write it as a block:\nroutes:\n  - escalation: on ` +
+        `issue_refund status=denied\n  - receipts: on issue_refund`,
+    );
+  }
+  return readDeclaredRoutes(field.items, file, toolNames);
 }
 
 /** `onSkip:` → the skip policy. Refused here rather than at `defineSkill` so

@@ -59,7 +59,7 @@ import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { breakFinalStage } from './stages/breakFinal.js';
-import { prepareFinalStage } from './stages/prepareFinal.js';
+import { prepareFinalStage, prepareFinalWithLimitsStage } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
@@ -229,6 +229,16 @@ export interface AgentChartDeps {
   readonly hasEvidenceGate?: boolean;
 
   /**
+   * `.limitsTravelWithTheAnswer()` is configured (this release). Swaps the
+   * final branch's first stage for the variant that folds the run's declared
+   * coverage into the answer before the turn payload is captured. Absent →
+   * the same stage function the chart has always mounted, byte for byte; the
+   * RECORDING half (events + `coverageDeclared`) is unconditional and does
+   * not depend on this flag.
+   */
+  readonly attachCoverageLimits?: boolean;
+
+  /**
    * An escalation brain is declared (9.19.0). In the GROUPED chart this
    * gates threading `skillEscalated` across the `sf-llm-call` boundary —
    * the flip is written by tool-calls on the OUTER scope and read by
@@ -281,7 +291,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // the turn payload; BreakFinal terminates the loop.
   let finalBranchBuilder = flowChart<AgentState>(
     'PrepareFinal',
-    prepareFinalStage,
+    // Same stage id, same position — only the body differs, and only for an
+    // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
+    // for why the fold happens HERE and not in a stage of its own.
+    deps.attachCoverageLimits === true ? prepareFinalWithLimitsStage : prepareFinalStage,
     'prepare-final',
     {
       ...(deps.structureRecorders !== undefined && {

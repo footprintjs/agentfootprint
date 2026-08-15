@@ -64,7 +64,7 @@ import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { breakFinalStage } from './stages/breakFinal.js';
-import { prepareFinalStage } from './stages/prepareFinal.js';
+import { prepareFinalStage, prepareFinalWithLimitsStage } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
 import type { AgentState } from './types.js';
@@ -145,7 +145,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // peer of the LLM turn, not part of it).
   let finalBranchBuilder = flowChart<AgentState>(
     'PrepareFinal',
-    prepareFinalStage,
+    // Same stage id, same position — only the body differs, and only for an
+    // agent that asked for its limits to travel. See `stages/prepareFinal.ts`
+    // for why the fold happens HERE and not in a stage of its own.
+    deps.attachCoverageLimits === true ? prepareFinalWithLimitsStage : prepareFinalStage,
     'prepare-final',
     {
       ...(deps.structureRecorders !== undefined && {

@@ -537,6 +537,44 @@ export {
   type ToolResultEnvelope,
   type ToolResultStatus,
 } from './core/agent/toolEffects.js';
+// The two coverage primitives — both invented in FIELD USE, on a live triage
+// agent, because the library had no answer for either.
+//
+//   • `absent()` — an absence that names its own coverage. A tool that finds
+//     nothing returns something, and from an empty array a model cannot tell
+//     "I looked and there is nothing" from "I could not look". The confusion
+//     is not symmetric: a nothing-found read as an outage costs an
+//     investigation, an outage read as nothing-found declares a system
+//     healthy that was never checked.
+//   • `coverage()` — the ledger of what a clean result does NOT rule out:
+//     checked, not checked, and can never be covered. The sibling of the
+//     evidence gate — the gate catches invented VALUES, this catches unstated
+//     LIMITS.
+//
+// Both are RECOGNIZED by the framework (status, events, evidence corpus), not
+// conventions: a shape the framework does not understand cannot stop a retry
+// loop or keep a value out of the evidence index.
+export {
+  ABSENCE_MARKER,
+  ABSENCE_NOTE,
+  absent,
+  coverage,
+  COVERAGE_BLOCK_HEADING,
+  COVERAGE_MARKER,
+  COVERAGE_NOTE,
+  readAbsence,
+  readCoverageLedger,
+  readCoverageResult,
+  type AbsenceDeclaration,
+  type Coverage,
+  type CoverageDeclaration,
+  type CoverageInput,
+  type CoverageItem,
+  type CoverageReading,
+  type CoveredResult,
+  type DeclaredCoverage,
+  type ToolAbsence,
+} from './core/agent/coverage/index.js';
 // Tool sessions (9.7.0) — the identity a tool holds a session under, and the
 // end-signal that releases it. The KEY DERIVATION is exported because it is the
 // isolation boundary: one implementation, or two that disagree.

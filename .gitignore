@@ -1,6 +1,10 @@
 node_modules
 dist/
-coverage/
+# ANCHORED to the repo root: this ignores the vitest report directory
+# (`npm run test:coverage` writes ./coverage), and nothing else. Unanchored,
+# the pattern also swallowed `src/core/agent/coverage/` — a source module that
+# would have been silently absent from every clone.
+/coverage/
 *.tgz
 .DS_Store
 
@@ -38,4 +42,5 @@ docs/canonical-demo.md
 # Local scratch artifacts
 index-claude.html
 *.scratch.*
-coverage
+# ANCHORED to the repo root — see the note above the other `coverage` rule.
+/coverage

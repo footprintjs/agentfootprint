@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.43.0] - 2026-08-15
+
+**Five primitives that came out of field use.** A review of a live incident-triage
+agent found its operator had independently invented things this library had no
+answer for. These are ours, built from that evidence. The credit is the field's.
+
+### Added
+
+- **`absent()` — an absence that names its own coverage.** A tool that finds
+  nothing returns a value saying WHAT was searched, what was not, what can never
+  be covered, and that a retry returns the same. It carries a reserved key the
+  framework recognises, because a convention cannot set a status, stop a loop, or
+  keep a value out of the evidence corpus.
+
+  It delivers a seventh `ToolResultStatus`, `'absent'`, routable by
+  `onToolStatus`. Folding it into `'failure'` IS the confusion this exists to
+  prevent; folding it into `'success'` leaves nothing to route on. The direction
+  of error is the point: a nothing-found read as an outage sends someone to
+  investigate a collector, and an outage read as nothing-found declares a system
+  healthy that was never checked.
+
+  **And it opened a hole in the evidence gate, which is why the gate now indexes
+  an absence's COVERAGE ONLY.** An absence says what was looked FOR — which
+  quotes the model's own arguments. Indexed whole, an invented identifier becomes
+  grounded by the one operation that proves nothing about it. A failed lookup is
+  the cheapest laundering machine there is, and this primitive would have made it
+  cheaper.
+
+- **`coverage()` — a ledger of what a clean answer does not rule out.** Sibling
+  of the evidence gate: the gate catches invented VALUES, this catches unstated
+  LIMITS. Recording is unconditional. Survival is enforced by construction and
+  opt-in — `.limitsTravelWithTheAnswer()` APPENDS the folded block, so the model
+  does not write it and therefore cannot drop it. What is deliberately NOT
+  enforced: any check that the model stated its limits in prose, because deciding
+  what counts as "stated" needs a second model, which is the one thing a guard
+  here may not depend on.
+
+- **`neverRoutes` — pin that a phrase must route NOWHERE.** Over-triggering is
+  the failure that hurts: a skill claiming a turn it has no business in shapes
+  the whole answer with the wrong instructions and the wrong tools. Declared at
+  the GRAPH level, because a phrase pinned to a skill is deleted the day that
+  skill is — which is exactly when a graph gets re-partitioned and over-triggering
+  appears. It asserts that no declared start rule claims the phrase, and it ships
+  its own boundary: intent scorers and `read_skill` are not covered, said on the
+  checkup rather than left implied.
+
+- **Three partition advisories in `graph.checkup()`.** A graph's partition is its
+  highest-leverage design decision and a poor one is visible from names alone:
+  tools in a skill all sharing a prefix, many skills declaring almost no edges, a
+  one-tool skill with a body that adds nothing to its schema.
+
+  The calibration is the feature. The verb exclusion came from surveying real
+  tool names — `get`, `read`, `issue`, `lookup`, `run` are the commonest first
+  segments and together outnumber every system prefix, so without excluding them
+  the check would fire on the best-named skills here. And all three are silent
+  below five skills, because without that floor they fired on small fixtures and
+  would have taught authors to stop reading the checkup. Advisories, never
+  errors: every one has a legitimate exception, and each message states the fact
+  and names the design it is also consistent with.
+
+- **`runbookFromDir` — routes on disk.** The ingest door carried prose, tools and
+  steps but not the edges, so a runbook still had to be hand-wired. A file may
+  now declare its exits using the two DATA guards a route already has — a tool
+  return and a status — and refuses a `when` predicate by name, because that is
+  code and nothing in these files is ever evaluated. The file PICKS, it never
+  DEFINES: an unresolved id fails the whole load rather than producing half a
+  graph. `skillsFromDir` REFUSES a file declaring routes and points here — a door
+  that silently dropped routing would hand back a graph you believed was on disk.
+
+### Fixed
+
+- Two unanchored `coverage` rules in `.gitignore` matched `src/core/agent/
+  coverage/`, so a new source directory would have been absent from every clone.
+  Anchored to the vitest report directory, with a comment naming why.
+
+
 ## [9.42.0] - 2026-08-15
 
 **Comparing strategies with statistics, and retention on the session port.**

@@ -1230,6 +1230,55 @@ export interface ToolRepeatedCallPayload {
   readonly resultFingerprint: string;
 }
 
+/**
+ * A tool looked and found nothing, and said so with `absent(…)`.
+ *
+ * The event exists because the RECORD is where "we looked here and there was
+ * nothing" has to survive: read off the answer alone, a clean run and a run
+ * that searched an empty collector look identical. Carries the coverage the
+ * tool declared — never the arguments the model passed, which are the model's
+ * own words about what it wanted, not the tool's about what it covered.
+ */
+export interface ToolAbsentPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** What the tool says it was looking for (its own prose). */
+  readonly lookedFor?: string;
+  /** Ground the search DID cover. Non-empty by construction — `absent()`
+   *  refuses a declaration that names no coverage. */
+  readonly checked: readonly CoverageItemPayload[];
+  /** Ground this search did not reach — the absence proves nothing there. */
+  readonly notChecked?: readonly CoverageItemPayload[];
+  /** Ground no call to this tool can reach. No retry changes it. */
+  readonly cannotCover?: readonly CoverageItemPayload[];
+}
+
+/**
+ * A tool returned a verdict WITH its own boundary — `coverage(result, …)`.
+ *
+ * The sibling of the evidence gate on the record: the gate's events say which
+ * VALUES an answer could not support, this one says which LIMITS it did not
+ * state. Fires per declaring call, whatever `.limitsTravelWithTheAnswer()`
+ * is set to — the recording half is unconditional, only the appending half is
+ * opt-in.
+ */
+export interface ToolCoverageDeclaredPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly checked?: readonly CoverageItemPayload[];
+  readonly notChecked?: readonly CoverageItemPayload[];
+  readonly cannotCover?: readonly CoverageItemPayload[];
+}
+
+/** One piece of declared ground, as it rides an event: detached plain data,
+ *  copied out of the tool's own declaration. */
+export interface CoverageItemPayload {
+  readonly what: string;
+  readonly why?: string;
+}
+
 // permission.* (4)
 export interface PermissionCheckPayload {
   /** 9.11.0 — the shared vocabulary, so the event cannot drift from the

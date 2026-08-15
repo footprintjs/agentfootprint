@@ -75,6 +75,8 @@ import {
 import { checkSkillContracts } from './skillContract.js';
 import { checkArtifactVocabularies } from './skillVocabulary.js';
 import { checkStartRuleExamples, validateStartRuleExamples } from './skillExamples.js';
+import { checkNeverRoutes, neverRouteKey, validateNeverRoutes } from './skillNeverRoutes.js';
+import { checkPartition } from './skillPartition.js';
 import {
   compileMatch,
   mermaidMatchCaption,
@@ -247,6 +249,16 @@ export interface SkillGraphFlatConfig {
    * See {@link BuildOptions.scopeTools}.
    */
   readonly scopeTools?: boolean;
+  /**
+   * Phrasings this graph must claim NOWHERE — the negative routing rows. Same
+   * machine as `.neverRoutes([...])`; see that method for what the check
+   * proves and what it deliberately does not. A row a declared start rule
+   * claims is an ERROR (`never-routes-claimed`), naming the rule.
+   *
+   * @example
+   *   skillGraph({ skills, start: { rules }, neverRoutes: ['what is the weather'] });
+   */
+  readonly neverRoutes?: readonly string[];
   readonly check?: GraphCheckMode;
   /** Baseline agent tool names — see {@link BuildOptions.knownTools}. */
   readonly knownTools?: readonly string[];
@@ -272,6 +284,10 @@ export interface SkillGraphTreeConfig {
   readonly scopeTools?: boolean;
   readonly start?: never;
   readonly steps?: never;
+  /** A tree has no start RULES for a negative row to be judged against, so the
+   *  type refuses it here and `build()` refuses it at runtime (see
+   *  {@link SkillGraphBuilder.neverRoutes}). */
+  readonly neverRoutes?: never;
   readonly check?: GraphCheckMode;
   /** Baseline agent tool names — see {@link BuildOptions.knownTools}. */
   readonly knownTools?: readonly string[];
@@ -899,6 +915,42 @@ export interface SkillGraphBuilder {
    * router per graph. Flat graphs only.
    */
   classify(scorer: IntentScorer, policy?: Partial<RoutingPolicy>): SkillGraphBuilder;
+  /**
+   * Declare phrasings this graph must claim **NOWHERE** — the negative form of
+   * a rule's `examples`, and the one that catches the expensive failure.
+   *
+   * An under-triggering skill costs a turn (the model tier picks instead). An
+   * OVER-triggering skill costs the answer: the wrong body enters the system
+   * prompt and the wrong tools enter the tools slot, and everything said after
+   * that is shaped by a skill with no business in the turn.
+   *
+   * It is declared on the GRAPH, not on a skill, because a phrase that must
+   * route nowhere belongs to no skill: the assertion is satisfied only when
+   * EVERY rule declines, and a row hung on one skill would vanish the day that
+   * skill was deleted — exactly when a graph is re-partitioned, which is
+   * exactly when over-triggering appears.
+   *
+   * `graph.checkup()` runs every declared start condition over the phrase on a
+   * cold-start context and reports the rule that claims it, BY NAME, as an
+   * ERROR (`never-routes-claimed`) — so a default `.build()` refuses.
+   *
+   * **What it proves, exactly:** no declared start RULE claims the phrase. Not
+   * "no routing at all": an intent rule is judged by a classifier at run time, a
+   * scorer / `.entryByRead()` menu ranks descriptions, and `read_skill` can
+   * always open an open skill by name. That statement rides the report itself
+   * (`checkup().notes`).
+   *
+   * Accepts one phrase or a list; call it as often as you like (rows
+   * accumulate). A duplicate row is refused — one row already asserts it
+   * against every rule.
+   *
+   * @example
+   *   skillGraph()
+   *     .entry(billing, { match: { keywords: ['refund', 'charge'] } })
+   *     .neverRoutes(["what's the weather in Berlin"])
+   *     .build();
+   */
+  neverRoutes(phrases: string | readonly string[]): SkillGraphBuilder;
   build(opts?: BuildOptions): SkillGraph;
 }
 
@@ -973,6 +1025,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   let entryByReadFlag = false;
   let classifyScorer: IntentScorer | undefined;
   let classifyPolicy: Partial<RoutingPolicy> | undefined;
+  // The negative rows, in declaration order. A graph that never calls
+  // `.neverRoutes()` keeps an empty array and pays one length check at
+  // check-up time — zero cost when unused.
+  const neverRoutePhrases: string[] = [];
 
   /**
    * Register a skill under its id, refusing a second DIFFERENT skill under an id
@@ -1100,6 +1156,20 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       classifyPolicy = policy;
       return builder;
     },
+    neverRoutes(phrases) {
+      // Validated at the keystroke, like a rule's `examples` — an unusable row
+      // is refused where it was written instead of quietly asserting nothing at
+      // check-up time. The already-declared set makes the duplicate refusal
+      // work across calls, not just within one.
+      neverRoutePhrases.push(
+        ...validateNeverRoutes(
+          phrases,
+          '.neverRoutes(...)',
+          new Set(neverRoutePhrases.map(neverRouteKey)),
+        ),
+      );
+      return builder;
+    },
     build(opts: BuildOptions = {}) {
       // One entry router per graph — classify is a third machine beside the
       // scorer and the model-read menu, and two of them deciding one turn
@@ -1162,6 +1232,23 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           "skillGraph: `scopeTools` on build() is the FLAT arm's dial. This graph is a " +
             '.tree(), which declares tool scoping on .tree(root, { scopeTools }) (object ' +
             "form: the tree arm's own `scopeTools` field) — set it there instead.",
+        );
+      }
+      // A negative row is judged against the START RULES, and a `.tree()` has
+      // none — it routes by predicate on every iteration, with no turn start to
+      // claim or decline a phrase. Accepting the rows here would run them
+      // against an empty rule set and report a clean pass, which is the one
+      // answer a negative assertion must never give by construction.
+      if (treeRoot && neverRoutePhrases.length > 0) {
+        throw new Error(
+          `skillGraph: .neverRoutes(...) declares ${plural(
+            neverRoutePhrases.length,
+            'phrase',
+            'phrases',
+          )} that must claim no skill, but this graph is a .tree() — which routes by predicate ` +
+            'on every iteration and has no start rules for a phrase to be judged against, so ' +
+            'the rows would pass in silence and you would read that as proof. Assert them on ' +
+            'a flat entry/route graph, or test the tree by running its predicates directly.',
         );
       }
       // A tree and the flat entry/route wiring are two ways to declare the same
@@ -1249,17 +1336,37 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             !(entryScorer !== undefined || entryByReadFlag) || classifyScorer !== undefined,
           hasClassifier: classifyScorer !== undefined,
         });
+        // The NEGATIVE rows — phrases this graph claims NOWHERE. No
+        // `orderDecides` gate: "nobody claims it" is an assertion every rule
+        // has to satisfy, so the order they are read in cannot change the
+        // answer (skillNeverRoutes.ts's header has the whole argument).
+        const negatives = checkNeverRoutes({ entries, phrases: neverRoutePhrases });
+        // The PARTITION advisories — how this graph cut the world into skills,
+        // read from names and structure alone. Warnings, always: every signal
+        // has a legitimate design behind it, and each message says which.
+        const partition = checkPartition({
+          skills: [...skillsById.values()],
+          routeCount: routes.length,
+          entryCount: entries.length,
+          isTree: treeRoot !== undefined,
+        });
         const problems = [
           ...wiring.problems,
           ...intentDuplicates,
           ...contract,
           ...vocabularies,
           ...examples.problems,
+          ...negatives.problems,
+          ...partition,
         ];
+        // Notes are statements about the report's own REACH, and each check
+        // brings its own — a graph that declared both examples and negative
+        // rows carries both boundaries, in declaration order of the checks.
+        const notes = [...examples.notes, ...negatives.notes];
         return {
           ok: !problems.some((p) => p.kind === 'error'),
           problems,
-          ...(examples.notes.length > 0 && { notes: examples.notes }),
+          ...(notes.length > 0 && { notes }),
         };
       };
 
@@ -1656,6 +1763,11 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         else builder.entryByRead();
       }
     }
+    // The negative rows (graph level, like the skills list itself — a phrase
+    // that must route nowhere belongs to no skill and to no `start` arm).
+    // Declared BEFORE `build()` so the tree refusal fires there, in one place,
+    // for both forms.
+    if (config.neverRoutes !== undefined) builder.neverRoutes(config.neverRoutes);
     for (const step of config.steps ?? []) {
       builder.route(resolve(step.from), resolve(step.to), {
         ...(step.when && { when: step.when }),

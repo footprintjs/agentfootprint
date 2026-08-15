@@ -280,6 +280,11 @@ export class AgentBuilder {
    *  thing it does, which is what makes the feature byte-identical when
    *  unused. */
   private toolsFromActiveSkillValue = false;
+  /** `.limitsTravelWithTheAnswer()` (this release). False for every agent
+   *  that did not ask for it, and the ONE thing it gates is which stage
+   *  function the final branch mounts — which is what makes the feature
+   *  byte-identical when unused. The recording half is unconditional. */
+  private limitsTravelValue = false;
 
   private outputSchemaRetries = 0;
   private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
@@ -1450,6 +1455,59 @@ export class AgentBuilder {
   }
 
   /**
+   * Make the limits of an answer travel WITH the answer (this release).
+   *
+   * A tool that returns `coverage(verdict, { checked, notChecked,
+   * cannotCover })` — or `absent({ what, checked, … })` — declares the ground
+   * its result stands on. With this on, the run's declarations are folded into
+   * one block and appended to the final answer, so a reader learns whether
+   * *"everything looks fine"* means **verified** or **unexamined**.
+   *
+   * ## Why appended, and not asked for
+   *
+   * A limit the model is asked to carry is a limit the model can drop, and
+   * dropping it is invisible: an answer with no caveat and an answer whose
+   * caveat was omitted read identically. The block is therefore composed by
+   * the framework from what the tools declared and concatenated onto the
+   * answer — the model does not write it, so the model cannot drop it. The
+   * price is that it changes the bytes of the answer, which is why it is off
+   * by default.
+   *
+   * **What it is not.** It does not judge whether the model stated the limits
+   * in its own prose, and it does not refuse an answer that did not. Both
+   * would need a second model to decide what counts as "stated", which is the
+   * one thing this library will not put in a guard (see
+   * `.namesAndNumbersFromEvidence()` and `core/agent/evidence/README.md`).
+   *
+   * Off → byte-identical: nothing is appended and the final branch mounts the
+   * stage function it has always mounted. The RECORDING half runs either way
+   * (`agentfootprint.tools.coverage_declared` / `.absent`, and
+   * `coverageDeclared` in the snapshot), so you can measure how often your
+   * tools declare limits before you decide to ship them.
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(replicationHealth)   // returns coverage(verdict, { … })
+   *     .limitsTravelWithTheAnswer()
+   *     .build();
+   */
+  limitsTravelWithTheAnswer(): this {
+    // Refused rather than shrugged at, like every other one-per-agent policy
+    // (`toolsFromActiveSkill` verbatim): a second call means the author
+    // believes there are two of these to set, and the honest answer is that
+    // there is one boundary block per answer.
+    if (this.limitsTravelValue) {
+      throw new Error(
+        'AgentBuilder.limitsTravelWithTheAnswer: already set. One agent appends one coverage ' +
+          'block to one answer, folded from every declaration its tools made — so a second ' +
+          'call has nothing left to say. Drop it.',
+      );
+    }
+    this.limitsTravelValue = true;
+    return this;
+  }
+
+  /**
    * Offer a skill's tools **only while that skill is active** (9.36.0). One
    * line, for every skill on the agent.
    *
@@ -2521,6 +2579,7 @@ export class AgentBuilder {
       this.skillGraphCascade,
       skillBrains,
       this.evidenceGate,
+      this.limitsTravelValue,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

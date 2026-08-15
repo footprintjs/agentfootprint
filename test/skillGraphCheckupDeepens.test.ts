@@ -449,8 +449,17 @@ describe(".build() default is 'throw' — the fluent form stops shipping a graph
 
 describe('checkup — property, security, performance, load', () => {
   it('property: a well-wired chain of N skills never trips a new code', () => {
+    // The bodies are spelled out because this property is about WIRING, and a
+    // chain long enough to be interesting (n >= 5) is also a PARTITION: the
+    // one-tool-thin-body advisory (`skill-wraps-one-tool`) reads a two-word
+    // body as an endpoint wrapper, correctly. Giving each link real guidance
+    // keeps the assertion exactly as strong and now pins both properties at
+    // once — a well-wired, well-bodied chain trips nothing at any length.
+    const realBody =
+      'Use this link when the previous step handed work forward. Confirm the identity of the ' +
+      'record first, check the outstanding balance, and stop if anything is disputed.';
     for (let n = 2; n <= 25; n++) {
-      const skills = Array.from({ length: n }, (_, i) => skill(`s${i}`));
+      const skills = Array.from({ length: n }, (_, i) => skill(`s${i}`, realBody));
       const g = skillGraph({
         skills,
         start: 's0',

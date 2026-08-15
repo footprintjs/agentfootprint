@@ -193,6 +193,36 @@ const calculator = defineTool({
 });
 ```
 
+### When a tool finds nothing, and what a clean result does not cover
+
+```typescript
+import { absent, coverage, defineTool } from 'agentfootprint';
+
+// "I looked and there is nothing" — never readable as "I could not look".
+execute: ({ port }) => rows.length ? rows : absent({
+  what: `FLOGI entries on ${port}`,
+  checked: ['shq-fab-a: the live fcns database', 'window: the last 24h'],
+  notChecked: [{ what: 'the archived history', why: 'older than the 24h window' }],
+  cannotCover: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
+  tryInstead: 'Ask for a different interface, or query the peer fabric by name.',
+}),
+
+// A verdict WITH its boundary — what "fine" does and does not rule out.
+execute: async () => coverage(await checkReplication(), {
+  checked: ['SRDF pair state on all 4 arrays'],
+  cannotCover: [{ what: 'host-side multipathing', why: 'no collector on the ESX hosts' }],
+}),
+```
+
+An absence gets the delivered status `'absent'` (route it with
+`onToolStatus: 'absent'`), files `agentfootprint.tools.absent`, and grounds only
+its COVERAGE in the evidence gate — so an id the model invented does not become
+grounded by one lookup that found nothing. It is never an error: nothing retries
+it, nothing refuses it, no `error: true`. A ledger files
+`agentfootprint.tools.coverage_declared`; add `.limitsTravelWithTheAnswer()` on
+the agent and the framework APPENDS the run's limits to the final answer, so the
+model cannot drop what it never wrote.
+
 ## Observing a run
 
 ```typescript
@@ -205,7 +235,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**94 typed events across 21 domains.** Two subscription shapes and no third:
+**96 typed events across 21 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

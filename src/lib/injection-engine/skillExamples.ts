@@ -93,13 +93,28 @@
  * visible wherever the graph reports its problems — because a reader who meets
  * it only in prose docs will meet a clean report first.
  *
+ * ## The opposite assertion lives next door
+ *
+ * Everything here is POSITIVE: this rule claims this phrase. The negative form
+ * — a phrase that must claim NO skill, which is the assertion that catches
+ * over-triggering — is `skillNeverRoutes.ts`, declared on the GRAPH rather than
+ * on a rule (a phrase that must route nowhere belongs to no skill). Both ask
+ * `startRuleClaim.ts` the same question and differ only in which answer is a
+ * defect; a phrase declared BOTH ways is reported there as the contradiction it
+ * is.
+ *
  * Composed into `graph.checkup()` by `skillGraph.ts`, exactly like
  * `skillContract`/`skillIntent`/`skillVocabulary`: this module owns the rule
  * AND its boundaries, and reports in the shared `GraphProblem` voice.
  */
 
-import type { InjectionContext } from './types.js';
-import { plainMatchCaption, type SkillMatchData } from './skillMatch.js';
+import {
+  COLD_CONTEXT_PHRASE,
+  claimLaws,
+  describeCondition,
+  runsOn,
+  type StartRuleDecl,
+} from './startRuleClaim.js';
 import type { GraphProblem } from './skillGraphCheckup.js';
 
 /**
@@ -120,18 +135,12 @@ export const EXAMPLES_ORDER_NOT_CHECKED =
   "Each rule's own matcher was still run against its own examples.";
 
 /**
- * The slice of an entry declaration this module reads — structural, so
- * `skillGraph.ts`'s module-private `EntryDecl` satisfies it unchanged (the
- * same trick `skillIntent.ts` uses).
+ * The slice of an entry declaration this module reads — the shared claim shape
+ * ({@link StartRuleDecl}, which owns "who claims a phrase") plus the one field
+ * only this check reads. Structural, so `skillGraph.ts`'s module-private
+ * `EntryDecl` satisfies it unchanged (the same trick `skillIntent.ts` uses).
  */
-export interface ExampleRuleDecl {
-  readonly id: string;
-  /** The compiled condition (from `match:`) or the author's `when`. Absent on
-   *  an unconditional entry and on an intent rule (no sync predicate). */
-  readonly when?: (ctx: InjectionContext) => boolean;
-  /** The serializable matcher behind `when`, when declared as data — quoted
-   *  back in the messages, and the one way to spot the intent arm. */
-  readonly match?: SkillMatchData;
+export interface ExampleRuleDecl extends StartRuleDecl {
   /** The phrasings this rule claims (build-time TEST material). */
   readonly examples?: readonly string[];
 }
@@ -236,26 +245,11 @@ export function checkStartRuleExamples(input: {
   if (!entries.some((e) => e.examples !== undefined && e.examples.length > 0)) return NOTHING;
 
   // WHO CAN CLAIM A PHRASE — both routing laws, mirrored, not re-invented (see
-  // this file's header). Intent entries never claim synchronously in either
-  // (no predicate at all), so neither set carries them.
-  //
-  //   • COLD WALK (`makeResolveCursor`, the default mount): every non-intent
-  //     entry, unconditional ones included — they claim everything from their
-  //     position onward.
-  //   • CASCADE tier 1 (`firstRuleMatch`, mounted by `.classify()` OR by
-  //     `continuity: 'conversation'`): the CONDITIONAL non-intent entries only.
-  //
-  // With a classifier the cascade is certain, so it is the only law consulted.
-  // Without one, EITHER may be mounted — both are computed, and where they
-  // disagree the report says so instead of picking one.
-  const nonIntent = entries
-    .map((entry, index) => ({ entry, index }))
-    .filter(({ entry }) => entry.match?.kind !== 'intent');
-  const ruleClaimants = nonIntent.filter(({ entry }) => entry.when !== undefined);
-  const claimUnderCascade = (phrase: string): Claim | undefined =>
-    ruleClaimants.find(({ entry }) => runsOn(entry, phrase) === 'match');
-  const claimUnderColdWalk = (phrase: string): Claim | undefined =>
-    nonIntent.find(({ entry }) => runsOn(entry, phrase) === 'match');
+  // this file's header and `startRuleClaim.ts`, which owns them). With a
+  // classifier the cascade is certain, so it is the only law consulted. Without
+  // one, EITHER may be mounted — both are computed, and where they disagree the
+  // report says so instead of picking one.
+  const { underCascade: claimUnderCascade, underColdWalk: claimUnderColdWalk } = claimLaws(entries);
 
   const problems: GraphProblem[] = [];
   for (const [index, entry] of entries.entries()) {
@@ -433,44 +427,6 @@ export function checkStartRuleExamples(input: {
   };
 }
 
-/**
- * Run one entry's condition over one phrase, on a COLD-START context — the
- * context a turn's first iteration really hands a start rule: iteration 1, the
- * phrase as `userMessage`, no history, no cursor, no tool results. A throw is
- * reported as `'threw'` and treated as a no-match by every caller, which is
- * exactly what the cursor resolver does with it at run time (so a claim made
- * here stays true of the run).
- *
- * An entry with NO condition matches everything: that is the cold walk's law
- * (`if (!e.when) return { to: e.id }`), not a shortcut.
- */
-function runsOn(entry: ExampleRuleDecl, phrase: string): 'match' | 'no-match' | 'threw' {
-  if (entry.when === undefined) return 'match';
-  try {
-    return entry.when(coldContext(phrase)) ? 'match' : 'no-match';
-  } catch {
-    return 'threw';
-  }
-}
-
-function coldContext(userMessage: string): InjectionContext {
-  return { iteration: 1, userMessage, history: [], activatedInjectionIds: [] };
-}
-
-/** The one context every predicate here is judged on, spelled out for the
- *  reader of a message — a check that names its own inputs can be argued with;
- *  one that hides them can only be guessed at. Kept as ONE string so every
- *  message describes the SAME context {@link coldContext} really builds. */
-const COLD_CONTEXT_PHRASE =
-  'a COLD-START context (iteration 1, the phrase as `userMessage`, empty `history`, no ' +
-  'cursor and no activated injections)';
-
-/** One claimant of a phrase: the entry, and its position in declaration order. */
-interface Claim {
-  readonly entry: ExampleRuleDecl;
-  readonly index: number;
-}
-
 /** The `example-misses-own-rule` sentence. Two readings, and the message says
  *  which one it is: a data matcher's no-match holds under every context, an
  *  opaque `when`'s holds only under the context it was run on. */
@@ -509,15 +465,4 @@ function selfMissMessage(
     `example to the rule that claims the phrase cold — a rule-level \`examples\` list is only ` +
     `ever run on the context named above. (Proved by running this rule's own predicate on it.)`
   );
-}
-
-/** How a rule's condition is named in a message: the data matcher quoted back,
- *  the honest word for opaque code — or, for an entry that declares neither,
- *  what having no condition MEANS. Naming a `when` predicate an unconditional
- *  entry does not have is how a report describes a graph nobody wrote. */
-function describeCondition(entry: ExampleRuleDecl): string {
-  if (entry.match !== undefined) return `its matcher \`${plainMatchCaption(entry.match)}\``;
-  return entry.when === undefined
-    ? 'declares no `match` and no `when`, so it claims every message'
-    : 'its `when` predicate';
 }

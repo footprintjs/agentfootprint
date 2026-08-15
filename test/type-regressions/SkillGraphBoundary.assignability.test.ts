@@ -132,6 +132,10 @@ describe('ToolResultStatus is one type under two names', () => {
 
   it('the exported list is the whole closed vocabulary', () => {
     expect([...TOOL_RESULT_STATUSES].sort()).toEqual([
+      // `absent` is the seventh (the `absent()` primitive): "we looked and
+      // there was nothing" must not route down the same edge as "the call
+      // broke", which is what folding it into `failure` would have done.
+      'absent',
       'denied',
       'failure',
       'invalid',

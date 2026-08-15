@@ -340,10 +340,13 @@ this table (a lower row never imports a higher one):
 | `skillContract.ts` | skill-body ↔ tool-contract checks (`body-foreign-tool` / `body-unknown-tool`). When a graph builds WITHOUT `knownTools`, these are DEFERRED via `SkillGraph.deferredBodyContract` — the note also rides each compiled skill's metadata (`SKILL_GRAPH_DEFERRED_CONTRACT_KEY`), so Agent build runs them once against the real registry whichever door the skills arrive through (`.skillGraph(graph)` or `.skills({ list: () => graph.skills })`; one problem, one report) |
 | `skillGraphCheckup.ts` | pure wiring lint (`checkupGraph`): reachability, entry fan-out, rule shadowing/overlap (re-enabled under a classifier — declaration order is back), `intent-without-classify`. Pure over strings — never imports engine types (`skillContract`/`skillIntent` borrow its `GraphProblem` shape so all checks report in one voice) |
 | `skillExamples.ts` | the declared-phrasings domain (SG-G): `validateStartRuleExamples` (every teaching refusal for a rule-level `examples` list) + `checkStartRuleExamples` (the witness properties — `example-misses-own-rule`, `example-shadowed-by-earlier`, `example-shadowed-by-default`, `example-unclaimed` — by RUNNING the compiled predicates in declaration order under BOTH start laws, the cold walk and tier-1 `firstRuleMatch`, and asserting an ERROR only where they agree) + `EXAMPLES_BOUNDARY` (the report's statement about its own reach, carried on `GraphCheckup.notes`). Reads declarations only; runs nothing at run time |
+| `skillNeverRoutes.ts` | the NEGATIVE row (`neverRoutes`, 9.43.0): `validateNeverRoutes` (the declaration-time refusals) + `checkNeverRoutes` (`never-routes-claimed` ERROR — a declared RULE claims a phrase the graph says nobody may; `never-routes-by-default` WARNING — only an unconditional entry does, and the two start laws disagree; `never-routes-contradicts-example` ERROR — the same phrase declared both ways) + `NEVER_ROUTES_BOUNDARY`. Graph-level by design: a phrase that must route nowhere belongs to no skill, and the assertion is satisfied only when EVERY rule declines. Needs no `orderDecides` gate — "nobody claims it" is order-independent |
+| `skillPartition.ts` | the PARTITION advisories (9.43.0) — `tools-share-prefix` (every tool in a skill shares one non-VERB `_`-prefix: a system wrapper, not a capability), `few-declared-edges` (routes < skills/4: the handoffs live in prose), `skill-wraps-one-tool` (1 tool + a body under 25 words). ALWAYS warnings, each message stating the signal as a FACT with its legitimate exception named; ALL THREE silent below 5 skills (no partition to have an opinion about). Reads `skillContract.ts`'s `skillToolNames` rather than re-deriving it |
+| `startRuleClaim.ts` | WHO CLAIMS A PHRASE, once: `runsOn` (one condition on the cold-start context), `coldContext`, `COLD_CONTEXT_PHRASE`, `describeCondition`, and `claimLaws` (the cold walk's claimant + the cascade tier-1 claimant). Shared by `skillExamples` (asserts THIS rule claims it) and `skillNeverRoutes` (asserts NOBODY does) so the two can never disagree about the same graph. Decides no severity and writes no message |
 | `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData` (regex · keywords · intent), `compileMatch` (ONE compilation → the predicate that routes + the data that describes it; the intent arm compiles to NO predicate — the classifier judges it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
 | `hostContract.ts` | the BOUNDARY contract (9.34.0): `SkillTool` / `SkillToolSchema` / `SkillToolDescriptor` (what a tool looks like to the graph, and how the graph describes one without building it), `SkillCachePolicy` (structural mirror of `cache/types.ts`), and `SkillGraphHost` — the five obligations a host owes the graph, as documentation-that-typechecks. Zero imports, by construction |
 | `skillToolDescriptors.ts` | the graph DESCRIBING `list_skills` + `read_skill`: the enum, the reachability offer, the turn-start menu, the per-`surfaceMode` result. `skillTools.ts` is the one line that wraps each descriptor in `defineTool` |
-| `toolOutcome.ts` | the six-value `ToolResultStatus` vocabulary `onToolStatus` edges key on. A zero-import leaf both sides read; `core/agent/toolEffects.ts` re-exports it and keeps the envelope grammar |
+| `toolOutcome.ts` | the seven-value `ToolResultStatus` vocabulary `onToolStatus` edges key on. A zero-import leaf both sides read; `core/agent/toolEffects.ts` re-exports it and keeps the envelope grammar |
 | `devWarn.ts` | the dev-warning seam: the pure core asks a bound reader instead of importing footprintjs's `isDevMode`. `devWarnHost.ts` (host zone, side-effect module) does the binding for this package |
 
 Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
@@ -353,8 +356,12 @@ a numbered block in `checkupGraph` (build refusals that cannot compile at
 all, like `rule-id-exists`, throw from `skillGraph.ts`'s config
 translation instead) — or, when the check needs more than strings (running a
 predicate, reading a skill body), a DOMAIN module composed into `checkup()`
-beside `skillContract`/`skillIntent`/`skillVocabulary`/`skillExamples`, which
-owns both the rule and the statement of its boundaries. The check-up compares only DATA — `when`
+beside
+`skillContract`/`skillIntent`/`skillVocabulary`/`skillExamples`/`skillNeverRoutes`/`skillPartition`,
+which owns both the rule and the statement of its boundaries. A check that
+ADVISES rather than reports (the partition signals) states its signal as a FACT
+with the legitimate design named, is never an error, and carries a floor so a
+small graph reports byte-identically to one that never heard of it. The check-up compares only DATA — `when`
 predicates are opaque, and every message says so. A new intent scorer =
 implement `IntentScorer` (numbers for EVERY candidate; declare `floor` only
 when a low score honestly means "did not match at all", `categorical` only
@@ -362,7 +369,7 @@ when the answer is one-id-or-none).
 
 Two 9.19.0 seams worth naming. **Route edges take a third condition**,
 `onToolStatus` (data, drawable — `on … status=denied` in `toMermaid()`):
-route on a tool result's DECLARED outcome (the six-value `ToolResultStatus`
+route on a tool result's DECLARED outcome (the seven-value `ToolResultStatus`
 vocabulary from `toolOutcome.ts`, re-exported by `core/agent/toolEffects.ts`) instead of its prose; a result
 with no declared status can never match, `when` + `onToolStatus` together is
 refused, and every determinism filter goes through the ONE
