@@ -84,13 +84,14 @@
  *  4. **`ttl` is input-only with a 24-hour floor**, and `expireTime` always
  *     comes back. An hour-long TTL is not available at any price.
  *
- *     **Sliding expiry is NOT claimed here**, and that changed with fact 2b. A
- *     `ttl` is sent on `create`, where the service takes it; later turns append
- *     an event, and whether an appended event renews the expiry is a service
- *     behaviour nothing in this repository has measured. Rather than send an
- *     unverified second call per turn to "refresh" it — a write whose only
- *     evidence would be that it did not error — the adapter sends the ttl once
- *     and says so. See {@link AgentEngineSessionsOptions.ttl}.
+ *     **Sliding expiry is NOT claimed here, and cannot be.** A `ttl` is sent on
+ *     `create`, where the service takes it; later turns append an event, and
+ *     appending one was MEASURED against the real service — by a field trial,
+ *     reported in issue #2 — to leave `expireTime` exactly where it was. So a
+ *     conversation expires on the clock its FIRST turn started, however active
+ *     it has been since, and the adapter sends the ttl once and says so because
+ *     there is no second call that would refresh it.
+ *     See {@link AgentEngineSessionsOptions.ttl}.
  *
  * ── The laws it inherits rather than re-implements ──────────────────────────
  * `checkEnvelope` runs on the way OUT and on the way IN, so an envelope whose
@@ -604,10 +605,11 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       enableWith:
         `pass ttl: '<seconds>s' to agentEngineSessions() — e.g. ttl: '604800s' for a week. ` +
         `The service's floor is 24 HOURS and it refuses anything shorter, so this can only ` +
-        `keep conversations longer, never expire them sooner. It is sent on CREATE only: ` +
-        `later turns append an event, and whether that renews the expiry is service ` +
-        `behaviour this repository has not measured — so set it long enough at creation ` +
-        `rather than relying on a conversation to push its own deadline out.`,
+        `keep conversations longer, never expire them sooner. It is sent on CREATE only, ` +
+        `and the clock does NOT restart: appending a later turn was measured against the ` +
+        `real service to leave expireTime where it was, so a conversation expires on the ` +
+        `clock its FIRST turn started however active it has been since. Set it long enough ` +
+        `at creation — a conversation cannot push its own deadline out.`,
     }),
 
     async forget(sessionId: string): Promise<void> {

@@ -579,6 +579,32 @@ describe('the declarations are the whole list, and each one is argued', () => {
     ]);
   });
 
+  it('every declared limitation is named in the public status ledger', () => {
+    // docs/ADAPTER_STATUS.md is what somebody evaluating an adapter reads INSTEAD
+    // of the code, so a limitation the harness declares and the ledger omits is
+    // the ledger being wrong in the one direction that flatters us.
+    //
+    // This test exists because that happened. A mis-attributed limitation was
+    // moved OFF the wrong adapter and never onto the right one, so it left the
+    // ledger entirely — and the ledger went on asserting a COUNT ('declares one
+    // limitation') that its own source of truth contradicted. A correction that
+    // deletes a true fact is still a regression.
+    const ledger = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/ADAPTER_STATUS.md'),
+      'utf8',
+    );
+    for (const harness of HARNESSES) {
+      for (const [name, reason] of Object.entries(harness.declared ?? {})) {
+        expect(
+          ledger,
+          `${harness.name} declares '${name}' (${reason.slice(0, 60)}…) and ` +
+            `docs/ADAPTER_STATUS.md never names it. A declaration a reader cannot ` +
+            `find in the ledger is a limitation nobody will ever argue with.`,
+        ).toContain(name);
+      }
+    }
+  });
+
   it('every declaration says WHY, in a sentence', () => {
     for (const harness of HARNESSES) {
       for (const [name, reason] of Object.entries(harness.declared ?? {})) {
