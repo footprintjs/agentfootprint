@@ -13,7 +13,7 @@ description: "Scorer A versus scorer B, topK versus a re-ranker — the same see
 
 Removing a tool leaves an agent that is strictly *smaller*, and `applyAblations` performs that removal by filtering the inputs the agent is built from. "Removing" a retrieval strategy leaves nothing coherent: *no retrieval at all* and *the library default* are two different experiments, and neither one is what **topK vs re-rank** means.
 
-So `AblationSpec` did **not** grow a fifth arm. `StrategyArm` is a sibling type. The two share every statistic — seeded reruns clamped to at least two, similarity mean/min/max/stdev, majority-flip counting, the cost readout — and share no search machinery, because [`bisectCulprits`](doc:localize-context-bug) searches *subsets of removals* and would happily report "minimal culprit set = {scorer swap}", which is the wrong tier of claim: an arm is an alternative configuration, not a culprit.
+So `AblationSpec` did **not** grow a fifth arm. `StrategyArm` is a sibling type. The two share every statistic — seeded reruns clamped to at least two, similarity mean/min/max/stdev, majority-flip counting, the cost readout — and share no search machinery, because [`bisectCulprits`](doc:localize-context-bug) searches *subsets of removals* and would happily report "minimal culprit set = `{scorer swap}`", which is the wrong tier of claim: an arm is an alternative configuration, not a culprit.
 
 An arm may still *contain* removals. `StrategyArm.ablations` holds ordinary `AblationSpec`s, and `applyArm` applies them through the unchanged `applyAblations`.
 

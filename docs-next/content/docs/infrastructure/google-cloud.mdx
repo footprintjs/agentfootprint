@@ -857,7 +857,7 @@ complaint about "an odd number of components". `EXPIRES_AT_FIELD` is exported
 beside it, for the same reason: it is the field name an operator types into a
 console or a `gcloud` line — `'expiresAt'` — and a name that lives only inside a
 string literal is a name somebody mistypes at 2am. See
-[retention](#retention--a-native-ttl-policy-on-expiresat).
+[retention](#retention-a-native-ttl-policy-on-expiresat).
 
 **`listByUser` asks the server for the filter, the order and the page.** One
 query does all of it — an equality on `owner`, ordered by `savedAt` descending
@@ -1009,7 +1009,7 @@ fresh start, because from the outside that is indistinguishable from a brand-new
 user. The same check runs on the way **in**, so a document this store could not
 read back is one it never writes.
 
-### Retention — a native TTL policy on `expiresAt`
+### Retention: a native TTL policy on `expiresAt`
 
 Firestore deletes documents on its own, on a **TTL policy** an operator creates
 once against a field of type **Timestamp**. Until 9.42.0 this collection had no
