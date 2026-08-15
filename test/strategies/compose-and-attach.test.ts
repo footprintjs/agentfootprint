@@ -503,14 +503,26 @@ describe('attachCostStrategy', () => {
       name: 'test',
       pricePerToken: (_m: string, kind: string) => (kind === 'input' ? 0.000001 : 0.000005),
     };
-    emitCostTick(scope, pricing, undefined, { model: 'm-1', provider: 'anthropic' }, {
-      input: 1000,
-      output: 200,
-    });
-    emitCostTick(scope, pricing, undefined, { model: 'm-1', provider: 'anthropic' }, {
-      input: 500,
-      output: 100,
-    });
+    emitCostTick(
+      scope,
+      pricing,
+      undefined,
+      { model: 'm-1', provider: 'anthropic' },
+      {
+        input: 1000,
+        output: 200,
+      },
+    );
+    emitCostTick(
+      scope,
+      pricing,
+      undefined,
+      { model: 'm-1', provider: 'anthropic' },
+      {
+        input: 500,
+        output: 100,
+      },
+    );
 
     const second = recordCost.mock.calls[1][0] as CostTick;
     expect(second.recentInputTokens).toBe(500);

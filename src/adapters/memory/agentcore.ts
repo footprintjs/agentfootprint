@@ -317,7 +317,9 @@ function escapeIdSegment(raw: string, introducer: string): string {
  * satisfied by construction rather than by a special case.
  */
 function actorSegment(raw: string | undefined | null): string {
-  return raw === undefined || raw === null || raw === '' ? IDENTITY_ABSENT : escapeIdSegment(raw, '/');
+  return raw === undefined || raw === null || raw === ''
+    ? IDENTITY_ABSENT
+    : escapeIdSegment(raw, '/');
 }
 
 /**
@@ -340,7 +342,9 @@ function boundedId(body: string, max: number, field: 'actor' | 'session'): strin
       `AgentCore's ${max}-character limit for ${field}Id. It is deliberately not truncated to fit — ` +
       `truncating two identities to one id is how one tenant reads another's memory, and a hash tail ` +
       `makes that unlikely rather than impossible. Shorten the ` +
-      `${field === 'actor' ? '`tenant` / `principal`' : '`conversationId`'} at the call site. (Anything ` +
+      `${
+        field === 'actor' ? '`tenant` / `principal`' : '`conversationId`'
+      } at the call site. (Anything ` +
       `outside [A-Za-z0-9-] escapes to five characters, so punctuation and non-ASCII count for more ` +
       `than they look.) The value is not quoted here on purpose: it addresses a tenant.`,
   );
@@ -430,7 +434,11 @@ export class AgentCoreStore implements MemoryStore {
   private sessionId(identity: MemoryIdentity): string {
     // One field, so no joiner — but `sessionId` admits no `/`, so it escapes with
     // `_` instead. `-` stays verbatim in both, which is what keeps a UUID a UUID.
-    return boundedId(escapeIdSegment(identity.conversationId ?? '', '_'), SESSION_ID_MAX, 'session');
+    return boundedId(
+      escapeIdSegment(identity.conversationId ?? '', '_'),
+      SESSION_ID_MAX,
+      'session',
+    );
   }
   private scope(identity: MemoryIdentity) {
     return {

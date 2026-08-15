@@ -505,13 +505,13 @@ export function attachCostStrategy(
           ...(typeof meta?.iterIndex === 'number'
             ? { iteration: meta.iterIndex }
             : typeof p.iteration === 'number'
-              ? { iteration: p.iteration }
-              : {}),
+            ? { iteration: p.iteration }
+            : {}),
           ...(typeof meta?.runtimeStageId === 'string'
             ? { runtimeStageId: meta.runtimeStageId }
             : typeof p.runtimeStageId === 'string'
-              ? { runtimeStageId: p.runtimeStageId }
-              : {}),
+            ? { runtimeStageId: p.runtimeStageId }
+            : {}),
         };
         events.deliver(tick);
       },

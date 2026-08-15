@@ -156,8 +156,8 @@ describe('AgentCoreStore ids — the collisions this fix closes', () => {
 
   it('the lossy slug is gone: `a.b`, `a/b`, `a b` and `a-b` are four actors', async () => {
     const ids = await Promise.all(
-      ['a.b', 'a/b', 'a b', 'a-b'].map(async (tenant) =>
-        (await idsFor({ tenant, principal: 'p', conversationId: 'x' })).actorId,
+      ['a.b', 'a/b', 'a b', 'a-b'].map(
+        async (tenant) => (await idsFor({ tenant, principal: 'p', conversationId: 'x' })).actorId,
       ),
     );
     expect(new Set(ids).size).toBe(4);
@@ -192,9 +192,10 @@ describe('AgentCoreStore ids — injectivity (property)', () => {
         const { actorId } = await idsFor({ tenant, principal, conversationId: 'c' });
         const tuple = JSON.stringify([tenant, principal]);
         const prior = seen.get(actorId);
-        expect(prior === undefined || prior === tuple, `${prior} and ${tuple} share ${actorId}`).toBe(
-          true,
-        );
+        expect(
+          prior === undefined || prior === tuple,
+          `${prior} and ${tuple} share ${actorId}`,
+        ).toBe(true);
         seen.set(actorId, tuple);
       }
     }
@@ -251,9 +252,9 @@ describe('AgentCoreStore ids — the length ceiling refuses rather than truncate
   // into "your tenant occasionally reads someone else's memory", silently.
   it('an over-long actor tuple refuses by name, naming the limit not the value', async () => {
     const secret = 'z'.repeat(300);
-    await expect(
-      idsFor({ tenant: secret, principal: 'p', conversationId: 'c' }),
-    ).rejects.toThrow(/actorId/);
+    await expect(idsFor({ tenant: secret, principal: 'p', conversationId: 'c' })).rejects.toThrow(
+      /actorId/,
+    );
     const err = await idsFor({ tenant: secret, principal: 'p', conversationId: 'c' }).catch(
       (e: Error) => e,
     );
@@ -266,7 +267,11 @@ describe('AgentCoreStore ids — the length ceiling refuses rather than truncate
   });
 
   it('the ceilings are AWS’s own, not a shared guess (actor 255, session 100)', async () => {
-    const actor = await idsFor({ tenant: 'z'.repeat(120), principal: 'y'.repeat(120), conversationId: 'c' });
+    const actor = await idsFor({
+      tenant: 'z'.repeat(120),
+      principal: 'y'.repeat(120),
+      conversationId: 'c',
+    });
     expect(actor.actorId.length).toBe(245); // 'afp-' + 120 + '_' + 120 — was truncated at 99
     const session = await idsFor({ conversationId: 'z'.repeat(96) });
     expect(session.sessionId.length).toBe(100);
