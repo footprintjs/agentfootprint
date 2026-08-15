@@ -174,11 +174,21 @@ export interface AgentEngineSessionsOptions extends AiPlatformConnection {
    * Omit and no `ttl` is sent, which leaves the service's own default
    * expiry in charge.
    *
-   * **Sent on CREATE only.** Later turns append an event (see the module
-   * header, fact 2b), and whether an appended event renews the expiry is not
-   * something this repository has measured — so a long conversation may still
-   * expire on the clock started by its first turn. If you need a conversation
-   * to outlive that, set a `ttl` long enough at creation.
+   * **Sent on CREATE only, and the clock does NOT restart.** Later turns append
+   * an event (see the module header, fact 2b), and appending one was measured
+   * against the real service — by a field trial, reported in issue #2 — to
+   * leave `expireTime` where it was. So a conversation expires on the clock its
+   * FIRST turn started, however active it has been since.
+   *
+   * That is a real operational edge: a busy conversation can disappear
+   * mid-use, and nothing in this adapter can extend it, because the service
+   * treats `ttl` as input-only at create. If you need a conversation to outlive
+   * that window, the only lever is a `ttl` long enough at creation.
+   *
+   * Recorded here rather than in a changelog because it is the kind of fact
+   * somebody needs at the moment they are choosing this value, and measured
+   * rather than assumed — the previous version of this comment said the
+   * question had not been measured, which was true until it was.
    */
   readonly ttl?: string;
   /**
