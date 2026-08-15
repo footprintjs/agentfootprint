@@ -56,16 +56,20 @@
  * the `_client` seam and no test pretends to have reached AWS. Real-cloud
  * verification lands with a field deployment.
  *
- * `firestoreSessions` is **contract-shaped and tested** on the same terms, with
- * one difference worth stating: every SDK member it calls was read off a real
- * install of `@google-cloud/firestore` 9.0.0 and hand-verified there, but the
- * package is deliberately NOT installed in this repository (it would hoist
- * `@opentelemetry/api` and disarm an absent-peer refusal test), so the assertion
- * that re-checks those names against the real package SKIPS here and runs for
- * anyone who installs it locally. What CI checks is dispatch. Nothing here has
- * reached a live Firestore. Its DESIGN is informed by a field trial of a
- * different adapter — see the module header for exactly what that trial proved
- * and what it did not.
+ * `firestoreSessions` is **field-validated except the ownership refusal
+ * (2026-08)**: an independent trial ran it against a real Firestore and
+ * exercised seven of its eight areas live — the round trip, the indexed and
+ * cursored listing, the missing-index refusal, the hashed document name, the
+ * size ceiling, derived ownership and `forget`. The eighth, refusing a turn
+ * signed by somebody ELSE, was added after that trial and is held by tests
+ * here and by nothing in the field. Two further caveats stand: every SDK
+ * member it calls was read off a real install of `@google-cloud/firestore`
+ * 9.0.0 and hand-verified there, but the package is deliberately NOT installed
+ * in this repository (it would hoist `@opentelemetry/api` and disarm an
+ * absent-peer refusal test), so the assertion that re-checks those names
+ * against the real package SKIPS here and runs for anyone who installs it
+ * locally; what CI checks is dispatch. See the adapter's module header for the
+ * full account.
  *
  * @example  An agent in an AgentCore Runtime container
  *   import { standingAgent } from 'agentfootprint/hosting';
@@ -112,6 +116,12 @@ export type {
 export {
   firestoreSessions,
   DEFAULT_SESSION_COLLECTION,
+  // The field a native TTL policy is configured against (9.42.0). On the
+  // barrel beside the collection name for the same reason: an operator types
+  // both of them into a console, and a name that lives only inside a string
+  // literal is a name somebody mistypes at 2am. `ttlPolicyCommand` stays off —
+  // it is reachable, already filled in, as `store.retention().enableWith`.
+  EXPIRES_AT_FIELD,
   FIRESTORE_MAX_DOCUMENT_BYTES,
   FIRESTORE_MAX_ENVELOPE_BYTES,
   EnvelopeTooLargeError,

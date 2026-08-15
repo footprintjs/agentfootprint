@@ -13,7 +13,7 @@
  *
  * So the laws moved out of the four suites and into `sessionLifecycleConformance`,
  * which is exported from `agentfootprint/hosting` for stores nobody here has
- * written. This file is the in-tree binding: four harnesses, one battery, one
+ * written. This file is the in-tree binding: six harnesses, one battery, one
  * `it()` per case per store.
  *
  * Where a store cannot satisfy a case it DECLARES it by name with the reason,
@@ -23,12 +23,25 @@
  *
  * Nothing here reaches a network. The Firestore harness uses this directory's
  * own double; the managed-service harness uses a small fake in this file.
+ *
+ * ── The fifth store, enrolled late (9.42.0) ─────────────────────────────────
+ * `agentCoreSessions` is a shipped `SessionLifecycle` and appeared here ZERO
+ * times, in BOTH its modes, from the day this file was written — and its
+ * absence was not declared anywhere, which is precisely the shape this suite
+ * exists to refuse one level down. A battery whose own roster can quietly omit
+ * a store is a battery that proves what it happened to be pointed at.
+ *
+ * Both modes are enrolled, separately, because they are two different stores
+ * behind one factory: one keeps a JSON file it owns, the other appends events
+ * to a service. Enrolling only the cheap one would have repeated the original
+ * mistake with fewer characters.
  */
 
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   envelopeOwner,
@@ -44,6 +57,8 @@ import type {
   SessionLifecycle,
   SessionStoreHarness,
 } from '../../src/hosting/index.js';
+import { agentCoreSessions } from '../../src/adapters/hosting/agentcore.js';
+import type { AgentCoreSessionClientLike } from '../../src/adapters/hosting/agentcore.js';
 import { firestoreSessions } from '../../src/hosting-providers.js';
 import {
   agentEngineSessions,
@@ -66,7 +81,7 @@ const memoryHarness: SessionStoreHarness = {
 // ─── sqlite ──────────────────────────────────────────────────────────
 
 /** One temp directory for every file this suite opens; removed at the end. */
-const sqliteDir = mkdtempSync(join(tmpdir(), 'af-conformance-'));
+const tempDir = mkdtempSync(join(tmpdir(), 'af-conformance-'));
 let sqliteNth = 0;
 /** The store does not publish its own path, so the harness remembers it beside
  *  the instance rather than asking the store for an accessor nothing else
@@ -76,7 +91,7 @@ const sqliteFiles = new WeakMap<object, string>();
 const sqliteHarness: SessionStoreHarness = {
   name: 'sqliteSessions',
   createStore: () => {
-    const file = join(sqliteDir, `s-${++sqliteNth}.db`);
+    const file = join(tempDir, `s-${++sqliteNth}.db`);
     const store = sqliteSessions({ file });
     sqliteFiles.set(store, file);
     return store;
@@ -265,9 +280,115 @@ const agentEngineHarness: SessionStoreHarness = {
   },
 };
 
+// ─── the container runtime's two session stores ──────────────────────
+//
+// One factory, two genuinely different stores: a JSON file this container
+// owns, and an append-only event log in a service. They are enrolled
+// separately because a harness that covered "the cheap one" would leave the
+// other exactly as unproven as both of them were before 9.42.0.
+
+/** Where the file-backed mode writes. One file per store, removed at the end. */
+let agentCoreNth = 0;
+const agentCoreFiles = new WeakMap<object, string>();
+
+const agentCoreFileHarness: SessionStoreHarness = {
+  name: "agentCoreSessions({ store: 'session-storage' })",
+  createStore: () => {
+    const path = join(tempDir, `agentcore-${++agentCoreNth}.json`);
+    const store = agentCoreSessions({ store: 'session-storage', path });
+    agentCoreFiles.set(store, path);
+    return store;
+  },
+  corrupt: (store, sessionId) => {
+    // Behind the store's back, straight into the file — which is how a corrupt
+    // session really arrives here: a container wrote to the same path, or a
+    // half-finished write survived. The FILE stays valid JSON; the one session
+    // inside it is not an envelope, which is the case that must refuse rather
+    // than answer "no conversation".
+    writeFileSync(
+      agentCoreFiles.get(store as object)!,
+      JSON.stringify({ version: 1, sessions: { [sessionId]: 'not an envelope' } }),
+      'utf8',
+    );
+  },
+};
+
+/**
+ * The slice of AgentCore Memory the event-backed mode touches, with the
+ * semantics the adapter is written against: events are APPENDED, listed
+ * NEWEST FIRST, and the newest one is the conversation.
+ *
+ * Deliberately keyed by the id the store actually sends — so the mapping from
+ * a caller's opaque session id to an AgentCore id is under test rather than
+ * bypassed by a fake that keys on the original.
+ */
+function fakeEventLog(): {
+  client: AgentCoreSessionClientLike;
+  events: Map<string, unknown[]>;
+} {
+  const events = new Map<string, unknown[]>();
+  return {
+    events,
+    client: {
+      createEvent: ({ actorId, sessionId, envelope }) => {
+        const key = `${actorId}/${sessionId}`;
+        // JSON TEXT, the way the shipped shim writes it — the service returns
+        // an object blob as its own host language's `toString()`, which is the
+        // defect 7.22.1 was released for.
+        events.set(key, [...(events.get(key) ?? []), JSON.stringify(envelope)]);
+        return Promise.resolve();
+      },
+      listEvents: ({ actorId, sessionId, maxResults }) => {
+        const key = `${actorId}/${sessionId}`;
+        const newestFirst = [...(events.get(key) ?? [])].reverse();
+        const page = maxResults === undefined ? newestFirst : newestFirst.slice(0, maxResults);
+        return Promise.resolve({
+          events: page.map((envelope, index) => ({ eventId: `e-${index}`, envelope })),
+        });
+      },
+    },
+  };
+}
+
+const agentCoreLogs = new WeakMap<object, ReturnType<typeof fakeEventLog>>();
+
+const agentCoreMemoryHarness: SessionStoreHarness = {
+  name: "agentCoreSessions({ store: 'memory' })",
+  createStore: () => {
+    const log = fakeEventLog();
+    const store = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'mem-conformance',
+      _client: log.client,
+    });
+    agentCoreLogs.set(store, log);
+    return store;
+  },
+  corrupt: (store, sessionId) => {
+    const log = agentCoreLogs.get(store as object)!;
+    // The store's OWN key, computed the way the store computes it — the fake
+    // holds one entry and this session is the only one in it, so corrupting
+    // "the newest event of the only conversation" needs no id mapping and
+    // makes no assumption about one.
+    for (const [key, stored] of log.events) {
+      if (stored.length === 0) continue;
+      log.events.set(key, [...stored.slice(0, -1), 'not an envelope at all']);
+      return;
+    }
+    throw new Error(`nothing stored for '${sessionId}' to corrupt`);
+  },
+};
+
 // ─── the run ─────────────────────────────────────────────────────────
 
-const HARNESSES = [memoryHarness, sqliteHarness, firestoreHarness, agentEngineHarness];
+const HARNESSES = [
+  memoryHarness,
+  sqliteHarness,
+  firestoreHarness,
+  agentEngineHarness,
+  agentCoreFileHarness,
+  agentCoreMemoryHarness,
+];
 
 /**
  * `node:sqlite` ships from Node 22.5; this repository's CI matrix also runs
@@ -379,6 +500,66 @@ describe.skipIf(!sqliteAvailable)('the one-call entry point an out-of-tree store
   });
 });
 
+describe('what enrolling the container runtime’s two stores actually proved', () => {
+  // Numbers, not `report.ok`. A store enrolled with every case reported
+  // `not-applicable` would be "ok" and would have proved nothing — the exact
+  // vacuous shape this whole suite exists to refuse — so each mode's split is
+  // written down, and turning one of these proofs into a skip has to be a
+  // deliberate edit here.
+  it('the file-backed mode holds every law a key/value store owes, and declares nothing', async () => {
+    const report = await runSessionLifecycleConformance(agentCoreFileHarness);
+    expect(formatConformanceReport(report)).toContain('0 FAILED');
+    expect(report.declared).toBe(0);
+    // Reading, writing, an unreadable session refused rather than answered as
+    // absent, opaque ids, its retention sweep, and feature detection.
+    expect(report.passed).toBe(6);
+    // It keeps no owner index and no listing — six ownership cases, the
+    // listing, and `forget`, none of which the port demands of it.
+    expect(report.notApplicable).toBe(8);
+  });
+
+  it('the event-backed mode holds the same laws, minus the retention it cannot honestly offer', async () => {
+    const report = await runSessionLifecycleConformance(agentCoreMemoryHarness);
+    expect(formatConformanceReport(report)).toContain('0 FAILED');
+    expect(report.declared).toBe(0);
+    expect(report.passed).toBe(5);
+    expect(report.notApplicable).toBe(9);
+    // The one difference between the two modes, asserted rather than implied:
+    // this store has no way to delete an event it wrote, so it implements no
+    // retention member and the case is n/a — never a sweep that reports zero.
+    const retention = report.outcomes.find((o) => o.case.startsWith('retention-'))!;
+    expect(retention.status).toBe('not-applicable');
+    expect(formatConformanceReport(report)).toContain('no retention() on this store');
+  });
+
+  it('no session store in this repository is missing from the roster', () => {
+    // The crude guard the original omission needed. `agentCoreSessions` was a
+    // shipped `SessionLifecycle` that appeared here zero times and was not
+    // declared anywhere — so a factory whose name ends in `Sessions`, exported
+    // from either hosting folder, must be NAMED in this file. Cruder than a
+    // type-level check and a better guardrail: the failure it catches is
+    // somebody adding a store on a Friday and enrolling it "next week".
+    const roots = ['src/hosting', 'src/adapters/hosting'];
+    const factories = new Set<string>();
+    for (const root of roots) {
+      const dir = resolve(dirname(fileURLToPath(import.meta.url)), '../..', root);
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
+        const text = readFileSync(join(dir, entry.name), 'utf8');
+        for (const match of text.matchAll(/^export function (\w*Sessions)\(/gm)) {
+          factories.add(match[1]!);
+        }
+      }
+    }
+    // If this ever finds nothing, the test would pass vacuously.
+    expect(factories.size).toBeGreaterThanOrEqual(5);
+    const thisFile = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+    for (const factory of factories) {
+      expect(thisFile, `${factory} ships and is not enrolled in the battery`).toContain(factory);
+    }
+  });
+});
+
 describe('the declarations are the whole list, and each one is argued', () => {
   it('no store has a declaration this file does not name', () => {
     // A new declaration has to be added HERE, deliberately, beside the reason.
@@ -407,7 +588,7 @@ describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law', () => {
     // A battery that quietly lost a case would pass every store trivially —
     // the same vacuous-pass shape `no-vendor-names` guards against.
-    expect(sessionLifecycleConformance.length).toBe(13);
+    expect(sessionLifecycleConformance.length).toBe(14);
     for (const testCase of sessionLifecycleConformance) {
       expect(testCase.law.length, `${testCase.name} has no law`).toBeGreaterThan(20);
     }
@@ -464,7 +645,7 @@ describe('the battery covers what it claims to', () => {
 // A file left behind is not a failure worth failing the suite over.
 process.on('exit', () => {
   try {
-    rmSync(sqliteDir, { recursive: true, force: true });
+    rmSync(tempDir, { recursive: true, force: true });
   } catch {
     /* best effort */
   }

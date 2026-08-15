@@ -247,6 +247,45 @@ export {
   type TraceVariableOptions,
   type VariableAblationHook,
 } from './lib/context-bisect/index.js';
+// Strategy arms — the SUBSTITUTION half of the counterfactual engine
+// ("scorer A vs scorer B", "topK vs a re-ranker"). Deliberately a SIBLING of
+// `AblationSpec` rather than a fifth arm on it: ablation removes, an arm
+// replaces, and the union feeds a subset search substitutions do not compose
+// under. Wired to 9.41.0's run manifest, so a run says which arm it belonged to
+// instead of the experimenter asserting it. See lib/context-bisect/arms/README.md.
+export {
+  applyArm,
+  armConfigKey,
+  armFacetsFromManifest,
+  armLabel,
+  checkArmApplication,
+  checkArmApplied,
+  collectArmRuns,
+  compareStrategyArms,
+  declaredFacetCount,
+  manifestFromEvents,
+  matchArm,
+  nullBandFrom,
+  RUN_CONFIGURED_EVENT,
+  scoreArmRuns,
+  validateStrategyArms,
+  verdictForArm,
+  type ArmApplication,
+  type ArmFacetMismatch,
+  type ArmFacets,
+  type ArmMemoryFacet,
+  type ArmOutcome,
+  type ArmRunResult,
+  type ArmRunner,
+  type ArmRuns,
+  type ArmVerdictContext,
+  type CompareStrategyArmsOptions,
+  type ManifestMemoryLike,
+  type NullBand,
+  type RunManifestLike,
+  type StrategyArm,
+  type StrategyComparison,
+} from './lib/context-bisect/index.js';
 // BacktrackTrace serializer — feeds agentThinkingUI's <BacktrackView>
 // (the "why?" board) straight off a localizer report. Pure mapping, no
 // UI dependency; the interfaces mirror agentthinkingui's contract.

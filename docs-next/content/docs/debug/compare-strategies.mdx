@@ -1,0 +1,156 @@
+---
+title: Compare two strategies
+description: "Scorer A versus scorer B, topK versus a re-ranker — the same seeded-rerun discipline as ablation, with the run manifest checking that the arm you declared is the arm that ran."
+---
+
+<Callout type="warn" title="Beta">
+`compareStrategyArms` is a **beta** feature. It works and ships with tests, but the API may still change before GA.
+</Callout>
+
+> [Re-running without sources](doc:rerun-without-sources) answers *"did removing this cause the bad answer?"*. This page answers a different question: *"does **scorer A** answer differently from **scorer B**?"* — and it is a different question, not the same one with a different argument.
+
+## Ablation is removal. This is substitution.
+
+Removing a tool leaves an agent that is strictly *smaller*, and `applyAblations` performs that removal by filtering the inputs the agent is built from. "Removing" a retrieval strategy leaves nothing coherent: *no retrieval at all* and *the library default* are two different experiments, and neither one is what **topK vs re-rank** means.
+
+So `AblationSpec` did **not** grow a fifth arm. `StrategyArm` is a sibling type. The two share every statistic — seeded reruns clamped to at least two, similarity mean/min/max/stdev, majority-flip counting, the cost readout — and share no search machinery, because [`bisectCulprits`](doc:localize-context-bug) searches *subsets of removals* and would happily report "minimal culprit set = {scorer swap}", which is the wrong tier of claim: an arm is an alternative configuration, not a culprit.
+
+An arm may still *contain* removals. `StrategyArm.ablations` holds ordinary `AblationSpec`s, and `applyArm` applies them through the unchanged `applyAblations`.
+
+## The comparison, end to end
+
+You supply the **runner** — a factory, the same shape `AblationRunner` already has. It builds a fresh agent under the arm's configuration, runs the same scenario, and hands back the answer *and the run's own manifest*.
+
+```ts twoslash
+import {
+  compareStrategyArms,
+  applyArm,
+  manifestFromEvents,
+  type ArmRunner,
+  type StrategyArm,
+} from 'agentfootprint/observe';
+import { mockEmbedder } from 'agentfootprint/memory';
+import type { AgentfootprintEvent } from 'agentfootprint/events';
+
+declare function buildAgent(config: {
+  retrieval: string | undefined;
+  tools: readonly { schema: { name: string } }[];
+}): { on(t: '*', f: (e: AgentfootprintEvent) => void): void; run(m: string): Promise<string> };
+declare const ALL_TOOLS: { schema: { name: string } }[];
+declare const buggyAnswer: string;
+// ---cut---
+// Two arms: the incumbent, and the challenger. Each names its configuration in
+// the vocabulary the run manifest speaks.
+const arms: StrategyArm[] = [
+  { id: 'topK', facets: { memory: { id: 'docs', retrieval: 'topK' } } },
+  { id: 'rerank', facets: { memory: { id: 'docs', retrieval: 'rerank' } } },
+];
+
+const runner: ArmRunner = async (arm) => {
+  // An arm's REMOVALS go through the unchanged removal machinery:
+  const { tools } = applyArm(arm, { tools: ALL_TOOLS });
+  const agent = buildAgent({ retrieval: arm.facets?.memory?.retrieval, tools });
+
+  // Capture the run's own configuration manifest (9.41.0):
+  const events: AgentfootprintEvent[] = [];
+  agent.on('*', (e) => events.push(e));
+
+  const output = await agent.run('the same question, every time');
+  return { output, manifest: manifestFromEvents(events) };
+};
+
+const result = await compareStrategyArms({
+  arms,
+  baselineArmId: 'topK', // the incumbent — defaults to the first arm
+  originalAnswer: buggyAnswer, // omit for a fresh A/B
+  embedder: mockEmbedder(),
+  samples: 3, // per arm; clamped to ≥ 2, never a single-run claim
+  runner,
+});
+
+console.log(result.summary);
+for (const arm of result.arms) {
+  if (arm.verdict) console.log(arm.armId, arm.verdict.claim);
+}
+```
+
+A confirmed arm reads:
+
+```
+CAUSAL: switching from baseline arm 'topK' to 'rerank' changed the answer in 3/3 seeded
+reruns (mean similarity to the reference 0.214 ± 0.031), outside the baseline arm's own
+band (floor 1.000), on a baseline that reproduced. Bounded by this scenario and this comparator.
+```
+
+## Reading the result
+
+`compareStrategyArms` takes a `CompareStrategyArmsOptions` and returns a `StrategyComparison`:
+
+| field | what it says |
+|---|---|
+| `reference` | the answer everything was measured against — `from: 'prior-run'` when you passed `originalAnswer`, `from: 'baseline-arm'` when the incumbent's own seed-0 answer became the reference |
+| `baselineStable` | the incumbent reproduced on **every** seed. `false` ⇒ every verdict is `inconclusive` |
+| `nullBand` | the `NullBand` described below |
+| `arms` | one `ArmOutcome` per arm, declaration order, the baseline included |
+| `runsUsed` | consumer-runner invocations spent |
+| `summary` | plain-language recap — presentation only; read the fields as data |
+
+Each `ArmOutcome` carries `runs` (the same `AblationRunStats` an ablation probe reports), every seeded `answers` entry, `outsideNullBand`, an `application` record, and — for challengers only — the `verdict`.
+
+`ArmApplication` is the manifest check: `manifestsSeen`, `checked` (were the declared facets really compared?), `applied`, and a list of `ArmFacetMismatch` rows, each naming the `facet`, what the arm `declared`, and what the run `observed`. Read `checked` first: `false` means the runner reported no manifest, or the arm declares only removals, and nothing was concluded either way.
+
+The inputs are `StrategyArm` — an `id`, optional `ArmFacets` (whose `memory` member is an `ArmMemoryFacet`), and optional `ablations`. Your runner is an `ArmRunner`, returning a string or an `ArmRunResult` (`output`, plus optional `cost` and `manifest`). A manifest is typed structurally as `RunManifestLike` (its memory rows as `ManifestMemoryLike`), satisfied by the real `AgentRunConfiguredPayload` — `context-bisect` is a leaf and does not import the event registry to read one payload. `manifestFromEvents` pulls it out of a run's captured events for you.
+
+Assembling your own loop instead? `collectArmRuns` runs one arm N seeded times and hands back an `ArmRuns` harvest; `scoreArmRuns` turns that into statistics against a reference; `nullBandFrom`, `checkArmApplication` and `verdictForArm` (which takes an `ArmVerdictContext`) are the remaining pieces, in that order.
+
+## What the library can apply, and what it can only check
+
+For a removal the library performs the intervention. For a substitution it cannot — replacing a scorer happens inside *your* construction code, which no library can reach into. What it can do is **verify**, because [the run manifest](doc:observability) (`agentfootprint.agent.run_configured`) names the strategies a run used.
+
+`ArmFacets` is deliberately that same vocabulary — `provider`, `model`, `reactMode`, `window`, `scorer`, `routing`, `continuity`, `evidenceGate`, and a `memory` facet carrying `strategy` / `retrieval` / `embedderId`. Hand each run's manifest back on `ArmRunResult.manifest` and:
+
+- `checkArmApplied` compares what the arm **declared** against what the run **reported**, field by field. An absent manifest field is a *contradiction*, not a wildcard — the manifest's own rule is that absence means "not configured".
+- An arm whose runs contradict its declaration gets **no verdict at all**. A difference measured between two arms that were secretly one configuration is not evidence about either — and that mis-wiring is invisible to bookkeeping, which is exactly what it looks like when a runner quietly ignores its arm.
+- `matchArm` runs the same comparison offline: hand it a recorded run's manifest and it says which declared arm that run belongs to. `armFacetsFromManifest` and `armLabel` give you a stable grouping key for N saved runs; `RUN_CONFIGURED_EVENT` is the event name it reads.
+
+## What "placebo" means for a substitution
+
+The [cost tier](doc:localize-context-bug)'s leave-one-out placebo band does **not** transfer. It works by holding one member out of a *population* of peer suspects, and two arms are not a population — leaving an arm out leaves an experiment, not a control. Rather than compute a number that merely looks like a band, the arm tier uses the placebo *idea* in a stronger form: the inert intervention is **re-running the same configuration**, which the engine already pays for.
+
+That gives two axes and two controls, and they are not interchangeable:
+
+| axis | control | rule |
+|---|---|---|
+| the flip comparator | the baseline arm's own **flip count** | must be **zero** — one un-intervened flip marks the scenario unstable and every verdict becomes `inconclusive` |
+| embedding similarity | the baseline arm's own **similarity spread** (`NullBand`) | a challenger's mean must fall **below** `nullBand.floor` |
+
+`NullBand.gates` says whether the similarity band participated. It only gates when the flip comparator *is* the similarity comparator: pass your own `answerChanged` and the two become different instruments, so the band is reported and never allowed to veto a real decision flip. `NullBand.degenerate` marks a baseline that reproduced identically on every seed — an honest hard floor, and only as strong as that determinism.
+
+## Verdict tiers
+
+Same three tiers as an ablation verdict, evaluated in refusal order — the first that applies wins:
+
+1. **unstable baseline** → `inconclusive`
+2. **the arm did not take effect** (the manifest disagreed) → `inconclusive`
+3. **majority flip, but inside the null band** → `inconclusive`
+4. **majority flip, outside the band, stable baseline** → `confirmed` — a causal claim, bounded by this scenario and this comparator
+5. **minority flips** → `inconclusive`
+6. **no flips** → `not-confirmed` — a finding about this scenario, never "the strategies are the same"
+
+## Refusals
+
+Everything knowable from the declaration is refused before a single model call — `validateStrategyArms` runs first, and `compareStrategyArms` calls it for you:
+
+- fewer than two arms ("for one configuration's own variance, probe it with `runAblationProbe`");
+- a blank or duplicated arm id;
+- a `baselineArmId` naming no arm;
+- a challenger that declares nothing — it could not be checked against the manifest and could not be told apart from the incumbent;
+- **two arms declaring the same configuration** — comparing an arm with itself measures seed variance, not a difference between strategies. `armConfigKey` decides sameness, and it ignores authoring order (field order, and the order of ids inside a spec).
+
+`declaredFacetCount` is the helper behind those last two.
+
+## Cost
+
+Exactly `samples × arms` runner calls, reported as `runsUsed`. The incumbent is one of the arms, not a surcharge: its one probe supplies the stability gate, the null band, and its own row. If your runner reports `RunCost`, each arm also carries a loops/tokens range — one run, two readouts.
+
+The lower-level pieces are exported too, for a consumer assembling their own loop: `collectArmRuns` (run an arm N seeded times), `scoreArmRuns` (score answers against a reference), `nullBandFrom`, `checkArmApplication` and `verdictForArm`.

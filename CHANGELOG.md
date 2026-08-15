@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.42.0] - 2026-08-15
+
+**Comparing strategies with statistics, and retention on the session port.**
+
+### Added
+
+- **`compareStrategyArms`** — the counterfactual engine can now compare
+  STRATEGIES, not only ablate context sources. It is a sibling type rather than
+  a fifth `AblationSpec` arm, and the reason matters: `bisectCulprits` runs
+  ddmin over SUBSETS OF REMOVALS, and substitutions do not compose that way —
+  a scorer swap plus a window swap is a third arm, not a bigger removal. A
+  union arm would have printed "minimal culprit set = {scorer swap}", and an
+  arm is an alternative configuration, not a culprit. Every statistic is
+  shared; no search machinery is. `ablation.ts`, `bisect.ts`, `rerun.ts` and
+  `localize.ts` are untouched.
+
+  The placebo band does not transfer and is not faked. Leave-one-out needs a
+  POPULATION of peer suspects; two arms are not a population, so leaving one
+  out leaves an experiment rather than a control. The arm tier uses the inert
+  intervention that does exist — re-running the same configuration — on two
+  axes, and the band deliberately does NOT gate when a custom comparator is
+  supplied, because vetoing a real decision flip with an embedding statistic
+  would suppress a true finding.
+
+  **It catches an experiment that lies about itself.** A runner that believes
+  it varies the model but builds the same one for both arms produces flips 2/2
+  — the numbers say there is a difference — and the run manifest from 9.41.0
+  contradicts the declaration, so the verdict is INCONCLUSIVE naming the facet.
+  Manual bookkeeping would have shipped that as a finding. Absence in a
+  manifest is a contradiction, not a wildcard.
+
+- **`SessionLifecycle.retention?()`** — optional and feature-detected, like
+  `listByUser`/`ownerOf`, reached through `sessionRetention(sessions)`.
+
+  A discriminated union on `deletedBy`, because both arms are real: a store
+  that holds its own rows SWEEPS (`forgetOlderThan`, clocked by the envelope's
+  own `savedAt` rather than wall time, owner index deleted with it, bounded);
+  a managed backend states its POLICY and deletes nothing on our behalf,
+  because a query plus one billed delete per row duplicates what the service
+  does free — and a store answering "0 deleted" from a backend that deletes
+  plenty lies by omission.
+
+  The shape rejected, and recorded as rejected: an expiry argument on
+  `persist`. It demands something of the one REQUIRED method, and it cannot be
+  feature-detected — `typeof persist === 'function'` is true whether or not a
+  third argument is read — so a store that ignored it would keep everything
+  forever while its caller believed retention was on.
+
+  Sweep: `memorySessions`, `sqliteSessions`, AgentCore session-storage. Policy:
+  `firestoreSessions`, `agentEngineSessions`. Honestly cannot: AgentCore memory
+  mode, which has no delete on its surface and refuses by name.
+
+- **Firestore gains `expiresAt`**, a Timestamp a native TTL policy can act on,
+  beside `savedAt` rather than replacing it. Firestore orders values BY TYPE
+  before value, so converting would have split old and new documents into two
+  blocks and silently reordered somebody's history. Every stored document stays
+  readable, listable and cursorable — pinned by a test seeded with a pre-9.42
+  row. Old documents do not start expiring; an active conversation gains an
+  expiry on its next turn, an abandoned one must be deleted by hand. Said in
+  the header and the docs, and the docs now carry the operator command the
+  code itself prints rather than a promise.
+
+### Fixed
+
+- `agentCoreSessions` is enrolled in the session conformance battery, in both
+  modes. It was a fifth shipped store appearing zero times in it, undeclared.
+  It needed no declarations, and the pass/not-applicable splits are asserted as
+  NUMBERS so a proof cannot decay into a skip. A roster guard now fails if any
+  exported `*Sessions(` factory is missing from that file.
+
+- The `firestoreSessions` status lines said "nothing here has been run against
+  a live Firestore" after a trial ran seven of eight areas live — including a
+  third stale copy the audit had not named. Promoted honestly, naming the
+  eighth area the trial did not cover: the foreign-signer refusal, which
+  post-dates it and is held by tests and by nothing in the field.
+
+### Known, not fixed
+
+- `safeSessionId` (`src/adapters/hosting/agentcore.ts`) is non-injective —
+  the same defect class 9.40.0 fixed in `src/adapters/memory/agentcore.ts`,
+  and worse here because the session id arrives on a caller-controlled header.
+  The conformance battery cannot see it: its collision case draws both ids
+  from a counter, so they differ in their prefix and the fold never shows.
+  Fixing it re-keys stored sessions. Next release.
+
+
 ## [9.41.0] - 2026-08-15
 
 **Comparing strategies, and proving a store.** An audit asked whether this

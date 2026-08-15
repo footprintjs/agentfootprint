@@ -42,7 +42,7 @@ Three ports, one composer, and one seam for writing your own HTTP adapter:
 |---|---|---|
 | `AgentHost` | something can call me | `name`, `capabilities`, `serve(handler)` |
 | `ConversationHost` | something can *talk* to me, both ways, until one of us ends it | `name`, `capabilities`, `conversationLimits?`, `serveConversations(handler)` |
-| `SessionLifecycle` | the conversation outlives the request | `hydrate`, `persist`, `onWake?` |
+| `SessionLifecycle` | the conversation outlives the request | `hydrate`, `persist`, `onWake?`, `listByUser?`, `ownerOf?`, `retention?` |
 | `HttpHost` / `HttpWire` | the HTTP work, parameterised by the JSON dialect it speaks | two paths + five body shapes |
 | `standingAgent` | the composer | hydrate → resume-or-fresh → persist → reply |
 
@@ -51,6 +51,18 @@ Three ports, one composer, and one seam for writing your own HTTP adapter:
 > Anything a real store also wants — a TTL, a scan, a delete — is that store's
 > own API, not a demand this port makes of every store that will ever implement
 > it.
+
+The four optional members sit *inside* that rule rather than beside it: each is
+feature-detected with `typeof store.member === 'function'`, a store that leaves
+one absent is unaffected, and a door that needs one **refuses by name** instead
+of pretending the answer is nothing. `listByUser` / `ownerOf` answer the
+[session-history ops](#session-history--session-list--session-transcript);
+`retention()` (9.42.0) says how conversations in this store stop existing —
+either a sweep your own cron calls, or a backend policy with the exact step that
+turns it on. Reach for it through `sessionRetention(sessions)`, which does the
+detection once and raises `SessionRetentionUnavailableError` for a store that
+has none; [Writing a session store](doc:session-stores#retention--how-a-conversation-stops-existing-9420)
+has the shape, the argument for it, and which store does which.
 
 (`ConversationHost` is the newest and has [its own section](#a-door-that-stays-open--serveconversations)
 — skip to it if the caller you have to serve cannot be *called*.)
@@ -643,6 +655,24 @@ None of them silently degrades. `sqliteSessions` refuses by name on a Node
 without `node:sqlite` rather than falling back to memory, because a store that
 quietly forgot every conversation on restart looks — from the outside — exactly
 like a brand-new user.
+
+**How long any of them keeps a conversation is `retention()`** (9.42.0), the
+port's fourth optional member. `sqliteSessions`, `memorySessions` and
+`agentCoreSessions({ store: 'session-storage' })` hand back a sweep your own
+cron calls; `firestoreSessions` and `agentEngineSessions` hand back the
+backend's policy and the step that arms it; `agentCoreSessions({ store:
+'memory' })` implements none and refuses by name. Nothing in this package
+deletes a conversation on a timer of its own, and no wire op can ask it to.
+
+```ts
+import { sessionRetention } from 'agentfootprint/hosting';
+
+const policy = sessionRetention(sessions, 'the nightly retention job');
+if (policy.deletedBy === 'this-store') {
+  let more = true;
+  while (more) ({ more } = await policy.forgetOlderThan(Date.now() - THIRTY_DAYS));
+}
+```
 
 What gets stored is a `CheckpointEnvelope` — a union of two shapes,
 discriminated on `format`:
@@ -1789,10 +1819,11 @@ evidence that means anything about a claim like this. A third test greps the
 hosting sources for vendor names, file by file, including every new port file.
 
 **The store contract** is the third suite, and the only one that is also
-*exported*: `runSessionLifecycleConformance` runs 13 cases against any
-`SessionLifecycle`, in this repository or yours. It exists because a split-brain
-ownership defect was live in four stores at once and no adapter's own tests could
-see it. See [Writing a session store](doc:session-stores).
+*exported*: `runSessionLifecycleConformance` runs 14 cases against any
+`SessionLifecycle`, in this repository or yours — six in-tree harnesses every
+build. It exists because a split-brain ownership defect was live in four stores
+at once and no adapter's own tests could see it. See
+[Writing a session store](doc:session-stores).
 
 ## Try it
 
@@ -1850,14 +1881,15 @@ its own.
 | `turnsPerHour` — the reference policy | `agentfootprint/hosting` | — | **Contract-shaped and tested.** The trial recorded the 429 and restated this helper's per-process bound, but not the shipped helper as the policy under test — and a run of minutes cannot cross an hour, so the window's roll-off and reset are proven by tests, not in the field. **Per-process ledger** — that caveat stands |
 | Session ownership (`envelopeOwner`, write-once) + `session-list` / `session-transcript` | `agentfootprint/hosting` | — | **Contract field-validated 2026-08-13** — an independent field trial exercised write-once ownership, the cross-user 404, feature detection and `mayOpenSession` on the ordinary turn. **The store underneath was the trial's own Firestore adapter**, so the CONTRACT earned this rung and no shipped adapter borrows it |
 | `resolveSessionOwner` + `SessionOwnershipConflictError` — the one owner-transition rule | `agentfootprint/hosting` | — | Shipped (9.37.0). A turn signed by a **different** person is refused whole; a leaner turn is still accepted. Behaviour change — see [Writing a session store](doc:session-stores) |
-| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 13 cases, run against four in-tree stores every build and exported for stores nobody here has written |
+| `retention()` + `sessionRetention()` — how long a conversation is kept | `agentfootprint/hosting` | — | Shipped (9.42.0). OPTIONAL and feature-detected, additive: a store that does not implement it is byte-identical to 9.41, and a caller that needs it gets `ERR_SESSION_RETENTION_UNAVAILABLE` rather than a sweep that silently deletes nothing. Five of six in-tree stores implement it. **Tested, not field-validated** — nothing in this repository has watched a policy expire a real conversation |
+| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 14 cases, run against **six** in-tree harnesses every build and exported for stores nobody here has written. `agentCoreSessions` was enrolled in 9.42.0, in both modes, after an audit found the fifth shipped store had appeared zero times and its absence was not declared anywhere |
 | `onIngressDecision` — the ingress record | `agentfootprint/hosting` | — | Shipped (9.32.0). A stream you chain into your own sink; explicitly **not** part of `auditExport()`'s hash chain |
-| `firestoreSessions` | — | — | **Tracked ticket, not scheduled here** — a `SessionLifecycle` over Firestore with an indexed `orderBy` + document cursor, a TTL policy and write-once owner. It needs a new optional peer (`@google-cloud/firestore`) and an SDK pin test before any adapter code, so it is its own release rather than a line in this one. The port is two methods in the meantime |
+| `firestoreSessions` | `agentfootprint/hosting` | `@google-cloud/firestore` | **Shipped 9.33.0; field-validated except the ownership refusal (2026-08).** An indexed `orderBy` + document cursor and a write-once owner inside a transaction. An independent trial ran it against a real Firestore and exercised seven of its eight areas live; the eighth — refusing a turn signed by somebody else — was added afterwards and is held by tests here and by nothing in the field. **The TTL policy this row used to promise did NOT ship in 9.33.0** and does now, as 9.42.0's `retention()`: every write stamps `expiresAt` (a timestamp, beside `savedAt`, which is a number and stays one) when the store is built with `expireAfterMs`, and one `gcloud` line an operator runs once arms the native policy — `store.retention().enableWith` prints it with your collection and database filled in. See [Google Cloud](doc:google-cloud#retention-a-native-ttl-policy-on-expiresat) |
 | Agent Runtime host (`agentRuntimeHost`) — the second route | — | — | **Tracked ticket, deliberately unbuilt** — a Node service really does run on Vertex Agent Runtime through the custom-container door (proven by an independent field trial, 2026-08-14; the recipe is on [the Google page](doc:google-cloud)). What is missing is not the runtime but the CONTRACT: `httpHost` serves ONE invoke path and frames streams as SSE, while that runtime wants a SECOND route at its own path framed as NDJSON. That is a port-shape change, so it is its own release, gated on real demand |
 | `redisSessions` | — | — | **Bring-your-own via the port** — two methods; see the sketch above |
 | `agentCoreRuntimeHost` / `agentCoreRuntimeWire` | `agentfootprint/hosting` | none — plain HTTP, no AWS SDK on its path | Shipped — **really verified**: passes the same host conformance suite as `nodeHost` over a real socket |
-| `agentCoreSessions({ store: 'session-storage' })` | `agentfootprint/hosting` | none (`node:fs`) | Shipped |
-| `agentCoreSessions({ store: 'memory' })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned |
+| `agentCoreSessions({ store: 'session-storage' })` | `agentfootprint/hosting` | none (`node:fs`) | Shipped. Passes the store battery (9.42.0), and implements `retention()` as a sweep over the file it owns |
+| `agentCoreSessions({ store: 'memory' })` | `agentfootprint/hosting` | `@aws-sdk/client-bedrock-agentcore` | Shipped; contract-mapped and injection-tested, command names pinned. Passes the store battery (9.42.0). It implements **no** `retention()` — no delete on its surface — so `sessionRetention()` refuses by name rather than sweeping nothing |
 | Binary conversation frames | — | — | Deferred — a capability question, until a consumer needs it |
 
 ## Next

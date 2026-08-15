@@ -27,18 +27,19 @@ export type SessionLifecycleCaseName =
   | 'owner-of-is-undefined-for-missing-and-unowned'
   | 'list-by-user-pages-with-a-stable-tie-break'
   | 'awkward-session-ids-round-trip'
+  | 'retention-says-who-deletes-and-deletes-only-the-old'
   | 'optional-members-are-feature-detected';
 
 /**
  * Members a case cannot run without.
  *
- * `listByUser` and `ownerOf` are OPTIONAL on the port, and `forget` is not on
- * it at all — so a store that lacks one is not failing anything, and a case
- * about it is reported `'not-applicable'` rather than passed or failed. That
- * distinction is the port's own feature-detection rule, applied to its own
- * test battery.
+ * `listByUser`, `ownerOf` and `retention` are OPTIONAL on the port, and
+ * `forget` is not on it at all — so a store that lacks one is not failing
+ * anything, and a case about it is reported `'not-applicable'` rather than
+ * passed or failed. That distinction is the port's own feature-detection rule,
+ * applied to its own test battery.
  */
-export type SessionStoreMember = 'listByUser' | 'ownerOf' | 'forget';
+export type SessionStoreMember = 'listByUser' | 'ownerOf' | 'forget' | 'retention';
 
 /**
  * How the battery reaches one store.

@@ -31,11 +31,15 @@
 
 import { envelopeOwner } from './envelope.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
+import { DEFAULT_SWEEP_LIMIT } from './types.js';
 import type {
   CheckpointEnvelope,
   SessionLifecycle,
   SessionListOptions,
   SessionListPage,
+  SessionRetention,
+  SessionSweepOptions,
+  SessionSweepResult,
 } from './types.js';
 
 /** How many rows one `listByUser` page carries when the caller names no limit. */
@@ -130,5 +134,46 @@ export function memorySessions(): SessionLifecycle {
       // `undefined` for "no such session" AND for "a session nobody signed
       // for" — the deliberate ambiguity the composer's one not-found rests on.
       Promise.resolve(stored.has(sessionId) ? owners.get(sessionId) : undefined),
+
+    // ── Retention (9.42.0) ──────────────────────────────────────────────
+    //
+    // `'this-store'`, obviously: the conversations are two Maps in this
+    // process, and nothing else is going to delete from them. Worth
+    // implementing rather than leaving absent even though a restart forgets
+    // everything anyway — this store is what a test and a local run use, so it
+    // is where a retention job gets WRITTEN, and a job that cannot be
+    // exercised until it reaches production is a job that is first exercised
+    // in production.
+    retention: (): SessionRetention => ({
+      deletedBy: 'this-store',
+      // eslint-disable-next-line @typescript-eslint/require-await
+      forgetOlderThan: async (
+        before: number,
+        sweepOptions?: SessionSweepOptions,
+      ): Promise<SessionSweepResult> => {
+        const limit = Math.max(1, Math.floor(sweepOptions?.limit ?? DEFAULT_SWEEP_LIMIT));
+        let forgotten = 0;
+        let more = false;
+        for (const [sessionId, envelope] of stored) {
+          if (envelope.savedAt >= before) continue;
+          if (forgotten >= limit) {
+            // One older session was found past the limit, which is all `more`
+            // claims. Stopping here rather than counting the rest keeps a
+            // sweep O(sessions) instead of making it walk the whole map twice
+            // to produce a number nobody reads.
+            more = true;
+            break;
+          }
+          // Both maps, together. `forget`-shaped deletion that left the owner
+          // index behind would leave a listing pointing at conversations
+          // nobody can open — the same law the conformance battery holds
+          // `forget` to.
+          stored.delete(sessionId);
+          owners.delete(sessionId);
+          forgotten += 1;
+        }
+        return { forgotten, more };
+      },
+    }),
   };
 }

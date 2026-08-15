@@ -11,9 +11,9 @@
  * containers, one conversation" answer Google has.
  *
  * ── The shape, said plainly ─────────────────────────────────────────────────
- * One collection. One document per session. Six fields:
+ * One collection. One document per session. Seven fields:
  *
- *   sessionId · format · savedAt · envelope · owner · messageCount
+ *   sessionId · format · savedAt · envelope · owner · messageCount · expiresAt
  *
  * That is the SQLite table, moved. It is deliberately the same shape, because
  * the two stores implement the same port under the same laws, and a reader who
@@ -95,6 +95,45 @@
  * in, and names those fields rather than restating the service's message — see
  * {@link firestoreFailure} for why no Google text is ever echoed here.
  *
+ * ── Retention: a SECOND timestamp, not a converted one (9.42.0) ─────────────
+ * A native Firestore TTL policy deletes a document when a field of type
+ * **Timestamp** is in the past. `savedAt` is a NUMBER — epoch milliseconds —
+ * so until this release an operator could not point a policy at this
+ * collection at all without a library change. The fix is a second field,
+ * `expiresAt`, written as a `Date` (the client stores one as a Timestamp) on
+ * every persist, holding `savedAt + expireAfterMs`. Give the store no
+ * `expireAfterMs` and the field is written as `null`, which a TTL policy
+ * ignores, and nothing about this release changes.
+ *
+ * **`savedAt` was NOT converted, and that is the load-bearing decision.** It is
+ * the ordering key of the composite index, the field the listing sorts by, and
+ * the first half of every cursor this store has ever minted (`<savedAt>:<docId>`,
+ * parsed with `parseFloat` and handed back to `startAfter` as a number).
+ * Converting it would have meant a new index, a new cursor grammar, and every
+ * pagination token issued by an earlier release becoming unreadable — but the
+ * decisive one is quieter: **Firestore's value ordering sorts by TYPE first.**
+ * Every number sorts before every timestamp. A collection holding old
+ * number-`savedAt` documents beside new timestamp-`savedAt` ones would list
+ * them in two blocks, all of one type then all of the other, with a person's
+ * conversations silently out of order by the type of the field rather than by
+ * when they were written. A second field costs one small write per turn and
+ * has no such shadow.
+ *
+ * So the migration consequence, plainly:
+ *
+ *   • **Every document already stored stays readable and listable.** Nothing
+ *     about `savedAt`, the index, the cursor or the query changed, and a
+ *     document written by 9.33–9.41 is read by this release unchanged.
+ *   • **Old documents do not start expiring.** They carry no `expiresAt`, and
+ *     a TTL policy ignores a document whose field is missing. A conversation
+ *     that is still being used gains one on its next turn; a conversation
+ *     nobody ever writes to again keeps living. If those matter, delete them
+ *     by hand once (a query on `savedAt` plus `forget`, or a `gcloud`
+ *     bulk-delete) — this adapter will not walk your collection behind your
+ *     back.
+ *   • **The policy is still yours to create.** `retention().enableWith` prints
+ *     the exact command with your collection and database in it.
+ *
  * ── The ceiling, since a store should name its own ──────────────────────────
  * A Firestore document is capped at 1 MiB. A conversation whose stored envelope
  * approaches that is refused BY NAME before the write
@@ -122,8 +161,29 @@
  * for it. So the write is a transaction.
  *
  * ── How much of this is verified ────────────────────────────────────────────
- * **Contract-shaped and tested. NOT field-validated.** Nothing here has been run
- * against a live Firestore by this repository.
+ * **Field-validated except the ownership refusal (2026-08).** An independent
+ * field trial ran THIS adapter against a real Firestore and exercised seven of
+ * its eight areas live: the round trip, the server-side indexed listing with
+ * its document-name tiebreak and real cursor, the missing-index refusal, the
+ * hashed document name, the size ceiling, ownership derived from the envelope,
+ * and `forget`.
+ *
+ * The eighth is named because under-claiming and over-claiming are the same
+ * defect: **the refusal of a turn signed by somebody else** — the
+ * `resolveSessionOwner` conflict this file's `persist` raises out of the
+ * transaction — was NOT exercised, because it did not exist when the trial
+ * ran. It is held by tests here, including the contested-write case of the
+ * shared conformance battery, and by nothing in the field. Two writers racing
+ * for one fresh session against a real Firestore, with the real client's
+ * transaction retry underneath, is exactly the shape a double models by
+ * assumption; the sibling Vertex adapter's equivalent was found in the field
+ * and not in a test suite.
+ *
+ * This section said "NOT field-validated. Nothing here has been run against a
+ * live Firestore" for two releases after that stopped being true. Under-claiming
+ * is the safe direction and it is still the same defect class the trials keep
+ * reporting: a status that does not track the evidence is a status nobody can
+ * use, whichever way it is wrong.
  *
  * The pin is the `firestoreSessions` row of `GOOGLE_SURFACE_PINS` in
  * `test/adapters/google/googlePin.ts`, asserted by
@@ -148,7 +208,8 @@
  * everywhere. That the row spells those members the way Google does is held by a
  * hand check against a real install, not by a test that runs here.
  *
- * The DESIGN is informed by an independent field trial of a different Firestore
+ * The DESIGN was informed, before any of that, by an EARLIER and separate trial
+ * of a DIFFERENT Firestore
  * session adapter, which ran against a real Firestore and passed eight ownership
  * and history checks — and whose own report named the defect this adapter does
  * not reproduce: that adapter read every document for one owner, sorted them in
@@ -167,6 +228,7 @@ import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import type {
   CheckpointEnvelope,
+  SessionExpiryPolicy,
   SessionLifecycle,
   SessionListOptions,
   SessionListPage,
@@ -321,6 +383,39 @@ export interface FirestoreSessionsOptions {
    */
   readonly firestore?: FirestoreLike;
   /**
+   * How long after its last turn a conversation should expire, in
+   * milliseconds. Omit and nothing expires (9.42.0).
+   *
+   * Setting it makes every write stamp {@link EXPIRES_AT_FIELD} —
+   * `savedAt + expireAfterMs`, as a timestamp — which is the field a **native
+   * Firestore TTL policy** reads. The policy itself is yours to enable, once,
+   * with the command {@link FirestoreSessions.retention} hands you; this store
+   * writes what it reads and never deletes a document on a clock of its own.
+   * Both halves are needed and neither is silent about the other: with no
+   * policy the field is inert data, and with no `expireAfterMs` the policy has
+   * nothing to act on.
+   *
+   * **The clock is the conversation's own `savedAt`, not this process's.** So
+   * the expiry is IDLE time: every turn pushes it out, and a conversation dies
+   * `expireAfterMs` after somebody last spoke, which is what a session
+   * retention rule almost always means. It also makes the stamp a pure
+   * function of the envelope — the same conversation stamps the same instant
+   * on any machine, whatever its clock says.
+   *
+   * **It does not reach backwards.** Documents written before this was
+   * configured carry no expiry field, and a TTL policy ignores a document
+   * whose field is missing — so old conversations expire only once they are
+   * written again. See the module header for what to do about the ones that
+   * never will be.
+   *
+   * Named `expireAfterMs` rather than `ttlMs` deliberately, even though the
+   * artifact stores in this package spell their dial the second way: theirs is
+   * stamped once at mint and measured from creation, and this one is measured
+   * from the LAST turn and moves on every write. One word for two clocks would
+   * be the cheaper name and the more expensive mistake.
+   */
+  readonly expireAfterMs?: number;
+  /**
    * @internal Test seam only — the `@google-cloud/firestore` module, injected.
    * Lets the suite exercise every path (including the refusals) without a
    * credential or a network. Not public API, and not a place to plug in another
@@ -331,6 +426,46 @@ export interface FirestoreSessionsOptions {
 
 /** Where sessions live when the caller names no collection. */
 export const DEFAULT_SESSION_COLLECTION = 'agentfootprint_sessions';
+
+/**
+ * The document field a native TTL policy is configured against (9.42.0).
+ *
+ * A SECOND field beside `savedAt`, never a change to it — see the module
+ * header for why converting the ordering key would have re-sorted every
+ * conversation already in the collection.
+ *
+ * Exported because an operator has to type this name into the console or the
+ * `gcloud` line, and a field name that lives only inside a string literal is a
+ * field name somebody will mistype at 2am.
+ */
+export const EXPIRES_AT_FIELD = 'expiresAt';
+
+/**
+ * The one step that turns the TTL policy on, with this store's own collection
+ * and database already in it.
+ *
+ * One spelling, shared by the retention answer and the documentation that
+ * quotes it, for the same reason the missing-index refusal prints the whole
+ * `gcloud` line: the person reading it can fix this in sixty seconds, and only
+ * if nobody makes them go and look up the flags first.
+ *
+ * `--database` is always printed, including for `(default)`, where gcloud
+ * would have assumed it — a project may hold several databases, and a policy
+ * created on the wrong one leaves conversations living forever with nothing to
+ * suggest why. Single-quoted, because `(default)` is bare parentheses and a
+ * syntax error in every shell this will be pasted into.
+ */
+export function ttlPolicyCommand(collection: string, database?: string): string {
+  const flagValue = `'${database ?? '<the database your Firestore client was built for>'}'`;
+  return (
+    `gcloud firestore fields ttls update ${EXPIRES_AT_FIELD} ` +
+    `--collection-group=${collection} --enable-ttl --database=${flagValue}` +
+    (database === undefined
+      ? ` (this store did not build the Firestore client, so it cannot name the database — ` +
+        `fill that flag in from wherever the client was constructed)`
+      : ``)
+  );
+}
 
 /** How many rows one `listByUser` page carries when the caller names no limit. */
 const DEFAULT_PAGE = 50;
@@ -379,6 +514,21 @@ export interface FirestoreSessions extends SessionLifecycle {
   readonly collection: string;
   /** Forget one session. A session that was never there is not an error. */
   forget(sessionId: string): Promise<void>;
+  /**
+   * How conversations here stop existing: **the backend does it**, on a native
+   * TTL policy an operator enables once, against {@link EXPIRES_AT_FIELD}
+   * (9.42.0).
+   *
+   * Narrowed from the port's optional member to a required one, and to the one
+   * arm this store can be: a caller holding a `FirestoreSessions` needs no
+   * feature check and no branch, and gets a compile error rather than a
+   * runtime surprise if they reach for a sweep that does not exist here.
+   *
+   * `active` says whether this store was built with `expireAfterMs` and is
+   * therefore stamping anything; `enableWith` is the exact command, with this
+   * store's collection and database already filled in.
+   */
+  retention(): SessionExpiryPolicy;
   /**
    * The document name one session id maps to — the sha-256 above.
    *
@@ -519,19 +669,30 @@ export class EnvelopeTooLargeError extends Error {
  * Conversations in Firestore — a fleet-shared session store with no instance to
  * run.
  *
- * **Status: contract-shaped and tested, NOT field-validated.** Every SDK member
- * it calls was read off a real install of `@google-cloud/firestore` 9.0.0 and
- * hand-verified there; the test that re-checks those names against the real
- * package SKIPS in this repository, because the package is deliberately not
- * installed here. What runs in CI is the dispatch pin. No test here pretends to
- * have reached Google. See the module header for the full account, and for what
- * a field trial of a DIFFERENT adapter did and did not establish about this
- * design.
+ * **Status: field-validated except the ownership refusal (2026-08).** An
+ * independent field trial ran this adapter against a real Firestore and
+ * exercised seven of its eight areas live — round trip, indexed and cursored
+ * listing, the missing-index refusal, the hashed document name, the size
+ * ceiling, derived ownership and `forget`. The eighth, the refusal of a turn
+ * signed by somebody ELSE, was added after the trial and is held by tests
+ * here and by nothing in the field. Every SDK member it calls was read off a
+ * real install of `@google-cloud/firestore` 9.0.0 and hand-verified there; the
+ * test that re-checks those names against the real package SKIPS in this
+ * repository, because the package is deliberately not installed here. What
+ * runs in CI is the dispatch pin. See the module header for the full account.
  *
  * @throws FirestoreIndexMissingError from `listByUser` until the composite index
  *   exists — see the module header for the exact index.
  * @throws EnvelopeTooLargeError from `persist` for a conversation above
  *   {@link FIRESTORE_MAX_ENVELOPE_BYTES}. Never truncated.
+ *
+ * @example  Conversations that expire 30 days after their last turn
+ *   const sessions = firestoreSessions({
+ *     project: 'my-project',
+ *     expireAfterMs: 30 * 24 * 60 * 60 * 1000,
+ *   });
+ *   // Then, ONCE, as an operator — the store prints the exact command:
+ *   console.log(sessions.retention().enableWith);
  *
  * @example  A standing agent whose conversations are shared across instances
  *   import { standingAgent, nodeHost } from 'agentfootprint/hosting';
@@ -594,6 +755,18 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
   const collection = (): FirestoreCollectionLike => db.collection(collectionName);
   const docFor = (sessionId: string): FirestoreDocumentReferenceLike =>
     collection().doc(documentIdFor(sessionId));
+
+  /**
+   * When this conversation should expire, or `null` for a store that was not
+   * given a retention setting.
+   *
+   * Idle expiry, measured from the envelope's own `savedAt`: every turn moves
+   * it, so a live conversation never expires underneath somebody.
+   */
+  const expiresAtFor = (savedAt: number): Date | null =>
+    options.expireAfterMs === undefined || !Number.isFinite(options.expireAfterMs)
+      ? null
+      : new Date(savedAt + options.expireAfterMs);
 
   /** The stored row, read back without trusting any of its types. */
   const readRow = async (
@@ -663,6 +836,27 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
         savedAt: checked.savedAt,
         envelope: json,
         messageCount: envelopeTranscript(checked).length,
+        // The TTL field (9.42.0) — a SECOND field, never a change to
+        // `savedAt`. See the module header: `savedAt` is the ordering key of
+        // the composite index and the first half of every cursor this store
+        // has ever minted, and Firestore sorts values by TYPE before value, so
+        // making it a timestamp would have put every document written from now
+        // on into a different sort bucket from every document already stored.
+        //
+        // A `Date`, which the client converts to a Timestamp on write — and a
+        // TTL policy acts only on a Timestamp. Writing one this way rather
+        // than through `Timestamp.fromMillis` is deliberate: it adds no member
+        // to the SDK surface this adapter dispatches (so the pin row is
+        // unchanged and no new name had to be hand-verified against a real
+        // install), and it works identically for a caller who passed their own
+        // client.
+        //
+        // `null` when nothing was configured, never `undefined`: the default
+        // client throws on `undefined`, and a TTL policy ignores a field that
+        // is null or missing — so an unconfigured store writes an inert field
+        // rather than an absent one, exactly as `owner` does one line down and
+        // for the same reason.
+        [EXPIRES_AT_FIELD]: expiresAtFor(checked.savedAt),
       };
 
       // WRITE ONCE for the owner, LAST WRITE WINS for everything else — the one
@@ -849,6 +1043,38 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
         throw firestoreFailure('forgetting a session', collectionName, err);
       }
     },
+
+    // ── Retention (9.42.0) ──────────────────────────────────────────────
+    //
+    // `'the-backend'`, and the honest answer rather than the convenient one.
+    // This store COULD have offered a sweep — query the old documents, delete
+    // them one at a time — and it would have been a worse answer at every
+    // scale: a full index read plus one write per document, billed, repeated
+    // nightly, to do a job the service already does for free and does not
+    // charge a delete for. A port member exists so a caller can find out what
+    // a store really does; a store that implemented the OTHER arm because it
+    // was implementable would be answering a different question.
+    //
+    // It works on a closed store on purpose — it reads no document and calls
+    // no SDK member. An operator asking "what expires these, and how do I turn
+    // it on?" during a shutdown or an incident should get the answer, not the
+    // refusal that guards the data plane.
+    retention: () => ({
+      deletedBy: 'the-backend' as const,
+      // Whether this store is really stamping the field, which is a different
+      // fact from whether the mechanism exists. Reported rather than implied:
+      // "there is a TTL field" and "conversations are expiring" are the two
+      // things an auditor must not be allowed to confuse.
+      active: options.expireAfterMs !== undefined && Number.isFinite(options.expireAfterMs),
+      expiresOn: EXPIRES_AT_FIELD,
+      enableWith:
+        `${ttlPolicyCommand(collectionName, databaseName)} — or Firestore console → ` +
+        `Time-to-live (TTL) → Create policy, on collection '${collectionName}' and field ` +
+        `'${EXPIRES_AT_FIELD}'. The policy deletes a document within 24 hours of the ` +
+        `instant in that field; it is not a hard deadline and the service says so. ` +
+        `Documents stored before 'expireAfterMs' was configured carry no such field and ` +
+        `are never deleted by it — they expire only once they are written again.`,
+    }),
 
     async close(): Promise<void> {
       if (closed) return;

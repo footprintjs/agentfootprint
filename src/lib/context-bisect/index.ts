@@ -96,6 +96,44 @@ export {
   type WhatChanged,
 } from './rerun.js';
 
+// Strategy arms — the SUBSTITUTION tier. Ablation removes; an arm REPLACES, so
+// it is a sibling spec type rather than a fifth `AblationSpec` kind (the union
+// feeds a subset search that substitutions do not compose under). Statistics
+// shared, search machinery not. See src/lib/context-bisect/arms/README.md.
+export {
+  applyArm,
+  armConfigKey,
+  armFacetsFromManifest,
+  armLabel,
+  checkArmApplication,
+  checkArmApplied,
+  collectArmRuns,
+  compareStrategyArms,
+  declaredFacetCount,
+  manifestFromEvents,
+  matchArm,
+  nullBandFrom,
+  RUN_CONFIGURED_EVENT,
+  scoreArmRuns,
+  validateStrategyArms,
+  verdictForArm,
+  type ArmApplication,
+  type ArmFacetMismatch,
+  type ArmFacets,
+  type ArmMemoryFacet,
+  type ArmOutcome,
+  type ArmRunResult,
+  type ArmRunner,
+  type ArmRuns,
+  type ArmVerdictContext,
+  type CompareStrategyArmsOptions,
+  type ManifestMemoryLike,
+  type NullBand,
+  type RunManifestLike,
+  type StrategyArm,
+  type StrategyComparison,
+} from './arms/index.js';
+
 // Per-loop recall shortlist (proposal 006, L3): rescue early culprits → narrow before ablation.
 export {
   shortlistEarlyCulprits,

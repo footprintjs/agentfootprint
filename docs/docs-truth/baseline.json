@@ -2,26 +2,26 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-14",
+  "recordedAt": "2026-08-15",
   "surface": {
     "subpaths": 13,
-    "declaredSymbols": 1752,
-    "declaredEvents": 93,
-    "eventSource": "src/events/registry.ts:665"
+    "declaredSymbols": 1804,
+    "declaredEvents": 94,
+    "eventSource": "src/events/registry.ts:671"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 874,
+      "documented-never-exercised": 929,
       "exercised-undocumented": 33,
       "undocumented-unexercised": 605,
       "site-code-sample-only": 19,
-      "written-but-not-published": 119,
-      "ok": 102
+      "written-but-not-published": 115,
+      "ok": 103
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 32,
+      "documented-never-exercised": 33,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 5,
@@ -45,7 +45,6 @@
     "AUDIT_GENESIS_EVENT_TYPE",
     "AUDIT_ZERO_HASH",
     "AblationRerun",
-    "AblationRunStats",
     "AblationTargets",
     "AblationVerdict",
     "AblationVerdictKind",
@@ -500,7 +499,6 @@
     "RouteTripKind",
     "RoutingPolicy",
     "RunContext",
-    "RunCost",
     "RunEvidence",
     "RunRecorder",
     "RunStepGraph",
@@ -662,7 +660,6 @@
     "autoPipeline",
     "averageRelevancy",
     "azureOpenai",
-    "bisectCulprits",
     "browserAzureOpenai",
     "bucketByAnchors",
     "buildChoiceContext",
@@ -775,7 +772,6 @@
     "registerCacheStrategy",
     "renderCommentary",
     "renderStatusLine",
-    "runAblationProbe",
     "runRestorationProbe",
     "runStepRecorder",
     "runToolLintCli",

@@ -73,9 +73,10 @@ place. One store per case, disposed after it, is the only shape that holds for a
 Three ways a case does not simply pass, and they mean different things:
 
 - **`'not-applicable'`** — the case is about an OPTIONAL port member
-  (`listByUser`, `ownerOf`) or a common extra (`forget`) this store does not
-  implement. That is feature detection, which is the port's own rule; a
-  key/value store owes nobody a secondary index.
+  (`listByUser`, `ownerOf`, `retention`) or a common extra (`forget`) this store
+  does not implement. That is feature detection, which is the port's own rule; a
+  key/value store owes nobody a secondary index, and a store with no way to
+  expire a conversation refuses by name rather than pretending to sweep.
 - **`'declared'`** — the store implements the member and still cannot satisfy
   the case, for a stated reason. A managed service whose owner field is
   immutable at creation genuinely cannot fill one in on turn two. **The case is
@@ -104,6 +105,7 @@ There is deliberately no way to make a case quietly disappear.
 | `owner-of-is-undefined-for-missing-and-unowned` | missing and unowned are one answer                                                 |
 | `list-by-user-pages-with-a-stable-tie-break`    | every owned row once, nobody else's ever, cursor only when more exist              |
 | `awkward-session-ids-round-trip`                | an id is opaque, and the mapping to a backend key is injective                     |
+| `retention-says-who-deletes-and-deletes-only-the-old` | `retention()` says WHO deletes; a sweeping store forgets exactly the old ones |
 | `optional-members-are-feature-detected`         | present as functions or absent; `ownerOf` ships beside `listByUser`                |
 
 ## Files

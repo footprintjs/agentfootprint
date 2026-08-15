@@ -58,11 +58,15 @@ import { UnreadableEnvelopeError } from './errors.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import { SqliteUnavailableError } from '../lib/sqliteUnavailable.js';
+import { DEFAULT_SWEEP_LIMIT } from './types.js';
 import type {
   CheckpointEnvelope,
   SessionLifecycle,
   SessionListOptions,
   SessionListPage,
+  SessionSweep,
+  SessionSweepOptions,
+  SessionSweepResult,
 } from './types.js';
 
 // ─── The little bit of `node:sqlite` this adapter uses ───────────────
@@ -145,6 +149,16 @@ export interface SqliteSessions extends SessionLifecycle {
   readonly journalMode: string;
   /** Forget one session. No-op if there is nothing stored for it. */
   forget(sessionId: string): Promise<void>;
+  /**
+   * How conversations here stop existing: **this store deletes them**, when a
+   * job of yours asks it to (9.42.0).
+   *
+   * Narrowed from the port's optional member to a required one, and to the one
+   * arm a file-backed store can be — a caller holding a `SqliteSessions` needs
+   * no feature check, and reaching for a backend policy that does not exist
+   * here is a compile error rather than a surprise at 3am.
+   */
+  retention(): SessionSweep;
   /**
    * Close the file. Idempotent — a shutdown hook and an explicit close can
    * coexist. Reading or writing afterwards refuses by name rather than
@@ -354,6 +368,16 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
       `WHERE owner = ? AND (saved_at < ? OR (saved_at = ? AND session_id > ?)) ` +
       `ORDER BY saved_at DESC, session_id ASC LIMIT ?`,
   );
+  // Retention (9.42.0). OLDEST FIRST, so a bounded sweep of a long-neglected
+  // file makes progress from the far end rather than nibbling at whichever
+  // rows the query planner happened to reach — after N calls the backlog is
+  // genuinely N × limit shorter. It selects rather than deleting in one
+  // statement because `DELETE … LIMIT` needs a compile-time option that is off
+  // in most SQLite builds, including Node's, and because the ids are what make
+  // the count exact without reading a driver-specific `changes` field.
+  const listExpired = db.prepare(
+    `SELECT session_id FROM ${SESSIONS_TABLE} WHERE saved_at < ? ORDER BY saved_at ASC LIMIT ?`,
+  );
 
   let closed = false;
   const open = (verb: string): void => {
@@ -500,6 +524,49 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
       open('forget a session');
       remove.run(sessionId);
     },
+
+    // ── Retention (9.42.0) ──────────────────────────────────────────────
+    //
+    // `'this-store'`: the rows are in a file this process owns, and there is
+    // no service behind it with a policy of its own. A cron job calls this;
+    // nothing here runs on a timer, because a library that started an interval
+    // would own your process's lifetime, and a deletion nobody asked for at a
+    // time nobody chose is the one kind of deletion you cannot explain
+    // afterwards.
+    retention: (): SessionSweep => ({
+      deletedBy: 'this-store',
+      // eslint-disable-next-line @typescript-eslint/require-await
+      forgetOlderThan: async (
+        before: number,
+        sweepOptions?: SessionSweepOptions,
+      ): Promise<SessionSweepResult> => {
+        open('forget old sessions');
+        const limit = Math.max(1, Math.floor(sweepOptions?.limit ?? DEFAULT_SWEEP_LIMIT));
+        // BEGIN IMMEDIATE, the same bargain `persist` makes: the select and
+        // the deletes must not have another writer's turn between them, or a
+        // conversation that was written after it was selected is deleted a
+        // millisecond later — the one bug a retention sweep must not have,
+        // since what it destroys is somebody's live conversation and there is
+        // nothing to notice afterwards.
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          // One extra row, so "is there more to do?" is a fact rather than a
+          // guess from a full batch — the same trick every listing here uses.
+          const rows = listExpired.all(before, limit + 1) as { session_id?: unknown }[];
+          const doomed = rows.slice(0, limit);
+          for (const row of doomed) remove.run(String(row.session_id));
+          db.exec('COMMIT');
+          return { forgotten: doomed.length, more: rows.length > limit };
+        } catch (err) {
+          try {
+            db.exec('ROLLBACK');
+          } catch {
+            /* Already rolled back or never opened; the error below says why. */
+          }
+          throw err;
+        }
+      },
+    }),
 
     close(): void {
       if (closed) return;

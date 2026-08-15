@@ -678,6 +678,50 @@ export class SessionIndexUnavailableError extends Error {
 }
 
 /**
+ * Retention was asked of a session store that has no answer for it (9.42.0).
+ *
+ * `retention` is OPTIONAL on the port for the same reason the two index
+ * members are — most stores are a key/value map and owe nobody a way to expire
+ * one — so this refusal names the store's limitation rather than doing
+ * nothing quietly. That distinction is the whole point here: an unanswerable
+ * question and a sweep that deleted nothing look identical from a cron job's
+ * exit code, and a deployment can run for a year believing conversations are
+ * being expired because a call returned without complaining.
+ *
+ * It names which stores DO implement it, because the answer to "my store
+ * cannot do this" is usually "then use one that can", and a refusal that makes
+ * somebody go and find that out is a refusal that gets caught and ignored. The
+ * two it names by hand are the two that ship in this folder; the cloud
+ * adapters are pointed at rather than listed, because a hand-maintained list
+ * of them inside a PORT is both a vendor name where none belongs and a list
+ * that goes stale the release after somebody adds one.
+ *
+ * No identity material, like every refusal here: retention is about a store,
+ * and nothing about who was signed in belongs in it.
+ */
+export class SessionRetentionUnavailableError extends Error {
+  readonly code = 'ERR_SESSION_RETENTION_UNAVAILABLE' as const;
+  /** What was being attempted, in the caller's words. */
+  readonly purpose: string;
+
+  constructor(purpose: string) {
+    super(
+      `[hosting] ${purpose} needs the session store to answer 'retention()', and the store ` +
+        `this was given does not implement it. That is a limitation of the store, not a ` +
+        `conversation that has already been expired — a sweep that quietly did nothing is ` +
+        `indistinguishable from retention that is working, which is how a deployment keeps ` +
+        `every conversation it ever had for a year. memorySessions() and ` +
+        `sqliteSessions({ file }) both implement it, as does every cloud session adapter in ` +
+        `this package whose backend can express an expiry — each states which in its own ` +
+        `docs. A custom SessionLifecycle can add retention() additively, with nothing else ` +
+        `changed: an absent member refuses like this one, it never silently keeps data.`,
+    );
+    this.name = 'SessionRetentionUnavailableError';
+    this.purpose = purpose;
+  }
+}
+
+/**
  * The ONE answer for a session the caller may not have — read OR continued.
  *
  * A session that does not exist, one that belongs to somebody else, and one

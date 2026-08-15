@@ -493,11 +493,123 @@ const awkwardIds: SessionLifecycleCase = {
   },
 };
 
+const retentionHonesty: SessionLifecycleCase = {
+  name: 'retention-says-who-deletes-and-deletes-only-the-old',
+  law: 'A store that answers `retention()` says WHO deletes — and where that is the store itself, it forgets exactly the sessions older than the cutoff and nothing else.',
+  members: ['retention'],
+  async run(store, kit) {
+    const policy = store.retention!();
+
+    // The BACKEND arm. There is nothing to call, so what is checked is the
+    // only thing that can be wrong: whether an operator could act on it. A
+    // policy that names no field and no step is a store saying "somebody else
+    // handles it" — which is what every deployment believes right up until
+    // somebody asks how long conversations are kept.
+    if (policy.deletedBy === 'the-backend') {
+      check(
+        typeof policy.expiresOn === 'string' && policy.expiresOn.length > 0,
+        'a backend-enforced retention policy named no field or setting for the backend to ' +
+          'act on. An operator configuring the policy has to know what it reads.',
+      );
+      check(
+        typeof policy.enableWith === 'string' && policy.enableWith.length > 30,
+        'a backend-enforced retention policy carries no step an operator can take. The ' +
+          'store knows its own collection, database or resource; making somebody go and ' +
+          'look that up is how retention stays switched off.',
+      );
+      check(
+        typeof policy.active === 'boolean',
+        '`active` is not a boolean. "There is an expiry mechanism" and "conversations are ' +
+          'expiring" are different facts, and this is the one that says which.',
+      );
+      return;
+    }
+
+    // The SWEEP arm. Three sessions around one cutoff, so the boundary is
+    // under test rather than assumed: strictly-before is what makes the same
+    // cutoff safe to pass twice.
+    const cutoff = 1_700_000_000_000;
+    const old = kit.id('older-than-the-cutoff');
+    const boundary = kit.id('exactly-at-the-cutoff');
+    const fresh = kit.id('newer-than-the-cutoff');
+    await store.persist(old, kit.envelope('last year', 'alice', cutoff - 60_000));
+    await store.persist(boundary, kit.envelope('right on it', 'alice', cutoff));
+    await store.persist(fresh, kit.envelope('this morning', 'alice', cutoff + 60_000));
+
+    const swept = await policy.forgetOlderThan(cutoff);
+    check(
+      swept.forgotten === 1,
+      `the sweep reported ${swept.forgotten} conversations forgotten and exactly one was ` +
+        `older than the cutoff. A count a cleanup job cannot trust is a count it will log ` +
+        `and nobody will read.`,
+    );
+    check(
+      swept.more === false,
+      'the sweep says more sessions remain older than the cutoff, and none do. `more` is ' +
+        'what a caller loops on, so a store that always says `true` is an infinite loop.',
+    );
+    check(
+      (await store.hydrate(old)) === undefined,
+      'the sweep reported forgetting a conversation and it is still readable. A deletion ' +
+        'that does not delete is the kind of thing a person finds out about from a regulator.',
+    );
+    check(
+      textOf(await store.hydrate(boundary)) === 'right on it',
+      'the sweep deleted the session saved EXACTLY at the cutoff. The bound is strictly ' +
+        'before, so that passing one cutoff twice is stable and a conversation on the ' +
+        'boundary survives — an off-by-one here deletes somebody who is still talking.',
+    );
+    check(
+      textOf(await store.hydrate(fresh)) === 'this morning',
+      'the sweep deleted a conversation NEWER than the cutoff. Whatever else a retention ' +
+        'job gets wrong, it may not delete the conversation somebody is having.',
+    );
+
+    // The index has to go with the conversation, exactly as `forget` must —
+    // a listing built on an index the sweep did not touch points at
+    // conversations nobody can open.
+    if (store.ownerOf !== undefined) {
+      check(
+        (await store.ownerOf(old)) === undefined,
+        'the sweep forgot the conversation and left the owner index naming somebody for it.',
+      );
+    }
+    if (store.listByUser !== undefined) {
+      const { ids } = await allPages(store, 'alice', 10);
+      check(
+        !ids.includes(old) && ids.includes(fresh),
+        `after the sweep the listing is ${ids.join(', ')} — it must have lost the swept ` +
+          `session and kept the rest. A sidebar row that opens nothing is worse than a row ` +
+          `that is gone.`,
+      );
+    }
+
+    // Idempotent, and bounded. A cleanup job runs on a schedule; most of its
+    // runs have nothing to do, and "nothing to do" is not an error.
+    const again = await policy.forgetOlderThan(cutoff);
+    check(
+      again.forgotten === 0 && again.more === false,
+      `sweeping the same cutoff twice forgot ${again.forgotten} more conversations. The ` +
+        `second run of a nightly job must be a no-op, or the job is deleting on a moving ` +
+        `target.`,
+    );
+
+    const limited = await policy.forgetOlderThan(cutoff + 120_000, { limit: 1 });
+    check(
+      limited.forgotten === 1 && limited.more === true,
+      `a sweep limited to one conversation reported ${limited.forgotten} forgotten and ` +
+        `more=${String(limited.more)}, with two eligible. The limit is what keeps the first ` +
+        `sweep of a neglected store from becoming one enormous transaction, and \`more\` is ` +
+        `how a caller knows to come back.`,
+    );
+  },
+};
+
 const featureDetected: SessionLifecycleCase = {
   name: 'optional-members-are-feature-detected',
   law: 'The optional members are present as functions or absent — never something a caller has to guess about.',
   async run(store) {
-    for (const member of ['onWake', 'listByUser', 'ownerOf'] as const) {
+    for (const member of ['onWake', 'listByUser', 'ownerOf', 'retention'] as const) {
       const value = store[member];
       check(
         value === undefined || typeof value === 'function',
@@ -512,12 +624,34 @@ const featureDetected: SessionLifecycleCase = {
         'A door built on it hands somebody a list and then refuses to open any of it — ' +
         'implement `ownerOf` beside `listByUser`.',
     );
+    // Retention is DESCRIBED synchronously — the answer is configuration, not
+    // a round trip — and a store that made a caller await a description would
+    // make an incident-time question ("what expires these?") cost a network
+    // call on a store that may already be closed.
+    if (store.retention !== undefined) {
+      const policy: unknown = store.retention();
+      const deletedBy = (policy as { deletedBy?: unknown } | null)?.deletedBy;
+      check(
+        deletedBy === 'this-store' || deletedBy === 'the-backend',
+        `retention() answered ${JSON.stringify(deletedBy)} for \`deletedBy\`. That field is ` +
+          `the discriminant a caller branches on — one arm hands you something to CALL and ` +
+          `the other something to CONFIGURE — so a third value is a branch nobody wrote.`,
+      );
+      if (deletedBy === 'this-store') {
+        check(
+          typeof (policy as { forgetOlderThan?: unknown }).forgetOlderThan === 'function',
+          'retention() says this store does the deleting and gave nothing to call. ' +
+            'The sweep IS the arm — without it the answer is a claim, not a mechanism.',
+        );
+      }
+    }
   },
 };
 
 /**
  * The battery, in the order a store fails it most usefully: reading before
- * writing, writing before ownership, ownership before the listing built on it.
+ * writing, writing before ownership, ownership before the listing built on it,
+ * and the listing before the retention that deletes out from under it.
  */
 export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   absentHydratesUndefined,
@@ -532,6 +666,7 @@ export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   ownerOfAmbiguity,
   listPages,
   awkwardIds,
+  retentionHonesty,
   featureDetected,
 ];
 

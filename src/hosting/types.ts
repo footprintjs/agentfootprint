@@ -800,7 +800,197 @@ export interface SessionLifecycle {
    * built a permission system out of a request field.
    */
   ownerOf?(sessionId: string): Promise<string | undefined>;
+  /**
+   * OPTIONAL (9.42.0) — how conversations in this store stop existing.
+   *
+   * Feature-detected exactly like the two members above, and for the same
+   * reason: the two required methods are a key/value map, and demanding a
+   * retention mechanism of every implementation that will ever exist would be
+   * this port breaking its own rule ("anything a real store also wants is that
+   * store's API, not a demand this port makes"). A store that leaves this
+   * absent makes {@link sessionRetention} refuse BY NAME, naming the store's
+   * limitation and which shipped stores do implement it — never a silent
+   * no-op, which is the one failure mode a retention feature must not have,
+   * because from the outside "nothing was deleted" and "everything is fine"
+   * look identical until somebody asks how long you keep conversations.
+   *
+   * ── Why it is one member with two arms, and not one verb ────────────────────
+   * Because there are exactly two honest implementations of retention, and a
+   * port member only half the shipped stores could implement would not be a
+   * port member at all:
+   *
+   *  - some stores **delete when you ask them to** — a `Map`, a table, a file.
+   *    A sweep is one loop or one statement there, and the caller's cron
+   *    decides when.
+   *  - some stores **cannot honestly sweep, because the backend already
+   *    expires rows on a policy the operator configured** out of band. Asking
+   *    such a store to sweep would mean a query plus one delete per row, at an
+   *    unbounded cost, duplicating a job the service does for free — and a
+   *    store that reported "0 deleted" from a backend that deletes plenty
+   *    would be lying by omission.
+   *
+   * So the answer is a DISCRIMINATED UNION and `deletedBy` is the field a
+   * consumer branches on: one feature check, then one exhaustive branch the
+   * compiler enforces. See {@link SessionRetention}.
+   *
+   * ── The shape that was deliberately NOT chosen ──────────────────────────────
+   * A stated expiry at persist time — `persist(id, envelope, { expiresAt })` —
+   * reads well and is the wrong shape twice over. It puts a demand on the one
+   * method every store must implement, so every store that will ever exist has
+   * to honour it; and it cannot be feature-detected, because `typeof
+   * store.persist === 'function'` is true whether or not the third argument is
+   * read. A store that ignored it would keep every conversation forever while
+   * its caller believed retention was configured. An optional member that is
+   * absent refuses; an optional ARGUMENT that is ignored does not.
+   *
+   * ── Why not the shape the ARTIFACT port already uses ────────────────────────
+   * That sibling port states an expiry at MINT (`ttlMs` → a stamped
+   * `expiresAt`) and sweeps a scope when a put next touches it. It is the right
+   * shape THERE because every artifact store in that family holds its own
+   * bytes, so every one of them can sweep. This family does not: two of its
+   * stores are managed services that expire rows on a policy nobody here
+   * controls, and one has no delete at all. A port copies its sibling's
+   * vocabulary only where the sibling's assumption also holds.
+   *
+   * ── What this is not ────────────────────────────────────────────────────────
+   * Not a wire op. No door in this package deletes conversations on request,
+   * and the composer never expires anything on its own: retention is an
+   * operator's job with an operator's blast radius, and a request that could
+   * delete somebody's history because it named a cutoff is not a feature.
+   *
+   * @example  A cleanup job that works against any store that can answer
+   *   const policy = sessionRetention(sessions);
+   *   if (policy.deletedBy === 'this-store') {
+   *     const { forgotten, more } = await policy.forgetOlderThan(Date.now() - THIRTY_DAYS);
+   *     log(`forgot ${forgotten} conversations${more ? ', more remain' : ''}`);
+   *   } else {
+   *     log(`the backend expires these on '${policy.expiresOn}': ${policy.enableWith}`);
+   *   }
+   */
+  retention?(): SessionRetention;
 }
+
+/**
+ * How one store's conversations stop existing — the answer
+ * {@link SessionLifecycle.retention} gives, in the two shapes a store can
+ * honestly give it.
+ *
+ * `deletedBy` is the discriminant, and it is spelled as WHO does the deleting
+ * rather than as a mechanism, because that is the fact a caller acts on: one
+ * arm hands you something to call, the other hands you something to configure.
+ */
+export type SessionRetention = SessionSweep | SessionExpiryPolicy;
+
+/**
+ * This store deletes, when you ask it to.
+ *
+ * The shape for a store that holds its own bytes — a map, a table, a file.
+ * Nothing sweeps on a timer of its own: a library that started an interval
+ * would be deciding your process's lifetime for you, and a sweep that runs
+ * without anybody asking is a deletion nobody can point at afterwards.
+ */
+export interface SessionSweep {
+  readonly deletedBy: 'this-store';
+  /**
+   * Forget every session whose stored `savedAt` is STRICTLY BEFORE `before`
+   * (epoch milliseconds), and say how many went.
+   *
+   * Strictly before, so that passing the same cutoff twice is stable and a
+   * session written exactly at the boundary survives — an off-by-one here
+   * deletes a conversation somebody is still holding.
+   *
+   * The clock is the ENVELOPE's `savedAt` — the same value the listing sorts
+   * on — and not the store's own wall clock. That makes a sweep a pure
+   * function of what is stored: the same cutoff over the same rows forgets the
+   * same conversations, in a test and at 3am.
+   *
+   * Bounded by `options.limit` ({@link DEFAULT_SWEEP_LIMIT} when absent), so a
+   * first sweep of a store that has been running for a year cannot become one
+   * unbounded transaction. `more` says whether another call has work to do.
+   *
+   * Deleting a session that is not there is not an error, and a sweep that
+   * matches nothing answers `{ forgotten: 0, more: false }` rather than
+   * refusing — a cleanup job runs on a schedule, and most of its runs have
+   * nothing to do.
+   */
+  forgetOlderThan(before: number, options?: SessionSweepOptions): Promise<SessionSweepResult>;
+}
+
+/**
+ * The BACKEND deletes, on a policy an operator configured — this store only
+ * writes what that policy reads, and can say exactly what to turn on.
+ *
+ * There is nothing to call here on purpose. A method that did nothing but
+ * report "the backend handles it" would be a method somebody puts in a cron
+ * job, and a cron job that deletes nothing is worse than no cron job: it looks
+ * like retention is running.
+ */
+export interface SessionExpiryPolicy {
+  readonly deletedBy: 'the-backend';
+  /**
+   * Whether this store is actually stamping an expiry on every write.
+   *
+   * `false` means the mechanism exists and nothing is using it — the store was
+   * built without a retention setting, so the backend's policy has nothing to
+   * act on and conversations live until somebody deletes them. Reported rather
+   * than implied, because "there is a TTL field" and "things are expiring" are
+   * different facts and only one of them answers an auditor.
+   */
+  readonly active: boolean;
+  /**
+   * What the backend's policy acts on — a stored field name, or the setting
+   * that starts the clock. Named so an operator can configure the policy
+   * against the right thing rather than guessing from a schema dump.
+   */
+  readonly expiresOn: string;
+  /**
+   * What an operator does to turn the policy on, in one step they can act on
+   * — with this store's own collection, database or resource already filled
+   * in where the step needs one.
+   *
+   * A sentence rather than a code, for the same reason the refusals in this
+   * package print a whole command instead of naming a concept: the operator
+   * reading this is the person who can fix it in sixty seconds, and only if
+   * nobody makes them go and look it up first.
+   */
+  readonly enableWith: string;
+}
+
+/** Options for {@link SessionSweep.forgetOlderThan}. */
+export interface SessionSweepOptions {
+  /**
+   * The most sessions to forget in this call. Default
+   * {@link DEFAULT_SWEEP_LIMIT}; stores may cap it lower.
+   *
+   * A bound rather than "delete everything matching", because the first sweep
+   * after this feature is turned on is the biggest one that store will ever
+   * do, and it is the one most likely to hold a write lock long enough to be
+   * noticed by every request behind it.
+   */
+  readonly limit?: number;
+}
+
+/** What one sweep did. */
+export interface SessionSweepResult {
+  /** How many conversations this call forgot. */
+  readonly forgotten: number;
+  /**
+   * True when sessions older than the cutoff REMAIN — i.e. the limit was
+   * reached. A caller that loops until this is `false` drains the backlog in
+   * bounded steps; one that ignores it simply sweeps again next time.
+   */
+  readonly more: boolean;
+}
+
+/**
+ * How many sessions one {@link SessionSweep.forgetOlderThan} forgets when the
+ * caller names no limit.
+ *
+ * Big enough that an ordinary nightly sweep finishes in one call, small enough
+ * that the first sweep of a neglected store is a series of short transactions
+ * rather than one long one.
+ */
+export const DEFAULT_SWEEP_LIMIT = 1000;
 
 /** Paging for {@link SessionLifecycle.listByUser} — the cursor convention every
  *  listing in this package follows. */

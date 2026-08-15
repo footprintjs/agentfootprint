@@ -50,6 +50,7 @@ import {
 import {
   DEFAULT_SESSION_COLLECTION,
   EnvelopeTooLargeError,
+  EXPIRES_AT_FIELD,
   FIRESTORE_MAX_ENVELOPE_BYTES,
   FirestoreIndexMissingError,
   firestoreSessions,
@@ -932,6 +933,135 @@ describe('firestoreSessions — the document name is legal, stable and injective
   it('the store‘s own documentIdFor is the module function — one mapping, not two', () => {
     const { sessions } = storeWith();
     expect(sessions.documentIdFor('s1')).toBe(documentIdFor('s1'));
+  });
+});
+
+// ─── retention — the field a native TTL policy can act on ────────────
+
+describe('firestoreSessions — expiry is a SECOND field, and savedAt is untouched', () => {
+  it('stamps expiresAt as a real timestamp value, savedAt + the configured window', async () => {
+    const fake = fakeFirestore();
+    const sessions = firestoreSessions({ _sdk: fake.sdk, expireAfterMs: 30 * 86_400_000 });
+    await sessions.persist('s1', envelope('alice', 1_700_000_000_000));
+
+    const row = [...fake.store.values()][0]!;
+    // A `Date`, which the client stores as a Timestamp — and a native TTL
+    // policy acts ONLY on a Timestamp field. This is the assertion the whole
+    // release turns on: a number here means an operator cannot configure a
+    // policy against this collection at all.
+    expect(row['expiresAt']).toBeInstanceOf(Date);
+    expect((row['expiresAt'] as Date).getTime()).toBe(1_700_000_000_000 + 30 * 86_400_000);
+    // And the ordering key is STILL a number. Converting it would have put
+    // every new document in a different sort bucket from every old one —
+    // Firestore orders by type before value — and broken every cursor already
+    // issued. The second field costs one small write and has no such shadow.
+    expect(typeof row['savedAt']).toBe('number');
+    expect(row['savedAt']).toBe(1_700_000_000_000);
+  });
+
+  it('the expiry slides: every turn pushes it out from that turn‘s savedAt', async () => {
+    const fake = fakeFirestore();
+    const sessions = firestoreSessions({ _sdk: fake.sdk, expireAfterMs: 86_400_000 });
+    await sessions.persist('s1', envelope('alice', 1_000_000));
+    await sessions.persist('s1', envelope('alice', 2_000_000));
+
+    const row = [...fake.store.values()][0]!;
+    expect((row['expiresAt'] as Date).getTime()).toBe(2_000_000 + 86_400_000);
+  });
+
+  it('an unconfigured store writes null — an inert field, never undefined', async () => {
+    // `undefined` throws in the default client, and a MISSING field cannot be
+    // told from a field this store failed to write. Null is the stored fact,
+    // and a TTL policy ignores it — which is why nothing changes for a
+    // deployment that does not want expiry.
+    const { sessions, fake } = storeWith();
+    await sessions.persist('s1', envelope('alice'));
+    const row = [...fake.store.values()][0]!;
+    expect(row['expiresAt']).toBeNull();
+  });
+
+  it('documents written before this release stay readable and listable', async () => {
+    // The migration consequence, executable. A row with no `expiresAt` at all
+    // — exactly what 9.33–9.41 wrote — is hydrated, listed and cursored by
+    // this build without a migration step.
+    const seed: FakeStore = new Map();
+    const old = envelope('alice', 1_700_000_000_000);
+    seed.set(documentIdFor('legacy'), {
+      sessionId: 'legacy',
+      format: old.format,
+      savedAt: old.savedAt,
+      envelope: JSON.stringify(old),
+      owner: 'alice',
+      messageCount: 2,
+    });
+    const fake = fakeFirestore({ seed });
+    const sessions = firestoreSessions({ _sdk: fake.sdk, expireAfterMs: 86_400_000 });
+
+    expect(await sessions.hydrate('legacy')).toBeDefined();
+    expect(await sessions.ownerOf('legacy')).toBe('alice');
+    const page = await sessions.listByUser('alice', { limit: 10 });
+    expect(page.sessions.map((s) => s.sessionId)).toEqual(['legacy']);
+    // It gains an expiry only when it is written again — which is the honest
+    // half: a conversation nobody ever touches again is never expired by the
+    // policy, and the module header says so rather than implying a backfill.
+    expect([...fake.store.values()][0]!['expiresAt']).toBeUndefined();
+  });
+
+  it('retention() says the BACKEND deletes, names the field, and prints the command', () => {
+    const { sessions } = storeWith();
+    const policy = sessions.retention();
+
+    expect(policy.deletedBy).toBe('the-backend');
+    expect(policy.expiresOn).toBe(EXPIRES_AT_FIELD);
+    // Not armed: this store was built without `expireAfterMs`, so the policy
+    // would have nothing to act on. "There is a TTL field" and "conversations
+    // are expiring" are different facts and this is the one that says which.
+    expect(policy.active).toBe(false);
+    expect(policy.enableWith).toContain('gcloud firestore fields ttls update expiresAt');
+    expect(policy.enableWith).toContain(`--collection-group=${DEFAULT_SESSION_COLLECTION}`);
+    expect(policy.enableWith).toContain('--enable-ttl');
+    // The database is always spelled out, single-quoted, even for the default
+    // — bare parentheses are a syntax error in every shell this is pasted into.
+    expect(policy.enableWith).toContain(`--database='(default)'`);
+  });
+
+  it('a configured store reports itself armed, on its own collection and database', () => {
+    const fake = fakeFirestore();
+    const sessions = firestoreSessions({
+      _sdk: fake.sdk,
+      collection: 'chat_sessions',
+      database: 'conversations',
+      expireAfterMs: 86_400_000,
+    });
+    const policy = sessions.retention();
+
+    expect(policy.active).toBe(true);
+    expect(policy.enableWith).toContain('--collection-group=chat_sessions');
+    expect(policy.enableWith).toContain(`--database='conversations'`);
+  });
+
+  it('a store given somebody else‘s client refuses to GUESS the database', () => {
+    // The same law the missing-index refusal follows: this store did not build
+    // the client, cannot read the setting back off it, and a command that
+    // silently said `(default)` would create the policy somewhere else and
+    // leave the conversations living forever with nothing to suggest why.
+    const fake = fakeFirestore();
+    const client = new fake.sdk.Firestore();
+    const sessions = firestoreSessions({ firestore: client, _sdk: fake.sdk });
+    expect(sessions.retention().enableWith).toContain('<the database your Firestore client was');
+  });
+
+  it('answers on a CLOSED store — it reads nothing and calls nothing', async () => {
+    const { sessions, fake } = storeWith();
+    await sessions.close();
+    fake.calls.length = 0;
+
+    expect(sessions.retention().expiresOn).toBe(EXPIRES_AT_FIELD);
+    expect(fake.calls).toEqual([]);
+    // The data plane still refuses, so this is a deliberate exception rather
+    // than a hole: an operator asking "what expires these?" during a shutdown
+    // gets the answer, not the guard.
+    await expect(sessions.hydrate('s1')).rejects.toThrow(/is closed/);
   });
 });
 

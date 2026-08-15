@@ -1,6 +1,6 @@
 ---
 title: Writing a session store
-description: The ownership rule every SessionLifecycle store must hold, and the shared battery that checks it — runSessionLifecycleConformance, 13 cases, three deliberately distinct non-pass outcomes, and no way to make a case quietly disappear. For anyone implementing the port over Postgres, DynamoDB, SQL Server or anything else.
+description: The ownership rule every SessionLifecycle store must hold, and the shared battery that checks it — runSessionLifecycleConformance, 14 cases, three deliberately distinct non-pass outcomes, and no way to make a case quietly disappear. For anyone implementing the port over Postgres, DynamoDB, SQL Server or anything else.
 ---
 
 > **A defect that lives in a PORT is invisible to every adapter's own tests at
@@ -195,12 +195,12 @@ is itself a test: the in-tree suite asserts that a harness with no `corrupt`
 hook and no declaration comes back `'failed'`, so the property cannot be
 regressed without a red build.
 
-`SessionLifecycleCaseName` is a **closed** union of the 13 names, which is what
+`SessionLifecycleCaseName` is a **closed** union of the 14 names, which is what
 makes `declared` safe. A declaration keyed by a free-form string would keep
 suppressing nothing at all after a rename — the same shape as the bug this suite
 exists to catch.
 
-## The 13 cases
+## The 14 cases
 
 | case | what it proves |
 |---|---|
@@ -216,17 +216,19 @@ exists to catch.
 | `owner-of-is-undefined-for-missing-and-unowned` | "no such session" and "nobody signed for it" are one answer, or a caller has an oracle for which session ids are real |
 | `list-by-user-pages-with-a-stable-tie-break` | every owned row exactly once, nobody else's ever, a cursor only when more rows exist, newest first — with five sessions sharing one `savedAt`, so the tie-break carries the paging rather than the timestamp |
 | `awkward-session-ids-round-trip` | an id is an opaque string — slashes, spaces, `..`, unicode, quotes, 1000 characters — and whatever mapping a store uses to make one legal for its backend is injective, so `a/b` and `a%2Fb` stay two conversations |
-| `optional-members-are-feature-detected` | `onWake`, `listByUser` and `ownerOf` are present as functions or absent, never something a caller has to guess about; and a store that can `listByUser` can also `ownerOf`, or a door hands somebody a list and then refuses to open any of it |
+| `retention-says-who-deletes-and-deletes-only-the-old` | `retention()` answers with a `deletedBy` a caller can branch on. Where the store itself deletes, a sweep forgets everything **strictly** older than the cutoff, keeps the session written exactly on it, takes the owner index and the listing with it, is idempotent, and honours a `limit` with `more`. Where the **backend** deletes, the answer names the field it acts on and the one step that turns it on. Needs a `retention` member |
+| `optional-members-are-feature-detected` | `onWake`, `listByUser`, `ownerOf` and `retention` are present as functions or absent, never something a caller has to guess about; a store that can `listByUser` can also `ownerOf`, or a door hands somebody a list and then refuses to open any of it; and a store that says it does its own deleting really hands back a sweep |
 
-Eight of the thirteen are about an **optional** member and report
+Nine of the fourteen are about an **optional** member and report
 `'not-applicable'` when the store does not have it: one needs `forget`, one needs
-`listByUser`, and the six ownership cases need `ownerOf`. `SessionStoreMember` is
-that set — `'listByUser' | 'ownerOf' | 'forget'`. The remaining five hold for
-every store, because they are about the two members the port actually requires.
+`listByUser`, one needs `retention`, and the six ownership cases need `ownerOf`.
+`SessionStoreMember` is that set — `'listByUser' | 'ownerOf' | 'forget' |
+'retention'`. The remaining five hold for every store, because they are about
+the two members the port actually requires.
 
 ### The one declaration that exists today
 
-Across all four in-tree stores, exactly one:
+Across all six in-tree harnesses, exactly one:
 
 ```ts
 declared: {
@@ -369,6 +371,114 @@ ever **refuses** — the owner can still list and read the session, and a turn o
 it is refused at any verifying door, for everybody, because the envelope names
 nobody to match against.
 
+## Retention — how a conversation stops existing (9.42.0)
+
+Every deployment that keeps conversations eventually has to answer "for how
+long?", and until 9.42.0 this port had nothing to say. `forget` lived on the
+concrete store types rather than on the port, no store could express a policy,
+and the honest consequence was a library whose default was *forever*.
+
+`retention()` is the answer, and it is **optional and feature-detected**, exactly
+like `listByUser` and `ownerOf`. The port's rule has not moved:
+
+> Anything a real store also wants — a TTL, a scan, a delete — is that store's
+> own API, not a demand this port makes of every store that will ever implement
+> it.
+
+An optional member sits *inside* that rule. A store that implements nothing new
+is unaffected, and a caller that asks for retention it does not have is refused
+by name rather than told nothing is wrong.
+
+### Two arms, because there are two honest implementations
+
+```ts
+import { sessionRetention } from 'agentfootprint/hosting';
+
+const policy = sessionRetention(sessions, 'the nightly retention job');
+
+if (policy.deletedBy === 'this-store') {
+  let more = true;
+  while (more) ({ more } = await policy.forgetOlderThan(Date.now() - THIRTY_DAYS));
+} else {
+  // Nothing to run. The backend expires them, on a policy you configure once.
+  console.log(policy.active ? 'expiry is armed' : policy.enableWith);
+}
+```
+
+`SessionRetention` is a union discriminated on `deletedBy`, so one feature check
+is followed by one branch the compiler makes you write:
+
+| arm | `deletedBy` | shape | for |
+|---|---|---|---|
+| `SessionSweep` | `'this-store'` | `forgetOlderThan(before, options?)` → `SessionSweepResult` | stores that hold their own bytes — a map, a table, a file. Your cron decides when |
+| `SessionExpiryPolicy` | `'the-backend'` | `active`, `expiresOn`, `enableWith` | stores whose service already expires rows on a policy an operator configured. There is deliberately **nothing to call** |
+
+A single verb would have been the wrong shape. `sweep(before)` alone is not
+implementable by a managed store without a query plus one billed delete per row,
+duplicating a job the service does for free — and a store that answered `0
+deleted` from a backend that deletes plenty would be lying by omission. A policy
+object alone deletes nothing. So the member answers both, and `deletedBy` says
+which you are holding.
+
+The shape deliberately **not** chosen is a stated expiry at persist time —
+`persist(id, envelope, { expiresAt })`. It reads well and it is wrong twice: it
+puts a demand on the one method every store must implement, and it cannot be
+feature-detected, because `typeof store.persist === 'function'` is true whether
+or not the third argument is read. A store that ignored it would keep every
+conversation forever while its caller believed retention was configured. An
+optional member that is absent refuses; an optional argument that is ignored
+does not.
+
+### The sweep's law
+
+`forgetOlderThan(before)` forgets sessions whose stored `savedAt` is **strictly
+before** `before`, in epoch milliseconds — so a conversation written exactly on
+the cutoff survives, and passing the same cutoff twice is stable. The clock is
+the envelope's own `savedAt`, the same value the listing sorts on, never the
+store's wall clock: the same cutoff over the same rows forgets the same
+conversations, in a test and at 3am. It takes the owner index with it, or a
+listing points at conversations nobody can open.
+
+`SessionSweepOptions.limit` bounds the batch (`DEFAULT_SWEEP_LIMIT`, 1000, when
+absent) and `SessionSweepResult` is `{ forgotten, more }` — `more` is what a
+caller loops on. The bound exists because the first sweep after retention is
+switched on is the biggest one that store will ever do, and it is the one most
+likely to hold a write lock long enough for every request behind it to notice.
+
+**Nothing sweeps on a timer of its own.** A library that started an interval
+would own your process's lifetime, and a deletion nobody asked for at a time
+nobody chose is the one deletion you cannot explain afterwards. Retention is
+also **not a wire op**: no door in this package deletes conversations on
+request.
+
+### Which store does which
+
+| store | arm | what expires it |
+|---|---|---|
+| `memorySessions()` | sweep | you call it; a restart forgets everything anyway, but this is where a retention job gets *written* |
+| `sqliteSessions({ file })` | sweep | one `BEGIN IMMEDIATE` transaction, oldest first, so a bounded sweep drains a backlog from the far end |
+| `firestoreSessions()` | backend | a native TTL policy on `expiresAt` — see [Google Cloud](doc:google-cloud#retention-a-native-ttl-policy-on-expiresat) |
+| `agentEngineSessions()` | backend | the service's own `ttl`, pinned at create, floor 24 hours |
+| `agentCoreSessions({ store: 'session-storage' })` | sweep | it owns the JSON file, so it can trim it |
+| `agentCoreSessions({ store: 'memory' })` | **none** | it appends events to a service and has no delete on its surface. `sessionRetention()` refuses **by name** rather than reporting a sweep that would delete nothing |
+
+That last row is the point of making the member optional. Five of six can answer;
+the sixth says so out loud.
+
+### The refusal
+
+`SessionRetentionUnavailableError` (`ERR_SESSION_RETENTION_UNAVAILABLE`) names
+the job you were doing, what is missing, that this is a limitation of the store
+rather than an empty result, and where to get a store that can. It carries no
+identity material — retention is about a store, and a refusal that named a user
+would be an oracle for who is signed in.
+
+The reason `sessionRetention(store)` exists at all, rather than
+`store.retention?.()`, is that `?.()` answers `undefined` — and a cleanup job
+whose call returned without complaining is indistinguishable from one that is
+working. The difference surfaces the day somebody asks how long conversations
+are kept, and by then the answer is *all of them, since the beginning*.
+
 ## The identity a store reads is not the identity memory keys on
 
 Both are called identity and they are different things. The `principal` on a
@@ -383,15 +493,23 @@ artifacts is a separate encoding with its own injectivity requirement — see
 |---|---|---|
 | `runSessionLifecycleConformance(harness)` | `agentfootprint/hosting` | Run the whole battery against one store → `Promise<SessionLifecycleReport>` |
 | `runSessionLifecycleCase(testCase, harness)` | `agentfootprint/hosting` | Run **one** case, building and disposing the store around it → `Promise<SessionLifecycleOutcome>` |
-| `sessionLifecycleConformance` | `agentfootprint/hosting` | The battery: `readonly SessionLifecycleCase[]`, 13 of them, ordered so a store fails it most usefully (reading before writing, writing before ownership, ownership before the listing built on it) |
+| `sessionLifecycleConformance` | `agentfootprint/hosting` | The battery: `readonly SessionLifecycleCase[]`, 14 of them, ordered so a store fails it most usefully (reading before writing, writing before ownership, ownership before the listing built on it) |
 | `formatConformanceReport(report)` | `agentfootprint/hosting` | The report as a string — one line per case, with the reason a case did not simply pass |
 | `SessionStoreHarness` | `agentfootprint/hosting` | How the battery reaches your store: `{ name, createStore, disposeStore?, corrupt?, declared? }` |
 | `SessionLifecycleReport` | `agentfootprint/hosting` | `{ store, outcomes, passed, notApplicable, declared, failed, ok }` |
 | `SessionLifecycleOutcome` | `agentfootprint/hosting` | One case's result — a union on `status`, carrying `missing`, `reason` + `stillFails`, or `error` |
 | `SessionLifecycleCase` | `agentfootprint/hosting` | One case: `name`, `law`, optional `members` / `harnessNeeds`, and `run(store, kit)` |
-| `SessionLifecycleCaseName` | `agentfootprint/hosting` | The closed union of the 13 case names — what `declared` is keyed by |
-| `SessionStoreMember` | `agentfootprint/hosting` | `'listByUser' \| 'ownerOf' \| 'forget'` — the members a case can be not-applicable for |
+| `SessionLifecycleCaseName` | `agentfootprint/hosting` | The closed union of the 14 case names — what `declared` is keyed by |
+| `SessionStoreMember` | `agentfootprint/hosting` | `'listByUser' \| 'ownerOf' \| 'forget' \| 'retention'` — the members a case can be not-applicable for |
 | `ConformanceKit` | `agentfootprint/hosting` | What a case is handed beside the store: `id()`, `envelope()`, `harness` |
+| `sessionRetention(sessions, purpose?)` | `agentfootprint/hosting` | The one feature detection for `retention()` → `SessionRetention`, or refuses by name |
+| `SessionRetention` | `agentfootprint/hosting` | `SessionSweep \| SessionExpiryPolicy`, discriminated on `deletedBy` |
+| `SessionSweep` | `agentfootprint/hosting` | `{ deletedBy: 'this-store', forgetOlderThan(before, options?) }` |
+| `SessionExpiryPolicy` | `agentfootprint/hosting` | `{ deletedBy: 'the-backend', active, expiresOn, enableWith }` |
+| `SessionSweepOptions` | `agentfootprint/hosting` | `{ limit? }` — the batch bound, `DEFAULT_SWEEP_LIMIT` when absent |
+| `SessionSweepResult` | `agentfootprint/hosting` | `{ forgotten, more }` — how many went, and whether older ones remain |
+| `DEFAULT_SWEEP_LIMIT` | `agentfootprint/hosting` | `1000` — how many one sweep forgets when the caller names no limit |
+| `SessionRetentionUnavailableError` | `agentfootprint/hosting` | `ERR_SESSION_RETENTION_UNAVAILABLE` — this store cannot expire anything, and says so rather than doing nothing |
 | `resolveSessionOwner(sessionId, stored, incoming)` | `agentfootprint/hosting` | The one owner-transition rule → the owner to record, or throws |
 | `SessionOwnershipConflictError` | `agentfootprint/hosting` | `ERR_SESSION_OWNERSHIP_CONFLICT` — the two would have named different people |
 
@@ -399,15 +517,16 @@ artifacts is a separate encoding with its own injectivity requirement — see
 
 | Piece | Door | Status |
 |---|---|---|
-| `resolveSessionOwner` + `SessionOwnershipConflictError` | `agentfootprint/hosting` | Shipped (9.37.0). Called by all four in-tree stores; the split-brain state it prevents was reproduced live before the fix |
-| `sessionLifecycleConformance` — the 13 cases | `agentfootprint/hosting` | Shipped (9.37.0). Run against four in-tree stores every build, one `it()` per case per store, entirely offline |
+| `resolveSessionOwner` + `SessionOwnershipConflictError` | `agentfootprint/hosting` | Shipped (9.37.0). Called by every in-tree store that keeps an owner index; the split-brain state it prevents was reproduced live before the fix |
+| `sessionLifecycleConformance` — the 14 cases | `agentfootprint/hosting` | Shipped (9.37.0; the retention case 9.42.0). Run against **six** in-tree harnesses every build — the fifth store, `agentCoreSessions`, was enrolled in 9.42.0 in both its modes after an audit found it had appeared zero times and its absence was not declared anywhere — one `it()` per case per store, entirely offline |
 | `runSessionLifecycleConformance` / `runSessionLifecycleCase` / `formatConformanceReport` | `agentfootprint/hosting` | Shipped (9.37.0) — the out-of-tree entry points |
+| `retention()` + `sessionRetention` + `SessionRetentionUnavailableError` | `agentfootprint/hosting` | Shipped (9.42.0). Optional and feature-detected; five of the six in-tree stores implement it, the sixth refuses by name. Tested, not field-validated — no store's retention has been watched deleting anything in production by this repository |
 | The no-silent-skip rule | — | Shipped and **executable**: a harness missing a needed hook with no declaration is asserted to come back `'failed'` |
 | Conformance for the two host ports | `agentfootprint/hosting` | Separate suites, described on [Hosting & runtime](doc:hosting-and-runtime#the-conformance-suites) |
 
 ## Next
 
 - [Hosting & runtime](doc:hosting-and-runtime) — the ports this battery checks, and the composer above them
-- [Sessions in a file](doc:sqlite) — `sqliteSessions`, one of the four stores under the battery
+- [Sessions in a file](doc:sqlite) — `sqliteSessions`, one of the stores under the battery
 - [Memory & stores](doc:memory-and-stores) — the other identity encoding, and why it has to be injective
 - [Infrastructure: ports & adapters](doc:infrastructure) — the boundary this page is one port of

@@ -500,6 +500,37 @@ describe('session state is written by appending an event, never by patching', ()
       expect(JSON.stringify(append.params)).not.toContain('172800s');
     }
   });
+
+  it('retention() says the SERVICE deletes, and hands nothing to call (9.42.0)', () => {
+    const fake = fakeVertex();
+    const unarmed = agentEngineSessions({ ...CONNECTION, _client: fake.client });
+    const armed = agentEngineSessions({ ...CONNECTION, _client: fake.client, ttl: '604800s' });
+
+    // No sweep arm, on purpose: a method that reported "the service handles
+    // it" is a method somebody puts in a cron job, and a cron job that deletes
+    // nothing is worse than no cron job — it looks like retention is running.
+    expect(unarmed.retention().deletedBy).toBe('the-backend');
+    expect(unarmed.retention()).not.toHaveProperty('forgetOlderThan');
+    // The service's own read-only field, not one this adapter writes.
+    expect(armed.retention().expiresOn).toBe('expireTime');
+    expect(unarmed.retention().active).toBe(false);
+    expect(armed.retention().active).toBe(true);
+    // The two facts a caller has to plan around, in the answer rather than in
+    // a doc somebody has to find: the floor, and create-only.
+    expect(armed.retention().enableWith).toContain('24 HOURS');
+    expect(armed.retention().enableWith).toContain('CREATE only');
+  });
+
+  it('retention() answers on a CLOSED store, and calls nothing to do it', () => {
+    const fake = fakeVertex();
+    const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client, ttl: '604800s' });
+    sessions.close();
+
+    // An operator asking "what expires these?" during a shutdown gets the
+    // answer, not the guard that protects the data plane.
+    expect(sessions.retention().active).toBe(true);
+    expect(fake.calls).toEqual([]);
+  });
 });
 
 // ── The userId law ──────────────────────────────────────────────────

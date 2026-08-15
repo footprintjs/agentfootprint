@@ -72,6 +72,13 @@
  *     adapter inherits when a stored session is PRESENT but cannot be read. An
  *     unreadable stored conversation and an absent one are different facts, and
  *     only one of them is safe to answer with a fresh start.
+ *   • `sessionRetention(sessions)` — how long a store keeps a conversation.
+ *     The port's optional `retention()` member, feature-detected once: a store
+ *     that deletes its own bytes hands back a sweep your cron calls, one whose
+ *     backend expires rows hands back the policy and the step that arms it, and
+ *     a store that can do neither is REFUSED BY NAME rather than sweeping
+ *     nothing. Nothing here runs on a timer of its own, and no wire op deletes
+ *     a conversation.
  *   • `requireCapability` — feature-detection with teeth.
  *
  * @example  An agent that stays up and remembers
@@ -127,7 +134,7 @@ export {
 } from './envelope.js';
 export { standingAgent } from './standingAgent.js';
 
-export { DEFAULT_MAX_ACTIVE_SESSIONS } from './types.js';
+export { DEFAULT_MAX_ACTIVE_SESSIONS, DEFAULT_SWEEP_LIMIT } from './types.js';
 
 export {
   requireCapability,
@@ -149,11 +156,19 @@ export {
   AdmissionRefusedError,
   SessionOpNeedsIdentityError,
   SessionIndexUnavailableError,
+  SessionRetentionUnavailableError,
   SessionNotFoundError,
   SessionOwnershipConflictError,
   SessionsNotCarriedError,
 } from './errors.js';
 export type { IdentityFailureClass } from './errors.js';
+
+// Retention (9.42.0) — the ONE feature detection for the port's optional
+// `retention()` member, and the refusal a store without one produces. A door
+// rather than `sessions.retention?.()`, because `undefined` there reads as
+// "fine" and a retention job that quietly deletes nothing is the failure this
+// whole member exists to prevent.
+export { sessionRetention } from './sessionRetention.js';
 
 // The one owner-transition rule (9.36.1) — shared by every store here, and
 // available to any store anybody else writes. Four adapters each spelling this
@@ -269,9 +284,14 @@ export type {
   PausedRun,
   PausedRunEnvelope,
   PendingAsk,
+  SessionExpiryPolicy,
   SessionLifecycle,
   SessionListOptions,
   SessionListPage,
+  SessionRetention,
+  SessionSweep,
+  SessionSweepOptions,
+  SessionSweepResult,
   StandingAgentBaseOptions,
   StandingAgentOptions,
   StandingAgentPoolOptions,

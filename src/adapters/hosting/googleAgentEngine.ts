@@ -106,6 +106,7 @@ import { UnreadableEnvelopeError } from '../../hosting/errors.js';
 import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
 import type {
   CheckpointEnvelope,
+  SessionExpiryPolicy,
   SessionLifecycle,
   SessionListOptions,
   SessionListPage,
@@ -225,6 +226,21 @@ export interface AgentEngineSessions extends SessionLifecycle {
   readonly parent: string;
   /** Forget one session. A session that was never there is not an error. */
   forget(sessionId: string): Promise<void>;
+  /**
+   * How conversations here stop existing: **the service does it**, on the
+   * `ttl` this store was built with (9.42.0).
+   *
+   * Narrowed from the port's optional member to a required one, and to the one
+   * arm this store can be — a caller holding an `AgentEngineSessions` needs no
+   * feature check, and reaching for a sweep that does not exist here is a
+   * compile error rather than a surprise at 3am.
+   *
+   * There is nothing to call and nothing for a cron job to do. `active` says
+   * whether a `ttl` was given at all; `enableWith` says what to pass and
+   * repeats the two facts a caller has to plan around — the service's 24-hour
+   * floor, and that the value is sent on CREATE only.
+   */
+  retention(): SessionExpiryPolicy;
   /**
    * Stop using this store. Idempotent, and **final** — reading or writing
    * afterwards refuses by name rather than quietly reconnecting, because a
@@ -552,6 +568,37 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         throw googleSdkFailure(ADAPTER, 'sessions.get', err);
       }
     },
+
+    // ── Retention (9.42.0) ──────────────────────────────────────────────
+    //
+    // `'the-backend'` is the only honest answer, and here it is not even a
+    // choice: the service OWNS expiry. `ttl` is input-only with a 24-hour
+    // floor, `expireTime` comes back and cannot be set, and there is no
+    // service-side call that means "delete everything older than X". This
+    // store could have swept — list, then delete one long-running operation at
+    // a time — and it would have been a second, slower, billed
+    // reimplementation of a policy the caller already handed the service at
+    // create.
+    //
+    // Answers on a CLOSED store on purpose: it reads nothing and calls
+    // nothing, and an operator asking "what expires these?" during a shutdown
+    // should get the answer rather than the refusal that guards the data
+    // plane.
+    retention: () => ({
+      deletedBy: 'the-backend' as const,
+      active: options.ttl !== undefined,
+      // The service's own field, not one this adapter writes — which is why
+      // the name is `expireTime` and not something of ours. It is returned on
+      // every session and is read-only; `ttl` is what SETS it.
+      expiresOn: 'expireTime',
+      enableWith:
+        `pass ttl: '<seconds>s' to agentEngineSessions() — e.g. ttl: '604800s' for a week. ` +
+        `The service's floor is 24 HOURS and it refuses anything shorter, so this can only ` +
+        `keep conversations longer, never expire them sooner. It is sent on CREATE only: ` +
+        `later turns append an event, and whether that renews the expiry is service ` +
+        `behaviour this repository has not measured — so set it long enough at creation ` +
+        `rather than relying on a conversation to push its own deadline out.`,
+    }),
 
     async forget(sessionId: string): Promise<void> {
       open('forget a session');

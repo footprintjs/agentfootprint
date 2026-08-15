@@ -82,7 +82,14 @@ import type {
   HttpRequestFacts,
   HttpWire,
 } from '../../hosting/httpHost.js';
-import type { CheckpointEnvelope, SessionLifecycle } from '../../hosting/types.js';
+import { DEFAULT_SWEEP_LIMIT } from '../../hosting/types.js';
+import type {
+  CheckpointEnvelope,
+  SessionLifecycle,
+  SessionRetention,
+  SessionSweepOptions,
+  SessionSweepResult,
+} from '../../hosting/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 // ─── The runtime host ────────────────────────────────────────────────
@@ -651,6 +658,14 @@ export type AgentCoreSessionsOptions =
  * refused by name too (`UnreadableEnvelopeError`), never answered with a fresh
  * start. Only a session that was never written hydrates as `undefined`.
  *
+ * **The two modes differ on retention (9.42.0), and the difference is
+ * reported rather than smoothed over.** `'session-storage'` owns its file, so
+ * it implements the port's optional `retention()` as a sweep you call.
+ * `'memory'` appends events to a service whose expiry belongs to the memory
+ * resource an operator configured, and this shim has no delete on its surface
+ * — so it implements no retention member at all, and `sessionRetention()`
+ * refuses BY NAME rather than reporting a sweep that would delete nothing.
+ *
  * @example  Survive a stop/resume, no AWS SDK required
  *   agentCoreSessions({ store: 'session-storage' });
  *
@@ -670,6 +685,18 @@ interface SessionFile {
 
 function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
   const path = options.path ?? DEFAULT_SESSION_STORAGE_PATH;
+
+  /** Write the whole file the way `persist` does — one temp file, one rename. */
+  async function writeFileAtomically(next: SessionFile): Promise<void> {
+    const { writeFile, rename, mkdir } = await import('node:fs/promises');
+    const { dirname } = await import('node:path');
+    await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
+    // Write-then-rename: a container killed mid-write leaves the previous
+    // conversations intact rather than a truncated file that refuses to parse.
+    const temporary = `${path}.${process.pid}.tmp`;
+    await writeFile(temporary, JSON.stringify(next), 'utf8');
+    await rename(temporary, path);
+  }
 
   async function readFile(): Promise<SessionFile> {
     const { readFile: read } = await import('node:fs/promises');
@@ -709,20 +736,62 @@ function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
       return checkEnvelope(stored, sessionId);
     },
     async persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void> {
-      const { writeFile, rename, mkdir } = await import('node:fs/promises');
-      const { dirname } = await import('node:path');
       const file = await readFile();
-      const next: SessionFile = {
+      await writeFileAtomically({
         version: 1,
         sessions: { ...file.sessions, [sessionId]: envelope },
-      };
-      await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
-      // Write-then-rename: a container killed mid-write leaves the previous
-      // conversation intact rather than a truncated file that refuses to parse.
-      const temporary = `${path}.${process.pid}.tmp`;
-      await writeFile(temporary, JSON.stringify(next), 'utf8');
-      await rename(temporary, path);
+      });
     },
+
+    // ── Retention (9.42.0) ──────────────────────────────────────────────
+    //
+    // `'this-store'`: the conversations are one JSON file this container owns,
+    // and nothing else is going to trim it. Worth having even though the
+    // runtime reclaims a session's storage when the session ends — one file
+    // holds every session this container has seen, so a long-lived container
+    // accumulates conversations that ended hours ago, and `/tmp` filling up
+    // inside a container is a failure that arrives as something else entirely.
+    //
+    // The sibling `{ store: 'memory' }` mode implements NO retention member,
+    // and that absence is deliberate rather than unfinished: it appends events
+    // to a service whose expiry belongs to the memory resource an operator
+    // configured, and this shim's surface has no delete on it. Claiming a
+    // sweep it cannot perform, or a backend policy nobody here has verified,
+    // would be worse than the refusal an absent member produces.
+    retention: (): SessionRetention => ({
+      deletedBy: 'this-store',
+      forgetOlderThan: async (
+        before: number,
+        sweepOptions?: SessionSweepOptions,
+      ): Promise<SessionSweepResult> => {
+        const limit = Math.max(1, Math.floor(sweepOptions?.limit ?? DEFAULT_SWEEP_LIMIT));
+        const file = await readFile();
+        const kept: Record<string, CheckpointEnvelope> = {};
+        let forgotten = 0;
+        let more = false;
+        for (const [sessionId, envelope] of Object.entries(file.sessions)) {
+          // A row this store cannot read the timestamp of is KEPT. A sweep
+          // deletes on evidence; "I could not tell how old this is" is not
+          // evidence, and the one mistake a retention job must not make is
+          // deleting a conversation it did not understand.
+          const savedAt = (envelope as { savedAt?: unknown })?.savedAt;
+          const expired = typeof savedAt === 'number' && savedAt < before;
+          if (!expired) {
+            kept[sessionId] = envelope;
+          } else if (forgotten >= limit) {
+            kept[sessionId] = envelope;
+            more = true;
+          } else {
+            forgotten += 1;
+          }
+        }
+        // One write, and only when something actually goes: a sweep that found
+        // nothing must not rewrite the file every minute, because the rename
+        // is the moment a crash can cost a turn.
+        if (forgotten > 0) await writeFileAtomically({ version: 1, sessions: kept });
+        return { forgotten, more };
+      },
+    }),
   };
 }
 
