@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.40.0] - 2026-08-15
+
+**Two identity bugs, one of which had been paying out zeros since v2.8.**
+
+### Fixed
+
+- **`agentcore` actorId and sessionId were not injective.** `safeId` slugged
+  every character outside `[A-Za-z0-9_-]` to `-`, so `a.b`, `a/b` and `a b`
+  were one actor; and tenant and principal were joined with `_`, so `a_b`+`c`
+  collided with `a`+`b_c`. Two different scopes became one actor at the AWS
+  session boundary.
+
+  Same law as the 9.37.0 identity encoder, different alphabet — and the
+  difference is the point: AgentCore ids admit `/` and `:` but NOT `%`, which
+  is precisely what that encoder escapes to, so it could not be reused. Every
+  code UNIT outside `[A-Za-z0-9-]` now becomes an introducer plus four hex
+  digits, fixed width, so a decoder is a left inverse. Code units rather than
+  code points, so a lone surrogate does not flatten to U+FFFD.
+
+  `sessionId` had the same lossy slug and is fixed too — leaving it would have
+  kept the (actor, session) pair non-injective regardless.
+
+  Byte-preserved for well-behaved values: `{tenant:'acme', principal:'alice'}`
+  is still `afp-acme_alice`. What re-keys is exactly what was already sharing
+  an address.
+
+  **Hash truncation is gone, and that is a behaviour change worth stating.**
+  Truncation maps infinitely many identities onto finitely many ids, so it
+  cannot be injective — a hash tail makes a collision unlikely, not impossible.
+  Over-long ids now refuse by name, with the ceilings raised to AWS's real
+  maxima (255 / 100, from a shared 99), so the refusal is rarer than the
+  truncation was.
+
+- **Every cost strategy has been receiving zeros.** `attachCostStrategy` read
+  `cumulativeInputTokens`, `recentInputTokens`, `cumulativeCostUsd` and
+  `recentCostUsd` off `CostTickPayload`. `git log -S` shows those names NEVER
+  existed on it — the projection has read fields nothing emits since v2.8, so
+  every strategy attached through `enable.cost()` got `0` for all six numbers.
+  `iteration` and `runtimeStageId` were read off the payload too; they ride
+  `event.meta`, so they were always absent as well.
+
+  The cause is worth recording: the test built its payload BY HAND, in the same
+  wrong shape as the projector. Code and test shared one false assumption, so
+  nothing could fail. The new test calls `emitCostTick` itself, and asserts
+  non-zero values — a test that only checks "a number arrived" passes against
+  zeros, which is how this shipped.
+
+  `provider` now flows through to `CostTick` as well (optional; absent stays
+  absent rather than becoming `'unknown'`).
+
+
 ## [9.39.0] - 2026-08-14
 
 **Three false doors closed, and two promises the recording did not keep.** An

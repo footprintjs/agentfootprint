@@ -435,6 +435,22 @@ export interface CostEnableOptions extends CommonStrategyOptions {
 /**
  * Subscribe to `agentfootprint.cost.tick` events, project payload into
  * the canonical `CostTick` shape, hand to strategy.
+ *
+ * **The projection reads `CostTickPayload`, which is not spelled like
+ * `CostTick`.** It never was: the wire payload `emitCostTick` produces carries
+ * `tokensInput` / `tokensOutput` / `estimatedUsd` for the call just billed and
+ * a nested `cumulative` for the run so far, while the strategy-facing
+ * {@link CostTick} says `recent*` / `cumulative*`. This projection used to read
+ * the strategy names off the payload, so every field resolved to `?? 0` and
+ * every attached cost strategy — billing sinks, budget breakers, dashboards —
+ * was handed a tick of zeros. A tick of zeros is worse than no tick: it looks
+ * like a run that cost nothing.
+ *
+ * The `?? p.recent*` / `?? p.cumulative*` fallbacks below are NOT that bug left
+ * in place. They cover an event hand-constructed from the public `CostTick`
+ * shape rather than emitted by the library — the same allowance the X-Ray and
+ * OTel exporters already make for this one event type (`xray.ts`, `otel.ts`),
+ * and the real shape is what wins when both are present.
  */
 export function attachCostStrategy(
   dispatcher: EventDispatcher,
@@ -468,16 +484,34 @@ export function attachCostStrategy(
       'agentfootprint.cost.tick' as AgentfootprintEventType,
       (event: AgentfootprintEvent) => {
         const p = event.payload as unknown as Record<string, unknown>;
+        const cum = (p.cumulative ?? {}) as Record<string, unknown>;
+        // `iteration` and `runtimeStageId` ride the ENVELOPE, not the payload —
+        // the dispatcher stamps them on every event, so a strategy that wants to
+        // attribute spend to a loop turn has to be handed them from there.
+        // `meta` is optional here only because an event can be dispatched by hand.
+        const meta = event.meta as AgentfootprintEvent['meta'] | undefined;
         const tick: CostTick = {
-          cumulativeInputTokens: Number(p.cumulativeInputTokens ?? 0),
-          cumulativeOutputTokens: Number(p.cumulativeOutputTokens ?? 0),
-          cumulativeCostUsd: Number(p.cumulativeCostUsd ?? 0),
-          recentInputTokens: Number(p.recentInputTokens ?? 0),
-          recentOutputTokens: Number(p.recentOutputTokens ?? 0),
-          recentCostUsd: Number(p.recentCostUsd ?? 0),
+          cumulativeInputTokens: Number(cum.tokensInput ?? p.cumulativeInputTokens ?? 0),
+          cumulativeOutputTokens: Number(cum.tokensOutput ?? p.cumulativeOutputTokens ?? 0),
+          cumulativeCostUsd: Number(cum.estimatedUsd ?? p.cumulativeCostUsd ?? 0),
+          recentInputTokens: Number(p.tokensInput ?? p.recentInputTokens ?? 0),
+          recentOutputTokens: Number(p.tokensOutput ?? p.recentOutputTokens ?? 0),
+          recentCostUsd: Number(p.estimatedUsd ?? p.recentCostUsd ?? 0),
           model: String(p.model ?? 'unknown'),
-          ...(typeof p.iteration === 'number' ? { iteration: p.iteration } : {}),
-          ...(typeof p.runtimeStageId === 'string' ? { runtimeStageId: p.runtimeStageId } : {}),
+          // Optional on the payload for one honest reason (see `CostTickPayload`):
+          // a window strategy's summarizer spend may not name its provider. Absent
+          // stays absent rather than becoming 'unknown', which would be a claim.
+          ...(typeof p.provider === 'string' ? { provider: p.provider } : {}),
+          ...(typeof meta?.iterIndex === 'number'
+            ? { iteration: meta.iterIndex }
+            : typeof p.iteration === 'number'
+              ? { iteration: p.iteration }
+              : {}),
+          ...(typeof meta?.runtimeStageId === 'string'
+            ? { runtimeStageId: meta.runtimeStageId }
+            : typeof p.runtimeStageId === 'string'
+              ? { runtimeStageId: p.runtimeStageId }
+              : {}),
         };
         events.deliver(tick);
       },

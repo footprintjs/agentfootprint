@@ -288,7 +288,23 @@ export interface CostTick {
   readonly recentOutputTokens: number;
   readonly recentCostUsd: number;
   readonly model: string;
+  /**
+   * The provider that billed it, by `LLMProvider.name` — the other half of
+   * attribution beside {@link model}, since one model id can be served by
+   * several providers at different prices (Bedrock and Anthropic both answer
+   * to a Claude model id).
+   *
+   * Optional because `CostTickPayload.provider` is: a window/compaction
+   * strategy reports summarizer spend through `WindowStrategyResult.spend`,
+   * and the provider is read from that strategy's `billing` declaration, which
+   * the seam leaves optional. Absent means "the strategy that billed this did
+   * not say", never "the agent's provider" — so a billing sink must not
+   * substitute one.
+   */
+  readonly provider?: string;
+  /** Loop turn this spend belongs to, from the event envelope (`meta.iterIndex`). */
   readonly iteration?: number;
+  /** footprintjs stage key this spend belongs to, from the event envelope. */
   readonly runtimeStageId?: string;
 }
 

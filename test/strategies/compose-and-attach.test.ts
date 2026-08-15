@@ -31,6 +31,7 @@ import {
   type LensUpdate,
 } from '../../src/strategies/index.js';
 import { EventDispatcher } from '../../src/events/dispatcher.js';
+import { emitCostTick } from '../../src/core/cost.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { expectScalesLinearly, expectWithinTimes, measure } from '../helpers/perf.js';
 import { settlesWithin } from '../helpers/settles.js';
@@ -404,6 +405,68 @@ describe('attachCostStrategy', () => {
     off();
   });
 
+  // P1 (the real wire shape). `CostTickPayload` is NOT spelled like `CostTick`:
+  // the emitter sends tokensInput / tokensOutput / estimatedUsd + a nested
+  // `cumulative`. The projection used to read the strategy's own names off the
+  // payload, so every field resolved to `?? 0` and every attached billing sink,
+  // budget breaker and dashboard was handed a tick of zeros — which reads as a
+  // run that cost nothing. Every assertion here is on a NON-ZERO value on
+  // purpose: "a number arrived" is exactly the assertion that shipped this.
+  it('P1 projects the REAL CostTickPayload shape into CostTick (non-zero)', () => {
+    const dispatcher = new EventDispatcher();
+    const recordCost = vi.fn();
+    const off = attachCostStrategy(dispatcher, {
+      strategy: { name: 'spy', capabilities: {}, recordCost },
+    });
+    dispatcher.dispatch({
+      type: 'agentfootprint.cost.tick',
+      payload: {
+        scope: 'iteration',
+        model: 'claude-haiku-4-5',
+        provider: 'bedrock',
+        tokensInput: 10,
+        tokensOutput: 5,
+        estimatedUsd: 0.0001,
+        cumulative: { tokensInput: 100, tokensOutput: 50, estimatedUsd: 0.005 },
+      },
+      meta: { runtimeStageId: 'callLLM#3', iterIndex: 2 },
+    } as never);
+    const tick = recordCost.mock.calls[0][0] as CostTick;
+    expect(tick.recentInputTokens).toBe(10);
+    expect(tick.recentOutputTokens).toBe(5);
+    expect(tick.recentCostUsd).toBe(0.0001);
+    expect(tick.cumulativeInputTokens).toBe(100);
+    expect(tick.cumulativeOutputTokens).toBe(50);
+    expect(tick.cumulativeCostUsd).toBe(0.005);
+    expect(tick.model).toBe('claude-haiku-4-5');
+    // 9.39.0 put attribution on the tick; a strategy that bills per model or
+    // per vendor should not have to join back against a stream event to get it.
+    expect(tick.provider).toBe('bedrock');
+    // These two ride the ENVELOPE, not the payload — they were read off the
+    // payload, where they have never existed, so they were always absent.
+    expect(tick.iteration).toBe(2);
+    expect(tick.runtimeStageId).toBe('callLLM#3');
+    off();
+  });
+
+  // P4 property: absent `provider` stays absent. A window strategy's summarizer
+  // spend may not name its billing provider, and 'unknown' would be a claim.
+  it('P4 provider absent on the payload stays absent on the tick', () => {
+    const dispatcher = new EventDispatcher();
+    const recordCost = vi.fn();
+    const off = attachCostStrategy(dispatcher, {
+      strategy: { name: 'spy', capabilities: {}, recordCost },
+    });
+    dispatcher.dispatch({
+      type: 'agentfootprint.cost.tick',
+      payload: { model: 'm', estimatedUsd: 0.002, cumulative: { estimatedUsd: 0.002 } },
+    } as never);
+    const tick = recordCost.mock.calls[0][0] as CostTick;
+    expect('provider' in tick).toBe(false);
+    expect(tick.recentCostUsd).toBe(0.002);
+    off();
+  });
+
   // P2 boundary: missing fields default to 0
   it('P2 missing payload fields default to 0', () => {
     const dispatcher = new EventDispatcher();
@@ -415,6 +478,48 @@ describe('attachCostStrategy', () => {
     const tick = recordCost.mock.calls[0][0] as CostTick;
     expect(tick.cumulativeInputTokens).toBe(0);
     expect(tick.model).toBe('unknown');
+    off();
+  });
+
+  // P3 scenario (end to end through the EMITTER). The bug was not a typo — it
+  // was a projector tested only against a payload nothing emits. So this test
+  // never writes a payload by hand: `emitCostTick` builds it, the way a real
+  // priced LLM response does, and the numbers must survive the trip.
+  it('P3 emitCostTick → attached strategy carries the real money', () => {
+    const dispatcher = new EventDispatcher();
+    const recordCost = vi.fn();
+    const off = attachCostStrategy(dispatcher, {
+      strategy: { name: 'spy', capabilities: {}, recordCost },
+    });
+    const scope = {
+      cumTokensInput: 0,
+      cumTokensOutput: 0,
+      cumEstimatedUsd: 0,
+      costBudgetHit: false,
+      $emit: (type: string, payload?: unknown) =>
+        dispatcher.dispatch({ type, payload, meta: { iterIndex: 1 } } as never),
+    };
+    const pricing = {
+      name: 'test',
+      pricePerToken: (_m: string, kind: string) => (kind === 'input' ? 0.000001 : 0.000005),
+    };
+    emitCostTick(scope, pricing, undefined, { model: 'm-1', provider: 'anthropic' }, {
+      input: 1000,
+      output: 200,
+    });
+    emitCostTick(scope, pricing, undefined, { model: 'm-1', provider: 'anthropic' }, {
+      input: 500,
+      output: 100,
+    });
+
+    const second = recordCost.mock.calls[1][0] as CostTick;
+    expect(second.recentInputTokens).toBe(500);
+    expect(second.recentCostUsd).toBeCloseTo(0.001, 10); // 500·1e-6 + 100·5e-6
+    expect(second.cumulativeInputTokens).toBe(1500);
+    expect(second.cumulativeOutputTokens).toBe(300);
+    expect(second.cumulativeCostUsd).toBeCloseTo(0.003, 10);
+    expect(second.provider).toBe('anthropic');
+    expect(second.iteration).toBe(1);
     off();
   });
 
