@@ -35,6 +35,7 @@ import {
   agentEngineSessions,
   DEFAULT_USER_ID,
   SESSION_STATE_KEY,
+  SESSION_ID_KEY,
 } from '../../../src/adapters/hosting/googleAgentEngine.js';
 import { toEnvelope, UnreadableEnvelopeError } from '../../../src/hosting/index.js';
 import type { CheckpointEnvelope } from '../../../src/hosting/index.js';
@@ -358,7 +359,7 @@ describe('session state is written by appending an event, never by patching', ()
     expect((await sessions.hydrate('s1'))?.data).toEqual(toEnvelope(conversation('turn 10')).data);
   });
 
-  it('the appended event carries the envelope in actions.stateDelta, under ONE key', async () => {
+  it('the appended event carries the envelope in actions.stateDelta, under our keys only', async () => {
     const fake = fakeVertex({ sessions: { [NAME]: { name: NAME, userId: 'u1' } } });
     const sessions = agentEngineSessions({ ...CONNECTION, _client: fake.client });
     const envelope = toEnvelope(conversation('hi'));
@@ -374,8 +375,18 @@ describe('session state is written by appending an event, never by patching', ()
     expect(event.author).toBe('agentfootprint');
     expect(event.invocationId).toMatch(/\S/);
     expect(Number.isFinite(Date.parse(String(event.timestamp)))).toBe(true);
-    // One top-level key, so a merging delta and a replacing one agree.
-    expect(Object.keys(event.actions?.stateDelta ?? {})).toEqual([SESSION_STATE_KEY]);
+    // Two top-level keys as of 9.45.0, both namespaced to this library: the
+    // envelope, and the caller's OWN session id. A delta merges by top-level
+    // key, so a merging delta and a replacing one still agree for both of ours
+    // and still leave another guest's keys alone. The second key exists because
+    // the resource id is a lossy fold — the listing has to carry the id its
+    // caller would recognise rather than the composed one.
+    expect(Object.keys(event.actions?.stateDelta ?? {}).sort()).toEqual(
+      [SESSION_STATE_KEY, SESSION_ID_KEY].sort(),
+    );
+    expect(
+      Object.keys(event.actions?.stateDelta ?? {}).every((k) => k.startsWith('agentfootprint.')),
+    ).toBe(true);
     expect(event.actions?.stateDelta?.[SESSION_STATE_KEY]).toEqual(envelope);
   });
 

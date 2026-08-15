@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.45.0] - 2026-08-15
+
+**Two more of the same defect, and the release that carries a correction 9.44.0 missed.**
+An independent audit of the 9.44.0 GCP work found a documentation claim that had shipped
+only halfway, a ledger that contradicted its own source of truth, and two live ownership
+defects in the Agent Engine adapter. All four are here.
+
+### Security
+
+- **A losing writer could append into the winner's session.** `persist` reads who owns a
+  session before writing, and `signedBy` answered `undefined` for two different facts:
+  there is no session, and there IS one whose owner cannot be read. Before a create those
+  are the same thing. They are not the same after another writer has created the session —
+  and given a service that exposes a created session before its fields settle, the loser
+  saw "no owner", appended, and left `ownerOf` naming the winner while `hydrate` returned
+  the loser's conversation. That is the split brain closed across four stores in 9.37.0.
+
+  `signedBy` now refuses when a session exists and its `userId` is unreadable. The service
+  REQUIRES `userId` at create and an anonymous conversation carries an explicit placeholder,
+  so an absent `userId` means the row is not readable yet — not that nobody owns it. This
+  is the port's own `unreadable-is-not-absent` law applied to OWNERSHIP instead of to the
+  conversation, because only one of those two answers is safe to write on. The refusal is
+  transient and says so.
+
+  **The first attempt guarded only the ALREADY_EXISTS branch and the regression went on
+  failing**, which is how the reasoning was corrected: the losing writer never reaches that
+  branch. The session exists, so its append succeeds on the ordinary path long before any
+  create is attempted.
+
+- **`safeResourceId` mapped two different session ids onto one conversation.** The function
+  was idempotent ON PURPOSE — its own output came back unchanged — because
+  `listByUser` answered with composed resource ids and callers fed those to `hydrate`.
+  That property IS an arm overlap: if `f(x)` is a fixed point then `x` and `f(x)` are two
+  different ids addressing one conversation, and the second is a value the store itself
+  published. A caller who adopted a listed id as their own session id landed on somebody
+  else's conversation.
+
+  The fold's output is now excluded from the pass-through arm, and nothing needs the fixed
+  point any more: a session carries the caller's OWN id beside its envelope
+  ({@link SESSION_ID_KEY}), and the listing answers with that. Sessions written before this
+  release do not carry it and fall back to the resource id, exactly as before.
+
+### Fixed
+
+- **The TTL correction that 9.44.0 did not actually ship.** The measurement — appending an
+  event does not renew `expireTime`, so a conversation expires on the clock its FIRST turn
+  started — landed after the 9.44.0 tag. It is in this release, and it was also incomplete:
+  it had been written into the `ttl` option and nowhere else, so two other places went on
+  saying the question had not been measured. One of them was `retention().enableWith`,
+  which is not a comment but a **string this library returns to callers** as guidance on
+  configuring expiry.
+
+- **The status ledger claimed one declared limitation where the battery declares two.**
+  `docs/ADAPTER_STATUS.md` omitted the limitation a field trial had confirmed — the service
+  pins `userId` at create, so an anonymous-first session cannot move into a signed user's
+  listing. The cause was a correction that moved a mis-attributed limitation OFF the wrong
+  adapter and never ONTO the right one: deleting a true fact rather than relocating it.
+
+### Added
+
+- **`an-id-the-store-hands-back-is-not-a-second-address`** — a sixteenth conformance case,
+  and the generic form of a collision a fold-pair table cannot express. A pair like
+  `a_b`/`a-b` catches a store that folds punctuation; nothing catches a store whose mapping
+  is idempotent, because only the store knows what its `f` is. So the case does not guess:
+  it reads the id the store's own listing hands back and tries to use it as a second
+  address. A caller doing that is the ordinary case — a sidebar lists conversations and
+  opens the one that was clicked.
+
+- **A regression test for the ownership race**, with a control. The control is the half that
+  makes it worth having: with the winner's fields readable the re-check works, so the
+  recorded failure was the adapter's assumption rather than the double's licence.
+
+- **A test that the status ledger names every declared limitation.** It reads
+  `docs/ADAPTER_STATUS.md` and fails if any declaration the harness makes is missing from
+  it. A declaration a reader cannot find in the ledger is a limitation nobody will ever
+  argue with.
+
+### Status, stated plainly
+
+`agentEngineSessions` is **not** promoted. The ownership race is closed in code and pinned
+by a deterministic regression, but a double cannot establish that the window exists on the
+real service, nor that closing it here closes it there. It stays at
+`contract-shaped and tested` until a fresh live trial says otherwise.
+
 ## [9.44.0] - 2026-08-15
 
 **Two cross-tenant collisions, and the batteries that certified them green.** Both

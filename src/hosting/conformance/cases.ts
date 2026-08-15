@@ -586,6 +586,64 @@ const FOLD_PAIRS: readonly FoldPair[] = [
   },
 ];
 
+/**
+ * The generic form of a collision a fold-pair table cannot express.
+ *
+ * A pair like `a_b` / `a-b` catches a store that folds punctuation. It cannot
+ * catch a store whose mapping is IDEMPOTENT — one that rewrites an awkward id
+ * into some composed form and then passes that composed form through unchanged.
+ * There `x` and `f(x)` are two different ids addressing one conversation, and
+ * the second is not something a table can guess, because only the store knows
+ * what `f` is.
+ *
+ * So this case does not guess: it asks the store for an id, by reading the one
+ * its own listing hands back, and then tries to use that as a second address.
+ * A caller doing exactly this is the ordinary case, not an attack — a sidebar
+ * lists conversations and opens the one that was clicked.
+ */
+const handedBackIdIsNotASecondAddress: SessionLifecycleCase = {
+  name: 'an-id-the-store-hands-back-is-not-a-second-address',
+  law: 'An id a store reports in a listing addresses THAT conversation and no other — it is never a second name for a different one.',
+  members: ['listByUser'],
+  async run(store, kit) {
+    const chosen = `${kit.id('handed-back')}A_b.c`;
+    await store.persist(chosen, kit.envelope('the original conversation', 'alice'));
+
+    const listed = await store.listByUser!('alice', { limit: 50 });
+    const reported =
+      listed.sessions.find((row) => row.sessionId === chosen)?.sessionId ??
+      listed.sessions[listed.sessions.length - 1]?.sessionId;
+    check(
+      reported !== undefined,
+      'listByUser did not report a conversation that was just written for that user.',
+    );
+
+    // The reported id must round-trip: a listing a caller cannot open is not a
+    // listing. This is the half stores usually get right.
+    check(
+      textOf(await store.hydrate(reported)) === 'the original conversation',
+      `listByUser reported ${JSON.stringify(reported)} and hydrate() of that id did not ` +
+        `return the conversation it was reported for. A sidebar lists conversations and ` +
+        `opens the one that was clicked, so an id in a listing has to be openable.`,
+    );
+
+    // And it must not ALSO be a way to address something else. If the store
+    // rewrote the caller's id into `reported`, and `reported` maps to itself,
+    // then writing here lands on the first conversation.
+    if (reported !== chosen) {
+      await store.persist(reported, kit.envelope('a different conversation', 'alice'));
+      check(
+        textOf(await store.hydrate(chosen)) === 'the original conversation',
+        `writing to the id this store REPORTED (${JSON.stringify(reported)}) overwrote the ` +
+          `conversation stored under the id the caller CHOSE (${JSON.stringify(chosen)}). The ` +
+          `store rewrote one into the other and then accepted the rewritten form as an id in ` +
+          `its own right, so two different session ids now name one conversation — and the ` +
+          `second one is a value this store published.`,
+      );
+    }
+  },
+};
+
 const awkwardIds: SessionLifecycleCase = {
   name: 'awkward-session-ids-round-trip',
   law: 'A session id is OPAQUE: whatever a caller chose comes back as its own conversation, and two different ids never collide.',
@@ -815,6 +873,7 @@ export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   ownerOfAmbiguity,
   listPages,
   listNewestFirst,
+  handedBackIdIsNotASecondAddress,
   awkwardIds,
   retentionHonesty,
   featureDetected,

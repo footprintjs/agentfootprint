@@ -670,14 +670,26 @@ describe('the resource-id grammar is the SDK’s own, quoted rather than remembe
     }
   });
 
-  it('running it over its own output changes nothing — listByUser round-trips through it', () => {
-    // `listByUser` reads the last segment of a resource name and hands it back
-    // as a session id, and callers feed those to `hydrate`. If the composer
-    // were not idempotent, a listed conversation would not be openable.
-    for (const raw of ['MySession', '01ARZ3NDEKTSV4RRFFQ69G5FAV', 'a'.repeat(500), 'plain-one']) {
+  it('its own output is NOT a fixed point — that idempotence was the collision', () => {
+    // This pinned the opposite until 9.45.0, and the reasoning was: `listByUser`
+    // hands back the last segment of a resource name, callers feed those to
+    // `hydrate`, so the composer had to be idempotent or a listed conversation
+    // would not be openable.
+    //
+    // Idempotence bought that at the price of an ARM OVERLAP. If `f(x)` is a
+    // fixed point then `x` and `f(x)` are two different session ids addressing
+    // ONE conversation — and the second is a value the store itself published,
+    // so a caller who adopted a listed id as their own session id would land on
+    // somebody else's conversation. The listing carries the caller's own id now
+    // (SESSION_ID_KEY), so nothing needs the fixed point, and the fold's output
+    // is excluded from the pass-through arm.
+    for (const raw of ['MySession', '01ARZ3NDEKTSV4RRFFQ69G5FAV', 'a'.repeat(500)]) {
       const once = safeResourceId(raw);
-      expect(safeResourceId(once), raw).toBe(once);
+      expect(safeResourceId(once), raw).not.toBe(once);
     }
+    // An id that never needed folding is still returned unchanged — the
+    // pass-through arm is intact for everything that does not collide.
+    expect(safeResourceId('plain-one')).toBe('plain-one');
   });
 
   it('a bound too small to be satisfiable is refused, not silently overrun', () => {

@@ -1,5 +1,5 @@
 /**
- * The Agent Engine concurrent-ownership race — RECORDED, not fixed.
+ * The Agent Engine concurrent-ownership race — the regression that closed it.
  *
  * `persist` re-reads ownership after a create loses with ALREADY_EXISTS, and the
  * comment on that branch argues the re-read is sufficient: "the 409 itself
@@ -15,19 +15,21 @@
  * closed across four stores in 9.37.0, reachable here through a window the
  * adapter assumes away.
  *
- * **Whether that window exists on Google's service is not something a double can
- * settle**, which is exactly why `agentEngineSessions` stays at
- * `contract-shaped and tested` in docs/ADAPTER_STATUS.md and why the finding is
- * tracked privately rather than published as a reproduction. What IS settled, and
- * what this file pins, is that the adapter has no defence if the window is real:
- * its correctness rests on a service-behaviour assumption it does not verify.
+ * **The fix is in `signedBy`, not on the 409 path.** The first attempt guarded
+ * only the ALREADY_EXISTS branch and this file went on failing, which showed the
+ * reasoning was wrong: the losing writer never REACHES that branch. The session
+ * exists, so its `append` succeeds on the ordinary path long before any create.
+ * `signedBy` now refuses when a session exists and its `userId` is unreadable —
+ * the port's own `unreadable-is-not-absent` law, applied to OWNERSHIP instead of
+ * to the conversation, because only one of those two answers is safe to write on.
  *
- * The second test is the control — with the fields readable, the re-check works.
- * Without it, the first test would prove only that the double can break things.
+ * The second test is the control — with the fields readable the re-check works —
+ * and without it the first would prove only that the double can break things.
  *
- * When the race is repaired, `it.fails` starts FAILING, which is the intended
- * alarm: it means this file needs deleting and the ledger needs revisiting — but
- * only alongside a fresh live trial, since a double cannot promote a status.
+ * **This does not promote the adapter's status.** A double cannot establish that
+ * the window exists on Google's service, nor that closing it here closes it
+ * there. `agentEngineSessions` stays at `contract-shaped and tested` until a
+ * fresh live trial says otherwise.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -170,8 +172,7 @@ describe('agentEngineSessions — ownership when a create loses to ALREADY_EXIST
     expect(signer).toBe('alice');
   });
 
-  // KNOWN DEFECT. Passes while the race is live; starts failing when it is fixed.
-  it.fails('KNOWN, UNFIXED: a partially-visible winner lets the losing signer append', async () => {
+  it('refuses the losing signer when the winner is only partially visible', async () => {
     const { bobRefused, owner, signer } = await contest(false);
     expect(bobRefused, 'bob’s foreign write was accepted').toBe(true);
     expect(

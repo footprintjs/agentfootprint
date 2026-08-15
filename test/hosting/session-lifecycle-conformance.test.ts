@@ -520,7 +520,7 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     expect(report.passed).toBe(6);
     // It keeps no owner index and no listing — six ownership cases, the
     // listing, and `forget`, none of which the port demands of it.
-    expect(report.notApplicable).toBe(9);
+    expect(report.notApplicable).toBe(10);
   });
 
   it('the event-backed mode holds the same laws, minus the retention it cannot honestly offer', async () => {
@@ -528,7 +528,7 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     expect(formatConformanceReport(report)).toContain('0 FAILED');
     expect(report.declared).toBe(0);
     expect(report.passed).toBe(5);
-    expect(report.notApplicable).toBe(10);
+    expect(report.notApplicable).toBe(11);
     // The one difference between the two modes, asserted rather than implied:
     // this store has no way to delete an event it wrote, so it implements no
     // retention member and the case is n/a — never a sweep that reports zero.
@@ -620,7 +620,7 @@ describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law', () => {
     // A battery that quietly lost a case would pass every store trivially —
     // the same vacuous-pass shape `no-vendor-names` guards against.
-    expect(sessionLifecycleConformance.length).toBe(15);
+    expect(sessionLifecycleConformance.length).toBe(16);
     for (const testCase of sessionLifecycleConformance) {
       expect(testCase.law.length, `${testCase.name} has no law`).toBeGreaterThan(20);
     }

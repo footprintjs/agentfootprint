@@ -51,9 +51,14 @@
  *     between this fix and a plausible-looking one:
  *
  *       • **A state delta MERGES by top-level key.** This store writes exactly
- *         one key — {@link SESSION_STATE_KEY} — so "merge the delta" and
- *         "replace our key" are the same outcome for us, and another guest's
- *         keys under the same session are left alone either way.
+ *         two, both namespaced to this library — {@link SESSION_STATE_KEY} and
+ *         {@link SESSION_ID_KEY} — so "merge the delta" and "replace our keys"
+ *         are the same outcome for us, and another guest's keys under the same
+ *         session are left alone either way. The second arrived in 9.45.0: the
+ *         resource id is a lossy fold, so the listing has to carry the id its
+ *         CALLER would recognise rather than the composed one. Answering with
+ *         the composed id, and making the fold idempotent so that answer could
+ *         be fed back, is what made two session ids address one conversation.
  *       • **A conversation now has an event log behind it**, one event per
  *         persisted turn, because that is the only writing surface the service
  *         offers. Nothing here READS that log — `hydrate` still reads the one
@@ -140,6 +145,22 @@ const ADAPTER = 'agentEngineSessions';
  * the console readable — one entry that says whose it is.
  */
 export const SESSION_STATE_KEY = 'agentfootprint.envelope';
+
+/**
+ * The caller's OWN session id, stored beside the envelope.
+ *
+ * The resource id is a fold — lower-cased, punctuation replaced, long ids
+ * fingerprinted — so it cannot be turned back into what the caller passed.
+ * `listByUser` used to answer with the resource id and rely on
+ * `safeResourceId` being idempotent, and that idempotence was a collision: it
+ * made the fold's output a legal input addressing the same conversation. So the
+ * raw id travels with the conversation instead, and the listing answers with
+ * the id its caller would recognise.
+ *
+ * Sessions written before 9.45.0 do not carry it; `listByUser` falls back to
+ * the resource id for those, which is what it always returned.
+ */
+export const SESSION_ID_KEY = 'agentfootprint.sessionId';
 
 /** Options for {@link agentEngineSessions}. */
 export interface AgentEngineSessionsOptions extends AiPlatformConnection {
@@ -359,7 +380,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
    * this" on a conversation somebody plainly signed for, and let the next
    * signer overwrite it.
    */
-  const signedBy = async (name: string): Promise<string | undefined> => {
+  const signedBy = async (name: string, sessionId: string): Promise<string | undefined> => {
     let session: VertexSession | undefined;
     try {
       session = (await sessions.get({ name }))?.data;
@@ -371,8 +392,27 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       if (isNotFound(err)) return undefined;
       throw googleSdkFailure(ADAPTER, 'sessions.get', err);
     }
+    // A session that EXISTS but whose owner cannot be read is not an unowned
+    // session, and answering `undefined` for both is what let a foreign turn
+    // land. The service REQUIRES userId at create, so a materialised session
+    // always has one and an anonymous conversation carries the explicit
+    // DEFAULT_USER_ID placeholder — an absent userId therefore means the row's
+    // fields have not become readable yet, not that nobody owns it.
+    //
+    // This is the `unreadable-is-not-absent` law of the port, applied to
+    // OWNERSHIP rather than to the conversation: the two answers must stay
+    // different, because only one of them is safe to write on.
     const userId = session?.userId;
-    if (typeof userId === 'string' && userId !== '' && userId !== DEFAULT_USER_ID) return userId;
+    if (typeof userId !== 'string' || userId === '') {
+      throw new Error(
+        `[hosting] ${ADAPTER} could not determine who owns session "${sessionId}". The session ` +
+          `exists but came back without a userId, so this store cannot tell an unowned ` +
+          `conversation from somebody else's — and it refuses rather than appending your turn ` +
+          `into a session that may not be yours. Nothing was written. This is transient ` +
+          `(another writer's create is still settling): retry the turn.`,
+      );
+    }
+    if (userId !== DEFAULT_USER_ID) return userId;
     const stored = session?.sessionState?.[SESSION_STATE_KEY];
     return stored !== null && typeof stored === 'object' ? envelopeOwner(stored) : undefined;
   };
@@ -441,7 +481,10 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       // read back is one it has no business writing.
       const checked = checkEnvelope(envelope, sessionId);
       const name = nameOf(sessionId);
-      const state = { [SESSION_STATE_KEY]: checked as unknown as Record<string, unknown> };
+      const state = {
+        [SESSION_STATE_KEY]: checked as unknown as Record<string, unknown>,
+        [SESSION_ID_KEY]: sessionId as unknown as Record<string, unknown>,
+      };
 
       // ── Whose conversation is this, before a byte of it is written ────
       //
@@ -461,7 +504,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       if (incoming !== undefined) {
         // Throws SessionOwnershipConflictError on a different signer, before
         // either the append or the create below.
-        resolveSessionOwner(sessionId, await signedBy(name), incoming);
+        resolveSessionOwner(sessionId, await signedBy(name, sessionId), incoming);
       }
 
       // APPEND first, CREATE when there is no session to append to.
@@ -500,7 +543,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         // closes it: the 409 itself guarantees the other writer's create has
         // already landed, so this read cannot miss it.
         if (incoming !== undefined) {
-          resolveSessionOwner(sessionId, await signedBy(name), incoming);
+          resolveSessionOwner(sessionId, await signedBy(name, sessionId), incoming);
         }
         if (await append(name, state)) return;
         // Created by somebody and gone again before we could write to it.
@@ -540,7 +583,12 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       }
 
       const summaries = (page?.sessions ?? []).map((session) => {
-        const sessionId = lastSegment(session.name);
+        // The caller's own id when the conversation carries it, the resource id
+        // when it predates that — never the composed id for a session that knows
+        // its real one, because a caller cannot feed the composed one back.
+        const carried = session.sessionState?.[SESSION_ID_KEY];
+        const sessionId =
+          typeof carried === 'string' && carried !== '' ? carried : lastSegment(session.name);
         const stored = session.sessionState?.[SESSION_STATE_KEY];
         // A listing must not fail because ONE row is unreadable — a sidebar
         // that 500s over a corrupt conversation is worse than one that shows

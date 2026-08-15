@@ -750,9 +750,24 @@ export const LEGAL_RESOURCE_ID = /^[a-z]$|^[a-z][a-z0-9-]*[a-z0-9]$/;
  * is carried by a {@link fingerprint} of the ORIGINAL, which keeps distinct
  * inputs distinct.
  */
+/** Marks an id this function had to rewrite; excluded from the pass-through arm. */
+const ENCODED_PREFIX = 'id-';
+
 export function safeResourceId(raw: string, max = MAX_RESOURCE_ID_LENGTH): string {
   const slug = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  if (slug === raw && slug.length <= max && LEGAL_RESOURCE_ID.test(slug)) return slug;
+  // `!startsWith(ENCODED_PREFIX)` is the whole of the collision fix. Without it
+  // the two arms OVERLAP: the fold's output is itself a legal id, so the fast
+  // arm returns it unchanged and `x` and `f(x)` become one resource. Two
+  // different session ids then address one conversation, which is the law
+  // `awkward-session-ids-round-trip` exists to hold.
+  if (
+    slug === raw &&
+    slug.length <= max &&
+    LEGAL_RESOURCE_ID.test(slug) &&
+    !slug.startsWith(ENCODED_PREFIX)
+  ) {
+    return slug;
+  }
   const suffix = fingerprint(raw);
   const room = max - suffix.length - 1;
   if (room < 2) {
@@ -764,12 +779,17 @@ export function safeResourceId(raw: string, max = MAX_RESOURCE_ID_LENGTH): strin
     );
   }
   // `id-` rather than the bare slug: the first character must be a LETTER, and
-  // the fold cannot promise one. The fingerprint is base36, so the last
-  // character is a letter or a digit by construction — which also makes this
-  // function IDEMPOTENT: its own output is a legal id and comes back unchanged.
-  // `agentEngineSessions.listByUser` relies on that, since it hands composed
-  // resource ids back to callers who feed them to `hydrate`.
-  const head = `id-${slug}`.slice(0, room).replace(/-+$/, '');
+  // the fold cannot promise one.
+  //
+  // This function used to be IDEMPOTENT on purpose — its own output came back
+  // unchanged — and `agentEngineSessions.listByUser` leaned on that when it
+  // handed composed resource ids back to callers who fed them to `hydrate`.
+  // That property IS the collision: if `f(x)` is a fixed point then `x` and
+  // `f(x)` are two different session ids addressing one conversation, and a
+  // caller who chose the second as their own id reads the first one's
+  // conversation. The prefix is now excluded from the fast arm instead, and the
+  // listing carries the caller's own id rather than the composed one.
+  const head = `${ENCODED_PREFIX}${slug}`.slice(0, room).replace(/-+$/, '');
   return `${head}-${suffix}`;
 }
 
