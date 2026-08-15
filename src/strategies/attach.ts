@@ -47,10 +47,6 @@ import {
   defaultStatusTemplates,
   type StatusTemplates,
 } from '../recorders/observability/status/statusTemplates.js';
-// Registry-lookup helpers (`getObservabilityStrategy` etc.) are
-// defined in `./registry.js` and used by consumers via the
-// `enable.*({ vendor, config })` path elsewhere — not used in the
-// current attach() implementations, which take `opts.strategy` directly.
 
 /**
  * Build the handle `enable.*` returns: the `Unsubscribe` it always was, plus
@@ -344,11 +340,15 @@ function subscribeRunEndFlush(
   );
 }
 
-// `resolveStrategy` (vendor-registry lookup helper) is reserved for
-// the `enable.*({ vendor, config })` API path — currently the
-// `enable.*({ strategy })` path is the only one used in production,
-// so no helper is needed here. Re-introduce when the vendor-config
-// path lands.
+// There is ONE way to wire a strategy: pass the instance —
+// `enable.observability({ strategy })`. A by-name `{ vendor, config }`
+// registry was declared alongside it for years and never wired to
+// anything; it was removed in 9.x rather than finished, because two
+// doors onto one job is the thing that makes a library hard to learn,
+// and the instance door is the one that composes (a consumer's own
+// sink needs no name). The cache family keeps its registry for the
+// opposite reason: there a vendor strategy must attach itself from a
+// side-effect import, so the NAME is the only handle the consumer has.
 
 // ─── Observability ───────────────────────────────────────────────────
 

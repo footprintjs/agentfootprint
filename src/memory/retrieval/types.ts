@@ -104,6 +104,23 @@ export interface RetrievalEvidence {
   /** The retriever's id (`defineRAG({ id })`). Stamped by the read mount. */
   readonly memoryId?: string;
   /**
+   * Which RULE ruled — {@link RetrievalStrategy.name}, e.g. `'top-k'`.
+   *
+   * The seam promises this on its own `name` field ("appears in the
+   * recording"), and until 9.x the recording did not carry it: a reader
+   * could see `k`, `threshold` and a verdict per candidate, and could not
+   * tell whether a shipped `topK` or a consumer's own re-ranker produced
+   * them. Two strategies with the same `k` leave records that are
+   * otherwise identical, so the name is the only thing that distinguishes
+   * them — and it is the first thing you need when the admitted set looks
+   * wrong.
+   *
+   * Always present: a retrieval always ran under exactly one strategy, and
+   * the shorthand (`k` / `minScore`) is `topK` spelled differently, not the
+   * absence of a rule.
+   */
+  readonly strategy: string;
+  /**
    * A stable hash of the query text — NOT the text. The query is already
    * in the recording once (as `userMessage`); copying it into a second
    * key would widen the exposure surface for no new information, and any

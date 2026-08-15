@@ -130,6 +130,22 @@ type Usage = {
 };
 
 /**
+ * Who billed this call, and for what.
+ *
+ * One argument rather than two so the pair cannot drift: a caller that knows
+ * the model always has the slot for the provider in front of it, and the one
+ * caller that genuinely cannot name a provider (a window strategy that reports
+ * `spend` without declaring `billing`) omits it deliberately instead of by
+ * forgetting a parameter.
+ */
+type BilledBy = {
+  /** `LLMProvider.name`. Omitted only where the caller genuinely cannot know it. */
+  readonly provider?: string;
+  /** The model id `pricePerToken` is asked about. */
+  readonly model: string;
+};
+
+/**
  * Emit `cost.tick` for the just-completed LLM response and, if the
  * consumer set a `costBudget`, emit a one-shot `cost.limit_hit` the first
  * time cumulative USD crosses the budget. Does nothing when no
@@ -142,11 +158,12 @@ export function emitCostTick(
   scope: CostAccountingScope & { $emit: (name: string, payload?: unknown) => void },
   pricingTable: PricingTable | undefined,
   costBudget: ResolvedCostBudget | undefined,
-  model: string,
+  billedBy: BilledBy,
   usage: Usage,
 ): void {
   if (!pricingTable) return;
   const budget = costBudget;
+  const { model } = billedBy;
 
   const usdThisCall =
     pricingTable.pricePerToken(model, 'input') * usage.input +
@@ -164,6 +181,11 @@ export function emitCostTick(
 
   typedEmit(scope, 'agentfootprint.cost.tick', {
     scope: 'iteration',
+    // Attribution rides the tick itself. A consumer summing `estimatedUsd`
+    // per model or per vendor should not have to join this event against a
+    // `stream.llm_start` by runtimeStageId to find out what it paid for.
+    model,
+    ...(billedBy.provider !== undefined && { provider: billedBy.provider }),
     tokensInput: usage.input,
     tokensOutput: usage.output,
     estimatedUsd: usdThisCall,

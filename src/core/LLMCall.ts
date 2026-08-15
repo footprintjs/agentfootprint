@@ -491,7 +491,13 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         durationMs,
       });
 
-      emitCostTick(scope, pricingTable, costBudget, model, response.usage);
+      emitCostTick(
+        scope,
+        pricingTable,
+        costBudget,
+        { provider: provider.name, model },
+        response.usage,
+      );
 
       // Write outputs to scope so downstream stages (sf-thinking,
       // extract-final) can read them. The chart's TraversalResult

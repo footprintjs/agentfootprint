@@ -480,6 +480,14 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    emitCostTick(scope, deps.pricingTable, deps.costBudget, model, response.usage);
+    // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
+    // agent's, and the bill follows the call, not the configuration.
+    emitCostTick(
+      scope,
+      deps.pricingTable,
+      deps.costBudget,
+      { provider: provider.name, model },
+      response.usage,
+    );
   };
 }

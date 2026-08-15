@@ -25,9 +25,12 @@ import { Agent, defineRAG, indexDocuments, topK } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { InMemoryStore, mockEmbedder, defineMemory } from '../../../src/memory/index.js';
 import { MEMORY_STRATEGIES, MEMORY_TYPES } from '../../../src/memory/define.types.js';
-import { __resetEmptyCorpusWarnings } from '../../../src/memory/embedding/loadRelevant.js';
+import {
+  __resetEmptyCorpusWarnings,
+  loadRelevant,
+} from '../../../src/memory/embedding/loadRelevant.js';
 import { recordRun } from '../../../src/observe.js';
-import type { RetrievalEvidence } from '../../../src/memory/retrieval/index.js';
+import type { RetrievalEvidence, RetrievalStrategy } from '../../../src/memory/retrieval/index.js';
 
 const DOCS = [
   {
@@ -485,6 +488,56 @@ describe('retrieval — integration', () => {
     expect((payload['candidates'] as unknown[]).length).toBe(3);
     expect(payload['admittedCount']).toBe(2);
     expect(payload['rejectedCount']).toBe(1);
+  });
+
+  it('the record names WHICH RULE ruled — the seam promised this on its own `name`', async () => {
+    // `RetrievalStrategy.name` says "Stable name — appears in the recording".
+    // It did not: both halves of the recording (the evidence in root state and
+    // the event) carried k, threshold and a verdict per candidate, and nothing
+    // that said who produced them. Two strategies with the same `k` are
+    // indistinguishable without it.
+    const r = await runAgainstCorpus({ ragOptions: { topK: 2, threshold: 0.5 } });
+    // The literal is the WIRE value a consumer matches on, so it is pinned as
+    // a literal; the second assertion is what proves the wire value is the
+    // strategy's own `name` rather than a string typed at the emit site.
+    expect(r.evidence?.strategy).toBe('topK');
+    expect(r.evidence?.strategy).toBe(topK({ k: 1 }).name);
+    const retrieved = r.events.filter((e) => e.type === 'agentfootprint.memory.retrieved');
+    expect(retrieved[0]?.payload['strategy']).toBe('topK');
+  });
+
+  it('a CUSTOM strategy names itself — the case the shorthand cannot cover', async () => {
+    // The shorthand (`topK` / `threshold`) always reports 'top-k', so a pin on
+    // the shipped default alone would pass on a hard-coded string. This is the
+    // assertion that the name comes from the strategy object.
+    const everything: RetrievalStrategy = {
+      name: 'admit-everything',
+      k: 3,
+      rejectWindow: 0,
+      select: (pool) => pool.map(() => ({ admitted: true })),
+    };
+    const r = await runAgainstCorpus({ ragOptions: { retrieval: everything } });
+    expect(r.evidence?.strategy).toBe('admit-everything');
+    const retrieved = r.events.filter((e) => e.type === 'agentfootprint.memory.retrieved');
+    expect(retrieved[0]?.payload['strategy']).toBe('admit-everything');
+  });
+
+  it('an empty query still names its rule — an empty record raises that question hardest', async () => {
+    // No query text means no search at all, and the evidence still lands. Driven
+    // at the stage rather than through `agent.run` because the run-input guard
+    // refuses a blank message at the door: the only way into this branch is a
+    // custom `queryFrom` that finds nothing, which is the real-world shape too.
+    const stage = loadRelevant({
+      store: await seededStore(),
+      embedder: mockEmbedder(),
+      retrieval: topK({ k: 4 }),
+      queryFrom: () => '',
+    });
+    const scope = { identity: {}, newMessages: [] } as unknown as Parameters<typeof stage>[0];
+    await stage(scope);
+    const evidence = (scope as unknown as { retrieved: RetrievalEvidence }).retrieved;
+    expect(evidence.consideredCount).toBe(0);
+    expect(evidence.strategy).toBe('topK');
   });
 
   it('memory.attached fires once per chunk that reached the prompt', async () => {

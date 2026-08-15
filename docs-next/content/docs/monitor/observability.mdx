@@ -163,6 +163,8 @@ All peer deps are declared **optional** — consumers who never call a particula
 
 Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget.
 
+Each tick also says what was billed: `model` and `provider` name the call that spent the money, so a run that switched models mid-loop — a `'retry-other'` failover, a compactor on a cheaper vendor — breaks down from the cost channel alone. The compactor's spend is filed under *its* summarizer, not the agent's provider. (`provider` is absent only when a third-party window strategy reports spend without declaring its `billing`.)
+
 A bare number **warns**: the event fires with `action: 'warn'` and the run carries on, and *you* decide what to do (cancel via signal, escalate, log). Since 8.14.0 you can also ask it to **stop**:
 
 ```ts

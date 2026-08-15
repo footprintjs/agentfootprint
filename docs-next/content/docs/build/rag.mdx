@@ -289,6 +289,8 @@ import { topK } from 'agentfootprint';
 defineRAG({ id: 'docs', store, embedder, retrieval: topK({ k: 5, threshold: 0.55 }) });
 ```
 
+Whichever rule ran, it names itself: `strategy` on the record and on `agentfootprint.memory.retrieved` carries the `RetrievalStrategy.name` that produced the verdicts. Two rules with the same `k` leave otherwise identical records, so that name is what tells them apart.
+
 A cross-encoder re-ranker and a diversity (MMR) selector are the next two adapters behind this same interface. Neither ships yet; the seam exists so that when they do, nothing else moves.
 
 ## Reference — the retrieval record
@@ -297,7 +299,7 @@ Types for reading a retrieval back. The record types are on the main barrel (a c
 
 | Name | What it is |
 |---|---|
-| `RetrievalEvidence` | The whole record for one retrieval: `queryHash`, `k`, `threshold`, `maxChars` / `charsUsed` (when a size budget was set), `embedderId`, `dimensions`, `selectionOrder`, the counts, `candidates`, `candidatesComplete`, `corpusEmpty`, `namespace`. |
+| `RetrievalEvidence` | The whole record for one retrieval: `strategy` (which rule ruled), `queryHash`, `k`, `threshold`, `maxChars` / `charsUsed` (when a size budget was set), `embedderId`, `dimensions`, `selectionOrder`, the counts, `candidates`, `candidatesComplete`, `corpusEmpty`, `namespace`. |
 | `RetrievedCandidate` | One candidate: `id`, `score`, `rank`, `admitted`, `reason`, `docUri`, `page`, `heading`, plus `promptFragment` / `promptPosition` for admitted ones. |
 | `RetrievalRejectReason` | Why a candidate was refused: `'below-threshold'` · `'over-budget'` · `'over-max-entries'` · `'over-char-budget'` (the `maxChars` size budget was already spent by better-ranked passages). |
 | `RetrievalStrategy` | The seam: `{ name, k, threshold?, rejectWindow, select(pool) }`. Given a score-descending pool it returns one `RetrievalVerdict` per candidate, in the same order. It never touches the store and never embeds. |

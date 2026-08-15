@@ -209,6 +209,46 @@ describe('summarizeOldest — the refusal latch (8.14.0)', () => {
     expect(sum.calls.length).toBe(ticks.length);
   });
 
+  it('the summarizer bill is filed under the SUMMARIZER, not the agent', async () => {
+    // The whole point of a compactor is that it runs somewhere cheaper. A tick
+    // that named the agent's provider would put the cheap vendor's spend on the
+    // expensive vendor's line — the exact breakdown a reader came for, inverted.
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sum = fatSummarizer();
+    const ticks: { provider?: string; model?: string; tokensInput: number }[] = [];
+    const agent = Agent.create({
+      provider: mainProvider(5).provider,
+      model: 'm',
+      pricingTable: { name: 'p', pricePerToken: () => 0.001 },
+    })
+      .tool(looker as never)
+      .compaction({
+        thresholdTokens: 30,
+        keepRecentTurns: 1,
+        summarizer: sum.provider,
+        model: 'cheap',
+      })
+      .maxIterations(9)
+      .build();
+    agent.on('agentfootprint.cost.tick', (e) => ticks.push(e.payload as never));
+    await agent.run({ message: 'hi' });
+
+    // The summarizer's calls are the ones reporting its usage (7 in, 7 out).
+    const summarizerTicks = ticks.filter((t) => t.tokensInput === 7);
+    const mainTicks = ticks.filter((t) => t.tokensInput === 5000);
+    expect(summarizerTicks.length).toBeGreaterThan(0);
+    expect(mainTicks.length).toBeGreaterThan(0);
+
+    for (const t of summarizerTicks) {
+      expect(t.provider).toBe('fat');
+      expect(t.model).toBe('cheap');
+    }
+    for (const t of mainTicks) {
+      expect(t.provider).toBe('main');
+      expect(t.model).toBe('m');
+    }
+  });
+
   it('a summarizer that THROWS is retried — that failure is not deterministic', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     let attempts = 0;

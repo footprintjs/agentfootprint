@@ -226,6 +226,52 @@ describe('cost — integration', () => {
       estimatedUsd: expect.any(Number),
     });
   });
+
+  it('the tick says WHAT was billed — provider and model, from the call itself', async () => {
+    // Until 9.x a tick carried tokens and dollars and nothing to attribute them
+    // to: a run that switched models or vendors mid-loop produced a bill that
+    // could not be broken down from the cost channel alone. `pricePerToken` is
+    // handed the model, so the event was already one line away from saying it.
+    const agent = Agent.create({
+      provider: { name: 'acme-cloud', complete: async () => resp('done') },
+      model: 'acme-large',
+      pricingTable: flatPricing(0.00001, 0.00003),
+    })
+      .system('')
+      .build();
+
+    const ticks: Record<string, unknown>[] = [];
+    agent.on('agentfootprint.cost.tick', (e) =>
+      ticks.push(e.payload as unknown as Record<string, unknown>),
+    );
+    await agent.run({ message: 'go' });
+
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]!.model).toBe('acme-large');
+    // The PROVIDER's own name, not the pricing table's — one model id can be
+    // served by two vendors at two prices, which is the case attribution is for.
+    expect(ticks[0]!.provider).toBe('acme-cloud');
+  });
+
+  it('LLMCall attributes its one call the same way — one law, both runners', async () => {
+    const llm = LLMCall.create({
+      provider: { name: 'acme-cloud', complete: async () => resp('done') },
+      model: 'acme-small',
+      pricingTable: flatPricing(0.00001, 0.00003),
+    })
+      .system('')
+      .build();
+
+    const ticks: Record<string, unknown>[] = [];
+    llm.on('agentfootprint.cost.tick', (e) =>
+      ticks.push(e.payload as unknown as Record<string, unknown>),
+    );
+    await llm.run({ message: 'go' });
+
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]!.model).toBe('acme-small');
+    expect(ticks[0]!.provider).toBe('acme-cloud');
+  });
 });
 
 // ── 4. Property — cumulative monotone & resets per run ──────────────

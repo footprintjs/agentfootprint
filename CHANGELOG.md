@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.39.0] - 2026-08-14
+
+**Three false doors closed, and two promises the recording did not keep.** An
+architecture audit asked whether a third party could add a new strategy without
+forking. Mostly yes — but the first thing such an author reads was wrong.
+
+### Fixed
+
+- **`CLAUDE.md` listed 13 import paths that do not exist**, and omitted 5 that
+  do. An exports map is exhaustive, so the very first line a strategy author
+  writes — `import { skillGraph } from 'agentfootprint/injection-engine'` —
+  failed to resolve. The line even framed the wrong list as a correction to
+  older docs, so it read as freshly verified. Corrected to the 13 real doors,
+  with the 16 paths 9.0.0 removed named as removed. A new pin test asserts set
+  equality against `package.json` in both directions, with an anti-vacuity
+  guard so a reworded line fails loudly instead of silently scraping nothing.
+
+- **`MemoryRetrievedPayload` did not name the strategy that produced it**, while
+  `RetrievalStrategy.name`'s own docstring promised "Stable name — appears in
+  the recording". It now does, on both the evidence and the event, sourced at
+  the one place they are constructed so the empty-query record carries it too.
+
+- **`CostTickPayload` carried neither provider nor model**, so cost could not be
+  attributed from the cost event alone. `model` is required — it was always
+  known at all three emit sites. `provider` is OPTIONAL and deliberately so: at
+  the window stage it comes from `WindowStrategy.billing`, which the seam
+  allows to be absent, and an absent value means "the strategy did not say"
+  rather than "the agent's provider". The pair travels as one argument so the
+  two cannot drift.
+
+### Removed
+
+- **`src/strategies/registry.ts` was dead code advertised as an extension
+  point.** `registerObservabilityStrategy` and its three siblings had exactly
+  one non-declaration reference in the repository: a comment admitting the path
+  was reserved. Not re-exported from any barrel, not an `exports` subpath, not
+  in the shipped-surface baseline — so nothing public could reach it and its
+  removal is not breaking. The by-instance door (`agent.enable.observability({
+  strategy })`) is real, first-class, and now the only one. The cache twin
+  legitimately has two doors; this one had one door and a sign pointing at a
+  wall.
+
+### Deprecated
+
+- `ContextSourceAdapter`, `RiskDetector` and `EmbeddingProvider` are exported to
+  consumers and have zero implementations and zero call sites — nowhere to plug
+  in. They cannot be removed in 9.x, so they are marked for 10.0.0 along with
+  their satellite types. `EmbeddingProvider` is a dead duplicate of the live
+  `Embedder` port.
+
+  Two more were examined and left alone, because they are not dormant:
+  `ReliabilityProvider` is read from `config.providers` at five sites, and
+  `CheckInDriver` is a produced output type filled by the configured scorer.
+
+### Known, not fixed
+
+- `attachCostStrategy` reads four field names that do not exist on
+  `CostTickPayload` (`cumulativeInputTokens`, `recentInputTokens`,
+  `cumulativeCostUsd`, `recentCostUsd`), so every cost strategy attached through
+  `enable.cost()` receives zeros. This release makes `model` resolve there; the
+  numbers are still zero. Its own ticket.
+
+
 ## [9.38.0] - 2026-08-14
 
 **Two behaviour changes that are bug fixes — a call that used to run now

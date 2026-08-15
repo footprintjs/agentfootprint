@@ -198,6 +198,10 @@ export function loadRelevant(config: LoadRelevantConfig) {
     const text = queryFrom(scope).trim();
 
     const baseEvidence = {
+      // Named here, in the base, so the EMPTY-QUERY record carries it too: a
+      // retrieval that never ran still ran under a rule, and "which retriever
+      // was this?" is exactly the question an empty record raises.
+      strategy: strategy.name,
       queryHash: fnv1a(text),
       k: strategy.k,
       ...(strategy.threshold !== undefined && { threshold: strategy.threshold }),
@@ -359,6 +363,7 @@ export function loadRelevant(config: LoadRelevantConfig) {
     // extra wiring. Which retriever fired is `meta.runtimeStageId`
     // (`sf-memory-read-<id>/load-relevant#N`) — the house correlation model.
     emit(scope, 'agentfootprint.memory.retrieved', {
+      strategy: evidence.strategy,
       queryHash: evidence.queryHash,
       k: evidence.k,
       ...(evidence.threshold !== undefined && { threshold: evidence.threshold }),

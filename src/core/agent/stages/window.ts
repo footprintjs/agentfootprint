@@ -219,12 +219,22 @@ export function buildWindowStage(
     }
 
     // A summarizer call is real money. It counts against the same budget.
+    //
+    // The provider is the STRATEGY's, from its own `billing` declaration —
+    // never `deps.providerName`, which is the agent's. A compactor commonly
+    // runs on a cheaper model at a different vendor, and naming the agent's
+    // provider here would file that spend under the wrong bill. `billing` is
+    // optional on the seam, so a third-party strategy that reports `spend`
+    // without declaring it leaves `provider` absent rather than guessed.
     if (result.spend !== undefined) {
       emitCostTick(
         scope as never,
         deps.pricingTable,
         deps.costBudget,
-        result.spend.model,
+        {
+          ...(strategy.billing !== undefined && { provider: strategy.billing.provider.name }),
+          model: result.spend.model,
+        },
         result.spend.usage,
       );
     }
