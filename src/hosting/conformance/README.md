@@ -104,6 +104,8 @@ There is deliberately no way to make a case quietly disappear.
 | `contested-write-leaves-no-split-brain`         | however two writers interleave, index and conversation never name different people |
 | `owner-of-is-undefined-for-missing-and-unowned` | missing and unowned are one answer                                                 |
 | `list-by-user-pages-with-a-stable-tie-break`    | every owned row once, nobody else's ever, cursor only when more exist              |
+| `list-by-user-is-newest-first`                  | newest first comes from the conversation's timestamp, not from insertion order     |
+| `an-id-the-store-hands-back-is-not-a-second-address` | an id a listing reports opens that conversation and is never a name for another |
 | `awkward-session-ids-round-trip`                | an id is opaque, and the mapping to a backend key is injective                     |
 | `retention-says-who-deletes-and-deletes-only-the-old` | `retention()` says WHO deletes; a sweeping store forgets exactly the old ones |
 | `optional-members-are-feature-detected`         | present as functions or absent; `ownerOf` ships beside `listByUser`                |

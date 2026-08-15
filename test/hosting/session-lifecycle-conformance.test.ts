@@ -579,6 +579,24 @@ describe('the declarations are the whole list, and each one is argued', () => {
     ]);
   });
 
+  it('every case in the battery is named in the conformance README', () => {
+    // Same drift as the ledger, one file over, and found the same way: two cases
+    // were added and the README that an out-of-tree adapter author reads as the
+    // list of obligations still described fourteen. A battery whose published
+    // list is shorter than the battery is a set of obligations somebody will
+    // meet in full and still fail.
+    const readme = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../src/hosting/conformance/README.md'),
+      'utf8',
+    );
+    for (const testCase of sessionLifecycleConformance) {
+      expect(
+        readme,
+        `the battery holds '${testCase.name}' and the README never names it`,
+      ).toContain(testCase.name);
+    }
+  });
+
   it('every declared limitation is named in the public status ledger', () => {
     // docs/ADAPTER_STATUS.md is what somebody evaluating an adapter reads INSTEAD
     // of the code, so a limitation the harness declares and the ledger omits is
