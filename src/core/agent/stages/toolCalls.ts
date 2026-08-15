@@ -1245,6 +1245,13 @@ export function buildToolCallsHandler(
     toolName: string,
     wants: NonNullable<Tool['wants']>,
     args: ToolArgs,
+    /** The tool's OWN schema — the other half of the declaration. `required`
+     *  there is what makes an omitted ref a hole rather than a choice, and it
+     *  is read HERE, not left to `toolArgValidation`: that dial is agent-wide
+     *  and can be turned off, while `wants` is a promise about delivered data
+     *  (the same reason the non-string belt already runs behind a disabled
+     *  gate). */
+    inputSchema: Readonly<Record<string, unknown>> | undefined,
   ): Promise<
     | {
         readonly ok: true;
@@ -1265,7 +1272,14 @@ export function buildToolCallsHandler(
       });
       return { ok: false, refusal: wantsNeedsStoreRefusal(toolName, wants) };
     }
-    const verdict = await resolveToolWants(store, runScopeOf(scope), toolName, wants, args);
+    const verdict = await resolveToolWants(
+      store,
+      runScopeOf(scope),
+      toolName,
+      wants,
+      args,
+      inputSchema,
+    );
     if (!verdict.ok) {
       for (const refusal of verdict.refusals) {
         typedEmit(scope, 'agentfootprint.artifacts.refused', {
@@ -1431,6 +1445,25 @@ export function buildToolCallsHandler(
   // operator's ref-ing, then the last-resort net (which then measures the
   // ticket). A placed result is a TICKET, not a refusal: the caller's
   // effects/step bookkeeping proceeds exactly as if the payload had landed.
+  //
+  // ── WHAT ROUTING SEES AFTERWARDS (the coupling, stated at both ends) ───
+  // The substitute returned here becomes `resultStr` below, which is the ONE
+  // string every downstream reader gets: the `role: 'tool'` history message,
+  // `scope.lastToolResult.result`, and each `scope.toolResults[]` entry. Route
+  // `when` predicates and `rule` triggers read exactly that string
+  // (`InjectionContext.lastToolResult` / `toolResults` — the other end of this
+  // comment lives on those fields), so raising or lowering `maxInlineChars`
+  // CAN change which edge fires: a predicate matching on payload text stops
+  // matching once the payload becomes a ticket, and one matching on
+  // `"kind":"tool-result/<tool>"` only ever matches after placement.
+  //
+  // That is the layering, not an accident. The alternative — predicates
+  // reading the pre-placement text while the model reads the ticket — would
+  // route on a string that is not in the conversation, and the whole point of
+  // reading `lastToolResult` is to react to what the MODEL was told. Keep the
+  // two identical: whatever the model reads is what routing judges. (Tool NAME
+  // edges — `onToolReturn` — and `onToolStatus` are unaffected either way;
+  // neither reads the result text.)
 
   const placeResults = async (
     scope: TypedScope<AgentState>,
@@ -1637,7 +1670,13 @@ export function buildToolCallsHandler(
     // does not run.
     let wantedMeta: Readonly<Record<string, ArtifactMeta>> | undefined;
     if (tool.wants !== undefined) {
-      const resolution = await resolveWantsAtDispatch(scope, toolName, tool.wants, args);
+      const resolution = await resolveWantsAtDispatch(
+        scope,
+        toolName,
+        tool.wants,
+        args,
+        tool.schema.inputSchema,
+      );
       if (!resolution.ok) return { result: resolution.refusal, error: true };
       args = resolution.args;
       wantedMeta = resolution.wanted;
@@ -2310,7 +2349,13 @@ export function buildToolCallsHandler(
           let wantedMeta: Readonly<Record<string, ArtifactMeta>> | undefined;
           let wantsBlocked = false;
           if (tool?.wants !== undefined) {
-            const resolution = await resolveWantsAtDispatch(scope, tc.name, tool.wants, callArgs);
+            const resolution = await resolveWantsAtDispatch(
+              scope,
+              tc.name,
+              tool.wants,
+              callArgs,
+              tool.schema.inputSchema,
+            );
             if (resolution.ok) {
               callArgs = resolution.args;
               wantedMeta = resolution.wanted;

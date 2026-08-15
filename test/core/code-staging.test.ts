@@ -396,6 +396,49 @@ describe('codeRunnerTool({ wants }) — property', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('NONE passed: the code still runs (optional inputs are legitimate) and the result SAYS nothing was staged', async () => {
+    // The absence a model would otherwise debug: its code reads
+    // AF_STAGED_INPUTS, the variable is not set, and nothing in the
+    // conversation explains why. Stated in the result rather than left to a
+    // traceback — while an unrelated call that needs no stored data still runs.
+    const spy = spyChildProcess();
+    const root = mkdtempSync(join(tmpdir(), 'af-stage-root-'));
+    try {
+      const agent = Agent.create({
+        provider: mock({
+          replies: [
+            { toolCalls: [{ id: '1', name: 'run_code', args: { code: 'print(1)' } }] },
+            { content: 'done' },
+          ],
+        }),
+        model: 'm',
+        maxIterations: 4,
+        artifacts: { store: inMemoryArtifacts() },
+      })
+        .tool(
+          codeRunnerTool({
+            runner: localCodeRunner({ _childProcess: spy.module, _stagingRoot: root }),
+            wants: { dataset: 'dataset/rows' },
+          }),
+        )
+        .build();
+      const ends: Record<string, unknown>[] = [];
+      agent.on('agentfootprint.stream.tool_end', (e) =>
+        ends.push(e.payload as Record<string, unknown>),
+      );
+      await agent.run({ message: 'go' });
+      // The code ran — nothing was refused.
+      expect(spy.calls).toHaveLength(1);
+      expect(spy.calls[0]?.env[STAGED_INPUTS_ENV]).toBeUndefined();
+      const text = String(ends[0]?.result);
+      expect(text).toContain('no artifact inputs were passed');
+      expect(text).toContain(STAGED_INPUTS_ENV);
+      expect(text).toContain("'dataset'");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 // ─── 7. ROI — data goes both ways without entering the window ────────

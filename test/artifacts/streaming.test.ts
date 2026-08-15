@@ -16,10 +16,11 @@
  */
 
 import { describe, expect, it, afterAll } from 'vitest';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  ArtifactIntegrityError,
   canGetArtifactStream,
   canPutArtifactStream,
   canStreamArtifacts,
@@ -248,6 +249,37 @@ describe('fileArtifacts — the sibling payload file', () => {
     // re-encoding, so a streamed read and a digest cannot disagree.
     expect(await drain(streamed!.body)).toBe('{"n":7}');
     expect(streamed!.meta.bytes).toBe('{"n":7}'.length);
+  });
+
+  it('getStream does NOT verify the digest — the loss is NAMED, and the ticket still carries what a caller would check', async () => {
+    // The trade this pins: `get` re-hashes and refuses corrupt bytes;
+    // `getStream` cannot, because verification needs the whole payload — the
+    // exact cost the member exists to avoid. Not silently traded: the digest
+    // rides `meta`, so a caller who needs the guarantee can hash what it
+    // collected and compare. Change this and you have changed a promise, not
+    // an implementation detail (see artifacts/streaming.ts's header).
+    const dir = tempDir();
+    const store = fileArtifacts({ directory: dir });
+    if (!canStreamArtifacts(store)) throw new Error('no streaming');
+    const { meta } = await store.put(SCOPE, {
+      kind: 'report/csv',
+      mediaType: 'text/plain',
+      data: 'true bytes',
+      digest: 'sha-256',
+    });
+    const file = join(dir, '_', '_', 'conv-a', `${meta.ref}.json`);
+    const envelope = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    (envelope.payload as { value: string }).value = 'tampered bytes';
+    writeFileSync(file, JSON.stringify(envelope));
+
+    // The verifying read refuses…
+    await expect(store.get(SCOPE, meta.ref)).rejects.toThrow(ArtifactIntegrityError);
+    // …the streaming read hands the bytes over, unverified and unhidden.
+    const streamed = await store.getStream(SCOPE, meta.ref);
+    expect(await drain(streamed!.body)).toBe('tampered bytes');
+    // The minted digest is still on the ticket — the caller's own check.
+    expect(streamed!.meta.digest).toBe(meta.digest);
+    expect(streamed!.meta.digest).toMatch(/^sha-256:[0-9a-f]{64}$/);
   });
 
   it('expiry sweeps the sibling payload too', async () => {

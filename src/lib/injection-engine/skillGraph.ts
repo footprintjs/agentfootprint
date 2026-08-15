@@ -301,7 +301,13 @@ export type { EntryScore, EntryScoring };
 export interface SkillRouteOptions {
   /** Predicate on the previous iteration's tool result → activate the target
    *  on the next iteration. The common, controllable edge. `status` is
-   *  present when the tool declared one on its result envelope (9.19.0). */
+   *  present when the tool declared one on its result envelope (9.19.0).
+   *
+   *  `result` is the string the MODEL read — which artifact placement can
+   *  replace with a claim ticket, so an operator raising or lowering
+   *  `artifacts.placement.maxInlineChars` can change whether a text-matching
+   *  edge fires. See {@link InjectionContext.lastToolResult}; route on
+   *  `onToolReturn` / `onToolStatus` for a guard placement cannot move. */
   readonly when?: (result: {
     readonly toolName: string;
     readonly result: string;

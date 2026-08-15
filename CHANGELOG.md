@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.38.0] - 2026-08-14
+
+**Two behaviour changes that are bug fixes — a call that used to run now
+refuses, and a call that used to mint an orphan now carries its lineage —
+plus two gaps named rather than papered over.**
+
+### Fixed — a declared `wants` was optional at runtime, if an unrelated dial was turned down
+
+A tool declaring `wants: { dataset: 'kind/x' }` for an argument its own
+schema marks REQUIRED would still execute when the model omitted it — but
+only when `toolArgValidation` was `'off'` or `'warn'`. Under the default
+`'enforce'` the args gate already caught it. So the artifact guarantee was
+resting on a dial that has nothing to do with artifacts: turn down argument
+validation for an unrelated reason and the `wants` contract quietly stopped
+applying.
+
+`resolveToolWants` now reads the tool's own `inputSchema.required` and
+refuses a required-but-omitted ref by name, with the same teaching shape
+the other refusals use (it lists the live refs of the wanted kind).
+Optional arguments are untouched — declaring `wants` for an optional
+argument and omitting it is legitimate, and stays legitimate.
+
+Threaded at BOTH dispatch doors. Worth recording why that matters: the
+mutation check found the resume door was UNPINNED — dropping the fix there
+failed zero tests, because nothing exercised an approved check-in resuming
+into a wants-declaring tool. The test that now covers it is named for the
+rule it protects: an approved call is not a waived one. A human approving a
+check-in does not waive the artifact contract.
+
+Also: a `null` argument was refused with "not a object". It now says
+`null`.
+
+### Fixed — derived artifacts carry their lineage
+
+`mintProducedFiles` minted code-produced artifacts with no `parentRefs`,
+while the framework was holding the resolved input refs on `ctx.wanted`
+from the very same call. So a derived artifact arrived with no ancestry —
+and lineage broke at exactly the step that exists to demonstrate lineage.
+
+Input refs are now stamped automatically, deduped, and ABSENT rather than
+`[]` when nothing was resolved, because an empty array reads as "derived
+from nothing". Kept strict: a parent that expired mid-call fails that mint,
+contained per entry and stated in the model's line, rather than silently
+dropping the lineage.
+
+### Documented — two gaps named rather than papered over
+
+**No shipped runner populates `CodeResult.artifacts`.** `localCodeRunner`
+cannot collect outputs honestly today — its staging directory is for
+inputs, and the child's cwd is the caller's own working directory, so
+"files the code wrote" is not a set it can identify without guessing which
+of a developer's files mattered. A dev-loop runner that uploaded whatever
+appeared beside your source would be the worse failure. The field is now
+documented as ABSENT rather than empty, with the three things a runner owes
+to produce outputs: a declared output location the model is told about, a
+bounded read-back, and a real byte count.
+
+**`getStream` does not verify the digest, and `get` does.** Verifying a
+stream would require buffering the whole payload — the digest is one-shot
+over the canonical payload, chosen so one primitive works in Node and a
+browser — and a second incremental implementation would be a different
+promise under the same field name. So the loss is named in all three
+places a caller meets it, and pinned by a test that demonstrates the
+difference: tamper the bytes, `get` throws, `getStream` hands them over,
+and `meta.digest` still rides so a caller can check it themselves.
+
+### Documented — placement and routing predicates, at both ends
+
+Automatic placement rewrites the tool-result string that `rule` triggers
+and skill-graph `when` edges read, so raising or lowering `maxInlineChars`
+can change which edge fires. This is intentional — predicates reading a
+string the conversation never contained would be worse — but it was
+undocumented, and it is a real footgun. Comments now sit at both ends and
+name each other, so neither can be changed without meeting the other, and
+a test runs the same tool with placement off and on to pin what a
+predicate actually sees.
+
 ## [9.37.1] - 2026-08-14
 
 **A hygiene release — nothing new is exported, nothing behaves differently.

@@ -54,6 +54,23 @@ const runnerProducing = (artifacts: NonNullable<CodeResult['artifacts']>): CodeR
   }),
 });
 
+/** The same, but its session can also take staged INPUTS — what a runner
+ *  behind a `wants`-declaring code tool must be able to do. */
+const stagingRunnerProducing = (artifacts: NonNullable<CodeResult['artifacts']>): CodeRunner => ({
+  id: 'test-staging-runner',
+  start: async () => ({
+    id: 'session-1',
+    stageInputs: async (inputs) =>
+      inputs.map((input) => ({
+        name: input.name,
+        path: `/session/${input.fileName ?? input.name}`,
+        bytes: typeof input.data === 'string' ? input.data.length : input.data.byteLength,
+      })),
+    execute: async () => ({ ok: true, stdout: 'derived', stderr: '', artifacts }),
+    stop: async () => undefined,
+  }),
+});
+
 const CSV = 'region,total\nwest,42\neast,17\n';
 
 describe('functional — files the run produced become tickets', () => {
@@ -183,6 +200,69 @@ describe('integration — a code-produced file feeds a wants-tool', () => {
     await second.run({ message: 'summarize' }, { sessionId: 'pipeline' });
     expect(seen.data).toBe(CSV);
     expect(String(ends[0].result)).toBe('rows: 2');
+  });
+});
+
+describe('lineage — a derived file names the input it was derived from', () => {
+  it('the refs the framework resolved for THIS call ride the mint as parentRefs', async () => {
+    const store = inMemoryArtifacts();
+    const scope = { conversationId: 'lineage' };
+    const { meta: seeded } = await store.put(scope, {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: [{ region: 'west', amount: 42 }],
+      label: 'Q3 rows',
+    });
+    // The model speaks the ticket as the argument — exactly the journey's
+    // derive step: input resolved by the framework, output minted by the tool.
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          call('run_code', 't1', { code: 'x', dataset: seeded.ref }),
+          final('done'),
+        ] as never,
+      }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: { store },
+    })
+      .system('s')
+      .tool(
+        codeRunnerTool({
+          runner: stagingRunnerProducing([{ name: 'report.csv', bytes: CSV.length, data: CSV }]),
+          wants: { dataset: 'dataset/rows' },
+        }),
+      )
+      .build();
+    const events = artifactCapture(agent);
+    await agent.run({ message: 'derive' }, { identity: scope });
+    const minted = events.filter((e) => e.name === 'agentfootprint.artifacts.minted');
+    expect(minted).toHaveLength(1);
+    expect(minted[0].payload).toMatchObject({ kind: 'file/csv', parentRefs: [seeded.ref] });
+    // …and it is on the ticket itself, not only on the event.
+    const meta = await store.head(scope, (minted[0].payload as { ref: string }).ref);
+    expect(meta?.parentRefs).toEqual([seeded.ref]);
+  });
+
+  it('no resolved inputs ⇒ NO parentRefs key — "derived from nothing" is not a claim to make', async () => {
+    const store = inMemoryArtifacts();
+    const agent = Agent.create({
+      provider: mock({ replies: [call('run_code', 't1', { code: 'x' }), final('done')] as never }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: { store },
+    })
+      .system('s')
+      .tool(
+        codeRunnerTool({
+          runner: runnerProducing([{ name: 'report.csv', bytes: CSV.length, data: CSV }]),
+        }),
+      )
+      .build();
+    const events = artifactCapture(agent);
+    await agent.run({ message: 'go' }, { sessionId: 'no-parents' });
+    const minted = events.find((e) => e.name === 'agentfootprint.artifacts.minted');
+    expect(minted?.payload).not.toHaveProperty('parentRefs');
   });
 });
 

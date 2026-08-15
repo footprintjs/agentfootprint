@@ -204,7 +204,13 @@ export interface ArtifactStreamPutInput {
 
 /** What `getStream` returns when the ref resolves: the ticket, and the
  *  payload's CANONICAL BYTES as a stream — the same bytes `meta.bytes` counts
- *  and a digest would cover, never a re-encoding. */
+ *  and a digest would cover, never a re-encoding.
+ *
+ *  `meta.digest` (when the artifact carries one) describes these bytes but has
+ *  NOT been checked against them: verification needs the whole payload, which
+ *  is what this shape exists to avoid holding. It rides anyway so a caller who
+ *  needs the guarantee can hash what it collected and compare — the loss is
+ *  named, never silently traded. `get` remains the verifying read. */
 export interface ArtifactStreamRecord {
   readonly meta: ArtifactMeta;
   readonly body: ReadableStream<Uint8Array>;

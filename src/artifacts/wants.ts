@@ -139,6 +139,24 @@ export type WantsResolution =
 const LIVE_REF_LIST_LIMIT = 10;
 const LIVE_REF_SCAN_LIMIT = 200;
 
+/**
+ * Which arguments this tool's OWN schema marks required — the half of the
+ * contract that says whether an omitted ref is a choice or a hole.
+ *
+ * Read here rather than trusted to the args gate: `toolArgValidation` is an
+ * agent-wide dial that an operator may set to `'warn'` or `'off'`, and a
+ * `wants` declaration is a promise about DELIVERED DATA, not about schema
+ * hygiene. The belt already refuses a non-string ref behind a disabled gate
+ * (`'ref STRING'`); omission is the same class of hole and gets the same belt.
+ */
+function requiredArgNames(
+  inputSchema: Readonly<Record<string, unknown>> | undefined,
+): ReadonlySet<string> {
+  const required = inputSchema?.required;
+  if (!Array.isArray(required)) return new Set();
+  return new Set(required.filter((name): name is string => typeof name === 'string'));
+}
+
 /** The live refs of `kind` in scope, newest first, bounded — what a refusal
  *  names so the model can correct instead of retrying the same dead ref. */
 async function liveRefsOfKind(
@@ -173,6 +191,16 @@ function describeLiveRef(meta: ArtifactMeta): string {
   }`;
 }
 
+/** What the model actually put in the argument, named the way a reader would
+ *  say it — `typeof null` is `'object'`, and a refusal that says "not a
+ *  object" about a `null` teaches the wrong correction. */
+function describeSpokenValue(spoken: unknown): string {
+  if (spoken === null) return 'null';
+  if (Array.isArray(spoken)) return 'an array';
+  if (typeof spoken === 'string') return 'an empty string';
+  return `a ${typeof spoken}`;
+}
+
 /** The correcting clause: what CAN resolve, or the honest "nothing can". */
 function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
   if (live.length === 0) {
@@ -190,8 +218,16 @@ function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
  * Resolve one tool's declared `wants` against the run's scope — the whole
  * Leg-1 law in one place, shared by every dispatch door.
  *
- * Per declared argument that is PRESENT in the call args (an absent optional
- * argument is the model choosing not to pass one — nothing to resolve):
+ * An ABSENT declared argument is judged by the tool's own schema (9.37.2):
+ * `required` there means the tool cannot do its job without the data, so
+ * dispatch refuses BY NAME rather than executing a handler that believes its
+ * payload was resolved; anything else is optional, and the model choosing not
+ * to pass one is legitimate (`ctx.wanted` simply has no entry for it — absent
+ * and empty are different facts). Pass the tool's `inputSchema` to have that
+ * judged; omit it and every declared argument is treated as optional, which is
+ * what a door that genuinely has no schema can honestly say.
+ *
+ * Per declared argument that is PRESENT in the call args:
  *   • a non-string value is refused (`invalid-input`) — the argument is
  *     spoken as the ref string, never the bytes;
  *   • a ref that does not resolve in scope is refused
@@ -210,14 +246,37 @@ export async function resolveToolWants(
   toolName: string,
   wants: ToolWants,
   args: Readonly<Record<string, unknown>>,
+  inputSchema?: Readonly<Record<string, unknown>>,
 ): Promise<WantsResolution> {
   const refusals: WantsRefusal[] = [];
   const wanted: Record<string, ArtifactMeta> = {};
   const resolvedList: Array<{ argName: string; meta: ArtifactMeta }> = [];
   const nextArgs: Record<string, unknown> = { ...args };
+  const required = requiredArgNames(inputSchema);
 
   for (const [argName, kind] of Object.entries(wants)) {
-    if (!(argName in args) || args[argName] === undefined) continue;
+    if (!(argName in args) || args[argName] === undefined) {
+      // Optional: the model chose not to pass one. Nothing to resolve, and
+      // nothing to complain about.
+      if (!required.has(argName)) continue;
+      // Required: the tool declared it wants '<kind>' HERE and its schema
+      // declared the argument mandatory. Executing anyway would hand the
+      // handler an argument it believes the framework resolved and did not —
+      // accepted-and-silently-wrong, in the one place this feature exists to
+      // make impossible.
+      const live = await liveRefsOfKind(store, scope, kind);
+      refusals.push({
+        argName,
+        kind,
+        reason: 'invalid-input',
+        detail:
+          `'${argName}' is required and no value was passed — this tool declares it wants a ` +
+          `'${kind}' artifact there, and the framework resolves the ref BEFORE the tool runs, ` +
+          `so the tool is never executed without it. Pass the art_… ref as '${argName}'. ` +
+          `${liveRefsClause(kind, live)}`,
+      });
+      continue;
+    }
     const spoken = args[argName];
     if (typeof spoken !== 'string' || spoken.trim().length === 0) {
       const live = await liveRefsOfKind(store, scope, kind);
@@ -227,7 +286,7 @@ export async function resolveToolWants(
         reason: 'invalid-input',
         detail:
           `'${argName}' must be an artifact ref STRING (an art_… ticket), not ` +
-          `${Array.isArray(spoken) ? 'an array' : `a ${typeof spoken}`} — this tool declares ` +
+          `${describeSpokenValue(spoken)} — this tool declares ` +
           `it wants '${kind}' there and the framework resolves the ref for you; never inline ` +
           `the data. ${liveRefsClause(kind, live)}`,
       });

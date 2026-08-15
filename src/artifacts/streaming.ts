@@ -31,6 +31,27 @@
  * `Readable.toWeb` / `Readable.fromWeb`; that bridge is an ADAPTER detail and
  * never leaks into the port.
  *
+ * ── What streaming COSTS, named so it cannot be assumed away ────────────────
+ * `get` is the VERIFYING read: when the meta carries a `digest`, the store
+ * re-hashes what it holds and throws `ArtifactIntegrityError` rather than hand
+ * back bytes that no longer match their ticket. **`getStream` does not, and
+ * cannot**: the digest is computed over the WHOLE canonical payload with the
+ * one primitive every adapter shares (`crypto.subtle.digest`, one-shot by
+ * design and identical in Node and a browser), so verifying a stream would mean
+ * buffering the payload — the exact cost the member exists to avoid. Faking it
+ * with a second, incremental hashing implementation would be a different
+ * promise wearing the same field name.
+ *
+ * So the trade is STATED rather than silently made, in all three places a
+ * caller meets it (the port's `getStream`, the guard below, and this header):
+ *
+ *   • `get(scope, ref)`       — integrity verified, payload held whole.
+ *   • `getStream(scope, ref)` — memory bounded, integrity NOT verified. The
+ *     `digest` still rides `meta`, so a caller who needs the guarantee on this
+ *     path can hash what it collected and compare — deliberately the caller's
+ *     move, because only the caller knows whether it can afford to hold the
+ *     bytes it just streamed.
+ *
  * ── What `ctx.artifacts` does NOT get, and why (a decision, not an omission) ─
  * The tool-facing capability keeps FIVE verbs this phase. A tool receives its
  * artifacts pre-scoped and answers a model; the model cannot hold a stream,
@@ -65,7 +86,15 @@ export function canPutArtifactStream(store: ArtifactStore): store is PutStreamin
   return typeof store.putStream === 'function';
 }
 
-/** Can this store hand back a stream? Narrowing type guard. */
+/**
+ * Can this store hand back a stream? Narrowing type guard.
+ *
+ * Note what the streamed read does NOT carry: `get` re-verifies a `digest`
+ * before returning, `getStream` cannot (see the header) — it bounds memory,
+ * not integrity. Branching to `getStream` for a digested artifact is a
+ * deliberate trade, and the ticket keeps the digest so a caller who needs the
+ * guarantee can make it themselves.
+ */
 export function canGetArtifactStream(store: ArtifactStore): store is GetStreamingArtifactStore {
   return typeof store.getStream === 'function';
 }

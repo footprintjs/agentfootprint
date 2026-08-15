@@ -231,7 +231,7 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      return render(result, maxOutputChars, minted, stagedNames);
+      return render(result, maxOutputChars, minted, stagedNames, wantNames);
     },
   });
 
@@ -506,10 +506,39 @@ function mediaTypeOfFile(name: string, data: string | Uint8Array): string {
 type FileMintOutcome = { readonly ref: string } | { readonly failed: string };
 
 /**
+ * The refs this call's declared artifact INPUTS resolved to — the parents of
+ * anything the code produced from them.
+ *
+ * The framework already redeemed them (that is what `ctx.wanted` is), so the
+ * lineage is a FACT it holds, not an inference: every file this execution
+ * handed back was computed in a session whose only declared inputs were these.
+ * Stamping them automatically is what makes the derive step of the claim-check
+ * journey actually carry lineage — a consumer folding `head()` over
+ * `parentRefs` walks from the chart back to the dataset without the tool
+ * author having to remember.
+ *
+ * Deduplicated, because two arguments may legitimately name one artifact and
+ * an object store's metadata budget counts every ref.
+ */
+function parentRefsOf(ctx: ToolExecutionContext): readonly string[] {
+  const wanted = ctx.wanted;
+  if (wanted === undefined) return [];
+  return [...new Set(Object.values(wanted).map((meta) => meta.ref))];
+}
+
+/**
  * Mint every in-band file into the store. Per-entry failures are CONTAINED
  * and stated in the rendered line (the code ran; a full store must not turn
  * its success into a throw) — the store's own `artifacts.refused` event has
  * already put the reason on the record.
+ *
+ * Lineage rides every mint: the resolved input refs go on as `parentRefs`,
+ * validated at mint like any other derivation fact. That validation is why
+ * this is not silently degraded to "drop the parents if they no longer
+ * resolve" — a parent that expired mid-call means the lineage this artifact
+ * would claim is not true, and a claim-check store that mints an unprovable
+ * derivation is exactly the lie `UnknownParentRefError` exists to refuse. The
+ * refusal lands per entry, stated in the line the model reads.
  */
 async function mintProducedFiles(
   result: CodeResult,
@@ -517,6 +546,7 @@ async function mintProducedFiles(
 ): Promise<ReadonlyMap<string, FileMintOutcome>> {
   const outcomes = new Map<string, FileMintOutcome>();
   if (!ctx.hasArtifacts) return outcomes;
+  const parentRefs = parentRefsOf(ctx);
   for (const artifact of result.artifacts ?? []) {
     if (artifact.data === undefined) continue;
     try {
@@ -525,6 +555,10 @@ async function mintProducedFiles(
         mediaType: artifact.mediaType ?? mediaTypeOfFile(artifact.name, artifact.data),
         data: artifact.data,
         label: artifact.name,
+        // Absent when this call resolved no refs — an empty list would read
+        // as "derived from nothing", which is a different statement from
+        // "nothing said where this came from".
+        ...(parentRefs.length > 0 && { parentRefs }),
       });
       outcomes.set(artifact.name, { ref: meta.ref });
     } catch (err) {
@@ -549,6 +583,7 @@ function render(
   maxOutputChars: number,
   minted?: ReadonlyMap<string, FileMintOutcome>,
   staged: readonly string[] = [],
+  declared: readonly string[] = [],
 ): string {
   const parts: string[] = [];
   // What was put IN, stated before what came out. A model whose code failed to
@@ -558,6 +593,19 @@ function render(
     parts.push(
       `[staged into this session before your code ran: ${staged.join(', ')} — ` +
         `paths are in ${STAGED_INPUTS_ENV}]`,
+    );
+  } else if (declared.length > 0) {
+    // The OTHER half of the same law, and the one an absent statement makes
+    // expensive: this tool declares artifact arguments, the model passed
+    // none, so the session holds no staged data and the manifest variable is
+    // not set at all. Optional inputs are legitimate (a call that needs no
+    // stored data is a real call), but a model whose code just failed on a
+    // missing environment variable would otherwise debug an absence nothing
+    // in the conversation explains.
+    parts.push(
+      `[no artifact inputs were passed on this call, so nothing was staged and ` +
+        `${STAGED_INPUTS_ENV} is not set. To work on stored data, pass its art_… ref as ` +
+        `${declared.map((n) => `'${n}'`).join(' / ')}.]`,
     );
   }
   const stdout = clip(result.stdout, maxOutputChars, result.truncated?.stdout === true);

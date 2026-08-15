@@ -22,6 +22,7 @@ import {
   placedResultKind,
   type AgentfootprintEvent,
 } from '../../src/index.js';
+import { defineInstruction } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 
 const call = (name: string, id: string, args: Record<string, unknown> = {}) => ({
@@ -230,6 +231,59 @@ describe('integration — the placed ref is a first-class ticket: a wants-tool r
     // The consumer read the EXACT text the model was spared.
     expect(seen.data).toBe(BIG);
     expect(String(ends[0].result)).toBe('got 5000 chars');
+  });
+});
+
+describe('the coupling — routing predicates read the string placement rewrites', () => {
+  it('a rule predicate sees the TICKET after placement, and the payload text without it — pinned at both ends', async () => {
+    // Not a bug: routing must judge what the MODEL was told, so the ticket is
+    // the honest thing for a predicate to see. It IS a footgun, which is why
+    // it is pinned here and commented at both ends (placeResults in
+    // stages/toolCalls.ts ↔ InjectionContext.lastToolResult). Change either
+    // without the other and this fails.
+    const seenBy = (placement?: { maxInlineChars: number }) => {
+      const seen: string[] = [];
+      const big = defineTool({
+        name: 'get_rows',
+        description: 'big result',
+        execute: () => 'ROWPAYLOAD'.repeat(40),
+      });
+      const agent = Agent.create({
+        provider: mock({
+          replies: [call('get_rows', 't1'), final('done')] as never,
+        }),
+        model: 'mock',
+        maxIterations: 4,
+        artifacts: { store: inMemoryArtifacts(), ...(placement && { placement }) },
+      })
+        .system('s')
+        .tool(big)
+        .instruction(
+          defineInstruction({
+            id: 'watch-result',
+            prompt: 'noted',
+            activeWhen: (ctx) => {
+              if (ctx.lastToolResult) seen.push(ctx.lastToolResult.result);
+              return false;
+            },
+          }),
+        )
+        .build();
+      return { agent, seen };
+    };
+
+    const off = seenBy();
+    await off.agent.run({ message: 'go' }, { sessionId: 'route-off' });
+    expect(off.seen.some((text) => text.includes('ROWPAYLOAD'))).toBe(true);
+    expect(off.seen.some((text) => text.includes('"placed":true'))).toBe(false);
+
+    const on = seenBy({ maxInlineChars: 50 });
+    await on.agent.run({ message: 'go' }, { sessionId: 'route-on' });
+    // The predicate now reads the claim ticket — including its `kind`, which
+    // is how an artifact-kind guard becomes reachable with no artifact edge.
+    expect(on.seen.some((text) => text.includes('"placed":true'))).toBe(true);
+    expect(on.seen.some((text) => text.includes(placedResultKind('get_rows')))).toBe(true);
+    expect(on.seen.some((text) => text.includes('ROWPAYLOAD'))).toBe(false);
   });
 });
 

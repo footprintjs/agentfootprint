@@ -16,10 +16,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   Agent,
+  checkInApproved,
   defineTool,
   inMemoryArtifacts,
+  isPaused,
   type ArtifactMeta,
   type AgentfootprintEvent,
+  type RunnerPauseOutcome,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 
@@ -295,6 +298,128 @@ describe('refusals — a bad ref never reaches the tool, and the lesson lists wh
     const refused = events.filter((e) => e.name === 'agentfootprint.artifacts.refused');
     expect(refused[0].payload).toMatchObject({ op: 'dispatch', reason: 'invalid-input' });
   });
+
+  it('a REQUIRED wants-arg the model OMITTED is refused by name behind validation OFF — the belt does not depend on the args gate', async () => {
+    // The hole this pins: `toolArgValidation` is an agent-wide dial, and with
+    // it off (or 'warn') an omitted ref used to reach `execute` — the handler
+    // running with `args.dataset` undefined, believing the framework had
+    // resolved it. The wants belt already covered a non-string ref behind the
+    // same disabled gate; omission is the same class of hole.
+    const store = inMemoryArtifacts();
+    let liveRef = '';
+    const seeder = Agent.create({
+      provider: mock({ replies: [call('get_data', 's1'), final('ok')] as never }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: store,
+    })
+      .system('s')
+      .tool(getData)
+      .build();
+    seeder.on('agentfootprint.artifacts.minted', (e) => {
+      liveRef = (e.payload as { ref: string }).ref;
+    });
+    await seeder.run({ message: 'seed' }, { sessionId: 'omitted' });
+
+    const probe = { args: undefined as unknown };
+    const agent = Agent.create({
+      provider: mock({ replies: [call('transform_report', 't1', {}), final('done')] as never }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: store,
+      toolArgValidation: 'off',
+    })
+      .system('s')
+      .tool(buildTransform(probe as never))
+      .build();
+    const events = artifactCapture(agent);
+    const ends = toolEndCapture(agent);
+    await agent.run({ message: 'go' }, { sessionId: 'omitted' });
+
+    // The tool never ran…
+    expect(probe.args).toBeUndefined();
+    // …and the model read a refusal naming the argument, the kind, and what
+    // CAN resolve (the same teaching shape every other wants refusal has).
+    const text = String(ends[0].result);
+    expect(text).toContain("'dataset' is required");
+    expect(text).toContain("'dataset/rows'");
+    expect(text).toContain(liveRef);
+    expect(ends[0].error).toBe(true);
+    const refused = events.filter((e) => e.name === 'agentfootprint.artifacts.refused');
+    expect(refused[0].payload).toMatchObject({
+      op: 'dispatch',
+      reason: 'invalid-input',
+      tool: 'transform_report',
+    });
+  });
+
+  it('a null value is named as null, never "a object" — the refusal teaches the right correction', async () => {
+    const probe = { args: undefined as unknown };
+    const agent = Agent.create({
+      provider: mock({
+        replies: [call('transform_report', 't1', { dataset: null }), final('done')] as never,
+      }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: inMemoryArtifacts(),
+      toolArgValidation: 'off',
+    })
+      .system('s')
+      .tool(buildTransform(probe as never))
+      .build();
+    const ends = toolEndCapture(agent);
+    await agent.run({ message: 'go' });
+    expect(probe.args).toBeUndefined();
+    expect(String(ends[0].result)).toContain('not null');
+  });
+});
+
+describe('integration — every dispatch door judges the declaration the same way', () => {
+  it('the RESUME door refuses a required-but-omitted ref too — an approved call is not a waived one', async () => {
+    // `resolveCredentialAndExecute` is the second dispatch door (check-in
+    // approval, credential-consent resume, ask-resume). A human approving a
+    // call approves the CALL, not the absence of the data it declared, so the
+    // same belt runs there — with the tool's own schema, which is what makes
+    // the refusal possible.
+    const probe = { args: undefined as unknown };
+    const gated = defineTool<{ dataset: string }, string>({
+      name: 'gated_transform',
+      description: 'total a stored dataset (pass the art_… ref)',
+      inputSchema: {
+        type: 'object',
+        properties: { dataset: { type: 'string' } },
+        required: ['dataset'],
+      },
+      wants: { dataset: 'dataset/rows' },
+      checkIn: 'always',
+      execute: (args) => {
+        probe.args = args;
+        return 'ran';
+      },
+    });
+    const build = (replies: readonly unknown[]) =>
+      Agent.create({
+        provider: mock({ replies: replies as never }),
+        model: 'mock',
+        maxIterations: 4,
+        artifacts: inMemoryArtifacts(),
+        toolArgValidation: 'off',
+      })
+        .system('s')
+        .tool(gated)
+        .build();
+
+    const first = build([call('gated_transform', 't1', {}), final('done')]);
+    const out = (await first.run({ message: 'go' })) as RunnerPauseOutcome;
+    expect(isPaused(out)).toBe(true);
+
+    const second = build([final('done')]);
+    const ends = toolEndCapture(second);
+    await second.resume(out.checkpoint, checkInApproved({ by: 'ops' }));
+    expect(probe.args).toBeUndefined();
+    expect(String(ends[0].result)).toContain("'dataset' is required");
+    expect(ends[0].error).toBe(true);
+  });
 });
 
 describe('integration — scope isolation and configuration refusals', () => {
@@ -371,6 +496,43 @@ describe('integration — scope isolation and configuration refusals', () => {
         execute: () => 'x',
       }),
     ).toThrowError(/wants: \{\}/);
+  });
+});
+
+describe('regression — an OPTIONAL declared argument is still the model’s choice', () => {
+  it('omitted where the schema does not require it: the tool RUNS, args carry no key, ctx.wanted stays absent', async () => {
+    const probe = { args: undefined as unknown, wanted: 'unset' as unknown, ran: false };
+    const optional = defineTool<{ dataset?: string }, string>({
+      name: 'optional_report',
+      description: 'works with or without a stored dataset',
+      // No `required` — declaring the argument does not make passing it
+      // mandatory, and the framework must not invent a rule the tool did not.
+      inputSchema: { type: 'object', properties: { dataset: { type: 'string' } } },
+      wants: { dataset: 'dataset/rows' },
+      execute: (args, ctx) => {
+        probe.ran = true;
+        probe.args = args;
+        probe.wanted = ctx.wanted;
+        return 'ok';
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({ replies: [call('optional_report', 't1', {}), final('done')] as never }),
+      model: 'mock',
+      maxIterations: 3,
+      artifacts: inMemoryArtifacts(),
+    })
+      .system('s')
+      .tool(optional)
+      .build();
+    const events = artifactCapture(agent);
+    await agent.run({ message: 'go' });
+    expect(probe.ran).toBe(true);
+    expect(probe.args).toEqual({});
+    // Absent, not empty — "nothing resolved" and "an empty resolution" are
+    // different facts, and only absence says the model chose not to pass one.
+    expect(probe.wanted).toBeUndefined();
+    expect(events).toHaveLength(0);
   });
 });
 

@@ -133,6 +133,19 @@ export interface InjectionContext {
    * to this when only the singular was provided. When the model called
    * several tools in one message this is the LAST of them — read
    * `toolResults` when the whole batch matters.
+   *
+   * **`result` is the string the MODEL read, which artifact PLACEMENT can
+   * replace.** With `artifacts: { store, placement: { maxInlineChars } }`
+   * configured, a tool result over the threshold is checked into the artifact
+   * store and both the model and this field get the claim ticket instead —
+   * `{"placed":true,"ref":"art_…","kind":"tool-result/<tool>",…}` (see
+   * `placeResults` in stages/toolCalls.ts, where the other end of this note
+   * lives). So a predicate matching on payload text stops firing once an
+   * operator turns placement on or lowers the threshold, and one matching on
+   * the ticket's `kind` only fires after it. Deliberate: routing judges what
+   * the model was told, never a string that is not in the conversation. Match
+   * on the tool NAME (`onToolReturn`) or a declared `status` (`onToolStatus`)
+   * when you want a guard placement cannot move.
    */
   readonly lastToolResult?: {
     readonly toolName: string;
@@ -147,6 +160,10 @@ export interface InjectionContext {
    * byte-identically to the singular. Absent on iteration 1 and for
    * contexts built by callers that only supply `lastToolResult` — use
    * {@link toolResultsOf} to read the batch with that fallback applied.
+   *
+   * Each `result` here is the same string the model read, so artifact
+   * PLACEMENT can substitute a claim ticket for it — see the note on
+   * {@link InjectionContext.lastToolResult}, which owns the statement.
    */
   readonly toolResults?: ReadonlyArray<{
     readonly toolName: string;

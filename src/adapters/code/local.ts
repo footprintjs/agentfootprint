@@ -25,6 +25,21 @@
  *   • CPU or memory limits beyond the timeout;
  *   • any protection from code that deletes something outside `cwd`.
  *
+ * ── It stages inputs; it does NOT report outputs (a decision, not a gap) ────
+ * `stageInputs` puts declared artifact payloads INTO the session, and the code
+ * reads them from the manifest. Nothing comes back the same way: this runner
+ * leaves `CodeResult.artifacts` ABSENT — never `[]`, which would claim the code
+ * produced nothing — because it has no output location to collect from. The
+ * child's working directory is the CALLER'S OWN cwd, so "files the code wrote"
+ * is not a set this adapter can identify without guessing which of a developer's
+ * files were meant, and a dev-loop runner that quietly uploaded whatever
+ * appeared beside your source would be the worse failure. Producing outputs
+ * needs three things this adapter does not have yet: a declared output
+ * directory the model is told about, a bounded read-back of what landed in it,
+ * and a size policy for what is too big to carry in-band. A runner that has
+ * them (a managed sandbox that returns file contents) fills the field, and
+ * `codeRunnerTool` mints every data-carrying entry with no further wiring.
+ *
  * So: a development loop, a trusted-input pipeline, a machine you would be
  * relaxed about a shell script running on. NOT arbitrary model-written code
  * from an untrusted user, on a host with anything on it. For that, run a real

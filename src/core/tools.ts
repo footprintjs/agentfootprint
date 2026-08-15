@@ -47,6 +47,13 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * wanted kind. Resolution rides `agentfootprint.artifacts.resolved`;
    * refusals ride `artifacts.refused` with `op: 'dispatch'`.
    *
+   * **Whether the model MAY omit it is your `inputSchema`'s to say.** Name
+   * the argument in `required` and dispatch refuses the call by name when no
+   * ref arrives — the handler is never entered believing the framework
+   * resolved something it did not. Leave it out and an omitted argument is
+   * the model choosing not to use one: the tool runs, `args` carries no such
+   * key, and `ctx.wanted` has no entry for it.
+   *
    * Requires an attached store: an Agent refuses at BUILD when a statically
    * registered tool declares `wants` with no `artifacts` configured (config
    * that lies otherwise); other dispatch doors refuse at dispatch, by name.
