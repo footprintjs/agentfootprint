@@ -130,6 +130,71 @@ model cannot hold a stream. A tool genuinely moving gigabytes holds the *store*
 — it constructed it — and calls that directly. **planned** (streaming on the
 tool capability): not designed, not wanted.
 
+## The proof ships with the port
+
+Five stores implement `ArtifactStore` here. Until 9.40 the laws they shared
+lived in a *test file*, and the published package excludes `dist/test` — so
+anyone implementing the port over Postgres, Azure Blob or their own service
+could read the interface and had no way to run the checks the in-tree stores are
+held to. The sibling port learned why that matters the hard way: a split-brain
+ownership defect was live in **four** session stores at once, every one of them
+tested, and invisible to all of them simultaneously because each was tested
+against *its own doubles*. A flaw in the port's semantics is exactly the flaw
+per-store tests cannot see.
+
+So the battery is now exported beside the port. `artifactStoreConformance` is an
+ordinary array of cases; `runArtifactStoreConformance(harness)` runs all of them
+and answers an `ArtifactStoreReport`; `runArtifactStoreCase(case, harness)` runs
+one, so you get an assertion per law in whatever runner you use; and
+`formatArtifactStoreReport(report)` renders the whole thing as text for a
+failure message or a log. **Nothing in it imports a test framework** — a case
+throws to fail — so it runs under vitest, jest, `node:test`, or a plain script.
+**shipped (9.40.0).**
+
+```ts
+import { runArtifactStoreConformance, formatArtifactStoreReport } from 'agentfootprint';
+
+const report = await runArtifactStoreConformance({
+  name: 'ourOwnArtifacts',
+  createStore: () => ourOwnArtifacts({ pool, clock }),
+  disposeStore: (store) => store.close(),
+  advanceTime: (store, ms) => clock.tick(ms),
+  corrupt: (store, scope, ref) => pool.query('update artifacts set payload = $1 …'),
+  boundedStore: (maxBytesPerScope) => ourOwnArtifacts({ pool, clock, retention: { maxBytesPerScope } }),
+});
+
+if (!report.ok) throw new Error(formatArtifactStoreReport(report));
+```
+
+You hand it an `ArtifactStoreHarness`: a **factory**, not a store, because most
+cases need a store with nothing in it and a closed store cannot be reset. Three
+of its fields are hooks for things the port deliberately has no verb for — the
+`ArtifactStoreHarnessHook` union names them: `advanceTime` (expiry cannot be
+observed without time passing), `corrupt` (the integrity law needs damage staged
+from outside), and `boundedStore` (a ceiling is configuration, not a verb).
+
+An `ArtifactStoreOutcome` distinguishes three ways a case does not simply pass,
+and they mean different things:
+
+- **`not-applicable`** — the case is about an optional member
+  (`ArtifactStoreMember`: `putStream` or `getStream`) this store does not
+  implement. Feature detection, which is the port's own rule.
+- **`declared`** — the store implements it and still cannot satisfy the case,
+  named in `declared` with a reason. `inMemoryArtifacts` declares exactly one:
+  its payloads live in a `Map` closed over by the factory, so the corruption the
+  integrity case stages cannot happen to it from outside. **A declared case is
+  still run**, and a declaration that starts passing is reported `STALE` — a
+  suppression nobody revisits is how a fixed defect keeps its exemption.
+- **`failed`** — including *"this case needed a harness hook nobody supplied and
+  nobody declared."* An undeclared skip is a pass with the evidence removed.
+
+There is deliberately no way to make a case quietly disappear. The case names
+are a closed union (`ArtifactStoreCaseName`) so a declaration cannot go on
+suppressing a case that was renamed, each `ArtifactStoreCase` carries the one
+`law` it holds — printed beside a failure, so a break reads as a broken promise
+rather than a broken assertion — and the `ArtifactConformanceKit` a case is
+handed gives it unique scopes and the store's own clock.
+
 ---
 
 # Chapter 1 — Who holds the scope

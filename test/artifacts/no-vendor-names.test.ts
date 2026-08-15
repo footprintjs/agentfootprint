@@ -59,10 +59,30 @@ const FORBIDDEN: readonly RegExp[] = [
   /\bx-amz-/i,
 ];
 
+/**
+ * Every `.ts` under `src/artifacts`, SUBTREES INCLUDED.
+ *
+ * Widened when `conformance/` arrived: a guardrail that stops at the first
+ * folder somebody adds is a guardrail that ages badly, and the battery is
+ * exactly the kind of file a vendor name creeps into ("skip this case on the
+ * bucket one"). Names are relative to the root so a report says
+ * `conformance/cases.ts` rather than `cases.ts`.
+ */
 function artifactSources(): { file: string; text: string }[] {
-  return readdirSync(ARTIFACTS_DIR)
-    .filter((name) => name.endsWith('.ts'))
-    .map((name) => ({ file: name, text: readFileSync(join(ARTIFACTS_DIR, name), 'utf8') }));
+  const found: { file: string; text: string }[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path, `${prefix}${entry.name}/`);
+      else if (entry.name.endsWith('.ts')) {
+        found.push({ file: `${prefix}${entry.name}`, text: readFileSync(path, 'utf8') });
+      }
+    }
+  };
+  walk(ARTIFACTS_DIR, '');
+  return found;
 }
 
 describe('the artifact port names no vendor', () => {

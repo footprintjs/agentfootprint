@@ -84,6 +84,7 @@ import {
 } from './toolSessions.js';
 import { buildEventMeta } from '../bridge/eventMeta.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
+import { buildRunManifest } from './agent/runManifest.js';
 
 /**
  * The pseudo-stage a tool-teardown event is stamped with.
@@ -96,6 +97,16 @@ import type { AgentfootprintEventMap } from '../events/registry.js';
  * `session_reused`, happen inside a real stage and carry its real id.
  */
 const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
+
+/**
+ * The pseudo-stage the run-configuration manifest is stamped with (9.41.0).
+ *
+ * Same reasoning as the teardown id above, at the other end of the run: the
+ * manifest is dispatched before the chart starts, so there is no stage to
+ * inherit and inventing a plausible one would put a node in every step strip
+ * that no traversal ever visited. This says plainly where it came from.
+ */
+const RUN_MANIFEST_STAGE_ID = 'run-configured#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
@@ -2499,7 +2510,83 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       if (r.delivery !== undefined) executor.attachCombinedRecorder(r);
       else attachObserver(r);
     }
+    // LAST, so the manifest describes a fully-wired run — and so it is the
+    // first event of this runId that any listener sees.
+    this.emitRunManifest();
     return executor;
+  }
+
+  /**
+   * File the run-configuration manifest (9.41.0) — which adapters and
+   * strategies this run is about to use, stamped with the runId every other
+   * event of the run already carries.
+   *
+   * **Why it lives in `createExecutor` and not in `run()`.** `run()` and
+   * `resume()` both come through here, and both mint a fresh runId (a resumed
+   * run is a new run to every consumer joining on `meta.runId`, so a resume
+   * with no manifest would be a run whose arm nobody can name). One funnel is
+   * also how the next entry point cannot forget — the `beginIngress` lesson.
+   *
+   * **Why a direct dispatch rather than `typedEmit`.** There is no stage: the
+   * chart has not started. So it is built with `buildEventMeta` and a STATED
+   * pseudo-stage, exactly like the tool-teardown reports at the other end of
+   * the run — never `minimalMeta()`, whose hardcoded `runId: 'consumer-scope'`
+   * would make the one event whose whole job is to BE joinable the one event
+   * that cannot be joined.
+   *
+   * **Why it is gated on a listener.** Every typed event in this library is:
+   * the dispatcher drops what nobody subscribed to, and `EmitBridge` does the
+   * same upstream. The gate is what keeps an unwatched agent at one map
+   * lookup per run. It also means the manifest is not "always on" but "always
+   * there when anything is watching" — including `recordRun`, which subscribes
+   * with `'*'` before the run starts, so every recording carries one.
+   */
+  private emitRunManifest(): void {
+    const type = 'agentfootprint.agent.run_configured';
+    const dispatcher = this.getDispatcher();
+    if (!dispatcher.hasListenersFor(type)) return;
+    dispatcher.dispatch({
+      type,
+      payload: buildRunManifest({
+        agentId: this.id,
+        providerName: this.provider.name,
+        model: this.model,
+        hasRunConfig: this.runConfigFn !== undefined,
+        hasSkillBrains: this.skillBrains !== undefined,
+        reactMode: this.reactMode,
+        memories: this.memories,
+        ...(this.windowStrategy !== undefined && {
+          windowStrategyName: this.windowStrategy.name,
+        }),
+        // A graph is mounted iff `.skillGraph()` handed over its cursor
+        // resolver. NOT `skillGraphCascade`, which a graph mounted without the
+        // turn-start cascade options never sets — reading that one would
+        // report "no graph" for a graph that routes every turn.
+        ...(this.skillGraphNextSkill !== undefined && {
+          skillGraph: {
+            ...(this.skillGraphCascade !== undefined && {
+              routing: this.skillGraphCascade.strictness,
+              continuity: this.skillGraphCascade.continuity,
+            }),
+            ...(this.skillGraphCascade?.turnRouting?.scorer !== undefined && {
+              scorerName: this.skillGraphCascade.turnRouting.scorer.name,
+            }),
+          },
+        }),
+        ...(this.evidenceGate !== undefined && {
+          evidenceGatePosture: this.evidenceGate.posture,
+        }),
+        // The store itself is never named — see RunManifestSources.artifacts.
+        ...(this.artifactStore !== undefined && {
+          artifacts: {
+            configured: true as const,
+            placement: this.artifactPlacement !== undefined,
+            recordings: this.artifactRecordings !== undefined,
+          },
+        }),
+      }),
+      meta: buildEventMeta({ runtimeStageId: RUN_MANIFEST_STAGE_ID }, this.currentRunContext),
+    });
   }
 
   /**

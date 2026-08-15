@@ -1,10 +1,12 @@
 /**
- * The two CLOUD artifact adapters — the same five-verb contract, run against
- * emulation doubles at the SDK boundary, plus the laws that are theirs alone.
+ * The two CLOUD artifact adapters — the laws that are theirs alone, against
+ * emulation doubles at the SDK boundary.
+ *
+ * The five-verb contract they share with every other store is the EXPORTED
+ * battery (`src/artifacts/conformance`), run against these same doubles in
+ * `./store-conformance.test.ts`.
  *
  * Sections follow Convention 3:
- *   Functional  — the five-verb contract × 2 adapters (the shared suite, so a
- *                 divergence from the shipped three fails here).
  *   Integration — scope-partitioned keys (traversal arrives as data), the
  *                 metadata budget refusal, retention + the read-time sweep,
  *                 the call SHAPE (what a listing costs on each column).
@@ -27,29 +29,17 @@ import {
   type ArtifactStore,
 } from '../../src/index.js';
 import { fakeGcs, fakeS3 } from './fakes/objectServices.js';
-import { clock, contractSuite, SCOPE, type MakeStore } from './storeContractSuite.js';
+import { clock, SCOPE } from './storeFixtures.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Functional — the five-verb contract, per adapter
+//
+// MOVED to the exported battery: `src/artifacts/conformance`, which both cloud
+// columns run against these same doubles in `./store-conformance.test.ts` —
+// one definition for all five stores, and one an out-of-tree store can import.
+// What stays here is what is theirs alone: key layout, the metadata budget,
+// the CALL SHAPE of a listing, and the secrecy law on an SDK failure.
 // ─────────────────────────────────────────────────────────────────────
-
-const CLOUD_ADAPTERS: ReadonlyArray<[string, MakeStore]> = [
-  [
-    's3Artifacts',
-    (now) =>
-      s3Artifacts({ bucket: 'b', prefix: 'artifacts', _client: fakeS3(now).client, _now: now }),
-  ],
-  [
-    'gcsArtifacts',
-    (now) =>
-      gcsArtifacts({ bucket: 'b', prefix: 'artifacts', _storage: fakeGcs(now).storage, _now: now }),
-  ],
-];
-
-// The SHARED contract suite — the same definition the three shipped adapters
-// run (`./storeContractSuite.ts`), so a cloud column that drifts from the port
-// fails here rather than being proved consistent with its own copy.
-for (const [name, makeStore] of CLOUD_ADAPTERS) contractSuite(name, makeStore);
 
 describe('both cloud adapters — retention', () => {
   it('retention: budgets evict oldest-first and report the sweep', async () => {

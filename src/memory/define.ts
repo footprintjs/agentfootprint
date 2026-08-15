@@ -60,6 +60,7 @@ import {
   type ExtractStrategy,
   type DecayStrategy,
   type HybridStrategy,
+  type MemoryStrategyKind,
 } from './define.types.js';
 import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.js';
 
@@ -113,10 +114,28 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
 
   const billing = summarizerBilling(options);
 
+  // The three names the compiled pipeline would otherwise swallow. Read
+  // structurally, the way `validate` reads the same fields: the union's arms
+  // declare each other's spellings as `never`, so intersecting them here would
+  // make the very fields this reads unreadable. See MemoryDefinition.strategy.
+  const declared = options.strategy as {
+    readonly kind?: MemoryStrategyKind;
+    readonly retrieval?: { readonly name?: string };
+    readonly embedder?: { readonly id?: string };
+    readonly embedderId?: string;
+  };
+  // The embedder's OWN id first: it is the thing that ran. `embedderId` is the
+  // declared filter, and it is the only answer for a server-text store, where
+  // there is no embedder instance to ask.
+  const embedderId = declared?.embedder?.id ?? declared?.embedderId;
+
   const definition: MemoryDefinition = {
     id: options.id,
     ...(options.description !== undefined && { description: options.description }),
     type: options.type,
+    ...(declared?.kind !== undefined && { strategy: declared.kind }),
+    ...(typeof declared?.retrieval?.name === 'string' && { retrieval: declared.retrieval.name }),
+    ...(embedderId !== undefined && { embedderId }),
     read: brandPipeline(pipeline.read),
     ...(write !== undefined && { write: brandPipeline(write) }),
     // Carried in the open so the host can resolve WHICH TURN this is against

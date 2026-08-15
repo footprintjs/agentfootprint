@@ -94,6 +94,24 @@ export {
   UnserializableRecordingError,
   type RecordingMintFacts,
 } from './recordingArtifact.js';
+// The battery a store must pass to CLAIM the port, exported beside the port
+// itself so an out-of-tree store imports the check the same way it imports the
+// interface it is implementing. Imports no test framework — a case throws to
+// fail. See conformance/README.md.
+export {
+  artifactStoreConformance,
+  formatArtifactStoreReport,
+  runArtifactStoreCase,
+  runArtifactStoreConformance,
+  type ArtifactConformanceKit,
+  type ArtifactStoreCase,
+  type ArtifactStoreCaseName,
+  type ArtifactStoreHarness,
+  type ArtifactStoreHarnessHook,
+  type ArtifactStoreMember,
+  type ArtifactStoreOutcome,
+  type ArtifactStoreReport,
+} from './conformance/index.js';
 export {
   assertArtifactPlacement,
   isPlacedToolResult,

@@ -141,7 +141,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     whatever the outcome. Names and numbers in the answer that appear
     //     in no tool result were TYPED, not read. A per-attempt fact, so it
     //     rides this channel; only the terminal verdict is committed.)
-    expect(ALL_EVENT_TYPES.length).toBe(93);
+    //    (agent.run_configured added with 9.41.0 — the run-configuration
+    //     manifest: one event at run start naming the adapters and strategies
+    //     in play, so N runs group into N labelled ARMS on the runId every
+    //     other event already carries. Names and ids ONLY — never an
+    //     endpoint, a key or a principal — and an unconfigured field is
+    //     ABSENT rather than guessed.)
+    expect(ALL_EVENT_TYPES.length).toBe(94);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -639,6 +639,26 @@ export {
   type ArtifactStreamRecord,
   type StreamingArtifactStore,
 } from './artifacts/index.js';
+// Artifacts, the CONFORMANCE battery — the laws a store must hold to claim the
+// port, written once against the port and run against every store, in-tree or
+// out. On the main barrel because that is where `ArtifactStore` itself ships:
+// somebody implementing the port imports the check from the same door as the
+// interface. Nothing in it imports a test framework — a case throws to fail —
+// so it runs under vitest, jest, `node:test` or a plain script.
+export {
+  artifactStoreConformance,
+  formatArtifactStoreReport,
+  runArtifactStoreCase,
+  runArtifactStoreConformance,
+  type ArtifactConformanceKit,
+  type ArtifactStoreCase,
+  type ArtifactStoreCaseName,
+  type ArtifactStoreHarness,
+  type ArtifactStoreHarnessHook,
+  type ArtifactStoreMember,
+  type ArtifactStoreOutcome,
+  type ArtifactStoreReport,
+} from './artifacts/index.js';
 // Artifacts, the data legs (9.22.0) — refs the model ROUTES: `wants` (ref
 // arguments resolved at dispatch, the declare-and-push precedent applied to
 // data), the auto-attached `present` tool (hand a ref to the screen with a

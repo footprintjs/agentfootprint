@@ -4,14 +4,15 @@
  * bounds + drop counting, the file store's traversal-proof paths and
  * present-but-unreadable refusal, the sqlite store's file refusals.
  *
- * The contract suite itself lives in `./storeContractSuite.ts`, because the two
- * CLOUD adapters run THE SAME definition (`./cloud-stores.test.ts`) rather than
- * a copy of it — five adapters, one law, and a new law added there is one all
- * five must immediately satisfy.
+ * The five-verb contract itself is no longer here. It moved out of
+ * `test/artifacts/` entirely and into `src/artifacts/conformance` — the
+ * EXPORTED battery, run against all five stores (these three plus the two cloud
+ * columns) by `./store-conformance.test.ts`, and importable by a store nobody
+ * here has written. This file keeps what is genuinely adapter-specific.
  *
  * Sections follow Convention 3: Unit (naming / retention / payload laws) ·
- * Functional (the five-verb contract × 3) · Integration (adapter-specific
- * laws) · Regression (pins on the exact refusal classes).
+ * Integration (adapter-specific laws) · Regression (pins on the exact refusal
+ * classes).
  */
 
 import { describe, it, expect, afterAll } from 'vitest';
@@ -39,7 +40,7 @@ import {
   encodeArtifactData,
   measureArtifactBytes,
 } from '../../src/artifacts/payload.js';
-import { clock, contractSuite, OTHER_SCOPE, SCOPE } from './storeContractSuite.js';
+import { clock, SCOPE } from './storeFixtures.js';
 
 const cleanups: Array<() => void> = [];
 afterAll(() => {
@@ -152,18 +153,13 @@ describe('payload — measured, carried, and refused one way', () => {
 // ─────────────────────────────────────────────────────────────────────────
 // Functional — the five-verb contract, once per adapter
 //
-// The suite itself lives in `./storeContractSuite.ts` so the two CLOUD
-// adapters run THE SAME laws rather than a copy of them (see that file's
-// header). A law added there is a law all five adapters must satisfy.
+// MOVED to the exported battery: `src/artifacts/conformance`, bound to all
+// five stores (these three and both cloud columns) by
+// `./store-conformance.test.ts`. A shared law belongs THERE, where a store
+// nobody here wrote can run it too — the laws that used to live in this
+// section proved only that the stores agreed with a suite that never left the
+// repository.
 // ─────────────────────────────────────────────────────────────────────────
-
-contractSuite('inMemoryArtifacts', (now) => inMemoryArtifacts({ _now: now }));
-contractSuite('fileArtifacts', (now) => fileArtifacts({ directory: tempDir(), _now: now }));
-contractSuite(
-  'sqliteArtifacts',
-  (now) => sqliteArtifacts({ file: join(tempDir(), 'artifacts.db'), _now: now }),
-  onSqlite,
-);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Integration — each adapter's own laws

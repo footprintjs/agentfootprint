@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.41.0] - 2026-08-15
+
+**Comparing strategies, and proving a store.** An audit asked whether this
+library can support research-grade work — run one workload under several
+strategies and collect comparable data. The verdict was that swapping a
+strategy is easy and ATTRIBUTING an outcome to it is not: 93 typed events with
+a correlated envelope, real numbers, and a genuine counterfactual engine in
+`context-bisect` — but no record of what varied. This release adds the join
+key, and the proof obligations for the second port.
+
+### Added
+
+- **`agentfootprint.agent.run_configured`** — one event at run start naming the
+  strategies in play: provider and model, memories with their declared
+  strategy / retrieval / embedder, window, skill-graph routing and scorer,
+  evidence-gate posture, artifact dials. Because `runId` is already stamped on
+  everything else, that single event turns N runs into N labelled ARMS with no
+  workload type, no arm type and no sweep runner. Fired from the one funnel
+  `run()` and `resume()` share, so a resumed run is its own arm.
+
+  **Names and ids only, never values.** A manifest that leaks an endpoint is
+  worse than no manifest, and a test configures obviously-secret values and
+  asserts none appears. Absence is omission — never `'unknown'`, never a
+  guessed `'default'`.
+
+  What it deliberately does NOT name, because naming it would be a lie: which
+  memory or artifact store (the ports declare no id, and shipped stores are
+  factory-returned literals, so one arm would be labelled and another not);
+  `entryBy()` scorers (the graph hands the Agent a bound function, never the
+  scorer); and the "effective" model, since `.configure()` resolves after this
+  point and calling a consumer's resolver twice per run to find out would be a
+  cost the event does not justify. It names the starting model plus
+  `modelOverrides`, and leaves per-call truth to `llm_start`.
+
+  Gated on a listener check and pinned by SIZE rather than absence: a
+  fully-configured agent serializes under 1,000 characters.
+
+- **`runArtifactStoreConformance`** — the `ArtifactStore` port now ships its own
+  proof obligations, the way `SessionLifecycle` has since 9.37.0. 19 cases, run
+  against all five in-tree stores. Exported from the door the port ships from,
+  so a third party writing their own store can prove it.
+
+  The battery imports NO test framework — a case throws to fail — which is what
+  lets it run under any runner or none. That rule is itself a test now: one
+  walks all of `src/**` looking for a test-framework import.
+
+  Three non-pass outcomes stay distinct: `not-applicable` (an optional member
+  is absent), `declared` (cannot satisfy, BY NAME with a reason, and the case
+  STILL RUNS so a declaration that starts passing is reported STALE), and
+  `failed` — which includes needing a harness hook nobody supplied and nobody
+  declared. Nothing can quietly disappear.
+
+  It reads the STORE's clock through a probe artifact rather than `Date.now()`,
+  because a case computing expiry from wall time would silently never expire
+  anything on an injected-clock store, and pass forever.
+
+  Two findings it surfaced rather than smoothed: `inMemoryArtifacts` must
+  declare the digest-corruption case, because its payloads live in a
+  closed-over Map with no seam to stage corruption through; and `fileArtifacts`
+  cannot hold a scope value longer than a filesystem component, where the
+  sibling session battery uses 1,000-character values freely.
+
+  Migration, not duplication: the old test-only suite became fixtures, and its
+  laws moved into the battery. A second copy of the same laws is exactly the
+  drift this exists to prevent.
+
+- `MemoryDefinition` gains optional declared `strategy`, `retrieval` and
+  `embedderId` — additive, and what makes a memory row worth grouping on.
+
+
 ## [9.40.0] - 2026-08-15
 
 **Two identity bugs, one of which had been paying out zeros since v2.8.**

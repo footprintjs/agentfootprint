@@ -393,6 +393,36 @@ export interface MemoryDefinition<T = unknown> {
   /** Which TYPE shape — gates legal STRATEGY combinations. */
   readonly type: MemoryType;
 
+  /**
+   * The strategy KIND this memory was compiled from, and the two names that
+   * ride with it (9.41.0).
+   *
+   * Carried in the open for the same reason {@link MemoryDefinition.store} is:
+   * the compiled subflows already closed over all of it, and a host looking at
+   * the definition could see WHICH memory was mounted but not WHICH RULE it
+   * runs. The run-configuration manifest
+   * (`agentfootprint.agent.run_configured`) names the strategies a run used so
+   * two runs can be grouped into two arms, and it fires before any subflow
+   * has — so the rule has to be readable from here, not from the retrieval
+   * that eventually happens.
+   *
+   * NAMES ONLY, deliberately: the numbers (`k`, `threshold`, `size`) stay
+   * inside the pipeline. They are what the rule is TUNED to, not which rule it
+   * is, and the manifest reports strategies rather than settings.
+   *
+   * Optional because a hand-built `MemoryDefinition` declares none — and
+   * absent has to keep meaning "did not say", never a guessed default.
+   */
+  readonly strategy?: MemoryStrategyKind;
+
+  /** `RetrievalStrategy.name`, when the strategy was given the spelled-out
+   *  `retrieval` rule rather than the `{ topK, threshold }` shorthand. */
+  readonly retrieval?: string;
+
+  /** The embedder in play, by `Embedder.id` — or the declared `embedderId`
+   *  when the store embeds server-side and no embedder was passed. */
+  readonly embedderId?: string;
+
   /** Compiled read subflow (built by the factory from type × strategy). */
   readonly read: ReadonlyMemoryFlowChart<T>;
 
