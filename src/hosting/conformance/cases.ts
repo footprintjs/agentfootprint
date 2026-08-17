@@ -337,12 +337,36 @@ const contestedWrite: SessionLifecycleCase = {
       attempt(() => store.persist(id, kit.envelope('alice speaking', 'alice'))),
       attempt(() => store.persist(id, kit.envelope('bob speaking', 'bob'))),
     ]);
-    check(
-      settled.some((err) => err === undefined),
-      `both writers were refused, so nothing was stored at all. One of them was first and ` +
-        `is entitled to its conversation; refusing both turns a contested write into an ` +
-        `outage.`,
-    );
+    if (!settled.some((err) => err === undefined)) {
+      // Both were rejected — but `attempt` catches EVERY rejection, and a store
+      // that cannot be reached rejects both writers too. A locked database
+      // account, a closed pool and a refused ownership write are three different
+      // facts, and this case used to report all of them as the same verdict.
+      //
+      // Found in the field: a trial whose SQL login was locked out mid-run got
+      // "both writers were refused, so nothing was stored at all" — an ownership
+      // finding about a database the battery never reached. So the case now
+      // earns the right to that verdict by proving the store answers at all.
+      // Same distinction `unreadable-is-not-absent` exists for, one level up:
+      // "it refused" and "it could not be asked" must not collapse into one.
+      const control = await attempt(() =>
+        store.persist(kit.id('reachable'), kit.envelope('an uncontested write', 'alice')),
+      );
+      check(
+        control === undefined,
+        `this store rejected BOTH contested writers and an uncontested one as well, so it ` +
+          `could not be reached — a bad credential, a closed pool, a network error. That is ` +
+          `an environment failure and NOT a verdict about contested writes: fix the ` +
+          `connection and run again. The uncontested write said: ${String(control)}`,
+      );
+      check(
+        false,
+        `both writers were refused, so nothing was stored at all — and an uncontested write ` +
+          `to this same store SUCCEEDED, so the store is reachable and this is really about ` +
+          `contention. One of them was first and is entitled to its conversation; refusing ` +
+          `both turns a contested write into an outage.`,
+      );
+    }
 
     const owner = await store.ownerOf!(id);
     const signer = envelopeOwner(await store.hydrate(id));
