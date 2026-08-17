@@ -394,6 +394,22 @@ narrowing multiplies start-up cost with nothing to show for it.
 Worked end to end, with the payoff, the isolation and the events printed:
 `examples/features/52-run-code.ts`.
 
+### Turn repeated code into a tool backlog
+
+Every completed run leaves a privacy-safe `CodeRunFacts` record keyed by its
+tool-call ID. `codeRunsOf(tool)` reads those facts for inspection, and
+`agentfootprint.tools.code_run` emits the same facts to attached observers after
+dispatch. Neither path exposes the generated program: `codeShape(code)` removes
+comments, literals and non-callee identifiers while keeping the operations and
+their order. The event carries the resulting `shapeHash` instead of source code.
+
+Group that hash over production runs. When the same shape keeps returning, the
+agent is repeatedly writing the same missing operation; the most frequent
+shapes are a measured backlog of tools worth implementing. The remaining facts
+— language, staged-input count, output size, truncation and success — let you
+prioritize that backlog without sending the model-written code or the customer
+data embedded in it to an observability provider.
+
 ### Why it is a plain tool — and what the chart form buys you
 
 `codeRunnerTool` is deliberately a **plain `Tool`, not a chart.** It is one

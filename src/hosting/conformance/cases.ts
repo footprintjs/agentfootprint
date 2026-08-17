@@ -584,7 +584,7 @@ const FOLD_PAIRS: readonly FoldPair[] = [
   },
   {
     fold: 'zero-width characters stripped',
-    left: (b) => `${b}chat​1`,
+    left: (b) => `${b}chat\u200B1`,
     right: (b) => `${b}chat1`,
   },
   // ── position: which END of an id a store keeps ──

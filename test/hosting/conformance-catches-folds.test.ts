@@ -61,7 +61,10 @@ const BROKEN_MAPPINGS: readonly {
   { name: 'normalises to NFC', toKey: (id) => id.normalize('NFC') },
   { name: 'normalises to NFD', toKey: (id) => id.normalize('NFD') },
   { name: 'normalises to NFKC', toKey: (id) => id.normalize('NFKC') },
-  { name: 'strips zero-width characters', toKey: (id) => id.replace(/[​-‍﻿]/g, '') },
+  {
+    name: 'strips zero-width characters',
+    toKey: (id) => id.replace(/[\u200B-\u200D\uFEFF]/g, ''),
+  },
 ];
 
 describe('the collision case catches a store that folds two ids into one', () => {
