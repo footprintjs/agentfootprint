@@ -31,6 +31,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         // desktop collapse button — so it still reads as the clean always-open ExpoStarter look,
         // without the toggle clutter, while mobile navigation keeps working.
         collapsible: true,
+        // The static export can otherwise prefetch every visible sidebar route,
+        // downloading many RSC payloads before the reader expresses intent.
+        prefetch: false,
         // The Docs | API Reference switcher at the top of the sidebar.
         tabs: [
           {

@@ -56,7 +56,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "clean": "rm -rf dist coverage node_modules package-lock.json",
+    "clean": "rm -rf dist coverage node_modules",
     "build": "rm -rf dist && tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs",
     "watch": "tsc -w",
     "test": "vitest run",

@@ -336,9 +336,9 @@ export function ContextEngineering() {
       {/* ---------- HERO ---------- */}
       <div className="af-ctx-hero">
         <p className="af-ctx-eyebrow">02 · the solution</p>
-        <h1>
+        <h3>
           {technical ? <>Context engineering, <em>abstracted.</em></> : <>Give every piece of context <em>an address.</em></>}
-        </h1>
+        </h3>
         <p className="af-ctx-lede-hero">
           {technical ? (
             <>That wrong document reached the System Prompt because <b>something injected it</b>. So here is
@@ -385,9 +385,9 @@ function AbstractionBlock() {
   return (
     <section className="af-ctx-block" data-narrative="flavors → 3 slots">
       <p className="af-ctx-kicker">The model — what we abstract</p>
-      <h2>
+      <h3>
         Many flavors. <em>Three slots.</em>
-      </h2>
+      </h3>
       <p className="af-ctx-lede">
         The data and instructions you collect wear many names. Each lands in <b>system</b>,{' '}
         <b>messages</b>, or <b>tools</b> — and several land in <i>more than one</i>. Scroll to map each
@@ -519,9 +519,9 @@ function TriggersBlock() {
   return (
     <section className="af-ctx-block" data-narrative="4 triggers → when">
       <p className="af-ctx-kicker">When each one fires</p>
-      <h2>
+      <h3>
         Four triggers decide <em>when.</em>
-      </h2>
+      </h3>
       <p className="af-ctx-lede">
         A slot says <b>where</b> content lands; a trigger says <b>when</b> it fires. Scroll to watch
         each kind light up <i>where in the loop</i> it acts — from always-on rules to context the model
@@ -621,9 +621,9 @@ function CodeBlock() {
   return (
     <section className="af-ctx-block" data-narrative="declare the flavor">
       <p className="af-ctx-kicker">In your code</p>
-      <h2>
+      <h3>
         Declare the flavor. <em>Not the prompt string.</em>
-      </h2>
+      </h3>
       <p className="af-ctx-lede">
         You attach typed pieces — a fact, a rule, a skill. The framework decides <b>which slot</b> and{' '}
         <b>which iteration</b> each fires on, places the cache markers, and records every injection it
@@ -790,9 +790,9 @@ function DynamicReactBlock() {
   return (
     <section className="af-ctx-block" data-narrative="recomposes every turn">
       <p className="af-ctx-kicker">How the assembly runs</p>
-      <h2>
+      <h3>
         The prompt <em>recomposes</em> every iteration.
-      </h2>
+      </h3>
       <p className="af-ctx-lede">
         The model reasons, decides which skill it needs, and the framework{' '}
         <b>re-engineers all three slots</b> — system, messages, and tools — around that decision. Tools

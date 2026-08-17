@@ -34,13 +34,13 @@ jobs:
       # The library itself: docs-next's twoslash code-checks and the generated API
       # reference both resolve against agentfootprint's built types (dist/), so build it.
       - name: Install library deps
-        run: npm install
+        run: npm ci
       - name: Build library (dist types for twoslash + API gen)
         run: npm run build
 
       - name: Install docs-next deps
         working-directory: docs-next
-        run: npm install
+        run: npm ci
 
       # The "Try it live" embed shows AND runs the same builder file. Run it here so a
       # broken demo fails the build, not the reader's browser.
@@ -57,6 +57,10 @@ jobs:
           EXPORT: 'true'
           NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
         run: npm run build
+
+      - name: Enforce site performance budgets
+        working-directory: docs-next
+        run: npm run check:site-budget
 
       # GitHub Pages must not run Jekyll (it would drop the _next/ underscore dir).
       - name: Disable Jekyll

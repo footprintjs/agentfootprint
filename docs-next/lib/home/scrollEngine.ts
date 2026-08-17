@@ -27,6 +27,7 @@ type Subscriber = {
 const subs = new Set<Subscriber>();
 let rafId = 0;
 let started = false;
+let resizeObserver: ResizeObserver | undefined;
 
 function progressOf(s: Subscriber, scrollY: number): number {
   // Default (lead 0): progress runs 0 → 1 as the track scrolls from "top at the top of the
@@ -73,8 +74,20 @@ function start(): void {
   window.addEventListener('resize', remeasureAll);
   // catch layout changes that don't fire 'resize': fonts, lazy content, images, reflow.
   if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(remeasureAll).observe(document.documentElement);
+    resizeObserver = new ResizeObserver(remeasureAll);
+    resizeObserver.observe(document.documentElement);
   }
+}
+
+function stopWhenIdle(): void {
+  if (!started || subs.size > 0 || typeof window === 'undefined') return;
+  started = false;
+  window.removeEventListener('scroll', schedule);
+  window.removeEventListener('resize', remeasureAll);
+  resizeObserver?.disconnect();
+  resizeObserver = undefined;
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = 0;
 }
 
 /**
@@ -99,5 +112,6 @@ export function registerScroll(
   cb(progressOf(s, typeof window === 'undefined' ? 0 : window.scrollY)); // seed initial state
   return () => {
     subs.delete(s);
+    stopWhenIdle();
   };
 }

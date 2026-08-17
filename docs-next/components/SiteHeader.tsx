@@ -61,9 +61,17 @@ export function SiteHeader() {
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
       <div className="af-sh-inner">
-        <Link href="/" className="af-wordmark af-sh-brand" aria-label="agentfootprint — home">
+        <Link href="/" prefetch={false} className="af-wordmark af-sh-brand" aria-label="agentfootprint — home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={asset('/footprint-logo.png')} alt="" className="af-wordmark-icon" aria-hidden="true" />
+          <img
+            src={asset('/footprint-logo-66.webp')}
+            width={50}
+            height={66}
+            alt=""
+            className="af-wordmark-icon"
+            aria-hidden="true"
+            decoding="async"
+          />
           <span className="af-wordmark-text">
             <span className="lo">agent</span>
             <span className="hi">footprint</span>
@@ -86,6 +94,7 @@ export function SiteHeader() {
               its left is already the home link, so nothing becomes unreachable. */}
           <Link
             href="/"
+            prefetch={false}
             className={`af-sh-link af-sh-home${onHome ? ' on' : ''}`}
             aria-current={onHome ? 'page' : undefined}
           >
@@ -93,12 +102,18 @@ export function SiteHeader() {
           </Link>
           <Link
             href="/features"
+            prefetch={false}
             className={`af-sh-link${onFeatures ? ' on' : ''}`}
             aria-current={onFeatures ? 'page' : undefined}
           >
             Features
           </Link>
-          <Link href="/docs" className={`af-sh-link${onDocs ? ' on' : ''}`} aria-current={onDocs ? 'page' : undefined}>
+          <Link
+            href="/docs"
+            prefetch={false}
+            className={`af-sh-link${onDocs ? ' on' : ''}`}
+            aria-current={onDocs ? 'page' : undefined}
+          >
             Docs
           </Link>
         </nav>

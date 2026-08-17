@@ -119,7 +119,7 @@ export function WhyThisTool() {
       <p className="af-why-kicker">
         {technical ? 'Forward influence over the same evidence graph' : 'Same machinery, a different agent'}
       </p>
-      <h2 className="af-why-head">{technical ? 'Inspect the decision boundary.' : 'Why this tool?'}</h2>
+      <h3 className="af-why-head">{technical ? 'Inspect the decision boundary.' : 'Why this tool?'}</h3>
       <p className="af-why-lede">
         {technical ? (
           <>The same footprint supports forward analysis: score candidate tools, surface an ambiguous boundary, revise the description, and rerun the scorer over the unchanged graph.</>

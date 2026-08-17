@@ -53,7 +53,39 @@ export function useScrollProgress<T>(
       return;
     }
 
-    return registerScroll(el, (progress) => commit(mapRef.current(progress)));
+    let unsubscribe: (() => void) | undefined;
+    const subscribe = () => {
+      if (!unsubscribe) {
+        unsubscribe = registerScroll(el, (progress) => commit(mapRef.current(progress)));
+      }
+    };
+    const unsubscribeWhenFar = () => {
+      unsubscribe?.();
+      unsubscribe = undefined;
+    };
+
+    // Pinned tracks are expensive only when the shared engine has to measure and
+    // update them. Keep a track out of that hot path until it is within one viewport;
+    // re-registering seeds the exact current progress, so deep links and reverse
+    // scrolling remain correct. The full visual/content stays server-rendered.
+    if (typeof IntersectionObserver === 'undefined') {
+      subscribe();
+      return unsubscribeWhenFar;
+    }
+
+    const proximityObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) subscribe();
+        else unsubscribeWhenFar();
+      },
+      { rootMargin: '100% 0px 100% 0px', threshold: 0 },
+    );
+    proximityObserver.observe(el);
+
+    return () => {
+      proximityObserver.disconnect();
+      unsubscribeWhenFar();
+    };
   }, [ref]);
 
   return value;

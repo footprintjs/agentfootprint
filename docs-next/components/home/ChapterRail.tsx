@@ -26,27 +26,58 @@ export function ChapterRail() {
 
   // scroll-spy: the active chapter is the last section whose top has passed the rail's bottom edge.
   useEffect(() => {
-    const sections = chapters.map((chapter) => document.getElementById(chapter.id)).filter(Boolean) as HTMLElement[];
-    if (sections.length === 0) return;
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const line = (railRef.current?.getBoundingClientRect().bottom ?? 96) + 8;
-        let cur = sections[0].id;
-        for (const s of sections) {
-          if (s.getBoundingClientRect().top <= line) cur = s.id;
-        }
-        setActive((prev) => (prev === cur ? prev : cur));
-      });
+    const rail = railRef.current;
+    if (!rail) return;
+    let cleanupActive: (() => void) | undefined;
+
+    const activate = () => {
+      if (cleanupActive) return;
+      const sections = chapters.map((chapter) => document.getElementById(chapter.id)).filter(Boolean) as HTMLElement[];
+      if (sections.length === 0) return;
+
+      let raf = 0;
+      const onScroll = () => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const line = (railRef.current?.getBoundingClientRect().bottom ?? 96) + 8;
+          let cur = sections[0].id;
+          for (const s of sections) {
+            if (s.getBoundingClientRect().top <= line) cur = s.id;
+          }
+          setActive((prev) => (prev === cur ? prev : cur));
+        });
+      };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll);
+      cleanupActive = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+        cancelAnimationFrame(raf);
+      };
     };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+
+    // The rail is below the opening content. Its links work as plain anchors from
+    // the server-rendered HTML; activate scroll-spy only as the rail approaches.
+    if (typeof IntersectionObserver === 'undefined') {
+      activate();
+      return () => cleanupActive?.();
+    }
+
+    const activationIo = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          activationIo.disconnect();
+          activate();
+        }
+      },
+      { rootMargin: '100% 0px 100% 0px', threshold: 0 },
+    );
+    activationIo.observe(rail);
+
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
+      activationIo.disconnect();
+      cleanupActive?.();
     };
   }, [chapters]);
 

@@ -692,9 +692,9 @@ export function CoreEngine() {
       {/* ---------- HERO ---------- */}
       <section className="af-eng-hero">
         <p className="af-eng-eyebrow">04 · how it works</p>
-        <h1 className="af-eng-h1">
+        <h3 className="af-eng-h1">
           {technical ? <>Traversal and provenance <em>share one runtime.</em></> : <>The brain thinks, asks a tool, <em>loops to the answer.</em></>}
-        </h1>
+        </h3>
         <p className="af-eng-lede">
           {technical
             ? 'Each stage emits typed evidence at the same boundary where execution advances. The causal record is created inline, never reconstructed from logs afterward.'
@@ -834,9 +834,9 @@ export function CoreEngine() {
         {/* header scrolls past normally — only the animation below pins (the global nav is
             already the sticky header; pinning the section header too is redundant) */}
         <header className="af-eng-ahead">
-          <h2 className="af-eng-h2">
+          <h3 className="af-eng-h2">
             {technical ? <>Inline emission creates the <em>typed footprint.</em></> : <>The loop <em>records itself.</em></>}
-          </h2>
+          </h3>
           <p className="af-eng-block-lede">
             {technical ? (
               <>Each traversal event becomes a typed row with node identity, timing, tokens, state, and causal links. The resulting footprint is directly sliceable and replayable.</>
@@ -929,9 +929,9 @@ export function CoreEngine() {
       <section className="af-eng-block alt2" data-narrative="costs the run nothing">
         {/* header scrolls past; only the animation pins below */}
         <header className="af-eng-ahead">
-          <h2 className="af-eng-h2">
+          <h3 className="af-eng-h2">
             {technical ? <>Deferred delivery stays <em>off the hot path.</em></> : <>Your agent <em>is</em> the event loop.</>}
-          </h2>
+          </h3>
           <p className="af-eng-block-lede">
             {technical ? (
               <>A stage emits on the call stack; observers drain from the queue at the next microtask boundary. Execution remains authoritative while recorder delivery stays one beat behind.</>

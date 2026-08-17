@@ -25,20 +25,39 @@ const config = {
     // automatically; Turbopack doesn't, so alias it to a throwing browser stub. The
     // library is untouched — this is a consumer-side bundler config.
     resolveAlias: {
-      'node:module': './lib/stubs/node-module.js',
+      'node:module': './lib/stubs/browser-node-builtins.js',
+      // Broad context/provider barrels also expose call-time-only Node helpers.
+      // The browser demos never call them, but the bundler must still resolve the
+      // dynamic imports while proving the client graph.
+      'node:http': './lib/stubs/browser-node-builtins.js',
+      'node:path': './lib/stubs/browser-node-builtins.js',
+      'node:fs/promises': './lib/stubs/browser-node-builtins.js',
       // localEmbedder's model packages — call-time-only, never reached by a
       // browser mock agent (see lib/stubs/embedder-deps.js).
       '@huggingface/transformers': './lib/stubs/embedder-deps.js',
       'fs/promises': './lib/stubs/embedder-deps.js',
     },
   },
-  // `next build` bundles with webpack; mirror the same three stubs there.
-  webpack: (config) => {
+  // Keep webpack as a supported verification/fallback path. `node:` requests
+  // need replacement before webpack's scheme reader runs; aliases alone are
+  // too late for them.
+  webpack: (config, { webpack }) => {
+    const browserNodeStub = resolve(import.meta.dirname, 'lib/stubs/browser-node-builtins.js');
     config.resolve.alias = {
       ...config.resolve.alias,
+      'node:module': browserNodeStub,
+      'node:http': browserNodeStub,
+      'node:path': browserNodeStub,
+      'node:fs/promises': browserNodeStub,
       '@huggingface/transformers': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
       'fs/promises': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
     };
+    config.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(
+        /^node:(?:module|http|path|fs\/promises)$/,
+        browserNodeStub,
+      ),
+    );
     return config;
   },
   ...(isExport

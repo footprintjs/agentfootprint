@@ -1362,6 +1362,16 @@ path.aff-in.on {
    fully-composed still on first paint (useAdditiveSteps commits every layer immediately).
    ============================================================================================ */
 @media (prefers-reduced-motion: reduce) {
+  /* The final composed state is rendered immediately by useAdditiveSteps. Remove the
+     scroll budget and pin as well, otherwise reduced-motion visitors still have to
+     cross 160–184vh of static space for every feature. */
+  .aff-beat-inner {
+    min-height: auto;
+  }
+  .aff-stagewrap {
+    position: static;
+    top: auto;
+  }
   .aff-in {
     opacity: var(--aff-op, 1);
     translate: none;

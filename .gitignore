@@ -33,7 +33,9 @@ api-docs/
 
 # Playwright
 .playwright-mcp/
-package-lock.json
+
+# Dependency locks are part of the build contract. The docs deployment uses
+# `npm ci`, so both the library and docs app resolve exactly what was reviewed.
 
 # Proposal scratchpads (drafts that get folded into real files)
 *.proposed.md

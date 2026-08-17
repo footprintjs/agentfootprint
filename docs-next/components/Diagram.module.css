@@ -1,0 +1,17 @@
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dark {
+  display: none;
+}
+
+:global(.dark) .light {
+  display: none;
+}
+
+:global(.dark) .dark {
+  display: block;
+}

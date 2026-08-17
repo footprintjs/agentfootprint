@@ -42,69 +42,99 @@ export function Chapters() {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const sections = Array.from(root.querySelectorAll<HTMLElement>('.af-chapter'));
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          e.target.classList.toggle('is-active', e.isIntersecting);
-        }
-      },
-      { rootMargin: '-18% 0px -62% 0px', threshold: 0 },
-    );
-    sections.forEach((s) => io.observe(s));
+    let cleanupActive: (() => void) | undefined;
 
-    // `.is-inview` gates the decorative @keyframes loops (CSS pauses them otherwise): start a
-    // chapter's animations ~one screen before it scrolls in, stop them once it's well past, so
-    // off-screen chapters cost zero animation work. Generous margin avoids any visible "pop".
-    const inViewIo = new IntersectionObserver(
+    // The story starts well below the hero. Keep its observers, layout reads, and
+    // global scroll/resize listeners dormant until the reader is within one viewport
+    // of it. The chapter HTML is still fully server-rendered and linkable.
+    const activate = () => {
+      if (cleanupActive) return;
+
+      const sections = Array.from(root.querySelectorAll<HTMLElement>('.af-chapter'));
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            e.target.classList.toggle('is-active', e.isIntersecting);
+          }
+        },
+        { rootMargin: '-18% 0px -62% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => io.observe(s));
+
+      // `.is-inview` gates the decorative @keyframes loops (CSS pauses them otherwise): start a
+      // chapter's animations ~one screen before it scrolls in, stop them once it's well past, so
+      // off-screen chapters cost zero animation work. Generous margin avoids any visible "pop".
+      const inViewIo = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            e.target.classList.toggle('is-inview', e.isIntersecting);
+          }
+        },
+        { rootMargin: '100% 0px 100% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => inViewIo.observe(s));
+
+      // per-section narrative — center-of-viewport test (robust for the tall pinned tracks)
+      const narrEls = Array.from(root.querySelectorAll<HTMLElement>('[data-narrative]'));
+      let raf = 0;
+      const onScroll = () => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const center = window.innerHeight / 2;
+          const found: Record<string, string> = {};
+          for (const el of narrEls) {
+            const r = el.getBoundingClientRect();
+            if (r.top <= center && r.bottom >= center) {
+              const cid = el.closest('.af-chapter')?.id;
+              const label = el.dataset.narrative;
+              if (cid && label) found[cid] = label;
+            }
+          }
+          setActiveSubs((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const cid in found) {
+              if (next[cid] !== found[cid]) {
+                next[cid] = found[cid];
+                changed = true;
+              }
+            }
+            return changed ? next : prev;
+          });
+        });
+      };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll);
+
+      cleanupActive = () => {
+        io.disconnect();
+        inViewIo.disconnect();
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+        cancelAnimationFrame(raf);
+      };
+    };
+
+    if (typeof IntersectionObserver === 'undefined') {
+      activate();
+      return () => cleanupActive?.();
+    }
+
+    const activationIo = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) {
-          e.target.classList.toggle('is-inview', e.isIntersecting);
+        if (entries.some((entry) => entry.isIntersecting)) {
+          activationIo.disconnect();
+          activate();
         }
       },
       { rootMargin: '100% 0px 100% 0px', threshold: 0 },
     );
-    sections.forEach((s) => inViewIo.observe(s));
-
-    // per-section narrative — center-of-viewport test (robust for the tall pinned tracks)
-    const narrEls = Array.from(root.querySelectorAll<HTMLElement>('[data-narrative]'));
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const center = window.innerHeight / 2;
-        const found: Record<string, string> = {};
-        for (const el of narrEls) {
-          const r = el.getBoundingClientRect();
-          if (r.top <= center && r.bottom >= center) {
-            const cid = el.closest('.af-chapter')?.id;
-            const label = el.dataset.narrative;
-            if (cid && label) found[cid] = label;
-          }
-        }
-        setActiveSubs((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          for (const cid in found) {
-            if (next[cid] !== found[cid]) {
-              next[cid] = found[cid];
-              changed = true;
-            }
-          }
-          return changed ? next : prev;
-        });
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    activationIo.observe(root);
 
     return () => {
-      io.disconnect();
-      inViewIo.disconnect();
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
+      activationIo.disconnect();
+      cleanupActive?.();
     };
   }, []);
 
@@ -120,7 +150,7 @@ export function Chapters() {
                 {/* The category (The solution, …) now lives in the rail as the table-of-contents
                     label; the bar owns the full title. Dropping the category pill here is what kills
                     the title/category echo between the rail and this bar. See ChapterRail.tsx. */}
-                <span className="ti">{c.ti}</span>
+                <h2 className="ti">{c.ti}</h2>
                 <span className="sub" key={sub}>
                   {sub}
                 </span>

@@ -28,9 +28,9 @@ export function SummaryChapter() {
       {/* whole-system overview — the recap diagram */}
       <section className="af-overview">
         <p className="af-overview-kicker">the whole system</p>
-        <h2 className="af-overview-head">
+        <h3 className="af-overview-head">
           {technical ? 'The provenance architecture.' : 'How it all fits together.'}
-        </h2>
+        </h3>
         <p className="af-overview-sub">
           {technical ? (
             <>Typed sources compose into <b>system / messages / tools</b>, execute through the runtime, and emit a causal graph for slicing, ablation, and replay.</>
@@ -41,9 +41,15 @@ export function SummaryChapter() {
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={asset('/system-overview.webp')}
+          src={asset('/system-overview-1000.webp')}
+          srcSet={`${asset('/system-overview-640.webp')} 640w, ${asset('/system-overview-1000.webp')} 1000w, ${asset('/system-overview-1600.webp')} 1600w`}
+          sizes="(max-width: 1048px) calc(100vw - 48px), 1000px"
+          width={1000}
+          height={667}
           alt="agentfootprint system overview: context sources compose through the agent into the system, messages, and tools slots, then the LLM produces a structured answer"
           className="af-overview-img"
+          loading="lazy"
+          decoding="async"
         />
       </section>
 
@@ -52,9 +58,9 @@ export function SummaryChapter() {
         <span className="af-pill">
           <span className="af-pill-dot" /> open source · MIT
         </span>
-        <h2 className="af-closer-head">
+        <h3 className="af-closer-head">
           {technical ? <>Make every agent run <em>causally queryable.</em></> : <>Stop guessing why your agent <em>answered wrong.</em></>}
-        </h2>
+        </h3>
         <p className="af-closer-lede">
           {technical
             ? 'Record inline. Slice backward. Ablate the suspect. Replay the counterfactual.'

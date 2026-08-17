@@ -140,14 +140,14 @@ export function BacktrackStory() {
 
       <div className="af-bt-grid">
         <div className="af-bt-card">
-          <h4>The run</h4>
+          <h3>The run</h3>
           <p style={{ fontFamily: 'var(--fd-font-mono, monospace)', fontSize: 12.5, marginTop: 8 }}>
             classify → refund &nbsp;·&nbsp; check → continue &nbsp;·&nbsp;{' '}
             <span style={{ color: 'var(--coral, #c2542a)' }}>decide → approved ✗</span>
           </p>
         </div>
         <div className="af-bt-card">
-          <h4>Can&apos;t you just ask a model?</h4>
+          <h3>Can&apos;t you just ask a model?</h3>
           <div className="af-bt-guess"><span className="who">gpt</span><span>the customer history</span><span className="conf">98%</span></div>
           <div className="af-bt-guess"><span className="who">claude</span><span>the policy doc</span><span className="conf">95%</span></div>
           <div className="af-bt-guess"><span className="who">llama</span><span>the tone rule</span><span className="conf">91%</span></div>

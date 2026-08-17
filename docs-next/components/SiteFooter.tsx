@@ -15,7 +15,15 @@ export function SiteFooter() {
       <a className="af-builton" href={SITE.core} target="_blank" rel="noreferrer">
         Built on
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={asset('/footprintjs-icon.png')} alt="" className="af-fpjs-icon" />
+        <img
+          src={asset('/footprintjs-icon-40.webp')}
+          width={25}
+          height={40}
+          alt=""
+          className="af-fpjs-icon"
+          loading="lazy"
+          decoding="async"
+        />
         <span className="af-fpjs-word">
           footprint<em>js</em>
         </span>

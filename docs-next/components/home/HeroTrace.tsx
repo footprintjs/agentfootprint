@@ -20,39 +20,70 @@ const STEPS: Step[] = [
 export function HeroTrace() {
   const [shown, setShown] = useState(0); // number of steps revealed
   const [asking, setAsking] = useState(false); // the "why?" prompt
+  const [isInViewport, setIsInViewport] = useState(true);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const root = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const element = root.current;
+    if (!element || !('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsInViewport(entry.isIntersecting),
+      { rootMargin: '200px 0px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const update = () => setIsPageVisible(document.visibilityState === 'visible');
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setShown(STEPS.length);
       setAsking(true);
       return;
     }
-    let i = 0;
-    const tick = () => {
-      if (i < STEPS.length) {
-        i += 1;
-        setShown(i);
-        timer.current = setTimeout(tick, 720);
-      } else {
-        setAsking(true);
-        timer.current = setTimeout(() => {
-          // reset and loop
-          setAsking(false);
-          setShown(0);
-          i = 0;
-          timer.current = setTimeout(tick, 700);
-        }, 2800);
+
+    if (!isInViewport || !isPageVisible) return;
+
+    if (shown < STEPS.length) {
+      timer.current = setTimeout(
+        () => setShown((current) => Math.min(current + 1, STEPS.length)),
+        shown === 0 ? 450 : 720,
+      );
+    } else if (!asking) {
+      timer.current = setTimeout(() => setAsking(true), 720);
+    } else {
+      timer.current = setTimeout(() => {
+        setAsking(false);
+        setShown(0);
+      }, 2800);
+    }
+
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = undefined;
       }
     };
-    timer.current = setTimeout(tick, 450);
-    return () => clearTimeout(timer.current);
-  }, []);
+  }, [asking, isInViewport, isPageVisible, shown]);
 
   const last = shown > 0 ? STEPS[shown - 1] : null;
 
   return (
-    <div className="af-trace af-flowwrap" role="img" aria-label="A live agent run recording itself, ending in a wrong refund approval.">
+    <div
+      ref={root}
+      className="af-trace af-flowwrap"
+      role="img"
+      aria-label="A live agent run recording itself, ending in a wrong refund approval."
+    >
       <div className="af-trace-head">
         <span className="af-trace-name">refunds-agent</span>
         <span className="af-trace-rec">

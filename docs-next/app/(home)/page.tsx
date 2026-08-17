@@ -11,6 +11,7 @@ import {
 import { SiteFooter } from '@/components/SiteFooter';
 import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
+import './home.css';
 
 const HOME_TITLE = 'agentfootprint — Find the context that made your agent answer wrong';
 const HOME_DESC =
@@ -62,9 +63,16 @@ export default function HomePage() {
       <section className="af-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={asset('/mascot.png')}
+          src={asset('/mascot-400.webp')}
+          srcSet={`${asset('/mascot-200.webp')} 200w, ${asset('/mascot-400.webp')} 400w`}
+          sizes="(max-width: 600px) 160px, 200px"
+          width={400}
+          height={400}
           alt="agentfootprint mascot — it pulls scattered context in and hands back clean, traceable slots"
           className="af-hero-mascot"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="af-hero-grid">
           <div className="af-hero-text">
@@ -90,7 +98,7 @@ export default function HomePage() {
               />
             </p>
             <div className="af-hero-cta">
-              <Link className="af-cta" href="/docs">
+              <Link className="af-cta" href="/docs" prefetch={false}>
                 Get started →
               </Link>
               <Link className="af-cta-ghost" href="https://github.com/footprintjs/agentfootprint">
