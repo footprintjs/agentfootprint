@@ -56,13 +56,13 @@ const docsIndexes: AdvancedIndex[] = source.getPages().map((page) => {
   };
 });
 
-// The 5 homepage chapters, derived from the SAME array that drives the sticky bars and the
-// jump-rail (lib/chapters.ts) — so they can never drift. Each remains one page-level result.
+// The 5 deep-walkthrough chapters, derived from the SAME array that drives the sticky bars and
+// jump-rail on /how-it-works (lib/chapters.ts) — so they can never drift.
 const chapterIndexes: AdvancedIndex[] = CHAPTERS_META.map((c) => ({
   id: c.id,
   title: c.ti,
   description: c.sub,
-  url: `/#${c.id}`,
+  url: `/how-it-works#${c.id}`,
   structuredData: {
     headings: [],
     contents: [{ heading: undefined, content: `${c.cat}. ${c.sub}` }],

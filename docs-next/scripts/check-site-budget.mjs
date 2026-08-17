@@ -20,6 +20,11 @@ const ROUTES = [
     limits: { js: 225_000, css: 25_000, html: 45_000, requests: 21 },
   },
   {
+    name: 'how it works',
+    file: 'how-it-works/index.html',
+    limits: { js: 235_000, css: 34_000, html: 45_000, requests: 21 },
+  },
+  {
     name: 'docs',
     file: 'docs/index.html',
     limits: { js: 235_000, css: 20_000, html: 50_000, requests: 22 },

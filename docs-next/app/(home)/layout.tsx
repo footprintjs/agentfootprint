@@ -1,6 +1,7 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { baseOptions } from '@/lib/layout.shared';
 import { SiteHeader } from '@/components/SiteHeader';
+import { MarketingPointer } from '@/components/MarketingPointer';
 import type { ReactNode } from 'react';
 
 // Home and docs render the SAME custom header (SiteHeader) via each layout's nav.component
@@ -9,6 +10,7 @@ import type { ReactNode } from 'react';
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <HomeLayout {...baseOptions()} nav={{ component: <SiteHeader /> }}>
+      <MarketingPointer />
       {children}
     </HomeLayout>
   );

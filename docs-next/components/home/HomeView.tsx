@@ -45,10 +45,7 @@ export function HomeViewProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [applyView]);
 
-  const setView = useCallback(
-    (nextView: HomeView) => applyView(nextView, true),
-    [applyView],
-  );
+  const setView = useCallback((nextView: HomeView) => applyView(nextView, true), [applyView]);
   const value = useMemo(() => ({ view, setView }), [setView, view]);
 
   return <HomeViewContext.Provider value={value}>{children}</HomeViewContext.Provider>;
@@ -65,11 +62,11 @@ export function HomeViewText({ product, technical }: { product: ReactNode; techn
   return view === 'technical' ? technical : product;
 }
 
-export function HomeViewSwitcher() {
+export function HomeViewSwitcher({ label = 'Choose view' }: { label?: string }) {
   const { view, setView } = useHomeView();
 
   return (
-    <div className="af-view-switcher" role="group" aria-label="Choose homepage view">
+    <div className="af-view-switcher" role="group" aria-label={label}>
       <span className="af-view-label">View</span>
       {(['product', 'technical'] as const).map((option) => (
         <button

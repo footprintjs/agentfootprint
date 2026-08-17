@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useRef } from 'react';
 import { useSearchContext } from 'fumadocs-ui/contexts/search';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
 import { SidebarTrigger } from 'fumadocs-ui/components/sidebar/base';
@@ -27,8 +28,17 @@ import { asset } from '@/lib/site';
 
 function SearchIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" strokeLinecap="round" />
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -43,7 +53,15 @@ function GitHubIcon() {
 
 function MenuIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
       <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
     </svg>
   );
@@ -54,14 +72,21 @@ export function SiteHeader() {
   const pathname = usePathname();
   const onDocs = pathname?.startsWith('/docs') ?? false;
   const onFeatures = pathname?.startsWith('/features') ?? false;
-  // "Home" is the current page only when we are on neither of the other two — otherwise /features
-  // would light up Home as well (the whole site outside /docs used to be "home").
-  const onHome = !onDocs && !onFeatures;
+  const onHow = pathname?.startsWith('/how-it-works') ?? false;
+  const onDevelopers = pathname?.startsWith('/docs/build') ?? false;
+  const onDeveloperQuickstart = pathname === '/docs/build/skill-graph-quickstart';
+  const mobileMenu = useRef<HTMLDetailsElement>(null);
+  const closeMobileMenu = () => mobileMenu.current?.removeAttribute('open');
 
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
       <div className="af-sh-inner">
-        <Link href="/" prefetch={false} className="af-wordmark af-sh-brand" aria-label="agentfootprint — home">
+        <Link
+          href="/"
+          prefetch={false}
+          className="af-wordmark af-sh-brand"
+          aria-label="agentfootprint — home"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={asset('/footprint-logo-66.webp')}
@@ -80,7 +105,12 @@ export function SiteHeader() {
 
         <div className="af-sh-gap" />
 
-        <button type="button" className="af-sh-search" onClick={() => setOpenSearch(true)} aria-label="Search">
+        <button
+          type="button"
+          className="af-sh-search"
+          onClick={() => setOpenSearch(true)}
+          aria-label="Search"
+        >
           <SearchIcon />
           <span className="af-sh-search-text">Search</span>
           <span className="af-sh-kbd" aria-hidden="true">
@@ -90,33 +120,87 @@ export function SiteHeader() {
         </button>
 
         <nav className="af-sh-nav" aria-label="Primary">
-          {/* af-sh-home marks the one link the phone header can afford to drop: the wordmark to
-              its left is already the home link, so nothing becomes unreachable. */}
-          <Link
-            href="/"
-            prefetch={false}
-            className={`af-sh-link af-sh-home${onHome ? ' on' : ''}`}
-            aria-current={onHome ? 'page' : undefined}
-          >
-            Home
-          </Link>
           <Link
             href="/features"
             prefetch={false}
-            className={`af-sh-link${onFeatures ? ' on' : ''}`}
+            className={`af-sh-link af-sh-home${onFeatures ? ' on' : ''}`}
             aria-current={onFeatures ? 'page' : undefined}
           >
-            Features
+            Product
+          </Link>
+          <Link
+            href="/how-it-works"
+            prefetch={false}
+            className={`af-sh-link${onHow ? ' on' : ''}`}
+            aria-current={onHow ? 'page' : undefined}
+          >
+            How it works
+          </Link>
+          <Link
+            href="/docs/build/skill-graph-quickstart"
+            prefetch={false}
+            className={`af-sh-link af-sh-home${onDevelopers ? ' on' : ''}`}
+            aria-current={onDeveloperQuickstart ? 'page' : onDevelopers ? 'location' : undefined}
+          >
+            Developers
           </Link>
           <Link
             href="/docs"
             prefetch={false}
-            className={`af-sh-link${onDocs ? ' on' : ''}`}
-            aria-current={onDocs ? 'page' : undefined}
+            className={`af-sh-link${onDocs && !onDevelopers ? ' on' : ''}`}
+            aria-current={onDocs && !onDevelopers ? 'page' : undefined}
           >
             Docs
           </Link>
         </nav>
+
+        <details className="af-sh-mobile" ref={mobileMenu}>
+          <summary className="af-sh-icon" aria-label="Open primary navigation">
+            <MenuIcon />
+          </summary>
+          <nav className="af-sh-mobile-panel" aria-label="Mobile primary">
+            <Link
+              href="/features"
+              prefetch={false}
+              aria-current={onFeatures ? 'page' : undefined}
+              onClick={closeMobileMenu}
+            >
+              Product
+            </Link>
+            <Link
+              href="/how-it-works"
+              prefetch={false}
+              aria-current={onHow ? 'page' : undefined}
+              onClick={closeMobileMenu}
+            >
+              How it works
+            </Link>
+            <Link
+              href="/docs/build/skill-graph-quickstart"
+              prefetch={false}
+              aria-current={onDeveloperQuickstart ? 'page' : onDevelopers ? 'location' : undefined}
+              onClick={closeMobileMenu}
+            >
+              Developers
+            </Link>
+            <Link
+              href="/docs"
+              prefetch={false}
+              aria-current={onDocs && !onDevelopers ? 'page' : undefined}
+              onClick={closeMobileMenu}
+            >
+              Docs
+            </Link>
+            <a
+              href="https://github.com/footprintjs/agentfootprint"
+              target="_blank"
+              rel="noreferrer"
+              onClick={closeMobileMenu}
+            >
+              GitHub ↗
+            </a>
+          </nav>
+        </details>
 
         <a
           className="af-sh-icon af-sh-gh"

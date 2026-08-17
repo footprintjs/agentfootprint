@@ -17,7 +17,12 @@ function Wordmark() {
   return (
     <span className="af-wordmark">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={asset('/footprint-logo.png')} alt="" className="af-wordmark-icon" aria-hidden="true" />
+      <img
+        src={asset('/footprint-logo.png')}
+        alt=""
+        className="af-wordmark-icon"
+        aria-hidden="true"
+      />
       {/* one word: "agent" + "footprint" sit flush (no gap) so it reads "agentfootprint" */}
       <span className="af-wordmark-text">
         <span className="lo">agent</span>
@@ -40,17 +45,21 @@ export function baseOptions(): BaseLayoutProps {
     },
     links: [
       {
-        // explicit Home link so the homepage is reachable from the shared header on
-        // BOTH layouts (the wordmark links home too, but a labeled link is discoverable).
-        text: 'Home',
-        url: '/',
-        active: 'url',
+        text: 'Product',
+        url: '/features',
+        active: 'nested-url',
         secondary: true,
       },
       {
-        text: 'Features',
-        url: '/features',
+        text: 'How it works',
+        url: '/how-it-works',
         active: 'nested-url',
+        secondary: true,
+      },
+      {
+        text: 'Developers',
+        url: '/docs/build/skill-graph-quickstart',
+        active: 'url',
         secondary: true,
       },
       {

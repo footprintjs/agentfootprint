@@ -11,10 +11,10 @@ import { ECOSYSTEM_PROJECTS } from './ecosystem';
 export const SITE = {
   url: 'https://footprintjs.github.io/agentfootprint',
   name: 'agentfootprint',
-  title: 'agentfootprint — the explainable AI-agent framework',
-  tagline: 'Inject less. Trace more.',
+  title: 'agentfootprint — control agent context and prove what made it fail',
+  tagline: 'Scope the work. Record the path. Prove the fix.',
   description:
-    'agentfootprint is the explainable agent framework for TypeScript. Every run records its own causal trace, so when your AI agent answers wrong you backtrack to the exact context that caused it — and prove the fix by re-running without it. Built on footprintjs.',
+    'agentfootprint is a TypeScript SkillGraph runtime that scopes procedure, tools, and models per step, records context provenance, and tests failures by controlled rerun.',
   author: 'Sanjay', // display byline ("Created by Sanjay")
   authorName: 'Sanjay Krishna Anbalagan', // full legal name — copyright line + schema (matches LICENSE + npm author)
   authorUrl: 'https://github.com/sanjay1909', // primary profile — footer rel=author link + JSON-LD Person.url

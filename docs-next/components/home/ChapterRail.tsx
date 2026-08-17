@@ -5,7 +5,7 @@ import { HOME_VIEW_CHAPTERS } from '@/lib/chapters';
 import { useHomeView } from './HomeView';
 
 /**
- * Home-only sticky chapter rail — a jump-nav under the shared top bar so readers can go
+ * Deep-walkthrough sticky chapter rail — a jump-nav under the shared top bar so readers can go
  * straight to a chapter without scrolling through every tall pinned animation. The active
  * link doubles as a "you are here / N of 5" progress indicator. Lives only on the home
  * surface, so it never touches the docs nav/sidebar/search.
@@ -32,7 +32,9 @@ export function ChapterRail() {
 
     const activate = () => {
       if (cleanupActive) return;
-      const sections = chapters.map((chapter) => document.getElementById(chapter.id)).filter(Boolean) as HTMLElement[];
+      const sections = chapters
+        .map((chapter) => document.getElementById(chapter.id))
+        .filter(Boolean) as HTMLElement[];
       if (sections.length === 0) return;
 
       let raf = 0;
@@ -87,7 +89,11 @@ export function ChapterRail() {
     const inner = railRef.current?.querySelector<HTMLElement>('.af-chaprail-inner');
     const link = inner?.querySelector<HTMLElement>(`a[data-id="${active}"]`);
     if (inner && link && inner.scrollWidth > inner.clientWidth) {
-      inner.scrollTo({ left: link.offsetLeft - inner.clientWidth / 2 + link.clientWidth / 2, behavior: 'smooth' });
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      inner.scrollTo({
+        left: link.offsetLeft - inner.clientWidth / 2 + link.clientWidth / 2,
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
     }
   }, [active]);
 

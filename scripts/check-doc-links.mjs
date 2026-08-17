@@ -19,8 +19,8 @@
  * Usage:  node scripts/check-doc-links.mjs [--strict]
  *   exit 0 = clean · exit 1 = broken links (always) or broken anchors (--strict)
  */
-import { readFileSync } from 'node:fs';
-import { relative, dirname, resolve } from 'node:path';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { relative, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const HERE = dirname(new URL(import.meta.url).pathname);
@@ -37,7 +37,8 @@ const sources = walk(DOCS_ROOT).filter(
   (f) => !relative(DOCS_ROOT, f).replace(/\\/g, '/').startsWith('api/'),
 );
 const anchorsByRoute = new Map(); // real-path anchor lookups
-for (const f of walk(DOCS_ROOT)) anchorsByRoute.set(fileToRoute(f), headingSlugs(readFileSync(f, 'utf8')));
+for (const f of walk(DOCS_ROOT))
+  anchorsByRoute.set(fileToRoute(f), headingSlugs(readFileSync(f, 'utf8')));
 
 const LINK_RE = /\[(?:[^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const brokenPaths = [];
@@ -89,6 +90,47 @@ for (const file of sources) {
   }
 }
 
+// Marketing TSX links bypass the MDX resolver, but they still point into the same docs route set.
+// Scan the home/features/walkthrough sources so a moved guide cannot silently break a homepage CTA.
+const MARKETING_ROOTS = [
+  resolve(HERE, '..', 'docs-next', 'app', '(home)'),
+  resolve(HERE, '..', 'docs-next', 'components', 'home'),
+];
+const SITE_HEADER = resolve(HERE, '..', 'docs-next', 'components', 'SiteHeader.tsx');
+const marketingSources = [SITE_HEADER];
+const walkTsx = (dir) => {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walkTsx(full);
+    else if (name.endsWith('.tsx')) marketingSources.push(full);
+  }
+};
+for (const root of MARKETING_ROOTS) walkTsx(root);
+
+const DOC_LITERAL_RE = /(?:href|link)\s*[:=]\s*['"](\/docs[^'"\s]*)['"]/g;
+let marketingLinks = 0;
+for (const file of marketingSources) {
+  const content = readFileSync(file, 'utf8');
+  DOC_LITERAL_RE.lastIndex = 0;
+  let match;
+  while ((match = DOC_LITERAL_RE.exec(content))) {
+    marketingLinks++;
+    const raw = match[1];
+    const [pathPart, anchor] = raw.split('#');
+    const route = pathPart.replace(/\/$/, '') || '/';
+    const line = content.slice(0, match.index).split('\n').length;
+    const where = `${relative(resolve(HERE, '..'), file)}:${line}`;
+    if (!routes.has(route)) {
+      brokenPaths.push({ where, raw, note: `no page at ${route}` });
+      continue;
+    }
+    const anchorSet = anchorsByRoute.get(route);
+    if (anchor && anchorSet && !anchorSet.has(anchor)) {
+      brokenAnchors.push({ where, raw, note: `no #${anchor} on ${route}` });
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // README front-door gate. The repo-root README links into the LIVE docs site by
 // ABSOLUTE URL (https://footprintjs.github.io/agentfootprint/<route>) — outside
@@ -122,12 +164,22 @@ try {
     }
   }
 } catch (err) {
-  brokenPaths.push({ where: 'README.md', raw: README, note: `could not read README (${err.code ?? err.message})` });
+  brokenPaths.push({
+    where: 'README.md',
+    raw: README,
+    note: `could not read README (${err.code ?? err.message})`,
+  });
 }
 
 const fmt = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-console.log(`Checked ${fmt(sources.length, 'doc')} (${fmt(idMap.size, 'doc id')}, ${fmt(routes.size, 'route')}).`);
+console.log(
+  `Checked ${fmt(sources.length, 'doc')} (${fmt(idMap.size, 'doc id')}, ${fmt(
+    routes.size,
+    'route',
+  )}).`,
+);
 console.log(`Checked ${fmt(readmeLinks, 'README doc-site link')} against the live route set.`);
+console.log(`Checked ${fmt(marketingLinks, 'marketing doc link')} against the live route set.`);
 if (brokenPaths.length) {
   console.error(`\n✗ ${fmt(brokenPaths.length, 'broken link')}:`);
   for (const b of brokenPaths) console.error(`  ${b.where}  ${b.raw}   [${b.note}]`);

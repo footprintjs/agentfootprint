@@ -18,10 +18,11 @@
   --yellow: #ffc700;
   --yellow-dark: #e6b400;
   --yellow-light: #ffd333;
+  --yellow-ink: #765900;
   --bg-alt: #f6f5f1;
   --color-fd-primary: #a67c00;
   --color-fd-accent: color-mix(in oklab, var(--yellow) 16%, var(--bg));
-  --color-fd-ring: var(--yellow-dark);
+  --color-fd-ring: var(--yellow-ink);
   --af-content-max: 1200px;
   --af-gutter: clamp(20px, 5vw, 48px);
 }
@@ -36,6 +37,7 @@
   --yellow: #ffc700;
   --yellow-dark: #e6b400;
   --yellow-light: #ffd333;
+  --yellow-ink: #ffd333;
   --bg-alt: #121214;
   --color-fd-primary: var(--yellow);
   --color-fd-accent: color-mix(in oklab, var(--yellow) 14%, var(--bg-elev));
@@ -63,9 +65,7 @@ html {
   background: var(--color-fd-card);
   border: 1px solid var(--color-fd-border);
   border-radius: 14px;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.04),
-    0 14px 36px -12px rgb(0 0 0 / 0.08);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 14px 36px -12px rgb(0 0 0 / 0.08);
   margin-block: 1.25rem;
 }
 #nd-sidebar {
@@ -86,8 +86,14 @@ html {
   flex: none;
   margin-right: 1px;
 }
-.af-wordmark .lo { color: var(--fg-muted); font-weight: 500; }
-.af-wordmark .hi { color: var(--fg); font-weight: 700; }
+.af-wordmark .lo {
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+.af-wordmark .hi {
+  color: var(--fg);
+  font-weight: 700;
+}
 
 /* Shared site header. */
 .af-sh {
@@ -167,7 +173,11 @@ html {
   color: var(--fg);
 }
 .af-sh-link.on {
-  color: var(--yellow-dark);
+  color: var(--yellow-ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
 }
 .af-sh-icon {
   display: inline-flex;
@@ -178,6 +188,7 @@ html {
   border-radius: 8px;
   color: color-mix(in oklab, var(--fg) 60%, transparent);
   transition: background 0.15s, color 0.15s;
+  flex: 0 0 auto;
 }
 .af-sh-icon:hover {
   background: color-mix(in oklab, var(--fg) 8%, transparent);
@@ -186,8 +197,86 @@ html {
 .af-sh-sidebar {
   display: none;
 }
+.af-sh-theme {
+  flex: 0 0 auto;
+}
+.af-sh-mobile {
+  position: relative;
+  display: none;
+  flex: 0 0 auto;
+}
+.af-sh-mobile > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.af-sh-mobile > summary::-webkit-details-marker {
+  display: none;
+}
+.af-sh-mobile[open] > summary {
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+.af-sh-mobile-panel {
+  position: absolute;
+  top: 43px;
+  right: 0;
+  z-index: 60;
+  display: grid;
+  min-width: 210px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elev);
+  box-shadow: 0 22px 55px -34px rgb(0 0 0 / 0.55);
+}
+.af-sh-mobile-panel a {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--fg-muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.af-sh-mobile-panel a:hover,
+.af-sh-mobile-panel a:focus-visible {
+  background: color-mix(in oklab, var(--yellow) 12%, var(--bg));
+  color: var(--fg);
+  outline: none;
+}
+.af-sh-mobile-panel a[aria-current] {
+  box-shadow: inset 3px 0 0 var(--yellow-ink);
+  color: var(--fg);
+  font-weight: 700;
+}
 
-@media (min-width: 1081px) and (max-width: 1439px) {
+/* Marketing-route pointer aura. The native cursor remains visible; this ambient
+   layer is disabled for touch, reduced motion, and forced-colour modes. */
+.af-pointer-aura {
+  position: fixed;
+  top: -6px;
+  left: -6px;
+  z-index: 80;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--yellow-dark);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--yellow) 58%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--yellow) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  scale: 1;
+  transition: opacity 0.16s ease, scale 0.18s ease, background 0.18s ease;
+  will-change: transform;
+}
+.af-pointer-aura.is-visible {
+  opacity: 0.72;
+}
+.af-pointer-aura.is-interactive {
+  background: color-mix(in oklab, var(--yellow) 15%, transparent);
+  opacity: 0.48;
+  scale: 3;
+}
+
+@media (max-width: 1439px) {
   .af-sh--home .af-sh-search {
     width: 36px;
     padding: 0;
@@ -198,7 +287,7 @@ html {
     display: none;
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 1080px) {
   .af-sh-search {
     width: 36px;
     padding: 0;
@@ -208,20 +297,31 @@ html {
   .af-sh-kbd {
     display: none;
   }
+}
+@media (max-width: 760px) {
   .af-sh-gh {
     display: none;
   }
   .af-sh-nav {
-    gap: 12px;
-  }
-  .af-sh-home {
     display: none;
   }
-  .af-sh-theme {
-    flex: none;
+  .af-sh--home .af-sh-mobile {
+    display: block;
   }
   .af-sh-sidebar {
     display: inline-flex;
+  }
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .af-pointer-aura {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .af-pointer-aura {
+    display: none;
   }
 }
 @media (max-width: 380px) {
