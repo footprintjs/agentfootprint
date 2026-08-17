@@ -18,9 +18,22 @@ import type { GraphProblem } from './skillGraphCheckup.js';
 
 /** A snake_case token immediately followed by `(` — looks like a tool call in prose. */
 const TOOL_CALL_RE = /\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\s*\(/g;
-
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Is this a name a check can actually look for?
+ *
+ * The tool names arrive from the CALLER — composed across a whole graph — and a
+ * hole anywhere in that composition used to reach {@link escapeRegExp} and throw
+ * `Cannot read properties of undefined (reading 'replace')`, from inside a regex
+ * helper, naming neither the skill being checked nor the tool that was missing.
+ * A contract checker that dies without saying which contract is the exact shape
+ * this module exists to catch in other people's code.
+ */
+function isUsableToolName(name: unknown): name is string {
+  return typeof name === 'string' && name.length > 0;
 }
 
 /** The tool names a skill unlocks (`inject.tools[].schema.name`). */
@@ -81,6 +94,23 @@ export function checkSkillContract(
   //    cannot call on this turn. Usually a `read_skill` handoff hint — confirm, or
   //    add the tool / reword. Word-boundary match (tool names are distinctive).
   for (const name of known) {
+    // Report, never throw. A hole in the caller's tool list is a real defect —
+    // some skill contributed a tool with no usable name — so it is surfaced as a
+    // problem that NAMES the skill under check, rather than skipped (which would
+    // hide it) or thrown (which loses the one fact that makes it fixable).
+    if (!isUsableToolName(name)) {
+      problems.push({
+        kind: 'error',
+        code: 'unusable-tool-name',
+        message:
+          `Skill "${id}" was checked against a tool list containing ${JSON.stringify(name)} ` +
+          `where a name was expected. The hole is in the tool list handed to this checker, not ` +
+          `in "${id}" itself — look for a tool whose \`schema.name\` is missing in whatever ` +
+          `composes \`knownTools\`. This skill's own contract could not be fully checked.`,
+        skill: id,
+      });
+      continue;
+    }
     if (own.has(name)) continue;
     if (baseline.has(name)) continue; // callable from every skill — not foreign
     if (new RegExp(`\\b${escapeRegExp(name)}\\b`).test(body)) {

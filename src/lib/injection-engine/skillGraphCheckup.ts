@@ -38,6 +38,7 @@ import { compareMatchers, type SkillMatchData } from './skillMatch.js';
 export type CheckupTriggerKind = 'always' | 'rule' | 'on-tool-return' | 'llm-activated';
 
 export type GraphProblemCode =
+  | 'unusable-tool-name'
   | 'unknown-skill'
   | 'no-entry'
   | 'unreachable-skill'

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.46.3] - 2026-08-16
+
+### Fixed
+
+- **`checkSkillContract` threw instead of reporting when the tool list it was
+  handed had a hole in it.** A non-string in `knownToolNames` reached a regex
+  helper and produced `Cannot read properties of undefined (reading 'replace')`,
+  naming neither the skill under check nor the missing tool — so every instinct
+  led to auditing the skills, which were all fine. The hole is in whatever
+  COMPOSES the tool list, and that is now what the message says.
+
+  It reports rather than skipping, because a tool with no `schema.name` is a real
+  defect somewhere and swallowing it would hide it; and rather than throwing,
+  because a contract checker that dies without naming the contract is the exact
+  failure this module exists to catch in other people's graphs. Reported from the
+  field on a graph that had just grown its twentieth skill.
+
 ## [9.46.2] - 2026-08-15
 
 ### Fixed
