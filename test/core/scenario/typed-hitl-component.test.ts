@@ -31,6 +31,7 @@ import {
   isPaused,
   CheckInRecorder,
   InvalidAskComponentError,
+  StaleDecisionError,
   RunCheckpointError,
   inMemoryArtifacts,
   type AgentfootprintEvent,
@@ -442,5 +443,79 @@ describe('typed HITL — zero-cost when unused', () => {
     ]);
     expect(JSON.stringify(out.checkpoint)).not.toContain('pausedComponentId');
     expect(await agent.resume(out.checkpoint, 'because')).toBe('done');
+  });
+});
+
+// ─── 4. The answer must be about the thing that was asked ────────────────
+
+describe('typed HITL — a decision chosen against a moved artifact is refused at resume', () => {
+  /** Mints options, asks against that ref. The canonical mint-then-ask flow. */
+  const reasonPicker = () =>
+    defineTool<Record<string, never>, string>({
+      name: 'pick_reason',
+      description: 'ask the person to pick a refund reason',
+      execute: async (_args, ctx) => {
+        const meta = await ctx.artifacts.put({
+          kind: 'options/list',
+          mediaType: 'application/json',
+          data: bigOptions,
+          label: 'refund reasons',
+        });
+        return askHuman({
+          question: 'Which reason?',
+          component: { componentId: 'option-picker', propsRef: meta.ref },
+        });
+      },
+    });
+
+  const pausedPicker = async () => {
+    const store = inMemoryArtifacts();
+    const agent = Agent.create({
+      provider: callThenDone('pick_reason', {}),
+      model: 'm',
+      artifacts: store,
+    })
+      .tool(reasonPicker())
+      .build();
+    const out = await agent.run({ message: 'refund' });
+    expect(isPaused(out)).toBe(true);
+    const paused = out as RunnerPauseOutcome;
+    const askedRef = (paused.pauseData as { component?: { propsRef?: string } }).component
+      ?.propsRef;
+    expect(askedRef, 'the ask did not pin a ref, so this scenario proves nothing').toBeTruthy();
+    return { agent, paused, askedRef: askedRef as string };
+  };
+
+  it('refuses when the answer names a DIFFERENT artifact than the ask pinned', async () => {
+    const { agent, paused } = await pausedPicker();
+    // The options were re-minted between asking and answering: a refresh landed,
+    // the list re-sorted, and "option-7" now names something else.
+    await expect(
+      agent.resume(
+        paused.checkpoint,
+        checkInApproved({
+          by: 'alice@ops',
+          value: {
+            kind: 'row-choice',
+            value: { id: 'option-7' },
+            from: 'art_0000000000000000000009',
+          },
+        } as never),
+      ),
+    ).rejects.toThrow(StaleDecisionError);
+  });
+
+  it('accepts the answer chosen against the artifact the ask pinned', async () => {
+    // The other direction, and the one that makes the guard worth having: a
+    // refusal that fires on the matching pair too is just an outage.
+    const { agent, paused, askedRef } = await pausedPicker();
+    const final = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({
+        by: 'alice@ops',
+        value: { kind: 'row-choice', value: { id: 'option-7' }, from: askedRef },
+      } as never),
+    );
+    expect(final).toBe('done');
   });
 });

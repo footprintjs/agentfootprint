@@ -149,6 +149,7 @@ export {
   // the silent `by: 'unknown'` decline it filed before.
   pauseDemandsDecision,
   DecisionRequiredError,
+  StaleDecisionError,
   // 8.18.0 — an askHuman/pauseHere pause resumed with NO value. The answer
   // becomes the tool's result, so "no answer" and "carry on" are two different
   // conversations and the caller picks; the library used to pick silently and

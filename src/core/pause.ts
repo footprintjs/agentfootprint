@@ -16,6 +16,7 @@
  * the tool API clean (tools are pure-ish) while still supporting pause.
  */
 
+import { readAskComponent } from './askComponent.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import type { AskComponent } from './askComponent.js';
 import type { CheckInRequest } from './checkin.js';
@@ -159,6 +160,23 @@ export interface ConsentGate {
  *
  * @returns the gate, or `undefined` when this pause takes any value.
  */
+/**
+ * Refuse an answer chosen against different bytes than the question was asked
+ * against. See {@link StaleDecisionError}.
+ *
+ * Silent in every case but one, deliberately: the ask has to have pinned a ref
+ * AND the answer has to name one. Either side absent means nobody claimed the
+ * two were about the same artifact, and inventing that claim here would refuse
+ * answers that are perfectly good.
+ */
+export function assertDecisionIsNotStale(pauseData: unknown, input: unknown): void {
+  const asked = readAskComponent(pauseData)?.propsRef;
+  if (asked === undefined) return;
+  const answered = (input as { value?: { from?: string } } | null | undefined)?.value?.from;
+  if (answered === undefined || answered === asked) return;
+  throw new StaleDecisionError(asked, answered);
+}
+
 export function pauseDemandsDecision(pauseData: unknown): ConsentGate | undefined {
   if (typeof pauseData !== 'object' || pauseData === null) return undefined;
   const bag = pauseData as {
@@ -199,6 +217,52 @@ export function pauseDemandsDecision(pauseData: unknown): ConsentGate | undefine
  * credential-consent pause never raises it either — it re-asks the provider and
  * ignores the input by design.
  */
+/**
+ * The person answered about something the ask was not about.
+ *
+ * A typed ask can pin the data the answer is to be chosen FROM — the
+ * `propsRef` on its {@link AskComponent}, a 200-row picker's options living in
+ * the artifact store rather than in every stored session envelope. A
+ * {@link DecisionValue} can say which artifact the choice was made AGAINST.
+ * When both are present and they disagree, the answer is about different bytes
+ * than the question.
+ *
+ * That happens for an ordinary reason: time passes between asking and
+ * answering. A refresh lands, a filter moves, rows re-sort, the ask is re-raised
+ * with new options — and "the third row" now names something else. Accepting it
+ * would resume the run with a value the person never chose, and there is no
+ * later signal that anything went wrong: the id is well-formed, the type checks,
+ * the loop continues.
+ *
+ * So it refuses, and the refusal is the feature. A person asked again is mildly
+ * annoyed; a person whose gesture was silently reinterpreted has been
+ * misrepresented, and in a consent record that is the one failure nothing
+ * downstream can recover from.
+ *
+ * Only ever raised when the ask pinned a ref AND the answer named one. An
+ * approve/decline, a plain `askHuman` value, or an answer that names no
+ * artifact are all byte-identical to every earlier release.
+ */
+export class StaleDecisionError extends Error {
+  readonly code = 'ERR_STALE_DECISION' as const;
+  /** The artifact the QUESTION was asked against. */
+  readonly asked: string;
+  /** The artifact the ANSWER was chosen against. */
+  readonly answered: string;
+
+  constructor(asked: string, answered: string) {
+    super(
+      `[resume] this answer was chosen against artifact '${answered}', and the question was ` +
+        `asked against '${asked}'. The data moved between asking and answering, so the choice ` +
+        `does not name what the person saw. Nothing was resumed — raise the ask again with the ` +
+        `current data.`,
+    );
+    this.name = 'StaleDecisionError';
+    this.asked = asked;
+    this.answered = answered;
+  }
+}
+
 export class DecisionRequiredError extends Error {
   readonly code = 'ERR_DECISION_REQUIRED' as const;
   /** Which gate is outstanding. */

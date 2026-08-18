@@ -38,6 +38,7 @@ import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../conventions.js';
 import {
   DecisionRequiredError,
+  assertDecisionIsNotStale,
   isPaused,
   pauseDemandsDecision,
   type RunnerPauseOutcome,
@@ -1718,6 +1719,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    // And the answer must be about the thing that was asked. Checked HERE, at
+    // the same door and before any state moves, because a resume that has begun
+    // is a resume that has already used the value.
+    assertDecisionIsNotStale(checkpoint.pauseData, input);
     // The same one-turn-at-a-time guard `run()` carries: a resume writes the
     // same per-instance state a run does. Answering the question is what this
     // door is FOR, so it never checks `pendingQuestion` — it clears it.
