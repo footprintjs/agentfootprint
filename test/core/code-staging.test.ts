@@ -192,7 +192,89 @@ describe('localCodeRunner.stageInputs — security', () => {
         0,
         (landed?.[0]?.path as string).lastIndexOf('/'),
       );
-      expect(readdirSync(dir).sort()).toEqual(['____etc_passwd', 'a_b.json']);
+      expect(readdirSync(dir).sort()).toEqual([
+        '_enc_.._u002f.._u002fetc_u002fpasswd',
+        '_enc_a_u002fb.json',
+      ]);
+      await session.stop();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // ── The name is a KEY, and a key that folds is a wrong dataset ──────
+  //
+  // The old `safeFileName` replaced every illegal character with `_`, so
+  // `a/b.csv` and `a_b.csv` became ONE file: the second write clobbered the
+  // first's bytes and the manifest handed the model two names pointing at one
+  // path. Nothing failed — the code opened the file it was told to open and
+  // computed over somebody else's data. `.slice(0, 120)` folded the same way
+  // for any two names agreeing on their first 120 characters.
+
+  it('two distinct names never become one file — and each reads back its OWN bytes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'af-stage-root-'));
+    try {
+      const session = await localCodeRunner({ _stagingRoot: root }).start({ key: 'k' });
+      /** Names chosen so a plausible normalisation folds at least one pair. */
+      const names = [
+        'a/b.csv',
+        'a_b.csv',
+        'a-b.csv',
+        'a:b.csv',
+        'a b.csv',
+        'a%2Fb.csv',
+        '..',
+        '.',
+        '...',
+        '../../etc/passwd',
+        '_enc_a_u002fb.csv',
+        'ünïcødé-😀.csv',
+        `${'x'.repeat(200)}A.csv`,
+        `${'x'.repeat(200)}B.csv`,
+        `${'y'.repeat(200)}:1.csv`,
+        `${'y'.repeat(200)}-1.csv`,
+      ];
+      const landed = await session.stageInputs?.(
+        names.map((name) => ({ name, data: `DATA FOR ${name}` })),
+      );
+      const paths = (landed ?? []).map((entry) => entry.path);
+      expect(new Set(paths).size).toBe(names.length);
+      // Distinct paths are not enough: the file each name points at has to hold
+      // the bytes THAT name was staged with.
+      for (const entry of landed ?? []) {
+        expect(readFileSync(entry.path, 'utf8')).toBe(`DATA FOR ${entry.name}`);
+      }
+      // …and every one of them is still one inert segment inside the dir.
+      const dir = paths[0]?.slice(0, paths[0].lastIndexOf('/')) as string;
+      for (const fileName of readdirSync(dir)) {
+        expect(fileName).toMatch(/^[A-Za-z0-9._-]+$/);
+        expect(fileName.length).toBeLessThanOrEqual(120);
+        expect(fileName).not.toBe('.');
+        expect(fileName).not.toBe('..');
+      }
+      await session.stop();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a name that was already legal exactly as it found it', async () => {
+    // The migration promise: this fix renames nothing that used to work. A
+    // name already inside `[A-Za-z0-9._-]` landed verbatim before and still
+    // does — including every name `codeRunnerTool` derives from a declared
+    // argument — so no deployment's staged file moves.
+    const root = mkdtempSync(join(tmpdir(), 'af-stage-root-'));
+    try {
+      const session = await localCodeRunner({ _stagingRoot: root }).start({ key: 'k' });
+      const legal = ['dataset.json', 'a_b.json', 'report-2026.csv', 'dataset', 'A_-9.txt', 'x'];
+      const landed = await session.stageInputs?.(legal.map((name) => ({ name, data: 'x' })));
+      const dir = (landed?.[0]?.path as string).slice(
+        0,
+        (landed?.[0]?.path as string).lastIndexOf('/'),
+      );
+      expect((landed ?? []).map((entry) => entry.path)).toEqual(
+        legal.map((name) => `${dir}/${name}`),
+      );
       await session.stop();
     } finally {
       rmSync(root, { recursive: true, force: true });

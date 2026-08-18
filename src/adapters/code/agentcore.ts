@@ -59,6 +59,7 @@
  */
 
 import type { CodeResult, CodeRunner, CodeSession } from '../types.js';
+import { hashSessionKey } from '../../core/toolSessions.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 export interface AgentCoreCodeRunnerOptions {
@@ -149,10 +150,10 @@ export function agentCoreCodeRunner(options: AgentCoreCodeRunnerOptions): CodeRu
       const api = resolve();
       const started = await api.startSession({
         codeInterpreterIdentifier: options.identifier,
-        // The isolation key names the session on AWS's side too, so an operator
-        // reading the console sees the same partition the runtime enforces. It
-        // is a HASH-free label AWS documents as non-unique; the key is already
-        // the caller's own composition, never widened here.
+        // The DIGEST of the isolation key labels the session on AWS's side, so
+        // an operator reading the console sees the same partition the runtime
+        // enforces — and sees it under the same digest the trace publishes.
+        // The key itself never leaves this process; see `sessionName`.
         name: sessionName(req.key),
         ...(options.sessionTimeoutSeconds !== undefined && {
           sessionTimeoutSeconds: options.sessionTimeoutSeconds,
@@ -225,10 +226,37 @@ export function agentCoreCodeRunner(options: AgentCoreCodeRunnerOptions): CodeRu
   };
 }
 
-/** A session label from the isolation key — AWS's `name` is a human handle. */
+/**
+ * A label for the remote session — derived FROM the isolation key, carrying
+ * none of it.
+ *
+ * **Why not the key itself.** The isolation key is
+ * `t=<tenant>/p=<principal>/s=<sessionId>` (see `toolSessionKey`), so it holds
+ * a tenant name, a principal and the hosting session id. The previous version
+ * of this function folded that string's illegal characters to `-` and sent the
+ * result to AWS as `StartCodeInterpreterSession`'s `name` — which put
+ * `af-t-acme-p-alice-s-s1` into a vendor control plane, its console, and its
+ * audit log, for every session opened. One module over,
+ * {@link hashSessionKey} exists precisely so the same identifiers never reach
+ * the event wire ("enough to JOIN two rows and not enough to name whose they
+ * are"). Two opposite decisions about one string; this is the one that agrees
+ * with the rest of the library.
+ *
+ * **What it buys beyond not leaking.** The label is now byte-identical to the
+ * `keyHash` on `agentfootprint.tools.session_closed`, so an operator with a
+ * session in the AWS console can actually FIND its rows in the trace. The fold
+ * could not do that: `alice:1` and `alice-1` produced one label, and any key
+ * over 100 characters was truncated onto its neighbours, so the console name
+ * an operator read did not identify one partition.
+ *
+ * **Not an address.** AWS documents `name` as a non-unique friendly handle;
+ * nothing — here or in the SDK — ever looks a session up by it. The address is
+ * the service-assigned `sessionId`, which `start()` reads back and passes to
+ * every `Invoke` and `Stop` verbatim. So no stored state is keyed on this
+ * string and relabelling migrates nothing.
+ */
 function sessionName(key: string): string {
-  // Keep it recognisable and within the service's naming charset.
-  return `af-${key.replace(/[^A-Za-z0-9_-]/g, '-')}`.slice(0, 100);
+  return `af-${hashSessionKey(key)}`;
 }
 
 function isAlreadyGone(err: unknown): boolean {
