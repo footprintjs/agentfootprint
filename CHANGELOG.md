@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.47.0] - 2026-08-17
+
+**The answer gets a typed half, two more identifier folds close, and an index so
+none of this gets rebuilt.**
+
+### Added
+
+- **`DecisionValue` — what a person CHOSE, not just whether they approved.**
+  `AskComponent` gave the QUESTION a typed half in 9.24.0: which registered screen
+  component collects the answer, and the props it renders with. The ANSWER never
+  got one. A decision was `approved` plus a free-text `note`, so a picked row or a
+  brushed date range had to travel as PROSE for the model to parse back out —
+  precisely the failure the typed ask exists to prevent, surviving on the return leg.
+
+  Shaped like the ask for the same reasons: `kind` is consumer vocabulary, `value`
+  is small inline JSON because it rides the resume, and `from` is the artifact the
+  choice was made AGAINST — a row id means nothing alone and something in a dataset.
+
+  **`coverage` is the field people skip.** Somebody who filtered 5,000 rows to 3
+  and picked one has not chosen from 5,000, and without it that pick is
+  indistinguishable from an informed choice over the whole set. That difference is
+  the entire value of a human in the loop. It is `coverage()` applied to the
+  person, because on that turn the person IS the tool. It rides a DECLINE too:
+  "none of these" is an answer with coverage, not the absence of one.
+
+  Optional everywhere — an existing approve/decline is byte-identical.
+
+- **`StaleDecisionError` — an answer must be about the thing that was asked.**
+  When the ask pinned a `propsRef` and the answer names a different artifact,
+  `resume` refuses by name, naming BOTH so a reader can tell which way it drifted.
+
+  The cause is ordinary: time passes. A refresh lands, a filter moves, rows
+  re-sort — and "the third row" now names something else. Accepting it resumes the
+  run with a value the person never chose, and nothing downstream can notice: the
+  id is well-formed, the type checks, the loop continues. Silent unless BOTH sides
+  claim an artifact, because inventing that claim would refuse good answers.
+
+- **A capability index in `CLAUDE.md`, keyed by what you would CALL a thing.**
+  Three times in one day a capability was re-proposed after it had shipped — the
+  typed-HITL ask, element bindings by role and name, the artifact-kind renderer.
+  `CLAUDE.md` was a feature-work map, organised for CHANGING the library, and
+  nothing was organised for "does this already exist". A reader searches with the
+  words THEY have, finds nothing, and designs what is already there.
+
+  `test/docs/capability-index.test.ts` fails if a row names a file or symbol that
+  does not exist — it caught three wrong rows on its first run. The table can go
+  stale by OMISSION and can never LIE about what it names; that limit is stated in
+  the test rather than papered over.
+
+### Security
+
+- **The AgentCore code adapter stopped shipping raw identifiers to a vendor
+  console.** `sessionName` carried the RAW tenant, RAW principal and RAW hosting
+  session id to AWS's control plane — and so to its console, CloudTrail and logs —
+  on every session open. `hashSessionKey` has existed in this repo all along with
+  the docstring "Publishing it on the event wire would put a user identifier into
+  every exporter's payload": two opposite decisions about one string, and the wire
+  got the wrong one.
+
+  Now `af-${hashSessionKey(key)}`, byte-identical to the `keyHash` already
+  published on `agentfootprint.tools.session_closed`, so the console-to-trace join
+  the old comment promised actually works instead of being a claim. The label loses
+  its human-readable form, which is right: that form was lying whenever two keys
+  folded.
+
+  The reported fold in the same line is real and crosses no boundary — the address
+  is the service-assigned `sessionId` and nothing looks a session up by name.
+
+### Fixed
+
+- **Two staged files no longer become one.** `safeFileName` folded illegal
+  characters onto one filler, so staging `a/b.csv` and `a_b.csv` wrote ONE path:
+  the second clobbered the first, the manifest pointed both logical names at it,
+  nothing threw, and reading `a/b.csv` returned the other file's bytes. Wrong data
+  handed to generated code with no signal — how a computation quietly answers about
+  the wrong dataset.
+
+  Fixed with the two-arm shape used elsewhere here: an already-legal name under the
+  cap is returned BYTE FOR BYTE, so every `codeRunnerTool`-derived name lands where
+  it did; anything else becomes `_enc_` plus an escaped form. The AgentCore code
+  adapter had no behavioural test at all before this release.
+
 ## [9.46.3] - 2026-08-16
 
 ### Fixed
