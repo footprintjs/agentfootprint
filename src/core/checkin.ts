@@ -26,6 +26,7 @@
  *          (checkpoint discipline) — no functions, no class instances.
  */
 
+import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../adapters/types.js';
 import type { AskComponent } from './askComponent.js';
 import type { AttributionUnit } from '../lib/influence-core/types.js';
@@ -119,6 +120,55 @@ export interface CheckInTrail {
  * {@link checkInApproved} / {@link checkInDeclined} and passed to
  * `agent.resume(checkpoint, decision)`. JSON/clone-safe.
  */
+/**
+ * What a person CHOSE, when the answer is a value rather than a yes or a no.
+ *
+ * The ask got its typed half in 9.24.0 — {@link AskComponent} names a registered
+ * screen component and the props it renders with. The ANSWER never did: a
+ * decision was `approved` plus a free-text `note`, so a picked row, a brushed
+ * date range or a chosen option had to travel as PROSE for the model to parse
+ * back out. That is the exact failure the typed ask exists to prevent, surviving
+ * on the return leg.
+ *
+ * Deliberately shaped like the ask, for the same reasons:
+ *   • `kind` is CONSUMER vocabulary — meaningful to whoever registered the
+ *     component, opaque here. Never a type name from this library.
+ *   • `value` is small inline JSON, because it rides the resume call and lands
+ *     in the run's history. Anything large belongs behind {@link from}.
+ *   • `from` is the artifact the choice was made AGAINST. A row id means
+ *     nothing on its own; it means something in a dataset.
+ *
+ * ── Why `coverage` is here, and it is the field people skip ─────────────────
+ * A person who filtered 5,000 rows to 3 and picked one has not chosen from
+ * 5,000. Without this field that pick is indistinguishable from an informed
+ * choice over the whole set, and the difference is the whole value of a human
+ * in the loop. It is the same distinction `coverage()` draws for a tool —
+ * what was checked, and what a clean answer does not rule out — applied to the
+ * person, because on this turn the person IS the tool.
+ *
+ * Every field must survive `structuredClone`: a decision rides the checkpoint.
+ */
+export interface DecisionValue {
+  /** Consumer vocabulary for what this value IS — e.g. `'row-choice'`. */
+  readonly kind: string;
+  /** The chosen value itself. JSON, clone-safe, small. */
+  readonly value: unknown;
+  /** The artifact the choice was made against, when there was one. */
+  readonly from?: ArtifactRef;
+  /**
+   * What the person could actually see when they chose.
+   *
+   * `seen` of `total`, and the filter that narrowed it. A pick made over a
+   * filtered view is a different fact from a pick made over everything, and
+   * only the screen knows which happened.
+   */
+  readonly coverage?: {
+    readonly seen: number;
+    readonly total: number;
+    readonly filter?: string;
+  };
+}
+
 export interface CheckInDecision {
   /** True to run the tool, false to decline it. */
   readonly approved: boolean;
@@ -128,6 +178,13 @@ export interface CheckInDecision {
   readonly note?: string;
   /** When the decision was made (ms since epoch). */
   readonly at: number;
+  /**
+   * What they chose, when the answer was a value and not just a yes.
+   *
+   * Optional everywhere: a decision without one is byte-identical to every
+   * earlier release, and a screen that only approves or declines never sets it.
+   */
+  readonly value?: DecisionValue;
 }
 
 /** Options for {@link checkInApproved} / {@link checkInDeclined}. */
@@ -136,6 +193,8 @@ export interface CheckInDecisionInput {
   readonly by: string;
   /** Optional free-text note. */
   readonly note?: string;
+  /** What was chosen, for an ask that wanted a value rather than a yes. */
+  readonly value?: DecisionValue;
 }
 
 /**
@@ -146,7 +205,13 @@ export interface CheckInDecisionInput {
  *   const final = await agent.resume(outcome.checkpoint, decision);
  */
 export function checkInApproved(input: CheckInDecisionInput): CheckInDecision {
-  return { approved: true, by: input.by, at: Date.now(), ...(input.note && { note: input.note }) };
+  return {
+    approved: true,
+    by: input.by,
+    at: Date.now(),
+    ...(input.note && { note: input.note }),
+    ...(input.value && { value: input.value }),
+  };
 }
 
 /**
@@ -158,7 +223,15 @@ export function checkInApproved(input: CheckInDecisionInput): CheckInDecision {
  *   const final = await agent.resume(outcome.checkpoint, decision);
  */
 export function checkInDeclined(input: CheckInDecisionInput): CheckInDecision {
-  return { approved: false, by: input.by, at: Date.now(), ...(input.note && { note: input.note }) };
+  return {
+    approved: false,
+    by: input.by,
+    at: Date.now(),
+    ...(input.note && { note: input.note }),
+    // Carried on a DECLINE too: "none of these" is an answer with coverage —
+    // what they searched and did not find — not the absence of one.
+    ...(input.value && { value: input.value }),
+  };
 }
 
 /**

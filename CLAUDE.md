@@ -3,6 +3,45 @@
 
 Agent framework layered on footprintjs: every runner (Agent, LLMCall, compositions, patterns) is a footprintjs chart built ONCE at construction and executed on a fresh `FlowChartExecutor` per run. Engine seams (stage kinds, $-methods, engine handlers) live UPSTREAM in footprintjs and are closed here. This file maps this repo's seams and blast radius — **trust the code** where any doc disagrees.
 
+## Before you design it: it may already exist
+
+**Read this table before proposing any new capability.** Everything below already
+ships. The failure it exists to stop is real and expensive: a reader searches for
+the words THEY would use, finds nothing, and designs a feature the library has had
+for releases. That has happened repeatedly — the typed-HITL ask, element bindings
+by role and name, and the artifact-kind renderer were each re-proposed after they
+shipped.
+
+Keyed by **what you would call it**, not by what it is called here. If your idea is
+not in this table, search `src/index.ts` for the nearest noun before writing code.
+
+| If you are about to build… | It is | Where | Since |
+|---|---|---|---|
+| a typed HITL prompt — let a person pick from a list, choose a range, use a real control instead of typing prose | `AskComponent` | `src/core/askComponent.ts` | 9.24.0 |
+| carrying WHAT the person chose back, with what they could see | `DecisionValue` | `src/core/checkin.ts` | 9.47.0 |
+| keeping a large tool result out of the model's context | `artifacts` + `wants` + `placement` | `src/artifacts/` | 9.21.0 |
+| letting the UI draw an artifact without the model naming a component | `registerArtifactComponent` (in the `agentfootprint-lens` package) | — | — |
+| finding which tools the model keeps writing by hand | `agentfootprint.tools.code_run` + `codeShape` | `src/core/codeRunnerTool.ts` | 9.46.0 |
+| a tool answering "I looked and found nothing", routably | `absent` | `src/core/agent/coverage/absent.ts` | 9.43.0 |
+| stating what a clean answer does NOT rule out | `coverage` | `src/core/agent/coverage/ledger.ts` | 9.43.0 |
+| proving a session store really honours the port | `runSessionLifecycleConformance` | `src/hosting/conformance/` | 9.37.0 |
+| deciding who owns a contested session write | `resolveSessionOwner` | `src/hosting/sessionOwnership.ts` | 9.37.0 |
+| making a caller-supplied id safe for a backend | `encodeIdentityField` | `src/memory/identity/encode.ts` | 9.40.0 |
+| scoping a skill's tools so they reach the model only while it is active | `toolsFromActiveSkill` | `src/core/agent/toolsFromActiveSkill.ts` | 9.43.0 |
+| subscribing to every event in one domain at once | `DomainWildcard` | `src/events/dispatcher.ts` | 9.4.0 |
+| pausing a run for a person and resuming it later | `checkInApproved` / `checkInDeclined` | `src/core/checkin.ts` | 9.24.0 |
+
+**One law before you add a mapping.** Any function turning caller data into a KEY,
+a namespace, a filename or an index entry must be injective, and its collision
+check ships in the SAME change — not the release that discovers it. Six defects of
+that exact shape were fixed between 9.37.0 and 9.46.0. Use `encodeIdentityField`
+rather than writing a seventh.
+
+**Maintaining this table:** a new public capability adds a row.
+`test/docs/capability-index.test.ts` fails if a row names a file or symbol that
+does not exist, so the table can go out of date by OMISSION but can never lie
+about what it names.
+
 ## Module map
 Entry points — THIRTEEN doors, and `package.json` `exports` is exhaustive, so a path not on this list does not resolve at all: `.` core API · `/providers` everything you plug a backend into (mock/anthropic/openai/bedrock/browser*, embedders, staticTools/gatedTools/skillScopedTools/mcpClient, thinking handlers, code runners) · `/memory` (defineMemory, MEMORY_TYPES, InMemoryStore, mockEmbedder, redis/agentcore/bedrockAgentMemory stores) · `/rag` index-time loaders/splitters/indexCorpus · `/cache` prompt caching (+ registerCacheStrategy; side-effectful, hence its own door) · `/observe` the whole watching story (recorders, recordRun, strategies + attach*, vendor sinks, run-autopsy finders, toSSE, status, locales) · `/events` typed event system · `/context` the injection engine (defineInjection/Skill/Fact/Instruction/Steering, decideSkill) · `/resilience` provider decorators + the reliability RULES · `/hosting` nodeHost/httpHost/standingAgent + session stores · `/security` permissions + tool credentials (it absorbed the old identity door) · `/reliability` the retained alias, kept ONLY because it is the sole home of the gate's `CircuitOpenError` · `/skill-graph` the framework-neutral routing layer. 9.0.0 removed sixteen older paths (`/llm-providers`, `/injection-engine`, `/tool-providers`, `/strategies`, `/observability-providers`, `/identity`, `/stream`, `/thinking`, `/status`, `/locales`, `/debug`, `/debug/finders`, `/memory-providers`, `/embedders`, `/hosting-providers`, `/observability/contextError/finders`) — it removed PATHS, not code; each name still ships through the door that absorbed it. This list is pinned against `package.json` by test/api-conformance/documented-doors.test.ts, and the removed sixteen by subpath-exports.test.ts. **Main barrel does NOT export** mock/browser*/defineMemory/defineSkill/skillGraph/mcpClient/InMemoryStore — import from the doors above.
 

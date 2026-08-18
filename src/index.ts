@@ -252,6 +252,7 @@ export {
   type CheckInTrail,
   type CheckInDecision,
   type CheckInDecisionInput,
+  type DecisionValue,
   type CheckInDemand,
   type CheckInPredicateContext,
   type CheckInScorer,
