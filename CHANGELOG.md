@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.50.0] - 2026-08-19
+
 Three recording-surface facts, all born the same way: a debugger built over
 recordings (the lens's SkillGraph views, echoed by an external triage-platform
 design) kept finding facts the framework KNEW at run time but put on the
