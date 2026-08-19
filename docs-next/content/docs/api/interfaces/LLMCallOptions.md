@@ -37,7 +37,7 @@ still reaches the LLM; the budget is a signal, not a limiter. Defaults:
 
 > `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
 
-Defined in: [src/core/LLMCall.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L125)
+Defined in: [src/core/LLMCall.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L135)
 
 Cumulative USD budget per run. When provided along with `pricingTable`,
 LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
@@ -55,7 +55,7 @@ refused at build rather than silently ignored.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/LLMCall.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L143)
+Defined in: [src/core/LLMCall.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L153)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -111,7 +111,7 @@ Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/docs/api/interfaces/PricingTable)
 
-Defined in: [src/core/LLMCall.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L113)
+Defined in: [src/core/LLMCall.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L123)
 
 Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
 after every LLM response with per-call and cumulative USD. Run-scoped
@@ -127,11 +127,27 @@ Defined in: [src/core/LLMCall.ts:83](https://github.com/footprintjs/agentfootpri
 
 ***
 
+### recordSystemPrompt?
+
+> `readonly` `optional` **recordSystemPrompt?**: `boolean`
+
+Defined in: [src/core/LLMCall.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L117)
+
+Record the ASSEMBLED system prompt on the LLM call (9.50.0). The LLMCall
+twin of `AgentOptions.recordSystemPrompt` — same field, same contract,
+same default. **Opt-in, default OFF**: when `true`,
+`agentfootprint.stream.llm_start` carries `systemPromptText`, the joined
+prompt verbatim as sent. PRIVACY: with the dial on, the full prompt rides
+into every recorder, sink and persisted recording — off, only
+`systemPromptChars` (the length) is on the record.
+
+***
+
 ### structureRecorders?
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/LLMCall.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L133)
+Defined in: [src/core/LLMCall.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L143)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

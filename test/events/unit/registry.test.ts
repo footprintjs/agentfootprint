@@ -174,7 +174,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     no EVENT_NAMES group and no ALL_EVENT_TYPES entry — so the docs
     //     described two events that `.on()` refused to accept. A truth
     //     correction: the list now matches what the runtime already emits.)
-    expect(ALL_EVENT_TYPES.length).toBe(99);
+    expect(ALL_EVENT_TYPES.length).toBe(100);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

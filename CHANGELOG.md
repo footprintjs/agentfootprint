@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Three recording-surface facts, all born the same way: a debugger built over
+recordings (the lens's SkillGraph views, echoed by an external triage-platform
+design) kept finding facts the framework KNEW at run time but put on the
+record only as prose — or not at all. "Don't parse reachability out of prose"
+is the whole release.
+
+### Added
+
+- **`agentfootprint.skill.graph_declared` — the author's map, on the record.**
+  Fired ONCE per run, right after the run-configuration manifest, for every
+  agent whose `.skillGraph()` mount can state its map: the declared nodes
+  (id, kind, catalog description verbatim, caption) and edges (from — `null`
+  for the synthetic START — to, kind, caption), straight from the built
+  graph and never inferred from runtime hops. Until now a recording's only
+  declared-edge source was per-hop `routing[]` provenance, which names an
+  edge once it FIRES — a lower bound every topology view had to caption
+  "partial" or paper over by making the consumer pass the built graph in by
+  hand. Same dispatch discipline as the manifest (the `createExecutor`
+  funnel both `run()` and `resume()` share; stated pseudo-stage
+  `graph-declared#0`; listener-gated), so a resumed run's fresh runId carries
+  its own copy and `recordRun`'s `'*'` subscription archives one in every
+  recording. No graph — or a structurally-typed graph that carries no
+  `nodes` — files nothing: absent, never guessed. The projection is the pure
+  `buildSkillGraphDeclared` (`src/core/agent/skillGraphDeclared.ts`).
+
+- **`context.evaluated.cursorMove.reachable` — where the run could go next,
+  typed on the move itself.** The routing gate has always known this set: it
+  rebuilds `read_skill`'s menu prose from it every iteration and writes the
+  refusal messages from it. Now every cursor move carries it as data — the
+  declared hops out of the LANDED cursor plus the open skills, composed from
+  the SAME two resolvers the gate uses, so the recorded set can never drift
+  from the verdicts (`skill.rejected.allowed` — already typed — is the same
+  set, on the refusing iteration). `[]` is a fact (a dead end); absent means
+  the mounted graph predates `reachableSkills` and the set was honestly not
+  on the record. The prose menu is untouched — this is additive data beside
+  it, not a replacement.
+
+- **`stream.llm_start.systemPromptText` — the assembled system prompt,
+  opt-in.** New dial `recordSystemPrompt: true` on `AgentOptions` and
+  `LLMCallOptions` (the `contextBudget` twin pattern). When on, every
+  `llm_start` carries the joined injection pieces byte-for-byte as the
+  provider received them — the one artifact the model actually read, which
+  recordings until now only described piecewise (each injection is on the
+  record; the assembled whole was an honest "not in this recording" card).
+
+  **The default is OFF, and the default is the feature.** The assembled
+  prompt is as sensitive as everything injected into it — skill bodies, RAG
+  passages, memory recalls, per-user instructions — and it can be large,
+  once per iteration. With the dial on it rides into every attached
+  recorder, every vendor sink, every `recordRun` recording and every
+  persisted envelope: treat those artifacts as being as sensitive as the
+  prompt itself. Off, `llm_start` keeps its exact prior bytes —
+  `systemPromptChars` still reports the length, and the envelope tests pin
+  that the archived BYTES contain no prompt text by default.
+
+- **Example: `examples/features/63-recording-carries-the-map.ts`** — one
+  skill-routed mock run archived with `persistRecording`, all three facts
+  read back off the JSON file, and the privacy default proven on the
+  archived bytes of a second, un-opted-in run.
+
+### Notes for recording consumers (the lens, triage platforms)
+
+- Draw the declared topology from `skill.graph_declared` (`declaredSource:
+  'recording'` can now mean COMPLETE); filter `from !== null` for
+  node-to-node edges, exactly as with a built graph's `edges`.
+- Fill per-beat reachability from `cursorMove.reachable` first; the refusal's
+  `allowed` and declared-edge folds remain as fallbacks for older eras.
+- Render the assembled prompt from `llm_start.systemPromptText` when present;
+  its absence still means "not in this recording", which stays the honest
+  card for every run that did not opt in.
+
 ## [9.49.0] - 2026-08-18
 
 ### Added

@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:136](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **artifacts?**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions)
 
-Defined in: [src/core/agent/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L376)
+Defined in: [src/core/agent/types.ts:400](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L400)
 
 The artifact store (9.21.0) — the claim-check seam. When set, every tool's
 `ctx.artifacts` is this store bound to the RUN's scope (the same
@@ -42,7 +42,7 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L448)
+Defined in: [src/core/agent/types.ts:472](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L472)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -55,7 +55,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:441](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L441)
+Defined in: [src/core/agent/types.ts:465](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L465)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -168,7 +168,7 @@ Agent.create({ provider, model, pricingTable,
 
 > `readonly` `optional` **credentials?**: `CredentialProvider`
 
-Defined in: [src/core/agent/types.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L352)
+Defined in: [src/core/agent/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L376)
 
 Credential provider for downstream OAuth (declare-and-push). When set, a
 tool that declares `needs: { credential }` has it resolved BEFORE `execute`
@@ -182,7 +182,7 @@ From `agentfootprint/security` (`agentCoreIdentity({ region })`,
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L475)
+Defined in: [src/core/agent/types.ts:499](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L499)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -295,7 +295,7 @@ Human-friendly name shown in events/metrics. Default: 'Agent'.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:536](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L536)
+Defined in: [src/core/agent/types.ts:560](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L560)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -331,7 +331,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:542](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L542)
+Defined in: [src/core/agent/types.ts:566](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L566)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -343,7 +343,7 @@ Queue dials for `observerDelivery: 'deferred'` — see
 
 > `readonly` `optional` **onAuthorizationRequired?**: `AuthorizationRequiredMode`
 
-Defined in: [src/core/agent/types.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L430)
+Defined in: [src/core/agent/types.ts:454](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L454)
 
 What the run does when a tool's DECLARED credential (`needs: { credential }`)
 comes back `authorization-required` — a person has to click a consent link
@@ -406,7 +406,7 @@ Defined in: [src/core/agent/types.ts:137](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:506](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L506)
+Defined in: [src/core/agent/types.ts:530](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L530)
 
 How the ReAct loop behaves — a single setting with three honest choices.
 Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
@@ -468,11 +468,45 @@ behavior-change callout.
 
 ***
 
+### recordSystemPrompt?
+
+> `readonly` `optional` **recordSystemPrompt?**: `boolean`
+
+Defined in: [src/core/agent/types.ts:368](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L368)
+
+Record the ASSEMBLED system prompt on every LLM call (9.50.0).
+**Opt-in. Default OFF — and the default is a privacy decision.**
+
+When `true`, each `agentfootprint.stream.llm_start` event carries
+`systemPromptText`: the joined injection pieces verbatim, exactly as the
+provider received them. That is the string today's recordings only
+describe (each piece is on the record; the assembled whole is not), so a
+debugger no longer has to render "not in this recording" for the one
+artifact the model actually read.
+
+WHY OFF BY DEFAULT: the assembled prompt is as sensitive as everything
+in it — skill bodies, RAG passages, memory recalls, per-user
+instructions — and it can be LARGE, once per iteration. With the dial on,
+it rides into every attached recorder, every vendor sink, every
+`recordRun` recording and every persisted envelope; treat those artifacts
+accordingly. Off (the default), `llm_start` keeps its exact prior bytes —
+`systemPromptChars` still reports the length, and the text is honestly
+absent rather than summarized.
+
+#### Example
+
+```ts
+capture the prompt while debugging context assembly
+  Agent.create({ provider, model, recordSystemPrompt: true })
+```
+
+***
+
 ### repeatedCallNudge?
 
 > `readonly` `optional` **repeatedCallNudge?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:408](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L408)
+Defined in: [src/core/agent/types.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L432)
 
 Tell the model when it has already made this exact call and already got
 this exact answer (9.26.0). **On by default.**
@@ -510,7 +544,7 @@ and the note would be noise rather than news.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:465](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L465)
+Defined in: [src/core/agent/types.ts:489](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L489)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per

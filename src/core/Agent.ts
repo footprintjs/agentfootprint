@@ -86,6 +86,7 @@ import {
 import { buildEventMeta } from '../bridge/eventMeta.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
+import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';
 
 /**
@@ -109,6 +110,13 @@ const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
  * that no traversal ever visited. This says plainly where it came from.
  */
 const RUN_MANIFEST_STAGE_ID = 'run-configured#0';
+/**
+ * Pseudo-stage for `agentfootprint.skill.graph_declared` (9.50.0) — same
+ * reasoning as the manifest id directly above: dispatched before the chart
+ * starts, so it states where it came from instead of inheriting a stage no
+ * traversal visited.
+ */
+const GRAPH_DECLARED_STAGE_ID = 'graph-declared#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
@@ -659,6 +667,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  agent that uses no recipes byte-identical to the one it emitted before
    *  they existed. */
   private readonly appliedRecipes?: readonly AppliedRecipe[];
+  /** The DECLARED skill map (9.50.0) — nodes + edges verbatim, captured by
+   *  `AgentBuilder.skillGraph()`. Filed once per run as
+   *  `agentfootprint.skill.graph_declared`; undefined = no graph, or a graph
+   *  that could not state its map (the event then never fires). */
+  private readonly skillGraphDeclared?: SkillGraphDeclaredMap;
+  /** `AgentOptions.recordSystemPrompt` (9.50.0) — OFF by default. When true,
+   *  every `stream.llm_start` carries the assembled system prompt verbatim as
+   *  `systemPromptText`. */
+  private readonly recordSystemPromptValue: boolean = false;
 
   constructor(
     opts: AgentOptions,
@@ -703,6 +720,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     evidenceGate?: ResolvedEvidenceGate,
     limitsTravelWithTheAnswer?: boolean,
     recipes?: readonly AppliedRecipe[],
+    skillGraphDeclared?: SkillGraphDeclaredMap,
   ) {
     super();
     this.provider = opts.provider;
@@ -736,6 +754,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.evidenceGate = evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
     this.appliedRecipes = recipes;
+    this.skillGraphDeclared = skillGraphDeclared;
+    if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -2545,6 +2565,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // LAST, so the manifest describes a fully-wired run — and so it is the
     // first event of this runId that any listener sees.
     this.emitRunManifest();
+    // …then the declared skill map (9.50.0), so a recording opens with the
+    // arm's configuration and the author's topology before any stage event.
+    this.emitSkillGraphDeclared();
     return executor;
   }
 
@@ -2623,6 +2646,34 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       }),
       meta: buildEventMeta({ runtimeStageId: RUN_MANIFEST_STAGE_ID }, this.currentRunContext),
+    });
+  }
+
+  /**
+   * File the DECLARED skill map (9.50.0) — `agentfootprint.skill.graph_declared`,
+   * once per run, right after the run-configuration manifest.
+   *
+   * Same funnel, same dispatch discipline, same listener gate as the manifest
+   * (see `emitRunManifest` above): `run()` and `resume()` both come through
+   * `createExecutor`, both mint a fresh runId, and a resumed run's consumers
+   * deserve the topology under the runId they are joining on. The payload is
+   * the map `AgentBuilder.skillGraph()` projected at mount — the author's
+   * nodes and edges VERBATIM, never inferred from runtime hops — so a
+   * recording carries the complete declared topology rather than the
+   * fired-edges lower bound that `context.evaluated.routing[]` names.
+   *
+   * No graph, or a graph that could not state its map ⇒ no event — absent,
+   * never guessed.
+   */
+  private emitSkillGraphDeclared(): void {
+    if (this.skillGraphDeclared === undefined) return;
+    const type = 'agentfootprint.skill.graph_declared';
+    const dispatcher = this.getDispatcher();
+    if (!dispatcher.hasListenersFor(type)) return;
+    dispatcher.dispatch({
+      type,
+      payload: this.skillGraphDeclared,
+      meta: buildEventMeta({ runtimeStageId: GRAPH_DECLARED_STAGE_ID }, this.currentRunContext),
     });
   }
 
@@ -3088,11 +3139,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // built earlier with a getter; this resolves the actual value).
     toolSchemasResolved = toolSchemas;
 
+    // The gate's admissible set, for the record (9.50.0): declared hops from
+    // the cursor plus the open skills — the SAME two resolvers the read_skill
+    // offer and the refusal messages are built from (`readSkillOfferFor`),
+    // composed once here so `context.evaluated.cursorMove.reachable` can
+    // never drift from the verdicts. Open ids are fixed after build, so they
+    // are computed once, exactly as the offer builder does.
+    const openForReachable = this.skillGraphReachable ? this.openSkillIds() : [];
     const injectionEngineSubflow = buildInjectionEngineSubflow({
       injections: this.injections,
       ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
       ...(this.skillGraphExplainNextSkill && {
         explainNextSkill: this.skillGraphExplainNextSkill,
+      }),
+      ...(this.skillGraphReachable && {
+        reachableSkills: (currentSkillId?: string) => [
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          ...new Set([...this.skillGraphReachable!(currentSkillId), ...openForReachable]),
+        ],
       }),
       ...(this.skillGraphSupersededEntries && {
         supersededEntries: this.skillGraphSupersededEntries,
@@ -3212,6 +3276,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Only a configured agent reads `scope.resolvedModel` — see the dep's
       // JSDoc for why this is a build-time flag and not a runtime fallback.
       ...(this.runConfigFn && { runConfigured: true }),
+      // Opt-in system-prompt capture (9.50.0) — value-conditional, so an agent
+      // that never asked keeps byte-identical llm_start events.
+      ...(this.recordSystemPromptValue && { recordSystemPrompt: true }),
       // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
       // brain or an escalation exists, so every other agent's stage reads no
       // new scope key and resolves on the exact line it always did. The

@@ -166,6 +166,21 @@ export interface LLMStartPayload {
   readonly provider: LLMProviderName;
   readonly model: string;
   readonly systemPromptChars: number;
+  /**
+   * The ASSEMBLED system prompt, verbatim as sent to the provider (9.50.0) —
+   * every injection piece joined exactly the way the wire saw it. **OPT-IN,
+   * default OFF**: present only when the run was built with
+   * `recordSystemPrompt: true` (`AgentOptions` / `LLMCallOptions`).
+   *
+   * PRIVACY: the assembled prompt routinely carries what its pieces carry —
+   * skill bodies, RAG passages, memory recalls, per-user instructions. With
+   * the dial on, all of it lands in every event sink and every recording
+   * (`recordRun` → `persistRecording`), so treat those artifacts as being as
+   * sensitive as the prompt itself. Absent, the event keeps its exact prior
+   * bytes: only `systemPromptChars` (the length) is recorded, and the
+   * assembled string is honestly NOT in the recording.
+   */
+  readonly systemPromptText?: string;
   readonly messagesCount: number;
   readonly toolsCount: number;
   /**
@@ -447,6 +462,18 @@ export interface ContextEvaluatedPayload {
      *  Absent for `when` predicates (opaque code), unconditional entries, and
      *  every scorer verdict (whose evidence is its scores). */
     readonly witness?: { readonly text: string; readonly keyword?: string };
+    /**
+     * The REACHABLE set from the cursor this move landed on (9.50.0) — the
+     * skill ids the `read_skill` gate will admit on THIS iteration: declared
+     * hops out of the landed cursor plus the open skills (`llm-activated`
+     * skills the graph wires no edge to). It is the same set, from the same
+     * two resolvers, that builds the `read_skill` offer prose and any
+     * `skill.rejected.allowed` list this iteration — as DATA, so no consumer
+     * has to parse the menu sentence back into ids. `[]` is a fact (a dead
+     * end: no hop and no open skill is admissible); ABSENT means the graph
+     * predates `reachableSkills` and the set was not on the record.
+     */
+    readonly reachable?: readonly string[];
   };
   /**
    * Skill-graph entries whose own `when` matched this iteration and which the cursor
@@ -996,6 +1023,44 @@ export interface SkillRerouteSupersededPayload {
    * it wins over a pick — the author's determinism is never overridden).
    */
   readonly source?: 'tool-proposal';
+}
+
+/**
+ * The DECLARED skill map, as the author drew it (9.50.0) — fired ONCE per run,
+ * right after `agent.run_configured`, for every agent whose `.skillGraph()`
+ * mount could state its map. Nodes and edges come from the BUILT graph
+ * (`graph.nodes` / `graph.edges`), never inferred from runtime hops — so a
+ * recording carries the complete authored topology, not the lower bound that
+ * per-hop `routing[]` provenance names (an edge appears there only once it
+ * FIRES). A consumer drawing the graph from a recording no longer has to say
+ * "partial" or ask the caller to pass the built graph in.
+ *
+ * ABSENT (no event) when no graph is mounted, or when a structurally-typed
+ * graph carries no `nodes` — the map is then honestly not on the record,
+ * never guessed.
+ */
+export interface SkillGraphDeclaredPayload {
+  /** The drawn nodes: `kind: 'skill'` boxes, plus `'predicate'` diamonds for a
+   *  decision `tree()`. `description` is the skill's catalog description,
+   *  verbatim (the text the model reads) — absent when the skill declares
+   *  none. `label` is the drawn caption (predicate nodes). */
+  readonly nodes: ReadonlyArray<{
+    readonly id: string;
+    /** `'skill' | 'predicate'` (reported verbatim from the graph). */
+    readonly kind: string;
+    readonly description?: string;
+    readonly label?: string;
+  }>;
+  /** The author's edges, verbatim. `from: null` is the synthetic START (an
+   *  entry edge — the lens's declared-edge consumers filter on
+   *  `from !== null`). `kind` is the declared `SkillEdgeKind`
+   *  (`'entry' | 'predicate' | 'on-tool-return' | 'on-tool-status' | 'model'`). */
+  readonly edges: ReadonlyArray<{
+    readonly from: string | null;
+    readonly to: string;
+    readonly kind: string;
+    readonly label?: string;
+  }>;
 }
 
 export interface SkillRejectedPayload {

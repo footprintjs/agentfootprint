@@ -150,6 +150,14 @@ export interface CallLLMStageDeps {
    * bytes (the additive `brain` field appears only when a rung won).
    */
   readonly brainFor?: import('../skillBrains.js').BrainFor;
+  /**
+   * `AgentOptions.recordSystemPrompt` (9.50.0) — opt-in, threaded
+   * value-conditionally so an agent that never asked emits byte-identical
+   * `llm_start` events. When true, the event carries `systemPromptText`: the
+   * assembled prompt verbatim as sent. The privacy story lives on the option
+   * and on the payload field; this dep only obeys it.
+   */
+  readonly recordSystemPrompt?: boolean;
 }
 
 /**
@@ -243,6 +251,9 @@ export function buildCallLLMStage(
       provider: provider.name,
       model,
       systemPromptChars: systemPrompt.length,
+      // Opt-in (9.50.0): the assembled prompt VERBATIM, exactly the string
+      // handed to the provider below — never re-joined by a consumer.
+      ...(deps.recordSystemPrompt === true && { systemPromptText: systemPrompt }),
       messagesCount: messages.length,
       toolsCount: activeToolSchemas.length,
       // WHICH BRAIN answered (9.19.0) — stamped ONLY when a brain rung won,

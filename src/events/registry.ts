@@ -84,6 +84,7 @@ import type {
   SkillActivatedPayload,
   SkillDeactivatedPayload,
   SkillEscalatedPayload,
+  SkillGraphDeclaredPayload,
   SkillRejectedPayload,
   SkillRerouteSupersededPayload,
   SkillRouteConflictPayload,
@@ -191,6 +192,7 @@ export const EVENT_NAMES = {
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
+    graphDeclared: 'agentfootprint.skill.graph_declared',
     deactivated: 'agentfootprint.skill.deactivated',
     rejected: 'agentfootprint.skill.rejected',
     rerouteSuperseded: 'agentfootprint.skill.reroute_superseded',
@@ -499,6 +501,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.skill.activated',
     SkillActivatedPayload
   >;
+  'agentfootprint.skill.graph_declared': AgentfootprintEventEnvelope<
+    'agentfootprint.skill.graph_declared',
+    SkillGraphDeclaredPayload
+  >;
   'agentfootprint.skill.deactivated': AgentfootprintEventEnvelope<
     'agentfootprint.skill.deactivated',
     SkillDeactivatedPayload
@@ -758,6 +764,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.coverage_declared',
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
+  'agentfootprint.skill.graph_declared',
   'agentfootprint.skill.deactivated',
   'agentfootprint.skill.rejected',
   'agentfootprint.skill.reroute_superseded',

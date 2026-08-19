@@ -118,6 +118,19 @@ export interface InjectionEngineConfig {
    */
   readonly supersededEntries?: (ctx: InjectionContext) => readonly string[];
   /**
+   * The gate's admissible set, for the record (9.50.0) — given the cursor a
+   * move landed on, the skill ids the `read_skill` gate will admit this
+   * iteration (declared hops out of that cursor plus the open skills). The
+   * Agent composes it from the SAME two resolvers the `read_skill` offer and
+   * the refusal messages use, so the recorded set can never drift from the
+   * verdicts. Stamped on `context.evaluated.cursorMove` as `reachable`.
+   *
+   * Optional for forward-compat with graphs built before `reachableSkills`
+   * existed; absent → the field is omitted and an observer sees exactly what
+   * it saw in 9.49.0.
+   */
+  readonly reachableSkills?: (currentSkillId?: string) => readonly string[];
+  /**
    * The frozen step plans, keyed by skill id (9.18.0) — present only when
    * ≥1 registered skill declares `steps`. The Evaluate stage owns the
    * pointer's TENURE RE-KEY with it, at the same stage the cursor truth
@@ -242,6 +255,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
         config.explainNextSkill,
         config.supersededEntries,
         config.stepPlanFor,
+        config.reachableSkills,
       ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
@@ -282,6 +296,7 @@ function makeEvaluateStage(
   explainNextSkill?: (ctx: InjectionContext) => CursorMove,
   supersededEntries?: (ctx: InjectionContext) => readonly string[],
   stepPlanFor?: StepPlanFor,
+  reachableSkills?: (currentSkillId?: string) => readonly string[],
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -482,11 +497,19 @@ function makeEvaluateStage(
             ...(ctx.turnRoute!.offered!.includes(move.to) ? {} : { declinedOffer: true as const }),
           }
         : undefined;
+    // The gate's admissible set from the LANDED cursor (9.50.0) — asked once,
+    // beside the one resolver consultation, so the recorded set and this
+    // iteration's read_skill offer/refusals come from the same answer. A POJO
+    // copy (event payloads are detached plain data); `[]` is a fact (a dead
+    // end), absence means the graph could not say.
+    const reachable =
+      move !== undefined && reachableSkills ? [...reachableSkills(cursor)] : undefined;
     const cursorMove = move
       ? {
           ...(move.from !== undefined && { from: move.from }),
           ...(move.to !== undefined && { to: move.to }),
           by: move.by,
+          ...(reachable !== undefined && { reachable }),
           // Tier-1 DATA-matcher evidence (9.28.0) — what the message said that
           // routed this hop. Copied field-by-field: the event payload is a
           // structural shape, never the engine's own object.

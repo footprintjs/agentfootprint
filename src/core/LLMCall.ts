@@ -106,6 +106,16 @@ export interface LLMCallOptions {
     readonly messages?: number;
   };
   /**
+   * Record the ASSEMBLED system prompt on the LLM call (9.50.0). The LLMCall
+   * twin of `AgentOptions.recordSystemPrompt` — same field, same contract,
+   * same default. **Opt-in, default OFF**: when `true`,
+   * `agentfootprint.stream.llm_start` carries `systemPromptText`, the joined
+   * prompt verbatim as sent. PRIVACY: with the dial on, the full prompt rides
+   * into every recorder, sink and persisted recording — off, only
+   * `systemPromptChars` (the length) is on the record.
+   */
+  readonly recordSystemPrompt?: boolean;
+  /**
    * Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
    * after every LLM response with per-call and cumulative USD. Run-scoped
    * — the cumulative resets on each `.run()`.
@@ -193,6 +203,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly costBudget?: ResolvedCostBudget;
   /** Per-slot character budgets (8.11.0). Absent keys keep the slot default. */
   private readonly contextBudget?: LLMCallOptions['contextBudget'];
+  /** `LLMCallOptions.recordSystemPrompt` (9.50.0) — opt-in, default OFF. */
+  private readonly recordSystemPromptValue: boolean = false;
   private readonly structureRecorders?: readonly StructureRecorder[];
   private readonly groupTranslator?: GroupTranslator;
   /** Auto-resolved from provider.name at construction time (same
@@ -227,6 +239,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const resolvedCostBudget = resolveCostBudget('LLMCall', opts.costBudget);
     if (resolvedCostBudget !== undefined) this.costBudget = resolvedCostBudget;
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
+    if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
     // v2.14 alignment — auto-wire ThinkingHandler by provider.name. Same
@@ -426,6 +439,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // Per-slot budgets (8.11.0) — forwarded only where the consumer set one,
     // so an unset slot keeps its own default.
     const budget = this.contextBudget;
+    const recordSystemPrompt = this.recordSystemPromptValue;
     const systemPromptSubflow = buildSystemPromptSlot({
       prompt: systemPromptValue,
       reason: 'LLMCall.system()',
@@ -458,6 +472,9 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         provider: provider.name,
         model,
         systemPromptChars: systemPrompt.length,
+        // Opt-in (9.50.0): the assembled prompt VERBATIM, exactly the string
+        // handed to the provider below.
+        ...(recordSystemPrompt && { systemPromptText: systemPrompt }),
         messagesCount: messages.length,
         toolsCount: 0,
         ...(temperature !== undefined && { temperature }),

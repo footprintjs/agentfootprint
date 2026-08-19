@@ -84,6 +84,7 @@ import {
 } from '../../lib/trace-toolpack/innerRunRecords.js';
 import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolpack.js';
 import { Agent } from '../Agent.js';
+import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
@@ -271,6 +272,12 @@ export class AgentBuilder {
    *  when cascade options were asked for): the brains check-up needs it on
    *  a bare mount too. Undefined when the graph object carries no `nodes`. */
   private skillGraphNodeIds?: ReadonlySet<string>;
+  /** Captured from `.skillGraph(graph)` (9.50.0) — the DECLARED map (nodes +
+   *  edges, verbatim), projected once at mount so every run can file it as
+   *  `agentfootprint.skill.graph_declared`. Undefined when the graph cannot
+   *  state one (a structurally-typed graph without `nodes`) — the event then
+   *  never fires, and the recording honestly carries no declared map. */
+  private skillGraphDeclared?: SkillGraphDeclaredMap;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -1194,7 +1201,18 @@ export class AgentBuilder {
        *  read_skill gate can tell a skill the graph routes from one it never mentions
        *  (see `openSkillIds` in `build()`). Optional for forward-compat with graphs
        *  built before `edges` existed; absent → the graph wires nothing. */
-      edges?: ReadonlyArray<{ readonly to: string }>;
+      edges?: ReadonlyArray<{
+        readonly to: string;
+        /** The declared source (`null` = the synthetic START) — read since
+         *  9.50.0 for the `skill.graph_declared` record. Optional for
+         *  forward-compat; an edge that omits it is routed exactly as before
+         *  but stays OFF the declared-map event (never completed by a guess). */
+        readonly from?: string | null;
+        /** The declared `SkillEdgeKind` — same 9.50.0 record, same posture. */
+        readonly kind?: string;
+        /** The author's caption — same 9.50.0 record, same posture. */
+        readonly label?: string;
+      }>;
       /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
        *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */
       explainNextSkill?: (ctx: InjectionContext) => CursorMove;
@@ -1206,7 +1224,13 @@ export class AgentBuilder {
        *  set is what a continuity cursor is validated against (`droppedResume`).
        *  Derived here rather than added to `SkillGraph` as a mode field — the shape
        *  is already public, and one fact should not be declared twice. */
-      nodes?: ReadonlyArray<{ readonly kind: string; readonly id?: string }>;
+      nodes?: ReadonlyArray<{
+        readonly kind: string;
+        readonly id?: string;
+        /** The drawn caption (predicate diamonds) — read since 9.50.0 for the
+         *  `skill.graph_declared` record only. */
+        readonly label?: string;
+      }>;
       /** The graph's turn-routing plan (SG-C) — tier-1 rules, intent candidates,
        *  the classifier and the resolved tie policy. Optional for forward-compat
        *  with graphs built before it existed; absent → the cascade cannot run
@@ -1293,6 +1317,10 @@ export class AgentBuilder {
         graph.nodes.flatMap((n) => (typeof n.id === 'string' ? [n.id] : [])),
       );
     }
+    // The DECLARED map (9.50.0) — nodes + edges verbatim, descriptions from the
+    // compiled skills. Projected ONCE here (the graph object is in hand only at
+    // mount) so `createExecutor` can file it per run without holding the graph.
+    this.skillGraphDeclared = buildSkillGraphDeclared(graph, graph.skills);
     // The brains options (9.19.0) — captured verbatim; folded + validated at
     // build(), where the final injection list (the other home) exists.
     if (
@@ -2749,6 +2777,7 @@ export class AgentBuilder {
       // Undefined rather than `[]` when none — the manifest's "absent means not
       // configured" law, and what keeps an agent with no recipes byte-identical.
       this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
+      this.skillGraphDeclared,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

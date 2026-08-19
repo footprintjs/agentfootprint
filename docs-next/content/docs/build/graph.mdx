@@ -164,3 +164,7 @@ pipeline.on('agentfootprint.composition.enter', (e) => console.log(e.payload.nam
 ```
 
 Graphs report themselves as composition kind `'Sequence'` — a graph's levels ARE a sequence, and `CompositionKind` is a closed public union that would break consumers' exhaustive switches if widened. The fan-out within a level is visible in the chart itself.
+
+## Naming your nodes — the `sf-` prefix is reserved
+
+Framework-owned composition segments are named `sf-*` (`sf-llm-call`, `sf-tools`, `sf-cache`, …), and every downstream reader — commentary, step graphs, the OTel bridge — tells library plumbing from your structure by that prefix alone. `graph()` node ids (like `Parallel.branch()` and `Conditional.when()`) therefore refuse the prefix at declaration time. `RESERVED_SUBFLOW_PREFIX` and `isReservedSubflowSegment` (main barrel) export the law itself, so a viewer or pattern miner can import it instead of hardcoding the string.

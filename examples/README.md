@@ -277,6 +277,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 60 | [`60-gemini-field-truths.ts`](features/60-gemini-field-truths.ts) | Gemini gives the signature back | A Gemini tool loop that echoes the model's thought signature (without it, the second call is a 400 after your tool already ran), plus per-door model defaults, visible thinking tokens, and a refreshable apiKey. |
 | 61 | [`61-agent-recipes.ts`](features/61-agent-recipes.ts) | Recipes — a named, versioned agent setup | Declare an agent setup once as a versioned recipe, compose two of them, and read back on the run manifest which compositions produced the agent that answered. |
 | 62 | [`62-recording-envelope.ts`](features/62-recording-envelope.ts) | Recording envelope — a saved run that says what it is | Persist a recorded run as one versioned JSON archive, read it back unchanged, and watch the envelope refuse by name every fact it would otherwise have had to guess. |
+| 63 | [`63-recording-carries-the-map.ts`](features/63-recording-carries-the-map.ts) | Recording carries the map — declared graph, reachable set, assembled prompt | The three 9.50.0 recording-surface facts: the declared skill graph as data, the typed reachable set on every cursor move, and the opt-in assembled system prompt — all read back from a persisted envelope file, with the privacy default proven on the bytes. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

@@ -343,6 +343,30 @@ export interface AgentOptions {
    */
   readonly writeProvenance?: WriteProvenanceMode;
   /**
+   * Record the ASSEMBLED system prompt on every LLM call (9.50.0).
+   * **Opt-in. Default OFF — and the default is a privacy decision.**
+   *
+   * When `true`, each `agentfootprint.stream.llm_start` event carries
+   * `systemPromptText`: the joined injection pieces verbatim, exactly as the
+   * provider received them. That is the string today's recordings only
+   * describe (each piece is on the record; the assembled whole is not), so a
+   * debugger no longer has to render "not in this recording" for the one
+   * artifact the model actually read.
+   *
+   * WHY OFF BY DEFAULT: the assembled prompt is as sensitive as everything
+   * in it — skill bodies, RAG passages, memory recalls, per-user
+   * instructions — and it can be LARGE, once per iteration. With the dial on,
+   * it rides into every attached recorder, every vendor sink, every
+   * `recordRun` recording and every persisted envelope; treat those artifacts
+   * accordingly. Off (the default), `llm_start` keeps its exact prior bytes —
+   * `systemPromptChars` still reports the length, and the text is honestly
+   * absent rather than summarized.
+   *
+   * @example capture the prompt while debugging context assembly
+   *   Agent.create({ provider, model, recordSystemPrompt: true })
+   */
+  readonly recordSystemPrompt?: boolean;
+  /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
    * and injected as `ctx.credential`; tools can also pull via `ctx.credentials`.
