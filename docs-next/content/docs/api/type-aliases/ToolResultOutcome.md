@@ -6,7 +6,7 @@ title: ToolResultOutcome
 
 > **ToolResultOutcome** = [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`unknown`\> \| [`DenyOutcome`](/docs/api/interfaces/DenyOutcome)
 
-Defined in: [src/core/agent/middleware/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L149)
+Defined in: [src/core/agent/middleware/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L157)
 
 Everything a tool middleware may answer at the after-tool moment. Two arms,
 and no `ask` — the tool has already run, so there is nothing left for a

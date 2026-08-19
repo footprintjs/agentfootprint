@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:23](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/adapters/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L84)
+Defined in: [src/adapters/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L91)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -50,7 +50,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/adapters/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L104)
+Defined in: [src/adapters/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L111)
 
 v7.21 — WHO let this message into the window.
 
@@ -108,7 +108,7 @@ Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/adapters/types.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L60)
+Defined in: [src/adapters/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L67)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -144,7 +144,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L36)
+Defined in: [src/adapters/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L42)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -152,6 +152,12 @@ tool_use blocks across iterations: when the next `complete()` includes
 a `role: 'tool'` message, the provider reconstructs the matching
 `tool_use` block on the previous assistant turn from this field.
 Empty array on text-only turns; undefined for non-assistant roles.
+
+`providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
+response put there, and for Gemini it holds the `thoughtSignature` without
+which the model refuses the turn after a tool call. See
+[LLMResponse](/docs/api/interfaces/LLMResponse)'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
+is NOT stripped on the way to a provider: it exists to be sent.
 
 ***
 

@@ -1,47 +1,51 @@
 ---
-title: RiskResult
+title: "~~Interface: RiskResult~~"
 ---
 
-# Interface: RiskResult
+# ~~Interface: RiskResult~~
 
-Defined in: [src/adapters/types.ts:498](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L498)
+Defined in: [src/adapters/types.ts:602](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L602)
+
+## Deprecated
+
+No implementation exists — see [RiskDetector](/docs/api/interfaces/RiskDetector). Removed in 10.0.0.
 
 ## Properties
 
-### category
+### ~~category~~
 
 > `readonly` **category**: `"pii"` \| `"prompt_injection"` \| `"runaway_loop"` \| `"cost_overrun"` \| `"hallucination_flag"`
 
-Defined in: [src/adapters/types.ts:501](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L501)
+Defined in: [src/adapters/types.ts:605](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L605)
 
 ***
 
-### evidence
+### ~~evidence~~
 
 > `readonly` **evidence**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/adapters/types.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L507)
+Defined in: [src/adapters/types.ts:611](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L611)
 
 ***
 
-### flagged
+### ~~flagged~~
 
 > `readonly` **flagged**: `boolean`
 
-Defined in: [src/adapters/types.ts:499](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L499)
+Defined in: [src/adapters/types.ts:603](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L603)
 
 ***
 
-### severity
+### ~~severity~~
 
 > `readonly` **severity**: `"low"` \| `"medium"` \| `"high"` \| `"critical"`
 
-Defined in: [src/adapters/types.ts:500](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L500)
+Defined in: [src/adapters/types.ts:604](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L604)
 
 ***
 
-### suggestedAction
+### ~~suggestedAction~~
 
 > `readonly` **suggestedAction**: `"warn"` \| `"redact"` \| `"abort"`
 
-Defined in: [src/adapters/types.ts:508](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L508)
+Defined in: [src/adapters/types.ts:612](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L612)

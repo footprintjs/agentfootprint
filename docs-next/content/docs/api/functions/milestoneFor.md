@@ -6,7 +6,7 @@ title: milestoneFor
 
 > **milestoneFor**(`id`): [`Milestone`](/docs/api/interfaces/Milestone) \| `null`
 
-Defined in: [src/conventions.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L303)
+Defined in: [src/conventions.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L322)
 
 Classify a stage id into a [Milestone](/docs/api/interfaces/Milestone), or `null` when the stage is NOT
 a milestone boundary (its commits fold into the surrounding milestone's

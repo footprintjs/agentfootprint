@@ -36,7 +36,7 @@ Defined in: [src/patterns/LlmRouter.ts:207](https://github.com/footprintjs/agent
 
 ###### stage
 
-`"json-parse"` \| `"shape"`
+`"shape"` \| `"json-parse"`
 
 #### Returns
 
@@ -128,7 +128,7 @@ not capture any frames.
 
 ### stage
 
-> `readonly` **stage**: `"json-parse"` \| `"shape"`
+> `readonly` **stage**: `"shape"` \| `"json-parse"`
 
 Defined in: [src/patterns/LlmRouter.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L205)
 

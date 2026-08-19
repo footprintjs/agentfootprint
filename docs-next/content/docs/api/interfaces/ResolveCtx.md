@@ -1,47 +1,51 @@
 ---
-title: ResolveCtx
+title: "~~Interface: ResolveCtx~~"
 ---
 
-# Interface: ResolveCtx
+# ~~Interface: ResolveCtx~~
 
-Defined in: [src/adapters/types.ts:456](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L456)
+Defined in: [src/adapters/types.ts:535](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L535)
+
+## Deprecated
+
+No implementation exists — see [ContextSourceAdapter](/docs/api/interfaces/ContextSourceAdapter). Removed in 10.0.0.
 
 ## Properties
 
-### availableBudgetTokens
+### ~~availableBudgetTokens~~
 
 > `readonly` **availableBudgetTokens**: `number`
 
-Defined in: [src/adapters/types.ts:460](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L460)
+Defined in: [src/adapters/types.ts:539](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L539)
 
 ***
 
-### iterIndex
+### ~~iterIndex~~
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/adapters/types.ts:459](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L459)
+Defined in: [src/adapters/types.ts:538](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L538)
 
 ***
 
-### signal?
+### ~~signal?~~
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L461)
+Defined in: [src/adapters/types.ts:540](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L540)
 
 ***
 
-### turnIndex
+### ~~turnIndex~~
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/adapters/types.ts:458](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L458)
+Defined in: [src/adapters/types.ts:537](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L537)
 
 ***
 
-### userMessage
+### ~~userMessage~~
 
 > `readonly` **userMessage**: `string`
 
-Defined in: [src/adapters/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L457)
+Defined in: [src/adapters/types.ts:536](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L536)

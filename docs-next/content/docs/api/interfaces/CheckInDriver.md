@@ -4,7 +4,7 @@ title: CheckInDriver
 
 # Interface: CheckInDriver
 
-Defined in: [src/core/checkin.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L83)
+Defined in: [src/core/checkin.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L94)
 
 One ranked driver — a context unit and how strongly it aligns with the pick.
 
@@ -14,7 +14,7 @@ One ranked driver — a context unit and how strongly it aligns with the pick.
 
 > `readonly` **channel**: `string`
 
-Defined in: [src/core/checkin.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L87)
+Defined in: [src/core/checkin.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L98)
 
 Origin group: `'system' | 'task' | 'result'`.
 
@@ -24,7 +24,7 @@ Origin group: `'system' | 'task' | 'result'`.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/checkin.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L85)
+Defined in: [src/core/checkin.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L96)
 
 The unit id (the citation, e.g. `'system-1'`).
 
@@ -34,7 +34,7 @@ The unit id (the citation, e.g. `'system-1'`).
 
 > `readonly` **score**: `number`
 
-Defined in: [src/core/checkin.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L92)
+Defined in: [src/core/checkin.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L103)
 
 Alignment score — higher means it drove the pick more. Scorer-defined
  units; compare within one request, not across scorers.
@@ -45,6 +45,6 @@ Alignment score — higher means it drove the pick more. Scorer-defined
 
 > `readonly` **text**: `string`
 
-Defined in: [src/core/checkin.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L89)
+Defined in: [src/core/checkin.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L100)
 
 The unit text (quotable).

@@ -8,7 +8,7 @@ title: allow
 
 > **allow**(): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L21)
+Defined in: [src/core/agent/middleware/outcomes.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L22)
 
 Pass the value through untouched.
 
@@ -20,7 +20,7 @@ Pass the value through untouched.
 
 > **allow**(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`never`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L30)
+Defined in: [src/core/agent/middleware/outcomes.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L31)
 
 Pass the value through untouched, and say why you were comfortable.
 
@@ -47,7 +47,7 @@ silently permitted, not only in the record of the call that asked.
 
 > **allow**\<`T`\>(`value`, `why`): [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)\<`T`\>
 
-Defined in: [src/core/agent/middleware/outcomes.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L38)
+Defined in: [src/core/agent/middleware/outcomes.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L39)
 
 Replace the value and say why.
 

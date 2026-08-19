@@ -6,7 +6,7 @@ title: ToolMiddleware
 
 > **ToolMiddleware** = [`ToolCallMiddleware`](/docs/api/interfaces/ToolCallMiddleware) \| [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
 
-Defined in: [src/core/agent/middleware/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L273)
+Defined in: [src/core/agent/middleware/types.ts:281](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L281)
 
 One link in the tool chain — a rule about the call, about the result, or
 about both.

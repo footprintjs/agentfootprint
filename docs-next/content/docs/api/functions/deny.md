@@ -6,7 +6,7 @@ title: deny
 
 > **deny**(`reason`): [`DenyOutcome`](/docs/api/interfaces/DenyOutcome)
 
-Defined in: [src/core/agent/middleware/outcomes.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L66)
+Defined in: [src/core/agent/middleware/outcomes.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/outcomes.ts#L67)
 
 Refuse the call.
 

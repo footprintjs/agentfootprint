@@ -26,6 +26,17 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footpr
 
 ***
 
+### componentId?
+
+> `readonly` `optional` **componentId?**: `string`
+
+Defined in: [src/recorders/core/CheckInRecorder.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L64)
+
+The registered component that collected this decision (9.24.0), when the
+ ask carried one — which SURFACE the person answered through.
+
+***
+
 ### iteration
 
 > `readonly` **iteration**: `number`

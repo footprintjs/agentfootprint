@@ -4,7 +4,7 @@ title: RunnerPauseOutcome
 
 # Interface: RunnerPauseOutcome
 
-Defined in: [src/core/pause.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L28)
+Defined in: [src/core/pause.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L30)
 
 Outcome returned by `runner.run()` / `runner.resume()` when execution
 has paused mid-flow. The shape mirrors footprintjs's `PausedResult` but
@@ -17,7 +17,7 @@ want to reach into the checkpoint.
 
 > `readonly` `optional` **ask?**: [`MiddlewareAsk`](/docs/api/interfaces/MiddlewareAsk)
 
-Defined in: [src/core/pause.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L57)
+Defined in: [src/core/pause.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L59)
 
 Present ONLY when a `toolMiddleware` answered `ask` — the question it put
 to a person, plus the middleware that asked. Absent for every other pause,
@@ -39,7 +39,7 @@ gets to write the tool's answer.
 
 > `readonly` `optional` **checkIn?**: [`CheckInRequest`](/docs/api/interfaces/CheckInRequest)
 
-Defined in: [src/core/pause.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L41)
+Defined in: [src/core/pause.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L43)
 
 Present ONLY when this pause is an evidence-carrying check-in (a tool
 declared `checkIn`). Carries the typed ask + evidence pack. Absent for
@@ -53,7 +53,7 @@ between the two pause kinds. Resume with a `CheckInDecision`
 
 > `readonly` **checkpoint**: `FlowchartCheckpoint`
 
-Defined in: [src/core/pause.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L31)
+Defined in: [src/core/pause.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L33)
 
 Serializable checkpoint — store anywhere (Redis, Postgres, localStorage).
 
@@ -63,7 +63,7 @@ Serializable checkpoint — store anywhere (Redis, Postgres, localStorage).
 
 > `readonly` **paused**: `true`
 
-Defined in: [src/core/pause.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L29)
+Defined in: [src/core/pause.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L31)
 
 ***
 
@@ -71,6 +71,6 @@ Defined in: [src/core/pause.ts:29](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **pauseData**: `unknown`
 
-Defined in: [src/core/pause.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L33)
+Defined in: [src/core/pause.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L35)
 
 Data passed to `scope.$pause()` / `pauseHere()`. Consumer-typed.

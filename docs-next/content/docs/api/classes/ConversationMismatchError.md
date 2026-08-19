@@ -4,7 +4,7 @@ title: ConversationMismatchError
 
 # Class: ConversationMismatchError
 
-Defined in: [src/core/runCheckpoint.ts:362](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L362)
+Defined in: [src/core/runCheckpoint.ts:381](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L381)
 
 Thrown when a stored conversation is handed to an agent that is provably
 not the one that recorded it (9.2.0).
@@ -26,7 +26,7 @@ deploy is the ordinary case and must keep working.
 
 > **new ConversationMismatchError**(`door`, `storedAgentId`, `agentId`): `ConversationMismatchError`
 
-Defined in: [src/core/runCheckpoint.ts:369](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L369)
+Defined in: [src/core/runCheckpoint.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L388)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/core/runCheckpoint.ts:369](https://github.com/footprintjs/agent
 
 > `readonly` **agentId**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L367)
+Defined in: [src/core/runCheckpoint.ts:386](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L386)
 
 The id of the agent it was handed to.
 
@@ -78,7 +78,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_CONVERSATION_MISMATCH"`
 
-Defined in: [src/core/runCheckpoint.ts:363](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L363)
+Defined in: [src/core/runCheckpoint.ts:382](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L382)
 
 ***
 
@@ -144,7 +144,7 @@ not capture any frames.
 
 > `readonly` **storedAgentId**: `string`
 
-Defined in: [src/core/runCheckpoint.ts:365](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L365)
+Defined in: [src/core/runCheckpoint.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L384)
 
 The id stamped on the stored conversation.
 

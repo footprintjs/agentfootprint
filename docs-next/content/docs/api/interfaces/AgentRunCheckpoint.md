@@ -19,7 +19,7 @@ resume hours / days / deploys later via `agent.resumeOnError(...)`.
 
 > `readonly` `optional` **agent?**: `object`
 
-Defined in: [src/core/runCheckpoint.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L160)
+Defined in: [src/core/runCheckpoint.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L179)
 
 WHICH agent recorded this conversation — present only when that agent was
 given an explicit `Agent.create({ id })` (9.2.0).
@@ -59,7 +59,7 @@ Wall-clock when the checkpoint was captured. Diagnostic only.
 
 > `readonly` `optional` **failurePoint?**: `object`
 
-Defined in: [src/core/runCheckpoint.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L164)
+Defined in: [src/core/runCheckpoint.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L183)
 
 Where the failure happened. Diagnostic — surfaces in oncall
  triage so you can tell "LLM 500 mid-iteration" from "tool
@@ -197,6 +197,31 @@ Defined in: [src/core/runCheckpoint.ts:82](https://github.com/footprintjs/agentf
  persisted checkpoint back to the original run's observability.
  NOT reused on resume: `resumeOnError` starts a fresh run with a
  fresh `runId` (only the conversation history is restored).
+
+***
+
+### skillCursor?
+
+> `readonly` `optional` **skillCursor?**: `string`
+
+Defined in: [src/core/runCheckpoint.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L159)
+
+WHERE the conversation's skill graph stood when the stored turn ended —
+the graph cursor, carried so a continued conversation can default its
+next turn's start to it (SG-C, 9.17.0).
+
+Written ONLY when the recording agent's graph declared
+`continuity: 'conversation'`; under the default `'turn'` the field is
+never written and the byte shape of every checkpoint is unchanged. On
+the continuing side it is honored only under the same declaration, and
+the RouteTurn cascade still judges it against the new message — an
+inherited cursor is a sticky DEFAULT, not a lock. An id the continuing
+graph does not know is dropped and recorded
+(`turn_routed.droppedResume`), never silently parked.
+
+**Version 1 still**, by the same documented rule as [folded](/docs/api/interfaces/AgentRunCheckpoint#folded) /
+[identity](/docs/api/interfaces/AgentRunCheckpoint#identity) / [agent](/docs/api/interfaces/AgentRunCheckpoint#agent): an optional field is not a format
+change — an older runtime ignores it and continues correctly.
 
 ***
 

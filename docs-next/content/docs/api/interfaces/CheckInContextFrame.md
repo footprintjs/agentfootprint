@@ -4,7 +4,7 @@ title: CheckInContextFrame
 
 # Interface: CheckInContextFrame
 
-Defined in: [src/core/checkin.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L75)
+Defined in: [src/core/checkin.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L86)
 
 One piece of context the run consumed — role/channel + a compact summary.
 
@@ -14,7 +14,7 @@ One piece of context the run consumed — role/channel + a compact summary.
 
 > `readonly` **channel**: `string`
 
-Defined in: [src/core/checkin.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L77)
+Defined in: [src/core/checkin.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L88)
 
 Origin group: `'system' | 'task' | 'result'`.
 
@@ -24,6 +24,6 @@ Origin group: `'system' | 'task' | 'result'`.
 
 > `readonly` **summary**: `string`
 
-Defined in: [src/core/checkin.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L79)
+Defined in: [src/core/checkin.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L90)
 
 A short, truncated summary of the piece (never the full payload).
