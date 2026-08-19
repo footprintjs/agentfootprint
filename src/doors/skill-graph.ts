@@ -130,17 +130,34 @@ export {
   type ToolResultStatus,
 } from '../lib/injection-engine/toolOutcome.js';
 
-// ─── The graph ─────────────────────────────────────────────────────────
+// ─── The graph (the SkillMap — the agent that mounts it is the SkillWalker) ─
 export {
   decideSkill,
   formatCheckup,
   skillGraph,
+  // The official vocabulary (9.51.0): `defineSkillMap` is a permanent
+  // reference-equal alias of `skillGraph`, `SkillMap` of `SkillGraph` — both
+  // names ship forever. There is deliberately no `SkillWalker` export: the
+  // walker is the host that mounts the map (inside agentfootprint, the agent).
+  defineSkillMap,
+  type SkillMap,
   SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
   SKILL_GRAPH_METADATA_KEY,
   type BuildOptions,
   type CheckupOptions,
   type CursorMove,
   type CursorMoveCause,
+  // Guards-as-data on route edges (9.51.0).
+  GUARD_HOP_KEYS,
+  plainGuardCaption,
+  type GuardConditionData,
+  type GuardConditionEvidence,
+  type GuardEvaluation,
+  type GuardOperator,
+  type GuardValue,
+  type SkillGuard,
+  type SkillGuardData,
+  type SkillGuardOps,
   type DecisionNode,
   type DeferredBodyContract,
   type EntryScore,

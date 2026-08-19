@@ -152,6 +152,37 @@ const agent = Agent.create({ provider, model })
 
 Same shape for `.instruction()` / `.memory()` / `.rag()` / raw `.injection()` — they're all the one primitive, `Injection = slot × trigger × cache`. [The full model ↓](#the-model--what-we-abstract)
 
+### The SkillMap — declare which skills connect
+
+When an agent has several skills, the routing between them is a thing you declare, not prose you hope the model follows. The official names, in one sentence: **you declare the SkillMap; the agent is the SkillWalker; the recording carries both.**
+
+1. **DECLARE** — `defineSkillMap` (a permanent alias of `skillGraph` — same function, both names forever): the skills, the edges between them, entry matchers as data (`match:`), and — since 9.51.0 — **guards as data** on route edges (`guard:`).
+2. **ATTACH** — `.skillGraph(map)`. There is no walker class to construct: the agent IS the SkillWalker, moving its cursor over your map.
+3. **WATCH** — every recording carries the map (`skill.graph_declared`, guard conditions included) and the walk (`cursorMove` on every iteration, with the evidence that opened or closed each guarded hop). The SkillGraph debugger renders both.
+
+The walker moves by exactly three movers:
+
+| mover | who decides | on the record |
+|---|---|---|
+| **llm** | the model picks via `read_skill`, bounded by the gate | `by: 'model-pick'`; refusals as `skill.rejected` |
+| **guard** | **your data decides** — a `when` / `onToolReturn` / `onToolStatus` / `guard:` edge fires | `by: 'route'`, with `cursorMove.guard` evidence when a data guard judged it |
+| **linear** | no choice — a hand-off that fires every time its source finishes | `by: 'route'` |
+
+A `guard:` is the data twin of the `when` predicate (at most one of the two per edge): conditions over the hop (`toolName`, `status`, `iteration`, …) and over the tool result's own JSON fields, in footprintjs's filter grammar (`eq/ne/gt/gte/lt/lte/in/notIn`, all ANDed):
+
+```typescript
+const map = defineSkillMap()
+  .entry(triage, { match: { keywords: ['check', 'account'] } })
+  .route(triage, escalation, {
+    onToolReturn: 'assess_risk',
+    guard: { riskLevel: { in: ['high', 'critical'] }, score: { gte: 0.7 } },
+  })
+  .route(escalation, wrapup, { onToolReturn: 'close_case' })
+  .build();
+```
+
+Because the guard is data: the build **proves contradictions** (`guard-unsatisfiable` — a guard that can never pass refuses to build, naming the conflict), `map.toMermaid()` captions the edge (`on assess_risk when riskLevel in [high, critical] AND score ≥ 0.7`), and every evaluation that decides a hop — taken or refused — puts its per-condition evidence on the record (`cursorMove.guard` / `cursorMove.guardsClosed`), so "why didn't my edge fire?" is a lookup, not a debugging session. [Runnable end to end](examples/features/64-skill-map-guards.ts) · [The five-minute walkthrough →](docs-next/content/docs/build/skill-graph-quickstart.mdx)
+
 When a skill's playbook is really a **sequence**, declare it as data and the framework walks it — offering one step's tool at a time (banner-led: `[Step 2 of 6 — confirm the duplicate charge]`), with `skip_step` to put a decline on the record and one teaching nudge if the model stops early. Your other tools stay available throughout — a declared order, not a cage:
 
 ```typescript

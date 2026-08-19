@@ -66,7 +66,12 @@ import {
   type Injection,
   type InjectionContext,
 } from './types.js';
-import { SKILL_GRAPH_METADATA_KEY, type CursorMove, type SkillRouting } from './skillGraph.js';
+import {
+  SKILL_GRAPH_METADATA_KEY,
+  type CursorMove,
+  type GuardEvaluation,
+  type SkillRouting,
+} from './skillGraph.js';
 import { menuOutstanding, type TurnRoute } from './routingPolicy.js';
 import {
   pointerOf,
@@ -519,6 +524,14 @@ function makeEvaluateStage(
               ...(move.witness.keyword !== undefined && { keyword: move.witness.keyword }),
             },
           }),
+          // Data-guard evidence (9.51.0) — the taken hop's evaluation and the
+          // refusals, copied field-by-field like the witness: the event
+          // payload is a structural shape, never the engine's own object.
+          ...(move.guard !== undefined && { guard: copyGuardEvaluation(move.guard) }),
+          ...(move.guardsClosed !== undefined &&
+            move.guardsClosed.length > 0 && {
+              guardsClosed: move.guardsClosed.map(copyGuardEvaluation),
+            }),
           ...resolvedMenu,
         }
       : undefined;
@@ -557,6 +570,26 @@ function makeEvaluateStage(
       // was suppressed, so the common iteration is byte-identical to 8.14.0.
       ...(supersededIds.length > 0 && { supersededIds }),
     });
+  };
+}
+
+/** One guard evaluation as a DETACHED POJO for the emit channel (9.51.0) —
+ *  field-by-field, conditions included: event payloads must be plain data,
+ *  and value arrays are re-sliced so no live reference rides the record. */
+function copyGuardEvaluation(g: GuardEvaluation) {
+  return {
+    from: g.from,
+    to: g.to,
+    toolName: g.toolName,
+    ...(g.toolCallId !== undefined && { toolCallId: g.toolCallId }),
+    verdict: g.verdict,
+    conditions: g.conditions.map((c) => ({
+      key: c.key,
+      op: c.op,
+      value: Array.isArray(c.value) ? [...c.value] : c.value,
+      actualSummary: c.actualSummary,
+      passed: c.passed,
+    })),
   };
 }
 

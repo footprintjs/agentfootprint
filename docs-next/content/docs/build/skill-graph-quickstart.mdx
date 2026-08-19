@@ -10,6 +10,30 @@ description: Three defineSkill calls, one skillGraph({ skills, start }) — rout
 
 This page is the whole loop: three skills, one graph, and the picture.
 
+## The names, and the whole story
+
+The official vocabulary (9.51.0), in one sentence: **you declare the SkillMap;
+the agent is the SkillWalker; the recording carries both.**
+
+1. **DECLARE** — `defineSkillMap` builds the map: skills, edges, entry
+   matchers as data, and guards as data on route edges. It is a permanent
+   alias of `skillGraph` — the same function, both names exported forever
+   (`SkillMap` aliases the `SkillGraph` type the same way). Use whichever
+   reads better; nothing was renamed.
+2. **ATTACH** — `.skillGraph(map)`. There is deliberately no `SkillWalker`
+   class: the walker is the agent itself, moving its cursor over your map.
+3. **WATCH** — every recording carries the map (`skill.graph_declared`,
+   guard conditions included) and the walk (`cursorMove` per iteration,
+   with per-condition guard evidence). The SkillGraph debugger renders both.
+
+The walker moves by exactly three movers:
+
+| mover | who decides | on the record |
+|---|---|---|
+| **llm** | the model picks via `read_skill`, bounded by the gate | `by: 'model-pick'`; refusals as `skill.rejected` |
+| **guard** | **your data decides** — a `when` / `onToolReturn` / `onToolStatus` / `guard:` edge | `by: 'route'`, with `cursorMove.guard` when a data guard judged it |
+| **linear** | no choice — a hand-off that fires whenever its source finishes | `by: 'route'` |
+
 ## The code
 
 Three `defineSkill` calls and one `skillGraph({ ... })`. Start rules are tried top
@@ -227,6 +251,69 @@ Every choice is on the record: `llm_start.brain` says which rung answered,
 'decider' }` names the resolver, and a tool's `status` rides
 `stream.tool_end` and the routed edge. None declared = byte-identical,
 events included.
+
+## Guard a transition with data (9.51.0)
+
+`onToolStatus` routed on a tool's declared outcome; the general condition was
+still an opaque `when` predicate — code the library can only run. `guard:` is
+its DATA twin, and the last of the walker's three movers to become data:
+
+```ts twoslash
+import { defineSkillMap, defineSkill } from 'agentfootprint/context';
+const triage = defineSkill({ id: 'triage', description: 'first look', body: '…' });
+const escalation = defineSkill({ id: 'escalation', description: 'high-risk handling', body: '…' });
+// ---cut---
+const map = defineSkillMap()
+  .entry(triage)
+  .route(triage, escalation, {
+    onToolReturn: 'assess_risk',                     // this tool…
+    guard: { riskLevel: { in: ['high', 'critical'] }, // …whose result says so
+             score: { gte: 0.7 } },
+  })
+  .build();
+```
+
+A guard is `{ key: { op: value, … }, … }` — operators
+`eq / ne / gt / gte / lt / lte / in / notIn`, every condition ANDed
+(deliberately footprintjs's `WhereFilter` grammar). Six **hop keys** read the
+hop itself — `toolName`, `result`, `status`, `iteration`, `userMessage`,
+`currentSkillId` — and any OTHER key reads the top-level field of that name
+from the tool result parsed as JSON, the shape structured results already
+have. At most one of `when` / `guard` per edge: code or data, never both.
+(One placement note: `result`-field keys judge the string the model READ,
+which artifact placement can replace with a claim ticket — guard on
+`toolName` / `status` when you want a condition placement cannot move.)
+
+Declaring the condition as data buys four things a predicate can never have:
+
+- **the check-up proves contradictions** — `guard-unsatisfiable` is an ERROR
+  naming the conflict (`score > 5 AND score < 3`; a guard `status` the edge's
+  own `onToolStatus` excludes; a status outside the closed vocabulary — the
+  typo `'sucess'` is caught at build, not discovered as an edge that never
+  fires);
+- **the map draws it** — `toMermaid()` captions the edge
+  (`on assess_risk when riskLevel in [high, critical] AND score ≥ 0.7`);
+- **the recording carries it** — `skill.graph_declared` edges include the
+  `guard` conditions, so a viewer drawing the SkillMap from a recording shows
+  them without re-reading source;
+- **every decision leaves evidence** — when a guard decides a hop, the move
+  (`context.evaluated.cursorMove`) carries the full per-condition evaluation:
+  `cursorMove.guard` on the taken hop (verdict `true`, each condition with
+  the summarized value it saw), `cursorMove.guardsClosed` on a refusal
+  (verdict `false` — so "why didn't my edge fire?" is a lookup: the record
+  says `score gte 0.7 — saw "0.2" → failed`).
+
+Runnable end to end (both walks, evidence printed):
+[`examples/features/64-skill-map-guards.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/64-skill-map-guards.ts).
+The compiled shapes are exported as `SkillGuard` (the author form — keys to
+`SkillGuardOps`, the per-key operator set, whose thresholds are plain
+`GuardValue` data), `SkillGuardData` (the serializable description on
+`SkillEdge.guard` and the declared map — a list of `GuardConditionData`
+rows, each one key + one `GuardOperator` + one value), and `GuardEvaluation`
+(the evidence on the move, whose per-condition rows are
+`GuardConditionEvidence` — the condition plus the summarized value it saw
+and whether it passed) — with `plainGuardCaption` naming any guard in prose
+and `GUARD_HOP_KEYS` listing the six hop keys.
 
 ## Running the graph without our agent (9.34.0)
 

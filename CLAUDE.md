@@ -17,7 +17,9 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
-| drawing the declared skill graph from a recording — the author's nodes + edges as DATA, never parsed from prose or inferred from fired hops | `skill.graph_declared` + `buildSkillGraphDeclared` | `src/core/agent/skillGraphDeclared.ts` | 9.50.0 |
+| declaring which skills connect — the SkillMap as one named thing (the agent that mounts it is the SkillWalker; there is deliberately no walker class) | `defineSkillMap` + `SkillMap` (permanent reference-equal aliases of `skillGraph`/`SkillGraph`) | `src/lib/injection-engine/skillGraph.ts` | 9.51.0 |
+| guarding a skill transition on state or a tool result's fields — a route condition as DATA (comparable, drawable, evidence-recorded), not an opaque predicate | `guard:` + `compileGuard` + `guard-unsatisfiable` | `src/lib/injection-engine/skillGuard.ts` | 9.51.0 |
+| seeing the skill map in a recording — the author's nodes + edges (guards included) as DATA, never parsed from prose or inferred from fired hops | `skill.graph_declared` + `buildSkillGraphDeclared` | `src/core/agent/skillGraphDeclared.ts` | 9.50.0 |
 | "where could the run go next?" — the reachable skill set at every cursor move, typed on the move itself | `cursorMove.reachable` + `reachableSkills` | `src/lib/injection-engine/buildInjectionEngineSubflow.ts` | 9.50.0 |
 | putting the ASSEMBLED system prompt in the recording — the exact string the model read (opt-in; default OFF is a privacy decision) | `recordSystemPrompt` | `src/core/agent/types.ts` | 9.50.0 |
 | a typed HITL prompt — let a person pick from a list, choose a range, use a real control instead of typing prose | `AskComponent` | `src/core/askComponent.ts` | 9.24.0 |

@@ -1212,6 +1212,10 @@ export class AgentBuilder {
         readonly kind?: string;
         /** The author's caption — same 9.50.0 record, same posture. */
         readonly label?: string;
+        /** The edge's declared DATA guard (9.51.0) — read for the
+         *  `skill.graph_declared` record only, carried verbatim when it has
+         *  the compiled shape and skipped otherwise (never completed). */
+        readonly guard?: { readonly conditions?: unknown };
       }>;
       /** The same cursor resolver, reporting the clause that won (8.5.0). Optional for
        *  forward-compat; absent → no `cursorMove` on `context.evaluated`. */

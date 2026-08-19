@@ -28,6 +28,7 @@
  */
 
 import { compareMatchers, type SkillMatchData } from './skillMatch.js';
+import { guardUnsatisfiable, plainGuardCaption, type SkillGuardData } from './skillGuard.js';
 
 /**
  * The compiled trigger kinds this file needs to tell apart. Mirrors
@@ -47,6 +48,13 @@ export type GraphProblemCode =
   | 'dead-entry-step' // 8.7.0 — an entry that can never be the cold-start cursor routes out of itself
   | 'ambiguous-routes'
   | 'self-loop'
+  | 'guard-unsatisfiable' // ERROR — a route edge's data guard PROVABLY can never pass: its own
+  //   conditions contradict each other (eq vs ne/in/notIn/crossed bounds on one key), it names
+  //   a `status` outside the closed result-status vocabulary, or it contradicts the edge's own
+  //   onToolStatus/exact onToolReturn declaration. Two of the author's declarations, one of
+  //   which must be wrong (the `never-routes-contradicts-example` posture) — and only where
+  //   PROVABLE from the data: cross-key logic, result-JSON runtime values and RegExp
+  //   intersection are never decided (skillGuard.ts `guardUnsatisfiable` owns the boundary).
   // The rules front door (SG-A):
   | 'rule-id-exists' // ERROR — a start rule routes to a skill id that is not in skills[].
   //   Raised as a BUILD refusal from the object form (a rule naming an unknown id cannot
@@ -182,8 +190,19 @@ export interface CheckupInput {
   readonly skillIds: ReadonlySet<string>;
   /** Declared entries, in declaration order (the order the cursor resolver reads). */
   readonly entries: readonly CheckupEntry[];
-  /** Declared edges; `deterministic` = has a `when`/`onToolReturn` predicate. */
-  readonly routes: ReadonlyArray<{ fromId: string; toId: string; deterministic: boolean }>;
+  /** Declared edges; `deterministic` = has a `when`/`onToolReturn`/
+   *  `onToolStatus`/`guard` condition. A `guard` rides as DATA so this file
+   *  can prove contradictions; `onToolReturnExact`/`onToolStatuses` are the
+   *  only preconditions that are provably comparable with it (a RegExp
+   *  `onToolReturn` is not decided, so it never arrives here). */
+  readonly routes: ReadonlyArray<{
+    fromId: string;
+    toId: string;
+    deterministic: boolean;
+    guard?: SkillGuardData;
+    onToolReturnExact?: string;
+    onToolStatuses?: readonly string[];
+  }>;
   /** Decision-`tree()` graphs are exhaustive by construction — only id checks apply. */
   readonly isTree: boolean;
   /**
@@ -258,6 +277,33 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
         skill: id,
       });
     }
+  }
+
+  // 1.5 guard-unsatisfiable (ERROR) — a route edge whose data guard PROVABLY
+  //     can never pass, by its own conditions or against the edge's own
+  //     tool/status declaration. Only what the data decides is claimed —
+  //     skillGuard.ts's `guardUnsatisfiable` owns the exact boundary; this
+  //     loop just names the edge. An error, not a warning: two of the
+  //     author's declarations on ONE edge, one of which must be wrong, and
+  //     the edge is dead under every context — unlike `unreachable-skill`,
+  //     no model pick can make a false condition true.
+  for (const r of routes) {
+    if (r.guard === undefined) continue;
+    const why = guardUnsatisfiable(r.guard, {
+      ...(r.onToolReturnExact !== undefined && { onToolReturnExact: r.onToolReturnExact }),
+      ...(r.onToolStatuses !== undefined && { onToolStatuses: r.onToolStatuses }),
+    });
+    if (why === undefined) continue;
+    problems.push({
+      kind: 'error',
+      code: 'guard-unsatisfiable',
+      message:
+        `Route ${r.fromId} → ${r.toId} declares the guard ` +
+        `\`${plainGuardCaption(r.guard)}\`, which can never pass: ${why}. The edge is dead ` +
+        `wiring under every run — fix the contradiction, or drop one of the declarations.`,
+      from: r.fromId,
+      to: r.toId,
+    });
   }
 
   if (isTree) {

@@ -102,6 +102,48 @@ describe('buildSkillGraphDeclared — the projection', () => {
     expect(map.edges).toEqual([{ from: null, to: 'x', kind: 'entry' }]);
   });
 
+  it('carries a declared guard verbatim (9.51.0) — a built graph and a well-formed structural one', () => {
+    const a = skill('a', 'first');
+    const b = skill('b', 'second');
+    const graph = skillGraph()
+      .entry(a)
+      .route(a, b, { guard: { riskLevel: { in: ['high', 'critical'] }, score: { gte: 0.7 } } })
+      .build();
+    const map = buildSkillGraphDeclared(graph, graph.skills)!;
+    const edge = map.edges.find((e) => e.to === 'b')!;
+    expect(edge.kind).toBe('guard');
+    expect(edge.guard).toEqual({
+      conditions: [
+        { key: 'riskLevel', op: 'in', value: ['high', 'critical'] },
+        { key: 'score', op: 'gte', value: 0.7 },
+      ],
+    });
+  });
+
+  it('SKIPS a malformed structural guard — the map carries what was declared, never a repair (9.51.0)', () => {
+    const map = buildSkillGraphDeclared(
+      {
+        nodes: [{ id: 'x', kind: 'skill' }],
+        edges: [
+          // conditions rows missing key/op, or holding non-data values —
+          // the EDGE still rides (it is declarable); the guard does not.
+          { to: 'x', from: 'y', kind: 'guard', guard: { conditions: [{ key: 'k' }] } },
+          {
+            to: 'x',
+            from: 'z',
+            kind: 'guard',
+            guard: { conditions: [{ key: 'k', op: 'eq', value: () => 1 }] },
+          },
+        ],
+      },
+      [],
+    )!;
+    expect(map.edges).toEqual([
+      { from: 'y', to: 'x', kind: 'guard' },
+      { from: 'z', to: 'x', kind: 'guard' },
+    ]);
+  });
+
   it('a decision tree projects predicate diamonds with their captions', () => {
     // A tree's nodes carry kind 'predicate' + label — the projection must keep
     // both so a consumer can draw the diamond the author drew.

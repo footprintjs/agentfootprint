@@ -84,6 +84,15 @@ import {
   type SkillMatch,
   type SkillMatchData,
 } from './skillMatch.js';
+import {
+  compileGuard,
+  mermaidGuardCaption,
+  plainGuardCaption,
+  type CompiledGuard,
+  type GuardConditionEvidence,
+  type SkillGuard,
+  type SkillGuardData,
+} from './skillGuard.js';
 import type { IntentScorer } from './intentScorer.js';
 import { resolveRoutingPolicy, type RoutingPolicy } from './routingPolicy.js';
 import {
@@ -97,6 +106,19 @@ export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphC
 // The data-matcher domain (`match:` on start rules) — one module owns the type,
 // the compiler, the comparator and the caption; see ./skillMatch.ts.
 export type { SkillMatch, SkillMatchData, RouteWitness } from './skillMatch.js';
+// The data-guard domain (`guard:` on route edges, 9.51.0) — one module owns the
+// type, the compiler, the evidence shape and the caption; see ./skillGuard.ts.
+export {
+  GUARD_HOP_KEYS,
+  plainGuardCaption,
+  type GuardConditionData,
+  type GuardConditionEvidence,
+  type GuardOperator,
+  type GuardValue,
+  type SkillGuard,
+  type SkillGuardData,
+  type SkillGuardOps,
+} from './skillGuard.js';
 // The turn-routing surfaces the graph exposes (SG-C) — the plan the agent's
 // RouteTurn stage consumes, and the verdict POJO the resolver reads.
 export type { TurnRoutingPlan } from './skillIntent.js';
@@ -223,6 +245,9 @@ export interface SkillGraphStep {
   /** Route on the result's declared outcome status (9.19.0) — see
    *  {@link SkillRouteOptions.onToolStatus}. */
   readonly onToolStatus?: SkillRouteOptions['onToolStatus'];
+  /** The edge's condition as DATA (9.51.0) — see
+   *  {@link SkillRouteOptions.guard}. */
+  readonly guard?: SkillRouteOptions['guard'];
   readonly label?: string;
 }
 
@@ -344,6 +369,34 @@ export interface SkillRouteOptions {
    * most one of `when` / `onToolStatus`: code or data, never both.
    */
   readonly onToolStatus?: ToolResultStatus | ReadonlyArray<ToolResultStatus>;
+  /**
+   * The DATA form of `when` (9.51.0) — the edge's condition declared as
+   * comparable, drawable, recordable conditions instead of an opaque
+   * predicate: `{ key: { eq | ne | gt | gte | lt | lte | in | notIn: value } }`,
+   * every condition ANDed (the operator grammar deliberately mirrors
+   * footprintjs's `WhereFilter` — see {@link SkillGuard}). This is the
+   * SkillWalker's guard mover as data: the map is data, entry matchers are
+   * data, `onToolStatus` arms are data — the guard was the last opaque
+   * function on a route edge.
+   *
+   * Judged per tool result of the previous iteration's batch, exactly where a
+   * `when` runs. Six hop keys read the hop directly (`toolName`, `result`,
+   * `status`, `iteration`, `userMessage`, `currentSkillId`); any OTHER key
+   * reads the top-level field of that name from the RESULT parsed as JSON —
+   * `guard: { riskLevel: { gte: 'high' } }` routes on a tool that returned
+   * `{"riskLevel":"high"}`. Being data buys four things a `when` can never
+   * have: the check-up proves contradictions (`guard-unsatisfiable`),
+   * `toMermaid()` captions the edge ("when riskLevel ≥ high"),
+   * `skill.graph_declared` carries it into every recording, and each
+   * evaluation that DECIDES a hop — taken or refused — leaves per-condition
+   * evidence on `cursorMove.guard` / `cursorMove.guardsClosed`.
+   *
+   * COMPOSES with `onToolReturn` / `onToolStatus` ("this tool, this outcome,
+   * AND these conditions"). At most one of `when` / `guard`: code or data,
+   * never both — to combine declared conditions with extra logic, fold the
+   * checks into your `when` predicate.
+   */
+  readonly guard?: SkillGuard;
   /** Caption rendered on the edge. Defaults to a derived label. */
   readonly label?: string;
 }
@@ -463,7 +516,13 @@ export interface TreeOptions {
   readonly scopeTools?: boolean;
 }
 
-export type SkillEdgeKind = 'entry' | 'predicate' | 'on-tool-return' | 'on-tool-status' | 'model';
+export type SkillEdgeKind =
+  | 'entry'
+  | 'predicate'
+  | 'on-tool-return'
+  | 'on-tool-status'
+  | 'guard'
+  | 'model';
 
 export interface SkillEdge {
   /** Source skill id, or `null` for the synthetic START (an entry edge). */
@@ -475,6 +534,13 @@ export interface SkillEdge {
    *  (`match:`). `toMermaid()` captions the edge with it when no explicit
    *  `label` was given. */
   readonly match?: SkillMatchData;
+  /** The DATA guard on a route edge, when one was declared (9.51.0) — rides
+   *  additively beside the kind exactly as `match` rides entry edges (a
+   *  guard composed with `onToolReturn`/`onToolStatus` keeps that kind; a
+   *  guard alone is kind `'guard'`). `toMermaid()` captions a guard-only
+   *  edge with it when no explicit `label` was given, and
+   *  `skill.graph_declared` carries it into every recording. */
+  readonly guard?: SkillGuardData;
 }
 
 /**
@@ -579,6 +645,30 @@ export interface RouteBatchConflict {
   readonly losers: readonly RouteBatchOutcome[];
 }
 
+/**
+ * One guard's evaluation against one tool result (9.51.0) — the evidence a
+ * data guard leaves whenever it DECIDES a hop: which edge, which result it
+ * judged, and every condition with the value it saw. Two homes on the move:
+ * `CursorMove.guard` (the taken hop's evaluation, verdict `true`) and
+ * `CursorMove.guardsClosed` (the refusals, verdict `false`) — both ride
+ * `context.evaluated.cursorMove` onto the record.
+ */
+export interface GuardEvaluation {
+  /** The guarded edge. */
+  readonly from: string;
+  readonly to: string;
+  /** The tool result this evaluation judged. */
+  readonly toolName: string;
+  /** The provider's tool_use id for that call, when the batch carried one. */
+  readonly toolCallId?: string;
+  /** `true` — the guard passed and the edge fired; `false` — the guard
+   *  refused a hop whose other declared conditions were already met. */
+  readonly verdict: boolean;
+  /** Per-condition evidence, in declaration order — every condition, the
+   *  summarized value it was judged against, and whether it passed. */
+  readonly conditions: readonly GuardConditionEvidence[];
+}
+
 /** The cursor resolver's full answer: where, and by which clause. */
 export interface CursorMove {
   /** The cursor after this iteration (what `nextSkill` returns). */
@@ -600,6 +690,26 @@ export interface CursorMove {
    * evidence is its scores — all three record no witness.
    */
   readonly witness?: RouteWitness;
+  /**
+   * The EVIDENCE the winning guard routed on (9.51.0) — present only for a
+   * `by: 'route'` move whose firing edge declared a `guard:`. The full
+   * per-condition evaluation (verdict `true`), decided at the same return as
+   * the destination, so the record can never quote a different judgment than
+   * the one that routed.
+   */
+  readonly guard?: GuardEvaluation;
+  /**
+   * The guards that REFUSED this iteration (9.51.0) — every guarded edge out
+   * of the cursor whose OTHER declared conditions a result met and whose
+   * guard said no (verdict `false`; at most one record per edge, the first
+   * refusal in call order). Present on whatever move resulted — including a
+   * `'stay'`, where it answers "why didn't my guarded edge fire?" with the
+   * conditions and the values that closed it, the same honesty
+   * `supersededEntries` gives suppressed entries. An edge whose
+   * `onToolReturn`/`onToolStatus` preconditions never matched is NOT here:
+   * its guard never decided anything.
+   */
+  readonly guardsClosed?: readonly GuardEvaluation[];
 }
 
 /** A node in the drawn graph — a `predicate` diamond or a `skill` box. */
@@ -645,6 +755,9 @@ export interface SkillRouting {
   /** The DATA matcher that routes here (entry only, when declared as `match:`) —
    *  serializable, so commentary/lens can say WHICH pattern chose the skill. */
   readonly match?: SkillMatchData;
+  /** The DATA guard on the first deterministic edge in (route only, when
+   *  declared as `guard:`, 9.51.0) — serializable, the `match` twin. */
+  readonly guard?: SkillGuardData;
 }
 
 /** The metadata key carrying a skill's routing provenance. */
@@ -976,15 +1089,23 @@ interface RouteDecl {
   readonly when?: SkillRouteOptions['when'];
   readonly onToolReturn?: string | RegExp;
   readonly onToolStatus?: SkillRouteOptions['onToolStatus'];
+  /** The compiled guard (9.51.0): predicate + data + evidence evaluator, one
+   *  compilation (see skillGuard.ts). */
+  readonly guard?: CompiledGuard;
   readonly label?: string;
 }
 
 /** A route edge that fires on its own evidence — `when` code, a tool-name
- *  match, or a declared status. NOT a model edge. The ONE predicate every
- *  determinism filter shares (9.19.0 folded four replicas into it when
- *  `onToolStatus` joined the family). */
+ *  match, a declared status, or a data guard. NOT a model edge. The ONE
+ *  predicate every determinism filter shares (9.19.0 folded four replicas
+ *  into it when `onToolStatus` joined the family; `guard` joined in 9.51.0). */
 function isDeterministicRoute(r: RouteDecl): boolean {
-  return r.when !== undefined || r.onToolReturn !== undefined || r.onToolStatus !== undefined;
+  return (
+    r.when !== undefined ||
+    r.onToolReturn !== undefined ||
+    r.onToolStatus !== undefined ||
+    r.guard !== undefined
+  );
 }
 
 /** The declared status set, normalized to an array. */
@@ -1124,12 +1245,31 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             `status, or drop the field.`,
         );
       }
+      // `when` is code, `guard` is data over the same hop — both set is a
+      // contradiction (which one fires the edge?), refused exactly as
+      // when+onToolStatus is. `guard` COMPOSES with onToolReturn/onToolStatus
+      // ("this tool, this outcome, AND these conditions") — conditions AND
+      // anyway, so the pair stays legal there.
+      if (opts?.when && opts?.guard) {
+        throw new Error(
+          `skillGraph: route ${fromId}→${toId} sets both 'when' and 'guard' — pick one. ` +
+            `'guard' is the data form (drawable, comparable, evidence-recorded); to ` +
+            `combine declared conditions with extra logic, fold the checks into your ` +
+            `'when' predicate.`,
+        );
+      }
+      // ONE compilation (the compileMatch pattern): the predicate that routes,
+      // the data the record carries, and the evidence evaluator — all from the
+      // same conditions. Every malformed shape is refused here, by name.
+      const guard =
+        opts?.guard !== undefined ? compileGuard(opts.guard, `route ${fromId}→${toId}`) : undefined;
       routes.push({
         fromId,
         toId,
         when: opts?.when,
         onToolReturn: opts?.onToolReturn,
         ...(opts?.onToolStatus !== undefined && { onToolStatus: opts.onToolStatus }),
+        ...(guard !== undefined && { guard }),
         label: opts?.label,
       });
       return builder;
@@ -1295,10 +1435,19 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             conditional: e.when !== undefined || e.match?.kind === 'intent',
             ...(e.match && { match: e.match }),
           })),
+          // A guard rides as DATA so the check-up can prove contradictions
+          // (`guard-unsatisfiable`) — beside the only preconditions that are
+          // provably comparable: an exact-string onToolReturn (a RegExp is not
+          // decided) and the declared status set.
           routes: routes.map((r) => ({
             fromId: r.fromId,
             toId: r.toId,
             deterministic: isDeterministicRoute(r),
+            ...(r.guard !== undefined && { guard: r.guard.data }),
+            ...(typeof r.onToolReturn === 'string' && { onToolReturnExact: r.onToolReturn }),
+            ...(r.onToolStatus !== undefined && {
+              onToolStatuses: statusesOf(r.onToolStatus),
+            }),
           })),
           isTree: treeRoot !== undefined,
           exclusiveEntries:
@@ -1534,28 +1683,43 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
               ...(e.match && { match: e.match }),
             }),
           ),
-          ...routes.map(
-            (r): SkillEdge => ({
+          ...routes.map((r): SkillEdge => {
+            // A guard composed with onToolReturn/onToolStatus keeps that kind
+            // (the guard rides beside it as data, like `match` on an entry);
+            // a guard ALONE is its own kind — it is deterministic routing,
+            // and calling it 'model' (no trigger) or 'predicate' (opaque
+            // code) would both be false.
+            const kind: SkillEdgeKind = r.onToolStatus
+              ? 'on-tool-status'
+              : r.onToolReturn
+              ? 'on-tool-return'
+              : r.guard
+              ? 'guard'
+              : r.when
+              ? 'predicate'
+              : 'model';
+            // The derived caption folds the guard clause in ("… when
+            // riskLevel ≥ high") wherever a tool/status part is already
+            // derived here; a guard-ONLY edge stores no label and toMermaid
+            // captions it from the data (the entry-`match` precedent, which
+            // keeps the mermaid escaping in one place).
+            const guardSuffix = r.guard ? ` when ${plainGuardCaption(r.guard.data)}` : '';
+            return {
               from: r.fromId,
               to: r.toId,
-              kind: r.onToolStatus
-                ? 'on-tool-status'
-                : r.onToolReturn
-                ? 'on-tool-return'
-                : r.when
-                ? 'predicate'
-                : 'model',
+              kind,
               label:
                 r.label ??
                 (r.onToolStatus
                   ? `on ${
                       r.onToolReturn !== undefined ? `${String(r.onToolReturn)} ` : ''
-                    }status=${statusesOf(r.onToolStatus).join('|')}`
+                    }status=${statusesOf(r.onToolStatus).join('|')}${guardSuffix}`
                   : r.onToolReturn
-                  ? `on ${String(r.onToolReturn)}`
+                  ? `on ${String(r.onToolReturn)}${guardSuffix}`
                   : undefined),
-            }),
-          ),
+              ...(r.guard && { guard: r.guard.data }),
+            };
+          }),
         );
       }
 
@@ -1773,6 +1937,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         ...(step.when && { when: step.when }),
         ...(step.onToolReturn && { onToolReturn: step.onToolReturn }),
         ...(step.onToolStatus !== undefined && { onToolStatus: step.onToolStatus }),
+        ...(step.guard !== undefined && { guard: step.guard }),
         ...(step.label && { label: step.label }),
       });
     }
@@ -1789,6 +1954,36 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
 
   return builder;
 }
+
+/**
+ * The official vocabulary (9.51.0): you declare the **SkillMap**; the agent
+ * is the **SkillWalker**; the recording carries both.
+ *
+ * `defineSkillMap` is a PERMANENT thin alias of {@link skillGraph} — the same
+ * function object (reference-equal), same overloads, both names exported
+ * forever; neither is a rename of the other. Use whichever reads better:
+ * `defineSkillMap({...})` beside `defineSkill({...})` says what you are
+ * doing; `skillGraph()` says what you get.
+ *
+ * There is deliberately NO `SkillWalker` export. The walker is not a thing
+ * you construct — it is the agent itself (`.skillGraph(map)` mounts the map;
+ * the agent walks it), moving the cursor by exactly three movers, every move
+ * on the record as `cursorMove`:
+ *
+ *   • **llm**    — the model picks via `read_skill`, bounded by the gate
+ *                  (`by: 'model-pick'`; refusals are `skill.rejected`);
+ *   • **guard**  — your DATA decides: a `when`/`onToolReturn`/`onToolStatus`/
+ *                  `guard:` edge fires, evidence recorded (`by: 'route'`,
+ *                  with `cursorMove.guard` when a data guard judged it);
+ *   • **linear** — no choice: a bare hand-off that fires every time its
+ *                  source finishes (an `onToolReturn` edge with one target —
+ *                  the degenerate guard).
+ */
+export const defineSkillMap = skillGraph;
+
+/** The declared graph a SkillWalker walks — a permanent alias of
+ *  {@link SkillGraph}, exported forever beside it (9.51.0). */
+export type SkillMap = SkillGraph;
 
 /**
  * The reachable-set resolver (the read_skill gate's allowed set). Pure +
@@ -1866,6 +2061,23 @@ function routeMatches(
     readonly status?: ToolResultStatus;
   },
 ): boolean {
+  if (!edgePreconditionsPass(r, res)) return false;
+  if (r.onToolStatus !== undefined || r.onToolReturn !== undefined) return true;
+  return r.when ? r.when(res) : false;
+}
+
+/** The tool/status PRECONDITIONS of one edge against one result — the part a
+ *  `guard` is judged AFTER (9.51.0). True when the edge declares neither.
+ *  Split out of `routeMatches` because the resolver dispatches guard edges
+ *  itself: the guard's evidence must be collected at the very statement that
+ *  decides the hop, and "the guard decided" is only true once these passed. */
+function edgePreconditionsPass(
+  r: RouteDecl,
+  res: {
+    readonly toolName: string;
+    readonly status?: ToolResultStatus;
+  },
+): boolean {
   if (r.onToolStatus !== undefined) {
     if (res.status === undefined || !statusesOf(r.onToolStatus).includes(res.status)) {
       return false;
@@ -1873,7 +2085,7 @@ function routeMatches(
     return r.onToolReturn ? toolMatcher(r.onToolReturn)(res.toolName) : true;
   }
   if (r.onToolReturn) return toolMatcher(r.onToolReturn)(res.toolName);
-  return r.when ? r.when(res) : false;
+  return true;
 }
 
 /**
@@ -2034,12 +2246,55 @@ function makeResolveCursor(
     // from the destination.
     let winner: RouteBatchOutcome | undefined;
     let losers: RouteBatchOutcome[] | undefined;
+    // Guard evidence (9.51.0), collected at the very statements that decide:
+    // the winning edge's evaluation (verdict true) and — per guarded edge —
+    // the FIRST refusal whose preconditions a result met (verdict false).
+    // A guarded edge whose tool/status preconditions never matched leaves no
+    // record: its guard never decided anything.
+    let winnerGuard: GuardEvaluation | undefined;
+    let guardsClosed: GuardEvaluation[] | undefined;
+    let closedEdges: Set<RouteDecl> | undefined;
     for (const res of toolResultsOf(ctx)) {
       let target: string | undefined;
+      let targetGuard: GuardEvaluation | undefined;
       for (const r of routes) {
         if (r.fromId !== cur) continue;
         if (!isDeterministicRoute(r)) continue; // model edges don't auto-fire
         try {
+          if (r.guard !== undefined) {
+            // The guard is judged AFTER the edge's own tool/status
+            // preconditions, over the hop view (the six hop keys + the
+            // result's JSON fields — see skillGuard.ts). `evaluate` and the
+            // routing predicate are one compilation, so the recorded
+            // conditions ARE the ones that routed.
+            if (!edgePreconditionsPass(r, res)) continue;
+            const evaluation = r.guard.evaluate({
+              toolName: res.toolName,
+              result: res.result,
+              ...(res.status !== undefined && { status: res.status }),
+              iteration: ctx.iteration,
+              userMessage: ctx.userMessage,
+              currentSkillId: cur,
+            });
+            const record: GuardEvaluation = {
+              from: r.fromId,
+              to: r.toId,
+              toolName: res.toolName,
+              ...(res.toolCallId !== undefined && { toolCallId: res.toolCallId }),
+              verdict: evaluation.verdict,
+              conditions: evaluation.conditions,
+            };
+            if (evaluation.verdict) {
+              target = r.toId;
+              targetGuard = record;
+              break;
+            }
+            if (!(closedEdges ??= new Set()).has(r)) {
+              closedEdges.add(r);
+              (guardsClosed ??= []).push(record);
+            }
+            continue;
+          }
           if (routeMatches(r, res)) {
             target = r.toId;
             break;
@@ -2054,14 +2309,22 @@ function makeResolveCursor(
         toolName: res.toolName,
         target,
       };
-      if (winner === undefined) winner = outcome;
-      else if (target !== winner.target) (losers ??= []).push(outcome);
+      if (winner === undefined) {
+        winner = outcome;
+        winnerGuard = targetGuard;
+      } else if (target !== winner.target) (losers ??= []).push(outcome);
     }
+    // The refusals ride WHATEVER move resulted — a closed guard explains a
+    // stay (or the hop that won instead) the same way `supersededEntries`
+    // explains a suppressed entry.
+    const closed = guardsClosed !== undefined ? { guardsClosed } : {};
     if (winner !== undefined) {
       return {
         ...from,
         to: winner.target,
         by: 'route',
+        ...(winnerGuard !== undefined && { guard: winnerGuard }),
+        ...closed,
         ...(losers !== undefined && { conflict: { winner, losers } }),
       };
     }
@@ -2073,15 +2336,15 @@ function makeResolveCursor(
     // A proposal of the CURRENT skill is a no-op stay, not a hop.
     const proposal = ctx.pendingToolTransition?.targetSkillId;
     if (proposal !== undefined && proposal !== cur) {
-      return { ...from, to: proposal, by: 'tool-proposal' };
+      return { ...from, to: proposal, by: 'tool-proposal', ...closed };
     }
     // D2 — the validated volunteer: no declared edge fired, so the model's own
     // (already gated) pick moves the cursor. A pick of the CURRENT skill is a
     // no-op stay, not a hop.
     if (ctx.pendingSkillPick !== undefined && ctx.pendingSkillPick !== cur) {
-      return { ...from, to: ctx.pendingSkillPick, by: 'model-pick' };
+      return { ...from, to: ctx.pendingSkillPick, by: 'model-pick', ...closed };
     }
-    return { ...from, to: cur, by: 'stay' }; // sticky stay — no edge out of cur fired
+    return { ...from, to: cur, by: 'stay', ...closed }; // sticky stay — no edge out of cur fired
   };
 }
 
@@ -2451,6 +2714,7 @@ function routingFor(
       from: first.fromId,
       ...(first.label && { label: first.label }),
       triggerKind: first.onToolReturn && !first.onToolStatus ? 'on-tool-return' : 'rule',
+      ...(first.guard && { guard: first.guard.data }),
     };
   }
   return { via: 'model' }; // model-reachable via read_skill
@@ -2471,8 +2735,13 @@ function renderMermaid(nodes: readonly SkillNode[], edges: readonly SkillEdge[])
     const from = e.from === null ? '__start__' : ref(e.from);
     const arrow = e.kind === 'model' ? '-.->' : '-->'; // model edges dashed
     // An explicit label wins unchanged; a data matcher captions its entry edge
-    // (that is half the point of declaring the rule as data — it can be drawn).
-    const caption = e.label ?? (e.match ? mermaidMatchCaption(e.match) : undefined);
+    // and a data guard captions its guard-only route edge (that is half the
+    // point of declaring the condition as data — it can be drawn). A guard
+    // composed with a tool/status part is already folded into that derived
+    // label at build.
+    const caption =
+      e.label ??
+      (e.match ? mermaidMatchCaption(e.match) : e.guard ? mermaidGuardCaption(e.guard) : undefined);
     const label = caption ? `|${caption}|` : '';
     lines.push(`  ${from} ${arrow}${label} ${ref(e.to)}`);
   }

@@ -67,6 +67,7 @@ const PURE_CORE = [
   `${IE}/skillExamples.ts`,
   `${IE}/skillGraph.ts`,
   `${IE}/skillGraphCheckup.ts`,
+  `${IE}/skillGuard.ts`,
   `${IE}/skillIntent.ts`,
   `${IE}/skillMatch.ts`,
   `${IE}/skillNeverRoutes.ts`,

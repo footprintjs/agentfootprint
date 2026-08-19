@@ -47,6 +47,10 @@ export interface DeclarableGraph {
     readonly from?: string | null;
     readonly kind?: string;
     readonly label?: string;
+    /** The edge's declared DATA guard (9.51.0) — carried verbatim when it has
+     *  the compiled shape; anything else is SKIPPED, never completed (the
+     *  same refusal-to-guess as `from`). */
+    readonly guard?: { readonly conditions?: unknown };
   }>;
 }
 
@@ -89,14 +93,62 @@ export function buildSkillGraphDeclared(
     // is a CLAIM (the synthetic START) and a kind is the author's word, not a
     // default. Skipped, never completed.
     if (e.from === undefined || typeof e.kind !== 'string' || typeof e.to !== 'string') return [];
+    const guard = projectGuard(e.guard);
     return [
       {
         from: e.from,
         to: e.to,
         kind: e.kind,
         ...(e.label !== undefined && { label: e.label }),
+        ...(guard !== undefined && { guard }),
       },
     ];
   });
   return { nodes, edges };
+}
+
+/** A guard condition value as the record may carry it — plain data only. */
+type GuardValueRecord = string | number | boolean | null;
+
+function isGuardValueRecord(v: unknown): v is GuardValueRecord {
+  return v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+}
+
+/**
+ * Project one edge's declared guard onto the record — verbatim rows, and only
+ * when EVERY row has the compiled shape (`{ key, op, value }`, value plain
+ * data). A structurally-typed graph carrying anything else gets NO guard on
+ * the record rather than a repaired one: the map carries what the author
+ * declared, never what this file could make of it.
+ */
+function projectGuard(guard: { readonly conditions?: unknown } | undefined):
+  | {
+      conditions: Array<{
+        key: string;
+        op: string;
+        value: GuardValueRecord | GuardValueRecord[];
+      }>;
+    }
+  | undefined {
+  if (guard === undefined || !Array.isArray(guard.conditions) || guard.conditions.length === 0) {
+    return undefined;
+  }
+  const conditions: Array<{
+    key: string;
+    op: string;
+    value: GuardValueRecord | GuardValueRecord[];
+  }> = [];
+  for (const row of guard.conditions as unknown[]) {
+    if (row === null || typeof row !== 'object') return undefined;
+    const { key, op, value } = row as { key?: unknown; op?: unknown; value?: unknown };
+    if (typeof key !== 'string' || typeof op !== 'string') return undefined;
+    if (Array.isArray(value)) {
+      if (!value.every(isGuardValueRecord)) return undefined;
+      conditions.push({ key, op, value: [...(value as GuardValueRecord[])] });
+      continue;
+    }
+    if (!isGuardValueRecord(value)) return undefined;
+    conditions.push({ key, op, value });
+  }
+  return { conditions };
 }

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Route edges can now declare their condition as **data** — the map shows it,
+the checkup checks it, the recording carries it. This completes the
+SkillWalker's third mover: the map is data, entry matchers are data,
+tool-outcome route arms are data — the general context guard was the last
+opaque function on a route edge.
+
+### Added
+
+- **`guard:` on route edges — guards as data (the `when` predicate's declared
+  twin).** `.route(a, b, { guard: { riskLevel: { in: ['high','critical'] },
+  score: { gte: 0.7 } } })` — conditions over the hop (`toolName`, `result`,
+  `status`, `iteration`, `userMessage`, `currentSkillId`) and over the tool
+  result's own top-level JSON fields, operators `eq/ne/gt/gte/lt/lte/in/notIn`
+  (deliberately footprintjs's `WhereFilter` grammar, mirrored door-locally —
+  the skill-graph door's no-footprintjs fence holds), every condition ANDed.
+  At most ONE of `when`/`guard` per edge, refused at build naming both; a
+  guard composes with `onToolReturn`/`onToolStatus` ("this tool, this
+  outcome, AND these conditions"). ONE compilation produces the predicate
+  that routes, the serializable `SkillGuardData`, and the evidence evaluator
+  — so the three can never describe different guards. What being data buys:
+  - **the check-up proves contradictions** — new ERROR
+    `guard-unsatisfiable`: crossed bounds (`gt: 5, lt: 3`), `eq` a same-key
+    `ne`/`in`/`notIn` excludes, a `status` outside the closed result-status
+    vocabulary (the typo `'sucess'` is caught at build), or a guard that
+    contradicts the edge's own `onToolStatus`/exact `onToolReturn`. Only
+    provable breakage errors; nothing is claimed across keys or about
+    runtime values.
+  - **the map shows it** — `toMermaid()` captions a guard-only edge
+    (`when riskLevel in [high, critical]`) and folds the clause into
+    tool/status edge captions; guard-only edges draw as the new
+    `SkillEdgeKind` `'guard'`; `SkillEdge.guard` carries the data.
+  - **the recording carries it** — `skill.graph_declared` edges gain an
+    optional `guard` field (additive), so a viewer drawing the SkillMap from
+    a recording shows the guard conditions; route provenance
+    (`metadata.skillGraph.guard`) rides too.
+  - **every decision leaves evidence** — when a guard decides a hop, the
+    move on `context.evaluated.cursorMove` carries the full per-condition
+    evaluation: `guard` on the taken hop (verdict `true`) and `guardsClosed`
+    for refusals (verdict `false`, at most one per edge per iteration, on
+    whatever move resulted — a stay says `score gte 0.7 — saw "0.2" →
+    failed`). Agents without guards keep byte-identical events.
+
+- **SkillMap & SkillWalker are now the official names.** You declare the
+  **SkillMap**; the agent is the **SkillWalker**; the recording carries both.
+  `defineSkillMap` ships as a permanent, reference-equal alias of
+  `skillGraph` (and `SkillMap` of the `SkillGraph` type) on the
+  `agentfootprint/context` and `agentfootprint/skill-graph` doors — both
+  names forever, nothing renamed. There is deliberately no `SkillWalker`
+  export: the walker is the agent itself, moving the cursor by exactly three
+  movers — **llm** (the model picks, the gate bounds), **guard** (your data
+  decides, evidence recorded), **linear** (no choice, every time).
+
+- **Example: `examples/features/64-skill-map-guards.ts`** — the whole story
+  on the mock provider: one SkillMap with all three movers, a guard that
+  passes (evidence on the taken hop), a guard that refuses (the stay explains
+  itself), the declared map carrying the conditions, and a contradictory
+  guard refused at build.
+
 ## [9.50.0] - 2026-08-19
 
 Three recording-surface facts, all born the same way: a debugger built over

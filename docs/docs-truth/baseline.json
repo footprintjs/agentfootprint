@@ -2,34 +2,34 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-15",
+  "recordedAt": "2026-08-19",
   "surface": {
-    "subpaths": 13,
-    "declaredSymbols": 1804,
-    "declaredEvents": 94,
-    "eventSource": "src/events/registry.ts:671"
+    "subpaths": 14,
+    "declaredSymbols": 1873,
+    "declaredEvents": 100,
+    "eventSource": "src/events/registry.ts:710"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 929,
+      "documented-never-exercised": 1001,
       "exercised-undocumented": 33,
-      "undocumented-unexercised": 605,
+      "undocumented-unexercised": 602,
       "site-code-sample-only": 19,
       "written-but-not-published": 115,
       "ok": 103
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 33,
+      "documented-never-exercised": 37,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 5,
       "written-but-not-published": 7,
-      "ok": 25
+      "ok": 27
     },
     "phantoms": 0,
-    "unregisteredEvents": 2,
+    "unregisteredEvents": 0,
     "advisories": 4,
     "docTextViolations": 0
   },
@@ -532,10 +532,8 @@
     "SimilarityPair",
     "SimilarityReport",
     "SimilarityStats",
-    "SkillEdge",
     "SkillEdgeKind",
     "SkillEntryOptions",
-    "SkillGraph",
     "SkillGraphBuilder",
     "SkillNode",
     "SkillRecorderOptions",
@@ -785,7 +783,6 @@
     "selfConsistency",
     "semanticAlignmentStrategy",
     "semanticPipeline",
-    "serializeTrace",
     "shortlistEarlyCulprits",
     "skillRecorder",
     "skillToolNames",
@@ -851,8 +848,5 @@
     "agentfootprint.tools.offered",
     "agentfootprint.validation.args_invalid"
   ],
-  "unregisteredEmittedEvents": [
-    "agentfootprint.resilience.output_canned_used",
-    "agentfootprint.resilience.output_fallback_triggered"
-  ]
+  "unregisteredEmittedEvents": []
 }

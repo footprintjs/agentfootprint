@@ -156,6 +156,12 @@ export {
 // graph-derived triggers + a drawable topology. Sugar over the trigger model.
 export {
   skillGraph,
+  // The official vocabulary (9.51.0): you declare the SkillMap; the agent is
+  // the SkillWalker; the recording carries both. `defineSkillMap` is a
+  // permanent reference-equal alias of `skillGraph`, `SkillMap` of
+  // `SkillGraph` — both names ship forever, neither is a rename.
+  defineSkillMap,
+  type SkillMap,
   decideSkill,
   // 8.7.0 — render a `graph.checkup()` for a log line or a CI failure. The formatter
   // the library itself uses; without it every consumer wrote their own. `checkupGraph`
@@ -195,6 +201,20 @@ export {
   type SkillMatch,
   type SkillMatchData,
   type SkillStartRule,
+  // Guards-as-data on route edges (9.51.0) — the SkillWalker's guard mover as
+  // data: `guard:` beside the code `when`, compiled once into the predicate,
+  // the serializable `SkillGuardData` (edges/provenance/`skill.graph_declared`)
+  // and the per-condition evidence (`cursorMove.guard`/`guardsClosed`).
+  GUARD_HOP_KEYS,
+  plainGuardCaption,
+  type GuardConditionData,
+  type GuardConditionEvidence,
+  type GuardEvaluation,
+  type GuardOperator,
+  type GuardValue,
+  type SkillGuard,
+  type SkillGuardData,
+  type SkillGuardOps,
   // The graph's note that its body-contract checks wait for Agent build (present
   // only when built without `knownTools`) — see SkillGraph.deferredBodyContract.
   // The note rides the graph AND each compiled skill's metadata (under

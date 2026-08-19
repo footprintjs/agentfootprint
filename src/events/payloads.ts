@@ -380,6 +380,38 @@ export interface ContextBudgetPressurePayload {
  * ("what actually landed in each slot"). Pure observability — no flow stage
  * reads it.
  */
+/** A guard threshold value as the record carries it — plain data only. */
+export type SkillGuardValueRecord =
+  | string
+  | number
+  | boolean
+  | null
+  | ReadonlyArray<string | number | boolean | null>;
+
+/**
+ * One route-edge guard evaluation, as `cursorMove.guard` / `guardsClosed`
+ * carry it (9.51.0): the guarded edge, the tool result it judged, the
+ * verdict, and per-condition evidence — each declared condition
+ * (`key`/`op`/`value`), the summarized value it was judged against (bounded
+ * to 80 chars — evidence, not a transcript), and whether it passed. The
+ * operator vocabulary deliberately mirrors footprintjs's `WhereFilter`
+ * (`eq/ne/gt/gte/lt/lte/in/notIn`).
+ */
+export interface SkillGuardEvaluationRecord {
+  readonly from: string;
+  readonly to: string;
+  readonly toolName: string;
+  readonly toolCallId?: string;
+  readonly verdict: boolean;
+  readonly conditions: ReadonlyArray<{
+    readonly key: string;
+    readonly op: string;
+    readonly value: SkillGuardValueRecord;
+    readonly actualSummary: string;
+    readonly passed: boolean;
+  }>;
+}
+
 export interface ContextEvaluatedPayload {
   readonly iteration: number;
   /** Number of injections active this iteration. */
@@ -462,6 +494,24 @@ export interface ContextEvaluatedPayload {
      *  Absent for `when` predicates (opaque code), unconditional entries, and
      *  every scorer verdict (whose evidence is its scores). */
     readonly witness?: { readonly text: string; readonly keyword?: string };
+    /**
+     * The EVIDENCE the winning data GUARD routed on (9.51.0) — present only
+     * for a `by: 'route'` move whose firing edge declared a `guard:`. The
+     * full per-condition evaluation (verdict `true`): which edge, which tool
+     * result it judged, and every declared condition with the summarized
+     * value it saw. Structural shape (mirrors the graph's `GuardEvaluation`;
+     * events stay decoupled from it).
+     */
+    readonly guard?: SkillGuardEvaluationRecord;
+    /**
+     * The data guards that REFUSED this iteration (9.51.0) — guarded edges
+     * out of the cursor whose other declared conditions a tool result met
+     * and whose guard said no (verdict `false`; at most one record per
+     * edge). Rides whatever move resulted — including a `'stay'`, where it
+     * answers "why didn't my guarded edge fire?" with the conditions and
+     * values that closed it. Absent when no guard decided anything.
+     */
+    readonly guardsClosed?: readonly SkillGuardEvaluationRecord[];
     /**
      * The REACHABLE set from the cursor this move landed on (9.50.0) — the
      * skill ids the `read_skill` gate will admit on THIS iteration: declared
@@ -1054,12 +1104,23 @@ export interface SkillGraphDeclaredPayload {
   /** The author's edges, verbatim. `from: null` is the synthetic START (an
    *  entry edge — the lens's declared-edge consumers filter on
    *  `from !== null`). `kind` is the declared `SkillEdgeKind`
-   *  (`'entry' | 'predicate' | 'on-tool-return' | 'on-tool-status' | 'model'`). */
+   *  (`'entry' | 'predicate' | 'on-tool-return' | 'on-tool-status' | 'guard'
+   *  | 'model'`). `guard` (9.51.0) is the edge's declared DATA guard,
+   *  verbatim — conditions in declaration order, all ANDed, the operator
+   *  vocabulary mirroring footprintjs's `WhereFilter` — so a recording's
+   *  SkillMap shows its guard conditions without anyone re-reading source. */
   readonly edges: ReadonlyArray<{
     readonly from: string | null;
     readonly to: string;
     readonly kind: string;
     readonly label?: string;
+    readonly guard?: {
+      readonly conditions: ReadonlyArray<{
+        readonly key: string;
+        readonly op: string;
+        readonly value: SkillGuardValueRecord;
+      }>;
+    };
   }>;
 }
 
