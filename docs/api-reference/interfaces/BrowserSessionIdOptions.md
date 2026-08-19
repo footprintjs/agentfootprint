@@ -6,7 +6,7 @@
 
 # Interface: BrowserSessionIdOptions
 
-Defined in: [src/hosting/browserSession.ts:33](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/hosting/browserSession.ts#L33)
+Defined in: [src/hosting/browserSession.ts:33](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/hosting/browserSession.ts#L33)
 
 Options for [browserSessionId](/agentfootprint/api/generated/functions/browserSessionId.md).
 
@@ -16,7 +16,7 @@ Options for [browserSessionId](/agentfootprint/api/generated/functions/browserSe
 
 > `readonly` `optional` **storageKey?**: `string`
 
-Defined in: [src/hosting/browserSession.ts:40](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/hosting/browserSession.ts#L40)
+Defined in: [src/hosting/browserSession.ts:40](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/hosting/browserSession.ts#L40)
 
 Where the id is kept. Default `'agentfootprint.sessionId'`.
 

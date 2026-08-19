@@ -6,7 +6,7 @@
 
 # Interface: CodeResult
 
-Defined in: [src/adapters/types.ts:798](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L798)
+Defined in: [src/adapters/types.ts:1010](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1010)
 
 What one execution produced.
 
@@ -16,10 +16,37 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:806](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L806)
+Defined in: [src/adapters/types.ts:1045](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1045)
 
 Files the run produced, described rather than inlined — the whole point is
- that big data does not enter the window.
+ that big data does not enter the window. All fields beyond the original
+ `{ name, bytes, uri? }` are ADDITIVE (9.22.0) and honest about absence:
+ a runner that only knows the file exists states exactly what it always
+ did.
+
+ **ABSENT and `[]` are different facts, and only one of them is about the
+ code.** `[]` says this execution produced no files. ABSENT says this
+ RUNNER does not report produced files at all — it has no declared output
+ location to collect from, so "the code produced nothing" is a claim it is
+ not in a position to make. `localCodeRunner` is in the second camp today
+ (see its module header): it runs the code in a child process whose cwd is
+ the caller's own working directory, and treating every file that appeared
+ there as an output would be a guess about which files mattered, made on
+ the machine least able to afford it. A runner that WANTS to produce
+ output artifacts owes three things: a declared output location the code
+ is told about, a bounded read-back of what landed there, and a `bytes`
+ that is the payload's real length — then `codeRunnerTool` mints every
+ data-carrying entry with no further wiring.
+
+ `data` is the in-band payload, present ONLY when the adapter can hand
+ the bytes back (a local runner reading its own working directory, a
+ managed sandbox that returns file contents). When a store is attached,
+ `codeRunnerTool` mints every data-carrying entry into the artifact
+ store and the model's result names the ref — entries without `data`
+ stay described-only, because minting needs bytes and inventing them is
+ worse than stating the gap. `mediaType` is the adapter's own statement
+ when it knows one; `ref` is stamped by whoever minted the file into an
+ artifact store (today: `codeRunnerTool`'s mint-on-output).
 
 ***
 
@@ -27,7 +54,7 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/adapters/types.ts:803](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L803)
+Defined in: [src/adapters/types.ts:1015](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1015)
 
 ***
 
@@ -35,7 +62,7 @@ Defined in: [src/adapters/types.ts:803](https://github.com/footprintjs/agentfoot
 
 > `readonly` **ok**: `boolean`
 
-Defined in: [src/adapters/types.ts:800](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L800)
+Defined in: [src/adapters/types.ts:1012](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1012)
 
 Did the code run to completion without an error exit?
 
@@ -45,7 +72,7 @@ Did the code run to completion without an error exit?
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/adapters/types.ts:802](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L802)
+Defined in: [src/adapters/types.ts:1014](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1014)
 
 ***
 
@@ -53,7 +80,7 @@ Defined in: [src/adapters/types.ts:802](https://github.com/footprintjs/agentfoot
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/adapters/types.ts:801](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L801)
+Defined in: [src/adapters/types.ts:1013](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1013)
 
 ***
 
@@ -61,7 +88,7 @@ Defined in: [src/adapters/types.ts:801](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **truncated?**: `object`
 
-Defined in: [src/adapters/types.ts:820](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L820)
+Defined in: [src/adapters/types.ts:1062](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L1062)
 
 Present IFF output was cut, and then it says by how much.
 

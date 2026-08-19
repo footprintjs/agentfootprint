@@ -6,7 +6,7 @@
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:26](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L26)
+Defined in: [src/core/tools.ts:30](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L30)
 
 One executable tool the Agent can call.
 
@@ -31,7 +31,7 @@ One executable tool the Agent can call.
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/agentfootprint/api/generated/type-aliases/ToolCapability.md)[]
 
-Defined in: [src/core/tools.ts:90](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L90)
+Defined in: [src/core/tools.ts:133](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L133)
 
 What this tool touches, DECLARED by whoever wrote it (9.11.0).
 
@@ -67,7 +67,7 @@ a tool the operator wants governed as a network egress
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)
 
-Defined in: [src/core/tools.ts:46](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L46)
+Defined in: [src/core/tools.ts:77](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L77)
 
 Declarative demand for a human check-in BEFORE this tool runs — consent
 for a consequential action, with an evidence pack riding the ask.
@@ -84,11 +84,29 @@ exposes a predicate typed to the tool's args at the CALL site.
 
 ***
 
+### checkInComponent?
+
+> `readonly` `optional` **checkInComponent?**: [`AskComponent`](/agentfootprint/api/generated/interfaces/AskComponent.md)
+
+Defined in: [src/core/tools.ts:89](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L89)
+
+Which REGISTERED screen component collects this tool's check-in decision
+(9.24.0) — ids and props only, never markup. Rides the `CheckInRequest`
+when the gate trips, so the answering screen renders its own registered
+component instead of prose. Meaningless without `checkIn` and refused
+beside its absence at `defineTool` — a component for a gate that never
+fires is configuration that lies. A `propsRef` here must resolve in the
+RUN's artifact scope when the gate trips (validated at raise time); a
+check-in fires BEFORE `execute`, so the tool cannot mint it mid-call —
+static declarations usually want inline `props`.
+
+***
+
 ### needs?
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:31](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L31)
+Defined in: [src/core/tools.ts:35](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L35)
 
 Declare-and-push: a credential this tool needs. The framework resolves it
  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
@@ -96,11 +114,26 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 ***
 
+### resultCeiling?
+
+> `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/agentfootprint/api/generated/interfaces/ToolResultCeiling.md)
+
+Defined in: [src/core/tools.ts:142](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L142)
+
+The refusing ceiling on THIS tool's result (9.20.0): when the handler's
+stringified return exceeds `maxChars`, the model reads a teaching refusal
+naming the true size, the ceiling and how to narrow — and the oversized
+payload never enters context, history or any event. See
+[ToolResultCeiling](/agentfootprint/api/generated/interfaces/ToolResultCeiling.md) for why refusal, not truncation. Omitted →
+byte-identical behavior (nothing measured, nothing emitted).
+
+***
+
 ### schema
 
 > `readonly` **schema**: [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)
 
-Defined in: [src/core/tools.ts:27](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L27)
+Defined in: [src/core/tools.ts:31](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L31)
 
 ***
 
@@ -108,7 +141,7 @@ Defined in: [src/core/tools.ts:27](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **source?**: `string`
 
-Defined in: [src/core/tools.ts:64](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L64)
+Defined in: [src/core/tools.ts:107](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L107)
 
 Where this tool came from — the name of the MCP server that served it.
 
@@ -126,13 +159,46 @@ Set by `mcpClient` / `mockMcpClient`. `defineTool` never sets it, so it
 cannot be spoofed by accident; a hand-built `Tool` may set it deliberately
 when it is genuinely relaying another source's tool.
 
+***
+
+### wants?
+
+> `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
+
+Defined in: [src/core/tools.ts:62](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L62)
+
+Declared artifact ARGUMENTS (9.22.0) — argument name → the artifact
+`kind` it must resolve to (e.g. `wants: { dataset: 'dataset/rows' }`).
+
+The `needs` precedent applied to data: the MODEL passes the ~26-char
+`art_…` ref as the argument (declare it `type: 'string'` in
+`inputSchema`), and at dispatch — BEFORE `execute` — the framework
+redeems it under the run's own scope and kind-checks the meta. The
+handler receives the RESOLVED DATA in `args` (and the claim tickets on
+`ctx.wanted`); a stale, unknown, or wrong-kind ref never reaches the
+tool — the model reads a teaching refusal listing the live refs of the
+wanted kind. Resolution rides `agentfootprint.artifacts.resolved`;
+refusals ride `artifacts.refused` with `op: 'dispatch'`.
+
+**Whether the model MAY omit it is your `inputSchema`'s to say.** Name
+the argument in `required` and dispatch refuses the call by name when no
+ref arrives — the handler is never entered believing the framework
+resolved something it did not. Leave it out and an omitted argument is
+the model choosing not to use one: the tool runs, `args` carries no such
+key, and `ctx.wanted` has no entry for it.
+
+Requires an attached store: an Agent refuses at BUILD when a statically
+registered tool declares `wants` with no `artifacts` configured (config
+that lies otherwise); other dispatch doors refuse at dispatch, by name.
+Omitted → byte-identical behavior (nothing resolved, nothing measured).
+
 ## Methods
 
 ### execute()
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:91](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L91)
+Defined in: [src/core/tools.ts:143](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L143)
 
 #### Parameters
 

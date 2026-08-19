@@ -8,7 +8,7 @@
 
 > **warnIfInvalidToolName**(`name`): `void`
 
-Defined in: [src/core/tools.ts:285](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L285)
+Defined in: [src/core/tools.ts:476](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L476)
 
 DEV-MODE heads-up (never throws): warns once-per-call if a tool name will be
 rejected by OpenAI/Anthropic. Production and non-dev runs pay nothing. This is

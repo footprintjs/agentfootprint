@@ -8,7 +8,7 @@
 
 > **CodeRunnerToolScope** = `Extract`\<[`TeardownScope`](/agentfootprint/api/generated/type-aliases/TeardownScope.md), `"call"` \| `"run"` \| `"session"`\>
 
-Defined in: [src/core/codeRunnerTool.ts:63](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/codeRunnerTool.ts#L63)
+Defined in: [src/core/codeRunnerTool.ts:66](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/codeRunnerTool.ts#L66)
 
 The scopes a code session can be held under. `'shutdown'` is not one: it is
  when everything goes, not a thing to key a session on.

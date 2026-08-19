@@ -6,7 +6,7 @@
 
 # Interface: CodeRunner
 
-Defined in: [src/adapters/types.ts:760](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L760)
+Defined in: [src/adapters/types.ts:878](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L878)
 
 A service that runs code in an isolated session — a managed code
 interpreter, a container pool, a subprocess.
@@ -35,7 +35,7 @@ Implement it for your own backend; ship it to `codeRunnerTool({ runner })`.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:763](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L763)
+Defined in: [src/adapters/types.ts:881](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L881)
 
 Stable id — reported on every `agentfootprint.tools.session_*` event so a
  row names its backend, not just its tool.
@@ -46,7 +46,7 @@ Stable id — reported on every `agentfootprint.tools.session_*` event so a
 
 > **start**(`req`): `Promise`\<[`CodeSession`](/agentfootprint/api/generated/interfaces/CodeSession.md)\>
 
-Defined in: [src/adapters/types.ts:770](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L770)
+Defined in: [src/adapters/types.ts:888](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L888)
 
 Open a session.
 

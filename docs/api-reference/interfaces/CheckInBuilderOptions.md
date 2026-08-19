@@ -6,7 +6,7 @@
 
 # Interface: CheckInBuilderOptions
 
-Defined in: [src/core/checkin.ts:449](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L449)
+Defined in: [src/core/checkin.ts:532](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L532)
 
 What `.checkIn({...})` accepts on the Agent builder.
 
@@ -16,7 +16,7 @@ What `.checkIn({...})` accepts on the Agent builder.
 
 > `readonly` `optional` **evidence?**: [`CheckInAssembler`](/agentfootprint/api/generated/type-aliases/CheckInAssembler.md) \| [`EvidencePreset`](/agentfootprint/api/generated/type-aliases/EvidencePreset.md)
 
-Defined in: [src/core/checkin.ts:455](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L455)
+Defined in: [src/core/checkin.ts:538](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L538)
 
 How much evidence rides the ask. `'standard'` (default) fills all four
 fields; `'minimal'` fills only `willDo` (zero cost); or pass your own
@@ -28,7 +28,7 @@ fields; `'minimal'` fills only `willDo` (zero cost); or pass your own
 
 > `readonly` `optional` **scorer?**: [`CheckInScorer`](/agentfootprint/api/generated/type-aliases/CheckInScorer.md)
 
-Defined in: [src/core/checkin.ts:460](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L460)
+Defined in: [src/core/checkin.ts:543](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L543)
 
 The scorer that ranks `drivers`. Default [lexicalDriverScorer](/agentfootprint/api/generated/variables/lexicalDriverScorer.md)
 (deterministic, zero LLM). Only consulted by the `'standard'` assembler.

@@ -8,4 +8,4 @@
 
 > **ParallelOutput** = `string`
 
-Defined in: [src/core-flow/Parallel.ts:79](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core-flow/Parallel.ts#L79)
+Defined in: [src/core-flow/Parallel.ts:80](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Parallel.ts#L80)

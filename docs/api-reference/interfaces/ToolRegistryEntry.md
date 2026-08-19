@@ -6,7 +6,7 @@
 
 # Interface: ToolRegistryEntry
 
-Defined in: [src/core/tools.ts:193](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L193)
+Defined in: [src/core/tools.ts:374](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L374)
 
 Internal: registry entry keyed by tool name.
 Consumer never sees this shape.
@@ -17,7 +17,7 @@ Consumer never sees this shape.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/tools.ts:194](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L194)
+Defined in: [src/core/tools.ts:375](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L375)
 
 ***
 
@@ -25,4 +25,4 @@ Defined in: [src/core/tools.ts:194](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **tool**: [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)
 
-Defined in: [src/core/tools.ts:195](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/tools.ts#L195)
+Defined in: [src/core/tools.ts:376](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/tools.ts#L376)

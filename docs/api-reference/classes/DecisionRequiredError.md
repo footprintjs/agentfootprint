@@ -6,24 +6,7 @@
 
 # Class: DecisionRequiredError
 
-Defined in: [src/core/pause.ts:194](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L194)
-
-Raised by `agent.resume()` when a run paused on a CONSENT GATE and the resume
-input is not a `CheckInDecision`.
-
-Before 8.13.0 that resume silently DECLINED, attributed to `by: 'unknown'` —
-a `checkin.decision` record naming a person who was never asked. A governance
-layer that invents a decision is worse than one that drops it: the run reads
-as consented-and-refused when nobody consented to anything.
-
-**Nothing was executed and the checkpoint is unchanged** — this refuses at the
-API boundary, before the engine is handed the checkpoint. Answer the gate and
-resume the same checkpoint again.
-
-A plain `askHuman()` / `pauseHere()` pause never raises this: there the
-human's answer IS the tool's result, so any value is accepted. The 3LO
-credential-consent pause never raises it either — it re-asks the provider and
-ignores the input by design.
+Defined in: [src/core/pause.ts:266](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L266)
 
 ## Extends
 
@@ -35,7 +18,7 @@ ignores the input by design.
 
 > **new DecisionRequiredError**(`gate`, `input`): `DecisionRequiredError`
 
-Defined in: [src/core/pause.ts:211](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L211)
+Defined in: [src/core/pause.ts:283](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L283)
 
 #### Parameters
 
@@ -73,7 +56,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_DECISION_REQUIRED"`
 
-Defined in: [src/core/pause.ts:195](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L195)
+Defined in: [src/core/pause.ts:267](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L267)
 
 ***
 
@@ -81,7 +64,7 @@ Defined in: [src/core/pause.ts:195](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **gate**: [`ConsentGateKind`](/agentfootprint/api/generated/type-aliases/ConsentGateKind.md)
 
-Defined in: [src/core/pause.ts:197](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L197)
+Defined in: [src/core/pause.ts:269](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L269)
 
 Which gate is outstanding.
 
@@ -103,7 +86,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` `optional` **middleware?**: `string`
 
-Defined in: [src/core/pause.ts:201](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L201)
+Defined in: [src/core/pause.ts:273](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L273)
 
 `'ask'` only — the middleware that asked.
 
@@ -125,7 +108,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **received**: `string`
 
-Defined in: [src/core/pause.ts:209](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L209)
+Defined in: [src/core/pause.ts:281](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L281)
 
 What arrived instead, as a TYPE NAME only (`'a string'`, `'nothing'`, …).
 
@@ -173,7 +156,7 @@ not capture any frames.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/pause.ts:199](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/pause.ts#L199)
+Defined in: [src/core/pause.ts:271](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L271)
 
 The tool the gate is about, when the pause named one.
 

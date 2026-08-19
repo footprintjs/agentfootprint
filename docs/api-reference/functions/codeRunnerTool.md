@@ -6,9 +6,9 @@
 
 # Function: codeRunnerTool()
 
-> **codeRunnerTool**(`options`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/agentfootprint/api/generated/interfaces/HoldsToolSessions.md)
+> **codeRunnerTool**(`options`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/agentfootprint/api/generated/interfaces/HoldsToolSessions.md) & `RecordsCodeRuns`
 
-Defined in: [src/core/codeRunnerTool.ts:129](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/codeRunnerTool.ts#L129)
+Defined in: [src/core/codeRunnerTool.ts:236](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/codeRunnerTool.ts#L236)
 
 ## Parameters
 
@@ -18,4 +18,4 @@ Defined in: [src/core/codeRunnerTool.ts:129](https://github.com/footprintjs/agen
 
 ## Returns
 
-[`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/agentfootprint/api/generated/interfaces/HoldsToolSessions.md)
+[`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<\{ `code`: `string`; \}, `string`\> & [`HoldsToolSessions`](/agentfootprint/api/generated/interfaces/HoldsToolSessions.md) & `RecordsCodeRuns`

@@ -6,7 +6,7 @@
 
 # Interface: RetrievalEvidence
 
-Defined in: [src/memory/retrieval/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L103)
+Defined in: [src/memory/retrieval/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L103)
 
 Everything one retrieval knows about itself. Written to the memory
 subflow's scope by `loadRelevant`, refined by `pickByBudget` and
@@ -19,7 +19,7 @@ it lands in the root commit log where a slice can reach it.
 
 > `readonly` **admittedCount**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L144)
+Defined in: [src/memory/retrieval/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L161)
 
 How many reached the prompt.
 
@@ -29,7 +29,7 @@ How many reached the prompt.
 
 > `readonly` `optional` **candidates?**: readonly [`RetrievedCandidate`](/agentfootprint/api/generated/interfaces/RetrievedCandidate.md)[]
 
-Defined in: [src/memory/retrieval/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L154)
+Defined in: [src/memory/retrieval/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L171)
 
 The candidates themselves, best-scoring first.
 
@@ -43,7 +43,7 @@ that case is `[]` with `consideredCount: 0`.
 
 > `readonly` **candidatesComplete**: `boolean`
 
-Defined in: [src/memory/retrieval/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L163)
+Defined in: [src/memory/retrieval/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L180)
 
 Whether [candidates](/agentfootprint/api/generated/interfaces/RetrievalEvidence.md#candidates) is the complete set of candidates that
 existed, or only as far as the pool we asked for reached.
@@ -58,7 +58,7 @@ may be further below-threshold entries we never saw.
 
 > `readonly` `optional` **candidatesOmittedReason?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L165)
+Defined in: [src/memory/retrieval/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L182)
 
 Present exactly when `candidates` is undefined.
 
@@ -68,7 +68,7 @@ Present exactly when `candidates` is undefined.
 
 > `readonly` `optional` **charsUsed?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L134)
+Defined in: [src/memory/retrieval/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L151)
 
 How many characters of PASSAGE the admitted set spends. Present exactly
 when [maxChars](/agentfootprint/api/generated/interfaces/RetrievalEvidence.md#maxchars) is, and re-stated by the budget picker so it can
@@ -85,7 +85,7 @@ formatter has run.
 
 > `readonly` **consideredCount**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L142)
+Defined in: [src/memory/retrieval/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L159)
 
 How many candidates came back from the store.
 
@@ -95,7 +95,7 @@ How many candidates came back from the store.
 
 > `readonly` **corpusEmpty**: `boolean`
 
-Defined in: [src/memory/retrieval/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L172)
+Defined in: [src/memory/retrieval/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L189)
 
 The store returned nothing at all for this namespace. Distinct from
 "everything scored below threshold" (`consideredCount > 0`), and the
@@ -108,7 +108,7 @@ means the corpus was indexed somewhere else.
 
 > `readonly` `optional` **dimensions?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L138)
+Defined in: [src/memory/retrieval/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L155)
 
 Length of the query vector. Mixing two lengths in one store is a config bug.
 
@@ -118,7 +118,7 @@ Length of the query vector. Mixing two lengths in one store is a config bug.
 
 > `readonly` `optional` **embedderId?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L136)
+Defined in: [src/memory/retrieval/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L153)
 
 The embedder id the query was produced with, when the caller declared one.
 
@@ -128,7 +128,7 @@ The embedder id the query was produced with, when the caller declared one.
 
 > `readonly` **k**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L115)
+Defined in: [src/memory/retrieval/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L132)
 
 How many chunks the retriever was willing to admit.
 
@@ -138,7 +138,7 @@ How many chunks the retriever was willing to admit.
 
 > `readonly` `optional` **maxChars?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L123)
+Defined in: [src/memory/retrieval/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L140)
 
 The character budget the admitted passages were spent against (8.19.0).
 Absent when the retriever set none — which is the default, and means
@@ -150,7 +150,7 @@ Absent when the retriever set none — which is the default, and means
 
 > `readonly` `optional` **memoryId?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L105)
+Defined in: [src/memory/retrieval/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L105)
 
 The retriever's id (`defineRAG({ id })`). Stamped by the read mount.
 
@@ -160,7 +160,7 @@ The retriever's id (`defineRAG({ id })`). Stamped by the read mount.
 
 > `readonly` `optional` **namespace?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L174)
+Defined in: [src/memory/retrieval/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L191)
 
 The namespace that was searched, as a plain string, for the diagnosis above.
 
@@ -170,7 +170,7 @@ The namespace that was searched, as a plain string, for the diagnosis above.
 
 > `readonly` **queryHash**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L113)
+Defined in: [src/memory/retrieval/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L130)
 
 A stable hash of the query text — NOT the text. The query is already
 in the recording once (as `userMessage`); copying it into a second
@@ -184,7 +184,7 @@ know about the second.
 
 > `readonly` **rejectedCount**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L146)
+Defined in: [src/memory/retrieval/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L163)
 
 `consideredCount - admittedCount`.
 
@@ -194,9 +194,32 @@ Defined in: [src/memory/retrieval/types.ts:146](https://github.com/footprintjs/a
 
 > `readonly` **selectionOrder**: `"recency"` \| `"relevance"`
 
-Defined in: [src/memory/retrieval/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L140)
+Defined in: [src/memory/retrieval/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L157)
 
 How the budget picker ordered the admitted set. See the note on `rank`.
+
+***
+
+### strategy
+
+> `readonly` **strategy**: `string`
+
+Defined in: [src/memory/retrieval/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L122)
+
+Which RULE ruled — [RetrievalStrategy.name](/agentfootprint/api/generated/interfaces/RetrievalStrategy.md#name), e.g. `'top-k'`.
+
+The seam promises this on its own `name` field ("appears in the
+recording"), and until 9.x the recording did not carry it: a reader
+could see `k`, `threshold` and a verdict per candidate, and could not
+tell whether a shipped `topK` or a consumer's own re-ranker produced
+them. Two strategies with the same `k` leave records that are
+otherwise identical, so the name is the only thing that distinguishes
+them — and it is the first thing you need when the admitted set looks
+wrong.
+
+Always present: a retrieval always ran under exactly one strategy, and
+the shorthand (`k` / `minScore`) is `topK` spelled differently, not the
+absence of a rule.
 
 ***
 
@@ -204,6 +227,6 @@ How the budget picker ordered the admitted set. See the note on `rank`.
 
 > `readonly` `optional` **threshold?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/memory/retrieval/types.ts#L117)
+Defined in: [src/memory/retrieval/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/memory/retrieval/types.ts#L134)
 
 The quality floor. Absent when the retriever set none.

@@ -4,62 +4,66 @@
 
 [agentfootprint](/agentfootprint/api/generated/README.md) / ContextContribution
 
-# Interface: ContextContribution
+# ~~Interface: ContextContribution~~
 
-Defined in: [src/adapters/types.ts:464](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L464)
+Defined in: [src/adapters/types.ts:544](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L544)
+
+## Deprecated
+
+No implementation exists — see [ContextSourceAdapter](/agentfootprint/api/generated/interfaces/ContextSourceAdapter.md). Removed in 10.0.0.
 
 ## Properties
 
-### asRole?
+### ~~asRole?~~
 
 > `readonly` `optional` **asRole?**: `ContextRole`
 
-Defined in: [src/adapters/types.ts:469](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L469)
+Defined in: [src/adapters/types.ts:549](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L549)
 
 ***
 
-### contentSummary
+### ~~contentSummary~~
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [src/adapters/types.ts:465](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L465)
+Defined in: [src/adapters/types.ts:545](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L545)
 
 ***
 
-### rank?
+### ~~rank?~~
 
 > `readonly` `optional` **rank?**: `number`
 
-Defined in: [src/adapters/types.ts:468](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L468)
+Defined in: [src/adapters/types.ts:548](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L548)
 
 ***
 
-### rawContent?
+### ~~rawContent?~~
 
 > `readonly` `optional` **rawContent?**: `string`
 
-Defined in: [src/adapters/types.ts:466](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L466)
+Defined in: [src/adapters/types.ts:546](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L546)
 
 ***
 
-### reason
+### ~~reason~~
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/adapters/types.ts:471](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L471)
+Defined in: [src/adapters/types.ts:551](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L551)
 
 ***
 
-### score?
+### ~~score?~~
 
 > `readonly` `optional` **score?**: `number`
 
-Defined in: [src/adapters/types.ts:467](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L467)
+Defined in: [src/adapters/types.ts:547](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L547)
 
 ***
 
-### sectionTag?
+### ~~sectionTag?~~
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: [src/adapters/types.ts:470](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/adapters/types.ts#L470)
+Defined in: [src/adapters/types.ts:550](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L550)

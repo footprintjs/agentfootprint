@@ -6,7 +6,7 @@
 
 # Interface: CheckInScoreInput
 
-Defined in: [src/core/checkin.ts:214](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L214)
+Defined in: [src/core/checkin.ts:297](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L297)
 
 Input to a [CheckInScorer](/agentfootprint/api/generated/type-aliases/CheckInScorer.md). Mirrors `influence-core`'s attribution
  shape so an embedding-backed scorer (wrapping `explainChoice`) drops in.
@@ -17,7 +17,7 @@ Input to a [CheckInScorer](/agentfootprint/api/generated/type-aliases/CheckInSco
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/checkin.ts:220](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L220)
+Defined in: [src/core/checkin.ts:303](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L303)
 
 Abort signal for network-backed scorers.
 
@@ -27,7 +27,7 @@ Abort signal for network-backed scorers.
 
 > `readonly` **tool**: `object`
 
-Defined in: [src/core/checkin.ts:216](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L216)
+Defined in: [src/core/checkin.ts:299](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L299)
 
 The chosen tool. `text` is what gets scored (name + description + args).
 
@@ -45,6 +45,6 @@ The chosen tool. `text` is what gets scored (name + description + args).
 
 > `readonly` **units**: readonly [`AttributionUnit`](/agentfootprint/api/generated/interfaces/AttributionUnit.md)[]
 
-Defined in: [src/core/checkin.ts:218](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/core/checkin.ts#L218)
+Defined in: [src/core/checkin.ts:301](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L301)
 
 The context units to rank against the tool.

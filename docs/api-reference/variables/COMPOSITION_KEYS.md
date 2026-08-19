@@ -8,7 +8,7 @@
 
 > `const` **COMPOSITION\_KEYS**: `object`
 
-Defined in: [src/recorders/core/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/da6095f057eb2f2b7ab8d6ad464a4cbde8688032/src/recorders/core/types.ts#L126)
+Defined in: [src/recorders/core/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/recorders/core/types.ts#L126)
 
 ## Type Declaration
 
