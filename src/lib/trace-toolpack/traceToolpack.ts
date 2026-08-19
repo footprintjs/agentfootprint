@@ -1934,6 +1934,12 @@ const OFFLINE_CONTEXT: ToolExecutionContext = {
   // Offline has no run to scope refs to; the capability teaches, never lies.
   artifacts: unconfiguredArtifacts(),
   hasArtifacts: false,
+  // Offline has no stage to emit from and no dispatcher to reach (9.52.0);
+  // a progress report is dropped rather than refused, because losing telemetry
+  // is not a reason to fail a call that is doing its work.
+  progress: () => {
+    /* nowhere to file it offline — see the note above */
+  },
   teardownScopes: [],
   onTeardown: () => {
     throw new Error(

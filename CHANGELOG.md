@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.52.0] - 2026-08-19
+
+A tool can now say **"hop 3 of 12 done"** while it is still working.
+
+Until this release a tool call was one atomic thing on the record:
+`stream.tool_start` fired, your handler ran for as long as it ran, and
+`stream.tool_end` carried the result. For a tool that finishes in 200ms that
+is the whole story. For a twelve-hop graph walk that takes forty seconds it is
+one long silence — and from outside, a tool that is working and a tool that has
+hung look exactly the same. That was the ask, from a team whose agent walks a
+dependency graph: nothing in the framework could report the middle of a call.
+
+### Added
+
+- **`ctx.progress(payload)` — progressive tool results.** One new method on
+  `ToolExecutionContext`, callable as many times as you like from inside
+  `tool.execute`:
+
+  ```typescript
+  execute: async (args, ctx) => {
+    for (const [i, hop] of hops.entries()) {
+      await visit(hop);
+      ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });
+    }
+    return summarize(hops);
+  },
+  ```
+
+  Each call files one event, in call order, always between that call's
+  `tool_start` and its `tool_end`.
+
+- **`agentfootprint.stream.tool_progress` — the new typed event** (registry
+  101 events / 22 domains), payload
+  `{ toolCallId, toolName, iteration, payload }`. **The framework stamps the
+  identity; the author owns the payload.** `toolCallId`, `toolName` and
+  `iteration` come from the dispatch the framework is already holding, so a
+  report can never claim to be from another call and a UI can correlate
+  without trusting the tool; `payload` is your data, forwarded verbatim (any
+  shape, as long as it survives `structuredClone`). Because the name starts
+  with `agentfootprint.stream.`, it reaches a browser with no wiring of its
+  own — `toSSE(agent)` carries it, and so does
+  `agent.on('agentfootprint.stream.*')` — and it lands in recordings, so
+  "where did those forty seconds go?" is answerable from an archive months
+  later.
+
+  It is **telemetry, not a result**: progress never enters the tool result,
+  the history, or anything the model reads. The model still sees exactly one
+  result, at the end, as it always did.
+
+  Three rules make it safe to call from anywhere: **always present** (never
+  `undefined` — the doors with no event stream to file on, a call served over
+  `mcpServe` and the offline `callTraceTool` context, supply a no-op, so one
+  handler is safe inside an Agent and outside one); **never fatal** (with
+  nothing listening the report is dropped; it never throws, never blocks, and
+  never changes what `execute` returns); **zero-cost when unused** (a tool
+  that never calls it produces exactly the event stream it produced before —
+  no `tool_progress` rows, nothing else moved, pinned by a test that compares
+  the two streams row for row).
+
+- **Example: `examples/features/65-tool-progress.ts`** — the twelve-hop walk on
+  the mock provider: a live progress bar drawn from
+  `agent.on('agentfootprint.stream.tool_progress')`, the framework stamps shown
+  beside the author's payload, the same reports read back off a real `toSSE`
+  stream, and a second agent whose tool reports nothing proving the feature
+  costs nothing to anyone who does not use it.
+
 ## [9.51.0] - 2026-08-19
 
 Route edges can now declare their condition as **data** — the map shows it,

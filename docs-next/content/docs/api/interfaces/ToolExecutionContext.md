@@ -77,7 +77,7 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/tools.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L293)
+Defined in: [src/core/tools.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L336)
 
 The identity the CALLER supplied — `run({ identity })`, the same tuple
 memory and the permission gate scope on.
@@ -106,7 +106,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/core/tools.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L267)
+Defined in: [src/core/tools.ts:310](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L310)
 
 The run this call belongs to.
 
@@ -120,7 +120,7 @@ fabricate a run that never existed. Branch on the absence.
 
 > `readonly` `optional` **sessionId?**: `string`
 
-Defined in: [src/core/tools.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L279)
+Defined in: [src/core/tools.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L322)
 
 The hosting conversation this run is bound to, when it is bound to one —
 `HostRequest.sessionId`, threaded through `agent.run({ sessionId })`.
@@ -147,7 +147,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/docs/api/type-aliases/TeardownScope)[]
 
-Defined in: [src/core/tools.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L324)
+Defined in: [src/core/tools.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L367)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -186,7 +186,7 @@ different facts). The data itself is already in `args`.
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:314](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L314)
+Defined in: [src/core/tools.ts:357](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L357)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.
@@ -222,4 +222,64 @@ a session that lives as long as the run
   const key = toolSessionKey(ctx, 'run');
   const session = await runner.start({ key });
   ctx.onTeardown?.(() => session.stop(), { scope: 'run', key });
+```
+
+***
+
+### progress()
+
+> **progress**(`payload`): `void`
+
+Defined in: [src/core/tools.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L295)
+
+Report progress from INSIDE a long-running tool — "hop 3 of 12 done", said
+mid-`execute`, while the call is still running.
+
+A tool call is otherwise ATOMIC on the record: `stream.tool_start` fires,
+the handler runs for as long as it runs, and `stream.tool_end` carries the
+result. For a forty-second twelve-hop walk that is one long silence — the
+person watching cannot tell working from hung, and neither can an operator
+reading the archive afterwards.
+
+Each call files one `agentfootprint.stream.tool_progress` event, in call
+order, BEFORE this call's `tool_end`. The framework stamps `toolCallId`,
+`toolName` and `iteration`: identity facts are never the tool's to state,
+so a report cannot claim to be from another call. `payload` is the tool
+author's own data, forwarded untouched.
+
+**Always present, never fatal.** With nothing listening it is a no-op that
+drops the report; it never throws, never blocks (nothing is awaited), and
+never changes what `execute` returns or what the model reads. A tool that
+calls it zero times behaves exactly as it did before this existed.
+
+**`payload` must survive `structuredClone`** — it rides the ordinary emit
+channel into every event sink and every recording, so plain data only (no
+class instances, no live handles, no functions). Progress is TELEMETRY: it
+never enters the tool result, the history, or the model's view.
+
+Doors with no event stream to file on — `mcpServe`, the offline
+`callTraceTool` context — supply the no-op. A tool must not have to know
+which door it is behind to be safe to call this from.
+
+#### Parameters
+
+##### payload
+
+`unknown`
+
+#### Returns
+
+`void`
+
+#### Example
+
+```ts
+a twelve-hop walk that says where it is
+  execute: async (args, ctx) => {
+    for (const [i, hop] of hops.entries()) {
+      await walk(hop);
+      ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });
+    }
+    return summary;
+  }
 ```

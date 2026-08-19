@@ -251,6 +251,49 @@ export interface ToolExecutionContext {
    *  Present only when the tool declared a need and it resolved successfully. */
   readonly credential?: Credential;
 
+  // ── Progressive results (9.52.0) ──────────────────────────────────────────
+
+  /**
+   * Report progress from INSIDE a long-running tool — "hop 3 of 12 done", said
+   * mid-`execute`, while the call is still running.
+   *
+   * A tool call is otherwise ATOMIC on the record: `stream.tool_start` fires,
+   * the handler runs for as long as it runs, and `stream.tool_end` carries the
+   * result. For a forty-second twelve-hop walk that is one long silence — the
+   * person watching cannot tell working from hung, and neither can an operator
+   * reading the archive afterwards.
+   *
+   * Each call files one `agentfootprint.stream.tool_progress` event, in call
+   * order, BEFORE this call's `tool_end`. The framework stamps `toolCallId`,
+   * `toolName` and `iteration`: identity facts are never the tool's to state,
+   * so a report cannot claim to be from another call. `payload` is the tool
+   * author's own data, forwarded untouched.
+   *
+   * **Always present, never fatal.** With nothing listening it is a no-op that
+   * drops the report; it never throws, never blocks (nothing is awaited), and
+   * never changes what `execute` returns or what the model reads. A tool that
+   * calls it zero times behaves exactly as it did before this existed.
+   *
+   * **`payload` must survive `structuredClone`** — it rides the ordinary emit
+   * channel into every event sink and every recording, so plain data only (no
+   * class instances, no live handles, no functions). Progress is TELEMETRY: it
+   * never enters the tool result, the history, or the model's view.
+   *
+   * Doors with no event stream to file on — `mcpServe`, the offline
+   * `callTraceTool` context — supply the no-op. A tool must not have to know
+   * which door it is behind to be safe to call this from.
+   *
+   * @example a twelve-hop walk that says where it is
+   *   execute: async (args, ctx) => {
+   *     for (const [i, hop] of hops.entries()) {
+   *       await walk(hop);
+   *       ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });
+   *     }
+   *     return summary;
+   *   }
+   */
+  progress(payload: unknown): void;
+
   // ── Run / session identity (9.7.0) ────────────────────────────────────────
   // Three facts a tool needs to hold a session WITHOUT cross-binding it to the
   // next caller. All optional, all ABSENT rather than invented when the door

@@ -110,6 +110,7 @@ import type {
   ToolsSessionClosedPayload,
   ToolsSessionCloseFailedPayload,
   ToolsOfferedPayload,
+  ToolProgressPayload,
   ToolStartPayload,
   ValidationArgsInvalidPayload,
   MiddlewareDecisionPayload,
@@ -153,6 +154,7 @@ export const EVENT_NAMES = {
     llmEnd: 'agentfootprint.stream.llm_end',
     token: 'agentfootprint.stream.token',
     toolStart: 'agentfootprint.stream.tool_start',
+    toolProgress: 'agentfootprint.stream.tool_progress',
     toolEnd: 'agentfootprint.stream.tool_end',
     thinkingDelta: 'agentfootprint.stream.thinking_delta',
     thinkingEnd: 'agentfootprint.stream.thinking_end',
@@ -372,6 +374,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.stream.tool_start': AgentfootprintEventEnvelope<
     'agentfootprint.stream.tool_start',
     ToolStartPayload
+  >;
+  'agentfootprint.stream.tool_progress': AgentfootprintEventEnvelope<
+    'agentfootprint.stream.tool_progress',
+    ToolProgressPayload
   >;
   'agentfootprint.stream.tool_end': AgentfootprintEventEnvelope<
     'agentfootprint.stream.tool_end',
@@ -732,6 +738,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.stream.llm_end',
   'agentfootprint.stream.token',
   'agentfootprint.stream.tool_start',
+  'agentfootprint.stream.tool_progress',
   'agentfootprint.stream.tool_end',
   'agentfootprint.stream.thinking_delta',
   'agentfootprint.stream.thinking_end',

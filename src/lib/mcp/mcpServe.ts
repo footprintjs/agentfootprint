@@ -387,6 +387,16 @@ async function buildExecutionContext(
       // for credentials. No sink: there is no run record to land facts on.
       artifacts: unconfiguredArtifacts(),
       hasArtifacts: false,
+      // A mid-call progress report has nowhere to go out here (9.52.0): a
+      // served call is one request/response over MCP, with no run, no event
+      // dispatcher and no recording to file on. So the capability is the
+      // NO-OP rather than a throw — unlike credentials and artifacts, whose
+      // absence changes what a tool may safely do, a dropped progress report
+      // changes nothing about the work or the result. The tool stays portable:
+      // the same handler runs inside an Agent, where the reports land.
+      progress: () => {
+        /* nowhere to file it here — see the note above */
+      },
       ...(signal && { signal }),
       ...(credential && { credential }),
       // No `runId`, no `sessionId`, no `identity` — and that ABSENCE is the

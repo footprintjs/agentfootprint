@@ -217,6 +217,26 @@ const weather = defineTool({
 
 Tool-name uniqueness is validated at `agent.build()` time across `.tool()` registrations AND every Skill's `inject.tools[]`.
 
+A long-running tool can say where it is, mid-call, with `ctx.progress(payload)` —
+each call files one `agentfootprint.stream.tool_progress` event between that
+call's `tool_start` and `tool_end`, so a forty-second walk reads as "hop 3 of 12"
+instead of silence:
+
+```typescript
+execute: async (args, ctx) => {
+  for (const [i, hop] of hops.entries()) {
+    await visit(hop);
+    ctx.progress({ done: i + 1, total: hops.length });   // telemetry, never the model's to read
+  }
+  return summarize(hops);
+},
+```
+
+The framework stamps `toolCallId` / `toolName` / `iteration`; `payload` is yours,
+forwarded verbatim (it must survive `structuredClone`). Always present, never
+throws, never blocks — with nothing listening it is a no-op, and a tool that
+never calls it emits exactly what it emitted before.
+
 ### Context Engineering — 4 typed factories
 
 All four return an `Injection` evaluated by the same engine; all emit the same `agentfootprint.context.injected` event with `source` discriminating the flavor.
@@ -504,7 +524,7 @@ files `agentfootprint.tools.coverage_declared`; with
 to the final answer, which is how a limit survives a model that would rather not
 mention it.
 
-### Observability — 100 typed events across 22 domains
+### Observability — 101 typed events across 22 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

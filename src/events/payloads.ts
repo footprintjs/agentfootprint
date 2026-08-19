@@ -262,6 +262,36 @@ export interface ToolStartPayload {
   readonly protocol?: ToolProtocol;
 }
 
+/**
+ * One progress report from inside a still-running tool call (9.52.0) — filed
+ * by `ctx.progress(payload)` from within `tool.execute`, in call order, always
+ * BETWEEN this call's `stream.tool_start` and its `stream.tool_end`.
+ *
+ * The split is deliberate: the three identity fields are stamped by the
+ * FRAMEWORK from the dispatch it is already holding (a tool cannot claim to be
+ * another call, another tool, or another iteration), and `payload` is the tool
+ * author's data forwarded verbatim. Nothing here is ever shown to the model —
+ * this is the telemetry channel, not the result channel.
+ *
+ * Absent entirely for every tool that never reports: a run whose tools call
+ * nothing files no `tool_progress` events at all.
+ */
+export interface ToolProgressPayload {
+  /** The invocation this report belongs to — matches `stream.tool_start.toolCallId`. */
+  readonly toolCallId: string;
+  /** The tool that reported. */
+  readonly toolName: string;
+  /** The ReAct iteration this call was dispatched on (`0` where there is no loop). */
+  readonly iteration: number;
+  /**
+   * The tool author's payload, verbatim — whatever shape they chose
+   * (`{ done: 3, total: 12 }`, a status string, a partial row). The library
+   * neither reads it nor normalizes it; it must survive `structuredClone`,
+   * because it lands in every event sink and every recording.
+   */
+  readonly payload: unknown;
+}
+
 export interface ToolEndPayload {
   readonly toolCallId: string;
   readonly result: unknown;

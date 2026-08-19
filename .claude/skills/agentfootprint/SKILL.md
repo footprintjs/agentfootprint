@@ -193,6 +193,23 @@ const calculator = defineTool({
 });
 ```
 
+### A long tool that says where it is
+
+```typescript
+execute: async (args, ctx) => {
+  for (const [i, hop] of hops.entries()) {
+    await visit(hop);
+    ctx.progress({ done: i + 1, total: hops.length });   // → stream.tool_progress
+  }
+  return summarize(hops);
+},
+```
+
+`ctx.progress` is always present, never throws, never blocks, and never reaches
+the model — the framework stamps `toolCallId` / `toolName` / `iteration`, you own
+`payload`. `agent.on('agentfootprint.stream.*')` and `toSSE(agent)` carry it with
+no extra wiring.
+
 ### When a tool finds nothing, and what a clean result does not cover
 
 ```typescript
@@ -235,7 +252,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**100 typed events across 22 domains.** Two subscription shapes and no third:
+**101 typed events across 22 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

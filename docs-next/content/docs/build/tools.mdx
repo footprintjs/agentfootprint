@@ -720,6 +720,79 @@ changes nothing until a call actually repeats. (A resume mints a fresh `runId`,
 so a turn continued after a person answered starts counting again — the
 framework only watched half of it.)
 
+## Progress from inside a long tool — `ctx.progress` (9.52.0)
+
+A tool call is atomic on the record. `agentfootprint.stream.tool_start` fires,
+your handler runs for as long as it runs, and `agentfootprint.stream.tool_end`
+carries the result. For a tool that finishes in 200ms that is the whole story.
+For a twelve-hop graph walk that takes forty seconds it is one long silence —
+and from outside, a tool that is working and a tool that has hung look exactly
+the same.
+
+`ctx.progress(payload)` breaks the silence:
+
+```typescript
+const walkGraph = defineTool({
+  name: 'walk_graph',
+  description: 'Walk the dependency graph from a root',
+  inputSchema: { type: 'object', properties: { root: { type: 'string' } }, required: ['root'] },
+  execute: async (args, ctx) => {
+    const hops = await plan(args.root as string);
+    for (const [i, hop] of hops.entries()) {
+      await visit(hop);
+      ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });  // "hop 3 of 12"
+    }
+    return summarize(hops);
+  },
+});
+```
+
+Each call files one **`agentfootprint.stream.tool_progress`** event, in call
+order, always between that call's `tool_start` and its `tool_end`:
+
+```typescript
+agent.on('agentfootprint.stream.tool_progress', (e) => {
+  const { toolName, toolCallId, iteration, payload } = e.payload;
+  console.log(`${toolName} [${toolCallId}] →`, payload);
+});
+```
+
+Because the event name starts with `agentfootprint.stream.`, it reaches a
+browser with no extra wiring — `toSSE(agent)` already carries it, and so does
+`agent.on('agentfootprint.stream.*')`.
+
+**The framework stamps the identity; you own the payload.** `toolCallId`,
+`toolName` and `iteration` come from the dispatch the framework is already
+holding, so a report can never claim to be from another call, and a UI can
+correlate reports to the call they belong to without trusting the tool. Your
+`payload` is forwarded verbatim — an object, a string, whatever shape your
+consumer wants.
+
+**It is telemetry, not a result.** Progress never enters the tool result, the
+conversation history, or anything the model reads; the model still sees exactly
+one result, at the end, as it always did. (This is the house rule that keeps
+retries, streaming and token counts on the emit channel too.)
+
+The rules that make it safe to call from anywhere:
+
+- **Always present.** `ctx.progress` is never `undefined`, so there is no
+  optional-chaining dance. Doors with no event stream to file on — a call served
+  over [`mcpServe`](doc:mcp-serve), the offline `callTraceTool` context — supply
+  a no-op, so the same handler is safe inside an Agent and outside one.
+- **Never fatal.** With nothing listening the report is dropped. It never
+  throws, never blocks (nothing is awaited), and never changes what `execute`
+  returns.
+- **`payload` must survive `structuredClone`.** It rides into every event sink
+  and every recording, so plain data only — no class instances, no live handles,
+  no functions.
+- **Zero-cost when unused.** A tool that never calls it produces exactly the
+  event stream it produced before this existed: no `tool_progress` rows, nothing
+  else moved.
+
+The reports land in [recordings](doc:recordings) with everything else, so
+"where did that forty seconds go?" is answerable from an archive months later,
+not only from a terminal someone happened to be watching.
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

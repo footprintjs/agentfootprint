@@ -1213,6 +1213,59 @@ export function buildToolCallsHandler(
   };
 
   /**
+   * `ctx.progress` for one dispatch (9.52.0) — the tool's mid-call report.
+   *
+   * The whole feature is this closure. A tool call is atomic on the record
+   * (`tool_start`, then silence for as long as the handler runs, then
+   * `tool_end`), and a twelve-hop walk spends forty seconds there with nothing
+   * to show. `progress` breaks the silence over the channel already built for
+   * it: `typedEmit` mid-stage, so each report carries the real
+   * `runtimeStageId`, rides the `agentfootprint.stream.` prefix the EmitBridge
+   * already forwards, and lands in recordings with the rest of the run.
+   *
+   * The three identity facts are stamped HERE, from the dispatch this closure
+   * was built for — the tool sends only its own payload. A report that could
+   * name its own `toolCallId` could name somebody else's, and a correlation id
+   * a consumer cannot trust is worse than none.
+   *
+   * NEVER fatal: an emit that throws (a recorder that dies at the wrong moment,
+   * a scope past its stage) must not fail a tool call that is otherwise
+   * succeeding — telemetry is not the work. Named in dev mode rather than
+   * swallowed, and once per tool: a twelve-hop walk whose channel is broken
+   * would otherwise print twelve identical warnings per call.
+   */
+  const progressWarned = new Set<string>();
+  const toolProgress = (
+    scope: TypedScope<AgentState>,
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly iteration: number;
+    },
+  ): Pick<ToolExecutionContext, 'progress'> => ({
+    progress: (payload: unknown): void => {
+      try {
+        typedEmit(scope, 'agentfootprint.stream.tool_progress', {
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          iteration: call.iteration,
+          payload,
+        });
+      } catch (err) {
+        if (isDevMode() && !progressWarned.has(call.toolName)) {
+          progressWarned.add(call.toolName);
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[agentfootprint] tool '${call.toolName}': ctx.progress could not file a report ` +
+              `(${err instanceof Error ? err.message : String(err)}). The call itself is ` +
+              'unaffected — progress is telemetry, and a dropped report never fails a tool.',
+          );
+        }
+      }
+    },
+  });
+
+  /**
    * `ctx.artifacts` + `ctx.hasArtifacts` for one dispatch — the claim-check
    * capability, shaped exactly like `ctx.credentials` (9.21.0).
    *
@@ -1834,6 +1887,7 @@ export function buildToolCallsHandler(
         ...(resolvedCredential && { credential: resolvedCredential }),
         ...toolArtifacts(scope, toolName, toolCallId),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
+        ...toolProgress(scope, { toolName, toolCallId, iteration }),
         ...sessionContext(scope, toolName, toolCallId),
       });
       await endCall(toolCallId);
@@ -2598,6 +2652,7 @@ export function buildToolCallsHandler(
                 ...(resolvedCredential && { credential: resolvedCredential }),
                 ...toolArtifacts(scope, tc.name, tc.id),
                 ...(wantedMeta !== undefined && { wanted: wantedMeta }),
+                ...toolProgress(scope, { toolName: tc.name, toolCallId: tc.id, iteration }),
                 ...sessionContext(scope, tc.name, tc.id),
               });
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by

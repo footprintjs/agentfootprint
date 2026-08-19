@@ -174,7 +174,14 @@ describe('event registry — names + exhaustiveness', () => {
     //     no EVENT_NAMES group and no ALL_EVENT_TYPES entry — so the docs
     //     described two events that `.on()` refused to accept. A truth
     //     correction: the list now matches what the runtime already emits.)
-    expect(ALL_EVENT_TYPES.length).toBe(100);
+    //    (stream.tool_progress added in 9.52.0 — the one event a TOOL AUTHOR
+    //     fires, via `ctx.progress(payload)` from inside a still-running
+    //     `execute`. It exists because a tool call was atomic on the record:
+    //     tool_start, then silence for as long as the handler ran, then
+    //     tool_end — and a twelve-hop walk spends that silence looking exactly
+    //     like a hang. The framework stamps toolCallId/toolName/iteration; the
+    //     author owns only `payload`.)
+    expect(ALL_EVENT_TYPES.length).toBe(101);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -6,8 +6,8 @@
   "surface": {
     "subpaths": 14,
     "declaredSymbols": 1873,
-    "declaredEvents": 100,
-    "eventSource": "src/events/registry.ts:710"
+    "declaredEvents": 101,
+    "eventSource": "src/events/registry.ts:716"
   },
   "counts": {
     "symbols": {
@@ -15,13 +15,13 @@
       "documented-never-exercised": 1001,
       "exercised-undocumented": 33,
       "undocumented-unexercised": 602,
-      "site-code-sample-only": 19,
+      "site-code-sample-only": 18,
       "written-but-not-published": 115,
-      "ok": 103
+      "ok": 104
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 37,
+      "documented-never-exercised": 38,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 15,
       "site-code-sample-only": 5,
@@ -670,7 +670,6 @@
     "buildStepGraphFromEvents",
     "buildWriterFrameIndex",
     "cacheRecorder",
-    "callTraceTool",
     "canonicalJson",
     "catalogFromTools",
     "causalEvidenceRecorder",

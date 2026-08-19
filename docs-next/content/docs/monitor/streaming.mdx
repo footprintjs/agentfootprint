@@ -27,6 +27,7 @@ The event taxonomy:
 - `stream.token` — one token chunk arrived (content, tokenIndex)
 - `stream.llm_end` — final chunk processed (full response, usage, stopReason)
 - `stream.tool_start` — agent about to dispatch a tool (name, args)
+- `stream.tool_progress` — a long-running tool reporting mid-call (`ctx.progress(payload)`; framework-stamped `toolCallId` / `toolName` / `iteration`, author's `payload` verbatim)
 - `stream.tool_end` — tool returned (result or error)
 
 ## SSE for browser clients
