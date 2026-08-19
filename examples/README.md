@@ -276,6 +276,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 59 | [`59-artifact-vocabularies.ts`](features/59-artifact-vocabularies.ts) | Artifact vocabularies (produces / consumes + the build-time check) | A skill declares which artifact kinds it produces and consumes, and graph.checkup() warns when a consumer needs a kind nothing on the agent makes — while staying silent on the legitimate runtime flow, where a wants-declaring tool redeems the ref from a store that outlives the turn. |
 | 60 | [`60-gemini-field-truths.ts`](features/60-gemini-field-truths.ts) | Gemini gives the signature back | A Gemini tool loop that echoes the model's thought signature (without it, the second call is a 400 after your tool already ran), plus per-door model defaults, visible thinking tokens, and a refreshable apiKey. |
 | 61 | [`61-agent-recipes.ts`](features/61-agent-recipes.ts) | Recipes — a named, versioned agent setup | Declare an agent setup once as a versioned recipe, compose two of them, and read back on the run manifest which compositions produced the agent that answered. |
+| 62 | [`62-recording-envelope.ts`](features/62-recording-envelope.ts) | Recording envelope — a saved run that says what it is | Persist a recorded run as one versioned JSON archive, read it back unchanged, and watch the envelope refuse by name every fact it would otherwise have had to guess. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

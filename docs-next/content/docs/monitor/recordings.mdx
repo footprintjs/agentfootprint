@@ -1,0 +1,238 @@
+---
+title: Archive a run
+description: persistRecording wraps a recorded run in a RecordingEnvelope — the versioned contract that says which run it is, how much of it this is, who produced it and under what privacy policy. Every field is derived from the run's own events or stated by the caller, and a fact it cannot honour is refused by name rather than guessed.
+---
+
+> **A recording you can hand to a viewer is not yet a recording you can put on disk.**
+
+[`recordRun`](doc:offline-replay) freezes a run into `snapshot`, `events` and
+`structure`, and that shape is exactly right for rendering the run in the same
+process. It is not enough to *store*: it carries no format marker, no producer
+version, no statement of **which** run it is, and no statement of whether it is
+the **whole** run. So every consumer that wanted to archive a run, attach one to
+a ticket, or feed one to an analysis tool invented its own wrapper — and each
+wrapper made a different guess about the same missing facts.
+
+A `RecordingEnvelope` is the producer-owned answer: one format string, and every
+field either a fact the library can prove or a fact you stated.
+
+## The narrow waist
+
+The envelope is **the contract**; the other two shapes a finished run leaves in
+are presentations over it.
+
+| Shape | For | What it is |
+|---|---|---|
+| `RecordingEnvelope` | machines | **the versioned contract** — identity, completeness and drop-count facts, stamped as truths or refused. Archives, ingestion, cross-run analysis. |
+| `Trace` | humans and UIs | a redacted domain-event **projection** of the same run — see [Replay a saved run](doc:offline-replay) |
+| `exportBugReport` | humans filing issues | a zip carrying the recording plus environment facts — a presentation for [one workflow](doc:file-a-bug) |
+
+If you are choosing: archive the envelope, and derive the other two from it.
+
+## Save one run
+
+`persistRecording` builds the envelope and hands it to a sink. `fileRecordingSink`
+is the reference sink — one JSON file per run, in a directory you can `ls`, `cat`
+and `tar`.
+
+<CodeFile path="examples/features/62-recording-envelope.ts" region="persist" title="examples/features/62-recording-envelope.ts (region: persist)" />
+
+The whole example — round trip, absent identity, and both refusals — is
+[`examples/features/62-recording-envelope.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/62-recording-envelope.ts),
+runnable on the mock provider with no key:
+
+```bash
+npm run example examples/features/62-recording-envelope.ts
+```
+
+Pass the **handle** from `recordRun(agent)` rather than the recording it made
+wherever you can: `RecordingSource` accepts either, but only the live handle
+knows how many events the cap discarded. `PersistRecordingOptions` is the sink,
+the run facts, an optional privacy statement and an optional `configuration`
+override; `run` is a `RecordingRunFacts` — the half of the truth the library
+cannot derive.
+
+## What an envelope holds
+
+| field | type | what it says |
+|---|---|---|
+| `format` | `RECORDING_ENVELOPE_FORMAT` | the marker for this envelope shape — v1 today. Compare against the exported constant rather than a copied string: it is bumped only for a change an older reader could not survive, so a reader that does not recognise it must refuse the file rather than half-read it. |
+| `producer` | `RecordingProducer` | the `agentfootprintVersion` and `footprintjsVersion` that made the bytes, or `'unknown'` when a manifest is unreadable |
+| `run` | `RecordingRun` | which run, and how much of it: `runId`, optional `sessionId` / `principal` / `tenant`, `startedAt`, optional `endedAt`, `complete`, `droppedEvents` |
+| `configuration` | `RecordingConfiguration` | the `agentId` and the run's own `run_configured` manifest — names and ids only, by law, which is what makes it safe to archive |
+| `privacy` | `RecordingPrivacy` | the `mode` and a matchable `policyId` — what was done to the bytes before they were stored |
+| `recording` | the recording | `snapshot`, `events` and `structure`, unmodified |
+
+It is plain JSON by construction — no `Date`s, no `Map`s, no live handles — and
+an absent optional is an absent **key** rather than a key holding `undefined`.
+That is what makes `JSON.parse(JSON.stringify(envelope))` the same envelope,
+deep-equal, rather than one that quietly changed shape on the way to disk.
+
+## The rule: never stamp a fact you had to guess
+
+An archive is read by people and tools that were not there when the run
+happened. That makes every field a claim — and a claim that turns out to be a
+guess is *worse* than a missing field, because a missing field sends the reader
+to look and a wrong one stops them looking. So each field has a stated source:
+
+| field | where it comes from |
+|---|---|
+| `runId`, `sessionId`, `principal`, `tenant` | the **event meta**, or your explicit statement. Never synthesized. |
+| `startedAt` / `endedAt` | event wall clocks, but only where the stream can honestly supply them |
+| `complete` | **your statement, always** |
+| `droppedEvents` | the live `recordRun` handle, which counts them |
+| `configuration` | the run's own `agentfootprint.agent.run_configured` manifest |
+| `producer` | the package manifests, at runtime |
+
+Where a fact is neither derivable nor supplied, the builder **refuses**. The
+refusals below are the feature, not the rough edges around it.
+
+### `complete` is asked for, never defaulted
+
+A frozen recording looks identical whether it was taken after the run or from a
+crash handler mid-run, and there is no run-terminal event to check. Defaulting
+it to `true` would make every crash dump claim to be whole, so `complete` is
+required — say `false` for a recording frozen from a timeout, a crash handler,
+or mid-stream.
+
+An incomplete recording gets **no `endedAt`** unless you state one: the last
+retained event is just where watching stopped, and a run that had not finished
+has no end time to report. `RecordingTimestamp` lets you state either edge as an
+ISO 8601 string, epoch milliseconds or a `Date`; anything unreadable is refused
+rather than silently becoming an invalid date.
+
+### Identity is inherited, never invented
+
+`principal` and `tenant` come from the event meta, whose own law is that they
+are stamped only from an explicit `run(input, { identity })` — never from the
+run's internal identity and never from a session id, because a conversation id
+is not an actor. The envelope inherits that guarantee whole: **an anonymous run
+produces an envelope with no `principal` key at all**, not a placeholder and not
+a session id wearing an actor's name.
+
+### `droppedEvents: 0` means none were dropped
+
+Only the live handle counts what the `maxEvents` cap discarded; a bare
+`Recording` is a plain object that carries no count. Enveloping one without
+stating the count raises `IndeterminateRunFactError` with `field: 'droppedEvents'`
+rather than reporting a comfortable zero — the difference between "none were
+dropped" and "we did not look" is the difference between a timeline that starts
+at the run's beginning and one that merely appears to.
+
+The same error, with `field: 'startedAt'`, fires when the cap **has** dropped
+events: the cap discards the oldest, so the earliest retained event is not the
+run's first, and a start time read off it would report the moment recording
+overflowed. State `run.startedAt`, or record with a larger `maxEvents`.
+
+### One envelope names one run
+
+A run id is minted per `run()` **and** per `resume()`, so a recorder left
+attached across both sees two. Filing that recording under the first id it saw
+would put a label on an archive that is wrong for some of the events inside it —
+so it is refused, naming both ids, and you either split the recording or state
+which `run.runId` the archive is filed under. Two `principal`s or two
+`sessionId`s in one stream refuse the same way.
+
+### Privacy: v1 is `'full'` only, and says so
+
+`RecordingPrivacyMode` names three modes; v1 implements one. Asking for
+`'redacted'` or `'structure-only'` raises `UnsupportedPrivacyModeError`, and it
+refuses **before the sink is reached**, so nothing is ever stored under a label
+the producer could not honour.
+
+That looks strict until you follow what the label does downstream: an archive
+browser decides what to show from it, a retention rule decides how long to keep
+it, and a triage tool decides who may open it. An envelope stamped `'redacted'`
+over un-redacted bytes would be handled with *less* care than one that admits it
+is raw — so silently storing the raw bytes under the nicer label is the worse
+outcome, not the convenient one.
+
+Redact **before** persisting instead:
+
+- `recordRun(agent, { boundaryDetail: 'lean' })` captures no payloads in the first place;
+- `serializeTrace` and `redactContent` redact at the serialize boundary (see [Replay a saved run](doc:offline-replay));
+- footprintjs's `setRedactionPolicy()` redacts state where it is written.
+
+A `'full'` envelope carries `FULL_PRIVACY_POLICY_ID` as its `policyId` when you
+name none, so a retention rule can match on a stable string rather than on prose.
+
+## The file name is a key
+
+`fileRecordingSink` takes `FileRecordingSinkOptions` — a `directory`, created if
+missing — and maps one run id to one file name with `recordingFileName`, which is
+exported so you can drive the mapping directly.
+
+That mapping is a **key**, so it is asserted rather than hoped for: two runs
+landing on one name means one archive silently overwrites another with nothing
+raised anywhere. Ids outside the safe set raise `UnsafeRecordingIdError` before
+anything is serialized.
+
+| refused | why |
+|---|---|
+| uppercase | macOS and Windows fold case, so `run-A` and `run-a` are two ids and one file |
+| `/` or `\` | a separator inside a field silently becomes a directory hop |
+| a leading `.` or `-` | one hides the archive from `ls`, the other reads as a flag to every CLI tool |
+| `.` and `..` | path navigation, not names |
+| `con`, `nul`, `com1`, … | Windows device names, with **or without** an extension: `con.json` opens the console |
+| over 200 characters | `NAME_MAX` is 255 and the suffixes add to it |
+
+The ids this library mints all satisfy it; the assertion is there for the ones
+you state. Two other things the reference sink gets right and a hand-rolled one
+usually does not: the write is **atomic** (a temp file, then a rename within the
+same directory), so a crash leaves a `.tmp` nobody reads rather than a truncated
+`.json` that parses as far as it got — a half-written archive is the one failure
+a bug report cannot survive, because it looks like evidence. And writing the same
+run id twice **replaces** the archive: the run id is the archive's identity, so a
+second envelope for one run is a newer version of one archive (a partial crash
+dump later superseded by the finished run), not a second archive.
+
+## Writing your own sink
+
+A `RecordingSink` is one method, so a bucket, a table or an HTTP endpoint is a
+few lines. Return an `id` — your own handle for what you stored — and a `uri`
+when your destination has a meaningful address.
+
+```ts
+import { persistRecording, type RecordingEnvelope, type RecordingSink } from 'agentfootprint/observe';
+
+const archived: RecordingEnvelope[] = [];
+
+const memorySink: RecordingSink = {
+  write(envelope) {
+    archived.push(envelope);
+    return Promise.resolve({ id: envelope.run.runId });
+  },
+};
+
+await persistRecording(recorder, { sink: memorySink, run: { complete: true } });
+```
+
+Swap the `push` for a bucket `put`, an `INSERT` or a `POST`, and return the key
+you stored it under — plus a `uri` when your destination has a meaningful
+address. Serialize with `JSON.stringify`: the envelope is plain JSON, and a
+`RecordingEnvelope` that came back through `JSON.parse` is deep-equal to the one
+that went out.
+
+When the envelope goes somewhere this library should not know about — a request
+body, a queue message, a test assertion — use `buildRecordingEnvelope`, which is
+the same builder without a destination. It takes
+`BuildRecordingEnvelopeOptions`: `PersistRecordingOptions` minus the sink.
+
+```ts
+import { buildRecordingEnvelope } from 'agentfootprint/observe';
+
+const envelope = buildRecordingEnvelope(recorder, { run: { complete: true } });
+await fetch('/api/runs', { method: 'POST', body: JSON.stringify(envelope) });
+```
+
+<Callout type="info" title="Reading an archive back">
+Check `format` first and refuse a string you do not recognise. Then
+`envelope.recording` is exactly what the viewers consume — hand it straight to
+`observeRecording()` as described in [Replay a saved run](doc:offline-replay).
+</Callout>
+
+## Next steps
+
+- [Replay a saved run](doc:offline-replay) — record a run, then render it in Why Lens or Flow Lens
+- [File a bug report](doc:file-a-bug) — the same run, packaged for a human to open
+- [Observability](doc:observability) — the typed event stream the envelope's facts are derived from

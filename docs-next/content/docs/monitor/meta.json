@@ -4,6 +4,7 @@
   "pages": [
     "---[BarChart3]Observability---",
     "observability",
+    "recordings",
     "exporters",
     "context-engineering-recorder",
     "streaming",
