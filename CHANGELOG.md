@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.48.0] - 2026-08-18
+
+**A run becomes an artifact, and an agent's setup becomes a named thing.** The first
+wave of the Pattern program: the recording contract everything downstream will
+consume, and the recipe surface that says which composition produced an agent.
+Design decisions and their audit are recorded in `docs/design/pattern-program.md`.
+
+### Added
+
+- **`RecordingEnvelope` — the versioned contract a finished run leaves in.** Format
+  `RECORDING_ENVELOPE_FORMAT`, wrapping the `recordRun` Recording unmodified and
+  stamping only facts that are TRUE:
+
+  - Identity is inherited, never derived — an anonymous run yields an envelope with
+    the identity keys genuinely absent, and a session id is never promoted to a
+    principal.
+  - `droppedEvents` is read off the live recorder, which really counts cap drops; a
+    bare `Recording` carries no count, so it is **refused** rather than reported as
+    0 — "we did not look" must not collapse into "none were dropped".
+  - `startedAt` is refused once the cap has discarded the head of the stream (the
+    earliest retained event is when recording overflowed, not when the run began).
+  - A recording spanning two runIds is refused — `resume()` mints a fresh runId, so
+    filing the archive under the first would mislabel it.
+  - Privacy v1 is `'full'` only; `'structure-only'` and `'redacted'` are refused BY
+    NAME before the sink is reached — a false `redacted` label gets bytes handled
+    with less care than bytes that admit they are raw.
+
+- **`persistRecording` + `RecordingSink` + `fileRecordingSink`.** One JSON file per
+  envelope, written atomically. The filename derives from the runId over an
+  asserted safe domain — refuse-by-domain, the one acceptable alternative to the
+  shared encoder, because a refusal cannot collide. Uppercase is refused outright:
+  macOS and Windows fold case, the exact defect class fixed in 9.44.0.
+
+- **`defineAgentRecipe` + `AgentBuilder.recipe()` — a declared, versioned
+  composition over the existing builder.** No plugin system, no lifecycle, nothing
+  hidden: recipes apply in declaration order, a duplicate tool or injection fails
+  at build time naming BOTH sources, and the run manifest gains additive
+  `recipes: [{ id, version }]` rows under the manifest's names-only discipline.
+  Ids are plain names (no version suffixes — the version field exists); versions
+  are strict SemVer, refused with the specific mistake named, never repaired.
+  New door: `agentfootprint/recipes`.
+
+- **Docs and examples for both**, including `examples/features/62-recording-envelope.ts`
+  (runs end to end, zero network, and teaches two refusals on purpose) and
+  `monitor/recordings.mdx` — which documents the refusals as the feature.
+
+### Fixed
+
+- **The capability index was missing `exportBugReport`** — and that omission is why
+  the repo quietly grew three producer-owned archive shapes with their relationship
+  stated nowhere. The row exists now, and the observability README states the rule:
+  the envelope is the contract; `Trace` and the bug-report zip are presentations
+  over it.
+
+- **The committed TypeDoc tree had drifted 282 files behind** and was regenerated
+  as its own deliberate commit.
+
+### Notes
+
+- `producer.footprintjsVersion` stamps honestly-`unknown` until your installed
+  footprintjs is ≥ 9.15.1, whose exports map yields `./package.json`.
+
 ## [9.47.0] - 2026-08-17
 
 **The answer gets a typed half, two more identifier folds close, and an index so
