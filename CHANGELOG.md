@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The `sf-` subflow prefix is RESERVED, and the doors refuse it.** Framework
+  composition segments are named `sf-*` (`sf-llm-call`, `sf-tools`, `sf-cache`,
+  and more each release), and every downstream reader — commentary, step
+  graphs, the OTel bridge, trace fingerprints — tells library plumbing from
+  consumer structure by that prefix alone. So a consumer branch named
+  `sf-billing` never failed like a name clash: it was silently read as
+  plumbing and vanished from the very views it was built to appear in. Two
+  different facts sharing one namespace with no law.
+
+  `Parallel.branch()`, `Conditional.when()/.otherwise()` and `graph()` node
+  ids now refuse the prefix at declaration time, teachingly. `Sequence` and
+  `Workflow` are immune by construction (they mount `step-…`, so a consumer
+  name can never start the segment) and a pin fails if that ever changes.
+  `RESERVED_SUBFLOW_PREFIX` and `isReservedSubflowSegment` are exported so a
+  viewer or pattern miner imports the law instead of hardcoding the string.
+
+  The edge stated plainly: a composition that already used an `sf-*` name was
+  already broken in every viewer — this turns silent misreading into a
+  build-time refusal.
+
+### Changed
+
+- **`exportBugReport` packs a `RecordingEnvelope` instead of a bare recording.**
+  The repo has ONE archive contract and several presentations over it; the
+  bug-report zip predated the contract and was quietly a second one. The bundle
+  now carries `envelope.json` — built through `buildRecordingEnvelope`, never
+  re-implemented — and `environment.json` keeps only the facts the envelope does
+  not stamp (Node, platform, architecture, the reporter's prose). The producer
+  versions it used to repeat are stamped once, in the envelope's `producer`.
+
+  - **Bundle layout version bumped: `manifest.manifestVersion` is `2`.** A
+    versioned artifact that cannot say its version is the defect class this
+    program exists to close.
+  - **New `run` option on both entry points** (`BugReportRunFacts` —
+    `{ complete, droppedEvents? }`). These are the two facts a frozen recording
+    cannot answer; every other envelope fact is derived per recording from its
+    own events, because a bundle may hold several runs and one `runId` or
+    `startedAt` stated once cannot be true of all of them. Pass the **handle**
+    from `recordRun(agent)` rather than its recording and the drop count is
+    read rather than stated — a proven count always beats a stated one.
+  - **A missing run fact refuses IN PLACE rather than throwing.**
+    `persistRecording` is right to throw: its caller asked for an archive. A bug
+    reporter asked for a filable bundle, and losing it because the library could
+    not name a start time helps nobody. So that conversation rides as
+    `recording.json`, the manifest carries a note naming the fact and the line
+    that supplies it, and `BugReportUnit.enveloped` says per conversation which
+    shape it got. Nothing is stamped that was not known.
+  - **The evidence is never packed twice** — an envelope *or* a bare recording,
+    never both. The zip is store-only, so a duplicated recording is duplicated
+    bytes against the size ceiling the trim hints exist to keep a reporter under.
+  - The GitHub issue body names the file that is really in the bundle, including
+    the mixed case (one conversation stamped, another not).
+
 ## [9.48.0] - 2026-08-18
 
 **A run becomes an artifact, and an agent's setup becomes a named thing.** The first

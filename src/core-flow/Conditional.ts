@@ -12,6 +12,7 @@
  * LLM-gated routing (`.whenLLM(id, prompt, runner)`) lands in Phase 5.
  */
 
+import { assertUnreservedSubflowSegment } from '../conventions.js';
 import {
   FlowChartExecutor,
   flowChart,
@@ -360,6 +361,10 @@ export class ConditionalBuilder {
     if (this.seenIds.has(id)) {
       throw new Error(`Conditional.when(): duplicate branch id '${id}'`);
     }
+    // Branch ids are mounted verbatim as subflow segments (addSubFlowChartBranch
+    // in buildChart), so a consumer 'sf-' name would be read as framework
+    // plumbing by every downstream viewer instead of colliding loudly.
+    assertUnreservedSubflowSegment('Conditional.when()', 'branch id', id);
     this.seenIds.add(id);
     const opts =
       typeof nameOrOpts === 'string'
@@ -390,6 +395,7 @@ export class ConditionalBuilder {
     if (this.seenIds.has(id)) {
       throw new Error(`Conditional.otherwise(): duplicate branch id '${id}'`);
     }
+    assertUnreservedSubflowSegment('Conditional.otherwise()', 'branch id', id);
     this.seenIds.add(id);
     const opts =
       typeof nameOrOpts === 'string'

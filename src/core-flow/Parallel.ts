@@ -11,6 +11,7 @@
  *          (via compositionRecorder).
  */
 
+import { assertUnreservedSubflowSegment } from '../conventions.js';
 import {
   FlowChartExecutor,
   flowChart,
@@ -820,6 +821,11 @@ export class ParallelBuilder {
         `Parallel.branch(): id '${id}' must not contain '/' — it collides with footprintjs's subflow-path separator used for per-branch error correlation`,
       );
     }
+    // The branch id is mounted VERBATIM as the subflow segment (see the
+    // `addSubFlowChart(branch.id, …)` call in buildChart), so an `sf-` name
+    // lands inside the framework's reserved namespace and is filtered out as
+    // plumbing by every downstream reader instead of colliding loudly.
+    assertUnreservedSubflowSegment('Parallel.branch()', 'branch id', id);
     this.seenIds.add(id);
     const opts =
       typeof nameOrOpts === 'string'

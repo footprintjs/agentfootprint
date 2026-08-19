@@ -116,6 +116,7 @@
  * ```
  */
 
+import { assertUnreservedSubflowSegment } from '../conventions.js';
 import {
   FlowChartExecutor,
   flowChart,
@@ -251,6 +252,9 @@ export function levelize(
         `graph: duplicate node id '${node.id}' — every node id must be unique (it is the results key).`,
       );
     }
+    // Node ids are mounted verbatim as subflow segments; an 'sf-' name would be
+    // filtered as framework plumbing by every downstream reader.
+    assertUnreservedSubflowSegment('graph()', 'node id', node.id);
     byId.set(node.id, node);
   }
 

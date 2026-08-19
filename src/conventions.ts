@@ -64,6 +64,68 @@ export const SUBFLOW_IDS = {
 
 export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];
 
+// ─── The reserved subflow namespace ──────────────────────────────────
+
+/**
+ * The subflow-id prefix the framework reserves for its OWN composition
+ * segments. Every id in {@link SUBFLOW_IDS} carries it except
+ * {@link SUBFLOW_IDS.FINAL} (a decider BRANCH KEY that doubles as a mount id,
+ * not a name we chose), and the set is deliberately open-ended — builders
+ * generate more of them per feature and per release (`sf-router-llm`,
+ * `sf-memory-read-<id>`, `sf-memory-write-<id>`, …).
+ *
+ * Reserved rather than merely conventional because every reader downstream
+ * tells LIBRARY PLUMBING from CONSUMER STRUCTURE by this prefix and nothing
+ * else:
+ *
+ *   • commentary skips `sf-*` segments while walking `meta.subflowPath` back
+ *     to a user-facing agent name (`commentary/commentaryTemplates.ts`);
+ *   • `BoundaryRecorder` hides them from the StepGraph so they never show up
+ *     as steps a person has to scrub past;
+ *   • the OTel bridge drops a slot-fork selection whose members are all
+ *     `sf-*` (`adapters/observability/otel.ts`);
+ *   • {@link stageRole} and the pattern/fingerprint readers classify by the
+ *     same convention.
+ *
+ * So a consumer branch named `sf-billing` does NOT fail like a name clash —
+ * it is silently read as framework plumbing and vanishes from the very views
+ * it was built to appear in. That is two different facts (framework segment /
+ * consumer segment) sharing one namespace with no law, which is why the doors
+ * that accept a consumer-chosen segment name refuse this prefix outright.
+ */
+export const RESERVED_SUBFLOW_PREFIX = 'sf-';
+
+/** True when a subflow-path segment falls inside the reserved namespace. */
+export function isReservedSubflowSegment(segment: string): boolean {
+  return segment.startsWith(RESERVED_SUBFLOW_PREFIX);
+}
+
+/**
+ * Refuse a consumer-chosen name that would become a reserved subflow-path
+ * segment — at DECLARATION time, where the name was typed, rather than at run
+ * time where the damage is invisible.
+ *
+ * Refuse-by-domain: a name that cannot be declared cannot collide. There is no
+ * escape hatch and no rename-behind-the-scenes, because a silently rewritten
+ * id would break the one thing the consumer wanted (finding their own segment
+ * in the trace) in a second, quieter way.
+ *
+ * @param door  the API that accepted the name, e.g. `Parallel.branch()`
+ * @param noun  what the name IS at that door, e.g. `branch id`
+ * @param id    the consumer-supplied name
+ */
+export function assertUnreservedSubflowSegment(door: string, noun: string, id: string): void {
+  if (!isReservedSubflowSegment(id)) return;
+  throw new Error(
+    `${door}: ${noun} '${id}' starts with '${RESERVED_SUBFLOW_PREFIX}', which is reserved — ` +
+      `agentfootprint names its own subflows '${RESERVED_SUBFLOW_PREFIX}…' ` +
+      `(sf-llm-call, sf-tools, sf-cache, and more each release), and every reader downstream ` +
+      `(step graphs, commentary, trace fingerprints) tells library plumbing from your structure ` +
+      `by that prefix alone. Named this way, '${id}' would be filtered out as plumbing instead ` +
+      `of colliding loudly. Pick a name that does not start with '${RESERVED_SUBFLOW_PREFIX}'.`,
+  );
+}
+
 /** Stage IDs — plain function stages that builders mount. */
 export const STAGE_IDS = {
   SEED: 'seed',

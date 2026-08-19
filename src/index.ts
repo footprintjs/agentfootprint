@@ -75,6 +75,14 @@ export {
   milestoneFor,
   type Milestone,
   type MilestoneKind,
+  // The reserved subflow namespace (9.49.0): the prefix the framework names its
+  // own composition segments with, and the predicate downstream READERS use to
+  // tell library plumbing from consumer structure — exported so a viewer or a
+  // pattern miner imports the law instead of hardcoding 'sf-'. The refusal
+  // itself (assertUnreservedSubflowSegment) stays internal: it belongs to the
+  // declaration doors, not to consumers.
+  RESERVED_SUBFLOW_PREFIX,
+  isReservedSubflowSegment,
 } from './conventions.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
