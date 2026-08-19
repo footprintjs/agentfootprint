@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.51.0] - 2026-08-19
+
 Route edges can now declare their condition as **data** — the map shows it,
 the checkup checks it, the recording carries it. This completes the
 SkillWalker's third mover: the map is data, entry matchers are data,
