@@ -90,6 +90,11 @@ const DOORS = [
   // can route with it. A door that carries no run entry point does not reopen
   // the 26-doors problem the ledger closed.
   './skill-graph',
+  // 9.48.0 — the TWELFTH, on the same argument: `./recipes` carries no run
+  // entry point either. It publishes the declared unit of agent CONFIGURATION
+  // (`defineAgentRecipe`), which is authoring-time vocabulary — an app that
+  // CONSUMES a recipe imports the object and calls `.recipe()`.
+  './recipes',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */
@@ -235,7 +240,7 @@ describe('the sixteen 9.0.0-removed subpaths are absent from the exports map', (
     expect(REMOVED_SUBPATHS).toHaveLength(16);
   });
 
-  it('the exports map is exactly: root + the eleven doors + the one retained alias', () => {
+  it('the exports map is exactly: root + the twelve doors + the one retained alias', () => {
     const expected = [...DOORS, ...Object.keys(ALIAS_TO_DOOR)].slice().sort();
     expect(codeSubpaths.slice().sort()).toEqual(expected);
   });

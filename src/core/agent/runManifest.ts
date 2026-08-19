@@ -31,6 +31,7 @@ import type {
   RunConfiguredMemoryPayload,
 } from '../../events/payloads.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
+import type { AppliedRecipe } from '../../recipes/types.js';
 
 /**
  * What the Agent hands over — already resolved, already narrowed to names.
@@ -77,6 +78,23 @@ export interface RunManifestSources {
     readonly placement: boolean;
     readonly recordings: boolean;
   };
+  /**
+   * The recipes `.recipe()` applied, in declaration order.
+   *
+   * Names and versions only — the same law the rest of this file keeps. A
+   * recipe's `description` is prose about the composition and never travels;
+   * what a consumer GROUPS on is the pair, and the pair stays two fields (a
+   * composed `'id@version'` would be one string two different pairs could
+   * produce).
+   *
+   * ABSENT, not `[]`, when an agent applied none — and this is the one place
+   * that differs from {@link memories}, deliberately. "No memory is mounted" is
+   * an arm a study compares against, so it is stated. "No recipe" is the state
+   * of every agent written before recipes existed, and stamping an empty list
+   * on all of them would put new bytes in every recording, every vendor sink
+   * and every stored manifest for a feature nobody used.
+   */
+  readonly recipes?: readonly AppliedRecipe[];
 }
 
 /**
@@ -130,6 +148,13 @@ export function buildRunManifest(sources: RunManifestSources): AgentRunConfigure
         ...(artifacts.recordings && { recordings: true as const }),
       },
     }),
+    // Rebuilt row by row rather than passed through: `AgentRecipe` also carries
+    // a `description` and a `configure` function, and a spread would put prose
+    // on every recording and a function where JSON goes. Two fields, no more.
+    ...(sources.recipes !== undefined &&
+      sources.recipes.length > 0 && {
+        recipes: sources.recipes.map((r) => ({ id: r.id, version: r.version })),
+      }),
   };
 }
 

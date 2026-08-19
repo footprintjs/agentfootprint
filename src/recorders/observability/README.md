@@ -17,6 +17,85 @@ recorders/observability/
 
 Phase 5 additions (planned): `enable.lens`, `enable.tracing`, `enable.cost`, `enable.guardrails`, `enable.eval`.
 
+## Saving a run: `recordRun` → `RecordingEnvelope` → a sink
+
+Three files, three jobs, in the order you meet them:
+
+```
+recordRun.ts             collect a run into { events, snapshot, structure }
+recordingEnvelope.ts     wrap that in a versioned, archivable contract
+fileRecordingSink.ts     put one envelope somewhere (the reference sink)
+```
+
+`recordRun` is enough to hand a run to a viewer in the same process. It is not
+enough to put one on disk: it carries no format marker, no producer version, no
+statement of *which* run it is, and no statement of whether it is the *whole*
+run. Before the envelope, every consumer that wanted to archive a recording,
+attach it to a bug report, or feed it to an analysis tool invented its own
+wrapper — and each one guessed differently about the same missing facts.
+
+```ts
+import { recordRun, persistRecording, fileRecordingSink } from 'agentfootprint/observe';
+
+const recorder = recordRun(agent);
+await agent.run({ message: 'Weather in San Francisco?' });
+
+const { uri } = await persistRecording(recorder, {
+  sink: fileRecordingSink({ directory: './run-archive' }),
+  run: { complete: true },
+});
+recorder.stop();
+// → ./run-archive/run-1787093273110-1.json
+```
+
+### The rule: never stamp a fact you had to guess
+
+An archive is read by people and tools that were not there when the run
+happened, so every field is a claim. Each one has a stated source, and where a
+fact is neither derivable nor supplied the builder **refuses** rather than
+filling in something plausible:
+
+| field | where it comes from |
+|---|---|
+| `runId`, `sessionId`, `principal`, `tenant` | the **event meta**, or the caller. Never synthesized. |
+| `startedAt` / `endedAt` | event wall clocks — but only where the stream can honestly supply them |
+| `complete` | **caller input, always.** Nothing in a frozen recording says whether it reached the run's end |
+| `droppedEvents` | the live `recordRun` handle, which counts them |
+| `configuration` | the run's own `run_configured` manifest (names and ids only, by law) |
+| `producer` | the package manifests, at runtime |
+
+Three consequences worth knowing before they surprise you:
+
+- **Identity is inherited, not derived.** `principal` and `tenant` come from
+  `EventMeta`, whose own law is that they are stamped only from an explicit
+  `run(input, { identity })` — never from a session id, because a conversation
+  id is not an actor. An anonymous run produces an envelope with **no
+  `principal` key at all**.
+- **A bare `Recording` cannot report `droppedEvents`.** Only the live handle
+  counts what the `maxEvents` cap discarded. Pass the handle, or state the
+  count — `0` here has to mean "none were dropped", not "we did not look".
+- **An incomplete recording gets no `endedAt`.** A run that had not finished
+  has no end time, so absence is the honest answer.
+
+### Privacy: v1 is `'full'` only, and says so
+
+`persistRecording(..., { privacy: { mode: 'redacted' } })` **throws**. The label
+is what downstream readers act on — an archive browser decides what to show, a
+retention rule decides how long to keep it — so stamping `redacted` on
+un-redacted bytes would get them handled with *less* care than bytes that admit
+they are raw. Redact before persisting instead: `recordRun(agent, {
+boundaryDetail: 'lean' })` captures no payloads at all, and
+`serializeTrace`/`redactContent` redact at the serialize boundary.
+
+### Writing your own sink
+
+A sink is one method — `write(envelope) => Promise<{ id, uri? }>` — so a table,
+a bucket or an HTTP endpoint is a few lines. Read `fileRecordingSink.ts` first
+for the two things that are easy to get wrong: the write is **atomic** (tmp file
+then rename, so a crash never leaves a half-parsed archive that looks like
+evidence), and the file name is a **key**, so the run id is asserted against a
+safe, case-unambiguous charset and refused by name otherwise.
+
 ## Why a separate layer
 
 Core recorders (in `../core/`) are ALWAYS attached by every runner — they ARE the library's event-emission machinery. Observability recorders are **consumer-attached**, fire zero cost when not enabled, and focus on DERIVED signals (readable status lines, structured logs, OTEL spans, cost totals, etc.).

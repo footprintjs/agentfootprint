@@ -86,6 +86,7 @@ import {
 import { buildEventMeta } from '../bridge/eventMeta.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
+import type { AppliedRecipe } from '../recipes/types.js';
 
 /**
  * The pseudo-stage a tool-teardown event is stamped with.
@@ -651,6 +652,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  See AgentOptions. */
   private readonly reactMode: 'classic' | 'dynamic' | 'dynamic-grouped';
 
+  /** The recipes `.recipe()` applied, in declaration order. Held for ONE
+   *  purpose: the run manifest's `recipes` rows, so a recording can say which
+   *  composition produced the agent that answered. Undefined — never `[]` — on
+   *  every agent built without one, which is what keeps the manifest of an
+   *  agent that uses no recipes byte-identical to the one it emitted before
+   *  they existed. */
+  private readonly appliedRecipes?: readonly AppliedRecipe[];
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -693,6 +702,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillBrains?: import('./agent/skillBrains.js').FoldedSkillBrains,
     evidenceGate?: ResolvedEvidenceGate,
     limitsTravelWithTheAnswer?: boolean,
+    recipes?: readonly AppliedRecipe[],
   ) {
     super();
     this.provider = opts.provider;
@@ -725,6 +735,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillBrains = skillBrains;
     this.evidenceGate = evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
+    this.appliedRecipes = recipes;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -2597,6 +2608,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ...(this.evidenceGate !== undefined && {
           evidenceGatePosture: this.evidenceGate.posture,
         }),
+        // The compositions this agent was built from, in declaration order.
+        // Spread value-conditionally so an agent with none passes no key at all
+        // — see `RunManifestSources.recipes` for why it is absent rather than
+        // an empty list.
+        ...(this.appliedRecipes !== undefined && { recipes: this.appliedRecipes }),
         // The store itself is never named — see RunManifestSources.artifacts.
         ...(this.artifactStore !== undefined && {
           artifacts: {

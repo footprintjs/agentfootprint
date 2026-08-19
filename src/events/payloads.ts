@@ -1729,6 +1729,25 @@ export interface RunConfiguredArtifactsPayload {
 }
 
 /**
+ * One applied recipe — the declared, versioned composition that produced part
+ * of this agent (9.48.0).
+ *
+ * The pair is what makes the row worth reading: two runs of `support-desk` that
+ * answered differently are a mystery until the record says one was `1.2.0` and
+ * the other `1.3.0`. The recipe's `description` is deliberately not here — it
+ * is prose about the composition, and the manifest carries what a consumer
+ * BRANCHES on.
+ */
+export interface RunConfiguredRecipePayload {
+  /** The composition's plain name, e.g. `'support-desk'`. */
+  readonly id: string;
+  /** Its SemVer version, e.g. `'1.2.0'`. Kept a SEPARATE field from `id` —
+   *  a composed `'support-desk@1.2.0'` would be one string that two different
+   *  pairs could produce as soon as either half may contain the separator. */
+  readonly version: string;
+}
+
+/**
  * The run-configuration manifest — ONE event at run start naming which
  * adapters and strategies this run is about to use.
  *
@@ -1797,6 +1816,17 @@ export interface AgentRunConfiguredPayload {
    *  Presence means the gate is on; absence means it is not mounted. */
   readonly evidenceGate?: 'assist' | 'guard' | 'rails';
   readonly artifacts?: RunConfiguredArtifactsPayload;
+  /**
+   * The recipes `.recipe()` applied, in declaration order — which declared,
+   * versioned composition produced this agent (9.48.0).
+   *
+   * ABSENT when none was applied, and that is the one asymmetry with
+   * {@link memories}: "no memory" is an arm a study compares against, while
+   * "no recipe" is the state of every agent written before recipes existed,
+   * and an empty list on all of them would be new bytes in every recording for
+   * a feature nobody used.
+   */
+  readonly recipes?: readonly RunConfiguredRecipePayload[];
 }
 
 export interface AgentOutputSchemaValidationFailedPayload {

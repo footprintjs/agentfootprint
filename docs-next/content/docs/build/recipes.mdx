@@ -1,0 +1,125 @@
+---
+title: Recipes — an agent setup you can name
+description: defineAgentRecipe declares an agent's whole setup as one named, versioned AgentRecipe, and .recipe() applies it. Every run then says on its manifest which composition produced the agent that answered.
+---
+
+> **Every capability already ships. What did not was a name for the setup.**
+
+An agent's setup — the system prompt, the tools, the steering, the memory — is a
+composition. Until now it had nowhere to live except an example, so it was
+copy-pasted into an app and drifted there. Afterwards nothing on the run could
+say which composition produced the agent that answered: two runs of "the support
+agent" could differ in every tool and every instruction and look identical on the
+record.
+
+A **recipe** is the missing noun.
+
+```ts
+import { Agent } from 'agentfootprint';
+import { defineAgentRecipe } from 'agentfootprint/recipes';
+
+export const supportDesk = defineAgentRecipe({
+  id: 'support-desk',
+  version: '1.2.0',
+  description: 'Order lookup + refund policy, the way support runs it.',
+  configure: (agent) => {
+    agent.system('You answer support questions.').tool(lookupOrder);
+  },
+});
+
+const agent = Agent.create({ provider, model })
+  .recipe(supportDesk)   // the composition support publishes
+  .recipe(housePolicy)   // the steering every agent here carries
+  .tool(escalate)        // and one tool this app adds itself
+  .build();
+```
+
+`configure` calls **builder methods that already exist**. There is no second
+configuration format and no class to extend: a recipe is a name, a version and a
+function.
+
+## What it buys you: the run says which setup produced it
+
+Applying a recipe puts a row on the run-configuration manifest
+(`agentfootprint.agent.run_configured`), beside the provider and the model it
+already named:
+
+```ts
+agent.on('agentfootprint.agent.run_configured', (event) => {
+  event.payload.recipes; // → [{ id: 'support-desk', version: '1.2.0' }, …]
+});
+```
+
+Each row is an `AppliedRecipe`: the id and the version, in declaration order.
+That pair is what turns N runs into N labelled arms — two runs of `support-desk`
+that answered differently are a mystery until the record says one was `1.2.0` and
+the other `1.3.0`.
+
+The `description` never travels: it is prose about the composition, and the
+manifest carries what a consumer branches on. An agent that applies no recipe
+gets no `recipes` field at all — absent means "none was applied", and an empty
+list on every agent that predates recipes would be new bytes in every recording
+for a feature nobody used.
+
+## Conflicts name both sides
+
+The builder has always refused a duplicate tool name: the model dispatches by
+name, so two tools called `search` is a coin flip whose loser is never called and
+never mentioned. What it could not say was **where each one came from**.
+
+```
+Agent.tool(): duplicate tool name 'search' — already registered by
+recipe 'support-desk' 1.2.0, and now by recipe 'crm-basics' 0.4.0.
+```
+
+It fires while the agent is being built, before any model call. A recipe that
+applies another recipe is attributed innermost-first
+(`recipe 'crm-basics' 0.4.0 ← applied by recipe 'house-standard' 2.1.0`), so the
+sentence always points at the file to open.
+
+`RecipeOptions` carries one setting, `conflict`, and
+`RecipeConflictPolicy` has one member: `'error'`, the default. `'skip'`,
+`'replace'` and automatic renaming are each a real design and none is
+implemented — every one of them has to answer where the dropped registration is
+RECORDED first. So `.recipe(r, { conflict: 'skip' })` is refused **by name**,
+never quietly run as `'error'`.
+
+## Two rules on the declaration
+
+Both are about grouping, and both refuse rather than repair. A bad declaration
+raises `InvalidAgentRecipeError`, which carries the `field` it refused so a host
+can report it without parsing prose.
+
+**The id is a plain name and carries no version.** Lower-case words joined by
+single hyphens — `support-desk`, `triage`. `support-desk-2` is refused: the
+version axis already exists as its own field, and an id that encodes one gives a
+single composition two names, so runs of `-2` read as an unrelated agent while
+the field that exists to tell them apart says `1.0.0` on both.
+
+**The version is strict SemVer.** `'1.2'`, `'v1.2.3'` and `'latest'` are refused
+rather than repaired — padding `'1.2'` to `'1.2.0'` would stamp a version on the
+record that the author never wrote.
+
+## No lifecycle magic — the limits are the point
+
+An `AgentRecipe` composes configuration and nothing else:
+
+- **nothing is registered** — you import the object and hand it to `.recipe()`.
+  No global map, no discovery, no "which version is installed";
+- **nothing is closable** — a recipe holds no connection and no handle, so it
+  never gets a `close()`. It is never awaited either: `configure` is
+  synchronous because `build()` is, and an `async configure` is refused by name
+  rather than silently not awaited;
+- **nothing is deferred** — every call `configure` makes happens where you wrote
+  `.recipe()` in the chain. A later builder call still wins, exactly as always.
+
+A composition that also owned a resource would be a component wearing a
+composition's name — the shape that makes "who closed the pool?" unanswerable two
+releases later.
+
+## Runnable example
+
+`examples/features/61-agent-recipes.ts` — two recipes and one local tool, the
+manifest rows they produce, and the refusal two colliding recipes get. It runs on
+the mock provider: a recipe resolves entirely at build time, so nothing there
+costs a model call.

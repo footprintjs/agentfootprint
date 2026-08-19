@@ -230,6 +230,16 @@
         "default": "./dist/doors/skill-graph.js"
       }
     },
+    "./recipes": {
+      "import": {
+        "types": "./dist/esm/doors/recipes.d.ts",
+        "default": "./dist/esm/doors/recipes.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/recipes.d.ts",
+        "default": "./dist/doors/recipes.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
@@ -269,6 +279,9 @@
       ],
       "skill-graph": [
         "./dist/types/doors/skill-graph.d.ts"
+      ],
+      "recipes": [
+        "./dist/types/doors/recipes.d.ts"
       ]
     }
   },

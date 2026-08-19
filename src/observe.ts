@@ -99,6 +99,44 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// The recording ENVELOPE — the versioned contract that makes a recording
+// archivable. `recordRun` freezes a run; this states which run it is, how much
+// of it this is, who produced it and under what privacy policy, so a saved run
+// can be filed, attached to a bug report, or read by an analysis tool without
+// every consumer inventing its own wrapper. Every field is derived from the
+// run's own events or stated by the caller — never guessed.
+export {
+  buildRecordingEnvelope,
+  persistRecording,
+  FULL_PRIVACY_POLICY_ID,
+  RECORDING_ENVELOPE_FORMAT,
+  IndeterminateRunFactError,
+  UnsupportedPrivacyModeError,
+  type BuildRecordingEnvelopeOptions,
+  type PersistRecordingOptions,
+  type RecordingConfiguration,
+  type RecordingEnvelope,
+  type RecordingPrivacy,
+  type RecordingPrivacyMode,
+  type RecordingProducer,
+  type RecordingRun,
+  type RecordingRunFacts,
+  type RecordingSink,
+  type RecordingSource,
+  type RecordingTimestamp,
+} from './recorders/observability/recordingEnvelope.js';
+
+// The reference sink: one archived run per JSON file, written atomically
+// (tmp + rename) so a crash never leaves a half-parsed archive. The file name
+// derives from the run id, which makes it a key — hence the asserted safe
+// charset and `UnsafeRecordingIdError` rather than a hopeful `${runId}.json`.
+export {
+  fileRecordingSink,
+  recordingFileName,
+  UnsafeRecordingIdError,
+  type FileRecordingSinkOptions,
+} from './recorders/observability/fileRecordingSink.js';
+
 // exportBugReport — a bug report IS the evidence. `describeBugReport` measures
 // the run first (selectable units, sizes, the redacted keys by NAME) so a human
 // can consent to exactly what leaves; `exportBugReport` bundles the units they

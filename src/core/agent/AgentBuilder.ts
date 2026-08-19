@@ -92,6 +92,16 @@ import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
+import { assertAgentRecipe } from '../../recipes/defineAgentRecipe.js';
+import {
+  asyncConfigureRefusal,
+  duplicateRecipeRefusal,
+  duplicateRegistrationRefusal,
+  recursiveRecipeRefusal,
+  resolveRecipeConflictPolicy,
+} from '../../recipes/apply.js';
+import { LOCAL_SOURCE, type RecipeSource } from '../../recipes/provenance.js';
+import type { AgentRecipe, AppliedRecipe, RecipeOptions } from '../../recipes/types.js';
 
 /**
  * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0; brains
@@ -366,6 +376,23 @@ export class AgentBuilder {
   private messageMiddlewareList: readonly MessageMiddleware[] = [];
   /** `.act()` is the posture block: one per agent. See the method. */
   private actCalled = false;
+  /** The recipes applied, in DECLARATION ORDER — the order `.recipe()` was
+   *  called, which is the order their builder calls ran. Reported verbatim on
+   *  the run manifest. Empty for every agent that never called `.recipe()`,
+   *  and an empty list puts NO field on the manifest. */
+  private readonly appliedRecipeList: AppliedRecipe[] = [];
+  /** The recipe application stack while a `configure` is running — OUTERMOST
+   *  first, because a recipe may apply another recipe and the innermost one is
+   *  the code that literally called `.tool()`. Empty means a direct call. */
+  private readonly recipeStack: AppliedRecipe[] = [];
+  /** Which source registered each tool NAME, and each injection ID. Two maps
+   *  keyed by the raw name, never one map keyed by a composed string: joining a
+   *  kind and a name is the separator-donation collision this repo has fixed
+   *  seven times, and there is nothing to gain by risking it here. Consulted
+   *  only when a duplicate is detected, so an agent with no recipes pays two
+   *  `Map.set` calls and nothing else. */
+  private readonly toolSources = new Map<string, RecipeSource>();
+  private readonly injectionSources = new Map<string, RecipeSource>();
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -415,9 +442,132 @@ export class AgentBuilder {
   tool<TArgs, TResult>(tool: Tool<TArgs, TResult>): this {
     const name = tool.schema.name;
     if (this.registry.some((e) => e.name === name)) {
-      throw new Error(`Agent.tool(): duplicate tool name '${name}'`);
+      throw new Error(this.duplicateRefusal('tool name', name, this.toolSources, 'Agent.tool()'));
     }
     this.registry.push({ name, tool: tool as unknown as Tool });
+    this.toolSources.set(name, this.currentSource());
+    return this;
+  }
+
+  /**
+   * Who is registering right now: the app itself, or the recipe whose
+   * `configure` is on the stack. A fresh object per call so a later push onto
+   * the stack cannot rewrite what an earlier registration recorded.
+   */
+  private currentSource(): RecipeSource {
+    return this.recipeStack.length === 0
+      ? LOCAL_SOURCE
+      : { kind: 'recipe', stack: [...this.recipeStack] };
+  }
+
+  /**
+   * The sentence a duplicate registration gets.
+   *
+   * Two sources both being LOCAL keeps the message it has always had, to the
+   * byte: an app whose tests read that string should not have them break
+   * because a feature it does not use shipped. As soon as either side is a
+   * recipe the message names both — which is the whole point, since "I never
+   * registered a `search` tool" is true and unhelpful when a composition did.
+   */
+  private duplicateRefusal(
+    what: 'tool name' | 'injection id',
+    name: string,
+    sources: ReadonlyMap<string, RecipeSource>,
+    callSite: string,
+  ): string {
+    const existing = sources.get(name);
+    const incoming = this.currentSource();
+    if (existing?.kind === 'local' && incoming.kind === 'local') {
+      return what === 'tool name'
+        ? `Agent.tool(): duplicate tool name '${name}'`
+        : `Agent.injection(): duplicate id '${name}'`;
+    }
+    return duplicateRegistrationRefusal({ what, name, existing, incoming, callSite });
+  }
+
+  /**
+   * Apply a **recipe** — a named, versioned composition over the builder
+   * methods below (9.48.0).
+   *
+   * Every capability an agent needs already ships; what did not was a declared,
+   * versioned, inspectable unit of CONFIGURATION. So an agent's setup lived as
+   * prose in an example, was copy-pasted into an app, drifted there, and
+   * afterwards nothing on the run could say which composition produced the
+   * agent that answered. A recipe is that missing noun, and each applied one
+   * puts an `{ id, version }` row on the run manifest.
+   *
+   * `configure` runs SYNCHRONOUSLY and immediately — at the position in the
+   * chain where you wrote `.recipe()`, so declaration order is application
+   * order and a later call still wins the way it always has. There is no
+   * deferred phase, nothing to close and nothing registered anywhere: see
+   * {@link AgentRecipe} for why that limit is deliberate.
+   *
+   * **Conflicts.** A tool name or injection id a recipe introduces that is
+   * already taken refuses right here, naming BOTH sources — which recipe, or
+   * the app itself. `'error'` is the only policy (`{ conflict }`); anything
+   * else is refused by name rather than approximated.
+   *
+   * @example  an app composing two published recipes
+   * ```ts
+   * import { defineAgentRecipe } from 'agentfootprint/recipes';
+   *
+   * const agent = Agent.create({ provider, model })
+   *   .recipe(supportDesk)   // system prompt + order lookup
+   *   .recipe(housePolicy)   // the steering every agent here carries
+   *   .tool(escalate)        // and one tool this app adds itself
+   *   .build();
+   * ```
+   */
+  recipe(recipe: AgentRecipe, options?: RecipeOptions): this {
+    assertAgentRecipe(recipe, 'AgentBuilder.recipe');
+    // Resolved before anything is applied: a policy this library does not have
+    // must not half-apply a composition before it says so.
+    resolveRecipeConflictPolicy(options?.conflict, 'AgentBuilder.recipe');
+    const applied: AppliedRecipe = { id: recipe.id, version: recipe.version };
+    // TWO different facts, two different refusals. On the STACK means the
+    // composition is its own ancestor and `configure` would recurse forever; on
+    // the LIST means the chain simply names one composition twice. Telling an
+    // author their recursion is a duplicate sends them to the wrong line.
+    const applying = this.recipeStack.find((r) => r.id === applied.id);
+    if (applying) {
+      throw new Error(
+        recursiveRecipeRefusal({
+          stack: [...this.recipeStack],
+          incoming: applied,
+          callSite: 'AgentBuilder.recipe',
+        }),
+      );
+    }
+    const already = this.appliedRecipeList.find((r) => r.id === applied.id);
+    if (already) {
+      throw new Error(
+        duplicateRecipeRefusal({
+          existing: already,
+          incoming: applied,
+          callSite: 'AgentBuilder.recipe',
+        }),
+      );
+    }
+    this.recipeStack.push(applied);
+    try {
+      const returned: unknown = recipe.configure(this);
+      // `build()` is synchronous, so nothing would ever await this. Refused by
+      // name rather than left to land on an agent that is already built.
+      if (typeof (returned as { then?: unknown } | undefined)?.then === 'function') {
+        throw new Error(asyncConfigureRefusal(applied, 'AgentBuilder.recipe'));
+      }
+    } finally {
+      // `finally`, not the happy path: a refusal raised inside `configure`
+      // (a duplicate tool, say) must not leave the stack claiming a recipe is
+      // still applying — the next registration would be attributed to it.
+      this.recipeStack.pop();
+    }
+    // The manifest row is recorded only once `configure` has run CLEANLY. A
+    // recipe whose application was refused half-way has not produced this
+    // agent, and a row claiming it did would be the manifest asserting
+    // something that did not happen. (Recursion is caught by the stack above,
+    // so nothing depends on the row being written early.)
+    this.appliedRecipeList.push(applied);
     return this;
   }
 
@@ -964,7 +1114,14 @@ export class AgentBuilder {
    */
   injection(injection: Injection): this {
     if (this.injectionList.some((i) => i.id === injection.id)) {
-      throw new Error(`Agent.injection(): duplicate id '${injection.id}'`);
+      throw new Error(
+        this.duplicateRefusal(
+          'injection id',
+          injection.id,
+          this.injectionSources,
+          'Agent.injection()',
+        ),
+      );
     }
     for (const msg of injection.inject?.messages ?? []) {
       if (msg.role === 'tool') {
@@ -973,6 +1130,7 @@ export class AgentBuilder {
     }
     assertReadSkillActivation(injection);
     this.injectionList.push(injection);
+    this.injectionSources.set(injection.id, this.currentSource());
     return this;
   }
 
@@ -1599,6 +1757,11 @@ export class AgentBuilder {
         prompt: instructionText,
       }),
     );
+    // The SECOND door into the injection list (`.injection()` is the other), so
+    // it records provenance too: without this the id would read as
+    // "unattributed" in a later collision — an honest answer, but a worse one
+    // than the true "the recipe/app that called .outputSchema() mounted it".
+    this.injectionSources.set(id, this.currentSource());
     return this;
   }
 
@@ -2580,6 +2743,12 @@ export class AgentBuilder {
       skillBrains,
       this.evidenceGate,
       this.limitsTravelValue,
+      // Declaration order, and a COPY: the manifest reports what this build
+      // applied, and a later `.recipe()` on the same builder (a second
+      // `build()`) must not retroactively edit the agent already handed out.
+      // Undefined rather than `[]` when none — the manifest's "absent means not
+      // configured" law, and what keeps an agent with no recipes byte-identical.
+      this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

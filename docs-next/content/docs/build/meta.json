@@ -4,6 +4,7 @@
   "pages": [
     "---[Boxes]Primitives---",
     "agent",
+    "recipes",
     "conversations",
     "dynamic-react",
     "swarm",

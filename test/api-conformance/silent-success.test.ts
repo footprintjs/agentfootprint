@@ -695,6 +695,10 @@ const REPEATABLE_BY_DESIGN = [
   'memory',
   'messageMiddleware',
   'rag',
+  // 9.48.0 — an agent composes MANY recipes, so a second call is the point.
+  // The same-id case is refused, which is `.tool()`'s rule exactly: repeatable
+  // by design, and a duplicate NAME is what gets caught.
+  'recipe',
   'skill',
   'skills',
   'steering',

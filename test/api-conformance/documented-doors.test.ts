@@ -119,10 +119,11 @@ describe('CLAUDE.md documents exactly the doors package.json publishes', () => {
   });
 
   it('the count it claims out loud matches the count it lists', () => {
-    // The line says "THIRTEEN doors" in words. A reader skimming trusts the
-    // word over the list, so the word is pinned too.
-    expect(entryPointsLine().current).toContain('THIRTEEN');
-    expect(documentedPaths(entryPointsLine().current)).toHaveLength(13);
+    // The line says "FOURTEEN doors" in words. A reader skimming trusts the
+    // word over the list, so the word is pinned too. (`/recipes`, 9.48.0, is
+    // the fourteenth.)
+    expect(entryPointsLine().current).toContain('FOURTEEN');
+    expect(documentedPaths(entryPointsLine().current)).toHaveLength(14);
   });
 });
 
