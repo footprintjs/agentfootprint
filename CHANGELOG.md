@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.49.0] - 2026-08-18
+
 ### Added
 
 - **The `sf-` subflow prefix is RESERVED, and the doors refuse it.** Framework
