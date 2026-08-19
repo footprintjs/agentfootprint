@@ -25,9 +25,12 @@ are presentations over it.
 |---|---|---|
 | `RecordingEnvelope` | machines | **the versioned contract** — identity, completeness and drop-count facts, stamped as truths or refused. Archives, ingestion, cross-run analysis. |
 | `Trace` | humans and UIs | a redacted domain-event **projection** of the same run — see [Replay a saved run](doc:offline-replay) |
-| `exportBugReport` | humans filing issues | a zip carrying the recording plus environment facts — a presentation for [one workflow](doc:file-a-bug) |
+| `exportBugReport` | humans filing issues | a zip whose evidence **is** an envelope, wrapped in consent machinery — a presentation for [one workflow](doc:file-a-bug) |
 
-If you are choosing: archive the envelope, and derive the other two from it.
+If you are choosing: archive the envelope, and derive the other two from it. The
+bug-report zip already does — its `envelope.json` is built by the same
+`buildRecordingEnvelope` this page describes, so the producer versions are
+stamped once and read the same way in both places.
 
 ## Save one run
 

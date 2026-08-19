@@ -75,6 +75,18 @@ export interface BugReportUnit {
   readonly runCount?: number;
   /** The hosting session id, when the runs carried one. */
   readonly sessionId?: string;
+  /**
+   * Conversation units only. `true` when this conversation's evidence rides as
+   * a `RecordingEnvelope` — the archive contract, with the recording under its
+   * `recording` field; `false` when the envelope's run facts were not available
+   * and it rides as the bare recording instead.
+   *
+   * Stated per unit rather than per bundle because a bundle can be mixed: a
+   * live `recordRun` handle proves its own dropped-event count and a bare
+   * `Recording` alongside it cannot, so one conversation can be stamped while
+   * its neighbour is not. The manifest's notes name the missing fact.
+   */
+  readonly enveloped?: boolean;
   /** Files this unit puts in the bundle (a `file` unit has exactly one). */
   readonly files: readonly string[];
 }
@@ -100,7 +112,15 @@ export interface BugReportExcluded {
   readonly unitIds: readonly string[];
 }
 
-/** Versions, and deliberately nothing that identifies a machine or a person. */
+/**
+ * Versions, and deliberately nothing that identifies a machine or a person.
+ *
+ * This is the MANIFEST's summary block — the one a consent dialog and the issue
+ * body print. The bundled `environment.json` is deliberately NARROWER: since
+ * the bundle carries a {@link BugReportManifest.manifestVersion} 2 envelope,
+ * the producer versions are stamped there (`envelope.json` → `producer`) and
+ * the file keeps only the host half. One archive fact, one stamping place.
+ */
 export interface BugReportEnvironment {
   /** This library's version, read from its own package manifest. */
   readonly agentfootprint: string;
@@ -113,6 +133,46 @@ export interface BugReportEnvironment {
   readonly arch: string;
   /** The reporting application's own version, when it told us. */
   readonly appVersion?: string;
+}
+
+/**
+ * The run facts an archive envelope needs and a frozen recording cannot supply.
+ *
+ * The bundle's evidence rides as a `RecordingEnvelope` — the one archive
+ * contract this repo has — and that envelope refuses to stamp a fact it had to
+ * guess. Two of its fields have no derivation:
+ *
+ *   `complete`       nothing in a frozen recording says whether it reached the
+ *                    run's end; a crash-handler snapshot and a finished run
+ *                    look identical. Stated, or the envelope is not built.
+ *   `droppedEvents`  only the live `recordRun` handle counts what the
+ *                    `maxEvents` cap discarded.
+ *
+ * Everything else the envelope needs — `runId`, `sessionId`, `principal`,
+ * `tenant`, `startedAt`, `endedAt` — is derived per recording from that
+ * recording's OWN events, and is deliberately not settable here: a bundle may
+ * carry several runs, and one run id stated once cannot be true of all of them.
+ */
+export interface BugReportRunFacts {
+  /**
+   * Did each recording in this bundle capture its run through to the end?
+   *
+   * Say `false` for a recording frozen from a crash handler, a timeout or
+   * mid-stream. Leave the whole `run` option off and the bundle still carries
+   * the evidence — as the bare recording, with the manifest stating in a note
+   * which fact was missing and how to supply it.
+   */
+  readonly complete: boolean;
+  /**
+   * Events lost to the recorder's `maxEvents` cap, for sources that cannot
+   * prove their own count.
+   *
+   * A live `recordRun` handle counts them, and that PROVEN count wins over
+   * anything stated here — a number the library can check is never overridden
+   * by a number it cannot. State this when the bundle is built from bare
+   * `Recording` objects, whose shape carries no count.
+   */
+  readonly droppedEvents?: number;
 }
 
 /** The oversize verdict, with hints that name real, droppable unit ids. */
@@ -132,7 +192,19 @@ export interface BugReportOversize {
  * the reporter's fields, and states the exclusions.
  */
 export interface BugReportManifest {
-  readonly manifestVersion: 1;
+  /**
+   * The BUNDLE LAYOUT version — bumped when the file set or this manifest's own
+   * shape changes, so a reader can tell which archive it is holding instead of
+   * inferring it from which names happen to be present.
+   *
+   *   1 — the evidence rode as a bare `recording.json`, and `environment.json`
+   *       repeated the producer versions the archive contract stamps.
+   *   2 — the evidence rides as `envelope.json`, a full `RecordingEnvelope`;
+   *       `environment.json` keeps only the host facts the envelope does not
+   *       hold. A conversation whose run facts could not be stamped falls back
+   *       to `recording.json` and the manifest says which fact was missing.
+   */
+  readonly manifestVersion: 2;
   /** ISO 8601, UTC. Also the timestamp stamped on every zip entry. */
   readonly createdAt: string;
   /** Present on an export manifest; absent on a description. */
@@ -211,10 +283,23 @@ export interface ExportBugReportOptions extends BugReportFields {
   readonly warnOverBytes?: number;
   /** Override the timestamp — the only thing that makes the zip deterministic. */
   readonly now?: Date;
+  /**
+   * The two run facts the archive envelope cannot derive. Supply them and the
+   * bundle's evidence rides as `envelope.json`; leave them off and it rides as
+   * the bare `recording.json`, with the manifest naming the missing fact.
+   */
+  readonly run?: BugReportRunFacts;
 }
 
-/** `describeBugReport` takes nothing but the input, and the same size dial. */
+/** `describeBugReport` takes nothing but the input, and the same dials. */
 export interface DescribeBugReportOptions {
   readonly warnOverBytes?: number;
   readonly now?: Date;
+  /**
+   * The same run facts {@link ExportBugReportOptions.run} takes — pass the same
+   * value to both calls. The offer measures the files the export will write, so
+   * stating the facts to one call and not the other would size the bundle from
+   * a different set of files than the one that leaves.
+   */
+  readonly run?: BugReportRunFacts;
 }

@@ -84,7 +84,13 @@ on the investigator's. Self-explaining is a testable property, not a slogan.
 - [ ] agentfootprint reserves the `sf-` subflow-id prefix at the builder door
       (makes the adapter's framework filter lawful; limitation documented in
       footprint-pattern 43caf6c until then).
-- [ ] exportBugReport packs an envelope instead of a bare recording.json.
+- [x] exportBugReport packs an envelope instead of a bare recording.json. DONE:
+      bundle layout 2 — `envelope.json` built via `buildRecordingEnvelope` (never
+      re-implemented), `environment.json` reduced to the host facts the envelope
+      does not stamp, `run: { complete, droppedEvents }` asked for at the door and
+      REFUSED in place (a note naming the fact, evidence still packed) rather than
+      thrown, because a bug reporter who cannot name a start time must still get a
+      filable bundle.
 - [ ] footprintjs 9.15.1 release + agentfootprint dep bump so engineVersion() resolves.
 - [ ] The NEXT agentfootprint release MUST be 9.48.0 — three index rows are already
       stamped with it and become lies under any other number.

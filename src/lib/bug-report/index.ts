@@ -21,6 +21,7 @@ export type {
   BugReportInput,
   BugReportManifest,
   BugReportOversize,
+  BugReportRunFacts,
   BugReportSource,
   BugReportUnit,
   DescribeBugReportOptions,

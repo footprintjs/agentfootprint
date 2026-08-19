@@ -20,22 +20,32 @@
  * it; the two-call shape is what makes a browser consent dialog possible at
  * all, because a dialog cannot ask about a blob it has not measured.
  *
- * ## What is in the bundle
+ * ## What is in the bundle (layout 2 — `manifest.manifestVersion`)
  *
  * | file | what it is |
  * |---|---|
  * | `manifest.json` | this manifest — always present, never a selectable unit |
- * | `recording.json` | the canon `{ snapshot, events, structure }` — drops straight into `observeRecording()` |
+ * | `envelope.json` | the run as a `RecordingEnvelope`: the archive contract, with the canon `{ snapshot, events, structure }` under `recording` |
+ * | `recording.json` | the bare recording — ONLY when the envelope's run facts were not available, with the manifest naming the missing one |
  * | `conversations/<id>.json` | one file per conversation, when there is more than one run |
  * | `conversation.json` | the readable transcript, derived from the events |
  * | `narrative.txt` | the narrative recorder's lines, when one was attached |
- * | `environment.json` | versions + the reporter's prose |
+ * | `environment.json` | the HOST that ran it + the reporter's prose |
  *
- * `environment.json` is deliberately the whole environment: library version,
- * engine version, Node version, platform and architecture. **No username, no
- * hostname, no working directory, no environment variables, no file paths.**
- * A bug report should not be the way an internal directory layout leaves a
- * company.
+ * The evidence file is named for what it is, and there is never more than one
+ * of it: a bundle carrying both an envelope and a copy of the recording it
+ * already contains would double the biggest file in the archive — and the
+ * archive is store-only, so doubling is real bytes, against a ceiling a
+ * reporter has to fit under.
+ *
+ * `environment.json` is the host and NOTHING that identifies a machine: Node
+ * version, platform, architecture. **No username, no hostname, no working
+ * directory, no environment variables, no file paths.** A bug report should not
+ * be the way an internal directory layout leaves a company. The producer
+ * versions it used to repeat now live where the archive contract stamps them,
+ * in `envelope.json`'s `producer` — one fact, one place. (The manifest's own
+ * `environment` block still prints both for the human reading the issue; it is
+ * a summary, not a second archive.)
  *
  * ## Redaction is already done, and the manifest proves it
  *
@@ -64,9 +74,10 @@
  * ```
  */
 
-import type { Recording } from '../../recorders/observability/recordRun.js';
+import type { Recording, RunRecorder } from '../../recorders/observability/recordRun.js';
 import { narrativeFrom } from '../trace-toolpack/openRecording.js';
 import { engineVersion, libraryVersion } from '../libraryVersion.js';
+import { stampConversation, type EnvelopeSource } from './envelope.js';
 import { deriveTranscript, type Transcript } from './transcript.js';
 import { zipStore } from './zip.js';
 import type {
@@ -76,6 +87,7 @@ import type {
   BugReportFileSummary,
   BugReportInput,
   BugReportManifest,
+  BugReportRunFacts,
   BugReportSource,
   BugReportUnit,
   DescribeBugReportOptions,
@@ -97,7 +109,19 @@ interface NormalizedRecording {
   readonly runId?: string;
   /** Honesty notes this source forced (a runner cannot hand over events). */
   readonly notes: readonly string[];
+  /**
+   * What the archive envelope is built FROM.
+   *
+   * The live `recordRun` handle where the caller gave us one — not the
+   * recording we pulled out of it — because the handle is the only thing that
+   * counts what the `maxEvents` cap discarded, and a count that can be read is
+   * never a count that gets stated.
+   */
+  readonly envelope: EnvelopeSource;
 }
+
+/** What `withIds` can learn: the recording and the ids on its events. */
+type IdentifiedRecording = Pick<NormalizedRecording, 'recording' | 'runId' | 'sessionId'>;
 
 const isFn = (value: unknown): value is (...args: never[]) => unknown =>
   typeof value === 'function';
@@ -125,10 +149,15 @@ function normalizeOne(source: BugReportSource, index: number): NormalizedRecordi
     );
   }
 
-  // A RunRecorder — the happy path, already wired.
+  // A RunRecorder — the happy path, already wired. The HANDLE rides on to the
+  // envelope builder: it is the only source that can prove its drop count.
   if (isFn(candidate.toRecording)) {
     const recording = (candidate.toRecording as () => Recording)();
-    return { ...withIds(recording), notes: [] };
+    return {
+      ...withIds(recording),
+      notes: [],
+      envelope: { source: source as RunRecorder, countsDrops: true },
+    };
   }
 
   // A Runner — two of the three pieces, honestly labelled.
@@ -149,6 +178,7 @@ function normalizeOne(source: BugReportSource, index: number): NormalizedRecordi
     };
     return {
       ...withIds(recording),
+      envelope: { source: recording, countsDrops: false },
       notes: [
         'Exported from a runner AFTER its run, so this bundle has the state and the chart ' +
           'but NO event timeline and no transcript: events are delivered live and dropped ' +
@@ -173,7 +203,7 @@ function normalizeOne(source: BugReportSource, index: number): NormalizedRecordi
               'transcript. Events are collected as a run happens — call recordRun(agent) ' +
               'BEFORE run(), then export what it gives you.',
           ];
-    return { ...withIds(recording), notes };
+    return { ...withIds(recording), notes, envelope: { source: recording, countsDrops: false } };
   }
 
   throw new TypeError(
@@ -184,7 +214,7 @@ function normalizeOne(source: BugReportSource, index: number): NormalizedRecordi
 }
 
 /** Read the run / session ids off the first event that carries them. */
-function withIds(recording: Recording): Omit<NormalizedRecording, 'notes'> {
+function withIds(recording: Recording): IdentifiedRecording {
   for (const event of recording.events ?? []) {
     const meta = asRecord(asRecord(event)?.meta);
     if (!meta) continue;
@@ -206,6 +236,8 @@ interface Conversation {
   readonly sessionId?: string;
   readonly runIds: readonly string[];
   readonly recordings: readonly Recording[];
+  /** Parallel to {@link recordings} — what each one's envelope is built from. */
+  readonly sources: readonly EnvelopeSource[];
   readonly events: readonly unknown[];
   readonly transcript?: Transcript;
 }
@@ -242,6 +274,7 @@ function groupConversations(sources: readonly NormalizedRecording[]): Conversati
       ...(sessionId !== undefined && { sessionId }),
       runIds,
       recordings: group.map((entry) => entry.recording),
+      sources: group.map((entry) => entry.envelope),
       events,
       ...(transcript !== undefined && { transcript }),
     };
@@ -290,16 +323,39 @@ const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 const byteLength = (text: string): number => encoder.encode(text).length;
 
-function environmentOf(appVersion?: string): BugReportEnvironment {
+/** The HOST that ran it — and nothing that identifies a machine or a person. */
+interface BugReportHost {
+  readonly node: string;
+  readonly platform: string;
+  readonly arch: string;
+  readonly appVersion?: string;
+}
+
+function hostOf(appVersion?: string): BugReportHost {
   const proc = (globalThis as { process?: { version?: string; platform?: string; arch?: string } })
     .process;
   return {
-    agentfootprint: libraryVersion(),
-    footprintjs: engineVersion(),
     node: typeof proc?.version === 'string' ? proc.version : 'unknown',
     platform: typeof proc?.platform === 'string' ? proc.platform : 'unknown',
     arch: typeof proc?.arch === 'string' ? proc.arch : 'unknown',
     ...(appVersion !== undefined && { appVersion }),
+  };
+}
+
+/**
+ * The manifest's environment block — the host PLUS the producer versions.
+ *
+ * The versions are here and not in `environment.json` because this block is a
+ * SUMMARY for a human: it is what a consent dialog shows and what the issue
+ * body prints, and it is the only version statement a reader gets when a
+ * conversation's run facts were missing and no envelope could be stamped. The
+ * archive's copy of the same two facts is stamped once, by the envelope.
+ */
+function environmentOf(appVersion?: string): BugReportEnvironment {
+  return {
+    agentfootprint: libraryVersion(),
+    footprintjs: engineVersion(),
+    ...hostOf(appVersion),
   };
 }
 
@@ -325,7 +381,16 @@ interface Plan {
   readonly redactedKeys: readonly string[];
 }
 
-function plan(input: BugReportInput, fields?: ExportBugReportOptions): Plan {
+function plan(
+  input: BugReportInput,
+  fields?: ExportBugReportOptions,
+  runFacts?: BugReportRunFacts,
+): Plan {
+  // `describeBugReport` has no `fields` to carry them on, so the facts are their
+  // own parameter — but an export passes both, and reading only the parameter
+  // would silently drop a caller's `run` if a future call site forgot to thread
+  // it. Prefer the explicit one, fall back to the options object.
+  const facts = runFacts ?? fields?.run;
   const sources = (Array.isArray(input) ? input : [input]) as readonly BugReportSource[];
   if (sources.length === 0) {
     throw new TypeError(
@@ -359,17 +424,43 @@ function plan(input: BugReportInput, fields?: ExportBugReportOptions): Plan {
   >();
   const units: BugReportUnit[] = [];
 
+  // Refusals are collected by REASON: three conversations that all lack the
+  // same stated fact are one note naming three ids, not three notes. One reason
+  // means one refused field, so the field rides along with the ids.
+  const refusals = new Map<string, { ids: string[]; field?: string }>();
+
   for (const conversation of conversations) {
-    // One run, one conversation → the canon shape under the canon name, so the
-    // file drops straight into `observeRecording()` with no unwrapping.
-    const name = single ? 'recording.json' : `conversations/${conversation.id}.json`;
+    const stamped = stampConversation(conversation.sources, facts);
+    if (stamped.refusal !== undefined) {
+      const named = refusals.get(stamped.refusal) ?? {
+        ids: [],
+        ...(stamped.field !== undefined && { field: stamped.field }),
+      };
+      named.ids.push(conversation.id);
+      refusals.set(stamped.refusal, named);
+    }
+
+    // One run, one conversation → one file at the root of the bundle, named for
+    // what is actually in it: the archive envelope, or the bare recording when
+    // the envelope's run facts were not available.
+    const name = single
+      ? stamped.envelopes
+        ? 'envelope.json'
+        : 'recording.json'
+      : `conversations/${conversation.id}.json`;
     const body = single
-      ? conversation.recordings[0]
+      ? stamped.envelopes
+        ? stamped.envelopes[0]
+        : conversation.recordings[0]
       : {
           id: conversation.id,
           ...(conversation.sessionId !== undefined && { sessionId: conversation.sessionId }),
           runIds: conversation.runIds,
-          recordings: conversation.recordings,
+          // One key or the other, never both: the envelope already holds the
+          // recording, and a store-only zip pays for every duplicated byte.
+          ...(stamped.envelopes
+            ? { envelopes: stamped.envelopes }
+            : { recordings: conversation.recordings }),
         };
     const text = json(body);
     const turnCount = conversation.transcript?.turns.length ?? 0;
@@ -390,8 +481,30 @@ function plan(input: BugReportInput, fields?: ExportBugReportOptions): Plan {
       turnCount,
       runCount: conversation.recordings.length,
       ...(conversation.sessionId !== undefined && { sessionId: conversation.sessionId }),
+      enveloped: stamped.envelopes !== undefined,
       files: [name],
     });
+  }
+
+  // A conversation that could not be enveloped is still in the bundle, whole —
+  // what it lost is the archive contract around it, and losing that quietly is
+  // exactly the drift this fold exists to end. So the reason is stated, by
+  // conversation id, with the one line that supplies the missing fact.
+  for (const [reason, { ids, field }] of refusals) {
+    // Only two of the envelope's facts can be stated at THIS door. When the
+    // refusal names any of the others, the builder's "state run.startedAt"
+    // advice is addressed to persistRecording, not to a bug reporter — saying
+    // so beats sending them looking for an option that is not there.
+    const settableHere = field === 'complete' || field === 'droppedEvents';
+    notes.push(
+      `${ids.join(', ')} ride${ids.length === 1 ? 's' : ''} as the bare recording rather than ` +
+        `an archive envelope: ${reason}` +
+        (settableHere
+          ? ''
+          : ' — of these, exportBugReport can state only run.complete and run.droppedEvents; ' +
+            "every other envelope fact is read from the recording's own events, so this one is " +
+            'fixed at recording time, not at export time.'),
+    );
   }
 
   // ── Derived file units ───────────────────────────────────────────
@@ -457,12 +570,16 @@ function plan(input: BugReportInput, fields?: ExportBugReportOptions): Plan {
     );
   }
 
-  // The environment is the same whichever conversations ride along.
+  // The host is the same whichever conversations ride along. What is NOT here
+  // any more: `agentfootprint` and `footprintjs`. Those are producer facts, and
+  // the archive contract stamps them in `envelope.json` — a second copy in a
+  // second file is a second thing to keep in step, which is how the two shapes
+  // drifted in the first place.
   const environmentFile: PlannedFile = {
     name: 'environment.json',
     unitId: 'file-environment',
     text: json({
-      ...environmentOf(fields?.appVersion),
+      ...hostOf(fields?.appVersion),
       ...(fields && {
         report: {
           title: fields.title,
@@ -478,7 +595,9 @@ function plan(input: BugReportInput, fields?: ExportBugReportOptions): Plan {
   units.push({
     id: 'file-environment',
     kind: 'file',
-    label: 'environment.json — library, engine, Node and platform versions (no machine identity)',
+    label:
+      'environment.json — the host that ran it: Node, platform, architecture ' +
+      '(no machine identity; the library versions are stamped in the envelope)',
     bytes: byteLength(environmentFile.text),
     files: ['environment.json'],
   });
@@ -552,7 +671,7 @@ function manifestFor(args: {
   }
 
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
     createdAt: createdAt.toISOString(),
     ...(fields && {
       report: {
@@ -666,7 +785,7 @@ export function describeBugReport(
   input: BugReportInput,
   options: DescribeBugReportOptions = {},
 ): BugReportManifest {
-  const planned = plan(input);
+  const planned = plan(input, undefined, options.run);
   const createdAt = options.now ?? new Date();
   const limitBytes = options.warnOverBytes ?? DEFAULT_WARN_OVER_BYTES;
   const selected = planned.units.map((unit) => unit.id);
@@ -732,7 +851,7 @@ export function exportBugReport(input: BugReportInput, options: ExportBugReportO
     );
   }
 
-  const planned = plan(input, options);
+  const planned = plan(input, options, options.run);
   const known = new Set(planned.units.map((unit) => unit.id));
   const selected = options.include ? [...new Set(options.include)] : [...known];
 

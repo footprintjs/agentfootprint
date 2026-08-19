@@ -11,8 +11,9 @@
  *   P5 Security     — redacted keys listed BY NAME (never values); no machine
  *                     identity in environment.json
  *   P6 Performance  — the oversize warning names a real, droppable unit id
- *   P7 ROI          — the bundle's recording.json is the canon shape, so it
- *                     drops straight into the viewers with no adapter
+ *   P7 ROI          — the bundle's evidence is the ONE archive contract
+ *                     (`RecordingEnvelope`), so it drops into the viewers and
+ *                     the archive readers with no adapter
  *
  * Mock provider only: no key, no network, deterministic.
  */
@@ -21,10 +22,22 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/doors/providers.js';
-import { describeBugReport, exportBugReport, recordRun } from '../../../src/doors/observe.js';
-import type { Recording } from '../../../src/doors/observe.js';
+import {
+  describeBugReport,
+  exportBugReport,
+  recordRun,
+  RECORDING_ENVELOPE_FORMAT,
+} from '../../../src/doors/observe.js';
+import type { Recording, RunRecorder } from '../../../src/doors/observe.js';
 
 const FIXED = new Date(Date.UTC(2026, 7, 11, 9, 0, 0));
+
+/**
+ * The two run facts a bug report can state. A bare `Recording` carries no drop
+ * count, so a bundle built from one has to say `droppedEvents` out loud — which
+ * is the whole point of the envelope refusing to assume `0`.
+ */
+const RUN_FACTS = { complete: true, droppedEvents: 0 } as const;
 
 const FIELDS = {
   title: 'Agent answered with a stale price',
@@ -136,7 +149,26 @@ async function realRecording(sessionId?: string): Promise<Recording> {
 // ─── P1 Unit ─────────────────────────────────────────────────────────
 
 describe('exportBugReport — P1 unit', () => {
-  it('P1 a single recording becomes manifest.json + recording.json + the derived files', () => {
+  it('P1 a single recording with its run facts becomes manifest + envelope + the derived files', () => {
+    const report = exportBugReport(fakeRecording({ narrative: ['seed ran'] }), {
+      ...FIELDS,
+      run: RUN_FACTS,
+      now: FIXED,
+    });
+    expect(report.files.map((file) => file.name)).toEqual([
+      'manifest.json',
+      'envelope.json',
+      'conversation.json',
+      'narrative.txt',
+      'environment.json',
+    ]);
+    expect(report.files[0]!.name).toBe('manifest.json');
+    // The layout can say which layout it is — an archive that cannot is the
+    // defect this fold exists to close.
+    expect(report.manifest.manifestVersion).toBe(2);
+  });
+
+  it('P1 without the run facts the evidence rides bare, under its own honest name', () => {
     const report = exportBugReport(fakeRecording({ narrative: ['seed ran'] }), {
       ...FIELDS,
       now: FIXED,
@@ -148,7 +180,7 @@ describe('exportBugReport — P1 unit', () => {
       'narrative.txt',
       'environment.json',
     ]);
-    expect(report.files[0]!.name).toBe('manifest.json');
+    expect(report.manifest.units[0]).toMatchObject({ id: 'conv-1', enveloped: false });
   });
 
   it('P1 the manifest counts what is in the bundle', () => {
@@ -214,6 +246,34 @@ describe('exportBugReport — P2 boundary', () => {
     const recording = JSON.parse(filesOf(report).get('recording.json')!) as Recording;
     expect(recording.snapshot).toBeDefined();
     expect(recording.structure).toBeDefined();
+  });
+
+  it('P2 a runner cannot be enveloped, and the note says the fix is at RECORDING time', async () => {
+    const agent = Agent.create({
+      provider: mock({ respond: () => ({ content: 'hi', toolCalls: [], stopReason: 'stop' }) }),
+      model: 'mock',
+    }).build();
+    await agent.run({ message: 'hello' });
+
+    // Stating the run facts is not enough: an envelope names ONE run, and the
+    // run id lives in the event meta a runner cannot hand over.
+    const report = exportBugReport(agent, { ...FIELDS, run: RUN_FACTS, now: FIXED });
+    expect(report.files.map((file) => file.name)).toContain('recording.json');
+    expect(report.files.map((file) => file.name)).not.toContain('envelope.json');
+    const note = report.manifest.notes.find((line) => line.includes('bare recording'))!;
+    expect(note).toMatch(/conv-1 rides as the bare recording/);
+    expect(note).toMatch(/cannot determine run\.runId/);
+    expect(note).toMatch(/fixed at recording time, not at export time/);
+  });
+
+  it('P2 no run facts at all: the refusal names run.complete and the line that supplies it', () => {
+    const manifest = describeBugReport(fakeRecording({}));
+    const note = manifest.notes.find((line) => line.includes('bare recording'))!;
+    expect(note).toMatch(/run\.complete was not stated/);
+    expect(note).toMatch(/run: \{ complete: true \}/);
+    // The fix IS available at this door, so the note must not send the reporter
+    // to recording time for it.
+    expect(note).not.toMatch(/fixed at recording time/);
   });
 
   it('P2 a runner that has not run is refused, naming the fix', () => {
@@ -380,6 +440,78 @@ describe('exportBugReport — P4 property (selection)', () => {
     expect(report.manifest.warnings.join(' ')).not.toMatch(/deliberately excluded/);
   });
 
+  it('P4 the evidence is never packed twice — an envelope OR a recording, never both', () => {
+    const inputs: { what: string; report: ReturnType<typeof exportBugReport> }[] = [
+      {
+        what: 'one recording, facts stated',
+        report: exportBugReport(fakeRecording({}), { ...FIELDS, run: RUN_FACTS, now: FIXED }),
+      },
+      {
+        what: 'one recording, no facts',
+        report: exportBugReport(fakeRecording({}), { ...FIELDS, now: FIXED }),
+      },
+      {
+        what: 'three recordings, facts stated',
+        report: exportBugReport(three(), { ...FIELDS, run: RUN_FACTS, now: FIXED }),
+      },
+      {
+        what: 'three recordings, no facts',
+        report: exportBugReport(three(), { ...FIELDS, now: FIXED }),
+      },
+    ];
+    for (const { what, report } of inputs) {
+      const names = report.files.map((file) => file.name);
+      const bothRoots = names.includes('envelope.json') && names.includes('recording.json');
+      expect(bothRoots, `${what}: the bundle carries the run twice`).toBe(false);
+      // …and inside a conversation file, one key or the other.
+      for (const file of report.files.filter((f) => f.name.startsWith('conversations/'))) {
+        const body = JSON.parse(file.text) as Record<string, unknown>;
+        expect(
+          'envelopes' in body && 'recordings' in body,
+          `${what}: ${file.name} carries the run twice`,
+        ).toBe(false);
+        expect('envelopes' in body || 'recordings' in body).toBe(true);
+      }
+      // The zip is stored, so a doubled recording is doubled bytes: the whole
+      // archive must stay within a hair of the sum of its named files.
+      const payload = report.files.reduce((sum, file) => sum + file.bytes.length, 0);
+      expect(report.zip.length).toBeLessThan(payload + 1000);
+    }
+  });
+
+  it('P4 a PROVEN dropped-event count beats a stated one, in both directions', () => {
+    // A live handle counts what the cap discarded. A caller stating something
+    // else is stating a number the library can CHECK — and checking wins.
+    const handleThatDropped = (dropped: number): RunRecorder =>
+      ({
+        toRecording: () => fakeRecording({ runId: 'r-proof' }),
+        droppedEvents: dropped,
+      } as unknown as RunRecorder);
+
+    // Proven 0, stated 5: the envelope reports 0.
+    const clean = exportBugReport(handleThatDropped(0), {
+      ...FIELDS,
+      run: { complete: true, droppedEvents: 5 },
+      now: FIXED,
+    });
+    const envelope = JSON.parse(filesOf(clean).get('envelope.json')!) as {
+      run: { droppedEvents: number };
+    };
+    expect(envelope.run.droppedEvents).toBe(0);
+
+    // Proven 12, stated 0: the truth is that the head of the stream is gone, so
+    // no start time can be read — and the envelope refuses rather than reading
+    // one off an event that is not the run's first. Had the stated 0 won, this
+    // bundle would carry a confidently wrong `startedAt`.
+    const lossy = exportBugReport(handleThatDropped(12), {
+      ...FIELDS,
+      run: { complete: true, droppedEvents: 0 },
+      now: FIXED,
+    });
+    expect(lossy.files.map((file) => file.name)).not.toContain('envelope.json');
+    expect(lossy.manifest.notes.join(' ')).toMatch(/cannot determine run\.startedAt/);
+  });
+
   it('P4 describeBugReport offers every unit with its own size and counts', () => {
     const manifest = describeBugReport(three());
     const conv2 = manifest.units.find((unit) => unit.id === 'conv-2')!;
@@ -415,20 +547,20 @@ describe('exportBugReport — P5 security', () => {
     );
   });
 
-  it('P5 environment.json carries versions and NO machine identity', () => {
-    const report = exportBugReport(fakeRecording({}), { ...FIELDS, now: FIXED });
+  it('P5 environment.json carries the HOST and NO machine identity — and no producer facts', () => {
+    const report = exportBugReport(fakeRecording({}), { ...FIELDS, run: RUN_FACTS, now: FIXED });
     const environment = JSON.parse(filesOf(report).get('environment.json')!) as Record<
       string,
       unknown
     >;
-    expect(Object.keys(environment).sort()).toEqual([
-      'agentfootprint',
-      'arch',
-      'footprintjs',
-      'node',
-      'platform',
-      'report',
-    ]);
+    // The producer versions are the ENVELOPE's to stamp. Two files claiming the
+    // same two facts is how these shapes drifted apart in the first place.
+    expect(Object.keys(environment).sort()).toEqual(['arch', 'node', 'platform', 'report']);
+    const envelope = JSON.parse(filesOf(report).get('envelope.json')!) as {
+      producer: { agentfootprintVersion: string; footprintjsVersion: string };
+    };
+    expect(envelope.producer.agentfootprintVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(envelope.producer).toHaveProperty('footprintjsVersion');
     const text = filesOf(report).get('environment.json')!;
     for (const leak of [
       process.cwd(),
@@ -496,7 +628,31 @@ describe('exportBugReport — P6 performance', () => {
 // ─── P7 ROI ──────────────────────────────────────────────────────────
 
 describe('exportBugReport — P7 ROI', () => {
-  it('P7 recording.json is the CANON shape — no unwrapping in the viewer', async () => {
+  it('P7 envelope.json is the ONE archive contract, recording unmodified inside it', async () => {
+    const report = exportBugReport(await realRecording(), {
+      ...FIELDS,
+      run: RUN_FACTS,
+      now: FIXED,
+    });
+    const envelope = JSON.parse(filesOf(report).get('envelope.json')!) as Record<string, unknown>;
+    expect(envelope.format).toBe(RECORDING_ENVELOPE_FORMAT);
+    expect(Object.keys(envelope).sort()).toEqual([
+      'configuration',
+      'format',
+      'privacy',
+      'producer',
+      'recording',
+      'run',
+    ]);
+    // The canon `{ snapshot, events, structure }` is one field in — the same
+    // bytes a viewer reads, now with a statement of which run they are.
+    const recording = envelope.recording as Record<string, unknown>;
+    expect(Object.keys(recording).sort()).toEqual(['events', 'snapshot', 'structure']);
+    expect(Array.isArray(recording.events)).toBe(true);
+    expect(envelope.run).toMatchObject({ complete: true, droppedEvents: 0 });
+  });
+
+  it('P7 recording.json is the CANON shape when the envelope could not be stamped', async () => {
     const report = exportBugReport(await realRecording(), { ...FIELDS, now: FIXED });
     const parsed = JSON.parse(filesOf(report).get('recording.json')!) as Record<string, unknown>;
     expect(Object.keys(parsed).sort()).toEqual(['events', 'snapshot', 'structure']);
@@ -506,12 +662,19 @@ describe('exportBugReport — P7 ROI', () => {
   it('P7 many conversations become one file each, keyed by the unit id', () => {
     const report = exportBugReport(
       [fakeRecording({ runId: 'r1' }), fakeRecording({ runId: 'r2' })],
-      { ...FIELDS, now: FIXED },
+      { ...FIELDS, run: RUN_FACTS, now: FIXED },
     );
     const names = report.files.map((file) => file.name);
     expect(names).toContain('conversations/conv-1.json');
     expect(names).toContain('conversations/conv-2.json');
     expect(names).not.toContain('recording.json');
+    expect(names).not.toContain('envelope.json');
+    const conversation = JSON.parse(filesOf(report).get('conversations/conv-1.json')!) as {
+      envelopes: { format: string }[];
+    };
+    expect(conversation.envelopes.map((envelope) => envelope.format)).toEqual([
+      RECORDING_ENVELOPE_FORMAT,
+    ]);
   });
 
   it('P7 describe then export is the whole consent flow, in two calls', () => {
@@ -521,5 +684,25 @@ describe('exportBugReport — P7 ROI', () => {
     const report = exportBugReport(input, { ...FIELDS, include: consented, now: FIXED });
     expect(report.manifest.selected).toEqual(consented);
     expect(report.zip.length).toBeGreaterThan(0);
+  });
+
+  it('P7 the offer measures the files the export will actually write', () => {
+    // A dialog that measured a bare recording and then sent an envelope would
+    // have asked the human to consent to a bundle that never existed.
+    const input = fakeRecording({ runId: 'r1' });
+    const offer = describeBugReport(input, { run: RUN_FACTS });
+    const report = exportBugReport(input, { ...FIELDS, run: RUN_FACTS, now: FIXED });
+    expect(offer.units.map((unit) => unit.files)).toEqual(
+      report.manifest.units.map((unit) => unit.files),
+    );
+    expect(offer.units.find((unit) => unit.id === 'conv-1')).toMatchObject({
+      enveloped: true,
+      files: ['envelope.json'],
+    });
+    // Same unit, same bytes: only manifest.json (which the offer cannot yet
+    // measure) separates the two totals.
+    expect(offer.units.find((unit) => unit.id === 'conv-1')!.bytes).toBe(
+      report.manifest.units.find((unit) => unit.id === 'conv-1')!.bytes,
+    );
   });
 });

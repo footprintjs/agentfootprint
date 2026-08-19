@@ -40,7 +40,8 @@ import {
   exportBugReport,
   githubBugReporter,
   recordRun,
-  type Recording,
+  RECORDING_ENVELOPE_FORMAT,
+  type RunRecorder,
 } from '../../src/doors/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
@@ -58,8 +59,15 @@ export const meta: ExampleMeta = {
   tags: ['observability', 'bug-report', 'evidence', 'consent', 'github', 'zip'],
 };
 
-/** One recorded turn of a real (mock-backed) agent. */
-async function recordOneTurn(message: string, sessionId: string): Promise<Recording> {
+/**
+ * One recorded turn of a real (mock-backed) agent.
+ *
+ * Returns the RECORDER, not the recording it holds: the live handle is the only
+ * thing that counts what the event cap discarded, so handing it to the export
+ * is what lets the bundle's envelope report `droppedEvents` as a fact rather
+ * than refuse it.
+ */
+async function recordOneTurn(message: string, sessionId: string): Promise<RunRecorder> {
   let call = 0;
   const provider = mock({
     respond: () => {
@@ -88,9 +96,8 @@ async function recordOneTurn(message: string, sessionId: string): Promise<Record
 
   const recorder = recordRun(agent); // BEFORE the run — always
   await agent.run({ message }, { sessionId });
-  const recording = recorder.toRecording();
-  recorder.stop();
-  return recording;
+  recorder.stop(); // the events already captured stay readable
+  return recorder;
 }
 
 /** The entry names in a zip, read out of its central directory. */
@@ -127,7 +134,9 @@ export async function run(input: string): Promise<unknown> {
   const unrelated = await recordOneTurn('and what about B-2?', 'session-unrelated');
 
   // ── STEP 1: measure. Nothing has left yet. ───────────────────────────
-  const offer = describeBugReport([broken, unrelated]);
+  // Same `run` facts as the export below: the offer must measure the files the
+  // export will really write, or the human consents to a bundle that never was.
+  const offer = describeBugReport([broken, unrelated], { run: { complete: true } });
   console.log('What would be sent:\n');
   for (const unit of offer.units) {
     console.log(`  [ ] ${unit.id.padEnd(18)} ${(unit.bytes / 1024).toFixed(1)} KB  ${unit.label}`);
@@ -152,6 +161,10 @@ export async function run(input: string): Promise<unknown> {
     expected: 'the updated price',
     actual: 'the price from before the update',
     appVersion: '4.2.0',
+    // The two facts no frozen recording can answer. State them and the evidence
+    // rides in the archive envelope; leave them off and it rides bare, with the
+    // manifest naming the fact that was missing.
+    run: { complete: true },
   });
 
   console.log(`Bundle: ${report.filename} (${(report.zip.length / 1024).toFixed(1)} KB)`);
@@ -172,6 +185,32 @@ export async function run(input: string): Promise<unknown> {
     !report.files.find((file) => file.name === 'conversation.json')!.text.includes('conv-2'),
     'and out of the derived transcript too',
   );
+
+  // ── The evidence rides in the ONE archive contract ───────────────────
+  // `conversations/conv-1.json` holds RecordingEnvelopes, not bare recordings:
+  // the same wrapper `persistRecording` writes, so a bug-report zip and a run
+  // archive are read by the same code.
+  const conversationFile = report.files.find((file) => file.name === 'conversations/conv-1.json')!;
+  const envelopes = (JSON.parse(conversationFile.text) as { envelopes?: { format: string }[] })
+    .envelopes;
+  check(envelopes?.[0]?.format === RECORDING_ENVELOPE_FORMAT, 'the evidence is an envelope');
+  check(
+    report.manifest.units.find((unit) => unit.id === 'conv-1')?.enveloped === true,
+    'and the manifest says so, per conversation',
+  );
+
+  // The producer facts are stamped ONCE. environment.json is the host and the
+  // reporter's prose; the library versions live in the envelope that produced
+  // the bytes.
+  const environment = JSON.parse(
+    report.files.find((file) => file.name === 'environment.json')!.text,
+  ) as Record<string, unknown>;
+  check(
+    !('agentfootprint' in environment) && !('footprintjs' in environment),
+    'environment.json does not repeat the producer versions',
+  );
+  check(typeof environment.node === 'string', 'environment.json still carries the host');
+  check(report.manifest.manifestVersion === 2, 'the bundle can say which layout it is');
 
   // The zip is a real zip: write it, read its directory back.
   const dir = mkdtempSync(join(tmpdir(), 'af-bug-'));

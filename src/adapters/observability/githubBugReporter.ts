@@ -598,10 +598,26 @@ function issueBody(args: {
             `to maintainers — this issue links it but does not contain it.`,
     );
   }
+  // Name the shape that is REALLY in this bundle. A conversation whose run
+  // facts were stated rides as an archive envelope; one whose facts were
+  // missing rides as the bare recording, and a bundle can be mixed. Printing
+  // one sentence for all three cases would send a maintainer looking for a file
+  // that is not there, so each case gets its own.
+  const included = manifest.units.filter(
+    (unit) => unit.kind === 'conversation' && manifest.selected.includes(unit.id),
+  );
+  const enveloped = included.filter((unit) => unit.enveloped === true).length;
+  const opener = 'Open it with `observeRecording()` (agentfootprint-lens) or the trace tools';
   lines.push(
     '',
-    'Open it with `observeRecording()` (agentfootprint-lens) or the trace tools — ' +
-      '`recording.json` is the canon `{ snapshot, events, structure }`.',
+    enveloped === 0
+      ? `${opener} — \`recording.json\` is the canon \`{ snapshot, events, structure }\`.`
+      : enveloped === included.length
+      ? `${opener} — the evidence is a recording envelope, and the canon ` +
+        '`{ snapshot, events, structure }` is its `recording` field.'
+      : `${opener}. ${enveloped} of ${included.length} conversations ride as recording ` +
+        'envelopes (the canon `{ snapshot, events, structure }` is under `recording`); the ' +
+        'rest are bare recordings, and the notes below say which fact was missing.',
     '',
   );
 

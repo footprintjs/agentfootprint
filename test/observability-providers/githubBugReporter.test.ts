@@ -66,11 +66,17 @@ function recording(options: { secretInState?: string } = {}): Recording {
   };
 }
 
-const report = (options: { secretInState?: string; oversize?: boolean } = {}): BugReport =>
+const report = (
+  options: { secretInState?: string; oversize?: boolean; enveloped?: boolean } = {},
+): BugReport =>
   exportBugReport(recording(options), {
     ...FIELDS,
     now: FIXED,
     ...(options.oversize && { warnOverBytes: 100 }),
+    // Stating the run facts is what puts the archive envelope in the bundle;
+    // without them the same evidence rides as a bare recording, and the issue
+    // body has to name whichever one is really there.
+    ...(options.enveloped && { run: { complete: true as const, droppedEvents: 0 } }),
   });
 
 // ── A scripted GitHub ────────────────────────────────────────────────
@@ -238,6 +244,30 @@ describe('githubBugReporter — P1 unit', () => {
     expect(body.body).toContain('https://github.example/blob/main/bug-reports/');
     expect(body.body).toContain('### Environment');
     expect(body.body).toContain('node ');
+  });
+
+  it('P1 the issue body names the evidence file that is REALLY in the bundle', async () => {
+    // Enveloped: the canon shape is one field in, and the body says so rather
+    // than sending a maintainer to look for a recording.json that is not there.
+    const stamped = await (async () => {
+      const { reporter, github } = reporterFor({ repoPrivate: true });
+      await reporter.file(report({ enveloped: true }));
+      return (JSON.parse(github.calls[2]!.body) as { body: string }).body;
+    })();
+    expect(stamped).toContain('| `envelope.json` |');
+    expect(stamped).toContain('the evidence is a recording envelope');
+    expect(stamped).toContain('`recording` field');
+    expect(stamped).not.toContain('`recording.json` is the canon');
+
+    // Not enveloped: the older sentence, because it is the true one here.
+    const bare = await (async () => {
+      const { reporter, github } = reporterFor({ repoPrivate: true });
+      await reporter.file(report());
+      return (JSON.parse(github.calls[2]!.body) as { body: string }).body;
+    })();
+    expect(bare).toContain('| `recording.json` |');
+    expect(bare).toContain('`recording.json` is the canon');
+    expect(bare).not.toContain('recording envelope');
   });
 
   it('P1 the zip travels as base64, and decodes back to the same bytes', async () => {

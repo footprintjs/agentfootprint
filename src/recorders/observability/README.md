@@ -27,13 +27,30 @@ an audit found them drifting toward overlap:
 |---|---|---|
 | `RecordingEnvelope` (here) | machines | THE versioned contract — the narrow waist. Identity, completeness and drop-count facts stamped as truths or refused. Archives, ingestion, cross-run analysis. |
 | `Trace` v1 (`trace.ts`) | humans + UIs | a redacted domain-event PROJECTION of the same run — a presentation, not the contract |
-| `exportBugReport` (`src/lib/bug-report/`) | humans filing issues | a zip carrying the bare recording plus environment facts — a presentation for one workflow |
+| `exportBugReport` (`src/lib/bug-report/`) | humans filing issues | a zip whose evidence IS an envelope, wrapped in consent machinery (selectable units, redacted-key names, a size ceiling) — a presentation for one workflow |
 
-The rule going forward: the envelope is the contract; the other two are
-presentations OVER it. `exportBugReport` predates the envelope and still packs a
-bare `recording.json` — folding it over an envelope is a follow-up, recorded in
-the Pattern-program ADR, so the producer facts it duplicates (`libraryVersion`,
-`engineVersion`) are stamped once, in one place.
+The rule: the envelope is the contract; the other two are presentations OVER it.
+
+**The fold has happened** (bundle layout 2). `exportBugReport` used to pack a
+bare `recording.json` beside an `environment.json` that repeated the producer
+facts the envelope stamps. It now builds the envelope through
+`buildRecordingEnvelope` — never a second implementation — so `libraryVersion` /
+`engineVersion` are stamped once, in `envelope.json`'s `producer`, and
+`environment.json` keeps only the host half (Node, platform, architecture).
+
+Two consequences worth knowing:
+
+- **The bug report cannot state every envelope fact, so it refuses in place
+  rather than throwing.** `exportBugReport` takes `run: { complete, droppedEvents }`
+  and nothing else — a bundle may hold several runs, and one `runId` or
+  `startedAt` stated once cannot be true of all of them. When a fact is
+  missing, that conversation rides as `recording.json` and the manifest names
+  the fact: a reporter still gets a filable bundle, and nothing is stamped that
+  was not known.
+- **The evidence is never packed twice.** An envelope OR a bare recording, at
+  the root or inside a `conversations/<id>.json`, never both — the zip is
+  store-only, so a duplicated recording is duplicated bytes against the ceiling
+  the trim hints are trying to keep the reporter under.
 
 ## Saving a run: `recordRun` → `RecordingEnvelope` → a sink
 

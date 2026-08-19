@@ -62,7 +62,7 @@ for (const unit of offer.units) {
 [ ] conv-1             357.3 KB  conv-1 — session session-broken: 1 run, 1 turn, 37 events
 [ ] conv-2             356.6 KB  conv-2 — session session-unrelated: 1 run, 1 turn, 37 events
 [ ] file-conversation    1.7 KB  conversation.json — the readable transcript
-[ ] file-environment     0.1 KB  environment.json — library, engine, Node and platform versions
+[ ] file-environment     0.1 KB  environment.json — the host that ran it: Node, platform, architecture
 
 total 715.8 KB · 74 events · 2 turns · redacted keys: none
 ```
@@ -86,6 +86,7 @@ const report = exportBugReport([broken, unrelated], {
   expected: 'the updated price',
   actual: 'the price from before the update',
   appVersion: '4.2.0',
+  run: { complete: true },        // see "The run facts" below
 });
 
 fs.writeFileSync(report.filename, report.zip);
@@ -109,15 +110,47 @@ repeats it. A maintainer reading turn 4 must be able to tell that turns 1–3 we
 | file | what it is |
 |---|---|
 | `manifest.json` | the manifest, reflecting the selection — always present |
-| `recording.json` | the canon `{ snapshot, events, structure }` — drops straight into `observeRecording()` |
+| `envelope.json` | the run as a [recording envelope](doc:recordings) — the archive contract, with the canon `{ snapshot, events, structure }` under its `recording` field |
+| `recording.json` | the bare recording — **only** when the envelope's run facts were not available (see below) |
 | `conversations/<id>.json` | one file per conversation, when there is more than one run |
 | `conversation.json` | the readable transcript — prompts, model replies, tool calls and results |
 | `narrative.txt` | the narrative recorder's lines, when one was attached |
-| `environment.json` | library, engine, Node and platform versions, plus the reporter's prose |
+| `environment.json` | the host that ran it — Node, platform, architecture — plus the reporter's prose |
 
-`environment.json` is deliberately the *whole* environment: **no username, no
-hostname, no working directory, no environment variables, no file paths.** A
-bug report should not be how an internal directory layout leaves a company.
+The bundle's own layout version is `manifest.manifestVersion`, now **2**: the
+evidence rides in the same envelope `persistRecording` writes, so a bug-report
+zip and a run archive are read by the same code. The evidence file is never
+packed twice — an envelope *or* a bare recording, never both, because the zip is
+stored rather than compressed and a duplicated recording is duplicated bytes
+against the size ceiling.
+
+`environment.json` is deliberately narrow: **no username, no hostname, no
+working directory, no environment variables, no file paths.** A bug report
+should not be how an internal directory layout leaves a company. It no longer
+repeats the library and engine versions either — those are producer facts, and
+the envelope stamps them in its `producer` block. One fact, one place.
+
+### The run facts
+
+Two things about a run cannot be read back out of a frozen recording, so the
+export asks for them as `run` — a `BugReportRunFacts`:
+
+| fact | why it cannot be derived |
+|---|---|
+| `complete` | a recording frozen from a crash handler and one taken after a finished run look identical. Defaulting it would make every partial recording claim to be whole. |
+| `droppedEvents` | only the live `recordRun` handle counts what the `maxEvents` cap discarded. Pass the **handle** instead of its recording and the count is read rather than stated — a proven count always wins over a stated one. |
+
+Leave `run` off and nothing breaks: the evidence rides as `recording.json`
+instead, and the manifest carries a note naming the missing fact and the one
+line that supplies it. What never happens is a stamped envelope holding a
+guess.
+
+<Callout type="info" title="Pass the recorder, not the recording">
+`describeBugReport(recorder)` and `exportBugReport(recorder, …)` take the handle
+`recordRun()` returns. That is the only source that can prove its own dropped-
+event count, so with `run: { complete: true }` alone the bundle is fully
+stamped.
+</Callout>
 
 ### The zip is stored, not compressed
 
@@ -174,31 +207,45 @@ short — two endpoints over whatever framework you already have:
 ```ts
 import { describeBugReport, exportBugReport, githubBugReporter, recordRun } from 'agentfootprint/observe';
 
-const recordings = new Map<string, Recording>();          // your store, your eviction
+// Your store, your eviction. Keep the drop count beside the recording: the
+// handle that knows it is gone once you freeze, and the envelope refuses to
+// assume 0 rather than report "we did not look" as "none were dropped".
+const runs = new Map<string, { recording: Recording; droppedEvents: number }>();
 const reporter = githubBugReporter({ issueRepo: 'acme/checkout-agent' });
 
 app.post('/api/run', async (req, res) => {
   const recorder = recordRun(agent);
   const reply = await agent.run({ message: req.body.message }, { sessionId: req.body.sessionId });
-  recordings.set(req.body.sessionId, recorder.toRecording());
+  runs.set(req.body.sessionId, {
+    recording: recorder.toRecording(),
+    droppedEvents: recorder.droppedEvents,
+  });
   recorder.stop();
   res.json(reply);
 });
 
 // 1. the consent step — the browser shows these rows as checkboxes
 app.get('/api/bug-report/describe', (req, res) => {
-  res.json(describeBugReport(recordings.get(String(req.query.sessionId))));
+  const run = runs.get(String(req.query.sessionId))!;
+  res.json(
+    describeBugReport(run.recording, {
+      run: { complete: true, droppedEvents: run.droppedEvents },   // same facts as the export
+    }),
+  );
 });
 
 // 2. the filing step — `include` is exactly what the human ticked
 app.post('/api/bug-report', async (req, res) => {
-  const report = exportBugReport(recordings.get(req.body.sessionId), {
+  const run = runs.get(req.body.sessionId)!;
+  const report = exportBugReport(run.recording, {
     include: req.body.include,
     title: req.body.title,
     stepsToReproduce: req.body.steps,
     expected: req.body.expected,
     actual: req.body.actual,
     appVersion: process.env.APP_VERSION,
+    // This store only holds runs that returned, so `complete` is a fact here.
+    run: { complete: true, droppedEvents: run.droppedEvents },
   });
   res.json(await reporter.file(report));
 });

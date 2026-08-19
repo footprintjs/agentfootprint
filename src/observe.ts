@@ -142,6 +142,12 @@ export {
 // can consent to exactly what leaves; `exportBugReport` bundles the units they
 // kept as named files plus a real (stored) zip. `githubBugReporter` — in this
 // same door, from the providers barrel — files that bundle.
+//
+// The evidence in that zip is a RecordingEnvelope (bundle layout 2), built by
+// the same `buildRecordingEnvelope` above rather than a second wrapper — so the
+// producer facts are stamped once. `BugReportRunFacts` is the pair the envelope
+// cannot derive; without it the bundle still ships, as the bare recording, with
+// the manifest naming the fact that was missing.
 export {
   describeBugReport,
   exportBugReport,
@@ -154,6 +160,7 @@ export {
   type BugReportInput,
   type BugReportManifest,
   type BugReportOversize,
+  type BugReportRunFacts,
   type BugReportSource,
   type BugReportUnit,
   type DescribeBugReportOptions,
