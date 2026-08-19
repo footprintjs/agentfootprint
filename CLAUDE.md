@@ -20,6 +20,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 | a typed HITL prompt — let a person pick from a list, choose a range, use a real control instead of typing prose | `AskComponent` | `src/core/askComponent.ts` | 9.24.0 |
 | carrying WHAT the person chose back, with what they could see | `DecisionValue` | `src/core/checkin.ts` | 9.47.0 |
 | archiving a finished run — filing it, attaching it to a bug report, feeding it to an analysis tool | `persistRecording` + `RecordingEnvelope` | `src/recorders/observability/recordingEnvelope.ts` | 9.48.0 |
+| packaging a run for a HUMAN to file — a zip with the recording, environment facts, and a readme | `exportBugReport` | `src/lib/bug-report/build.ts` | — |
 | writing archived runs somewhere — a directory, one JSON file per run | `fileRecordingSink` + `RecordingSink` | `src/recorders/observability/fileRecordingSink.ts` | 9.48.0 |
 | declaring an agent's whole setup as one named, versioned thing — a preset, a template, a blueprint, "the support agent we all use" | `defineAgentRecipe` + `AgentBuilder.recipe()` | `src/recipes/` | 9.48.0 |
 | keeping a large tool result out of the model's context | `artifacts` + `wants` + `placement` | `src/artifacts/` | 9.21.0 |
@@ -38,7 +39,10 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 a namespace, a filename or an index entry must be injective, and its collision
 check ships in the SAME change — not the release that discovers it. Six defects of
 that exact shape were fixed between 9.37.0 and 9.46.0. Use `encodeIdentityField`
-rather than writing a seventh.
+rather than writing a seventh. The ONE acceptable alternative is refuse-by-domain —
+assert a safe charset and refuse everything else by name, as `fileRecordingSink`
+does for internal runIds — because a refusal cannot collide. What is never
+acceptable is a third thing: a fold that quietly rewrites.
 
 **Maintaining this table:** a new public capability adds a row.
 `test/docs/capability-index.test.ts` fails if a row names a file or symbol that
@@ -57,7 +61,7 @@ Entry points — FOURTEEN doors, and `package.json` `exports` is exhaustive, so 
 | core/slots/ | the 3 context-slot subflow builders + thinking subflow — intentionally NOT exported |
 | core-flow/ | Sequence/Parallel/Conditional/Loop — RunnerBase subclasses with own charts |
 | patterns/ | Debate/MapReduce/Reflection/SelfConsistency/Swarm/ToT — pure composition of runners, no new control flow |
-| adapters/ | hexagonal ports (types.ts = ALL port interfaces) + vendor impls (llm/, memory/, identity/, observability/). memory/sqliteVector.ts (8.9.0) = the only FULL MemoryStore we ship with `search` besides InMemoryStore — exact cosine over a resident Float32Array matrix, hydrated per namespace on first search and dropped on any write to it |
+| adapters/ | hexagonal ports (types.ts = ALL port interfaces — one exception: `RecordingSink` lives beside `recordRun` in recorders/observability/, per "anything that saves a run goes through it") + vendor impls (llm/, memory/, identity/, observability/). memory/sqliteVector.ts (8.9.0) = the only FULL MemoryStore we ship with `search` besides InMemoryStore — exact cosine over a resident Float32Array matrix, hydrated per namespace on first search and dropped on any write to it |
 | recorders/core/ | bridges footprintjs events → typed EventDispatcher (ContextRecorder, EmitBridge, typedEmit) — auto-attached by Agent.createExecutor; most factories also exported via `/observe` for manual wiring (EmitBridge itself stays internal) |
 | recorders/observability/ | consumer recorders over the typed stream (RunStepRecorder, FlowchartRecorder, Status, Trace replay) + `recordRun` — THE producer of a recording `{snapshot, events, structure}` (the shape lens's `observeRecording` consumes; `structure` = `getSpec().buildTimeStructure`, which no snapshot carries). Anything that saves a run goes through it |
 | rag/ | (8.10.0, door `/rag`) index-TIME: `DocumentLoader` adapters (text/markdown/html zero-dep, pdf via lazy `unpdf`) + `Splitter` factories + `indexCorpus` — a REAL footprintjs chart whose commit log IS the indexing report. `defineRAG` deliberately stays on the MAIN barrel (run-time wiring); this door is the half that runs once, before any agent exists |

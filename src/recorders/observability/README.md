@@ -17,6 +17,24 @@ recorders/observability/
 
 Phase 5 additions (planned): `enable.lens`, `enable.tracing`, `enable.cost`, `enable.guardrails`, `enable.eval`.
 
+## Three archive shapes, one relationship
+
+This repo ships THREE producer-owned ways a finished run leaves the process, and
+until this section existed their relationship was stated nowhere — which is how
+an audit found them drifting toward overlap:
+
+| Shape | For | What it is |
+|---|---|---|
+| `RecordingEnvelope` (here) | machines | THE versioned contract — the narrow waist. Identity, completeness and drop-count facts stamped as truths or refused. Archives, ingestion, cross-run analysis. |
+| `Trace` v1 (`trace.ts`) | humans + UIs | a redacted domain-event PROJECTION of the same run — a presentation, not the contract |
+| `exportBugReport` (`src/lib/bug-report/`) | humans filing issues | a zip carrying the bare recording plus environment facts — a presentation for one workflow |
+
+The rule going forward: the envelope is the contract; the other two are
+presentations OVER it. `exportBugReport` predates the envelope and still packs a
+bare `recording.json` — folding it over an envelope is a follow-up, recorded in
+the Pattern-program ADR, so the producer facts it duplicates (`libraryVersion`,
+`engineVersion`) are stamped once, in one place.
+
 ## Saving a run: `recordRun` → `RecordingEnvelope` → a sink
 
 Three files, three jobs, in the order you meet them:
