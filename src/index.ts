@@ -526,6 +526,7 @@ export {
   defineTool,
   assertValidToolName,
   assertResultCeiling,
+  assertResultClass,
   warnIfInvalidToolName,
 } from './core/tools.js';
 // Typed tool effects (9.19.0) — the result envelope a tool may return to
@@ -585,6 +586,40 @@ export {
   type DeclaredCoverage,
   type ToolAbsence,
 } from './core/agent/coverage/index.js';
+// The semantic tool-result envelope (9.53.0) — typed series/facts/edges with
+// the caveats that make them honest (grain, provenance, coverage) as DATA,
+// so honesty is inherited, not re-authored per tool. A sibling recognizer
+// beside the effects envelope and the coverage primitives (its own
+// `af_semantics` marker); the three compose on one result. The MODEL reads
+// the compact rendering-free projection; the FULL envelope rides the typed
+// `tools.semantics_declared` event; a declared `coverage` flows through the
+// same channel `coverage()` uses. The gate half (`checkSemantics`, the
+// `agentfootprint-check-semantics` bin) ships through `/observe`.
+export {
+  composeNotCovered,
+  COUNTER_AGGREGATION_WORDS,
+  explainSemantics,
+  isCounterLookingAggregation,
+  readSemantics,
+  RESULT_CLASSES,
+  semantic,
+  SEMANTICS_MARKER,
+  SEMANTICS_NOTE,
+  semanticsForModel,
+  type SemanticClarify,
+  type SemanticCoverage,
+  type SemanticDeclaration,
+  type SemanticEdge,
+  type SemanticFact,
+  type SemanticGrain,
+  type SemanticIssue,
+  type SemanticIssueCode,
+  type SemanticProvenance,
+  type SemanticRender,
+  type SemanticSeriesPoint,
+  type ToolResultClass,
+  type ToolSemantics,
+} from './lib/semantics/index.js';
 // Tool sessions (9.7.0) — the identity a tool holds a session under, and the
 // end-signal that releases it. The KEY DERIVATION is exported because it is the
 // isolation boundary: one implementation, or two that disagree.

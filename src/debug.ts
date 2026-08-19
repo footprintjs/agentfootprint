@@ -342,6 +342,23 @@ export {
   type ToolCatalogReport,
   type ToolLintCliIO,
 } from './lib/tool-lint/index.js';
+// check:semantics (9.53.0) — the tool-lint pattern applied to RESULT shapes:
+// judge sample results (your mock tools' returns, dumped to JSON) against
+// the semantic-envelope vocabulary and the per-class rules declared on
+// defineTool({ resultClass }). A triage tool whose sample declares no
+// coverage fails the build NAMING the tool and the field. The authoring
+// half (semantic(), readSemantics, the types) ships on the main barrel.
+export {
+  checkSemantics,
+  coerceSemanticsCatalog,
+  formatSemanticsReport,
+  runCheckSemanticsCli,
+  type SemanticsCatalogEntry,
+  type SemanticsCliIO,
+  type SemanticsFinding,
+  type SemanticsFindingCode,
+  type SemanticsReport,
+} from './lib/semantics/index.js';
 // recorded-chat — the session-scoped turn recorder. Wraps a consumer agent
 // factory into a recorded conversation: send() freezes each turn's evidence,
 // reason(k)/rerunTurn(k)/fork(k) are the per-turn transparency loop. Absorbs

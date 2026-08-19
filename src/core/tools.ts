@@ -15,6 +15,7 @@ import type { ArtifactMeta } from '../artifacts/types.js';
 import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import { RESULT_CLASSES, type ToolResultClass } from '../lib/semantics/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
@@ -140,6 +141,17 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * byte-identical behavior (nothing measured, nothing emitted).
    */
   readonly resultCeiling?: ToolResultCeiling;
+  /**
+   * The declared CLASS of this tool's results (9.53.0) — what kind of answer
+   * it gives (`'triage'` — a health/fault verdict; `'inventory'` — a
+   * population listing). Declared, never inferred (the `capabilities` law),
+   * and validated at definition against the closed set. The
+   * `check:semantics` gate keys its per-class rules on it — a `'triage'`
+   * tool whose sample result declares no coverage fails the build by name.
+   * Omitted → no class rules; the semantic-envelope rules still apply to any
+   * result that carries the `af_semantics` marker.
+   */
+  readonly resultClass?: ToolResultClass;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -204,6 +216,29 @@ export function assertResultCeiling(
           `or drop the field — omitting it is how "no suggestions" is said.`,
       );
     }
+  }
+}
+
+/**
+ * Refuse a `resultClass` outside the closed set, at definition time — naming
+ * the tool, the value and the whole vocabulary (the `assertResultCeiling`
+ * law: a declaration this library cannot honor fails HERE, never at the
+ * first gate run of the first CI pipeline). Exported beside it for consumers
+ * assembling `Tool` objects by hand.
+ */
+export function assertResultClass(
+  toolName: string,
+  resultClass: ToolResultClass | undefined,
+): void {
+  if (resultClass === undefined) return;
+  if (!RESULT_CLASSES.includes(resultClass)) {
+    throw new Error(
+      `defineTool: tool '${toolName}' declares resultClass '${String(resultClass)}', which is ` +
+        `not a class this library has. The classes are: ${RESULT_CLASSES.join(', ')} — each ` +
+        `carries a rule \`check:semantics\` can prove ('triage'/'inventory' results must ` +
+        `declare coverage). To declare no class, omit the field (the semantic-envelope rules ` +
+        `still apply to any result carrying the af_semantics marker).`,
+    );
   }
 }
 
@@ -407,6 +442,10 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Refuse (never truncate) a result over this many chars, teaching the model
    *  to narrow (see {@link ToolResultCeiling}). Omitted → byte-identical. */
   readonly resultCeiling?: ToolResultCeiling;
+  /** The declared class of this tool's results — `'triage'` or `'inventory'`
+   *  (see {@link Tool.resultClass}). Keys the `check:semantics` per-class
+   *  rules. Omitted → no class rules. */
+  readonly resultClass?: ToolResultClass;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -490,6 +529,9 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // A ceiling that cannot cap fails HERE, naming the tool — not at the first
   // oversized result of the first run.
   assertResultCeiling(options.name, options.resultCeiling);
+  // A class outside the closed set fails HERE too — not at the first
+  // `check:semantics` run of the first CI pipeline.
+  assertResultClass(options.name, options.resultClass);
   // A decision component for a gate that never fires is configuration that
   // lies — configured-and-inert looks exactly like configured-and-working
   // (the `.checkIn({ scorer })`-with-minimal-evidence precedent). And a
@@ -531,6 +573,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     // it touches nothing, which is a different statement from saying nothing.
     ...(options.capabilities !== undefined && { capabilities: options.capabilities }),
     ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
+    ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
     execute: options.execute,
   };
 }

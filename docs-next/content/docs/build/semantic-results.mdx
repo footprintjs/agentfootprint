@@ -1,0 +1,121 @@
+---
+title: Semantic tool results
+description: A tool can return series, facts, and provenance as typed data — grain, freshness, and coverage travel with the numbers — and a build gate refuses a triage tool that forgets its caveats, by name.
+---
+
+> Your inventory tool reports `jobs_local: 331` and `jobs_replicated_in: 607`. The model adds them and announces 938 protected jobs — a fleet nobody has, because those two numbers must never be summed. The tool's author knew that. The knowledge lived in a comment. **The semantic envelope makes the caveats typed data that travel with the values**, and `check:semantics` is the build gate that refuses a tool that forgot them.
+
+## The problem: honesty by culture
+
+The conventions that make tool answers trustworthy — grain stated, counters marked, freshness declared, "not covered" named on every triage — get re-implemented by hand inside every tool and held in place by code review. That scales to one disciplined author. It does not scale to a hundred tools or to adapters written by other teams.
+
+`semantic()` turns the conventions into construction:
+
+```ts
+import { defineTool, semantic } from 'agentfootprint';
+
+const backupStatus = defineTool({
+  name: 'vm_backup_status',
+  description: 'Backup posture for one VM across the Cohesity clusters',
+  resultClass: 'triage', // ← declared class; check:semantics keys rules on it
+  inputSchema: { type: 'object', properties: { vm: { type: 'string' } }, required: ['vm'] },
+  execute: ({ vm }) =>
+    semantic({
+      facts: [{ entity: vm, backed_up: true, copies: 1 }],
+      series: [{ t: '2026-08-19T10:00:00Z', entity: vm, metric: 'backup_runs_ok', value: 1 }],
+      grain: { interval: 'daily', aggregation: 'count', is_counter: true },
+      provenance: { measured_at: '2026-08-19T10:12:00Z', source: 'Cohesity API (4 clusters)' },
+      coverage: {
+        checked: ['4 Cohesity clusters'],
+        cannotCover: [{ what: 'PPDM', why: 'not collected on this install' }],
+      },
+      render: { default: 'table', columns: ['entity', 'backed_up', 'copies'] },
+    }),
+});
+```
+
+The envelope's fields:
+
+| field | what it says |
+|---|---|
+| `series` | measured points — `{ t, entity, metric, value }` |
+| `facts` | typed rows about entities — every row names its `entity` |
+| `edges` | typed relationships — `{ from, to, kind }` |
+| `grain` | what one value MEANS: `interval`, `aggregation`, `is_counter`, `collapsed` |
+| `provenance` | `measured_at` (when the WORLD was measured — not when the tool ran), `source`, `age_seconds`, `source_export_date` |
+| `coverage` | the same three-list vocabulary `coverage()` and `absent()` speak: checked / not checked / cannot cover |
+| `clarify` | the ask-vs-answer decision as data: `{ question, candidates }`, or `null` for "ambiguity considered, none found" |
+| `render` | hints for a UI — the tool never renders; the model never sees these |
+
+`semantic()` refuses at the call site — the `absent()` law — anything the vocabulary cannot honor: series without `grain`, data without `provenance.measured_at` + `source`, a counter-looking aggregation (`sum`, `count`, `total`, `cumulative`, `counter`, `delta`) with `is_counter` unstated. A minted envelope is honest by construction.
+
+## Two views of one envelope
+
+**The model reads a compact, rendering-free projection**: the data, `grain`, `provenance`, the `not_covered` prose lines (composed from `coverage` — never hand-written, so the two cannot disagree), a non-null `clarify`, and a static note telling it how to read the caveats. It never sees the `af_semantics` marker, the `render` hints, or the three-list coverage detail.
+
+**The record gets everything.** The full envelope rides the typed
+`agentfootprint.tools.semantics_declared` event — one per recognized envelope, stamped with the
+tool name, the tool call id and the iteration:
+
+```ts
+agent.on('agentfootprint.tools.semantics_declared', (e) => {
+  e.payload.semantics; // the FULL envelope — render hints, coverage, all of it
+});
+```
+
+It lands in recordings (`recordRun` / `persistRecording`), so a UI can draw the table the author hinted at months after the run. And it is emitted **before** the tool's `resultCeiling` is measured — the ceiling measures the projection the model would read, and an oversized result cannot silently delete its own grain and provenance: the caveats are already on the record when the refusal replaces the content.
+
+The `coverage` field is absorbed into the existing coverage channel — the same `tools.coverage_declared` event, the same tracked state, and [`.limitsTravelWithTheAnswer()`](doc:grounding) appends it to the final answer, exactly as if the tool had used `coverage()`.
+
+**Composition:** the three result envelopes stack. `{ content: semantic({...}), effects: [...], status: 'partial' }` is one result that carries typed data AND a [tool effect](doc:tools) AND an outcome status. `absent()` remains the answer for "I looked and found nothing".
+
+## check:semantics — the build gate
+
+The gate judges **sample results** (what your mock tools return — a build must never run tools that touch live systems) against the envelope rules and the per-class rules declared on `defineTool({ resultClass })`:
+
+| rule | severity |
+|---|---|
+| `'triage'` result with no coverage declaration (semantic `coverage`, `coverage()`, or `absent()`) | error |
+| `'inventory'` result with no coverage declaration | error |
+| marker-bearing envelope with faults: `series-without-grain`, `data-without-provenance`, `counter-aggregation-unstated`, `malformed-semantics` | error |
+| `'inventory'` with `facts` but no `render` hint | warning |
+| a classed tool with zero sample results | warning |
+
+Severity follows provability: only what the declarations prove wrong errors. Every finding names the **tool** and the **field**.
+
+Wire it beside your other gates (the `check:tools` convention) — dump `[{ name, resultClass, results: [...] }]` to JSON and:
+
+```json
+{
+  "scripts": {
+    "check:semantics": "agentfootprint-check-semantics semantics-catalog.json"
+  }
+}
+```
+
+Exit codes: `0` ok, `1` findings failed the gate (`--strict` gates warnings too), `2` input error. The same core is callable in-process:
+
+```ts
+import { checkSemantics, formatSemanticsReport } from 'agentfootprint/observe';
+
+const report = checkSemantics([
+  { name: 'vm_backup_status', resultClass: 'triage', results: [sampleResult] },
+]);
+if (!report.ok) throw new Error(formatSemanticsReport(report));
+```
+
+## Zero-cost when unused
+
+Recognition is strict: only a plain object whose `af_semantics` is exactly `true` **and** that passes the whole rule set is an envelope. Every other value any tool has ever returned — including a marker-bearing shape with faults, which is dev-warned and named by the gate but never half-applied — takes the exact path it always took, byte for byte.
+
+## Vocabulary reference
+
+The authoring half ships on the main barrel (`agentfootprint`). `semantic` mints the envelope from a `SemanticDeclaration`; the rendered value is a `ToolSemantics` carrying `SemanticSeriesPoint` rows, `SemanticFact` rows, `SemanticEdge` links, a `SemanticGrain`, a `SemanticProvenance`, a `SemanticCoverage` (whose derived `not_covered` lines are composed by `composeNotCovered`), a `SemanticClarify` question and `SemanticRender` hints. `readSemantics` is the strict recognizer the dispatch loop uses; `explainSemantics` names the faults — `SemanticIssue` rows, each with a `SemanticIssueCode` — on a marker-bearing value that was not recognized; `semanticsForModel` builds the model's compact projection; `isCounterLookingAggregation` and the `COUNTER_AGGREGATION_WORDS` list decide when `is_counter` must be stated. The marker key is `SEMANTICS_MARKER` (the string `af_semantics`), the static note text is `SEMANTICS_NOTE`, the closed class set is `RESULT_CLASSES` (typed as `ToolResultClass`), and `assertResultClass` is the definition-time refusal `defineTool` runs on a declared class.
+
+The gate half ships on `agentfootprint/observe`. `checkSemantics` judges an array of `SemanticsCatalogEntry` rows and returns a `SemanticsReport` of `SemanticsFinding` rows, each carrying a `SemanticsFindingCode`, the tool and the field; `formatSemanticsReport` renders the report for a terminal; `coerceSemanticsCatalog` normalizes the accepted JSON shapes; and `runCheckSemanticsCli` is the unit-testable CLI core behind the `agentfootprint-check-semantics` bin, with its IO injected through `SemanticsCliIO`.
+
+## Next steps
+
+- [Runnable example 66](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/66-semantic-envelope.ts) — the two views, the coverage absorb, and the gate failing a broken tool by name
+- [Grounding](doc:grounding) — `coverage()` / `absent()`, the vocabulary this envelope absorbs
+- [Tools](doc:tools) — `defineTool`, tool effects, `resultCeiling`

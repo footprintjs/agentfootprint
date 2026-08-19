@@ -123,6 +123,12 @@ import {
   type StepPointer,
 } from '../../../lib/injection-engine/skillSteps.js';
 import {
+  explainSemantics,
+  readSemantics,
+  semanticsForModel,
+} from '../../../lib/semantics/envelope.js';
+import type { ToolSemantics } from '../../../lib/semantics/types.js';
+import {
   readCoverageResult,
   type CoverageFacts,
   type DeclaredCoverage,
@@ -766,6 +772,74 @@ export function buildToolCallsHandler(
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
     return reading.status;
+  };
+
+  /**
+   * The semantic envelope (9.53.0) — recognized at the SAME execute
+   * boundaries as coverage and the ceiling (one implementation, every door),
+   * AFTER `declareCoverage` (which absorbs the envelope's `coverage` field
+   * through the one coverage funnel) and BEFORE `refuseOverCeiling` (so the
+   * FULL envelope — grain, provenance, render, coverage — is on the record
+   * even when the content is refused as oversized: a caveat that died with
+   * an oversized result would be the silence the envelope exists to break).
+   *
+   * Returns the MODEL's view — the compact rendering-free projection
+   * (`semanticsForModel`: data + grain + provenance + composed `not_covered`
+   * + non-null clarify + the static note; never the marker, `render`, or the
+   * three-list coverage detail) — or `undefined` for every non-envelope
+   * value, which keeps today's path byte for byte. The full envelope rides
+   * the typed `tools.semantics_declared` event, so recordings and UIs get
+   * everything the model was spared.
+   *
+   * A value CARRYING the marker that this library cannot honor stays DATA
+   * (never half-applied — the recognition strictness law) and is dev-warned
+   * here naming its first fault; `check:semantics` names them all at build
+   * time.
+   */
+  const declareSemantics = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    value: unknown,
+  ): unknown | undefined => {
+    const sem = readSemantics(value);
+    if (sem === undefined) {
+      const faults = explainSemantics(value);
+      if (faults !== undefined && faults.length > 0 && isDevMode()) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `agentfootprint semantics: tool '${call.toolName}' returned a value carrying ` +
+            `af_semantics that was NOT recognized (treated as plain data): ` +
+            `${faults[0].message} (field: ${faults[0].field})` +
+            (faults.length > 1 ? ` — and ${faults.length - 1} more; run check:semantics.` : ''),
+        );
+      }
+      return undefined;
+    }
+    // Detached plain data for the record — the event must not hold a live
+    // reference into a value the tool still owns. An envelope that cannot
+    // survive structuredClone cannot ride the record (or a checkpoint), so
+    // it is declined here — data path, dev-warned — rather than half-filed.
+    let detached: unknown;
+    try {
+      detached = structuredClone(sem);
+    } catch {
+      if (isDevMode()) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `agentfootprint semantics: tool '${call.toolName}' returned a semantic envelope ` +
+            `that does not survive structuredClone (a function or live handle in a fact row?) ` +
+            `— treated as plain data. Envelope values must be plain data.`,
+        );
+      }
+      return undefined;
+    }
+    typedEmit(scope, 'agentfootprint.tools.semantics_declared', {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      semantics: detached as ToolSemantics,
+    });
+    return semanticsForModel(sem);
   };
 
   // ── Step-procedure boundary (9.18.0) — ONE implementation, five sites ──
@@ -1878,7 +1952,9 @@ export function buildToolCallsHandler(
       }
     }
     try {
-      const result = await tool.execute(args, {
+      // `let`, not `const`: the semantic projection below replaces the value
+      // on the non-envelope path exactly as the batch loop does.
+      let result = await tool.execute(args, {
         toolCallId,
         iteration,
         ...(env.signal && { signal: env.signal }),
@@ -1908,6 +1984,16 @@ export function buildToolCallsHandler(
           envelope.content,
         );
         const declaredStatus = envelope.status ?? coverageStatus;
+        // The semantic envelope (9.53.0), on the unwrapped content — the
+        // effects+semantics composition point: full envelope to the record,
+        // projection to the model. BEFORE the ceiling, which must measure
+        // what the model will actually read.
+        const semanticView = declareSemantics(
+          scope,
+          { toolName, toolCallId, iteration },
+          envelope.content,
+        );
+        const content = semanticView ?? envelope.content;
         // The tool's own ceiling (9.20.0) measures the CONTENT — the channel
         // that can overflow a context window. The DECLARED effects are small
         // validated data and are still judged by the caller: a tool that
@@ -1919,7 +2005,7 @@ export function buildToolCallsHandler(
           scope,
           { toolName, toolCallId, iteration },
           tool,
-          envelope.content,
+          content,
           declaredStatus,
         );
         if (refusal !== undefined) {
@@ -1931,13 +2017,23 @@ export function buildToolCallsHandler(
           };
         }
         return {
-          result: envelope.content,
+          result: content,
           executed: true,
           envelope:
-            declaredStatus === envelope.status ? envelope : { ...envelope, status: declaredStatus },
+            declaredStatus === envelope.status && semanticView === undefined
+              ? envelope
+              : {
+                  ...envelope,
+                  content,
+                  ...(declaredStatus !== undefined && { status: declaredStatus }),
+                },
         };
       }
       const coverageStatus = declareCoverage(scope, { toolName, toolCallId, iteration }, result);
+      // The semantic envelope (9.53.0) on this path's own execute boundary —
+      // a resumed call's envelope is judged exactly as an inline one's.
+      const semanticView = declareSemantics(scope, { toolName, toolCallId, iteration }, result);
+      if (semanticView !== undefined) result = semanticView;
       const refusal = refuseOverCeiling(
         scope,
         { toolName, toolCallId, iteration },
@@ -2699,6 +2795,20 @@ export function buildToolCallsHandler(
                 result,
               );
               if (toolStatus === undefined) toolStatus = coverageStatus;
+              // The semantic envelope (9.53.0), on the unwrapped content and
+              // AFTER coverage (whose funnel absorbs the envelope's own
+              // `coverage` field), BEFORE the ceiling (which must measure
+              // what the model will actually read, and must not silently
+              // delete grain/provenance — they are already on the record by
+              // the time it fires). Everything downstream — governance, the
+              // cap, history, `tool_end` — sees the compact projection; the
+              // full envelope rides `tools.semantics_declared`.
+              const semanticView = declareSemantics(
+                scope,
+                { toolName: tc.name, toolCallId: tc.id, iteration },
+                result,
+              );
+              if (semanticView !== undefined) result = semanticView;
               // The tool's own refusing ceiling (9.20.0) — at the execute
               // boundary, BEFORE the gates and the after-tool chain, so
               // governance and the agent-level cap compose over what the

@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.53.0] - 2026-08-19
+
+A tool can return **series, facts, and provenance as typed data** — and a
+build gate refuses a triage tool that forgets its caveats.
+
+The ask came from a triage-platform team with seventy tools. The things that
+make a tool's numbers honest — the collection interval, whether the values
+are counters that must never be summed, when the world was actually measured,
+which clusters were NOT collected — were re-written by hand inside every tool
+and held in place by code review. Culture like that scales to one disciplined
+author, not to a hundred tools. This release makes the caveats **data that
+travel with the numbers**, and makes forgetting them a build failure with the
+tool's name on it.
+
+### Added
+
+- **`semantic({...})` — the semantic tool-result envelope.** A tool's
+  `execute` returns typed data instead of prose:
+
+  ```typescript
+  return semantic({
+    series: [{ t: '2026-08-19T10:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 18450 }],
+    grain: { interval: '30m', aggregation: 'avg', is_counter: false },
+    provenance: { measured_at: '2026-08-19T10:20:00Z', source: 'InfluxDB SwitchPortStats' },
+    coverage: { checked: ['fabric A: all 48 ports'],
+                notChecked: [{ what: 'the peer fabric', why: 'collector scoped to one fabric' }] },
+    render: { default: 'table', columns: ['entity', 'value'], sort: 'value desc' },
+  });
+  ```
+
+  Fields: `series` (measured points), `facts` (typed rows, each naming its
+  `entity`), `edges` (typed relationships), `grain` (what one value MEANS —
+  interval, aggregation, `is_counter`, what was collapsed), `provenance`
+  (when the WORLD was measured — not when the tool ran — and from which
+  source), `coverage` (the exact three-list vocabulary `coverage()` and
+  `absent()` already speak — absorbed, never duplicated), `clarify` (the
+  ask-vs-answer decision as data), and `render` (hints for a UI — the tool
+  never renders). `semantic()` refuses at the call site anything the
+  vocabulary cannot honor: series without grain, data without
+  `measured_at` + `source`, a counter-looking aggregation with `is_counter`
+  unstated.
+
+- **Two views of one envelope.** The MODEL reads a compact rendering-free
+  projection — the data, the grain, the provenance, the composed
+  `not_covered` prose (derived from `coverage`, so the two can never
+  disagree), and a static note; it never sees the marker, the `render` hints
+  or the three-list coverage detail. The RECORD gets everything: the full
+  envelope rides the new typed `agentfootprint.tools.semantics_declared`
+  event (registry now 102 events / 22 domains) into recordings and UIs — and
+  it is filed BEFORE the tool's `resultCeiling` is measured, so an oversized
+  result cannot silently delete its own caveats. The ceiling itself measures
+  the projection, because that is what the model would have read.
+
+- **The envelope's `coverage` flows through the coverage channel.** Same
+  `tools.coverage_declared` event, same tracked state, and
+  `.limitsTravelWithTheAnswer()` appends it to the final answer — exactly as
+  if the tool had used `coverage()`. The three result envelopes compose on
+  one return value: `{ content: semantic({...}), effects: [...], status }`.
+
+- **`defineTool({ resultClass })` — a declared class for a tool's results.**
+  `'triage'` (a health/fault verdict) or `'inventory'` (a population
+  listing); closed set, validated at definition (`assertResultClass`), never
+  inferred.
+
+- **`check:semantics` — the build gate.** Judges sample results (what your
+  mock tools return, dumped to JSON — the `check:tools` convention) against
+  the envelope rules and the class rules: a `'triage'` or `'inventory'` tool
+  whose sample declares no coverage **fails the build naming the tool and the
+  field**; a marker-bearing envelope with faults fails under the recognizer's
+  own codes; only provable violations error. Ships as the
+  `agentfootprint-check-semantics` bin (exit 0/1/2, `--strict`, `--json`)
+  with the unit-tested core (`checkSemantics`, `formatSemanticsReport`,
+  `coerceSemanticsCatalog`) on `agentfootprint/observe`.
+
+- Zero-cost when unused: recognition is strict (`af_semantics: true` AND the
+  whole rule set), so every value any tool has ever returned keeps its bytes.
+  Runnable example: `examples/features/66-semantic-envelope.ts`. Guide:
+  docs *Build → Semantic tool results*.
+
 ## [9.52.0] - 2026-08-19
 
 A tool can now say **"hop 3 of 12 done"** while it is still working.

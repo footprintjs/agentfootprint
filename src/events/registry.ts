@@ -94,6 +94,7 @@ import type {
   SkillTurnRoutedPayload,
   ToolAbsentPayload,
   ToolCoverageDeclaredPayload,
+  ToolSemanticsDeclaredPayload,
   ToolsCodeRunPayload,
   ToolEffectPayload,
   ToolRepeatedCallPayload,
@@ -190,6 +191,7 @@ export const EVENT_NAMES = {
     repeatedCall: 'agentfootprint.tools.repeated_call',
     absent: 'agentfootprint.tools.absent',
     coverageDeclared: 'agentfootprint.tools.coverage_declared',
+    semanticsDeclared: 'agentfootprint.tools.semantics_declared',
     codeRun: 'agentfootprint.tools.code_run',
   },
   skill: {
@@ -498,6 +500,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tools.coverage_declared',
     ToolCoverageDeclaredPayload
   >;
+  'agentfootprint.tools.semantics_declared': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.semantics_declared',
+    ToolSemanticsDeclaredPayload
+  >;
   'agentfootprint.tools.session_close_failed': AgentfootprintEventEnvelope<
     'agentfootprint.tools.session_close_failed',
     ToolsSessionCloseFailedPayload
@@ -769,6 +775,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.absent',
   'agentfootprint.tools.code_run',
   'agentfootprint.tools.coverage_declared',
+  'agentfootprint.tools.semantics_declared',
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.graph_declared',

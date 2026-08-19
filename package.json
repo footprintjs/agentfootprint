@@ -94,6 +94,7 @@
   "bin": {
     "agentfootprint-setup": "ai-instructions/setup.sh",
     "agentfootprint-lint-tools": "bin/agentfootprint-lint-tools.mjs",
+    "agentfootprint-check-semantics": "bin/agentfootprint-check-semantics.mjs",
     "agentfootprint-index": "bin/agentfootprint-index.mjs"
   },
   "main": "dist/index.js",

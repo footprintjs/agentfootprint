@@ -181,7 +181,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     tool_end — and a twelve-hop walk spends that silence looking exactly
     //     like a hang. The framework stamps toolCallId/toolName/iteration; the
     //     author owns only `payload`.)
-    expect(ALL_EVENT_TYPES.length).toBe(101);
+    //    (tools.semantics_declared added in 9.53.0 — the FULL semantic
+    //     envelope (`semantic(…)`: typed series/facts/edges + grain +
+    //     provenance + coverage + render hints), while the model received
+    //     only the compact rendering-free projection. Emitted BEFORE the
+    //     result ceiling is measured, so the caveats survive to recordings
+    //     even when the content itself was refused as oversized.)
+    expect(ALL_EVENT_TYPES.length).toBe(102);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

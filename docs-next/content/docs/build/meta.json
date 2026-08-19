@@ -34,6 +34,7 @@
     "strict-output",
     "grounding",
     "evidence-gate",
+    "semantic-results",
     "---[Database]Memory---",
     "memory",
     "auto-memory",

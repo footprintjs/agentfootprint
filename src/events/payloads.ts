@@ -25,6 +25,7 @@ import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js'
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../core/agent/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
+import type { ToolSemantics } from '../lib/semantics/types.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -1465,6 +1466,26 @@ export interface ToolCoverageDeclaredPayload {
 export interface CoverageItemPayload {
   readonly what: string;
   readonly why?: string;
+}
+
+/**
+ * A tool returned a semantic envelope (`semantic(…)`, 9.53.0) — typed
+ * series/facts/edges with the caveats that make them honest (grain,
+ * provenance, coverage) as data.
+ *
+ * The event carries the FULL envelope — render hints, the three-list
+ * coverage detail, the marker, everything — because this is the channel
+ * recordings and UIs read; the MODEL received only the compact
+ * rendering-free projection (`semanticsForModel`). Emitted BEFORE the
+ * result ceiling is measured, so grain and provenance survive to the record
+ * even when the content itself was refused as oversized. Detached plain
+ * data (structuredClone), never a live reference into the tool's own value.
+ */
+export interface ToolSemanticsDeclaredPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly semantics: ToolSemantics;
 }
 
 // permission.* (4)

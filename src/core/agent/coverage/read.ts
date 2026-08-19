@@ -16,6 +16,7 @@
  */
 
 import type { ToolResultStatus } from '../../../lib/injection-engine/toolOutcome.js';
+import { coverageOfSemantics, readSemantics } from '../../../lib/semantics/envelope.js';
 import { coverageOfAbsence, readAbsence } from './absent.js';
 import { coverageOfLedger, readCoverageLedger } from './ledger.js';
 import type { Coverage } from './types.js';
@@ -65,6 +66,17 @@ export function readCoverageResult(value: unknown): CoverageReading | undefined 
         { kind: 'absence', coverage: coverageOfAbsence(absence), lookedFor: absence.looked_for },
       ],
     };
+  }
+  // A semantic envelope's `coverage` field (9.53.0) is ABSORBED here — the
+  // one recognizer funnel — so the boundary a semantic tool declared flows
+  // through the exact channel `coverage()` uses (the `tools.coverage_declared`
+  // event, tracked state, the final-answer limits block) with zero extra
+  // wiring at any dispatch door. A semantic envelope without `coverage`
+  // declares no boundary, exactly like a bare result.
+  const sem = readSemantics(value);
+  if (sem !== undefined) {
+    if (sem.coverage === undefined) return undefined;
+    return { declared: [{ kind: 'ledger', coverage: coverageOfSemantics(sem) }] };
   }
   const covered = readCoverageLedger(value);
   if (covered === undefined) return undefined;
