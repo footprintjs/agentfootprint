@@ -28,6 +28,7 @@ The event taxonomy:
 - `stream.llm_end` — final chunk processed (full response, usage, stopReason)
 - `stream.tool_start` — agent about to dispatch a tool (name, args)
 - `stream.tool_progress` — a long-running tool reporting mid-call (`ctx.progress(payload)`; framework-stamped `toolCallId` / `toolName` / `iteration`, author's `payload` verbatim)
+  - Since 9.54.0 this also moves the **live status line**: a top-level string `message` is shown verbatim (cut at 120 characters, cut stated), anything else renders an honest generic line — never a payload dump. See [Tools → What a person sees](doc:tools).
 - `stream.tool_end` — tool returned (result or error)
 
 ## SSE for browser clients

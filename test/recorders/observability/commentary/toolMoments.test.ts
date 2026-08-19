@@ -214,3 +214,43 @@ describe('skill.escalated commentary — which brain took over, and why', () => 
     expect(line(escalated(2, { provider: 'edge-provider' }))).toContain('to edge-provider.');
   });
 });
+
+// ── stream.tool_progress ──────────────────────────────────────────────
+
+describe('stream.tool_progress commentary', () => {
+  const progress = (payload: unknown = { done: 3, total: 12 }): AgentfootprintEvent =>
+    ev('agentfootprint.stream.tool_progress', {
+      toolCallId: 'call-1',
+      toolName: 'walk_graph',
+      iteration: 1,
+      payload,
+    });
+
+  it('narrates that the call broke its silence — the teaching voice, verbatim from Lens', () => {
+    expect(line(progress())).toBe(
+      'The `walk_graph` tool reported progress while it was still running.',
+    );
+  });
+
+  it('says the same thing whatever the author put in the payload — no field dumps', () => {
+    const dumps = [
+      progress({ done: 3, total: 12, hop: 'pricing' }),
+      progress({ message: 'Hop 3 of 12' }),
+      progress('a bare string'),
+      progress(undefined),
+    ];
+    for (const e of dumps) {
+      const out = line(e);
+      expect(out).toBe('The `walk_graph` tool reported progress while it was still running.');
+      expect(out).not.toContain('pricing');
+      expect(out).not.toContain('{');
+      expect(out).not.toMatch(/\{\{/);
+    }
+  });
+
+  it('routes to a key that exists', () => {
+    const key = selectCommentaryKey(progress());
+    expect(key).toBe('stream.tool_progress');
+    expect(defaultCommentaryTemplates[key as string]).toBeDefined();
+  });
+});

@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.54.0] - 2026-08-19
+
+A mid-call tool report now reaches **the person watching**, not only the
+record.
+
+`ctx.progress(payload)` shipped in 9.52.0 and did its half of the job well: a
+report from inside a still-running tool call became a typed, stamped, ordered
+`agentfootprint.stream.tool_progress` event, on the record and in the
+envelope. A consumer integration then found the other half missing, and their
+sentence is the whole bug report: `tool_progress` "is emitted by the tool-call
+stage and in the event registry, but no status strategy consumes it — so it
+lands on the record, not in the browser."
+
+They were right. Nothing projected the event onto the surfaces a person
+actually watches, so every consumer kept a hand-rolled side channel for the
+live middle of a long call — which is half the feature written twice, in every
+integration. The record half and the live half must come from ONE call. Now
+they do.
+
+### Added
+
+- **The live status line consumes `tool_progress`.** While a tool call is in
+  flight, an arriving report updates the sentence
+  `agent.enable.liveStatus(...)` hands to whatever renders your chat bubble —
+  and the low-level `attachStatus(dispatcher, { onStatus })` door too. No new
+  event, no payload change, no wiring on your side: the arm was missing, and
+  this adds the arm.
+
+- **The display contract, stated and narrow.** `payload` is author-defined
+  `unknown`, so a surface that guessed at it would put words in a tool's
+  mouth. One rule, and it is the whole rule:
+
+  | your payload | the line a person reads |
+  | --- | --- |
+  | `{ message: 'Hop 3 of 12' }` | `Hop 3 of 12` — your sentence, verbatim |
+  | `{ done: 3, total: 12 }` | `` `walk_graph` reported progress (3 so far)… `` |
+  | `'a bare string'` | the same generic line |
+
+  A top-level string field named **`message`** is shown verbatim, trimmed, and
+  cut at **120 characters** with the cut stated (`… (+N more)`) — `message` is
+  the field MCP's own progress notification uses, so a tool already speaking
+  that protocol needs no second vocabulary. Anything else — no `message`, a
+  non-string one, an empty one, a bare string payload — gets the generic line:
+  the tool's name, that it reported, and how many times.
+
+  What it will **never** do is pretty-print your payload into a human
+  sentence. A status line is prose, and a tool's JSON is not a sentence anyone
+  wrote. One tool's `total` is hops and the next one's is bytes; a line that
+  said "3 of 12" about the wrong unit would be worse than one that said
+  nothing.
+
+- **One call, two honest faces.** The structured payload rides to the record
+  untouched either way. Adding `message` does not remove your numbers — it
+  adds the half a person can read, and `getRecording()` still carries the rest.
+
+- **Parallel calls interleave correctly, keyed by `toolCallId`.** Two calls in
+  flight each keep their own progress tally; the newest report wins the line
+  and names the call that made it; a call ending removes only itself. That
+  last one also fixes a quieter imprecision that predates this release: a
+  `tool_end` used to be able to clear a SIBLING call's status, leaving the
+  bubble blank while a tool was still working.
+
+- **Commentary narrates the middle**, so recordings replay it: *"The
+  `walk_graph` tool reported progress while it was still running."* The
+  teaching voice states the fact and never the payload — the same split the
+  Lens teaching view keeps, in the same words.
+
+- **Consumers override by template key.** `tool.progress` (the `message`
+  case), `tool.progress.generic` (everything else), or per tool with
+  `tool.<toolName>.progress` / `tool.<toolName>.progress.generic` — the same
+  map `.thinkingTemplates(...)` already takes.
+
+### Changed
+
+- **A tool that already calls `ctx.progress` will see its status line move
+  where it did not before.** That is the fix, not a side effect. If you shipped
+  a curated `tool.<toolName>` line and want it to stand through a call's
+  reports, delete `tool.progress.generic` from your template map: the ladder
+  falls through to `tool.<toolName>` and then `tool`, so a template map written
+  before this release renders exactly what it always did, and nothing here can
+  blank a bubble that used to have a line in it.
+
+- A tool that never reports is **byte-identical** — same events, same status
+  lines, nothing to opt out of. Pinned by a test that says so.
+
+### For consumers
+
+If you hand-rolled a side channel to show the middle of a long tool call —
+a second event listener, a parallel status store, a bespoke
+`tool_progress` → string renderer — you can delete it. Add `message` to the
+payload you were already sending and the line says your words; leave it off
+and the line still says the call is working.
+
 ## [9.53.0] - 2026-08-19
 
 A tool can return **series, facts, and provenance as typed data** — and a

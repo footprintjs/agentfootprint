@@ -18,6 +18,7 @@ import type {
   AgentfootprintEventMap,
   AgentfootprintEventType,
 } from '../../events/registry.js';
+import { progressMessageOf } from './status/statusTemplates.js';
 
 export interface StatusOptions {
   /**
@@ -41,6 +42,7 @@ export type StatusEvent =
   | AgentfootprintEventMap['agentfootprint.agent.iteration_start']
   | AgentfootprintEventMap['agentfootprint.agent.route_decided']
   | AgentfootprintEventMap['agentfootprint.stream.tool_start']
+  | AgentfootprintEventMap['agentfootprint.stream.tool_progress']
   | AgentfootprintEventMap['agentfootprint.stream.tool_end'];
 
 const RELEVANT: ReadonlySet<AgentfootprintEventType> = new Set<AgentfootprintEventType>([
@@ -49,26 +51,49 @@ const RELEVANT: ReadonlySet<AgentfootprintEventType> = new Set<AgentfootprintEve
   'agentfootprint.agent.iteration_start',
   'agentfootprint.agent.route_decided',
   'agentfootprint.stream.tool_start',
+  'agentfootprint.stream.tool_progress',
   'agentfootprint.stream.tool_end',
 ]);
 
 /**
  * Attach a thinking-status subscription to the event dispatcher.
  * Returns an Unsubscribe — call to detach.
+ *
+ * Holds one small piece of state: how many mid-call reports each in-flight
+ * tool call has filed (9.54.0), so the generic progress line can say "3 so
+ * far" instead of repeating one indistinguishable sentence. The tally is
+ * per-`toolCallId` — parallel calls count separately — and is dropped when
+ * that call ends, so nothing accumulates across a long-lived run.
  */
 export function attachStatus(dispatcher: EventDispatcher, options: StatusOptions): Unsubscribe {
-  const format = options.format ?? defaultFormatter;
+  const progressCounts = new Map<string, number>();
+  const format = options.format ?? ((e: StatusEvent) => defaultFormatter(e, progressCounts));
   return dispatcher.on('*', (event: AgentfootprintEvent) => {
     if (!RELEVANT.has(event.type)) return;
+    if (event.type === 'agentfootprint.stream.tool_progress') {
+      const id = event.payload.toolCallId;
+      progressCounts.set(id, (progressCounts.get(id) ?? 0) + 1);
+    }
     const status = format(event as StatusEvent);
+    if (event.type === 'agentfootprint.stream.tool_end') {
+      progressCounts.delete(event.payload.toolCallId);
+    }
     if (status !== null) options.onStatus(status);
   });
 }
 
 /**
  * Default renderer. Humanizes each supported event into a short status line.
+ *
+ * `tool_progress` keeps the same display contract the projection keeps
+ * (`progressMessageOf`): a top-level string `message` is shown verbatim,
+ * length-capped; anything else gets the tool's name, the fact that it
+ * reported, and the count. The author's payload is never dumped into prose.
  */
-function defaultFormatter(event: StatusEvent): string | null {
+function defaultFormatter(
+  event: StatusEvent,
+  progressCounts?: ReadonlyMap<string, number>,
+): string | null {
   switch (event.type) {
     case 'agentfootprint.agent.turn_start':
       return 'Thinking...';
@@ -76,6 +101,12 @@ function defaultFormatter(event: StatusEvent): string | null {
       return `Iteration ${event.payload.iterIndex}`;
     case 'agentfootprint.stream.tool_start':
       return `Calling ${event.payload.toolName}(…)`;
+    case 'agentfootprint.stream.tool_progress': {
+      const message = progressMessageOf(event.payload.payload);
+      if (message !== null) return message;
+      const n = progressCounts?.get(event.payload.toolCallId) ?? 1;
+      return `${event.payload.toolName} reported progress (${String(n)} so far)`;
+    }
     case 'agentfootprint.stream.tool_end':
       return event.payload.error
         ? `Tool ${event.payload.toolCallId} failed`

@@ -793,6 +793,61 @@ The reports land in [recordings](doc:recordings) with everything else, so
 "where did that forty seconds go?" is answerable from an archive months later,
 not only from a terminal someone happened to be watching.
 
+### What a person sees
+
+<Callout>Since 9.54.0. Through 9.53.0 a report reached the record and stopped
+there — nothing projected it onto a surface a person watches, so consumers kept
+a hand-rolled side channel for the live middle of a long call. That side channel
+can go.</Callout>
+
+The same report now moves the **live status line** — the one sentence
+`agent.enable.liveStatus(...)` hands to whatever renders your chat bubble:
+
+```typescript
+agent.enable.liveStatus({
+  strategy: chatBubbleLiveStatus({ onLine: (line) => setStatus(line) }),
+});
+```
+
+Because `payload` is yours and typed `unknown`, the display contract is narrow
+and literal — one rule, no guessing:
+
+| your payload | the line a person reads |
+| --- | --- |
+| `{ message: 'Hop 3 of 12' }` | `Hop 3 of 12` — your sentence, verbatim |
+| `{ done: 3, total: 12 }` | `` `walk_graph` reported progress (3 so far)… `` |
+| `'a bare string'` | the same generic line |
+
+- **`message` is the one field read.** A top-level string field named `message`
+  is shown to the person verbatim, trimmed, and cut at **120 characters** with
+  the cut stated (`… (+N more)`). It is the field MCP's own progress
+  notification uses, so a tool already speaking that protocol needs no second
+  vocabulary. Nothing else in your payload is read — one tool's `total` is hops
+  and the next one's is bytes, and a status line that said "3 of 12" about the
+  wrong unit would be worse than one that said nothing.
+- **Everything else gets the generic line.** No `message`, a non-string one, an
+  empty one, a bare string payload: the person sees the tool's name, that it
+  reported, and how many times. Your payload is **never** pretty-printed into
+  that sentence. A status line is prose, and a tool's JSON is not a sentence
+  anyone wrote.
+- **One call, two faces.** The structured payload rides to the record untouched
+  either way. Adding `message` does not remove your numbers — it adds the
+  half a person can read.
+- **Parallel calls stay apart.** The line is keyed by `toolCallId`: two calls
+  running at once each keep their own count, the newest report wins the line and
+  names the call that made it, and one call ending never closes its sibling.
+- **Override the wording by template key.** `tool.progress` (the `message`
+  case), `tool.progress.generic` (everything else), or per tool with
+  `tool.<toolName>.progress` / `tool.<toolName>.progress.generic` — the same
+  map `.thinkingTemplates(...)` takes. Drop a key and the ladder falls through
+  to your existing `tool.<toolName>` line, so a template map written before
+  9.54.0 renders exactly what it always did.
+
+Recordings replay the middle too: the commentary voice narrates each report as
+*"The `walk_graph` tool reported progress while it was still running."* — the
+fact, never the payload, which is the same split the
+[Lens](doc:recordings) teaching view keeps.
+
 ## Anti-patterns
 
 - Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` — use `ctx.signal` to honor cancellation, and `ctx.runId` / `ctx.sessionId` / `ctx.identity` to isolate anything you hold, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)

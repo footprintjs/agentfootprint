@@ -106,6 +106,13 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'stream.tool_start.desc': ' — registered as "{{desc}}"',
   'stream.tool_start.noDesc': '',
 
+  // A mid-call report (9.54.0). The teaching voice says THAT the call broke
+  // its silence, never what the author's payload said: `payload` is
+  // `unknown`, and a sentence that quoted it would be a field dump wearing
+  // prose. The words a person is meant to read live on the STATUS surface,
+  // where the author opted into them by naming a `message`.
+  'stream.tool_progress': 'The `{{toolName}}` tool reported progress while it was still running.',
+
   'stream.tool_end': 'The tool returned its result. {{agentName}} will share it with the LLM next.',
 
   'context.injected.rag':
@@ -405,6 +412,8 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
 
     case 'agentfootprint.stream.tool_start':
       return 'stream.tool_start';
+    case 'agentfootprint.stream.tool_progress':
+      return 'stream.tool_progress';
     case 'agentfootprint.stream.tool_end':
       return 'stream.tool_end';
 
@@ -671,6 +680,9 @@ export function extractCommentaryVars(
         : templates['stream.tool_start.noDesc'] ?? '';
       return { ...base, toolName, descClause };
     }
+
+    case 'agentfootprint.stream.tool_progress':
+      return { ...base, toolName: event.payload.toolName };
 
     case 'agentfootprint.composition.enter': {
       const p = event.payload;

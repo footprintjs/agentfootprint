@@ -11,7 +11,7 @@
  * one `agentfootprint.stream.tool_progress` event, in call order, always
  * between that call's `tool_start` and its `tool_end`.
  *
- * Three things this example shows, in order:
+ * Four things this example shows, in order:
  *
  *   1. The live feed — `agent.on('agentfootprint.stream.tool_progress')` while
  *      the walk is still running, printing each hop as it lands.
@@ -21,6 +21,14 @@
  *   3. The same reports over the wire — `toSSE(agent)` carries them to a
  *      browser with no wiring of its own, because the event name already
  *      starts with `agentfootprint.stream.`.
+ *   4. The LIVE STATUS LINE (9.54.0) — the same reports as the sentence a chat
+ *      bubble shows, through `agent.enable.liveStatus(...)`. Through 9.53.0
+ *      this half was missing: the event was on the record and nothing carried
+ *      it to the screen, so every consumer wrote their own side channel for
+ *      the middle of a long call. The display contract is narrow on purpose —
+ *      a top-level string `message` is shown VERBATIM (cut at 120 characters,
+ *      and the cut is stated); anything else gets an honest generic line. The
+ *      author's payload is never pretty-printed into a human sentence.
  *
  * …and one thing it proves by absence: a second agent whose tool never calls
  * `progress` files zero `tool_progress` events. The feature costs nothing to
@@ -35,7 +43,7 @@
 
 import { Agent, defineTool, type LLMProvider, type ToolExecutionContext } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
-import { toSSE } from '../../src/doors/observe.js';
+import { chatBubbleLiveStatus, toSSE } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -43,9 +51,10 @@ export const meta: ExampleMeta = {
   title: 'Progressive tool results — "hop 3 of 12" while the tool is still working',
   group: 'features',
   description:
-    "A long-running tool calls ctx.progress() mid-execute; each report lands as a typed " +
+    'A long-running tool calls ctx.progress() mid-execute; each report lands as a typed ' +
     'agentfootprint.stream.tool_progress event — framework-stamped with toolCallId/toolName/' +
-    'iteration, author-owned payload — read live from the event stream and again off toSSE.',
+    'iteration, author-owned payload — read live from the event stream, off toSSE, and as the ' +
+    'live status line a chat bubble shows (a `message` verbatim, anything else generic).',
   defaultInput: 'What does the checkout service depend on?',
   providerSlots: ['default'],
   tags: ['features', 'tools', 'observability', 'streaming', 'events'],
@@ -75,7 +84,15 @@ function walkTool(report: boolean) {
         visited.push(hop);
         // The one line. Always present, never throws, never blocks — and with
         // nothing listening it is a no-op that drops the report.
-        if (report) ctx.progress({ done: i + 1, total: HOPS.length, hop });
+        // `message` is the one field the live status line reads. Everything
+        // else still rides to the record untouched — one call, two faces.
+        if (report) {
+          ctx.progress(
+            i % 4 === 3
+              ? { message: `Hop ${String(i + 1)} of ${String(HOPS.length)} — ${hop}`, done: i + 1, total: HOPS.length, hop }
+              : { done: i + 1, total: HOPS.length, hop },
+          );
+        }
       }
       return `${String(args.root)} reaches ${String(visited.length)} services: ${visited.join(', ')}`;
     },
@@ -151,14 +168,47 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   check(chunks.length === HOPS.length, `${String(HOPS.length)} SSE frames`);
   console.log(`     ${chunks[2]!.trim().split('\n').join('\n     ')}`);
 
-  // ── 4. Zero-cost when unused ───────────────────────────────────────────
+  // ── 4. The live status line — what a PERSON sees (9.54.0) ──────────────
+  // This is the half that was missing through 9.53.0. `enable.liveStatus`
+  // projects the run onto ONE sentence and hands it to whatever renders your
+  // chat bubble; mid-call reports now move that sentence.
+  console.log('\n4. The same reports as the line a chat bubble shows:');
+  const watched = buildAgent(true);
+  const statusLines: string[] = [];
+  watched.enable.liveStatus({
+    strategy: chatBubbleLiveStatus({ onLine: (line) => statusLines.push(line) }),
+  });
+  await watched.run({ message: input });
+
+  const spoken = statusLines.filter((l) => l.startsWith('Hop '));
+  const generic = statusLines.filter((l) => l.includes('reported progress'));
+  for (const l of [...spoken.slice(0, 2), ...generic.slice(0, 1)]) console.log(`     "${l}"`);
+  // A report that named a `message` speaks for itself; one that did not gets
+  // the honest generic line instead of a pretty-printed payload.
+  check(spoken.length > 0, 'reports with a `message` shown verbatim');
+  check(generic.length > 0, 'reports without one shown as the generic line');
+  check(
+    statusLines.every((l) => !l.includes('{') && !l.includes('api-gateway')),
+    'no payload ever dumped into a human line',
+  );
+  console.log('     …and never a payload dump: the JSON stays on the record, where it belongs.');
+
+  // ── 5. Zero-cost when unused ───────────────────────────────────────────
   const quiet = buildAgent(false);
   let quietReports = 0;
+  const quietLines: string[] = [];
+  quiet.enable.liveStatus({
+    strategy: chatBubbleLiveStatus({ onLine: (line) => quietLines.push(line) }),
+  });
   quiet.on('agentfootprint.stream.tool_progress', () => (quietReports += 1));
   await quiet.run({ message: input });
   check(quietReports === 0, 'no reports from a tool that never calls progress');
-  console.log('\n4. A tool that never calls progress files ZERO tool_progress events —');
-  console.log('   same result, same stream, nothing to opt out of.');
+  check(
+    quietLines.every((l) => !l.includes('reported progress')),
+    'a quiet tool’s status line is exactly what it always was',
+  );
+  console.log('\n5. A tool that never calls progress files ZERO tool_progress events —');
+  console.log('   same result, same stream, same status line, nothing to opt out of.');
 
   return answer;
 }

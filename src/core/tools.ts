@@ -314,6 +314,29 @@ export interface ToolExecutionContext {
    * class instances, no live handles, no functions). Progress is TELEMETRY: it
    * never enters the tool result, the history, or the model's view.
    *
+   * **What a PERSON sees (9.54.0).** One call, two faces. The structured
+   * payload rides to the record untouched, exactly as above — and the live
+   * status surfaces (`agent.enable.liveStatus(...)`, `attachStatus`) now show
+   * the report too, so a long call is no longer silent in the browser. Because
+   * `payload` is yours and typed `unknown`, the display contract is narrow and
+   * literal:
+   *
+   *   - A top-level **string field named `message`** is shown to the person
+   *     VERBATIM, trimmed, cut at **120 characters** with the cut stated
+   *     (`… (+N more)`). `message` is the field MCP's own progress
+   *     notification uses; nothing else in the payload is read.
+   *   - **Anything else** — no `message`, a non-string one, an empty one, a
+   *     bare string payload — shows the generic line instead:
+   *     `` `<toolName>` reported progress (N so far)… ``. Your payload is
+   *     never pretty-printed into that sentence. A status line is prose, and
+   *     a tool's JSON is not a sentence anyone wrote.
+   *
+   * So `ctx.progress({ done: 3, total: 12 })` keeps its numbers on the record
+   * and says "reported progress (3 so far)" on screen; adding
+   * `message: 'Hop 3 of 12'` puts your own words there instead — and keeps the
+   * numbers. Consumers override the wording by template key
+   * (`tool.progress`, `tool.progress.generic`, or per tool).
+   *
    * Doors with no event stream to file on — `mcpServe`, the offline
    * `callTraceTool` context — supply the no-op. A tool must not have to know
    * which door it is behind to be safe to call this from.
@@ -322,7 +345,14 @@ export interface ToolExecutionContext {
    *   execute: async (args, ctx) => {
    *     for (const [i, hop] of hops.entries()) {
    *       await walk(hop);
-   *       ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });
+   *       // `message` is what the person reads; the rest is what the record
+   *       // keeps. Drop `message` and the screen still says a report landed.
+   *       ctx.progress({
+   *         message: `Hop ${i + 1} of ${hops.length} — ${hop.id}`,
+   *         done: i + 1,
+   *         total: hops.length,
+   *         hop: hop.id,
+   *       });
    *     }
    *     return summary;
    *   }
