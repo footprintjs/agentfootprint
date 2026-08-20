@@ -2,10 +2,14 @@
  * Claim<T> — a value that says how it knows itself.
  *
  * Pattern: tagged union + tiny constructors. Pure, zero dependencies.
- * Role:    the maps family's honesty primitive. Every dynamic fact a map or
- *          the mount kernel states about the world is a Claim, never a bare
- *          value — so "unknown" carries its reason, and a count that nobody
- *          measured can never be rendered as a zero.
+ * Role:    the library's honesty primitive — ONE vocabulary leaf, many doors.
+ *          Every dynamic fact a subsystem states about the world is a Claim,
+ *          never a bare value — so "unknown" carries its reason, and a count
+ *          that nobody measured can never be rendered as a zero. It lives
+ *          under lib/ (not under any one door) because two doors already need
+ *          it: `agentfootprint/maps` (the mount kernel) and
+ *          `agentfootprint/cache` (the hit-rate meter, 9.59.0). Both re-export
+ *          THESE symbols, so `known` from either door is the same function.
  *
  * Why it exists: two recorded failures came from a system stating a value it
  * did not hold — a final summary written from a trimmed memory, and a served

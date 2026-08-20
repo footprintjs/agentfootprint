@@ -1,8 +1,12 @@
 # claim — a value that says how it knows itself
 
-**Why.** Two recorded failures came from the system stating a value it did not hold: a final
-summary written from a trimmed memory, and a served list whose silent cap read as
-completeness. `Claim<T>` makes the third state — *we do not know, and here is why* — a first-class
+**Where it lives.** `src/lib/claim/` — one vocabulary leaf, many doors. It is re-exported
+reference-equal from both `agentfootprint/maps` and `agentfootprint/cache`, so `known` imported
+from either door is the same function.
+
+**Why.** Three recorded failures came from the system stating a value it did not hold: a final
+summary written from a trimmed memory, a served list whose silent cap read as completeness, and
+(9.58.0) a cache meter that reported a 0% hit rate for a turn nobody had measured. `Claim<T>` makes the third state — *we do not know, and here is why* — a first-class
 value a consumer must branch on. An unknown count can never become a zero, because the type has no
 door from `unknown` to `.value`.
 

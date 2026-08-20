@@ -128,9 +128,19 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   [
     'src/cache/types.ts',
     'reached by `adapters/types.ts` for `CacheMarker` (`LLMRequest.cacheMarkers`), and it ' +
-      'points straight back — the four files here are one closed cluster of pure TYPE ' +
+      'points straight back — the files here are one closed cluster of pure TYPE ' +
       'declarations with no runtime between them. Note the pure core does NOT get this one: ' +
       'it uses the `SkillCachePolicy` mirror instead.',
+  ],
+  [
+    'src/lib/claim/claim.ts',
+    '`Claim<T>` — reached by `cache/types.ts`, which types `CacheStrategy.extractMetrics` ' +
+      'as `Claim<CacheMetrics>` so an unmeasured call cannot be read as a zero one ' +
+      '(9.59.0). The purest leaf on either list: a tagged union and six one-line ' +
+      'constructors, ZERO imports of its own, nothing in it that knows what an agent or a ' +
+      'provider is. It moved here from `src/maps/claim/` precisely so that reaching it ' +
+      'never means reaching the maps kernel — two unrelated consumers (the mount kernel ' +
+      'and the cache meter) share one honesty primitive, and neither depends on the other.',
   ],
 ];
 

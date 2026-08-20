@@ -43,7 +43,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 | letting the UI draw an artifact without the model naming a component | `registerArtifactComponent` (in the `agentfootprint-lens` package) | — | — |
 | finding which tools the model keeps writing by hand | `agentfootprint.tools.code_run` + `codeShape` | `src/core/codeRunnerTool.ts` | 9.46.0 |
 | a skill wrongly activated by a keyword staying loaded for the whole turn — suspending/parking a map's prompt + tools when its contribution goes unused, WITHOUT touching its cursor, and re-engaging it on evidence | `.maps()` + `advanceEngagement` + `agentfootprint.map.engaged/parked` + skip reason `'parked'` | `src/maps/` | 9.58.0 |
-| a value that must say how it knows itself — an unknown count that can never render as zero | `Claim<T>` (`known`/`unknown`/`notApplicable`) | `src/maps/claim/claim.ts` | 9.58.0 |
+| a value that must say how it knows itself — an unknown count that can never render as zero | `Claim<T>` (`known`/`unknown`/`notApplicable`) | `src/lib/claim/claim.ts` | 9.58.0 |
 | a tool answering "I looked and found nothing", routably | `absent` | `src/core/agent/coverage/absent.ts` | 9.43.0 |
 | stating what a clean answer does NOT rule out | `coverage` | `src/core/agent/coverage/ledger.ts` | 9.43.0 |
 | proving a session store really honours the port | `runSessionLifecycleConformance` | `src/hosting/conformance/` | 9.37.0 |
