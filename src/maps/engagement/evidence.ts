@@ -31,8 +31,38 @@ export interface EngagementPass {
   readonly toolResults: readonly { readonly toolName: string }[];
   /** The `read_skill` pick the gate accepted last iteration, if any. */
   readonly pendingSkillPick?: string;
-  /** Skills the model has activated this turn (accumulates; turn lifetime). */
-  readonly activatedInjectionIds: readonly string[];
+  /**
+   * The `read_skill` picks the gate accepted ON THE PREVIOUS PASS — hops,
+   * open skills and re-engagements alike. PER-PASS, and that word is the
+   * whole fix (9.59.0).
+   *
+   * It replaces `activatedInjectionIds`, which was the turn-cumulative
+   * activation list: it is cleared only at run start, and a mounted map's
+   * member list is every node in the graph, so ONE accepted `read_skill`
+   * anywhere produced "explicit evidence" on every pass for the rest of the
+   * turn. Twelve passes after an unrelated pick, a record could read
+   * `standing: engaged, by: 'explicit', idle: 0` while the wrong 7,000-
+   * character fragment rode every call. The same lever that recovers a parked
+   * map silently switched the kernel off.
+   *
+   * Renewal must be FRESH evidence. That an `llm-activated` skill stays
+   * active turn-long is true, but it is the *served* condition, not the
+   * renewal one — a map riding forever without being used is exactly what the
+   * kernel exists to park.
+   */
+  readonly acceptedSkillPicks: readonly string[];
+  /**
+   * The injection ids this map's contribution actually reached the wire
+   * through on the PREVIOUS pass (9.59.0) — the previous pass's per-slot
+   * active set, flattened.
+   *
+   * The idle test's first documented clause, and until now the unimplemented
+   * one: "the map's contribution was actually served". It is honestly
+   * knowable for the pass the idle test judges — the idle test is about the
+   * previous pass, and the previous pass's active set is already a boundary
+   * argument at the stage that runs the advance.
+   */
+  readonly servedLastPass: readonly string[];
 }
 
 /** One piece of renewal evidence, typed by what produced it. */
@@ -44,10 +74,17 @@ export type RenewalEvidence =
 
 /**
  * Classify a cursor-move clause into an evidence strength. Mirrors the skill
- * map's `CursorMoveCause` vocabulary; an unrecognized future clause counts as
- * `structural` on purpose — the conservative reading, because a wrongly
- * strong classification merely delays a park, while a wrongly weak one parks
- * a map the system itself just routed to.
+ * map's `CursorMoveCause` vocabulary.
+ *
+ * Two defaults, and the difference matters (9.59.0):
+ * - `'stay'` and `'none'` are NOT MOVES. They answer `assumed`: the cursor is
+ *   where it already was and nothing explains why. Staying is exactly what
+ *   the recorded stuck turn did 29 times out of 30 — classifying it as
+ *   system evidence is how that turn would have been renewed forever.
+ * - Any OTHER unrecognized clause counts as `structural`, unchanged: a future
+ *   clause is presumed to be a real routing decision, and there a wrongly
+ *   strong reading merely delays a park while a wrongly weak one parks a map
+ *   the system itself just routed to.
  */
 export function strengthOfMove(by: string): EvidenceStrength {
   switch (by) {
@@ -62,6 +99,9 @@ export function strengthOfMove(by: string): EvidenceStrength {
       return 'semantic';
     case 'entry':
       return 'lexical';
+    case 'stay':
+    case 'none':
+      return 'assumed';
     default:
       return 'structural';
   }
@@ -69,19 +109,24 @@ export function strengthOfMove(by: string): EvidenceStrength {
 
 /** Rank for upgrades: a stronger renewal upgrades a weaker engagement. */
 const STRENGTH_RANK: Readonly<Record<EvidenceStrength, number>> = {
-  explicit: 3,
-  structural: 2,
-  semantic: 1,
-  lexical: 0,
+  explicit: 4,
+  structural: 3,
+  semantic: 2,
+  lexical: 1,
+  assumed: 0,
 };
 
 export function strongerOf(a: EvidenceStrength, b: EvidenceStrength): EvidenceStrength {
   return STRENGTH_RANK[a] >= STRENGTH_RANK[b] ? a : b;
 }
 
-/** A guess decays without corroboration; system- and model-backed standings do not. */
+/**
+ * A guess decays without corroboration; system- and model-backed standings do
+ * not. `assumed` — nobody said why — decays too: an unknown cause is the
+ * weakest thing on the record, not the strongest.
+ */
 export function isTentative(strength: EvidenceStrength): boolean {
-  return strength === 'lexical' || strength === 'semantic';
+  return strength === 'lexical' || strength === 'semantic' || strength === 'assumed';
 }
 
 /**
@@ -111,7 +156,10 @@ export function renewalEvidenceOf(map: MountedMap, pass: EngagementPass): Renewa
   if (pass.pendingSkillPick !== undefined && members.has(pass.pendingSkillPick)) {
     evidence.push({ kind: 'explicit-pick', skillId: pass.pendingSkillPick });
   }
-  for (const id of pass.activatedInjectionIds) {
+  // PER-PASS picks only. The turn-cumulative activation list used to be read
+  // here, which made one pick anywhere disarm the kernel for the rest of the
+  // turn (see `EngagementPass.acceptedSkillPicks`).
+  for (const id of pass.acceptedSkillPicks) {
     if (members.has(id)) evidence.push({ kind: 'member-activated', skillId: id });
   }
   return evidence;

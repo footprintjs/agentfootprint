@@ -37,7 +37,11 @@ const plan = (over: Partial<EngagementPlan> = {}): EngagementPlan => ({
 const pass = (over: Partial<EngagementPass>): EngagementPass => ({
   iteration: 1,
   toolResults: [],
-  activatedInjectionIds: [],
+  acceptedSkillPicks: [],
+  // The idle test's SERVED clause (9.59.0). Default: the map's contribution
+  // DID ride last pass, which is the situation every timeline below is about.
+  // A test that wants the not-served case says so explicitly.
+  servedLastPass: MAP.memberIds,
   ...over,
 });
 
@@ -53,7 +57,14 @@ describe('unit: the renewal feed classifies evidence by what produced it', () =>
     // Unknown future clause reads as structural — the conservative arm:
     // wrongly strong delays a park; wrongly weak parks what the system routed to.
     expect(strengthOfMove('something-new')).toBe('structural');
+    // But 'stay' and 'none' are NOT MOVES, and they are the recorded stuck
+    // turn's own shape (29 of 30). They answer `assumed` — nobody said why —
+    // which is TENTATIVE, so it decays. Reading them as system evidence is
+    // exactly how that turn would have been renewed forever.
+    expect(strengthOfMove('stay')).toBe('assumed');
+    expect(strengthOfMove('none')).toBe('assumed');
     expect(isTentative('lexical')).toBe(true);
+    expect(isTentative('assumed')).toBe(true);
     expect(isTentative('structural')).toBe(false);
   });
 
@@ -91,6 +102,14 @@ describe('functional: the recorded keyword-trap timeline, pass by pass', () => {
         standing: 'engaged',
         by: 'lexical',
         since: 1,
+        // FACT 1 — engagement provenance, written once and never rewritten.
+        foundedBy: 'lexical',
+        foundedAt: 1,
+        foundedOn: 'zone-audit',
+        // FACT 2 — position evidence, recorded separately from the start.
+        at: 'zone-audit',
+        atBy: 'lexical',
+        atSince: 1,
         idle: 0,
         witness: 'zone',
       },
@@ -189,7 +208,20 @@ describe('functional: the recorded keyword-trap timeline, pass by pass', () => {
 
   it('explicit evidence re-engages a parked map; tentative evidence does not', () => {
     const parked: MapEngagement = [
-      { mapId: 'skill-map', standing: 'parked', by: 'lexical', since: 4, idle: 3, witness: 'zone' },
+      {
+        mapId: 'skill-map',
+        standing: 'parked',
+        by: 'lexical',
+        since: 4,
+        foundedBy: 'lexical',
+        foundedAt: 1,
+        foundedOn: 'zone-audit',
+        at: 'zone-audit',
+        atBy: 'lexical',
+        atSince: 1,
+        idle: 3,
+        witness: 'zone',
+      },
     ];
     // Same lexical noise again: stays parked.
     const still = advanceEngagement(

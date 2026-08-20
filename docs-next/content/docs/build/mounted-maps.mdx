@@ -51,8 +51,9 @@ Every engagement carries the strength of what founded it. `EvidenceStrength` is 
 - `structural` — a declared edge fired, or the map's own tool was called.
 - `semantic` — a classifier or scorer judged the person's words.
 - `lexical` — a pattern matched the person's words. A regex hit is a guess about intent, never a commitment.
+- `assumed` — **nobody said why.** The cursor is inside the map and no clause explains how it got there. The weakest rung, and the honest answer where the old code wrote down the strongest one.
 
-The top two stand until released. The bottom two are guesses, and guesses expire without corroboration — that is what `isTentative` answers. `strengthOfMove` maps a map's own cursor-move vocabulary onto this ladder, `strengthOfEvidence` does the same for a piece of renewal evidence, and `strongestOf` picks the winner when several arrive on one pass.
+The top two stand until released. The bottom three are guesses, and guesses expire without corroboration — that is what `isTentative` answers. `strengthOfMove` maps a map's own cursor-move vocabulary onto this ladder, `strengthOfEvidence` does the same for a piece of renewal evidence, and `strongestOf` picks the winner when several arrive on one pass.
 
 The reason the ladder exists at all is the recorded turn above: a `lexical` match is exactly what put the wrong map on the wire, and treating it as equal to a user request is what kept it there.
 
@@ -77,6 +78,36 @@ A tentative engagement counts one idle pass when all three of these hold:
 All three matter. A pass with no tool calls at all counts nothing — the model was thinking, not ignoring. And a contribution that never reached the wire cannot have been ignored, so it earns no idle either.
 
 At `renewalGrace` consecutive idle passes, the map parks.
+
+## Three facts, not one standing
+
+An engagement record answers three different questions, and keeping them apart is the difference between a causal record and a plausible story:
+
+1. **Engagement provenance** — *why is this map participating at all?* `foundedBy`, `foundedAt` and `foundedOn`. Written once and **never** rewritten. "At iteration 3 the user explicitly activated audit" stays true forever, whatever happens afterwards.
+2. **Position evidence** — *why is the cursor on this member?* `at`, `atBy` and `atSince`. The kernel observes position; it never sets it.
+3. **Contribution eligibility** — *why is this member's contribution being served right now?* `by`. Recomputed every pass.
+
+Only the third may weaken, and only when the **subject** changes — never because time passed.
+
+### What a declared route does
+
+Say the model explicitly asked for `audit`, and a declared edge then moves the cursor to `billing`. Nobody asked for billing.
+
+The ruling, and what the code does: **billing does not inherit audit's `explicit`.** It entered by a declared transition, so its position evidence is `structural`, with its own iteration. Eligibility is re-derived from that — not inherited from the member that used to hold the cursor. The engagement's founding cause is untouched: it still says, truthfully and forever, that this engagement began explicitly on `audit` at iteration 1.
+
+This matters because `explicit` never decays. Under a single-`by` model, one explicit pick at the top of a turn silently warranted every skill the graph walked to afterwards, for the rest of the turn. Now a member entered by a weak clause is tentative and can park, exactly as if it had been entered that way from the start.
+
+The kernel says so on the record too: the `agentfootprint.map.engaged` event carries `tenantChanged`, the member moved to, and the founding cause — so a reader sees that eligibility changed and why.
+
+## Turns
+
+Cursor continuity and engagement continuity have **independent lifetimes**, on purpose.
+
+The conversation carrier persists `currentSkillId` — the cursor — across turns. It carries no engagement state at all. So on a new turn the kernel starts fresh and re-evaluates engagement from that turn's evidence: a new user message is new evidence, and neither an old parked state nor an old explicit activation gets to silently decide the new turn.
+
+The carried cursor arrives on turn two with no clause explaining why it is there. That is what `assumed` is for: **nobody said why**. It is the weakest rung and it is tentative, so it decays and parks like any other guess.
+
+That rung closed a real hole. An absent clause used to be recorded as `structural` — the strongest, non-decaying category — so turn one's mistaken pattern match was laundered into a permanent warrant on turn two and every turn after. Three routes led into it: a graph with no `explainNextSkill` hook, so no cause ever arrives; a `stay` or `none`, which are not moves; and the turn boundary itself.
 
 ## Reading the record
 

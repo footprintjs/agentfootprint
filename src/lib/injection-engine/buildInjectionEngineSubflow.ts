@@ -257,12 +257,35 @@ interface InjectionEngineArgs {
    *  currentSkillId/nextSkillCursor alias discipline). Present only after
    *  a tool granted one. */
   instructionLeases?: readonly InstructionLease[];
+  /** The `read_skill` picks the gate accepted on the PREVIOUS pass — hops,
+   *  open skills and re-engagements alike (9.59.0). PER-PASS: the tool-calls
+   *  stage clears it at the top of every dispatching iteration, beside
+   *  `pendingSkillPick`. The kernel's renewal feed reads THIS, not the
+   *  turn-cumulative `activatedInjectionIds` — one accepted pick anywhere
+   *  used to read as live explicit evidence for every remaining pass of the
+   *  turn, which silently switched the kernel off. Threaded only for agents
+   *  built with `.maps()`. */
+  acceptedSkillPicks?: readonly string[];
   /** The kernel's engagement state as of the PREVIOUS iteration (9.58.0) — a
    *  readonly boundary INPUT (the currentSkillId/nextSkillCursor alias
    *  discipline). Evaluate advances it and writes the fresh value under
    *  `nextMapEngagement`; the mount mappers carry the alias back onto the
    *  parent's `mapEngagement`. Present only on agents built with `.maps()`. */
   mapEngagement?: MapEngagement;
+}
+
+/**
+ * Every injection id that reached the wire last pass, across all three slots.
+ * The idle test's "was it actually served?" clause, answered from data the
+ * Evaluate stage already receives.
+ */
+function servedIdsOf(prior: ActiveBySlot | undefined): readonly string[] {
+  if (prior === undefined) return [];
+  const out = new Set<string>();
+  for (const slot of [prior.systemPrompt, prior.messages, prior.tools]) {
+    for (const r of slot) out.add(r.id);
+  }
+  return [...out];
 }
 
 /**
@@ -473,7 +496,13 @@ function makeEvaluateStage(
         ...(move?.witness?.text !== undefined && { witness: move.witness.text }),
         toolResults: toolResultsOf(ctx),
         ...(ctx.pendingSkillPick !== undefined && { pendingSkillPick: ctx.pendingSkillPick }),
-        activatedInjectionIds: ctx.activatedInjectionIds,
+        // PER-PASS picks (9.59.0), not the turn-cumulative activation list.
+        acceptedSkillPicks: args.acceptedSkillPicks ?? [],
+        // The idle test's SERVED clause (9.59.0), from the previous pass's
+        // per-slot active set — already a boundary arg here, so this costs
+        // no new plumbing. Flattened across the three slots: a contribution
+        // that reached the wire through ANY slot was served.
+        servedLastPass: servedIdsOf(args.priorActiveByslot),
       });
       // Written on EVERY pass the feature is on (the `if (routes)` precedent)
       // so a boundary never re-delivers stale engagement state.
@@ -486,6 +515,15 @@ function makeEvaluateStage(
             by: change.by,
             ...(change.witness !== undefined && { witness: change.witness }),
             ...(change.reengaged === true && { reengaged: true as const }),
+            // A guess that real evidence confirmed, and the cause it was
+            // FOUNDED on — so a reader of the record sees both halves of the
+            // story instead of a `by` that silently rewrote itself (9.59.0).
+            ...(change.upgraded === true && { upgraded: true as const }),
+            // The cursor moved to a different member: eligibility was
+            // re-derived from THIS member's evidence, not inherited.
+            ...(change.tenantChanged === true && { tenantChanged: true as const }),
+            ...(change.at !== undefined && { at: change.at }),
+            ...(change.foundedBy !== undefined && { foundedBy: change.foundedBy }),
           });
         } else {
           typedEmit(scope, 'agentfootprint.map.parked', {
