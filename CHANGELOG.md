@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.58.0] - 2026-08-20
+
 **A map's cursor says where it stands. Nothing said whether it had earned
 its seat. Now something does — without touching the cursor.**
 
