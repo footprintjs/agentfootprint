@@ -642,8 +642,8 @@ export function buildCallLLMStage(
       response.wireManifest === undefined
         ? 'unreachable'
         : wireFindings.length > 0
-          ? 'checked-fail'
-          : 'checked-pass',
+        ? 'checked-fail'
+        : 'checked-pass',
       wireFindings.length > 0 ? Date.now() : undefined,
     );
     fileIntegrityFindings(scope, wireFindings, iteration);

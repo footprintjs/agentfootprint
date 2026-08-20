@@ -32,8 +32,6 @@ export function toolManifestOf(
 ): WireToolManifest {
   if (tools === undefined) return { toolNames: [] };
   return {
-    toolNames: tools
-      .map((t) => t.name)
-      .filter((name): name is string => typeof name === 'string'),
+    toolNames: tools.map((t) => t.name).filter((name): name is string => typeof name === 'string'),
   };
 }
