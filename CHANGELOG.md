@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The server Anthropic adapter now keeps both halves of the cache
+  contract.** `AnthropicCacheStrategy` prepares cache markers for the
+  `'anthropic'` provider on every call, and the adapter silently dropped
+  them — so on the server path a byte-identical prompt prefix (measured at
+  roughly 65% of every call on a real recording) was paid at full rate, and
+  the miss was invisible: no `cacheRead`/`cacheWrite` ever came back on
+  `usage` for a meter to read. Markers now reach the wire as
+  `cache_control` (with the same request→body index translation the browser
+  adapter already pins), and the API's `cache_read_input_tokens` /
+  `cache_creation_input_tokens` come back as `usage.cacheRead` /
+  `usage.cacheWrite` on both adapters, streaming included. Absent stays
+  absent — an adapter never invents a zero for a number the provider did
+  not report. The marker application itself moved to one shared module,
+  `anthropicCacheWire`, so the two adapters cannot drift apart again.
+
 ## [9.57.0] - 2026-08-20
 
 **The window used to keep the task and throw away the evidence. Now it keeps

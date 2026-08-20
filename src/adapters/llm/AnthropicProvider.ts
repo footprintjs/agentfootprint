@@ -29,6 +29,7 @@ import type {
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -92,7 +93,14 @@ interface AnthropicMessage {
   role: 'assistant';
   content: AnthropicContentBlock[];
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | string;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    // Cache traffic — present only when the request carried cache_control.
+    // Absent means "no caching asked for", never zero. See anthropicCacheWire.
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 interface AnthropicStream {
@@ -309,10 +317,14 @@ function buildParams(
   if (req.thinking && maxTokens <= req.thinking.budget) {
     maxTokens = req.thinking.budget + 1024;
   }
+  // The map is only needed when a messages cache marker has to be placed;
+  // building it always keeps the transform single-pass and costs one number
+  // per message. Mirrors BrowserAnthropicProvider.
+  const messageIndexMap: number[] = [];
   const params: AnthropicCreateParams = {
     model: req.model === 'anthropic' ? defaultModel : req.model,
     max_tokens: maxTokens,
-    messages: toAnthropicMessages(req.messages),
+    messages: toAnthropicMessages(req.messages, messageIndexMap),
   };
   if (req.systemPrompt) params.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) params.tools = req.tools.map(toAnthropicTool);
@@ -339,6 +351,14 @@ function buildParams(
   if (req.toolChoice && params.tools !== undefined && params.tools.length > 0) {
     params.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }
+  // Cache markers — applied AFTER param construction so the materialized
+  // fields (system / tools / messages) exist to mark. Already clamped to
+  // Anthropic's 4-marker limit by AnthropicCacheStrategy. Before this, the
+  // server path silently dropped the markers the strategy prepared, so the
+  // stable prefix was paid at full rate on every call.
+  if (req.cacheMarkers && req.cacheMarkers.length > 0) {
+    applyCacheMarkers(params, req.cacheMarkers, messageIndexMap);
+  }
   return params;
 }
 
@@ -352,12 +372,24 @@ function buildParams(
  *   • `role: 'tool'` → coalesced into a `user` message with
  *     tool_result blocks (Anthropic's expected shape). Consecutive
  *     tool messages merge into one user turn.
+ *
+ * `indexMap` (optional) records where each request message landed in the
+ * result — `-1` for one that did not survive — so a messages cache marker
+ * can be translated between the two index spaces. Mirrors
+ * BrowserAnthropicProvider; see anthropicCacheWire.MessageIndexMap.
  */
-function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageParam[] {
+function toAnthropicMessages(
+  messages: readonly LLMMessage[],
+  indexMap?: number[],
+): AnthropicMessageParam[] {
   const result: AnthropicMessageParam[] = [];
   for (const m of messages) {
-    if (m.role === 'system') continue; // System lives outside message array.
+    if (m.role === 'system') {
+      indexMap?.push(-1); // System lives outside message array.
+      continue;
+    }
     if (m.role === 'user') {
+      indexMap?.push(result.length);
       result.push({ role: 'user', content: m.content });
       continue;
     }
@@ -402,6 +434,7 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
       // preserve the original `m.content || ''` fallback for empty
       // assistant turns.
       const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
+      indexMap?.push(result.length);
       result.push({
         role: 'assistant',
         content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
@@ -418,8 +451,12 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
       // multiple tool_results in one user message after a multi-tool turn).
       const last = result[result.length - 1];
       if (last && last.role === 'user' && Array.isArray(last.content)) {
+        // Coalesced into the user turn already open — several request
+        // messages share one body index.
+        indexMap?.push(result.length - 1);
         last.content.push(block);
       } else {
+        indexMap?.push(result.length);
         result.push({ role: 'user', content: [block] });
       }
       continue;
@@ -460,6 +497,9 @@ function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
     usage: {
       input: message.usage.input_tokens,
       output: message.usage.output_tokens,
+      // Cache traffic, when Anthropic reported it. Absent stays absent —
+      // see anthropicCacheWire.readCacheUsage.
+      ...readCacheUsage(message.usage),
       // v2.14 — Anthropic doesn't expose thinking tokens as a separate
       // field today (bundled in output_tokens). When the API surfaces
       // a dedicated field in the future, populate here. Per Phase 2

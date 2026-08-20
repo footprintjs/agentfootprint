@@ -30,6 +30,7 @@ import type {
   WireRole,
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
+import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -82,7 +83,14 @@ interface AnthropicMessage {
   role: 'assistant';
   content: AnthropicContentBlock[];
   stop_reason: string;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    // Cache traffic — present only when the request carried cache_control.
+    // Absent means "no caching asked for", never zero. See anthropicCacheWire.
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────
@@ -227,6 +235,9 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       let stopReason: string | undefined;
       let inputTokens = 0;
       let outputTokens = 0;
+      // Cache traffic rides message_start's usage. Stays undefined when the
+      // API reported nothing — see anthropicCacheWire.readCacheUsage.
+      let cacheUsage: { cacheRead?: number; cacheWrite?: number } = {};
 
       for await (const event of parseSSE(response.body)) {
         if (event.event === 'message_start') {
@@ -235,6 +246,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
             messageId = msg.id;
             inputTokens = msg.usage?.input_tokens ?? 0;
             outputTokens = msg.usage?.output_tokens ?? 0;
+            cacheUsage = readCacheUsage(msg.usage);
           }
         } else if (event.event === 'message_delta') {
           // Carries `delta.stop_reason` + cumulative `usage.output_tokens`.
@@ -360,7 +372,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       const response2: LLMResponse = {
         content: accumulatedText.join(''),
         toolCalls: completedToolUses.map((t) => ({ id: t.id, name: t.name, args: t.input })),
-        usage: { input: inputTokens, output: outputTokens },
+        usage: { input: inputTokens, output: outputTokens, ...cacheUsage },
         stopReason: normalizeStopReason(stopReason ?? 'stop'),
         ...(messageId && { providerRef: messageId }),
         // v2.14 — pass thinking blocks through as `rawThinking` so the
@@ -448,101 +460,8 @@ function buildBody(
   return body;
 }
 
-/**
- * Apply CacheMarker[] to an Anthropic request body in-place.
- *
- * Per-field positional rules (Anthropic API):
- *   - `system`: convert from `string` → array of text blocks; mark
- *     the block at `boundaryIndex` (clamped to last block) with
- *     `cache_control`. We currently put the whole system prompt in
- *     ONE block, so any system marker effectively caches the whole
- *     prompt. Splitting into per-injection blocks is a v2.7+ refinement.
- *   - `tools`: mark the tool at `boundaryIndex` (clamped to last tool).
- *   - `messages`: mark the LAST content block of the LAST message in
- *     the cacheable prefix. Anthropic only honors cache_control on
- *     the final content block of the final cached message.
- *
- * `messageIndexMap` translates the marker's index — which is a position in
- * `LLMRequest.messages` — into a position in `body.messages`. The two arrays
- * differ: system messages are dropped and consecutive tool results are
- * coalesced into one user turn. Applying the marker by raw ordinal was correct
- * only while the cached prefix happened to end at the very last message, and
- * drifted by one position per tool round-trip after that — putting the cache
- * breakpoint on a turn that changes every iteration, which is the one place it
- * can never be reused.
- */
-function applyCacheMarkers(
-  body: AnthropicRequestBody,
-  markers: readonly { field: string; boundaryIndex: number; ttl: 'short' | 'long' }[],
-  messageIndexMap?: MessageIndexMap,
-): void {
-  for (const m of markers) {
-    const cacheControl =
-      m.ttl === 'long'
-        ? { type: 'ephemeral' as const, ttl: '1h' as const }
-        : { type: 'ephemeral' as const };
-    if (m.field === 'system') {
-      // Convert string system → array form so we can attach
-      // cache_control. v2.6 ships single-block system prompt; v2.7
-      // may split per-injection for finer cache boundaries.
-      if (typeof body.system === 'string') {
-        body.system = [
-          {
-            type: 'text',
-            text: body.system,
-            cache_control: cacheControl,
-          },
-        ] as unknown as string;
-      }
-    } else if (m.field === 'tools' && body.tools && body.tools.length > 0) {
-      const idx = Math.min(m.boundaryIndex, body.tools.length - 1);
-      const tool = body.tools[idx] as AnthropicTool & {
-        cache_control?: typeof cacheControl;
-      };
-      tool.cache_control = cacheControl;
-    } else if (m.field === 'messages' && body.messages.length > 0) {
-      // Mark the LAST content block of the LAST message in the
-      // cacheable prefix. Anthropic ONLY honors cache_control there.
-      // Translate first: the marker names a request-message position, and a
-      // message that did not survive the transform (`-1`, a system message)
-      // cannot be marked at all — silently marking its neighbour would claim a
-      // boundary nobody asked for.
-      const mapped = messageIndexMap?.[m.boundaryIndex];
-      if (messageIndexMap !== undefined && (mapped === undefined || mapped < 0)) continue;
-      const msgIdx = Math.min(mapped ?? m.boundaryIndex, body.messages.length - 1);
-      const msg = body.messages[msgIdx];
-      // String content → wrap in array so we can attach cache_control
-      if (typeof msg.content === 'string') {
-        (body.messages[msgIdx] as { content: AnthropicContentBlock[] }).content = [
-          {
-            type: 'text',
-            text: msg.content,
-            cache_control: cacheControl,
-          } as AnthropicContentBlock & { cache_control: typeof cacheControl },
-        ];
-      } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-        const last = msg.content[msg.content.length - 1] as AnthropicContentBlock & {
-          cache_control?: typeof cacheControl;
-        };
-        last.cache_control = cacheControl;
-      }
-    }
-  }
-}
-
-/**
- * Where each request message ended up in the body — `-1` for one that did not
- * survive the transform.
- *
- * This exists because the two arrays are NOT the same length or the same order:
- * a `role: 'system'` message is dropped (system is a separate top-level field)
- * and consecutive `role: 'tool'` messages are coalesced into ONE user turn. A
- * `CacheMarker{field:'messages'}` names a position in `LLMRequest.messages`, so
- * without this map it would be applied by ordinal into a differently-indexed
- * array and land on the wrong turn — silently, and further off the more tool
- * round-trips the conversation has had.
- */
-type MessageIndexMap = readonly number[];
+// applyCacheMarkers + MessageIndexMap moved to anthropicCacheWire.ts (shared
+// with the Node AnthropicProvider, which used to drop markers on the floor).
 
 function toAnthropicMessages(
   messages: readonly LLMMessage[],
@@ -645,6 +564,9 @@ function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
     usage: {
       input: message.usage.input_tokens,
       output: message.usage.output_tokens,
+      // Cache traffic, when Anthropic reported it. Absent stays absent —
+      // see anthropicCacheWire.readCacheUsage.
+      ...readCacheUsage(message.usage),
     },
     stopReason: normalizeStopReason(message.stop_reason),
     providerRef: message.id,

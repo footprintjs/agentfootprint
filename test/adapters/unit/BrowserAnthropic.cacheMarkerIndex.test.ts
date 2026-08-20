@@ -136,3 +136,62 @@ describe('messages cache marker — index translated into the Anthropic body', (
     expect(markedText(bodies[0]!)).toBeUndefined();
   });
 });
+
+describe("the API's cache counts come back on usage (browser path)", () => {
+  it('maps cache_read/cache_creation onto cacheRead/cacheWrite, absent stays absent', async () => {
+    const bodies: AnthropicBody[] = [];
+    const provider = browserAnthropic({
+      apiKey: 'sk-test',
+      _fetch: ((_url: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.body) bodies.push(JSON.parse(init.body as string) as AnthropicBody);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 'msg_1',
+              model: 'claude-sonnet-4-5-20250929',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: {
+                input_tokens: 100,
+                output_tokens: 5,
+                cache_read_input_tokens: 7700,
+                cache_creation_input_tokens: 42,
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }) as typeof fetch,
+    });
+    const res = await provider.complete({
+      model: 'anthropic',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(res.usage.cacheRead).toBe(7700);
+    expect(res.usage.cacheWrite).toBe(42);
+
+    // And the plain shape reports nothing rather than zero.
+    const plain = browserAnthropic({
+      apiKey: 'sk-test',
+      _fetch: (() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 'msg_2',
+              model: 'claude-sonnet-4-5-20250929',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        )) as typeof fetch,
+    });
+    const bare = await plain.complete({
+      model: 'anthropic',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect('cacheRead' in bare.usage).toBe(false);
+    expect('cacheWrite' in bare.usage).toBe(false);
+  });
+});
