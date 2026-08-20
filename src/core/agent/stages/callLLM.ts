@@ -33,6 +33,7 @@ import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
+import { toolNameOfMessage } from '../window/toolNames.js';
 import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
@@ -373,6 +374,18 @@ export function buildCallLLMStage(
     // has no fresh result in the frame is being offered without its evidence.
     // Both fences live in the check: never-dropped is silent (not-yet-grounded
     // is legitimate sequencing) and a re-fetched ground is silent.
+    //
+    // ONE HELPER, BOTH SIDES. The dropped side is the window ledger, which
+    // names a result with `toolNameOfMessage` — the helper that recovers the
+    // name from the assistant turn that asked when the result itself carries
+    // no `toolName`. The present side asks the SAME helper the SAME question,
+    // because `LLMMessage.toolName` is optional and a conversation restored
+    // from an older release (or a host that speaks only the wire shape) names
+    // its tools through `toolCalls[].id` alone. Reading `m.toolName` here
+    // instead made the same message evidence-that-left on one side and
+    // not-present on the other, and the check then accused a window that had
+    // been RE-GROUNDED — a legitimate re-fetch reported as a dangling
+    // reference. A false accusation is this family's unrecoverable failure.
     if (deps.toolGrounding !== undefined && deps.toolGrounding.size > 0) {
       const grounding = deps.toolGrounding;
       const servedGrounded = (llmRequest.tools ?? [])
@@ -383,10 +396,11 @@ export function buildCallLLMStage(
         [];
       const droppedResults = new Set(windowVisits.flatMap((v) => v.droppedObservations ?? []));
       if (servedGrounded.length > 0 && droppedResults.size > 0) {
+        const frame = llmRequest.messages;
         const presentResults = new Set(
-          llmRequest.messages
-            .filter((m) => m.role === 'tool' && m.toolName !== undefined)
-            .map((m) => m.toolName!),
+          frame
+            .map((m) => toolNameOfMessage(m, frame))
+            .filter((name): name is string => name !== undefined),
         );
         const danglingFindings = danglingReferencesOf(
           servedGrounded,

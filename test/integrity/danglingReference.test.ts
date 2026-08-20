@@ -25,7 +25,9 @@
 import { describe, expect, it } from 'vitest';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { AgentRunCheckpoint } from '../../src/index.js';
+import type { WindowRecord } from '../../src/core/agent/window/types.js';
 
 // ---------------------------------------------------------------------------
 // The check, on its own
@@ -213,6 +215,125 @@ describe('functional: the evicted ground files ONE finding through the real loop
   it('the same run with no declaration is byte-silent — zero-delta', async () => {
     const { agent, events } = trapAgent(false);
     await agent.run({ message: TASK });
+    expect(events.filter((e) => e.kind === 'dangling-reference')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Both sides must name a message the same way
+// ---------------------------------------------------------------------------
+
+/**
+ * The check compares two name sets, and the two used to be derived by
+ * DIFFERENT rules. The dropped side comes off the window ledger, which names a
+ * tool result with `window/toolNames.ts` — the helper that RECOVERS the name
+ * from the assistant turn that asked when the result itself does not carry
+ * `toolName`. The present side read `m.toolName` directly.
+ *
+ * `LLMMessage.toolName` is OPTIONAL on the adapter type, and every reason it
+ * can be absent is documented in that helper: a conversation restored from an
+ * older release, a hand-built fixture, a host that speaks the wire shape and
+ * nothing more. Such a conversation names its tools ONLY through the
+ * assistant's `toolCalls[].id`. Under the old asymmetry the SAME message was
+ * evidence-that-left on one side and not-present on the other, so a window
+ * whose ground had been RE-FETCHED — the check's own second fence — was
+ * accused of dangling. A false accusation is this family's unrecoverable
+ * failure mode (see `dangling-reference/README.md`): it teaches a model to
+ * re-fetch what it already has, and teaches a reader to distrust the finding.
+ */
+const WIRE_SHAPE_GROUND = `IDS ${'x'.repeat(600)}`;
+
+/**
+ * A conversation whose tool results carry only the `toolCallId` they answer.
+ * `whats_here` is called twice: the FIRST result is old enough to be evicted,
+ * the SECOND is the re-fetch and sits in the freshest turn.
+ */
+function wireShapeConversation(): readonly LLMMessage[] {
+  return [
+    { role: 'user', content: TASK },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'h1', name: 'whats_here', args: {} }] },
+    { role: 'tool', content: WIRE_SHAPE_GROUND, toolCallId: 'h1' },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'f1', name: 'screen_fire', args: {} }] },
+    { role: 'tool', content: 'fired', toolCallId: 'f1' },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'f2', name: 'screen_fire', args: {} }] },
+    { role: 'tool', content: 'fired', toolCallId: 'f2' },
+    // THE RE-FETCH — the ground is back, and the window still holds it.
+    { role: 'assistant', content: '', toolCalls: [{ id: 'h2', name: 'whats_here', args: {} }] },
+    { role: 'tool', content: WIRE_SHAPE_GROUND, toolCallId: 'h2' },
+  ];
+}
+
+function restoredConversation(): AgentRunCheckpoint {
+  return {
+    version: 1,
+    runId: 'run-from-an-older-release',
+    history: wireShapeConversation(),
+    lastCompletedIteration: 4,
+    originalInput: { message: TASK },
+    checkpointedAt: Date.now(),
+  };
+}
+
+/** One answer, no tool calls: the run's ONE composition is the one under test. */
+function answersAtOnce(): LLMProvider {
+  return {
+    name: 'mock',
+    complete: async (): Promise<LLMResponse> => ({
+      content: 'done',
+      toolCalls: [],
+      usage: { input: 10, output: 5 },
+      stopReason: 'end_turn',
+    }),
+  };
+}
+
+function stateOf(agent: Agent): {
+  compactions?: readonly WindowRecord[];
+  history?: readonly LLMMessage[];
+} {
+  return (agent.getLastSnapshot()?.sharedState ?? {}) as {
+    compactions?: readonly WindowRecord[];
+    history?: readonly LLMMessage[];
+  };
+}
+
+describe('regression: a re-fetched ground stays silent when the window speaks wire shape', () => {
+  it('the ground the ledger recovered by name is the ground the frame recovers by name', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const agent = Agent.create({
+      provider: answersAtOnce(),
+      model: 'm',
+      maxIterations: 4,
+      // Same pin-off trap as above: the check covers the agents that switched
+      // the last-tool-result pin off.
+      keepLastToolResults: false,
+    })
+      .tool(bigGround())
+      .tool(firesAtIds(true))
+      .window(slidingWindow({ keepRecentTurns: 2 }))
+      .build();
+    agent.on('agentfootprint.integrity.context_error', (e) => {
+      events.push(e.payload as unknown as Record<string, unknown>);
+    });
+
+    await agent.run({ message: 'Which rack is hottest?', continueFrom: restoredConversation() });
+
+    const { compactions = [], history = [] } = stateOf(agent);
+
+    // The trap is armed: the window DID drop, and the ledger recovered the
+    // ground's name from a result that never carried one.
+    expect(compactions.some((r) => r.droppedObservations?.includes('whats_here'))).toBe(true);
+
+    // And the re-fetch is right there in the assembled window — carrying no
+    // `toolName`, exactly like the result the ledger just named.
+    const reGrounded = history.find((m) => m.role === 'tool' && m.toolCallId === 'h2');
+    expect(reGrounded).toBeDefined();
+    expect(reGrounded!.toolName).toBeUndefined();
+    expect(
+      history.some((m) => (m.toolCalls ?? []).some((c) => c.id === 'h2' && c.name === 'whats_here')),
+    ).toBe(true);
+
+    // So the second fence holds: evidence in reach, nothing to accuse.
     expect(events.filter((e) => e.kind === 'dangling-reference')).toEqual([]);
   });
 });

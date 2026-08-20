@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Six defects in the Context Integrity family, caught by an adversarial
+  review before release** — each survived two independent attempts to refute
+  it, and each is now pinned by a red-proved regression test.
+  - *A claim finding's identity ignored the FIELD*, so a contract naming two
+    fields of one entity (the shape `.claims()` itself tells you to write)
+    filed one event and swallowed the rest — while the disposition ledger
+    counted them all, leaving the two accounts of one run disagreeing.
+    `ContextError.predicate` now rides the identity, mirroring the
+    substrate's own `assertionKey`; findings that never set it keep exactly
+    the identity they had.
+  - *The dangling-reference check was DEAD under `reactMode:
+    'dynamic-grouped'`* — `compactions` was threaded into the wrong mapper,
+    so the check saw an empty window ledger every pass and filed a healthy
+    verdict. Chart-shape parity is now pinned by tests that run the same
+    trap under both dynamic shapes.
+  - *The dev canary structurally disabled the wiring-rot theorem.* A minted
+    canary proves the pure function still works; it says nothing about
+    whether the pipeline ever calls it (`beginIntegrityRun` mints by calling
+    the function directly). Masking theorem (i) with it meant the alarm this
+    ledger exists for could never fire.
+  - *`workExisted` was hardcoded `true`* on every exit path, so a run that
+    died or paused before its first LLM call reported every registered
+    checker as dead. It is now measured from a signal the integrity code
+    does not itself write.
+  - *An answer agreeing with a settled non-reading was filed as an advisory*
+    — `null` reported for a fact whose settled value is `null` is agreement,
+    not doubt.
+  - *The claim ledger accumulated for agents that never declared a
+    contract*, and appended by whole-array spread. It is now gated on
+    `.claims()` and appends without the quadratic copy — restoring the
+    zero-delta promise for every agent that configured none of this.
+
 ### Added
 
 - **`.claims()` — the claim seam: what the answer says vs what the run
@@ -55,6 +89,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UNCONDITIONALLY — a tool that vanished with the event tail could not say
   the evidence is missing. `TRACE_TOOL_NAMES` (and therefore
   `.selfExplain()`'s reserved names) is now eleven.
+
+### Fixed
+
+- **`dangling-reference` no longer accuses a window that HAS been
+  re-grounded.** The check compares two name sets, and the two were derived
+  by different rules: the dropped side came off the window ledger, which
+  names a tool result with `window/toolNames.ts` — the helper that recovers
+  the name from the assistant turn that asked when the result itself carries
+  no `toolName` — while the present side read `message.toolName` directly.
+  `LLMMessage.toolName` is optional, so a conversation restored from an older
+  release (or from a host that speaks the wire shape and nothing more) names
+  its tools through `toolCalls[].id` alone; the SAME message was then
+  evidence-that-left on one side and not-present on the other, and a
+  legitimate re-fetch was reported as a dangling reference. The present side
+  now asks the same helper the same question. One helper, two sides, so the
+  two can never disagree about what a message is — and the check's second
+  fence ("a re-fetched ground is silent") holds for windows that never
+  carried the field.
 
 ## [9.60.0] - 2026-08-20
 
