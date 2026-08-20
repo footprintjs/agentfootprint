@@ -7,6 +7,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.57.0] - 2026-08-20
+
+**The window used to keep the task and throw away the evidence. Now it keeps
+both — and says so either way.**
+
+From a context-gap audit over five real recorded runs of a consumer
+integration. An agent drove a screen through tools. One tool result carried the
+only list of ids it was allowed to act on. Under a small window that result
+survived about two iterations — an assistant message plus its tool results is
+ONE turn, so two kept turns are two tool rounds. Since 9.55.0 the user's
+REQUEST is undroppable, so the model still knew exactly what it had been asked
+to do, and no longer had the evidence to do it.
+
+What it did next was invent. It took an entity name it remembered plus the
+shape of an id it had used earlier, assembled one that has never existed, and
+was refused — a wasted action out of a small budget. In one archived run the
+final answer to the *person* named a host that appears in no tool result at
+all.
+
+Nothing in the conversation said the evidence had gone. That is the release.
+
+### Added
+
+- **The window keeps each tool's most recent result.** For every tool the
+  agent is using, its latest result stays in the window — up to
+  `keepLastToolResults` (default **2**) beyond the recent-turns window — until
+  the agent calls that tool again, or the person asks something new. The turn
+  refuses by name, as `'last-tool-result'`.
+
+  It lives in the one shared refusal engine, so all three shipped strategies
+  and any strategy **you** wrote inherit it without an edit — the same way they
+  inherited the 9.55.0 anchor.
+
+  It cannot run away with your window. One pin per tool NAME, superseded on
+  that tool's next call, so the candidate space is your tool roster and not
+  your transcript. A parallel batch is one turn and costs one slot. A pin
+  already inside `keepRecentTurns` costs nothing at all. Nothing at or before
+  the current request is pinnable, so a new user turn releases the whole
+  previous loop. The floor is `1 request + keepLastToolResults pins +
+  keepRecentTurns turns`, whatever your tool count, iteration count or run
+  length.
+
+  And a pin that BLOCKS is worse than a pin that misses: when two consecutive
+  visits both removed nothing and both named `'last-tool-result'`, the pin
+  releases for one visit and files `observations.standDown: true`. Two blocked
+  boundaries is the hard bound, under any strategy.
+
+  `keepLastToolResults: false` (or `0`) reproduces 9.56.0 byte for byte.
+
+- **A drop now says whose results it took.** The authored notice gains one
+  sentence: *"Tool results are among them (whats_here, pan_view) — call the
+  tool again if you need its output; do not reconstruct ids or values from
+  memory."* That sentence is the difference between a re-fetch and a
+  fabrication. Tool names are the only caller data that reaches it, and they
+  are shape-filtered to a plain identifier and **dropped, never truncated**,
+  when they are not one — at most four, then `…`.
+
+- **`WindowRecord.droppedObservations`** — the same fact on the record, full
+  and uncapped, and filed even when no notice was authored at all. A removal
+  further into the window inserts nothing, so the model is told nothing; then
+  the record is the only witness.
+
+- **`WindowRecord.observations`** — what the pin KEPT: each held turn, its
+  tool, and its exact character count, plus what the ceiling turned away.
+  Subtract the pinned chars from `windowCharsAfter` and you have the window
+  this run would have had without the feature. A framework that keeps
+  something has to be as visible as one that removes something.
+
+- **An instruction can SAY a run-time number, not only gate on it.**
+  `defineInstruction({ promptTemplate })` renders on every action from a
+  CLOSED three-word vocabulary — `{{action}}`, `{{actionBudget}}`,
+  `{{actionsRemaining}}`:
+
+  > You are on action 25 of 30; 5 remain. Finish what you have rather than
+  > start something new.
+
+  Measured, not decorative: given its remaining budget a model wrote *"I have 5
+  steps left, enough to finish this properly"* and landed the task, where
+  before it spiralled and produced no answer at all.
+
+  The vocabulary is closed rather than a `(ctx) => string` because of
+  **absence**. Given a function, an author writes `${ctx.maxIterations}` and
+  ships *"23 of undefined"*, or writes `?? 0` and ships a fabricated
+  denominator that nothing — and no model — can tell from a real zero. With
+  named slots the library owns absence and applies one rule: if any named fact
+  is unavailable, the whole instruction is skipped, by name, as
+  `skipped: 'unknown-fact'`. Never a gap, never a fake zero, never the literal
+  placeholder. A name outside the three is refused at define time, with the
+  three listed in the error.
+
+- **`InjectionContext.maxIterations` / `.iterationsRemaining`** — so a
+  predicate can gate on how much room is LEFT rather than on a raw iteration
+  number that means nothing on its own. They arrive paired: both, or neither.
+  `iterationsRemainingOf` is now the one denominator, shared with the cache
+  decision and the request assembly, so the three cannot drift by one.
+
+### Fixed
+
+- **A courtesy message could stop a window strategy dropping anything, for the
+  rest of the run.** The drop notice was authored whenever a removal reached
+  the front of what may leave, and the whole removal was abandoned when that
+  notice was not smaller than what it replaced. But the obligation the notice
+  exists for is narrower — the window must OPEN ON A USER TURN — and when the
+  message that would become the head was already a user turn (the pinned
+  request, or an older turn of a restored conversation) no notice was owed at
+  all. Its 245–358 characters were nevertheless allowed to veto a legitimate
+  drop; and because the removable span is the longest *contiguous* run, the
+  same verdict came back at every boundary while the window grew without
+  bound.
+
+  Reproduced by execution in both shapes before the fix: ten boundaries,
+  `removedMessageCount === 0` every time, the window climbing from 10 to 28
+  messages and still climbing. The decision is now a ladder — the notice
+  naming the dropped tools, else the plain notice, else no notice at all — and
+  `'replacement-not-smaller'` fires only when the wire genuinely needs a
+  message in that position and none of them fits.
+
+### Changed
+
+- `WindowRefusalReason` gains `'last-tool-result'`. A consumer with an
+  exhaustive `switch` over the union gets a compile error — deliberately, and
+  precedented by 9.55.0: a reason that appears at run time and nowhere in your
+  code is a reason nobody reads.
+- The drop notice's text changed (one sentence added). It has always been
+  library-authored prose; match it with `DROP_NOTICE_PREFIX` / `isDropNotice`,
+  never on the full string.
+- A **templated** instruction files one `agentfootprint.context.injected` per
+  action where a static one files one per run, because `ContextRecorder` dedups
+  by content hash and a template's content really is different every action.
+  That is more truth, not less — but a consumer counting rows will see N times
+  as many. Note also that a never-cacheable injection truncates the cached
+  prefix at its declaration position, so **declare templated instructions
+  last**.
+
 ## [9.56.0] - 2026-08-19
 
 **Running out of budget now ends with an honest summary, not a fragment.**

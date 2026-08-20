@@ -67,6 +67,7 @@ nothing was summarized, and nothing was lost — only un-sent.
 All three resolve what may leave through the same code, so a refusal reason means the same thing everywhere. Never removed, by any of them:
 
 - **the current request** — the message the run is executing. See [The request never leaves](#the-request-never-leaves);
+- **each tool's most recent result** — up to `keepLastToolResults` (default 2) beyond the recent turns. See [The evidence stays too](#the-evidence-stays-too);
 - **the system envelope** — it never enters the window at all (it rides `systemPrompt`);
 - **the last `keepRecentTurns` turns** — what the model is reasoning over right now;
 - **any turn holding an unresolved tool call** — an assistant `tool_use` with no matching `tool_result`. Removing an unanswered question destroys the referent of an answer that has not arrived yet;
@@ -107,6 +108,118 @@ Other history drops ahead of it. If the budget cannot hold even the request plus
   A window with no identifiable request — hand-built, or seeded entirely from outside the run — has nothing to protect, and behaves exactly as it did before this rule existed.
 </Callout>
 
+## The evidence stays too
+
+**No strategy may drop the latest result of a tool the agent is still using.**
+9.55.0 kept the task; this keeps what the task needs.
+
+It comes from the same place — a context-gap audit over recorded runs. An agent
+drove a screen through tools. One tool result carried the only list of ids it
+could act on. Under `slidingWindow({ keepRecentTurns: 2 })` that result survived
+about **two iterations** (an assistant message plus its tool results is ONE turn,
+so two kept turns are two tool rounds). The request stayed, so the model still
+knew what it had been asked to do — and no longer had the evidence to do it.
+Across five runs it assembled a plausible id out of an entity name it remembered
+plus the shape of an id it had used earlier, and was refused. In one archived run
+the final answer to the *person* named a host that appears in no tool result.
+
+So the turn refuses, by name:
+
+```ts
+{
+  strategy: 'sliding-window',
+  removedMessageCount: 2,
+  refusals: [
+    { reason: 'current-request',  turnIndex: 0, messageIndex: 0 },
+    { reason: 'last-tool-result', turnIndex: 1, messageIndex: 1 },  // ← the ids stay
+  ],
+  droppedObservations: ['focus'],
+  observations: {
+    pinned: [{ toolName: 'whats_here', turnIndex: 1, chars: 1531 }],
+    yielded: 0,
+    limit: 2,
+  },
+}
+```
+
+**One pin per tool NAME**, always the latest result, superseded the moment that
+tool answers again — so the candidate space is your tool roster, not the
+transcript. Three more bounds compose on top: a parallel batch is one turn and
+costs one slot; a pin already inside `keepRecentTurns` costs nothing; and nothing
+at or before the current request is pinnable, so a new user turn releases the
+whole previous loop. The floor is `1 request + keepLastToolResults pins +
+keepRecentTurns turns`, whatever your tool count, iteration count or run length.
+
+The dial is on the agent, not the strategy — so a strategy **you** wrote inherits
+it:
+
+```ts
+Agent.create({
+  provider,
+  model,
+  keepLastToolResults: 2,  // the default. `false` or 0 restores 9.56.0 exactly.
+}).window(slidingWindow({ keepRecentTurns: 2 }));
+```
+
+<Callout type="warn">
+  **What it gets wrong, said out loud.** The pin is CONTENT-BLIND: it keeps a
+  tool's *last* result, which may be a one-word acknowledgement while the
+  load-bearing screen dump was the call before. Two slots absorb the common case;
+  nothing eliminates it. And under `summarizeOldest` a pinned turn stays **raw**
+  while everything around it is folded — pinned bytes are the last bytes a
+  compaction strategy can reduce.
+</Callout>
+
+**A pin that blocks stands down.** If the two previous visits both removed
+nothing *and* both named `last-tool-result`, the pin is provably what is stopping
+progress, so it releases for one visit and files
+`observations.standDown: true`. Two consecutive blocked boundaries is the hard
+bound, under any strategy including one you wrote. It is recorded rather than
+done quietly: a policy that reverses itself has to say so.
+
+## A drop says whose results left
+
+When a tool result *does* leave, the model is told which tool it came from — and
+told what to do about it:
+
+```text
+[dropped history — 4 earlier message(s) were dropped from this window at iteration 9
+by the 'sliding-window' window strategy. Tool results are among them (focus, pan_view) —
+call the tool again if you need its output; do not reconstruct ids or values from
+memory. Nothing was summarized: those turns are simply not being re-sent. They are
+retained verbatim in this run's commit log.]
+```
+
+That sentence is the difference between a re-fetch and a fabrication. Tool names
+are the only caller data that reaches this message, and they are shape-filtered
+to a plain identifier and **dropped, never truncated**, when they are not one —
+so a drop still has no prompt-injection surface to speak of. At most four names
+appear, then `…`.
+
+The record carries the same fact **uncapped and unfiltered**, as
+`droppedObservations` — and it is filed even when no notice was authored at all.
+A removal further into the window inserts nothing, so the model is told nothing;
+then the record is the only witness.
+
+## When a drop is abandoned
+
+The authored notice exists for the **wire**: an agent window looks like `user,
+assistant+tool, assistant+tool, …`, and the providers that care require the
+window to open on a user turn. So the decision is a ladder — the notice naming
+the dropped tools, else the plain notice, else **no notice at all**. The removal
+is abandoned under `replacement-not-smaller` only when the wire genuinely needs a
+message in that position and none of them is smaller than the span it replaces.
+
+<Callout type="info">
+  Through 9.56.0 the size test was applied whenever the removal reached the front
+  of what may leave, *without* asking whether the message that would become the
+  head was already a user turn. When it was — the pinned request, or an older
+  turn of a restored conversation — a notice nobody needed could veto a
+  legitimate drop; and because the span is the longest *contiguous* removable run,
+  the same verdict came back at every boundary while the window grew without
+  bound. Reproduced by execution, fixed in 9.57.0.
+</Callout>
+
 ## What each visit records
 
 Every strategy appends a `WindowRecord` to `scope.compactions` — including the visits that removed **nothing**, which are the interesting ones:
@@ -120,6 +233,12 @@ Every strategy appends a `WindowRecord` to `scope.compactions` — including the
   windowCharsBefore: 4656,
   windowCharsAfter: 3693,          // EXACT, and chars — not tokens
   refusals: [{ reason: 'inside-keep-window', turnIndex: 3, messageIndex: 5 }],
+  droppedObservations: ['whats_here'],   // whose RESULTS left — full, uncapped
+  observations: {                        // what the pin held, and what it cost
+    pinned: [{ toolName: 'pan_view', turnIndex: 2, chars: 812 }],
+    yielded: 0,
+    limit: 2,
+  },
   // …plus the strategy's own facts: keepRecentTurns/turnsBefore/turnsAfter for
   // slidingWindow; measuredTokens/thresholdTokens/overBudget for the two
   // token-triggered ones; summaryChars/summarizerTokens for summarizeOldest.
@@ -191,7 +310,7 @@ Unlike the [compaction frame](doc:compaction), **no model wrote a word of it**: 
 
 It appears only when the removal reaches the front of what may leave. A removal further in leaves the original opening turn in place, so there is no wire problem to solve — and splicing a lone `user` message between two assistant turns is its own risk. The record names that removal either way.
 
-It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if the notice would not be *smaller* than the span it replaces — a real case, when the only removable turn is a short one — the whole drop is abandoned under `replacement-not-smaller`, because dropping two tiny turns to insert a longer notice is pure loss.
+It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if no version of it would be *smaller* than the span it replaces, the notice is simply not written — or, when the wire genuinely needs one in that position, the whole drop is abandoned under `replacement-not-smaller`. See [When a drop is abandoned](#when-a-drop-is-abandoned).
 
 Recognise it without matching on prose:
 
@@ -257,6 +376,7 @@ Everything below comes from the package root, `agentfootprint`:
 | `SlidingWindowRecord` | A `WindowRecord` plus `keepRecentTurns`, `turnsBefore`, `turnsAfter`. |
 | `TokenBudgetRecord` | A `WindowRecord` plus `measuredTokens`, `thresholdTokens`, `overBudget`, `keepRecentTurns`. |
 | `CompactionRecord` | A `WindowRecord` plus the summarizer's facts — see [Compaction](doc:compaction). |
+| `WindowObservations` | What the last-tool-result pin did on one visit: `pinned` (tool, turn, exact chars), `yielded`, `limit`, and `standDown` when it released. |
 | `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons. (`FoldRefusal` / `FoldRefusalReason` were the 7.16 names; the aliases were removed in 9.0.0.) |
 | `WindowEviction` | One message leaving the window: its `index` in the pre-change window and its measured `survivalMs`. |
 | `RemovalPlan` | What `planRemoval` answers: the span `{ from, to }` in turn indices, plus every refusal. `from` is `-1` when nothing may be removed. |

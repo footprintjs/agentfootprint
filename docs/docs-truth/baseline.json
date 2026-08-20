@@ -2,31 +2,31 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-19",
+  "recordedAt": "2026-08-20",
   "surface": {
     "subpaths": 14,
-    "declaredSymbols": 1873,
-    "declaredEvents": 101,
-    "eventSource": "src/events/registry.ts:716"
+    "declaredSymbols": 1906,
+    "declaredEvents": 103,
+    "eventSource": "src/events/registry.ts:728"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1001,
-      "exercised-undocumented": 33,
-      "undocumented-unexercised": 602,
+      "documented-never-exercised": 935,
+      "exercised-undocumented": 34,
+      "undocumented-unexercised": 600,
       "site-code-sample-only": 18,
       "written-but-not-published": 115,
-      "ok": 104
+      "ok": 204
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 38,
-      "exercised-undocumented": 9,
-      "undocumented-unexercised": 15,
+      "documented-never-exercised": 10,
+      "exercised-undocumented": 11,
+      "undocumented-unexercised": 13,
       "site-code-sample-only": 5,
       "written-but-not-published": 7,
-      "ok": 27
+      "ok": 57
     },
     "phantoms": 0,
     "unregisteredEvents": 0,
@@ -34,10 +34,10 @@
     "docTextViolations": 0
   },
   "exercisedEvidence": {
-    "recordedAt": "2026-07-28",
-    "examplesRun": 95,
-    "examplesPassed": 95,
-    "eventTypesObserved": 45
+    "recordedAt": "2026-08-20",
+    "examplesRun": 156,
+    "examplesPassed": 156,
+    "eventTypesObserved": 78
   },
   "undocumentedSymbols": [
     "ALL_EVENT_TYPES",
@@ -690,7 +690,6 @@
     "defaultPipeline",
     "defaultStructuralRules",
     "defaultSuspectClassifier",
-    "defineMenuHint",
     "descriptionRule",
     "differentiationHint",
     "embedMessages",

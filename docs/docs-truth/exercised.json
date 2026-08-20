@@ -1,24 +1,32 @@
 {
   "$schema": "docs-truth exercised-evidence v1",
   "note": "Recorded by `npm run docs:truth:exercise`. Ran every examples/*/*.ts with zero credentials. eventsObserved is RUNTIME evidence (event bus, listener gates forced open). symbolsReferenced is STATIC: named imports of examples that exited 0 — it over-counts, so treat it as a floor for doc gaps and read \"never exercised\" with care.",
-  "recordedAt": "2026-07-28",
+  "recordedAt": "2026-08-20",
   "node": "v22.16.0",
   "credentialsUsed": false,
-  "envVarsStrippedByName": 3,
+  "envVarsStrippedByName": 28,
   "totals": {
-    "total": 95,
-    "passed": 95,
+    "total": 156,
+    "passed": 156,
     "failed": 0,
     "eventTapFailures": 0
   },
   "failedExamples": [],
   "eventsObserved": [
+    "agentfootprint.agent.budget_exhausted",
     "agentfootprint.agent.iteration_end",
     "agentfootprint.agent.iteration_start",
+    "agentfootprint.agent.output_contract_unmet",
+    "agentfootprint.agent.output_schema_retry",
     "agentfootprint.agent.output_schema_validation_failed",
     "agentfootprint.agent.route_decided",
+    "agentfootprint.agent.run_configured",
     "agentfootprint.agent.turn_end",
     "agentfootprint.agent.turn_start",
+    "agentfootprint.artifacts.minted",
+    "agentfootprint.artifacts.presented",
+    "agentfootprint.artifacts.refused",
+    "agentfootprint.artifacts.resolved",
     "agentfootprint.checkin.decision",
     "agentfootprint.checkin.request",
     "agentfootprint.composition.enter",
@@ -30,15 +38,25 @@
     "agentfootprint.composition.route_decided",
     "agentfootprint.context.budget_pressure",
     "agentfootprint.context.evaluated",
+    "agentfootprint.context.evicted",
     "agentfootprint.context.injected",
     "agentfootprint.context.slot_composed",
     "agentfootprint.cost.limit_hit",
     "agentfootprint.cost.tick",
+    "agentfootprint.credential.acquired",
+    "agentfootprint.credential.authorization_required",
+    "agentfootprint.credential.requested",
+    "agentfootprint.embedding.generated",
+    "agentfootprint.error.circuit_changed",
     "agentfootprint.error.fatal",
     "agentfootprint.error.recovered",
     "agentfootprint.error.retried",
     "agentfootprint.eval.score",
     "agentfootprint.fallback.triggered",
+    "agentfootprint.memory.attached",
+    "agentfootprint.memory.retrieved",
+    "agentfootprint.memory.strategy_applied",
+    "agentfootprint.middleware.decision",
     "agentfootprint.pause.request",
     "agentfootprint.pause.resume",
     "agentfootprint.permission.check",
@@ -48,36 +66,45 @@
     "agentfootprint.reliability.retried",
     "agentfootprint.resilience.output_canned_used",
     "agentfootprint.resilience.output_fallback_triggered",
+    "agentfootprint.skill.graph_declared",
     "agentfootprint.skill.rejected",
+    "agentfootprint.skill.reroute_superseded",
+    "agentfootprint.skill.step_advanced",
+    "agentfootprint.skill.step_skipped",
+    "agentfootprint.skill.turn_routed",
     "agentfootprint.stream.llm_end",
     "agentfootprint.stream.llm_start",
     "agentfootprint.stream.token",
     "agentfootprint.stream.tool_end",
+    "agentfootprint.stream.tool_progress",
     "agentfootprint.stream.tool_start",
+    "agentfootprint.tools.code_run",
+    "agentfootprint.tools.coverage_declared",
     "agentfootprint.tools.discovery_completed",
     "agentfootprint.tools.discovery_failed",
     "agentfootprint.tools.discovery_started",
+    "agentfootprint.tools.effect",
+    "agentfootprint.tools.repeated_call",
+    "agentfootprint.tools.result_refused",
+    "agentfootprint.tools.semantics_declared",
+    "agentfootprint.tools.session_closed",
+    "agentfootprint.tools.session_reused",
+    "agentfootprint.tools.session_started",
     "agentfootprint.validation.args_invalid"
   ],
   "subpathsReferenced": [
     ".",
-    "./debug",
+    "./context",
     "./events",
-    "./identity",
-    "./injection-engine",
-    "./llm-providers",
-    "./locales",
+    "./hosting",
     "./memory",
-    "./memory-providers",
-    "./observability-providers",
-    "./observability/contextError/finders",
     "./observe",
-    "./reliability",
+    "./providers",
+    "./rag",
+    "./recipes",
     "./resilience",
     "./security",
-    "./status",
-    "./strategies",
-    "./tool-providers"
+    "./skill-graph"
   ],
   "symbolsReferenced": [
     "AblationRerun",
@@ -88,24 +115,40 @@
     "AgentCoreStore",
     "AgentRunCheckpoint",
     "AgentfootprintEvent",
+    "ArtifactMeta",
+    "ArtifactStore",
     "AuditBundle",
     "BacktrackTrace",
+    "COMPACTED_FRAME_PREFIX",
     "CapturedEventLike",
     "CatalogTool",
     "CheckInDecision",
     "CheckInRecorder",
     "CheckInRequest",
     "CircuitOpenError",
+    "CodeRunner",
+    "CodeSession",
     "CombinedRecorder",
     "Conditional",
+    "ConsentRequest",
     "ContextBugArtifacts",
     "ContextBugReport",
     "ContextUnit",
+    "ConversationClose",
+    "CredentialConsentRequiredError",
     "CredentialProvider",
+    "CredentialResult",
+    "DROP_NOTICE_PREFIX",
     "Embedder",
     "EntryScorer",
+    "FULL_PRIVACY_POLICY_ID",
     "FindInput",
+    "GeminiClientLike",
+    "GeminiGenerateParams",
+    "HostConversation",
+    "IdentityVerifier",
     "InMemoryStore",
+    "IndeterminateRunFactError",
     "InfluenceScore",
     "InfluenceScorer",
     "InfluenceStrategy",
@@ -113,6 +156,7 @@
     "InjectionContext",
     "LLMCall",
     "LLMCallHooks",
+    "LLMMessage",
     "LLMProvider",
     "LLMRequest",
     "LLMResponse",
@@ -122,18 +166,32 @@
     "MEMORY_TYPES",
     "MOCK_EMBEDDER_CALIBRATION",
     "MakeChatAgent",
+    "McpCallToolRequest",
     "McpSdkClient",
+    "McpSdkServer",
     "MemoryEntry",
+    "MessageMiddleware",
+    "MiddlewareAsk",
+    "MiddlewareDecision",
     "MockProvider",
     "MockProviderOptions",
     "ObservabilityStrategy",
+    "OllamaUnavailableError",
     "OtelSpanLike",
     "OtelSpanOptions",
     "OtelTracerLike",
+    "OutputSchemaError",
+    "PRESENT_TOOL_NAME",
     "Parallel",
+    "PendingQuestionError",
     "PermissionChecker",
+    "PermissionPolicy",
     "PolicyHaltError",
     "PricingTable",
+    "RECORDING_ARTIFACT_KIND",
+    "RECORDING_ENVELOPE_FORMAT",
+    "Recording",
+    "RecordingEnvelope",
     "RedisLikeClient",
     "RedisLikePipeline",
     "RedisStore",
@@ -142,30 +200,57 @@
     "ReliabilityScope",
     "RestorationRunner",
     "RunCheckpointError",
+    "RunInFlightError",
+    "RunRecorder",
+    "RunnerBase",
+    "RunnerPauseOutcome",
+    "SCHEMA_TOOL_NAME",
     "SNAPSHOT_PROJECTIONS",
     "Sequence",
     "ServerToolEntry",
+    "SessionLifecycle",
+    "SkillMap",
+    "SqliteSessions",
+    "SqliteUnavailableError",
     "StatusTemplates",
     "Suspect",
     "Tool",
     "ToolCallEntry",
+    "ToolCapability",
     "ToolCatalogReport",
     "ToolChoiceCall",
     "ToolChoiceSummary",
     "ToolDispatchContext",
+    "ToolExecutionContext",
+    "ToolMiddleware",
     "ToolProvider",
+    "UnreadableSessionFileError",
+    "UnsupportedPrivacyModeError",
     "WhatChanged",
+    "WindowRecord",
+    "WriteProvenanceMode",
+    "agentCoreRuntimeHost",
+    "agentCoreSessions",
+    "allow",
     "analyzeToolCatalog",
     "applyAblations",
+    "ask",
+    "askHuman",
     "assembleTrajectory",
     "assignCostVerdicts",
     "auditExport",
+    "bearer",
+    "browserSessionId",
+    "buildRecordingEnvelope",
     "callTraceTool",
+    "canStreamArtifacts",
     "chatBubbleLiveStatus",
     "checkInApproved",
     "checkInDeclined",
+    "checkSemantics",
     "checkSkillContract",
     "classifySuspect",
+    "codeRunnerTool",
     "compareFinders",
     "consoleObservability",
     "contextLedger",
@@ -173,24 +258,43 @@
     "decideSkill",
     "defaultStatusTemplates",
     "defaultStuckLoopRule",
+    "defineAgentRecipe",
     "defineFact",
     "defineInstruction",
     "defineMemory",
     "defineRAG",
     "defineRelevanceHint",
     "defineSkill",
+    "defineSkillMap",
     "defineSteering",
     "defineTool",
+    "deny",
+    "describeBugReport",
     "embeddingCache",
     "embeddingScorer",
     "evaluateInjections",
+    "exportBugReport",
+    "fileRecordingSink",
     "findDroppedContext",
+    "flowchartAsTool",
+    "foldedMessages",
+    "foldedSpanFor",
+    "formatCheckup",
     "formatContextBugReport",
+    "formatSemanticsReport",
     "formatToolCatalogReport",
     "gatedTools",
+    "gemini",
+    "githubBugReporter",
+    "graph",
+    "inMemoryArtifacts",
     "indexDocuments",
+    "indexFolder",
+    "isAskPause",
     "isCheckInPause",
+    "isCompactedSummary",
     "isPaused",
+    "isTruncatedToolResult",
     "keywordScorer",
     "ledgerGated",
     "ledgerToolGate",
@@ -198,19 +302,29 @@
     "listInfluenceStrategies",
     "liveStateRecorder",
     "llmCallIdsFromEvents",
+    "llmSwarm",
+    "localCodeRunner",
     "localizeContextBug",
     "mapReduce",
     "mcpClient",
+    "mcpServe",
+    "memorySessions",
     "mock",
     "mockEmbedder",
+    "nodeHost",
+    "ollama",
     "otelObservability",
     "pairwiseSimilarity",
     "pauseHere",
+    "persistRecording",
     "providerFromEnv",
     "rankEntries",
     "rankSuspects",
     "rankingConfidence",
     "ratioStrategy",
+    "readEnvelope",
+    "readPausedRun",
+    "readSkillDescriptor",
     "recordRun",
     "recordedChat",
     "reflection",
@@ -224,612 +338,1001 @@
     "scoreMargin",
     "selectStatus",
     "selfConsistency",
+    "semantic",
     "semanticAlignmentStrategy",
     "shortlistEarlyCulprits",
     "shrinkToCause",
     "skillGraph",
+    "skillsFromDir",
+    "slidingWindow",
+    "sqliteSessions",
+    "sqliteVectorStore",
+    "standingAgent",
     "staticTokens",
     "staticTools",
     "swarm",
     "testManyCombos",
     "toBacktrackTrace",
+    "toEnvelope",
+    "toPausedEnvelope",
+    "toSSE",
+    "tokenBudget",
     "toolChoiceRecorder",
     "toolContractCheckup",
     "toolLineageRecorder",
     "tot",
     "traceDebugAgent",
     "traceToolpack",
+    "traceVariable",
+    "turnsPerHour",
+    "variableToBacktrackTrace",
     "verifyAuditBundle",
+    "vocabularyOf",
+    "walkToRoot",
     "walkTrajectory",
     "withCircuitBreaker",
     "withCredentialRetry",
     "withFallback",
-    "withRetry"
+    "withRetry",
+    "workflow"
   ],
   "examplesImportingSrcInternals": [
+    "src/adapters/llm/GeminiProvider",
     "src/adapters/llm/MockProvider",
     "src/adapters/memory/agentcore",
     "src/adapters/memory/redis",
     "src/adapters/types",
+    "src/core/checkin",
+    "src/core/pause",
     "src/events/registry",
+    "src/hosting/index",
+    "src/injection-engine",
     "src/lib/influence-core",
     "src/lib/influence-core/index",
     "src/lib/injection-engine/index",
     "src/lib/mcp/types",
     "src/memory/embedding/mockEmbedder",
     "src/memory/entry/index",
-    "src/reliability/types"
+    "src/observe",
+    "src/reliability/types",
+    "src/security/index"
   ],
   "perExample": [
     {
       "file": "examples/canonical/loan-officer-causal.ts",
       "ok": true,
-      "durationMs": 4875,
-      "eventCount": 13
+      "durationMs": 6675,
+      "eventCount": 14
     },
     {
       "file": "examples/context-engineering/01-instruction.ts",
       "ok": true,
-      "durationMs": 2937,
-      "eventCount": 11
+      "durationMs": 4708,
+      "eventCount": 12
     },
     {
       "file": "examples/context-engineering/02-skill.ts",
       "ok": true,
-      "durationMs": 3290,
-      "eventCount": 13
+      "durationMs": 5080,
+      "eventCount": 14
     },
     {
       "file": "examples/context-engineering/03-steering.ts",
       "ok": true,
-      "durationMs": 2778,
-      "eventCount": 11
+      "durationMs": 4553,
+      "eventCount": 12
     },
     {
       "file": "examples/context-engineering/04-fact.ts",
       "ok": true,
-      "durationMs": 2898,
-      "eventCount": 11
+      "durationMs": 6011,
+      "eventCount": 12
     },
     {
       "file": "examples/context-engineering/05-dynamic-react.ts",
       "ok": true,
-      "durationMs": 3504,
-      "eventCount": 13
+      "durationMs": 2325,
+      "eventCount": 14
     },
     {
       "file": "examples/context-engineering/06-mixed-flavors.ts",
       "ok": true,
-      "durationMs": 1427,
-      "eventCount": 11
+      "durationMs": 1638,
+      "eventCount": 12
     },
     {
       "file": "examples/context-engineering/07-rag.ts",
       "ok": true,
-      "durationMs": 1445,
-      "eventCount": 11
+      "durationMs": 1837,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/08-mcp.ts",
       "ok": true,
-      "durationMs": 1441,
-      "eventCount": 11
+      "durationMs": 1744,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/context-engineering/09-skills-from-dir.ts",
+      "ok": true,
+      "durationMs": 2518,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/context-engineering/10-mcp-serve.ts",
+      "ok": true,
+      "durationMs": 2517,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/context-engineering/11-compaction.ts",
+      "ok": true,
+      "durationMs": 2810,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/context-engineering/12-window-strategies.ts",
+      "ok": true,
+      "durationMs": 2544,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/context-engineering/13-messages-delivery.ts",
+      "ok": true,
+      "durationMs": 2483,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/context-engineering/14-durable-compaction.ts",
+      "ok": true,
+      "durationMs": 2113,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/context-engineering/15-skill-graph-intents.ts",
+      "ok": true,
+      "durationMs": 1924,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/context-engineering/16-skill-steps.ts",
+      "ok": true,
+      "durationMs": 2495,
+      "eventCount": 18
+    },
+    {
+      "file": "examples/context-engineering/17-brains-and-tool-effects.ts",
+      "ok": true,
+      "durationMs": 2827,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/context-engineering/18-start-rule-examples.ts",
+      "ok": true,
+      "durationMs": 1676,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/context-engineering/19-skill-graph-host.ts",
+      "ok": true,
+      "durationMs": 1775,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/context-engineering/20-keep-the-evidence.ts",
+      "ok": true,
+      "durationMs": 2532,
+      "eventCount": 15
     },
     {
       "file": "examples/core-flow/01-sequence.ts",
       "ok": true,
-      "durationMs": 15506,
+      "durationMs": 16744,
       "eventCount": 6
     },
     {
       "file": "examples/core-flow/02-parallel.ts",
       "ok": true,
-      "durationMs": 7047,
+      "durationMs": 10070,
       "eventCount": 8
     },
     {
       "file": "examples/core-flow/03-conditional.ts",
       "ok": true,
-      "durationMs": 10733,
+      "durationMs": 12237,
       "eventCount": 7
     },
     {
       "file": "examples/core-flow/04-loop.ts",
       "ok": true,
-      "durationMs": 17396,
+      "durationMs": 16500,
       "eventCount": 8
+    },
+    {
+      "file": "examples/core-flow/05-workflow.ts",
+      "ok": true,
+      "durationMs": 11906,
+      "eventCount": 6
+    },
+    {
+      "file": "examples/core-flow/06-graph.ts",
+      "ok": true,
+      "durationMs": 15751,
+      "eventCount": 6
     },
     {
       "file": "examples/core/01-llm-call.ts",
       "ok": true,
-      "durationMs": 4938,
+      "durationMs": 6330,
       "eventCount": 4
     },
     {
       "file": "examples/core/02-agent-with-tools.ts",
       "ok": true,
-      "durationMs": 10348,
-      "eventCount": 13
+      "durationMs": 13251,
+      "eventCount": 14
     },
     {
       "file": "examples/deploy/agentcore-runtime.ts",
       "ok": true,
-      "durationMs": 1237,
-      "eventCount": 11
+      "durationMs": 2505,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/durable-sessions.ts",
+      "ok": true,
+      "durationMs": 1873,
+      "eventCount": 19
+    },
+    {
+      "file": "examples/deploy/echo-conversation.ts",
+      "ok": true,
+      "durationMs": 1972,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/multi-user.ts",
+      "ok": true,
+      "durationMs": 2082,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/one-port.ts",
+      "ok": true,
+      "durationMs": 1686,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/own-routes.ts",
+      "ok": true,
+      "durationMs": 1711,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/render-by-ref.ts",
+      "ok": true,
+      "durationMs": 1857,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/deploy/sqlite-sessions.ts",
+      "ok": true,
+      "durationMs": 1862,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/deploy/standing-agent.ts",
+      "ok": true,
+      "durationMs": 2030,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/deploy/verified-door.ts",
+      "ok": true,
+      "durationMs": 1811,
+      "eventCount": 14
     },
     {
       "file": "examples/dynamic-react/01-classic-react.ts",
       "ok": true,
-      "durationMs": 2229,
-      "eventCount": 13
+      "durationMs": 2660,
+      "eventCount": 14
     },
     {
       "file": "examples/dynamic-react/02-dynamic-react.ts",
       "ok": true,
-      "durationMs": 2373,
-      "eventCount": 13
+      "durationMs": 2824,
+      "eventCount": 14
     },
     {
       "file": "examples/features/01-pause-resume.ts",
       "ok": true,
-      "durationMs": 15394,
-      "eventCount": 15
+      "durationMs": 13729,
+      "eventCount": 16
     },
     {
       "file": "examples/features/02-cost-tracking.ts",
       "ok": true,
-      "durationMs": 12341,
-      "eventCount": 15
+      "durationMs": 14115,
+      "eventCount": 17
     },
     {
       "file": "examples/features/03-permissions.ts",
       "ok": true,
-      "durationMs": 11408,
-      "eventCount": 14
+      "durationMs": 1489,
+      "eventCount": 16
     },
     {
       "file": "examples/features/04-observability.ts",
       "ok": true,
-      "durationMs": 13626,
-      "eventCount": 13
+      "durationMs": 11767,
+      "eventCount": 14
     },
     {
       "file": "examples/features/05-events.ts",
       "ok": true,
-      "durationMs": 12120,
-      "eventCount": 14
+      "durationMs": 13858,
+      "eventCount": 15
     },
     {
       "file": "examples/features/06-detached-observability.ts",
       "ok": true,
-      "durationMs": 5068,
-      "eventCount": 11
+      "durationMs": 6331,
+      "eventCount": 12
     },
     {
       "file": "examples/features/06-flowchart-boundary-payloads.ts",
       "ok": true,
-      "durationMs": 12506,
-      "eventCount": 13
+      "durationMs": 14263,
+      "eventCount": 14
     },
     {
       "file": "examples/features/06-status-subpath.ts",
       "ok": true,
-      "durationMs": 13506,
-      "eventCount": 14
+      "durationMs": 16542,
+      "eventCount": 15
     },
     {
       "file": "examples/features/06-tool-args-validation.ts",
       "ok": true,
-      "durationMs": 17911,
-      "eventCount": 14
+      "durationMs": 20317,
+      "eventCount": 15
     },
     {
       "file": "examples/features/07-mock-multi-turn-replies.ts",
       "ok": true,
-      "durationMs": 1145,
-      "eventCount": 13
+      "durationMs": 1410,
+      "eventCount": 14
     },
     {
       "file": "examples/features/08-reliability.ts",
       "ok": true,
-      "durationMs": 1251,
-      "eventCount": 17
+      "durationMs": 1500,
+      "eventCount": 20
     },
     {
       "file": "examples/features/09-reliability-gate.ts",
       "ok": true,
-      "durationMs": 1002,
-      "eventCount": 13
+      "durationMs": 1231,
+      "eventCount": 14
     },
     {
       "file": "examples/features/10-discovery-provider.ts",
       "ok": true,
-      "durationMs": 1399,
-      "eventCount": 17
+      "durationMs": 1322,
+      "eventCount": 18
     },
     {
       "file": "examples/features/11-sequence-policy.ts",
       "ok": true,
-      "durationMs": 1430,
-      "eventCount": 15
+      "durationMs": 1742,
+      "eventCount": 16
     },
     {
       "file": "examples/features/12-strict-output.ts",
       "ok": true,
-      "durationMs": 1146,
-      "eventCount": 14
+      "durationMs": 1332,
+      "eventCount": 15
     },
     {
       "file": "examples/features/13-live-state.ts",
       "ok": true,
-      "durationMs": 10605,
-      "eventCount": 13
+      "durationMs": 12601,
+      "eventCount": 14
     },
     {
       "file": "examples/features/14-tool-lineage.ts",
       "ok": true,
-      "durationMs": 1540,
-      "eventCount": 13
+      "durationMs": 1815,
+      "eventCount": 14
     },
     {
       "file": "examples/features/15-skill-graph.ts",
       "ok": true,
-      "durationMs": 1493,
-      "eventCount": 13
+      "durationMs": 1705,
+      "eventCount": 15
     },
     {
       "file": "examples/features/16-providers.ts",
       "ok": true,
-      "durationMs": 1309,
-      "eventCount": 11
+      "durationMs": 1381,
+      "eventCount": 12
     },
     {
       "file": "examples/features/17-identity.ts",
       "ok": true,
-      "durationMs": 1318,
-      "eventCount": 13
+      "durationMs": 1596,
+      "eventCount": 16
     },
     {
       "file": "examples/features/18-otel-genai.ts",
       "ok": true,
-      "durationMs": 10581,
-      "eventCount": 13
+      "durationMs": 8565,
+      "eventCount": 14
     },
     {
       "file": "examples/features/19-audit-export.ts",
       "ok": true,
-      "durationMs": 23957,
-      "eventCount": 14
+      "durationMs": 24243,
+      "eventCount": 15
     },
     {
       "file": "examples/features/20-regulated-decisioning.ts",
       "ok": true,
-      "durationMs": 3208,
-      "eventCount": 15
+      "durationMs": 3517,
+      "eventCount": 16
     },
     {
       "file": "examples/features/21-deferred-observers.ts",
       "ok": true,
-      "durationMs": 57842,
-      "eventCount": 14
+      "durationMs": 57786,
+      "eventCount": 15
     },
     {
       "file": "examples/features/22-influence-core.ts",
       "ok": true,
-      "durationMs": 1015,
+      "durationMs": 1384,
       "eventCount": 0
     },
     {
       "file": "examples/features/23-skill-graph-scoped-read-skill.ts",
       "ok": true,
-      "durationMs": 1553,
-      "eventCount": 14
+      "durationMs": 2135,
+      "eventCount": 16
     },
     {
       "file": "examples/features/24-skill-graph-entry-relevance.ts",
       "ok": true,
-      "durationMs": 1122,
-      "eventCount": 11
+      "durationMs": 1356,
+      "eventCount": 13
     },
     {
       "file": "examples/features/25-skill-graph-checkup.ts",
       "ok": true,
-      "durationMs": 928,
+      "durationMs": 1287,
       "eventCount": 0
     },
     {
       "file": "examples/features/26-skill-graph-route-recorder.ts",
       "ok": true,
-      "durationMs": 1278,
-      "eventCount": 13
+      "durationMs": 1519,
+      "eventCount": 15
     },
     {
       "file": "examples/features/27-skill-graph-relevance-hint.ts",
       "ok": true,
-      "durationMs": 1170,
-      "eventCount": 11
+      "durationMs": 1280,
+      "eventCount": 13
     },
     {
       "file": "examples/features/28-skill-graph-entry-read.ts",
       "ok": true,
-      "durationMs": 2053,
-      "eventCount": 13
+      "durationMs": 1780,
+      "eventCount": 15
     },
     {
       "file": "examples/features/29-skill-contract-check.ts",
       "ok": true,
-      "durationMs": 1698,
+      "durationMs": 1348,
       "eventCount": 0
     },
     {
       "file": "examples/features/30-tool-contract-checkup.ts",
       "ok": true,
-      "durationMs": 1588,
+      "durationMs": 1287,
       "eventCount": 0
     },
     {
       "file": "examples/features/31-skill-graph-keyword-scorer.ts",
       "ok": true,
-      "durationMs": 1589,
-      "eventCount": 11
+      "durationMs": 1345,
+      "eventCount": 13
     },
     {
       "file": "examples/features/32-context-ledger.ts",
       "ok": true,
-      "durationMs": 1851,
+      "durationMs": 1645,
       "eventCount": 0
     },
     {
       "file": "examples/features/33-checkin.ts",
       "ok": true,
-      "durationMs": 1523,
-      "eventCount": 16
+      "durationMs": 1246,
+      "eventCount": 17
     },
     {
       "file": "examples/features/34-checkin-coworker.ts",
       "ok": true,
-      "durationMs": 1523,
-      "eventCount": 16
+      "durationMs": 1353,
+      "eventCount": 17
     },
     {
       "file": "examples/features/35-resilience-visibility.ts",
       "ok": true,
-      "durationMs": 1487,
+      "durationMs": 1394,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/36-per-run-config.ts",
+      "ok": true,
+      "durationMs": 1579,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/features/37-middleware.ts",
+      "ok": true,
+      "durationMs": 1556,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/38-act.ts",
+      "ok": true,
+      "durationMs": 1652,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/39-approve-once.ts",
+      "ok": true,
+      "durationMs": 1829,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/40-output-schema-retry.ts",
+      "ok": true,
+      "durationMs": 2305,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/41-local-model.ts",
+      "ok": true,
+      "durationMs": 1526,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/42-skill-graph-model-pick.ts",
+      "ok": true,
+      "durationMs": 2429,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/features/43-skill-graph-tree-pick.ts",
+      "ok": true,
+      "durationMs": 1480,
+      "eventCount": 18
+    },
+    {
+      "file": "examples/features/44-skill-graph-read-skill-offer.ts",
+      "ok": true,
+      "durationMs": 1633,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/45-credential-consent.ts",
+      "ok": true,
+      "durationMs": 1845,
+      "eventCount": 19
+    },
+    {
+      "file": "examples/features/46-skill-graph-checkup-deepens.ts",
+      "ok": true,
+      "durationMs": 1411,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/47-skills-from-dir-graph.ts",
+      "ok": true,
+      "durationMs": 1795,
       "eventCount": 13
+    },
+    {
+      "file": "examples/features/48-graceful-shutdown.ts",
+      "ok": true,
+      "durationMs": 21183,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/features/49-self-explain-live.ts",
+      "ok": true,
+      "durationMs": 1695,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/50-through-the-tool-boundary.ts",
+      "ok": true,
+      "durationMs": 1458,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/features/51-conversations.ts",
+      "ok": true,
+      "durationMs": 1321,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/52-run-code.ts",
+      "ok": true,
+      "durationMs": 1964,
+      "eventCount": 18
+    },
+    {
+      "file": "examples/features/53-enterprise-governance.ts",
+      "ok": true,
+      "durationMs": 15372,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/54-skill-graph-front-door.ts",
+      "ok": true,
+      "durationMs": 2698,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/55-result-ceiling.ts",
+      "ok": true,
+      "durationMs": 1602,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/56-artifacts.ts",
+      "ok": true,
+      "durationMs": 28475,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/57-artifact-data-flow.ts",
+      "ok": true,
+      "durationMs": 24417,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/58-typed-hitl-component.ts",
+      "ok": true,
+      "durationMs": 14567,
+      "eventCount": 18
+    },
+    {
+      "file": "examples/features/59-artifact-vocabularies.ts",
+      "ok": true,
+      "durationMs": 18168,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/60-gemini-field-truths.ts",
+      "ok": true,
+      "durationMs": 1233,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/61-agent-recipes.ts",
+      "ok": true,
+      "durationMs": 1461,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/features/62-recording-envelope.ts",
+      "ok": true,
+      "durationMs": 1384,
+      "eventCount": 12
+    },
+    {
+      "file": "examples/features/63-recording-carries-the-map.ts",
+      "ok": true,
+      "durationMs": 1909,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/64-skill-map-guards.ts",
+      "ok": true,
+      "durationMs": 1504,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/65-tool-progress.ts",
+      "ok": true,
+      "durationMs": 2607,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/66-semantic-envelope.ts",
+      "ok": true,
+      "durationMs": 1730,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/features/67-out-of-budget-wrap-up.ts",
+      "ok": true,
+      "durationMs": 4031,
+      "eventCount": 16
     },
     {
       "file": "examples/helpers/cli.ts",
       "ok": true,
-      "durationMs": 1236,
+      "durationMs": 960,
       "eventCount": 0
     },
     {
       "file": "examples/helpers/neoToolCatalog.ts",
       "ok": true,
-      "durationMs": 1256,
+      "durationMs": 990,
       "eventCount": 0
     },
     {
       "file": "examples/helpers/provider.ts",
       "ok": true,
-      "durationMs": 1156,
+      "durationMs": 1002,
       "eventCount": 0
     },
     {
       "file": "examples/memory/01-window-strategy.ts",
       "ok": true,
-      "durationMs": 1705,
-      "eventCount": 11
+      "durationMs": 1774,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/02-budget-strategy.ts",
       "ok": true,
-      "durationMs": 3119,
-      "eventCount": 11
+      "durationMs": 1743,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/03-summarize-strategy.ts",
       "ok": true,
-      "durationMs": 3573,
-      "eventCount": 11
+      "durationMs": 3541,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/04-topK-strategy.ts",
       "ok": true,
-      "durationMs": 3612,
-      "eventCount": 11
+      "durationMs": 2249,
+      "eventCount": 15
     },
     {
       "file": "examples/memory/05-extract-strategy.ts",
       "ok": true,
-      "durationMs": 3948,
-      "eventCount": 11
+      "durationMs": 2512,
+      "eventCount": 12
     },
     {
       "file": "examples/memory/06-causal-snapshot.ts",
       "ok": true,
-      "durationMs": 1982,
-      "eventCount": 11
+      "durationMs": 1917,
+      "eventCount": 12
     },
     {
       "file": "examples/memory/07-hybrid-auto.ts",
       "ok": true,
-      "durationMs": 2178,
-      "eventCount": 11
+      "durationMs": 2292,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/08-redis-store.ts",
       "ok": true,
-      "durationMs": 1906,
-      "eventCount": 11
+      "durationMs": 2017,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/09-agentcore-store.ts",
       "ok": true,
-      "durationMs": 1760,
-      "eventCount": 11
+      "durationMs": 2064,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/memory/10-durable-vector-index.ts",
+      "ok": true,
+      "durationMs": 1802,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/memory/11-decay-strategy.ts",
+      "ok": true,
+      "durationMs": 1319,
+      "eventCount": 12
     },
     {
       "file": "examples/observability/01-trace-debug-session.ts",
       "ok": true,
-      "durationMs": 1075,
+      "durationMs": 1429,
       "eventCount": 0
     },
     {
       "file": "examples/observability/02-lint-confusable-catalog.ts",
       "ok": true,
-      "durationMs": 1158,
+      "durationMs": 1568,
       "eventCount": 0
     },
     {
       "file": "examples/observability/03-lint-fix-and-pass.ts",
       "ok": true,
-      "durationMs": 1166,
+      "durationMs": 1704,
       "eventCount": 0
     },
     {
       "file": "examples/observability/04-tool-choice-margins.ts",
       "ok": true,
-      "durationMs": 2370,
-      "eventCount": 13
+      "durationMs": 2946,
+      "eventCount": 14
     },
     {
       "file": "examples/observability/05-context-bisect.ts",
       "ok": true,
-      "durationMs": 9385,
-      "eventCount": 13
+      "durationMs": 10014,
+      "eventCount": 14
     },
     {
       "file": "examples/observability/06-backtrack-trace.ts",
       "ok": true,
-      "durationMs": 9299,
-      "eventCount": 13
+      "durationMs": 9899,
+      "eventCount": 14
     },
     {
       "file": "examples/observability/07-trace-debug-agent.ts",
       "ok": true,
-      "durationMs": 2364,
-      "eventCount": 15
+      "durationMs": 2805,
+      "eventCount": 16
     },
     {
       "file": "examples/observability/08-self-explain.ts",
       "ok": true,
-      "durationMs": 4753,
-      "eventCount": 16
+      "durationMs": 4725,
+      "eventCount": 17
     },
     {
       "file": "examples/observability/09-attributability-marker.ts",
       "ok": true,
-      "durationMs": 1217,
+      "durationMs": 1119,
       "eventCount": 0
     },
     {
       "file": "examples/observability/10-missing-context.ts",
       "ok": true,
-      "durationMs": 1224,
+      "durationMs": 1097,
       "eventCount": 0
     },
     {
       "file": "examples/observability/11-contrastive-influence.ts",
       "ok": true,
-      "durationMs": 1357,
+      "durationMs": 1151,
       "eventCount": 0
     },
     {
       "file": "examples/observability/12-two-score-localization.ts",
       "ok": true,
-      "durationMs": 1326,
+      "durationMs": 1235,
       "eventCount": 0
     },
     {
       "file": "examples/observability/13-context-error-finders.ts",
       "ok": true,
-      "durationMs": 1070,
+      "durationMs": 1291,
       "eventCount": 0
     },
     {
       "file": "examples/observability/13-per-loop-trajectory.ts",
       "ok": true,
-      "durationMs": 1187,
-      "eventCount": 13
+      "durationMs": 1299,
+      "eventCount": 15
     },
     {
       "file": "examples/observability/14-loop-recall-shortlist.ts",
       "ok": true,
-      "durationMs": 1103,
+      "durationMs": 1174,
       "eventCount": 0
     },
     {
       "file": "examples/observability/15-walk-to-root.ts",
       "ok": true,
-      "durationMs": 1101,
+      "durationMs": 1291,
       "eventCount": 0
     },
     {
       "file": "examples/observability/16-pluggable-scorer.ts",
       "ok": true,
-      "durationMs": 1745,
-      "eventCount": 13
+      "durationMs": 1869,
+      "eventCount": 14
     },
     {
       "file": "examples/observability/17-localize-quickstart.ts",
       "ok": true,
-      "durationMs": 4872,
-      "eventCount": 11
+      "durationMs": 5263,
+      "eventCount": 12
     },
     {
       "file": "examples/observability/18-influence-strategies-and-rerun.ts",
       "ok": true,
-      "durationMs": 6308,
-      "eventCount": 11
+      "durationMs": 6704,
+      "eventCount": 12
     },
     {
       "file": "examples/observability/19-recorded-chat.ts",
       "ok": true,
-      "durationMs": 6753,
-      "eventCount": 11
+      "durationMs": 7255,
+      "eventCount": 12
     },
     {
       "file": "examples/observability/20-record-and-render.ts",
       "ok": true,
-      "durationMs": 12136,
+      "durationMs": 12649,
       "eventCount": 6
+    },
+    {
+      "file": "examples/observability/21-variable-recall.ts",
+      "ok": true,
+      "durationMs": 1201,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/observability/22-file-a-bug.ts",
+      "ok": true,
+      "durationMs": 1699,
+      "eventCount": 14
     },
     {
       "file": "examples/patterns/01-self-consistency.ts",
       "ok": true,
-      "durationMs": 8794,
+      "durationMs": 6301,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/02-reflection.ts",
       "ok": true,
-      "durationMs": 23305,
+      "durationMs": 21263,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/03-debate.ts",
       "ok": true,
-      "durationMs": 27172,
+      "durationMs": 28433,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/04-map-reduce.ts",
       "ok": true,
-      "durationMs": 5074,
+      "durationMs": 7763,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/05-tot.ts",
       "ok": true,
-      "durationMs": 14431,
+      "durationMs": 13729,
       "eventCount": 10
     },
     {
       "file": "examples/patterns/06-swarm.ts",
       "ok": true,
-      "durationMs": 13105,
+      "durationMs": 14710,
       "eventCount": 9
+    },
+    {
+      "file": "examples/patterns/07-llm-swarm.ts",
+      "ok": true,
+      "durationMs": 8183,
+      "eventCount": 9
+    },
+    {
+      "file": "examples/rag/01-folder-to-agent.ts",
+      "ok": true,
+      "durationMs": 1817,
+      "eventCount": 15
     }
   ]
 }

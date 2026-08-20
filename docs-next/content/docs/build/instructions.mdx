@@ -118,11 +118,89 @@ defineTool({
 A tool result IS a recent message, it needs no role negotiation, and it lands after the
 assistant's turn every time.
 
+## Saying a run-time fact, not just gating on one
+
+The predicate gets an `InjectionContext`, so an Instruction could always *switch
+on* at action 22. It could never **say** so: `Injection.inject` is static data,
+which is why `defineStepsHint`, `defineMenuHint` and `defineRelevanceHint` — the
+library's own advisory injections — each carry a static body and push their DATA
+through a tool description instead. That workaround only works for content the
+framework can attach to a tool it owns.
+
+Since 9.57.0 an Instruction can carry a **`promptTemplate`**, rendered fresh on
+every action:
+
+```ts
+defineInstruction({
+  id: 'budget-awareness',
+  activeWhen: (ctx) => (ctx.iterationsRemaining ?? Infinity) <= 5,
+  promptTemplate:
+    'You are on action {{action}} of {{actionBudget}}; {{actionsRemaining}} remain. ' +
+    'Finish what you have rather than start something new.',
+});
+```
+
+The model reads *"You are on action 25 of 30; 5 remain."* This is measured, not
+decorative: given its remaining budget a model wrote *"I have 5 steps left,
+enough to finish this properly"* and landed the task, where before it spiralled
+and produced no answer at all.
+
+### The vocabulary is closed, on purpose
+
+Three words, all about the turn's action budget:
+
+| placeholder | what it renders |
+| --- | --- |
+| `{{action}}` | the action about to be taken (1-based) |
+| `{{actionBudget}}` | the turn's `maxIterations` |
+| `{{actionsRemaining}}` | how many are left — never negative |
+
+A name outside that set is **refused at define time**, with the three listed in
+the error. Nothing renders as a literal in front of a model.
+
+It is a closed vocabulary rather than `inject: (ctx) => string` because of
+**absence**. Given a function, an author writes `${ctx.maxIterations}` and ships
+*"23 of undefined"*, or writes `?? 0` and ships a fabricated denominator that
+nothing downstream — and no model — can tell from a real zero. With named slots
+the library owns absence and applies one rule: **if any named fact is
+unavailable, the whole instruction is skipped**, by name, as
+`skipped: 'unknown-fact'` on `agentfootprint.context.evaluated`. Never a gap,
+never a fake zero, never the placeholder.
+
+### Three rules a template lives under
+
+- **`prompt` or `promptTemplate`, never both.** They are the same decision
+  spelled two ways, and the library will not pick one for you.
+- **Not `slot: 'messages'`.** That slot delivers each piece once per run and its
+  ledger keys by the content itself, so a template that renders differently every
+  action would deliver a *new message* every action, all run. The system-prompt
+  slot is re-composed per action by design, which is exactly what a template
+  needs.
+- **Not cacheable.** A cache marker asserts a stable prefix; these bytes change
+  every call. `cache: 'always'` on a template is refused. Because a never-cached
+  injection truncates the cached prefix at its declaration position, **declare
+  templated instructions last**.
+
+One consequence worth knowing before you look at a dashboard: `ContextRecorder`
+dedups by content hash per run, so a templated Instruction files one
+`agentfootprint.context.injected` **per action** where a static one files one per
+run. That is more truth, not less — but a consumer counting rows will see N times
+as many.
+
+### The budget facts reach the predicate too
+
+`ctx.maxIterations` and `ctx.iterationsRemaining` are on every agent-mounted
+evaluation, whether or not you use a template — so `activeWhen` can gate on how
+much room is left rather than on a raw iteration number that means nothing on its
+own. They arrive **paired**: both present, or neither. A count without a
+denominator is the fabrication the pairing exists to prevent.
+
 ## Anti-patterns
 
 - ❌ **Don't put dynamic state in the predicate's closure** — it's evaluated per iteration, with fresh `ctx`. Reading from `ctx` is correct; capturing a `let counter` in the closure is racy.
 - ❌ **Don't make `activeWhen` async or side-effecting** — it runs many times per turn; latency multiplies.
 - ❌ **Don't combine many predicates into one giant Instruction** — register multiple small ones with single-purpose predicates. Easier to reason about, easier to observe (one event per matching id).
+- ❌ **Don't reach for a template when a static prompt will do** — a templated Instruction re-renders (and re-records) every action. Use one when the *number* is the point, not for decoration.
 - ❌ **Don't rely on Instruction order for correctness** — registration order determines the order of matching prompts in the system slot, but the LLM doesn't strictly read top-to-bottom. If two Instructions could conflict, write one Instruction with the conflict resolved in its prompt.
 
 ## Next steps
