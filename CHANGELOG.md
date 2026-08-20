@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The wire seam: the manifest of what actually crossed** (T7b — the check
+  the compose seam cannot do). Anthropic and browser-anthropic adapters now
+  state `LLMResponse.wireManifest`, tool names read back from the FINAL
+  serialized request body after every transform; mock echoes its request.
+  `callLLM` compares the manifest against the exact request object it handed
+  the adapter (post cache-strategy, so a strategy edit is never blamed on the
+  adapter) and files `integrity.context_error` findings at seam `'wire'`:
+  one for names that crossed uncomposed (the recorded four-retained-schemas
+  defect — invisible to every pre-serialization check), one for composed
+  names that never crossed. A provider stating no manifest leaves the call
+  incomparable — silence, never a guess; an empty manifest is a stated zero.
+  Same identity-dedup rail as the compose backstop: one defect files once
+  per run.
+
 - **The first live check: `invariant-violation`, at the compose seam.**
   A parked map whose owned tool names are still on the final merged wire
   list is the recorded two-channels contradiction — one channel says

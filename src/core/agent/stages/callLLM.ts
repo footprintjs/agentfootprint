@@ -31,6 +31,8 @@ import type {
 } from '../../../adapters/types.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
+import { contextErrorIdentity } from '../../../integrity/finding/types.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
@@ -509,6 +511,44 @@ export function buildCallLLMStage(
       stopReason: response.stopReason,
       durationMs,
     });
+
+    // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
+    // this reads what the ADAPTER says actually crossed — the manifest read
+    // back from the serialized body — against the schemas this very call
+    // assembled. The recorded defect lived exactly in that gap: a clean
+    // frame, four retained schemas on the wire. No manifest stated → the
+    // call is incomparable and nothing is guessed. Same seen-list rail as
+    // the compose backstop, freshest copy first, so one defect files once
+    // per run however many calls re-detect it.
+    {
+      // The composed side is llmRequest — the exact object HANDED TO the
+      // adapter, after the cache strategy's transform — so a strategy edit
+      // is never blamed on the adapter.
+      const wireFindings = wireViolationsOf(
+        {
+          names: (llmRequest.tools ?? []).map((t) => t.name),
+          provenance: 'callLLM (assembled request)',
+        },
+        response.wireManifest === undefined
+          ? undefined
+          : { names: response.wireManifest.toolNames, provenance: provider.name },
+        iteration,
+      );
+      if (wireFindings.length > 0) {
+        const seenIds =
+          (scope.$getValue('integrityFindingIds') as readonly string[] | undefined) ??
+          (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
+          [];
+        const newIds: string[] = [...seenIds];
+        for (const f of wireFindings) {
+          const id = contextErrorIdentity({ ...f, epoch: undefined });
+          if (newIds.includes(id)) continue;
+          newIds.push(id);
+          typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
+        }
+        if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+      }
+    }
 
     // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
     // agent's, and the bill follows the call, not the configuration.

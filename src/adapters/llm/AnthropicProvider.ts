@@ -30,6 +30,7 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import { toolManifestOf } from './wireManifest.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -209,7 +210,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
         const message = await client.messages.create(params);
-        return fromAnthropicResponse(message);
+        // Manifest read from the FINAL params — after tool mapping and cache
+        // markers — because the whole point is catching what the body says,
+        // not what the request intended (wireManifest.ts).
+        return { ...fromAnthropicResponse(message), wireManifest: toolManifestOf(params.tools) };
       } catch (err) {
         throw wrapError(err);
       }
@@ -235,7 +239,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           }
         }
         const final = await stream.finalMessage();
-        const response = fromAnthropicResponse(final);
+        const response: LLMResponse = {
+          ...fromAnthropicResponse(final),
+          wireManifest: toolManifestOf(params.tools),
+        };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
         throw wrapError(err);

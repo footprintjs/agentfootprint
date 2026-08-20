@@ -31,6 +31,7 @@ import type {
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import { toolManifestOf } from './wireManifest.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -173,7 +174,9 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       }
       if (!response.ok) throw await wrapStatus(response);
       const json = (await response.json()) as AnthropicMessage;
-      return fromAnthropicResponse(json);
+      // Manifest read from the FINAL body — the very object JSON.stringify
+      // sent — after every transform (wireManifest.ts).
+      return { ...fromAnthropicResponse(json), wireManifest: toolManifestOf(body.tools) };
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       const body: AnthropicRequestBody = {
@@ -380,6 +383,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
         // ThinkingBlock[] via AnthropicThinkingHandler. Same shape as the
         // non-streaming path's fromAnthropicResponse.
         ...(completedThinking.length > 0 && { rawThinking: completedThinking }),
+        wireManifest: toolManifestOf(body.tools),
       };
       yield { tokenIndex, content: '', done: true, response: response2 };
     },

@@ -284,6 +284,27 @@ export interface LLMResponse {
    * etc.). The thinking subflow's stage early-returns in this case.
    */
   readonly rawThinking?: unknown;
+  /**
+   * 9.60.0 — what this request ACTUALLY carried, read back from the
+   * serialized body after every transform (see adapters/llm/wireManifest.ts,
+   * which builds it; the SHAPE lives here because it is part of the provider
+   * port, and the skill-graph fence rightly refuses this file reaching
+   * anything past the port).
+   *
+   * The wire seam's evidence: the recorded defect was an adapter still
+   * serializing four tool schemas after the internal frame said they were
+   * removed — invisible to any check that reads only the pre-serialization
+   * IR. Absent when the adapter states no manifest, and the wire check then
+   * treats the request as INCOMPARABLE (never as "nothing crossed"); an
+   * empty `toolNames` is the opposite — a stated zero.
+   */
+  readonly wireManifest?: WireToolManifest;
+}
+
+/** The structural record of what one request actually carried on the wire. */
+export interface WireToolManifest {
+  /** Tool names as they appear in the serialized body, in wire order. */
+  readonly toolNames: readonly string[];
 }
 
 export interface LLMChunk {
