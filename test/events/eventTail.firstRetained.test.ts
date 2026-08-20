@@ -24,7 +24,7 @@ const ev = (i: number): AgentfootprintEvent =>
     name: 'agentfootprint.stream.token',
     payload: { index: i },
     meta: { runId: 'r', runtimeStageId: `s#${i}`, timestamp: i },
-  }) as unknown as AgentfootprintEvent;
+  } as unknown as AgentfootprintEvent);
 
 describe('unit: the retained window is a stated range', () => {
   it('starts at 0 while nothing has dropped', () => {

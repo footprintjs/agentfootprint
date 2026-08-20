@@ -244,7 +244,12 @@ describe('R1 regression: a founding cause survives everything', () => {
     const back = advanceEngagement(
       plan,
       state,
-      pass({ iteration: 7, currentNode: 'billing', moveBy: 'model-pick', acceptedSkillPicks: ['billing'] }),
+      pass({
+        iteration: 7,
+        currentNode: 'billing',
+        moveBy: 'model-pick',
+        acceptedSkillPicks: ['billing'],
+      }),
     );
     expect(back.next[0]!.standing).toBe('engaged');
     // Through a guess, an upgrade, a tenant change, a park and a recovery:

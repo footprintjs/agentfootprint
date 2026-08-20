@@ -425,7 +425,10 @@ function resolvePrivacy(privacy: PersistRecordingOptions['privacy']): RecordingP
  * "window start unproven" by omission — so a bare Recording resolves to
  * `undefined` rather than a refusal.
  */
-function resolveFirstRetained(source: RecordingSource, stated: number | undefined): number | undefined {
+function resolveFirstRetained(
+  source: RecordingSource,
+  stated: number | undefined,
+): number | undefined {
   if (stated !== undefined) {
     if (!Number.isInteger(stated) || stated < 0) {
       throw new IndeterminateRunFactError(

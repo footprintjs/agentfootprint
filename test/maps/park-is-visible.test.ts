@@ -61,7 +61,10 @@ const trapGraph = () => {
     description: 'billing questions',
     body: 'BILLING PROCEDURE',
   });
-  return skillGraph().entry(zoneAudit, { match: { keywords: ['zone'] } }).route(zoneAudit, billing).build();
+  return skillGraph()
+    .entry(zoneAudit, { match: { keywords: ['zone'] } })
+    .route(zoneAudit, billing)
+    .build();
 };
 
 const call = (id: string, name: string, args: Record<string, unknown> = {}) => ({

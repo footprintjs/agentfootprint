@@ -71,9 +71,7 @@ export function parkedMemberIds(
 ): ReadonlySet<string> {
   const out = new Set<string>();
   if (engagement === undefined) return out;
-  const parked = new Set(
-    engagement.filter((r) => r.standing === 'parked').map((r) => r.mapId),
-  );
+  const parked = new Set(engagement.filter((r) => r.standing === 'parked').map((r) => r.mapId));
   for (const map of plan.maps) {
     if (parked.has(map.id)) for (const id of map.memberIds) out.add(id);
   }

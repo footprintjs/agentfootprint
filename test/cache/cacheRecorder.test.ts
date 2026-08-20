@@ -87,12 +87,14 @@ function decisionEvent(branch: 'apply-markers' | 'no-markers', rule?: string): F
  * omits them when the provider reported no number — their absence is the
  * signal "nobody measured", and collapsing it to 0 is the original bug.
  */
-function llmEndEvent(usage: {
-  input?: number;
-  output?: number;
-  cacheRead?: number;
-  cacheWrite?: number;
-} | null): AgentfootprintEvent {
+function llmEndEvent(
+  usage: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  } | null,
+): AgentfootprintEvent {
   return {
     type: 'agentfootprint.stream.llm_end',
     payload: { usage: usage === null ? undefined : { output: 0, ...usage } },
@@ -175,21 +177,15 @@ describe('cacheRecorder — scenario', () => {
 
     // Iter 1: cache write
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(
-      llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }),
-    );
+    rec.onEmit(llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }));
 
     // Iter 2: cache hit
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(
-      llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
-    );
+    rec.onEmit(llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }));
 
     // Iter 3: cache hit
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(
-      llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
-    );
+    rec.onEmit(llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }));
 
     const r = rec.report();
     expect(r.totalIterations).toBe(3);
@@ -258,14 +254,10 @@ describe('cacheRecorder — property', () => {
     });
     // Simulate 5 cache-hit iterations after one initial write
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(
-      llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }),
-    );
+    rec.onEmit(llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }));
     for (let i = 0; i < 5; i++) {
       rec.onDecision(decisionEvent('apply-markers'));
-      rec.onEmit(
-        llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
-      );
+      rec.onEmit(llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }));
     }
     const r = rec.report();
     expect(isKnown(r.estimatedDollarsSavedVsNoCache)).toBe(true);
@@ -314,9 +306,7 @@ describe('cacheRecorder — performance', () => {
       });
       for (let i = 0; i < iterations; i++) {
         rec.onDecision(decisionEvent('apply-markers'));
-        rec.onEmit(
-          llmEndEvent({ input: 100, cacheRead: 1000 }),
-        );
+        rec.onEmit(llmEndEvent({ input: 100, cacheRead: 1000 }));
       }
       rec.report();
     };

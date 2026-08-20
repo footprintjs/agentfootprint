@@ -145,9 +145,21 @@ describe('R4 measurement: a cursor move rewrites the whole prompt cache', () => 
     // definition", not "send fewer tools".
     const seen: string[] = [];
     const script: unknown[] = [
-      { content: '', toolCalls: [{ id: 'c1', name: 'screen_open', args: {} }], stopReason: 'tool_use' },
-      { content: '', toolCalls: [{ id: 'c2', name: 'screen_open', args: {} }], stopReason: 'tool_use' },
-      { content: '', toolCalls: [{ id: 'c3', name: 'screen_open', args: {} }], stopReason: 'tool_use' },
+      {
+        content: '',
+        toolCalls: [{ id: 'c1', name: 'screen_open', args: {} }],
+        stopReason: 'tool_use',
+      },
+      {
+        content: '',
+        toolCalls: [{ id: 'c2', name: 'screen_open', args: {} }],
+        stopReason: 'tool_use',
+      },
+      {
+        content: '',
+        toolCalls: [{ id: 'c3', name: 'screen_open', args: {} }],
+        stopReason: 'tool_use',
+      },
       final,
     ];
     let i = 0;
