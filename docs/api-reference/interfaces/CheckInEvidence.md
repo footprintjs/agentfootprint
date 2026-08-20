@@ -6,7 +6,7 @@
 
 # Interface: CheckInEvidence
 
-Defined in: [src/core/checkin.ts:69](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L69)
+Defined in: [src/core/checkin.ts:69](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L69)
 
 The evidence pack — the "receipts". The `'minimal'` assembler fills only
 [willDo](/agentfootprint/api/generated/interfaces/CheckInEvidence.md#willdo) (zero cost); the `'standard'` assembler fills all four.
@@ -17,7 +17,7 @@ The evidence pack — the "receipts". The `'minimal'` assembler fills only
 
 > `readonly` `optional` **drivers?**: readonly [`CheckInDriver`](/agentfootprint/api/generated/interfaces/CheckInDriver.md)[]
 
-Defined in: [src/core/checkin.ts:80](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L80)
+Defined in: [src/core/checkin.ts:80](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L80)
 
 Which context drove THIS choice, ranked most-to-least. Produced by the
  configured [CheckInScorer](/agentfootprint/api/generated/type-aliases/CheckInScorer.md) (default: a zero-LLM lexical scorer).
@@ -29,7 +29,7 @@ Which context drove THIS choice, ranked most-to-least. Produced by the
 
 > `readonly` `optional` **read?**: readonly [`CheckInContextFrame`](/agentfootprint/api/generated/interfaces/CheckInContextFrame.md)[]
 
-Defined in: [src/core/checkin.ts:76](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L76)
+Defined in: [src/core/checkin.ts:76](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L76)
 
 What context this run consumed so far — one frame per context piece
  (system rules, the user task, prior tool results). Absent under the
@@ -41,7 +41,7 @@ What context this run consumed so far — one frame per context piece
 
 > `readonly` `optional` **trail?**: [`CheckInTrail`](/agentfootprint/api/generated/interfaces/CheckInTrail.md)
 
-Defined in: [src/core/checkin.ts:82](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L82)
+Defined in: [src/core/checkin.ts:82](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L82)
 
 A compact grouped summary of the run so far. Absent under `'minimal'`.
 
@@ -51,7 +51,7 @@ A compact grouped summary of the run so far. Absent under `'minimal'`.
 
 > `readonly` **willDo**: `string`
 
-Defined in: [src/core/checkin.ts:72](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L72)
+Defined in: [src/core/checkin.ts:72](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L72)
 
 Plain-words claim of what will happen: the tool description + the
  rendered arguments. Always present.

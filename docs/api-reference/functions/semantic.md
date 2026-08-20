@@ -8,7 +8,7 @@
 
 > **semantic**(`decl`): [`ToolSemantics`](/agentfootprint/api/generated/interfaces/ToolSemantics.md)
 
-Defined in: [src/lib/semantics/envelope.ts:661](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/envelope.ts#L661)
+Defined in: [src/lib/semantics/envelope.ts:661](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/envelope.ts#L661)
 
 Say "here is typed data, with the caveats that make it honest" in a shape
 the framework recognizes, the record keeps whole, and a build gate can

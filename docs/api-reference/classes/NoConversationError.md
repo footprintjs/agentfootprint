@@ -6,7 +6,7 @@
 
 # Class: NoConversationError
 
-Defined in: [src/core/conversation.ts:128](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/conversation.ts#L128)
+Defined in: [src/core/conversation.ts:128](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/conversation.ts#L128)
 
 Thrown by `followUp()` when there is no conversation to follow up on.
 
@@ -24,7 +24,7 @@ first turn would be the very confusion the door exists to remove.
 
 > **new NoConversationError**(`door`, `reason`): `NoConversationError`
 
-Defined in: [src/core/conversation.ts:131](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/conversation.ts#L131)
+Defined in: [src/core/conversation.ts:131](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/conversation.ts#L131)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_NO_CONVERSATION"`
 
-Defined in: [src/core/conversation.ts:129](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/conversation.ts#L129)
+Defined in: [src/core/conversation.ts:129](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/conversation.ts#L129)
 
 ***
 

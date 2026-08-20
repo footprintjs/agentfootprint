@@ -6,7 +6,7 @@
 
 # Interface: PendingToolTransition
 
-Defined in: [src/core/agent/toolEffects.ts:276](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L276)
+Defined in: [src/core/agent/toolEffects.ts:276](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L276)
 
 The transition proposal the tool-calls stage ACCEPTED this iteration —
 validated (graph mounted, target reachable), first-accepted-wins across
@@ -21,7 +21,7 @@ back to undefined (zero-cost stays zero for agents that never see one).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/toolEffects.ts:284](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L284)
+Defined in: [src/core/agent/toolEffects.ts:284](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L284)
 
 The ReAct iteration whose batch granted it (valid for iteration + 1).
 
@@ -31,7 +31,7 @@ The ReAct iteration whose batch granted it (valid for iteration + 1).
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:282](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L282)
+Defined in: [src/core/agent/toolEffects.ts:282](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L282)
 
 The effect's own declared reason.
 
@@ -41,7 +41,7 @@ The effect's own declared reason.
 
 > `readonly` **targetSkillId**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:277](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L277)
+Defined in: [src/core/agent/toolEffects.ts:277](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L277)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [src/core/agent/toolEffects.ts:277](https://github.com/footprintjs/a
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:280](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L280)
+Defined in: [src/core/agent/toolEffects.ts:280](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L280)
 
 ***
 
@@ -57,6 +57,6 @@ Defined in: [src/core/agent/toolEffects.ts:280](https://github.com/footprintjs/a
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:279](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L279)
+Defined in: [src/core/agent/toolEffects.ts:279](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L279)
 
 The proposing tool — provenance for the record.

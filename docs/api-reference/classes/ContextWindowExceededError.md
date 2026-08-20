@@ -6,7 +6,7 @@
 
 # Class: ContextWindowExceededError
 
-Defined in: [src/adapters/llm/contextWindow.ts:57](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L57)
+Defined in: [src/adapters/llm/contextWindow.ts:57](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L57)
 
 Thrown by an LLM adapter when the provider refused the request because the
 prompt did not fit the model's context window.
@@ -41,7 +41,7 @@ try {
 
 > **new ContextWindowExceededError**(`args`): `ContextWindowExceededError`
 
-Defined in: [src/adapters/llm/contextWindow.ts:75](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L75)
+Defined in: [src/adapters/llm/contextWindow.ts:75](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L75)
 
 #### Parameters
 
@@ -85,7 +85,7 @@ Defined in: [src/adapters/llm/contextWindow.ts:75](https://github.com/footprintj
 
 > `readonly` `optional` **actualTokens?**: `number`
 
-Defined in: [src/adapters/llm/contextWindow.ts:67](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L67)
+Defined in: [src/adapters/llm/contextWindow.ts:67](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L67)
 
 What the request actually came to in tokens, when the vendor said it.
 
@@ -95,7 +95,7 @@ What the request actually came to in tokens, when the vendor said it.
 
 > `readonly` `optional` **cause?**: `Error`
 
-Defined in: [src/adapters/llm/contextWindow.ts:73](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L73)
+Defined in: [src/adapters/llm/contextWindow.ts:73](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L73)
 
 The provider's own error, unchanged.
 
@@ -109,7 +109,7 @@ The provider's own error, unchanged.
 
 > `readonly` **code**: `"ERR_CONTEXT_WINDOW_EXCEEDED"` = `ERR_CONTEXT_WINDOW_EXCEEDED`
 
-Defined in: [src/adapters/llm/contextWindow.ts:58](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L58)
+Defined in: [src/adapters/llm/contextWindow.ts:58](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L58)
 
 ***
 
@@ -117,7 +117,7 @@ Defined in: [src/adapters/llm/contextWindow.ts:58](https://github.com/footprintj
 
 > `readonly` `optional` **limitTokens?**: `number`
 
-Defined in: [src/adapters/llm/contextWindow.ts:64](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L64)
+Defined in: [src/adapters/llm/contextWindow.ts:64](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L64)
 
 The model's (or gateway's) ceiling in tokens, when the vendor said it.
 
@@ -151,7 +151,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **provider**: `string`
 
-Defined in: [src/adapters/llm/contextWindow.ts:61](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L61)
+Defined in: [src/adapters/llm/contextWindow.ts:61](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L61)
 
 Which adapter refused — `'openai'`, `'anthropic'`, `'bedrock'`, …
 
@@ -195,7 +195,7 @@ not capture any frames.
 
 > `readonly` `optional` **status?**: `number`
 
-Defined in: [src/adapters/llm/contextWindow.ts:70](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/llm/contextWindow.ts#L70)
+Defined in: [src/adapters/llm/contextWindow.ts:70](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/adapters/llm/contextWindow.ts#L70)
 
 HTTP status, when there was one. Kept so retry policies still see a 4xx.
 

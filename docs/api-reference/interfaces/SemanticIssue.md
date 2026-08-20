@@ -6,7 +6,7 @@
 
 # Interface: SemanticIssue
 
-Defined in: [src/lib/semantics/envelope.ts:70](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/envelope.ts#L70)
+Defined in: [src/lib/semantics/envelope.ts:70](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/envelope.ts#L70)
 
 One fault, naming the field so a refusal can teach and a gate can point.
 
@@ -16,7 +16,7 @@ One fault, naming the field so a refusal can teach and a gate can point.
 
 > `readonly` **code**: [`SemanticIssueCode`](/agentfootprint/api/generated/type-aliases/SemanticIssueCode.md)
 
-Defined in: [src/lib/semantics/envelope.ts:71](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/envelope.ts#L71)
+Defined in: [src/lib/semantics/envelope.ts:71](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/envelope.ts#L71)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/semantics/envelope.ts:71](https://github.com/footprintjs/ag
 
 > `readonly` **field**: `string`
 
-Defined in: [src/lib/semantics/envelope.ts:73](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/envelope.ts#L73)
+Defined in: [src/lib/semantics/envelope.ts:73](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/envelope.ts#L73)
 
 The offending / missing field, dot-pathed ('grain.is_counter').
 
@@ -34,4 +34,4 @@ The offending / missing field, dot-pathed ('grain.is_counter').
 
 > `readonly` **message**: `string`
 
-Defined in: [src/lib/semantics/envelope.ts:74](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/envelope.ts#L74)
+Defined in: [src/lib/semantics/envelope.ts:74](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/envelope.ts#L74)

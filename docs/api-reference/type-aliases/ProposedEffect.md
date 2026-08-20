@@ -8,6 +8,6 @@
 
 > **ProposedEffect** = [`ProposeTransitionEffect`](/agentfootprint/api/generated/interfaces/ProposeTransitionEffect.md) \| [`RequireInstructionEffect`](/agentfootprint/api/generated/interfaces/RequireInstructionEffect.md)
 
-Defined in: [src/core/agent/toolEffects.ts:95](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L95)
+Defined in: [src/core/agent/toolEffects.ts:95](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L95)
 
 The typed effects a tool result may carry. Two kinds — deliberately.

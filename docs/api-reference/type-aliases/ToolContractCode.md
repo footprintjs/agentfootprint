@@ -8,4 +8,4 @@
 
 > **ToolContractCode** = `"missing-on-server"` \| `"dead-endpoint"` \| `"required-divergence"` \| `"arg-divergence"` \| `"optional-drift"`
 
-Defined in: [src/core/toolContract.ts:17](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/toolContract.ts#L17)
+Defined in: [src/core/toolContract.ts:17](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/toolContract.ts#L17)

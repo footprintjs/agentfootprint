@@ -6,7 +6,7 @@
 
 # Interface: InstructionLease
 
-Defined in: [src/core/agent/toolEffects.ts:302](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L302)
+Defined in: [src/core/agent/toolEffects.ts:302](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L302)
 
 One granted `require-instruction` lease. Validity is COMPUTED, never
 mutated: `'next-call'` serves exactly the Evaluate pass of
@@ -28,7 +28,7 @@ law's owner: it runs whether or not anything new was granted.
 
 > `readonly` **deliveryLease**: [`InstructionDeliveryLease`](/agentfootprint/api/generated/type-aliases/InstructionDeliveryLease.md)
 
-Defined in: [src/core/agent/toolEffects.ts:304](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L304)
+Defined in: [src/core/agent/toolEffects.ts:304](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L304)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core/agent/toolEffects.ts:304](https://github.com/footprintjs/a
 
 > `readonly` **instructionId**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:303](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L303)
+Defined in: [src/core/agent/toolEffects.ts:303](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L303)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/core/agent/toolEffects.ts:303](https://github.com/footprintjs/a
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/toolEffects.ts:313](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L313)
+Defined in: [src/core/agent/toolEffects.ts:313](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L313)
 
 The ReAct iteration whose batch granted it.
 
@@ -54,7 +54,7 @@ The ReAct iteration whose batch granted it.
 
 > `readonly` `optional` **skillId?**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:308](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L308)
+Defined in: [src/core/agent/toolEffects.ts:308](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L308)
 
 The tenure that granted it (advanced cursor, else the activation tail);
  absent when no tenant existed at grant. `'until-skill-exit'` compares
@@ -66,7 +66,7 @@ The tenure that granted it (advanced cursor, else the activation tail);
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:311](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L311)
+Defined in: [src/core/agent/toolEffects.ts:311](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L311)
 
 ***
 
@@ -74,6 +74,6 @@ Defined in: [src/core/agent/toolEffects.ts:311](https://github.com/footprintjs/a
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:310](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L310)
+Defined in: [src/core/agent/toolEffects.ts:310](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L310)
 
 The granting tool — provenance for the record.

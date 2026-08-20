@@ -6,7 +6,7 @@
 
 # Interface: CoveredResult\<T\>
 
-Defined in: [src/core/agent/coverage/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L124)
+Defined in: [src/core/agent/coverage/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/coverage/types.ts#L124)
 
 The rendered coverage ledger, wrapped around the result it bounds.
 
@@ -22,7 +22,7 @@ The rendered coverage ledger, wrapped around the result it bounds.
 
 > `readonly` **af\_coverage**: `object`
 
-Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L125)
+Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/coverage/types.ts#L125)
 
 #### cannot\_cover?
 
@@ -46,6 +46,6 @@ Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintj
 
 > `readonly` **result**: `T`
 
-Defined in: [src/core/agent/coverage/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L132)
+Defined in: [src/core/agent/coverage/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/coverage/types.ts#L132)
 
 The tool's own answer, untouched.

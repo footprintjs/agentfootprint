@@ -6,7 +6,7 @@
 
 # Interface: Turn
 
-Defined in: [src/core/agent/window/turns.ts:33](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/turns.ts#L33)
+Defined in: [src/core/agent/window/turns.ts:33](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/turns.ts#L33)
 
 One turn: a `user` / `assistant` / `system` message plus every `tool`
 message that answers it. Tool results belong to the assistant turn that
@@ -18,7 +18,7 @@ requested them — that pairing is the thing a removal must never break.
 
 > `readonly` **index**: `number`
 
-Defined in: [src/core/agent/window/turns.ts:35](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/turns.ts#L35)
+Defined in: [src/core/agent/window/turns.ts:35](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/turns.ts#L35)
 
 Index of this turn in the segmentation.
 
@@ -28,7 +28,7 @@ Index of this turn in the segmentation.
 
 > `readonly` **length**: `number`
 
-Defined in: [src/core/agent/window/turns.ts:39](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/turns.ts#L39)
+Defined in: [src/core/agent/window/turns.ts:39](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/turns.ts#L39)
 
 Number of messages in the turn.
 
@@ -38,7 +38,7 @@ Number of messages in the turn.
 
 > `readonly` **messages**: readonly [`LLMMessage`](/agentfootprint/api/generated/interfaces/LLMMessage.md)[]
 
-Defined in: [src/core/agent/window/turns.ts:40](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/turns.ts#L40)
+Defined in: [src/core/agent/window/turns.ts:40](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/turns.ts#L40)
 
 ***
 
@@ -46,6 +46,6 @@ Defined in: [src/core/agent/window/turns.ts:40](https://github.com/footprintjs/a
 
 > `readonly` **start**: `number`
 
-Defined in: [src/core/agent/window/turns.ts:37](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/turns.ts#L37)
+Defined in: [src/core/agent/window/turns.ts:37](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/turns.ts#L37)
 
 Index of the turn's FIRST message in the window.

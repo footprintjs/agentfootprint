@@ -6,7 +6,7 @@
 
 # Interface: SemanticRender
 
-Defined in: [src/lib/semantics/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L137)
+Defined in: [src/lib/semantics/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L137)
 
 Rendering HINTS — the tool never renders. A UI that understands them draws
 a better table; one that does not loses nothing, because everything load-
@@ -18,7 +18,7 @@ bearing is in the data fields. Dropped from the model's view entirely.
 
 > `readonly` `optional` **chart\_hint?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L147)
+Defined in: [src/lib/semantics/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L147)
 
 Chart-shape hint ('line per entity').
 
@@ -28,7 +28,7 @@ Chart-shape hint ('line per entity').
 
 > `readonly` `optional` **columns?**: readonly `string`[]
 
-Defined in: [src/lib/semantics/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L141)
+Defined in: [src/lib/semantics/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L141)
 
 Column order for a tabular view.
 
@@ -38,7 +38,7 @@ Column order for a tabular view.
 
 > `readonly` **default**: `string`
 
-Defined in: [src/lib/semantics/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L139)
+Defined in: [src/lib/semantics/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L139)
 
 The default presentation ('table', 'chart', 'prose', …). A hint.
 
@@ -48,7 +48,7 @@ The default presentation ('table', 'chart', 'prose', …). A hint.
 
 > `readonly` `optional` **filter\_note?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L145)
+Defined in: [src/lib/semantics/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L145)
 
 A note about what filtering already happened ('replicas excluded').
 
@@ -58,6 +58,6 @@ A note about what filtering already happened ('replicas excluded').
 
 > `readonly` `optional` **sort?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L143)
+Defined in: [src/lib/semantics/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L143)
 
 Sort hint ('avg_iops desc').

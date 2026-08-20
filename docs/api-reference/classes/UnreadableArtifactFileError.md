@@ -6,7 +6,7 @@
 
 # Class: UnreadableArtifactFileError
 
-Defined in: [src/artifacts/fileArtifacts.ts:100](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/fileArtifacts.ts#L100)
+Defined in: [src/artifacts/fileArtifacts.ts:100](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/fileArtifacts.ts#L100)
 
 Raised when an artifact file EXISTS but this runtime cannot read it — a
 different fact from "no artifact", and only one of them is safe to answer
@@ -22,7 +22,7 @@ with `null`. (The sqliteSessions law, per file.)
 
 > **new UnreadableArtifactFileError**(`file`, `detail`): `UnreadableArtifactFileError`
 
-Defined in: [src/artifacts/fileArtifacts.ts:104](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/fileArtifacts.ts#L104)
+Defined in: [src/artifacts/fileArtifacts.ts:104](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/fileArtifacts.ts#L104)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNREADABLE_ARTIFACT_FILE"`
 
-Defined in: [src/artifacts/fileArtifacts.ts:101](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/fileArtifacts.ts#L101)
+Defined in: [src/artifacts/fileArtifacts.ts:101](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/fileArtifacts.ts#L101)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/artifacts/fileArtifacts.ts:101](https://github.com/footprintjs/
 
 > `readonly` **file**: `string`
 
-Defined in: [src/artifacts/fileArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/fileArtifacts.ts#L102)
+Defined in: [src/artifacts/fileArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/fileArtifacts.ts#L102)
 
 ***
 

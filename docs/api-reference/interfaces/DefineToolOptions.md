@@ -6,7 +6,7 @@
 
 # Interface: DefineToolOptions\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:452](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L452)
+Defined in: [src/core/tools.ts:452](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L452)
 
 Convenience input for `defineTool` — flatter than `Tool` itself.
 Consumers describe the tool inline; the helper assembles `schema`.
@@ -31,7 +31,7 @@ properties: {} }` or omit and we'll default to that.
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/agentfootprint/api/generated/type-aliases/ToolCapability.md)[]
 
-Defined in: [src/core/tools.ts:471](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L471)
+Defined in: [src/core/tools.ts:471](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L471)
 
 Declare what this tool touches (see [Tool.capabilities](/agentfootprint/api/generated/interfaces/Tool.md#capabilities)). Consulted
  only when the configured checker declares it governs them.
@@ -42,7 +42,7 @@ Declare what this tool touches (see [Tool.capabilities](/agentfootprint/api/gene
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)\<`TArgs`\>
 
-Defined in: [src/core/tools.ts:465](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L465)
+Defined in: [src/core/tools.ts:465](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L465)
 
 Demand a human check-in before this tool runs (see [Tool.checkIn](/agentfootprint/api/generated/interfaces/Tool.md#checkin)).
  `'always'` or a `(args, ctx) => boolean` predicate.
@@ -53,7 +53,7 @@ Demand a human check-in before this tool runs (see [Tool.checkIn](/agentfootprin
 
 > `readonly` `optional` **checkInComponent?**: [`AskComponent`](/agentfootprint/api/generated/interfaces/AskComponent.md)
 
-Defined in: [src/core/tools.ts:468](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L468)
+Defined in: [src/core/tools.ts:468](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L468)
 
 The registered screen component that collects the check-in decision
  (see [Tool.checkInComponent](/agentfootprint/api/generated/interfaces/Tool.md#checkincomponent)). Requires `checkIn`.
@@ -64,7 +64,7 @@ The registered screen component that collects the check-in decision
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/tools.ts:454](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L454)
+Defined in: [src/core/tools.ts:454](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L454)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/core/tools.ts:454](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/tools.ts:455](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L455)
+Defined in: [src/core/tools.ts:455](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L455)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [src/core/tools.ts:455](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/tools.ts:453](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L453)
+Defined in: [src/core/tools.ts:453](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L453)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [src/core/tools.ts:453](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:458](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L458)
+Defined in: [src/core/tools.ts:458](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L458)
 
 Declare a credential this tool needs (declare-and-push). Resolved by the
  framework before `execute` and injected as `ctx.credential`.
@@ -99,7 +99,7 @@ Declare a credential this tool needs (declare-and-push). Resolved by the
 
 > `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/agentfootprint/api/generated/interfaces/ToolResultCeiling.md)
 
-Defined in: [src/core/tools.ts:474](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L474)
+Defined in: [src/core/tools.ts:474](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L474)
 
 Refuse (never truncate) a result over this many chars, teaching the model
  to narrow (see [ToolResultCeiling](/agentfootprint/api/generated/interfaces/ToolResultCeiling.md)). Omitted → byte-identical.
@@ -110,7 +110,7 @@ Refuse (never truncate) a result over this many chars, teaching the model
 
 > `readonly` `optional` **resultClass?**: [`ToolResultClass`](/agentfootprint/api/generated/type-aliases/ToolResultClass.md)
 
-Defined in: [src/core/tools.ts:478](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L478)
+Defined in: [src/core/tools.ts:478](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L478)
 
 The declared class of this tool's results — `'triage'` or `'inventory'`
  (see [Tool.resultClass](/agentfootprint/api/generated/interfaces/Tool.md#resultclass)). Keys the `check:semantics` per-class
@@ -122,7 +122,7 @@ The declared class of this tool's results — `'triage'` or `'inventory'`
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/tools.ts:462](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L462)
+Defined in: [src/core/tools.ts:462](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L462)
 
 Declare artifact arguments: arg name → required artifact kind (see
  [Tool.wants](/agentfootprint/api/generated/interfaces/Tool.md#wants)). The model passes the `art_…` ref; the framework
@@ -134,7 +134,7 @@ Declare artifact arguments: arg name → required artifact kind (see
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:479](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/tools.ts#L479)
+Defined in: [src/core/tools.ts:479](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/tools.ts#L479)
 
 #### Parameters
 

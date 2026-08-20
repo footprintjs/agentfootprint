@@ -6,7 +6,7 @@
 
 # Interface: CheckInDecision
 
-Defined in: [src/core/checkin.ts:172](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L172)
+Defined in: [src/core/checkin.ts:172](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L172)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/checkin.ts:172](https://github.com/footprintjs/agentfootpr
 
 > `readonly` **approved**: `boolean`
 
-Defined in: [src/core/checkin.ts:174](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L174)
+Defined in: [src/core/checkin.ts:174](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L174)
 
 True to run the tool, false to decline it.
 
@@ -24,7 +24,7 @@ True to run the tool, false to decline it.
 
 > `readonly` **at**: `number`
 
-Defined in: [src/core/checkin.ts:180](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L180)
+Defined in: [src/core/checkin.ts:180](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L180)
 
 When the decision was made (ms since epoch).
 
@@ -34,7 +34,7 @@ When the decision was made (ms since epoch).
 
 > `readonly` **by**: `string`
 
-Defined in: [src/core/checkin.ts:176](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L176)
+Defined in: [src/core/checkin.ts:176](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L176)
 
 Who decided (an operator id, an email, a queue name — your call).
 
@@ -44,7 +44,7 @@ Who decided (an operator id, an email, a queue name — your call).
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/core/checkin.ts:178](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L178)
+Defined in: [src/core/checkin.ts:178](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L178)
 
 Optional note. On decline it is surfaced to the model so it can adapt.
 
@@ -54,7 +54,7 @@ Optional note. On decline it is surfaced to the model so it can adapt.
 
 > `readonly` `optional` **value?**: [`DecisionValue`](/agentfootprint/api/generated/interfaces/DecisionValue.md)
 
-Defined in: [src/core/checkin.ts:187](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L187)
+Defined in: [src/core/checkin.ts:187](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/checkin.ts#L187)
 
 What they chose, when the answer was a value and not just a yes.
 

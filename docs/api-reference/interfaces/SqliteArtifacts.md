@@ -6,7 +6,7 @@
 
 # Interface: SqliteArtifacts
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:100](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/sqliteArtifacts.ts#L100)
+Defined in: [src/artifacts/sqliteArtifacts.ts:100](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/sqliteArtifacts.ts#L100)
 
 The store, plus the three things a real file store owes beyond the port.
 
@@ -20,7 +20,7 @@ The store, plus the three things a real file store owes beyond the port.
 
 > `readonly` **journalMode**: `string`
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/sqliteArtifacts.ts#L102)
+Defined in: [src/artifacts/sqliteArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/sqliteArtifacts.ts#L102)
 
 The journal mode the file ACTUALLY has, read back from SQLite.
 
@@ -30,7 +30,7 @@ The journal mode the file ACTUALLY has, read back from SQLite.
 
 > **close**(): `void`
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:104](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/sqliteArtifacts.ts#L104)
+Defined in: [src/artifacts/sqliteArtifacts.ts:104](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/sqliteArtifacts.ts#L104)
 
 Close the file. Idempotent; using the store afterwards refuses by name.
 
@@ -44,7 +44,7 @@ Close the file. Idempotent; using the store afterwards refuses by name.
 
 > **delete**(`scope`, `ref`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L249)
+Defined in: [src/artifacts/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L249)
 
 Remove one artifact. No-op when it does not exist — deleting an absence
  is not an error, it is agreement.
@@ -73,7 +73,7 @@ Remove one artifact. No-op when it does not exist — deleting an absence
 
 > **get**(`scope`, `ref`): `Promise`\<[`ArtifactRecord`](/agentfootprint/api/generated/interfaces/ArtifactRecord.md) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L245)
+Defined in: [src/artifacts/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L245)
 
 The ticket and the payload. `null` for missing-or-expired. When the meta
 carries a `digest`, the payload is re-verified here — a mismatch throws
@@ -103,7 +103,7 @@ carries a `digest`, the payload is re-verified here — a mismatch throws
 
 > `optional` **getStream**(`scope`, `ref`): `Promise`\<[`ArtifactStreamRecord`](/agentfootprint/api/generated/interfaces/ArtifactStreamRecord.md) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:280](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L280)
+Defined in: [src/artifacts/types.ts:280](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L280)
 
 OPTIONAL — read a payload as a stream of its canonical bytes. `null` for
 missing-or-expired, exactly like `get`. Absent on stores that would have
@@ -139,7 +139,7 @@ silently traded.
 
 > **head**(`scope`, `ref`): `Promise`\<[`ArtifactMeta`](/agentfootprint/api/generated/interfaces/ArtifactMeta.md) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L238)
+Defined in: [src/artifacts/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L238)
 
 The ticket without the payload — the render-by-ref decision. `null` for
 missing-or-expired (the deliberate ambiguity; both mean "no data").
@@ -168,7 +168,7 @@ missing-or-expired (the deliberate ambiguity; both mean "no data").
 
 > **list**(`scope`, `options?`): `Promise`\<[`ArtifactListResult`](/agentfootprint/api/generated/interfaces/ArtifactListResult.md)\>
 
-Defined in: [src/artifacts/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L252)
+Defined in: [src/artifacts/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L252)
 
 Page through this scope's tickets, newest first.
 
@@ -196,7 +196,7 @@ Page through this scope's tickets, newest first.
 
 > **put**(`scope`, `input`): `Promise`\<[`ArtifactPutResult`](/agentfootprint/api/generated/interfaces/ArtifactPutResult.md)\>
 
-Defined in: [src/artifacts/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L232)
+Defined in: [src/artifacts/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L232)
 
 Store a payload; mint and return the ticket. Validates the input (a
 malformed put is refused by name), validates `parentRefs` resolve in the
@@ -227,7 +227,7 @@ store's retention — and reports what retention swept to make room.
 
 > `optional` **putStream**(`scope`, `input`, `body`): `Promise`\<[`ArtifactPutResult`](/agentfootprint/api/generated/interfaces/ArtifactPutResult.md)\>
 
-Defined in: [src/artifacts/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L263)
+Defined in: [src/artifacts/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L263)
 
 OPTIONAL — store a payload the caller streams, without either side
 holding it whole. Absent on stores that cannot honor that promise; detect

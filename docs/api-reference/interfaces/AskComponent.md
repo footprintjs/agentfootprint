@@ -6,7 +6,7 @@
 
 # Interface: AskComponent
 
-Defined in: [src/core/askComponent.ts:49](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L49)
+Defined in: [src/core/askComponent.ts:49](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/askComponent.ts#L49)
 
 The typed half of a human ask: which REGISTERED screen component collects
 the answer, and what it renders with.
@@ -25,7 +25,7 @@ decision as are display; the structured decision is the record.
 
 > `readonly` **componentId**: `string`
 
-Defined in: [src/core/askComponent.ts:56](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L56)
+Defined in: [src/core/askComponent.ts:56](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/askComponent.ts#L56)
 
 The id of a component registered in the consuming frontend — consumer
 vocabulary, declared by whoever raises the ask, never interpreted here.
@@ -38,7 +38,7 @@ markup or code under it (the no-eval law).
 
 > `readonly` `optional` **props?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/askComponent.ts:62](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L62)
+Defined in: [src/core/askComponent.ts:62](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/askComponent.ts#L62)
 
 Small inline props (plain JSON). These ride the ask — and therefore the
 checkpoint and every stored session envelope — so keep them small; the
@@ -50,7 +50,7 @@ big half is what [propsRef](/agentfootprint/api/generated/interfaces/AskComponen
 
 > `readonly` `optional` **propsRef?**: `string`
 
-Defined in: [src/core/askComponent.ts:70](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L70)
+Defined in: [src/core/askComponent.ts:70](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/askComponent.ts#L70)
 
 Claim ticket for the big half — an artifact ref minted BEFORE the ask
 (usually by the asking tool via `ctx.artifacts.put`). The options table

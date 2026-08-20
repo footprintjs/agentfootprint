@@ -6,7 +6,7 @@
 
 # Class: CheckInRecorder
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:90](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L90)
+Defined in: [src/recorders/core/CheckInRecorder.ts:90](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L90)
 
 A queryable store of every check-in ask + decision. Attach once; read after
 the run (or between runs — it accumulates across `agent.run()` calls until
@@ -34,7 +34,7 @@ const checkins = new CheckInRecorder();
 
 > **new CheckInRecorder**(`id?`): `CheckInRecorder`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:99](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L99)
+Defined in: [src/recorders/core/CheckInRecorder.ts:99](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L99)
 
 #### Parameters
 
@@ -55,7 +55,7 @@ Stable recorder id for idempotent attach/detach. Give distinct
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L91)
+Defined in: [src/recorders/core/CheckInRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L91)
 
 #### Implementation of
 
@@ -67,7 +67,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:91](https://github.com/footpr
 
 > **getDecisions**(): readonly [`CheckInDecisionRecord`](/agentfootprint/api/generated/interfaces/CheckInDecisionRecord.md)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:132](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L132)
+Defined in: [src/recorders/core/CheckInRecorder.ts:132](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L132)
 
 Every human decision captured, oldest first.
 
@@ -81,7 +81,7 @@ readonly [`CheckInDecisionRecord`](/agentfootprint/api/generated/interfaces/Chec
 
 > **getRequests**(): readonly [`CheckInRequestRecord`](/agentfootprint/api/generated/interfaces/CheckInRequestRecord.md)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:127](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L127)
+Defined in: [src/recorders/core/CheckInRecorder.ts:127](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L127)
 
 Every check-in ask captured, oldest first.
 
@@ -95,7 +95,7 @@ readonly [`CheckInRequestRecord`](/agentfootprint/api/generated/interfaces/Check
 
 > **getStats**(): [`CheckInStats`](/agentfootprint/api/generated/interfaces/CheckInStats.md)
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:137](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L137)
+Defined in: [src/recorders/core/CheckInRecorder.ts:137](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L137)
 
 Roll-up counts. `pending` = asks still awaiting a decision.
 
@@ -109,7 +109,7 @@ Roll-up counts. `pending` = asks still awaiting a decision.
 
 > **onEmit**(`event`): `void`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:103](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L103)
+Defined in: [src/recorders/core/CheckInRecorder.ts:103](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L103)
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -140,7 +140,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > **reset**(): `void`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:150](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/core/CheckInRecorder.ts#L150)
+Defined in: [src/recorders/core/CheckInRecorder.ts:150](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/recorders/core/CheckInRecorder.ts#L150)
 
 Drop all captured records (e.g. between runs when reusing the recorder).
 

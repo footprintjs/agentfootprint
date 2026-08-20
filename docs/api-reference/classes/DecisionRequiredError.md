@@ -6,7 +6,7 @@
 
 # Class: DecisionRequiredError
 
-Defined in: [src/core/pause.ts:266](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L266)
+Defined in: [src/core/pause.ts:266](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L266)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [src/core/pause.ts:266](https://github.com/footprintjs/agentfootprin
 
 > **new DecisionRequiredError**(`gate`, `input`): `DecisionRequiredError`
 
-Defined in: [src/core/pause.ts:283](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L283)
+Defined in: [src/core/pause.ts:283](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L283)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_DECISION_REQUIRED"`
 
-Defined in: [src/core/pause.ts:267](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L267)
+Defined in: [src/core/pause.ts:267](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L267)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/pause.ts:267](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **gate**: [`ConsentGateKind`](/agentfootprint/api/generated/type-aliases/ConsentGateKind.md)
 
-Defined in: [src/core/pause.ts:269](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L269)
+Defined in: [src/core/pause.ts:269](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L269)
 
 Which gate is outstanding.
 
@@ -86,7 +86,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` `optional` **middleware?**: `string`
 
-Defined in: [src/core/pause.ts:273](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L273)
+Defined in: [src/core/pause.ts:273](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L273)
 
 `'ask'` only — the middleware that asked.
 
@@ -108,7 +108,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **received**: `string`
 
-Defined in: [src/core/pause.ts:281](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L281)
+Defined in: [src/core/pause.ts:281](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L281)
 
 What arrived instead, as a TYPE NAME only (`'a string'`, `'nothing'`, …).
 
@@ -156,7 +156,7 @@ not capture any frames.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/pause.ts:271](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L271)
+Defined in: [src/core/pause.ts:271](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/pause.ts#L271)
 
 The tool the gate is about, when the pause named one.
 

@@ -6,7 +6,7 @@
 
 # Class: ArtifactIntegrityError
 
-Defined in: [src/artifacts/types.ts:314](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L314)
+Defined in: [src/artifacts/types.ts:314](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L314)
 
 A stored payload no longer matches the digest minted with it. Thrown by
 `get` instead of returning the bytes — corrupt data delivered as whole data
@@ -23,7 +23,7 @@ must never do is honor a ticket with someone else's parcel.
 
 > **new ArtifactIntegrityError**(`ref`, `expected`, `actual`): `ArtifactIntegrityError`
 
-Defined in: [src/artifacts/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L322)
+Defined in: [src/artifacts/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L322)
 
 #### Parameters
 
@@ -53,7 +53,7 @@ Defined in: [src/artifacts/types.ts:322](https://github.com/footprintjs/agentfoo
 
 > `readonly` **actual**: `string`
 
-Defined in: [src/artifacts/types.ts:320](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L320)
+Defined in: [src/artifacts/types.ts:320](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L320)
 
 The digest of what the store actually holds now.
 
@@ -75,7 +75,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ARTIFACT_INTEGRITY"`
 
-Defined in: [src/artifacts/types.ts:315](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L315)
+Defined in: [src/artifacts/types.ts:315](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L315)
 
 ***
 
@@ -83,7 +83,7 @@ Defined in: [src/artifacts/types.ts:315](https://github.com/footprintjs/agentfoo
 
 > `readonly` **expected**: `string`
 
-Defined in: [src/artifacts/types.ts:318](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L318)
+Defined in: [src/artifacts/types.ts:318](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L318)
 
 The digest minted at put.
 
@@ -117,7 +117,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **ref**: `string`
 
-Defined in: [src/artifacts/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L316)
+Defined in: [src/artifacts/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L316)
 
 ***
 

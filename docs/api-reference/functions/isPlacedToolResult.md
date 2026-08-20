@@ -8,7 +8,7 @@
 
 > **isPlacedToolResult**(`value`): `value is PlacedToolResult`
 
-Defined in: [src/artifacts/placement.ts:105](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/placement.ts#L105)
+Defined in: [src/artifacts/placement.ts:105](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/placement.ts#L105)
 
 Type guard for consumers reading `tool_end.result` or a tool message.
 

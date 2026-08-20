@@ -6,7 +6,7 @@
 
 # Interface: ToolResultEnvelope
 
-Defined in: [src/core/agent/toolEffects.ts:110](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L110)
+Defined in: [src/core/agent/toolEffects.ts:110](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L110)
 
 What a tool handler returns to opt into the channel:
 `{ content, effects, status? }`. `content` is what the model reads (any
@@ -26,7 +26,7 @@ explicit marker when only `status` matters.
 
 > `readonly` **content**: `unknown`
 
-Defined in: [src/core/agent/toolEffects.ts:111](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L111)
+Defined in: [src/core/agent/toolEffects.ts:111](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L111)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/core/agent/toolEffects.ts:111](https://github.com/footprintjs/a
 
 > `readonly` **effects**: readonly [`ProposedEffect`](/agentfootprint/api/generated/type-aliases/ProposedEffect.md)[]
 
-Defined in: [src/core/agent/toolEffects.ts:112](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L112)
+Defined in: [src/core/agent/toolEffects.ts:112](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L112)
 
 ***
 
@@ -42,4 +42,4 @@ Defined in: [src/core/agent/toolEffects.ts:112](https://github.com/footprintjs/a
 
 > `readonly` `optional` **status?**: [`ToolResultStatus`](/agentfootprint/api/generated/type-aliases/ToolResultStatus.md)
 
-Defined in: [src/core/agent/toolEffects.ts:113](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/toolEffects.ts#L113)
+Defined in: [src/core/agent/toolEffects.ts:113](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/toolEffects.ts#L113)

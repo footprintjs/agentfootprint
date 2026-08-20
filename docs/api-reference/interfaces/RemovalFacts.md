@@ -6,7 +6,7 @@
 
 # Interface: RemovalFacts
 
-Defined in: [src/core/agent/window/strategy.ts:57](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/strategy.ts#L57)
+Defined in: [src/core/agent/window/strategy.ts:57](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L57)
 
 The provenance of a set of removed messages, as the ledger needs it.
 
@@ -16,7 +16,7 @@ The provenance of a set of removed messages, as the ledger needs it.
 
 > `readonly` **evictions**: readonly [`WindowEviction`](/agentfootprint/api/generated/interfaces/WindowEviction.md)[]
 
-Defined in: [src/core/agent/window/strategy.ts:61](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/strategy.ts#L61)
+Defined in: [src/core/agent/window/strategy.ts:61](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L61)
 
 One eviction per message, with its measured lifetime.
 
@@ -26,6 +26,6 @@ One eviction per message, with its measured lifetime.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/strategy.ts:59](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/strategy.ts#L59)
+Defined in: [src/core/agent/window/strategy.ts:59](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/core/agent/window/strategy.ts#L59)
 
 `runtimeStageId`s of the stages that appended those messages, in order.

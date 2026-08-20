@@ -6,7 +6,7 @@
 
 # Interface: ArtifactRecord
 
-Defined in: [src/artifacts/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L156)
+Defined in: [src/artifacts/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L156)
 
 What `get` returns when the ref resolves: the ticket and the payload.
 
@@ -16,7 +16,7 @@ What `get` returns when the ref resolves: the ticket and the payload.
 
 > `readonly` **data**: `unknown`
 
-Defined in: [src/artifacts/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L158)
+Defined in: [src/artifacts/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L158)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [src/artifacts/types.ts:158](https://github.com/footprintjs/agentfoo
 
 > `readonly` **meta**: [`ArtifactMeta`](/agentfootprint/api/generated/interfaces/ArtifactMeta.md)
 
-Defined in: [src/artifacts/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L157)
+Defined in: [src/artifacts/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/types.ts#L157)

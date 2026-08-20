@@ -8,6 +8,6 @@
 
 > `const` **TOOL\_RESULT\_STATUSES**: readonly [`ToolResultStatus`](/agentfootprint/api/generated/type-aliases/ToolResultStatus.md)[]
 
-Defined in: [src/lib/injection-engine/toolOutcome.ts:48](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/injection-engine/toolOutcome.ts#L48)
+Defined in: [src/lib/injection-engine/toolOutcome.ts:48](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/injection-engine/toolOutcome.ts#L48)
 
 The closed set, as data — validators and docs read one list.

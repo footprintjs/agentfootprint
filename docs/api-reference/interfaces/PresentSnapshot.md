@@ -6,7 +6,7 @@
 
 # Interface: PresentSnapshot
 
-Defined in: [src/artifacts/present.ts:43](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/present.ts#L43)
+Defined in: [src/artifacts/present.ts:43](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/present.ts#L43)
 
 The description snapshot — what the `present` result carries about the
 parcel at speak time, so an expired artifact can still render an honest
@@ -18,7 +18,7 @@ placeholder from history. Meta only, never the payload.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/artifacts/present.ts:47](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/present.ts#L47)
+Defined in: [src/artifacts/present.ts:47](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/present.ts#L47)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/artifacts/present.ts:47](https://github.com/footprintjs/agentfo
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/artifacts/present.ts:45](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/present.ts#L45)
+Defined in: [src/artifacts/present.ts:45](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/present.ts#L45)
 
 The artifact's own consumer vocabulary (`meta.kind`).
 
@@ -36,7 +36,7 @@ The artifact's own consumer vocabulary (`meta.kind`).
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/present.ts:49](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/present.ts#L49)
+Defined in: [src/artifacts/present.ts:49](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/present.ts#L49)
 
 The human title — the call's `label` when given, else the mint's.
 
@@ -46,4 +46,4 @@ The human title — the call's `label` when given, else the mint's.
 
 > `readonly` **mediaType**: `string`
 
-Defined in: [src/artifacts/present.ts:46](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/present.ts#L46)
+Defined in: [src/artifacts/present.ts:46](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/present.ts#L46)

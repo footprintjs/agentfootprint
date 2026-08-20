@@ -8,7 +8,7 @@
 
 > **isArtifactRef**(`candidate`): `candidate is string`
 
-Defined in: [src/artifacts/naming.ts:62](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/naming.ts#L62)
+Defined in: [src/artifacts/naming.ts:62](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/artifacts/naming.ts#L62)
 
 Is this string a well-formed artifact ref?
 

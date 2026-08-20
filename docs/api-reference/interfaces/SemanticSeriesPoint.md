@@ -6,7 +6,7 @@
 
 # Interface: SemanticSeriesPoint
 
-Defined in: [src/lib/semantics/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L55)
+Defined in: [src/lib/semantics/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L55)
 
 One measured point. `t` is the tool's own clock words (an ISO string or an
 epoch number — the library never reinterprets it), `entity` is what was
@@ -18,7 +18,7 @@ measured, `metric` names the measurement, `value` is the reading.
 
 > `readonly` **entity**: `string`
 
-Defined in: [src/lib/semantics/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L57)
+Defined in: [src/lib/semantics/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L57)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/lib/semantics/types.ts:57](https://github.com/footprintjs/agent
 
 > `readonly` **metric**: `string`
 
-Defined in: [src/lib/semantics/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L58)
+Defined in: [src/lib/semantics/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L58)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/semantics/types.ts:58](https://github.com/footprintjs/agent
 
 > `readonly` **t**: `string` \| `number`
 
-Defined in: [src/lib/semantics/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L56)
+Defined in: [src/lib/semantics/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L56)
 
 ***
 
@@ -42,4 +42,4 @@ Defined in: [src/lib/semantics/types.ts:56](https://github.com/footprintjs/agent
 
 > `readonly` **value**: `string` \| `number` \| `boolean` \| `null`
 
-Defined in: [src/lib/semantics/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/lib/semantics/types.ts#L59)
+Defined in: [src/lib/semantics/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/bf2bb6032a7a77012e83dd190bf46141ff4a3215/src/lib/semantics/types.ts#L59)
