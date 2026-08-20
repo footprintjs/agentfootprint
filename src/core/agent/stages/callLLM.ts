@@ -20,6 +20,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -313,7 +314,7 @@ export function buildCallLLMStage(
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
     const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
       iteration,
-      iterationsRemaining: Math.max(0, deps.maxIterations - iteration),
+      iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),
       recentHitRate: scope.recentHitRate,
       cachingDisabled: scope.cachingDisabled ?? false,
     });

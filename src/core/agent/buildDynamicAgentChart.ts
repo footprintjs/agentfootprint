@@ -206,6 +206,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // Deliver mount below for why that indirection exists.
       inputMapper: (parent) => ({
         iteration: parent.iteration as number | undefined,
+        // The turn's action budget (9.57.0) — the same line the flat chart
+        // and the cache mount carry, so `ctx` is one shape in both charts.
+        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
         userMessage: parent.userMessage as string | undefined,
         history: parent.history as readonly LLMMessage[] | undefined,
         lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,

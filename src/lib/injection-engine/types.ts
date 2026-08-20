@@ -115,6 +115,28 @@ export interface InjectionContent {
 export interface InjectionContext {
   /** Current ReAct iteration (1-based). */
   readonly iteration: number;
+  /**
+   * The turn's ACTION BUDGET — the agent's `maxIterations` (9.57.0).
+   *
+   * Absent only when the engine was driven without one (a hand-built
+   * evaluation, a foreign host). Every agent-mounted evaluation carries it.
+   *
+   * It arrives PAIRED with {@link iterationsRemaining}: both are present or
+   * neither is. A count without a denominator is the exact fabrication this
+   * pairing exists to prevent — "you have used 23" says nothing, and "23 of
+   * undefined" says something false.
+   */
+  readonly maxIterations?: number;
+  /**
+   * Actions left in this turn — `maxIterations - iteration`, never negative
+   * (9.57.0). Computed by `iterationsRemainingOf`, the same one function the
+   * cache decision and the request assembly use, so the three cannot drift by
+   * one. Zero at the out-of-budget wrap-up call, which legally runs at
+   * `maxIterations + 1`.
+   *
+   * Paired with {@link maxIterations} — see there.
+   */
+  readonly iterationsRemaining?: number;
   /** The current user message that started this turn. */
   readonly userMessage: string;
   /**

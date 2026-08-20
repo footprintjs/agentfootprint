@@ -429,6 +429,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       {
         inputMapper: (parent) => ({
           iteration: parent.iteration as number | undefined,
+          // The turn's action budget (9.57.0), threaded exactly as the cache
+          // mount threads it — so `activeWhen` can gate on how much room is
+          // left, and a templated instruction can SAY it.
+          maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
           userMessage: parent.userMessage as string | undefined,
           history: parent.history as readonly LLMMessage[] | undefined,
           lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,

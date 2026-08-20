@@ -29,6 +29,7 @@ import type { TypedScope } from 'footprintjs';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from './types.js';
 import type { LLMMessage } from '../adapters/types.js';
 import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
+import { iterationsRemainingOf } from '../lib/iterationBudget.js';
 
 /**
  * Subflow scope state. Set via inputMapper from the agent's parent
@@ -137,7 +138,7 @@ export function computeCacheMarkers(
 
   const ctx: CachePolicyContext = {
     iteration: state.iteration,
-    iterationsRemaining: Math.max(0, state.maxIterations - state.iteration),
+    iterationsRemaining: iterationsRemainingOf(state.maxIterations, state.iteration),
     userMessage: state.userMessage,
     ...(state.lastToolName !== undefined && { lastToolName: state.lastToolName }),
     cumulativeInputTokens: state.cumulativeInputTokens,

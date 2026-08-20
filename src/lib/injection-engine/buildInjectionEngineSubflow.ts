@@ -59,6 +59,7 @@
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
+import { iterationsRemainingOf } from '../iterationBudget.js';
 import { evaluateInjections } from './evaluator.js';
 import {
   projectActiveInjection,
@@ -190,6 +191,10 @@ interface InjectionEngineState {
 /** Subflow input (boundary inputMapper) shape, shared by all four stages. */
 interface InjectionEngineArgs {
   iteration?: number;
+  /** The turn's action budget (9.57.0), threaded by the mount exactly as the
+   *  cache mount threads it. Absent = the engine was driven without one, and
+   *  then neither budget fact reaches the ctx. */
+  maxIterations?: number;
   userMessage?: string;
   history?: InjectionContext['history'];
   lastToolResult?: InjectionContext['lastToolResult'];
@@ -319,6 +324,13 @@ function makeEvaluateStage(
 
     const baseCtx: InjectionContext = {
       iteration,
+      // The action budget, as ONE fact with two spellings (9.57.0). Written
+      // together so the pairing invariant — both or neither — is a property
+      // of this object literal rather than a rule somebody has to remember.
+      ...(args.maxIterations !== undefined && {
+        maxIterations: args.maxIterations,
+        iterationsRemaining: iterationsRemainingOf(args.maxIterations, iteration),
+      }),
       userMessage: args.userMessage ?? '',
       history: args.history ?? [],
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
