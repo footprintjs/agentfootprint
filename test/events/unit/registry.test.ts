@@ -195,7 +195,13 @@ describe('event registry — names + exhaustiveness', () => {
     //     the LIMIT being crossed and stays exactly that; this one is the
     //     difference between an outcome chip that says "answered" and one that
     //     says "answered after the budget ran out".)
-    expect(ALL_EVENT_TYPES.length).toBe(106);
+    //    (integrity.disposition added in 9.60.0 — the run boundary files the
+    //     disposition ledger's rows ONCE: one row per registered check,
+    //     counting checked-pass / checked-fail / not-applicable / unreachable,
+    //     because a findings stream alone cannot say whether the checkers
+    //     RAN. `integrity.context_error` reports a defect; this reports the
+    //     checkers' own health.)
+    expect(ALL_EVENT_TYPES.length).toBe(107);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

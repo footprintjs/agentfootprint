@@ -466,6 +466,23 @@ export interface AgentOptions {
    */
   readonly keepLastToolResults?: number | false;
   /**
+   * How loud the Context Integrity checkers are about their OWN health
+   * (9.60.0). Default `'observe'`.
+   *
+   * Every run keeps a disposition ledger — one row per applicable check,
+   * counting checked-pass / checked-fail / not-applicable / unreachable —
+   * and files it once at the run boundary as
+   * `agentfootprint.integrity.disposition` (listener-gated, like every
+   * typed event). `'dev'` adds the two liveness theorems: a canary at run
+   * start proves each check's pure function can still catch its own
+   * synthetic defect, and a run whose registered checkers demonstrably
+   * never ran fails with `CheckerDeadError` instead of returning a green
+   * answer — because a green report from a check that never ran is
+   * decoration, and two shipped checks in this codebase decayed exactly
+   * that way.
+   */
+  readonly integrityPosture?: 'observe' | 'dev';
+  /**
    * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
    * Default **on**.
    *

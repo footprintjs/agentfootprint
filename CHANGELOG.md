@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The disposition ledger goes live: every run accounts for its checkers**
+  (T9's run lifecycle). Each run registers the applicable checks (wire:
+  always; compose invariant: `.maps()` mounted; dangling-reference: any
+  tool declaring `argumentsFrom`) and every check now notes one disposition
+  per encounter — checked-pass / checked-fail / not-applicable /
+  unreachable (a provider stating no wire manifest is UNREACHABLE, which is
+  a different fact from clean). The run boundary files the rows ONCE as
+  `agentfootprint.integrity.disposition` (107th typed event; every path —
+  success, failure, pause — and before the recording stops, so recordings
+  carry their run's checker accounting). New `integrityPosture: 'dev'`
+  option adds the two liveness theorems: a run-start canary proves each
+  pure check still catches its own synthetic defect (quarantined counts),
+  and a finished run whose registered checkers demonstrably never ran fails
+  with `CheckerDeadError` instead of returning green — because two shipped
+  checks in this codebase decayed exactly that way. Default `'observe'`:
+  rows only, listener-gated.
+
 - **`Tool.argumentsFrom` + the dangling-reference check** (the closure
   check's decidable fragment). A tool author can now declare where a tool's
   arguments come from — `defineTool({ name: 'screen_fire', argumentsFrom:

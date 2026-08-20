@@ -125,6 +125,15 @@ export interface CallLLMStageDeps {
    * absent → the dangling-reference check never runs, byte-identical.
    */
   readonly toolGrounding?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The per-run disposition ledger, by REFERENCE (9.60.0) — plumbing shared
+   * through the build closure like ProviderToolCache, never scope state.
+   * Every check in this stage notes one disposition per encounter here, so
+   * silence is auditable at the run boundary.
+   */
+  readonly integrityLedger?: {
+    current: import('../../../integrity/disposition/ledger.js').DispositionLedger | undefined;
+  };
   /** Optional rules-based reliability config (v2.11.5+). When set,
    *  the call is wrapped in a retry/fallback/fail-fast loop driven
    *  by `config.preCheck` and `config.postDecide` rules. Streaming
@@ -369,23 +378,33 @@ export function buildCallLLMStage(
       const servedGrounded = (llmRequest.tools ?? [])
         .filter((t) => grounding.has(t.name))
         .map((t) => ({ name: t.name, argumentsFrom: grounding.get(t.name)! }));
-      if (servedGrounded.length > 0) {
-        const windowVisits =
-          (scope.compactions as readonly { droppedObservations?: readonly string[] }[] | undefined) ??
-          [];
-        const droppedResults = new Set(windowVisits.flatMap((v) => v.droppedObservations ?? []));
-        if (droppedResults.size > 0) {
-          const presentResults = new Set(
-            llmRequest.messages
-              .filter((m) => m.role === 'tool' && m.toolName !== undefined)
-              .map((m) => m.toolName!),
-          );
-          fileIntegrityFindings(
-            scope,
-            danglingReferencesOf(servedGrounded, droppedResults, presentResults, iteration),
-            iteration,
-          );
-        }
+      const windowVisits =
+        (scope.compactions as readonly { droppedObservations?: readonly string[] }[] | undefined) ??
+        [];
+      const droppedResults = new Set(windowVisits.flatMap((v) => v.droppedObservations ?? []));
+      if (servedGrounded.length > 0 && droppedResults.size > 0) {
+        const presentResults = new Set(
+          llmRequest.messages
+            .filter((m) => m.role === 'tool' && m.toolName !== undefined)
+            .map((m) => m.toolName!),
+        );
+        const danglingFindings = danglingReferencesOf(
+          servedGrounded,
+          droppedResults,
+          presentResults,
+          iteration,
+        );
+        deps.integrityLedger?.current?.note(
+          'dangling-reference',
+          'compose',
+          danglingFindings.length > 0 ? 'checked-fail' : 'checked-pass',
+          danglingFindings.length > 0 ? Date.now() : undefined,
+        );
+        fileIntegrityFindings(scope, danglingFindings, iteration);
+      } else {
+        // No grounded tool served, or nothing has dropped: nothing this call
+        // could violate — stated, never silence.
+        deps.integrityLedger?.current?.note('dangling-reference', 'compose', 'not-applicable');
       }
     }
 
@@ -590,20 +609,30 @@ export function buildCallLLMStage(
     // The composed side is llmRequest — the exact object HANDED TO the
     // adapter, after the cache strategy's transform — so a strategy edit
     // is never blamed on the adapter.
-    fileIntegrityFindings(
-      scope,
-      wireViolationsOf(
-        {
-          names: (llmRequest.tools ?? []).map((t) => t.name),
-          provenance: 'callLLM (assembled request)',
-        },
-        response.wireManifest === undefined
-          ? undefined
-          : { names: response.wireManifest.toolNames, provenance: provider.name },
-        iteration,
-      ),
+    const wireFindings = wireViolationsOf(
+      {
+        names: (llmRequest.tools ?? []).map((t) => t.name),
+        provenance: 'callLLM (assembled request)',
+      },
+      response.wireManifest === undefined
+        ? undefined
+        : { names: response.wireManifest.toolNames, provenance: provider.name },
       iteration,
     );
+    // The disposition: a provider stating no manifest leaves this call
+    // UNREACHABLE — the check could not see the wire, which is a different
+    // fact from "the wire was clean", and the ledger keeps them apart.
+    deps.integrityLedger?.current?.note(
+      'invariant-violation',
+      'wire',
+      response.wireManifest === undefined
+        ? 'unreachable'
+        : wireFindings.length > 0
+          ? 'checked-fail'
+          : 'checked-pass',
+      wireFindings.length > 0 ? Date.now() : undefined,
+    );
+    fileIntegrityFindings(scope, wireFindings, iteration);
 
     // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
     // agent's, and the bill follows the call, not the configuration.

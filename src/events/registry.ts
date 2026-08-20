@@ -124,6 +124,7 @@ import type {
   MapEngagedPayload,
   MapParkedPayload,
   IntegrityContextErrorPayload,
+  IntegrityDispositionPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -218,6 +219,7 @@ export const EVENT_NAMES = {
   },
   integrity: {
     contextError: 'agentfootprint.integrity.context_error',
+    disposition: 'agentfootprint.integrity.disposition',
   },
   validation: {
     argsInvalid: 'agentfootprint.validation.args_invalid',
@@ -735,6 +737,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.integrity.context_error',
     IntegrityContextErrorPayload
   >;
+  'agentfootprint.integrity.disposition': AgentfootprintEventEnvelope<
+    'agentfootprint.integrity.disposition',
+    IntegrityDispositionPayload
+  >;
 }
 
 /** Union of every typed event. Consumers use this for exhaustive `switch`. */
@@ -854,4 +860,5 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.map.engaged',
   'agentfootprint.map.parked',
   'agentfootprint.integrity.context_error',
+  'agentfootprint.integrity.disposition',
 ] as const;

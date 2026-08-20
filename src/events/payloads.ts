@@ -2561,3 +2561,18 @@ export type IntegrityContextErrorPayload = import('../integrity/finding/types.js
   /** The iteration the finding was filed on, when filed mid-loop. */
   readonly iteration?: number;
 };
+
+/**
+ * One run's disposition accounting — one row per registered (check, seam),
+ * filed ONCE at the run boundary. The rows answer the question a findings
+ * stream cannot: did the checkers RUN? `checked` with zero `findings` is
+ * health; a registered row with zero encounters while `workExisted` is the
+ * wiring-rot signal `assertAlive` names in dev posture. Synthetic (canary)
+ * counts ride each row quarantined from the real numbers.
+ */
+export interface IntegrityDispositionPayload {
+  readonly posture: 'observe' | 'dev';
+  /** Whether the run did any work a checker could have seen (≥1 LLM call). */
+  readonly workExisted: boolean;
+  readonly rows: readonly import('../integrity/disposition/types.js').CheckReport[];
+}

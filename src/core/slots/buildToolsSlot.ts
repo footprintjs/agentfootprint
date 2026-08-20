@@ -64,6 +64,14 @@ export interface ToolsSlotConfig {
    * compose-seam integrity backstop below. Present only when `.maps()` is
    * mounted; absent → the backstop never runs, byte-identical.
    */
+  /**
+   * The per-run disposition ledger, by REFERENCE (9.60.0) — the
+   * ProviderToolCache pattern: build-closure plumbing, never scope state.
+   * The compose backstop notes one disposition per pass here.
+   */
+  readonly integrityLedger?: {
+    current: import('../../integrity/disposition/ledger.js').DispositionLedger | undefined;
+  };
   readonly mountedMaps?: ReadonlyArray<{
     readonly id: string;
     readonly toolNames: readonly string[];
@@ -565,9 +573,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       const seenIds =
         (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ?? [];
       const newIds: string[] = [...seenIds];
+      let comparedAnyMap = false;
+      let firedThisPass = false;
       for (const map of config.mountedMaps) {
         const parkedOwned = map.toolNames.filter((n) => parkHoldOut.has(n));
         if (parkedOwned.length === 0) continue;
+        comparedAnyMap = true;
         const findings = invariantViolationsOf(
           {
             mapId: map.id,
@@ -577,6 +588,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           },
           { names: servedNames, provenance: 'tools slot (merged wire list)' },
         );
+        if (findings.length > 0) firedThisPass = true;
         for (const f of findings) {
           const id = contextErrorIdentity({ ...f, epoch: undefined });
           if (newIds.includes(id)) continue;
@@ -589,6 +601,19 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         }
       }
       if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+      // The disposition (9.60.0): a pass with no parked map had nothing this
+      // check could violate — stated as not-applicable, never as silence.
+      config.integrityLedger?.current?.note(
+        'invariant-violation',
+        'compose',
+        !comparedAnyMap ? 'not-applicable' : firedThisPass ? 'checked-fail' : 'checked-pass',
+        firedThisPass ? Date.now() : undefined,
+      );
+    } else if (config.mountedMaps !== undefined) {
+      // Maps mounted, nothing parked this pass: the registered check had no
+      // applicable work — stated, so the liveness theorem never mistakes a
+      // run that simply never parked for a dead checker.
+      config.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
     }
     reportShadowedTools(scope, {
       iteration,

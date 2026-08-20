@@ -88,6 +88,11 @@ import {
 import { buildEventMeta } from '../bridge/eventMeta.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
+import {
+  beginIntegrityRun,
+  type IntegrityPosture,
+} from '../integrity/disposition/lifecycle.js';
+import type { DispositionLedger } from '../integrity/disposition/ledger.js';
 import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';
 
@@ -112,6 +117,12 @@ const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
  * that no traversal ever visited. This says plainly where it came from.
  */
 const RUN_MANIFEST_STAGE_ID = 'run-configured#0';
+/**
+ * Pseudo-stage for `agentfootprint.integrity.disposition` (9.60.0) — the
+ * ledger is filed at the run boundary, after the last stage committed, so it
+ * states where it came from exactly as the teardown id above does.
+ */
+const INTEGRITY_DISPOSITION_STAGE_ID = 'integrity-disposition#0';
 /**
  * Pseudo-stage for `agentfootprint.skill.graph_declared` (9.50.0) — same
  * reasoning as the manifest id directly above: dispatched before the chart
@@ -475,6 +486,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The last-tool-result pin (9.57.0) — set only when the operator named a
    *  value other than the default 2. See AgentOptions.keepLastToolResults. */
   private readonly keepLastToolResults?: number | false;
+  /** See AgentOptions.integrityPosture (9.60.0). Default 'observe'. */
+  private readonly integrityPosture: IntegrityPosture = 'observe';
+  /**
+   * The per-run disposition ledger, shared with the check sites by
+   * REFERENCE through build-time closures (the ProviderToolCache pattern —
+   * plumbing, never scope state). `run()` resets it; the run boundary
+   * files its report and clears it.
+   */
+  private readonly integrityLedgerHolder: { current: DispositionLedger | undefined } = {
+    current: undefined,
+  };
+  /** Set at chart build: whether any registered tool declared `argumentsFrom`. */
+  private integrityDanglingPresent = false;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -863,6 +887,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.keepLastToolResults !== undefined) {
       requireKeepLastToolResults(opts.keepLastToolResults, 'Agent');
       this.keepLastToolResults = opts.keepLastToolResults;
+    }
+    // Refused at construction, never mid-run — a misspelled posture that was
+    // ignored would leave the liveness theorems switched off in an agent
+    // that believes they are on (the concurrency-mode precedent).
+    if (opts.integrityPosture !== undefined) {
+      if (opts.integrityPosture !== 'observe' && opts.integrityPosture !== 'dev') {
+        throw new Error(
+          `Agent: integrityPosture must be 'observe' or 'dev', got ` +
+            `${JSON.stringify(opts.integrityPosture)}.`,
+        );
+      }
+      this.integrityPosture = opts.integrityPosture;
     }
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
@@ -1387,6 +1423,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // declared at file end via hoisting)
     const executor = this.createExecutor(options);
     this.inFlightRunId = this.currentRunContext.runId;
+    // One disposition ledger per run (9.60.0) — registration mirrors what
+    // this agent's configuration makes applicable; dev posture runs the
+    // canaries here, BEFORE any real work, so a dead check is named first.
+    this.beginIntegrityLedger();
 
     // Auto-checkpoint at iteration boundaries — captures the latest
     // conversation history into a per-run tracker. On error, we
@@ -1426,6 +1466,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.recordPendingQuestion(finalized);
       await this.endRunToolSessions(finalized);
       // The answer is FINISHED before this line and cannot be changed by it.
+      // The liveness theorems (9.60.0, dev posture only) — a run that would
+      // return green while its registered checkers demonstrably never ran
+      // fails HERE instead, before the recording is filed. A finished run is
+      // itself the proof work existed: the loop cannot finish without at
+      // least one model call.
+      this.assertIntegrityAlive();
       // See `fileRunRecording` for why the write is awaited rather than left
       // in flight, and why it can never fail the run.
       await this.fileRunRecording(recording, finalized);
@@ -1464,7 +1510,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // it would hand the caller a retry handle for a wall and bury the
           // named values one `.cause` deep, where the person deciding what to
           // do about them will not look.
-          cause instanceof UnsupportedValuesError);
+          cause instanceof UnsupportedValuesError ||
+          // 9.60.0 — a dead checker is a WIRING verdict on this build, not a
+          // recoverable run state: resuming would run the same dead wiring.
+          cause.name === 'CheckerDeadError');
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
         // Observation beats the heuristic: if a bracket was open, it says
         // exactly what the run was doing. `classifyFailurePhase` only decides
@@ -1498,6 +1547,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
+      // The run's disposition rows, on EVERY path — success, failure, pause —
+      // and BEFORE the recording stops, so a recording carries its run's
+      // checker accounting (9.60.0).
+      this.fileIntegrityDisposition();
       // Always released: a recording left subscribed would keep listening
       // through the next run and grow a tail nobody reads.
       recording?.stop();
@@ -1800,6 +1853,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const recording = this.startRunRecording();
     const executor = this.createExecutor(options);
     this.inFlightRunId = this.currentRunContext.runId;
+    // A resumed turn is two runs, and each keeps its own ledger — exactly
+    // the recording's terms one comment up.
+    this.beginIntegrityLedger();
     this.lastRunAnswer = undefined;
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
@@ -1811,12 +1867,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // AGAIN has asked a new one, and that one is outstanding from here.
       this.recordPendingQuestion(finalized);
       await this.endRunToolSessions(finalized);
+      // Same liveness gate the fresh-run path applies (9.60.0).
+      this.assertIntegrityAlive();
       await this.fileRunRecording(recording, finalized);
       return finalized;
     } catch (cause) {
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
+      // Same terms as the fresh-run path: rows on every exit, before the
+      // recording stops (9.60.0).
+      this.fileIntegrityDisposition();
       recording?.stop();
       this.inFlightRunId = undefined;
     }
@@ -2626,6 +2687,60 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * there when anything is watching" — including `recordRun`, which subscribes
    * with `'*'` before the run starts, so every recording carries one.
    */
+  /** Fresh per-run ledger — see AgentOptions.integrityPosture (9.60.0). */
+  private beginIntegrityLedger(): void {
+    this.integrityLedgerHolder.current = beginIntegrityRun(
+      {
+        wire: true,
+        composeInvariant: this.mapsPlan !== undefined,
+        dangling: this.integrityDanglingPresent,
+      },
+      this.integrityPosture,
+    );
+  }
+
+  /**
+   * Dev posture only: throw {@link CheckerDeadError} on a run whose
+   * registered checkers demonstrably never ran, or whose canary went
+   * uncaught. Called on the SUCCESS path before the recording files, so the
+   * failure is the run's result, never a masked afterthought.
+   */
+  private assertIntegrityAlive(): void {
+    if (this.integrityPosture !== 'dev') return;
+    this.integrityLedgerHolder.current?.assertAlive({ workExisted: true });
+  }
+
+  /**
+   * File the run's disposition rows as ONE `integrity.disposition` event and
+   * clear the ledger. On the finally path of both run doors — every exit,
+   * before the recording stops. Listener-gated like every typed event, and
+   * deliberately throw-proof: accounting must never change a run's outcome.
+   */
+  private fileIntegrityDisposition(): void {
+    const ledger = this.integrityLedgerHolder.current;
+    this.integrityLedgerHolder.current = undefined;
+    if (ledger === undefined) return;
+    try {
+      const type = 'agentfootprint.integrity.disposition';
+      const dispatcher = this.getDispatcher();
+      if (!dispatcher.hasListenersFor(type)) return;
+      dispatcher.dispatch({
+        type,
+        payload: {
+          posture: this.integrityPosture,
+          workExisted: true,
+          rows: ledger.report(),
+        },
+        meta: buildEventMeta(
+          { runtimeStageId: INTEGRITY_DISPOSITION_STAGE_ID },
+          this.currentRunContext,
+        ),
+      });
+    } catch {
+      // Recorder/dispatcher failures never abort a run — the house rule.
+    }
+  }
+
   private emitRunManifest(): void {
     const type = 'agentfootprint.agent.run_configured';
     const dispatcher = this.getDispatcher();
@@ -3286,6 +3401,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .filter((r) => r.tool.argumentsFrom !== undefined)
         .map((r) => [r.name, r.tool.argumentsFrom!] as const),
     );
+    this.integrityDanglingPresent = toolGrounding.size > 0;
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(toolOwners.size > 0 && { toolOwners }),
@@ -3293,6 +3409,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.mapsPlan !== undefined && {
         mountedMaps: this.mapsPlan.maps.map((m) => ({ id: m.id, toolNames: m.toolNames })),
       }),
+      integrityLedger: this.integrityLedgerHolder,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(readSkillFor && { readSkillFor }),
@@ -3319,6 +3436,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The declared argument-ground edges (9.60.0) — value-conditional, so
       // an agent whose tools declare none runs the exact bytes it always did.
       ...(toolGrounding.size > 0 && { toolGrounding }),
+      integrityLedger: this.integrityLedgerHolder,
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
       ...(this.outputSchemaParser !== undefined && {
         outputSchemaParser: this.outputSchemaParser,
