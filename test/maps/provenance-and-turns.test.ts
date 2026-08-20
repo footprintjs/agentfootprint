@@ -107,12 +107,11 @@ describe('R1 unit: the record answers three separate questions', () => {
 describe('R1 functional: a declared route does not forge a user request', () => {
   it('B entered by a declared edge rests on structural, not on A’s explicit', () => {
     // Iteration 1: the user explicitly asked for `audit`.
-    let state: MapEngagement | undefined;
-    ({ next: state } = advanceEngagement(
+    const { next: state } = advanceEngagement(
       plan,
-      state,
+      undefined,
       pass({ iteration: 1, currentNode: 'audit', moveBy: 'model-pick' }),
-    ));
+    );
     expect(state[0]!.by).toBe('explicit');
 
     // Iteration 2: a DECLARED EDGE moves the cursor to `billing`. Nobody asked
