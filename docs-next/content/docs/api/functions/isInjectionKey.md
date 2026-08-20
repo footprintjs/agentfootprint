@@ -6,7 +6,7 @@ title: isInjectionKey
 
 > **isInjectionKey**(`key`): `key is InjectionKey`
 
-Defined in: [src/conventions.ts:462](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L462)
+Defined in: [src/conventions.ts:478](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L478)
 
 True when a scope key is any of the known injection keys.
 

@@ -6,7 +6,7 @@
 
 # Class: UnsupportedValuesError
 
-Defined in: [src/core/agent/evidence/errors.ts:52](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L52)
+Defined in: [src/core/agent/evidence/errors.ts:52](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L52)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [src/core/agent/evidence/errors.ts:52](https://github.com/footprintj
 
 > **new UnsupportedValuesError**(`ctx`): `UnsupportedValuesError`
 
-Defined in: [src/core/agent/evidence/errors.ts:58](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L58)
+Defined in: [src/core/agent/evidence/errors.ts:58](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L58)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/core/agent/evidence/errors.ts:58](https://github.com/footprintj
 
 > `readonly` **candidates**: `number`
 
-Defined in: [src/core/agent/evidence/errors.ts:55](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L55)
+Defined in: [src/core/agent/evidence/errors.ts:55](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L55)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNSUPPORTED_VALUES"`
 
-Defined in: [src/core/agent/evidence/errors.ts:53](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L53)
+Defined in: [src/core/agent/evidence/errors.ts:53](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L53)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **revised**: `boolean`
 
-Defined in: [src/core/agent/evidence/errors.ts:56](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L56)
+Defined in: [src/core/agent/evidence/errors.ts:56](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L56)
 
 ***
 
@@ -134,7 +134,7 @@ not capture any frames.
 
 > `readonly` **values**: readonly [`UnsupportedValue`](/agentfootprint/api/generated/interfaces/UnsupportedValue.md)[]
 
-Defined in: [src/core/agent/evidence/errors.ts:54](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/evidence/errors.ts#L54)
+Defined in: [src/core/agent/evidence/errors.ts:54](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/evidence/errors.ts#L54)
 
 ## Methods
 

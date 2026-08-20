@@ -6,7 +6,7 @@
 
 # Class: InvalidAskComponentError
 
-Defined in: [src/core/askComponent.ts:88](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L88)
+Defined in: [src/core/askComponent.ts:88](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L88)
 
 An ask nominated a component this run cannot honor as stated — a malformed
 shape, a `propsRef` with no artifact store attached, or a `propsRef` that
@@ -29,7 +29,7 @@ was executed behind anyone's back.
 
 > **new InvalidAskComponentError**(`reason`, `door`, `detail`, `ref?`): `InvalidAskComponentError`
 
-Defined in: [src/core/askComponent.ts:98](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L98)
+Defined in: [src/core/askComponent.ts:98](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L98)
 
 #### Parameters
 
@@ -75,7 +75,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INVALID_ASK_COMPONENT"`
 
-Defined in: [src/core/askComponent.ts:89](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L89)
+Defined in: [src/core/askComponent.ts:89](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L89)
 
 ***
 
@@ -83,7 +83,7 @@ Defined in: [src/core/askComponent.ts:89](https://github.com/footprintjs/agentfo
 
 > `readonly` **door**: `string`
 
-Defined in: [src/core/askComponent.ts:94](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L94)
+Defined in: [src/core/askComponent.ts:94](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L94)
 
 The door the component arrived through (`askHuman`, `ask middleware '<name>'`,
  `tool '<name>' checkInComponent`, …).
@@ -118,7 +118,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`AskComponentRefusalReason`](/agentfootprint/api/generated/type-aliases/AskComponentRefusalReason.md)
 
-Defined in: [src/core/askComponent.ts:91](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L91)
+Defined in: [src/core/askComponent.ts:91](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L91)
 
 Which rule refused.
 
@@ -128,7 +128,7 @@ Which rule refused.
 
 > `readonly` `optional` **ref?**: `string`
 
-Defined in: [src/core/askComponent.ts:96](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/askComponent.ts#L96)
+Defined in: [src/core/askComponent.ts:96](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/askComponent.ts#L96)
 
 The ref that could not be honored, when the refusal is about one.
 

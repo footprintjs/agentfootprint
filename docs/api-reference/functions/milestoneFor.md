@@ -8,7 +8,7 @@
 
 > **milestoneFor**(`id`): [`Milestone`](/agentfootprint/api/generated/interfaces/Milestone.md) \| `null`
 
-Defined in: [src/conventions.ts:384](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/conventions.ts#L384)
+Defined in: [src/conventions.ts:396](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/conventions.ts#L396)
 
 Classify a stage id into a [Milestone](/agentfootprint/api/generated/interfaces/Milestone.md), or `null` when the stage is NOT
 a milestone boundary (its commits fold into the surrounding milestone's

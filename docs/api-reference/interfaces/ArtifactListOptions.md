@@ -6,7 +6,7 @@
 
 # Interface: ArtifactListOptions
 
-Defined in: [src/artifacts/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L162)
+Defined in: [src/artifacts/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L162)
 
 Options for `list` — the cursor convention `MemoryStore.list` set.
 
@@ -16,7 +16,7 @@ Options for `list` — the cursor convention `MemoryStore.list` set.
 
 > `readonly` `optional` **cursor?**: `string`
 
-Defined in: [src/artifacts/types.ts:164](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L164)
+Defined in: [src/artifacts/types.ts:164](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L164)
 
 Continuation token from a previous page. Omit for the first page.
 
@@ -26,6 +26,6 @@ Continuation token from a previous page. Omit for the first page.
 
 > `readonly` `optional` **limit?**: `number`
 
-Defined in: [src/artifacts/types.ts:166](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L166)
+Defined in: [src/artifacts/types.ts:166](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L166)
 
 Maximum rows this page. Adapters may cap it lower.

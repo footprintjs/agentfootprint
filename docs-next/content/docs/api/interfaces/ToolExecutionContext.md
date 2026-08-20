@@ -4,7 +4,7 @@ title: ToolExecutionContext
 
 # Interface: ToolExecutionContext
 
-Defined in: [src/core/tools.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L211)
+Defined in: [src/core/tools.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L246)
 
 Runtime context passed to tool.execute().
 
@@ -14,7 +14,7 @@ Runtime context passed to tool.execute().
 
 > `readonly` **artifacts**: [`ToolArtifacts`](/docs/api/interfaces/ToolArtifacts)
 
-Defined in: [src/core/tools.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L238)
+Defined in: [src/core/tools.ts:273](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L273)
 
 The claim-check store, bound to THIS run's scope (9.21.0) — shaped
 exactly like `credentials`. Always present: with no store attached every
@@ -31,7 +31,7 @@ cannot name, widen, or replace it. `put` stamps `origin`
 
 > `readonly` `optional` **credential?**: `Credential`
 
-Defined in: [src/core/tools.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L252)
+Defined in: [src/core/tools.ts:287](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L287)
 
 The credential resolved for this tool's declared `needs` (declare-and-push).
  Present only when the tool declared a need and it resolved successfully.
@@ -42,7 +42,7 @@ The credential resolved for this tool's declared `needs` (declare-and-push).
 
 > `readonly` **credentials**: `CredentialProvider`
 
-Defined in: [src/core/tools.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L224)
+Defined in: [src/core/tools.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L259)
 
 The bound credential provider — the PULL escape hatch for dynamic needs.
 Always present: when none is attached it's a fail-closed provider that
@@ -55,7 +55,7 @@ declarative `needs` + `ctx.credential` for the common case.
 
 > `readonly` **hasArtifacts**: `boolean`
 
-Defined in: [src/core/tools.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L241)
+Defined in: [src/core/tools.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L276)
 
 True when a real artifact store is attached. Branch on this for an
  intentional no-store (degraded) mode instead of catching the refusal.
@@ -66,7 +66,7 @@ True when a real artifact store is attached. Branch on this for an
 
 > `readonly` **hasCredentials**: `boolean`
 
-Defined in: [src/core/tools.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L227)
+Defined in: [src/core/tools.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L262)
 
 True when a real provider is attached. Branch on this for intentional
  degraded (no-credential) mode instead of relying on `undefined`.
@@ -77,7 +77,7 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/tools.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L336)
+Defined in: [src/core/tools.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L401)
 
 The identity the CALLER supplied — `run({ identity })`, the same tuple
 memory and the permission gate scope on.
@@ -96,7 +96,7 @@ transport actually delivered.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/tools.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L215)
+Defined in: [src/core/tools.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L250)
 
 Current iteration number of the ReAct loop.
 
@@ -106,7 +106,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/core/tools.ts:310](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L310)
+Defined in: [src/core/tools.ts:375](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L375)
 
 The run this call belongs to.
 
@@ -120,7 +120,7 @@ fabricate a run that never existed. Branch on the absence.
 
 > `readonly` `optional` **sessionId?**: `string`
 
-Defined in: [src/core/tools.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L322)
+Defined in: [src/core/tools.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L387)
 
 The hosting conversation this run is bound to, when it is bound to one —
 `HostRequest.sessionId`, threaded through `agent.run({ sessionId })`.
@@ -137,7 +137,7 @@ alone — compose it with tenant and principal via [toolSessionKey](/docs/api/fu
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/tools.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L217)
+Defined in: [src/core/tools.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L252)
 
 Abort signal propagated from run({ env: { signal } }).
 
@@ -147,7 +147,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/docs/api/type-aliases/TeardownScope)[]
 
-Defined in: [src/core/tools.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L367)
+Defined in: [src/core/tools.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L432)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -162,7 +162,7 @@ needs to know it is talking to a door that has no runs BEFORE it opens one.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/tools.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L213)
+Defined in: [src/core/tools.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L248)
 
 Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
@@ -172,7 +172,7 @@ Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
 > `readonly` `optional` **wanted?**: `Readonly`\<`Record`\<`string`, [`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)\>\>
 
-Defined in: [src/core/tools.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L249)
+Defined in: [src/core/tools.ts:284](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L284)
 
 The claim tickets behind this call's resolved `wants` arguments (9.22.0)
 — argument name → the `ArtifactMeta` whose data replaced the ref in
@@ -186,7 +186,7 @@ different facts). The data itself is already in `args`.
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:357](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L357)
+Defined in: [src/core/tools.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L422)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.
@@ -230,7 +230,7 @@ a session that lives as long as the run
 
 > **progress**(`payload`): `void`
 
-Defined in: [src/core/tools.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L295)
+Defined in: [src/core/tools.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L360)
 
 Report progress from INSIDE a long-running tool — "hop 3 of 12 done", said
 mid-`execute`, while the call is still running.
@@ -257,6 +257,29 @@ channel into every event sink and every recording, so plain data only (no
 class instances, no live handles, no functions). Progress is TELEMETRY: it
 never enters the tool result, the history, or the model's view.
 
+**What a PERSON sees (9.54.0).** One call, two faces. The structured
+payload rides to the record untouched, exactly as above — and the live
+status surfaces (`agent.enable.liveStatus(...)`, `attachStatus`) now show
+the report too, so a long call is no longer silent in the browser. Because
+`payload` is yours and typed `unknown`, the display contract is narrow and
+literal:
+
+  - A top-level **string field named `message`** is shown to the person
+    VERBATIM, trimmed, cut at **120 characters** with the cut stated
+    (`… (+N more)`). `message` is the field MCP's own progress
+    notification uses; nothing else in the payload is read.
+  - **Anything else** — no `message`, a non-string one, an empty one, a
+    bare string payload — shows the generic line instead:
+    `` `<toolName>` reported progress (N so far)… ``. Your payload is
+    never pretty-printed into that sentence. A status line is prose, and
+    a tool's JSON is not a sentence anyone wrote.
+
+So `ctx.progress({ done: 3, total: 12 })` keeps its numbers on the record
+and says "reported progress (3 so far)" on screen; adding
+`message: 'Hop 3 of 12'` puts your own words there instead — and keeps the
+numbers. Consumers override the wording by template key
+(`tool.progress`, `tool.progress.generic`, or per tool).
+
 Doors with no event stream to file on — `mcpServe`, the offline
 `callTraceTool` context — supply the no-op. A tool must not have to know
 which door it is behind to be safe to call this from.
@@ -278,7 +301,14 @@ a twelve-hop walk that says where it is
   execute: async (args, ctx) => {
     for (const [i, hop] of hops.entries()) {
       await walk(hop);
-      ctx.progress({ done: i + 1, total: hops.length, hop: hop.id });
+      // `message` is what the person reads; the rest is what the record
+      // keeps. Drop `message` and the screen still says a report landed.
+      ctx.progress({
+        message: `Hop ${i + 1} of ${hops.length} — ${hop.id}`,
+        done: i + 1,
+        total: hops.length,
+        hop: hop.id,
+      });
     }
     return summary;
   }

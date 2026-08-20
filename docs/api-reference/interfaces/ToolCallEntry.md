@@ -6,7 +6,7 @@
 
 # Interface: ToolCallEntry
 
-Defined in: [src/adapters/types.ts:645](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L645)
+Defined in: [src/adapters/types.ts:645](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L645)
 
 One entry in the in-flight tool-call sequence delivered to
 `PermissionChecker.check()` since v2.12. Lets sequence-aware
@@ -22,7 +22,7 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\> \| `undefined`
 
-Defined in: [src/adapters/types.ts:649](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L649)
+Defined in: [src/adapters/types.ts:649](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L649)
 
 Tool args passed to `tool.execute(args, ctx)`.
 
@@ -32,7 +32,7 @@ Tool args passed to `tool.execute(args, ctx)`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/adapters/types.ts:651](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L651)
+Defined in: [src/adapters/types.ts:651](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L651)
 
 ReAct iteration the call was dispatched on.
 
@@ -42,7 +42,7 @@ ReAct iteration the call was dispatched on.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:647](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L647)
+Defined in: [src/adapters/types.ts:647](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L647)
 
 Tool name dispatched.
 
@@ -52,7 +52,7 @@ Tool name dispatched.
 
 > `readonly` `optional` **providerId?**: `string`
 
-Defined in: [src/adapters/types.ts:658](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L658)
+Defined in: [src/adapters/types.ts:658](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L658)
 
 Optional source identifier — `'local'` for tools registered via
 `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for

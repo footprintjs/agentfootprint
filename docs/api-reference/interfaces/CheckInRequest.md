@@ -6,7 +6,7 @@
 
 # Interface: CheckInRequest
 
-Defined in: [src/core/checkin.ts:41](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L41)
+Defined in: [src/core/checkin.ts:41](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L41)
 
 The typed pause payload for one check-in. Rides the existing pause
 machinery: it becomes the checkpoint's `pauseData` and is surfaced on
@@ -18,7 +18,7 @@ surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:45](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L45)
+Defined in: [src/core/checkin.ts:45](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L45)
 
 The arguments the model proposed for this call.
 
@@ -28,7 +28,7 @@ The arguments the model proposed for this call.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/agentfootprint/api/generated/interfaces/AskComponent.md)
 
-Defined in: [src/core/checkin.ts:62](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L62)
+Defined in: [src/core/checkin.ts:62](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L62)
 
 Which REGISTERED screen component collects the decision (9.24.0) — the
 tool's own declaration (`defineTool({ checkIn, checkInComponent })`),
@@ -43,7 +43,7 @@ what the answer is.
 
 > `readonly` **evidence**: [`CheckInEvidence`](/agentfootprint/api/generated/interfaces/CheckInEvidence.md)
 
-Defined in: [src/core/checkin.ts:53](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L53)
+Defined in: [src/core/checkin.ts:53](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L53)
 
 The receipts riding the ask.
 
@@ -53,7 +53,7 @@ The receipts riding the ask.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:51](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L51)
+Defined in: [src/core/checkin.ts:51](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L51)
 
 The model's stated reasoning for THIS call, when the assistant turn
 carried text alongside the tool call. Omitted when the turn was a bare
@@ -65,6 +65,6 @@ tool call with no content.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/checkin.ts:43](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L43)
+Defined in: [src/core/checkin.ts:43](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L43)
 
 The tool the agent wants to run (its name).

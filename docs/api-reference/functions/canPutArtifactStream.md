@@ -8,7 +8,7 @@
 
 > **canPutArtifactStream**(`store`): `store is PutStreamingArtifactStore`
 
-Defined in: [src/artifacts/streaming.ts:85](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/streaming.ts#L85)
+Defined in: [src/artifacts/streaming.ts:85](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/streaming.ts#L85)
 
 Can this store take a streamed put? Narrowing type guard — the answer is
 the type, so a consumer branches once and the compiler carries it.

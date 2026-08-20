@@ -8,7 +8,7 @@
 
 > **extractCommentaryVars**(`event`, `ctx`, `templates?`): `Record`\<`string`, `string`\>
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:649](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/recorders/observability/commentary/commentaryTemplates.ts#L649)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:658](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/recorders/observability/commentary/commentaryTemplates.ts#L658)
 
 Build the variable bag for a given event. Flat `name → string` map;
 `renderCommentary` substitutes by name. Templates use whatever names

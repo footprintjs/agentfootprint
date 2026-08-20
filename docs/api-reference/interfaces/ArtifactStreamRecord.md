@@ -6,7 +6,7 @@
 
 # Interface: ArtifactStreamRecord
 
-Defined in: [src/artifacts/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L214)
+Defined in: [src/artifacts/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L214)
 
 What `getStream` returns when the ref resolves: the ticket, and the
  payload's CANONICAL BYTES as a stream — the same bytes `meta.bytes` counts
@@ -24,7 +24,7 @@ What `getStream` returns when the ref resolves: the ticket, and the
 
 > `readonly` **body**: `ReadableStream`\<`Uint8Array`\>
 
-Defined in: [src/artifacts/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L216)
+Defined in: [src/artifacts/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L216)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [src/artifacts/types.ts:216](https://github.com/footprintjs/agentfoo
 
 > `readonly` **meta**: [`ArtifactMeta`](/agentfootprint/api/generated/interfaces/ArtifactMeta.md)
 
-Defined in: [src/artifacts/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L215)
+Defined in: [src/artifacts/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L215)

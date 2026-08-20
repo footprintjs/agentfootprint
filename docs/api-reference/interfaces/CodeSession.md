@@ -6,7 +6,7 @@
 
 # Interface: CodeSession
 
-Defined in: [src/adapters/types.ts:953](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L953)
+Defined in: [src/adapters/types.ts:953](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L953)
 
 One live session. `stop()` is idempotent and tolerates "already gone".
 
@@ -16,7 +16,7 @@ One live session. `stop()` is idempotent and tolerates "already gone".
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:955](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L955)
+Defined in: [src/adapters/types.ts:955](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L955)
 
 The backend's own id for this session, when it has one.
 
@@ -26,7 +26,7 @@ The backend's own id for this session, when it has one.
 
 > **execute**(`req`): `Promise`\<[`CodeResult`](/agentfootprint/api/generated/interfaces/CodeResult.md)\>
 
-Defined in: [src/adapters/types.ts:956](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L956)
+Defined in: [src/adapters/types.ts:956](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L956)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/adapters/types.ts:956](https://github.com/footprintjs/agentfoot
 
 > `optional` **stageInputs**(`inputs`): `Promise`\<readonly [`StagedCodeInput`](/agentfootprint/api/generated/interfaces/StagedCodeInput.md)[]\>
 
-Defined in: [src/adapters/types.ts:990](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L990)
+Defined in: [src/adapters/types.ts:990](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L990)
 
 OPTIONAL (9.26.0) — put payloads INTO the session, so code can read data
 that never travelled through the context window.
@@ -103,7 +103,7 @@ readonly [`CodeInput`](/agentfootprint/api/generated/interfaces/CodeInput.md)[]
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:998](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L998)
+Defined in: [src/adapters/types.ts:998](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L998)
 
 Release the session.
 

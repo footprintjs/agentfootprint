@@ -6,7 +6,7 @@
 
 # Interface: RecordingMintFacts
 
-Defined in: [src/artifacts/recordingArtifact.ts:45](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/recordingArtifact.ts#L45)
+Defined in: [src/artifacts/recordingArtifact.ts:45](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/recordingArtifact.ts#L45)
 
 What a recording mint needs to know beyond the recording itself.
 
@@ -16,7 +16,7 @@ What a recording mint needs to know beyond the recording itself.
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:59](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/recordingArtifact.ts#L59)
+Defined in: [src/artifacts/recordingArtifact.ts:59](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/recordingArtifact.ts#L59)
 
 The operator's label, when they set one.
 
@@ -33,7 +33,7 @@ useful honest sentence available at mint time.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:48](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/recordingArtifact.ts#L48)
+Defined in: [src/artifacts/recordingArtifact.ts:48](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/recordingArtifact.ts#L48)
 
 The run this recording is OF — stamped on `origin.runId`, which is the
  join back to the trace.

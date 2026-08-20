@@ -6,7 +6,7 @@ title: readCoverageResult
 
 > **readCoverageResult**(`value`): [`CoverageReading`](/docs/api/interfaces/CoverageReading) \| `undefined`
 
-Defined in: [src/core/agent/coverage/read.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/read.ts#L59)
+Defined in: [src/core/agent/coverage/read.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/read.ts#L60)
 
 Read one finalized tool result for coverage declarations.
 

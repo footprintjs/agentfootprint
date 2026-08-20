@@ -6,7 +6,7 @@
 
 # Interface: TokenBudgetRecord
 
-Defined in: [src/core/agent/window/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L172)
+Defined in: [src/core/agent/window/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L269)
 
 What one OVER-BUDGET visit to `tokenBudget` put in the ledger.
 
@@ -16,11 +16,38 @@ What one OVER-BUDGET visit to `tokenBudget` put in the ledger.
 
 ## Properties
 
+### droppedObservations?
+
+> `readonly` `optional` **droppedObservations?**: readonly `string`[]
+
+Defined in: [src/core/agent/window/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L179)
+
+The tools whose RESULTS left the window on this visit, in first-appearance
+order (9.57.0). Present only when at least one did.
+
+This is the record's half of the sentence the drop notice says on the
+wire, and it is filed even when no notice was authored at all — a removal
+further into the window tells the model nothing, and then this is the only
+place the fact exists. Uncapped and unfiltered, because the record is not
+the wire: the notice prints at most four names and only plain identifiers,
+this prints every name exactly as the tool declared it.
+
+The failure it exists for was measured: a model whose `whats_here` result
+had been evicted assembled a plausible id from an entity name it
+remembered, was refused, and spent actions on it — and nothing in the run
+said the evidence had gone.
+
+#### Inherited from
+
+[`WindowRecord`](/agentfootprint/api/generated/interfaces/WindowRecord.md).[`droppedObservations`](/agentfootprint/api/generated/interfaces/WindowRecord.md#droppedobservations)
+
+***
+
 ### iteration
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/window/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L121)
+Defined in: [src/core/agent/window/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L153)
 
 ReAct iteration this visit belongs to.
 
@@ -34,7 +61,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` **keepRecentTurns**: `number`
 
-Defined in: [src/core/agent/window/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L181)
+Defined in: [src/core/agent/window/types.ts:278](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L278)
 
 How many recent turns were off-limits to this visit.
 
@@ -44,9 +71,29 @@ How many recent turns were off-limits to this visit.
 
 > `readonly` **measuredTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L175)
+Defined in: [src/core/agent/window/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L272)
 
 Adapter-reported input tokens of the last call — what tripped the check.
+
+***
+
+### observations?
+
+> `readonly` `optional` **observations?**: [`WindowObservations`](/agentfootprint/api/generated/interfaces/WindowObservations.md)
+
+Defined in: [src/core/agent/window/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L189)
+
+What the last-tool-result pin did on this visit (9.57.0). Present only
+when it did something: held a turn, turned one away at the ceiling, or
+stood down.
+
+See [WindowObservations](/agentfootprint/api/generated/interfaces/WindowObservations.md). An agent with `keepLastToolResults: false`
+— or one whose window held no pinnable tool result — never carries this
+key, so its records are the exact shape they were before 9.57.0.
+
+#### Inherited from
+
+[`WindowRecord`](/agentfootprint/api/generated/interfaces/WindowRecord.md).[`observations`](/agentfootprint/api/generated/interfaces/WindowRecord.md#observations)
 
 ***
 
@@ -54,7 +101,7 @@ Adapter-reported input tokens of the last call — what tripped the check.
 
 > `readonly` **overBudget**: `boolean`
 
-Defined in: [src/core/agent/window/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L179)
+Defined in: [src/core/agent/window/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L276)
 
 True when the measurement was over budget (a drop was attempted).
 
@@ -64,7 +111,7 @@ True when the measurement was over budget (a drop was attempted).
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/agentfootprint/api/generated/interfaces/WindowRefusal.md)[]
 
-Defined in: [src/core/agent/window/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L130)
+Defined in: [src/core/agent/window/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L162)
 
 Every turn that refused to leave, named.
 
@@ -78,7 +125,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L125)
+Defined in: [src/core/agent/window/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L157)
 
 How many messages left the window.
 
@@ -92,7 +139,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L123)
+Defined in: [src/core/agent/window/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L155)
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -106,7 +153,7 @@ Defined in: [src/core/agent/window/types.ts:123](https://github.com/footprintjs/
 
 > `readonly` **strategy**: `"token-budget"`
 
-Defined in: [src/core/agent/window/types.ts:173](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L173)
+Defined in: [src/core/agent/window/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L270)
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -121,7 +168,7 @@ Defined in: [src/core/agent/window/types.ts:173](https://github.com/footprintjs/
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L177)
+Defined in: [src/core/agent/window/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L274)
 
 The budget it was compared against.
 
@@ -131,7 +178,7 @@ The budget it was compared against.
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: [src/core/agent/window/types.ts:128](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L128)
+Defined in: [src/core/agent/window/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L160)
 
 #### Inherited from
 
@@ -143,7 +190,7 @@ Defined in: [src/core/agent/window/types.ts:128](https://github.com/footprintjs/
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: [src/core/agent/window/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/window/types.ts#L127)
+Defined in: [src/core/agent/window/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/window/types.ts#L159)
 
 Window size in chars before / after this visit. Exact, and not tokens.
 

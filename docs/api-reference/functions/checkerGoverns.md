@@ -8,7 +8,7 @@
 
 > **checkerGoverns**(`checker`, `capability`): `boolean`
 
-Defined in: [src/adapters/types.ts:835](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/adapters/types.ts#L835)
+Defined in: [src/adapters/types.ts:835](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/adapters/types.ts#L835)
 
 Does this checker ask to be consulted about `capability`? (9.11.0)
 

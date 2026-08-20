@@ -8,7 +8,7 @@
 
 > **ArtifactScope** = `MemoryIdentity`
 
-Defined in: [src/artifacts/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/artifacts/types.ts#L55)
+Defined in: [src/artifacts/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/artifacts/types.ts#L55)
 
 The isolation tuple every artifact call presents — the SAME tuple memory
 scopes on (`{ tenant?, principal?, conversationId }`), under a name that

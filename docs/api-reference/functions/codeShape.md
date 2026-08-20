@@ -8,7 +8,7 @@
 
 > **codeShape**(`code`): `string`
 
-Defined in: [src/core/codeRunnerTool.ts:198](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/codeRunnerTool.ts#L198)
+Defined in: [src/core/codeRunnerTool.ts:198](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/codeRunnerTool.ts#L198)
 
 A program reduced to its CALL SHAPE: which operations, in what order.
 

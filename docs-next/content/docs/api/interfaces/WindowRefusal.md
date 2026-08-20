@@ -4,7 +4,7 @@ title: WindowRefusal
 
 # Interface: WindowRefusal
 
-Defined in: [src/core/agent/window/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L83)
+Defined in: [src/core/agent/window/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L115)
 
 One named refusal, positioned so a reader can find the turn.
 
@@ -14,7 +14,7 @@ One named refusal, positioned so a reader can find the turn.
 
 > `readonly` **messageIndex**: `number`
 
-Defined in: [src/core/agent/window/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L88)
+Defined in: [src/core/agent/window/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L120)
 
 Index of the turn's first message in the pre-removal window.
 
@@ -24,7 +24,7 @@ Index of the turn's first message in the pre-removal window.
 
 > `readonly` **reason**: [`WindowRefusalReason`](/docs/api/type-aliases/WindowRefusalReason)
 
-Defined in: [src/core/agent/window/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L84)
+Defined in: [src/core/agent/window/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L116)
 
 ***
 
@@ -32,6 +32,6 @@ Defined in: [src/core/agent/window/types.ts:84](https://github.com/footprintjs/a
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/core/agent/window/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L86)
+Defined in: [src/core/agent/window/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L118)
 
 Index of the turn in this iteration's turn segmentation.

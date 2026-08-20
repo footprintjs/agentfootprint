@@ -8,7 +8,7 @@
 
 > **checkInApproved**(`input`): [`CheckInDecision`](/agentfootprint/api/generated/interfaces/CheckInDecision.md)
 
-Defined in: [src/core/checkin.ts:207](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L207)
+Defined in: [src/core/checkin.ts:207](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L207)
 
 Approve a pending check-in — the paused tool executes normally on resume.
 

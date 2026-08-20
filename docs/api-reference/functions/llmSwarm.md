@@ -8,7 +8,7 @@
 
 > **llmSwarm**(`opts`): [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [src/patterns/LlmSwarm.ts:104](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/patterns/LlmSwarm.ts#L104)
+Defined in: [src/patterns/LlmSwarm.ts:104](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/patterns/LlmSwarm.ts#L104)
 
 Build a swarm whose hand-offs are decided by an LLM.
 

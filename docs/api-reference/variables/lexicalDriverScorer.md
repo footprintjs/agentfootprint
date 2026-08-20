@@ -8,7 +8,7 @@
 
 > `const` **lexicalDriverScorer**: [`CheckInScorer`](/agentfootprint/api/generated/type-aliases/CheckInScorer.md)
 
-Defined in: [src/core/checkin.ts:365](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/checkin.ts#L365)
+Defined in: [src/core/checkin.ts:365](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/checkin.ts#L365)
 
 The default drivers scorer: deterministic Jaccard token overlap between
 the tool text and each context unit. Zero LLM, zero network, structuredClone

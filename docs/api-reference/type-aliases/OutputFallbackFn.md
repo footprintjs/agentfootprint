@@ -8,7 +8,7 @@
 
 > **OutputFallbackFn**\<`T`\> = (`error`, `rawOutput`) => `Promise`\<`T`\> \| `T`
 
-Defined in: [src/core/outputFallback.ts:109](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/outputFallback.ts#L109)
+Defined in: [src/core/outputFallback.ts:109](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/outputFallback.ts#L109)
 
 Tier-2 fallback function. Receives the original validation error +
 the raw LLM output; returns a value that the agent will then try

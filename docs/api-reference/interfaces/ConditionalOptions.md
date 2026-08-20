@@ -6,7 +6,7 @@
 
 # Interface: ConditionalOptions
 
-Defined in: [src/core-flow/Conditional.ts:37](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Conditional.ts#L37)
+Defined in: [src/core-flow/Conditional.ts:37](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core-flow/Conditional.ts#L37)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core-flow/Conditional.ts:37](https://github.com/footprintjs/age
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core-flow/Conditional.ts:56](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Conditional.ts#L56)
+Defined in: [src/core-flow/Conditional.ts:56](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core-flow/Conditional.ts#L56)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -28,7 +28,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:39](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Conditional.ts#L39)
+Defined in: [src/core-flow/Conditional.ts:39](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core-flow/Conditional.ts#L39)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core-flow/Conditional.ts:39](https://github.com/footprintjs/age
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:38](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Conditional.ts#L38)
+Defined in: [src/core-flow/Conditional.ts:38](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core-flow/Conditional.ts#L38)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/core-flow/Conditional.ts:38](https://github.com/footprintjs/age
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Conditional.ts:48](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core-flow/Conditional.ts#L48)
+Defined in: [src/core-flow/Conditional.ts:48](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core-flow/Conditional.ts#L48)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

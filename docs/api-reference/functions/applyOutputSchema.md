@@ -8,7 +8,7 @@
 
 > **applyOutputSchema**\<`T`\>(`raw`, `parser`): `T`
 
-Defined in: [src/core/outputSchema.ts:197](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/outputSchema.ts#L197)
+Defined in: [src/core/outputSchema.ts:197](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/outputSchema.ts#L197)
 
 Parse + validate a raw string answer against a parser. Used by
 `agent.parseOutput()` / `agent.runTyped()`. Centralized here so

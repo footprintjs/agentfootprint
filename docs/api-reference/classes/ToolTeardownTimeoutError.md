@@ -6,7 +6,7 @@
 
 # Class: ToolTeardownTimeoutError
 
-Defined in: [src/core/toolSessions.ts:535](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/toolSessions.ts#L535)
+Defined in: [src/core/toolSessions.ts:535](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/toolSessions.ts#L535)
 
 A teardown that outran its budget. Named so an alert can route on it.
 
@@ -20,7 +20,7 @@ A teardown that outran its budget. Named so an alert can route on it.
 
 > **new ToolTeardownTimeoutError**(`what`, `timeoutMs`): `ToolTeardownTimeoutError`
 
-Defined in: [src/core/toolSessions.ts:537](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/toolSessions.ts#L537)
+Defined in: [src/core/toolSessions.ts:537](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/toolSessions.ts#L537)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ not capture any frames.
 
 > `readonly` **timeoutMs**: `number`
 
-Defined in: [src/core/toolSessions.ts:536](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/toolSessions.ts#L536)
+Defined in: [src/core/toolSessions.ts:536](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/toolSessions.ts#L536)
 
 ## Methods
 

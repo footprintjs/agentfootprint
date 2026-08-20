@@ -6,7 +6,7 @@
 
 # Interface: MiddlewareAsk
 
-Defined in: [src/core/pause.ts:63](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L63)
+Defined in: [src/core/pause.ts:63](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L63)
 
 The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
@@ -16,7 +16,7 @@ The question a `toolMiddleware` put to a person, as it rides the checkpoint.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/agentfootprint/api/generated/interfaces/AskComponent.md)
 
-Defined in: [src/core/pause.ts:74](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L74)
+Defined in: [src/core/pause.ts:74](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L74)
 
 Which REGISTERED screen component collects the answer (9.24.0) — the
 typed half of the question, carried from `ask({ question, component })`.
@@ -29,7 +29,7 @@ back through the same `CheckInDecision` either way.
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L67)
+Defined in: [src/core/pause.ts:67](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L67)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -39,7 +39,7 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **middleware**: `string`
 
-Defined in: [src/core/pause.ts:76](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L76)
+Defined in: [src/core/pause.ts:76](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L76)
 
 `name` of the middleware that asked.
 
@@ -49,6 +49,6 @@ Defined in: [src/core/pause.ts:76](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/pause.ts:65](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/pause.ts#L65)
+Defined in: [src/core/pause.ts:65](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/pause.ts#L65)
 
 The question, in the middleware author's own words.

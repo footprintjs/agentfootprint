@@ -6,7 +6,7 @@
 
 # Interface: Coverage
 
-Defined in: [src/core/agent/coverage/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/coverage/types.ts#L53)
+Defined in: [src/core/agent/coverage/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L53)
 
 The three lists, normalized. This is the shape everything downstream reads —
 the renderer, the event payload, the answer-level block.
@@ -33,7 +33,7 @@ The three are NOT interchangeable, and the difference is the whole point:
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/coverage/types.ts#L56)
+Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L56)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [src/core/agent/coverage/types.ts:56](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/coverage/types.ts#L54)
+Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L54)
 
 ***
 
@@ -49,4 +49,4 @@ Defined in: [src/core/agent/coverage/types.ts:54](https://github.com/footprintjs
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/agentfootprint/api/generated/interfaces/CoverageItem.md)[]
 
-Defined in: [src/core/agent/coverage/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/add0815e3417d934797433808004882c515e7ba6/src/core/agent/coverage/types.ts#L55)
+Defined in: [src/core/agent/coverage/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/0f601a8e26f97aefad58718776b96f7784728635/src/core/agent/coverage/types.ts#L55)
