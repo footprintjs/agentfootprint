@@ -1231,6 +1231,18 @@ export interface AgentState {
   instructionLeases?: ReadonlyArray<import('./toolEffects.js').InstructionLease>;
 
   /**
+   * The mount kernel's engagement state (9.58.0) — one record per mounted
+   * map: engaged or parked, the evidence strength the standing rests on,
+   * and the idle count. Written each pass by the injection engine's
+   * Evaluate stage via the `nextMapEngagement` alias round trip; present
+   * ONLY on agents built with `.maps()`, so every other agent commits the
+   * exact key set it always did. A plain POJO — survives structuredClone,
+   * so recordings carry the kernel's standing beside the cursor it never
+   * touches.
+   */
+  mapEngagement?: import('../../maps/engagement/types.js').MapEngagement;
+
+  /**
    * Every coverage statement the run's tools declared, in the order they
    * landed — `absent(…)`'s "here is where I looked" and `coverage(…)`'s
    * "here is what my verdict does not rule out".

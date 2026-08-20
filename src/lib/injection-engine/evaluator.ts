@@ -31,6 +31,15 @@
  * trigger said nothing. Declaration order is preserved (the lease admits;
  * it never reorders), and an injection both triggered AND leased is active
  * once. Absent `leaseActiveIds` = the loop below is byte-identical.
+ *
+ * And ONE framework-tier suppression, the admission's mirror (9.58.0): an
+ * injection named by `ctx.parkedIds` — a member of a map the mount kernel
+ * has PARKED for lack of corroborating evidence — is skipped for this pass
+ * with the honest reason `'parked'`, whatever its own trigger says. Checked
+ * FIRST (before the lease) so the record can never claim a parked map's
+ * contribution was served; a lease that would collide with a park is itself
+ * renewal evidence upstream, so the collision does not arise. Absent
+ * `parkedIds` = the loop below is byte-identical.
  */
 
 import { toolResultsOf } from './types.js';
@@ -44,12 +53,27 @@ export function evaluateInjections(
   const admitted: Injection[] = [];
   const skipped: Array<{
     id: string;
-    reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
+    reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
     error?: string;
   }> = [];
   const active: Injection[] = [];
 
   for (const inj of injections) {
+    // The park suppression (9.58.0) — the lease admission's mirror. FIRST,
+    // so a parked map's member is skipped whatever its trigger or a lease
+    // would have said, and the skip is on the record by name.
+    if (ctx.parkedIds !== undefined && ctx.parkedIds.includes(inj.id)) {
+      skipped.push({
+        id: inj.id,
+        reason: 'parked',
+        error:
+          `its map is parked: the contribution was served without one of its tools being ` +
+          `called while the turn went elsewhere. The cursor has not moved; explicit or ` +
+          `structural evidence (a read_skill pick, a declared route, its own tool called) ` +
+          `re-engages it.`,
+      });
+      continue;
+    }
     // The lease admission (9.19.0) — a granted `require-instruction` push.
     // Checked FIRST so a leased injection is active exactly once whatever
     // its own trigger would have said; the switch below never runs for it,

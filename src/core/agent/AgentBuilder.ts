@@ -31,6 +31,7 @@ import {
   type ResolvedOutputFallback,
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
+import type { EngagementPlan, MapsOptions } from '../../maps/engagement/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
 import {
   SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
@@ -278,6 +279,10 @@ export class AgentBuilder {
    *  state one (a structurally-typed graph without `nodes`) — the event then
    *  never fires, and the recording honestly carries no declared map. */
   private skillGraphDeclared?: SkillGraphDeclaredMap;
+  /** `.maps()` (9.58.0) — the mount kernel's options; the plan itself is
+   *  resolved at build(), where the final injection list and the mounted
+   *  graph both exist. Absent = no kernel, zero delta. */
+  private mapsOptions?: MapsOptions;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -1415,6 +1420,58 @@ export class AgentBuilder {
   }
 
   /**
+   * Mount the maps kernel (9.58.0) — the layer that owns ENGAGEMENT, the
+   * axis orthogonal to every map's own cursor.
+   *
+   * A mounted map (today: the skill map; the screen map is the next tenant)
+   * keeps sole ownership of its position. What the kernel owns is whether
+   * that map's contributions — prompt fragment and tools — ride the next
+   * call. An engagement founded on a GUESS (an entry regex, a classifier)
+   * is renewed only by concrete evidence: the map's own tool called, a
+   * declared route fired, the model asking by name. Without corroboration
+   * for `renewalGrace` consecutive passes the map is PARKED — its cursor
+   * stays exactly where the map put it, its contribution stops riding, and
+   * explicit or structural evidence re-engages it (an accepted `read_skill`
+   * pick is the recovery door). Every standing change is a typed event:
+   * `agentfootprint.map.engaged` / `agentfootprint.map.parked`.
+   *
+   * Why: in a recorded 30-call turn, an entry regex matched the word "zone"
+   * inside "find the most recent zone redundancy run" — a noun the person
+   * wanted to FIND, not a task. The turn stood on an audit skill for all 30
+   * calls; its 4 tools were never called; ~7k characters of the wrong map
+   * rode every call of a 359k-token turn. Under the kernel that map parks
+   * on call four.
+   *
+   * Requires a mounted skill map — refused at build() otherwise. Zero-delta
+   * when absent: no scope key, no events, byte-identical evaluation.
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .skillGraph(myMap)
+   *     .maps({ renewalGrace: 3 })
+   *     .build();
+   */
+  maps(options: MapsOptions = {}): this {
+    if (this.mapsOptions !== undefined) {
+      throw new Error(
+        `Agent.maps(): the kernel is already configured. One kernel per agent — a second ` +
+          `call would silently replace the first's policy. Merge the options into one call.`,
+      );
+    }
+    if (options.renewalGrace !== undefined) {
+      if (!Number.isInteger(options.renewalGrace) || options.renewalGrace < 1) {
+        throw new Error(
+          `Agent.maps(): renewalGrace must be an integer >= 1, got ` +
+            `${String(options.renewalGrace)}. It is the number of corroboration-free ` +
+            `passes a guessed engagement survives before parking.`,
+        );
+      }
+    }
+    this.mapsOptions = options;
+    return this;
+  }
+
+  /**
    * Register a Steering doc — always-on system-prompt rule.
    * Use for invariant guidance: output format, persona, safety policies.
    */
@@ -2299,6 +2356,47 @@ export class AgentBuilder {
    * depend on the WHOLE agent: the tools are registered by other calls that
    * may come after, and `.selfExplain()` attaches its own.
    */
+  /**
+   * Resolve `.maps()` into the kernel's plan (9.58.0). Undefined when the
+   * kernel is not mounted — the zero-delta path. Refuses loudly when there
+   * is nothing to manage: the kernel owns engagement, and with no map
+   * mounted there is nothing to engage or park.
+   */
+  private resolveMapsPlan(injections: readonly Injection[]): EngagementPlan | undefined {
+    if (this.mapsOptions === undefined) return undefined;
+    if (this.skillGraphNextSkill === undefined) {
+      throw new Error(
+        `Agent.maps(): nothing is mounted that the kernel could manage — mount a skill ` +
+          `map first (.skillGraph(defineSkillMap(...).build())). The kernel owns ` +
+          `ENGAGEMENT (whether a map's prompt and tools ride the next call); with no ` +
+          `map mounted there is nothing to engage or park.`,
+      );
+    }
+    if (this.skillGraphNodeIds === undefined || this.skillGraphNodeIds.size === 0) {
+      throw new Error(
+        `Agent.maps(): the mounted graph carries no node ids (a structurally-typed ` +
+          `graph). The kernel needs the member list to know exactly which contributions ` +
+          `parking suppresses — mount the full defineSkillMap(...).build() result.`,
+      );
+    }
+    const memberIds = [...this.skillGraphNodeIds];
+    const memberSet = new Set(memberIds);
+    // The renewal feed's join key: tool NAMES contributed by this map's
+    // members. Names, not references — the feed joins against the previous
+    // batch's tool results, which carry names.
+    const toolNames = [
+      ...new Set(
+        injections
+          .filter((inj) => memberSet.has(inj.id))
+          .flatMap((inj) => (inj.inject.tools ?? []).map((t) => t.schema.name)),
+      ),
+    ];
+    return {
+      maps: [{ id: 'skill-map', memberIds, toolNames }],
+      renewalGrace: this.mapsOptions.renewalGrace ?? 3,
+    };
+  }
+
   private resolveOutputEnforcement(): ResolvedOutputEnforcement | undefined {
     const parser = this.outputSchemaParser;
     if (!parser) return undefined;
@@ -2742,6 +2840,10 @@ export class AgentBuilder {
         );
       }
     }
+    // The maps kernel's plan (9.58.0) — resolved HERE because it needs both
+    // the mounted graph (member ids) and the final injection list (each
+    // member's contributed tool names). Refusals live in the resolver.
+    const mapsPlan = this.resolveMapsPlan(injections);
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -2782,6 +2884,7 @@ export class AgentBuilder {
       // configured" law, and what keeps an agent with no recipes byte-identical.
       this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
       this.skillGraphDeclared,
+      mapsPlan,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

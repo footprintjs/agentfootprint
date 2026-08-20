@@ -217,6 +217,10 @@ const SURVIVING_SUBPATHS = [
   // authoring-time vocabulary: an app that CONSUMES a recipe imports the object
   // and calls `.recipe()`, so the main barrel stays as it was.
   './recipes',
+  // 9.58.0 — also added, also never one of the sixteen. `./maps` publishes
+  // the mount kernel's vocabulary (engagement, leases, Claim<T>) — pure data
+  // and pure functions, no run entry point.
+  './maps',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────

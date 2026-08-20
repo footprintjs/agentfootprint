@@ -95,6 +95,12 @@ const DOORS = [
   // (`defineAgentRecipe`), which is authoring-time vocabulary — an app that
   // CONSUMES a recipe imports the object and calls `.recipe()`.
   './recipes',
+  // 9.58.0 — the THIRTEENTH, same argument again: `./maps` carries no run
+  // entry point. It publishes the mount kernel's vocabulary — Claim<T>, the
+  // engagement lease machine and its renewal feed, all pure data + pure
+  // functions — so a consumer can type the `agentfootprint.map.*` payloads
+  // it observes and reason about the lease law directly.
+  './maps',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */

@@ -253,6 +253,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         ...(parent.instructionLeases !== undefined && {
           instructionLeases: parent.instructionLeases,
         }),
+        // The mount kernel's engagement state (9.58.0) — the sf-llm-call
+        // boundary's readonly input, for the Evaluate advance (the
+        // stepPointer discipline verbatim).
+        ...(deps.engagementPlan !== undefined &&
+          parent.mapEngagement !== undefined && {
+            mapEngagement: parent.mapEngagement,
+          }),
       }),
       outputMapper: (sf) => ({
         activeInjections: sf.activeInjections,
@@ -275,6 +282,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // — never written before a first grant.
         ...(sf.nextInstructionLeases !== undefined && {
           nextInstructionLeases: sf.nextInstructionLeases,
+        }),
+        // The advanced engagement state (9.58.0) — first hop of the same
+        // alias round trip; the outer boundary maps it onto the ReAct
+        // parent's `mapEngagement`. Value-conditional — never written
+        // unless `.maps()` is mounted.
+        ...(sf.nextMapEngagement !== undefined && {
+          nextMapEngagement: sf.nextMapEngagement,
         }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
@@ -568,6 +582,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(p.instructionLeases !== undefined && {
             instructionLeases: p.instructionLeases,
           }),
+          // The mount kernel's engagement state (9.58.0) — a direct
+          // cross-iteration read like the step pointer one block up.
+          ...(deps.engagementPlan !== undefined &&
+            p.mapEngagement !== undefined && { mapEngagement: p.mapEngagement }),
           // The escalation flip (9.19.0) — written by tool-calls on the
           // OUTER scope, read by callLLM INSIDE this boundary (`brainFor`'s
           // second argument). Gated on the policy being declared, so every
@@ -662,6 +680,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // that never saw a grant keep byte-identical mapper output.
           ...(s.nextInstructionLeases !== undefined && {
             instructionLeases: s.nextInstructionLeases,
+          }),
+          // The advanced engagement state (9.58.0) — second hop of the alias
+          // round trip, onto the outer `mapEngagement` key. Value-conditional.
+          ...(s.nextMapEngagement !== undefined && {
+            mapEngagement: s.nextMapEngagement,
           }),
         };
       },

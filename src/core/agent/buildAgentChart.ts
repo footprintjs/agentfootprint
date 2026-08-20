@@ -197,6 +197,15 @@ export interface AgentChartDeps {
   readonly hasSteps?: boolean;
 
   /**
+   * The mount kernel's plan (9.58.0) — present ONLY on an agent built with
+   * `.maps()`. Gates the `mapEngagement`/`nextMapEngagement` alias round
+   * trip through the injection-engine boundary (the stepPointer discipline
+   * verbatim). Absent → the keys are never threaded, so every other agent's
+   * mapper bytes are exactly what they were.
+   */
+  readonly engagementPlan?: import('../../maps/engagement/types.js').EngagementPlan;
+
+  /**
    * The unfinished-steps nudge branch (9.18.0). Present ONLY on an agent
    * with ≥1 stepped skill — and when present it is one more branch of the
    * Route decider carrying the same `{ loopTo }` the tool branch does,
@@ -479,6 +488,14 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           ...(parent.instructionLeases !== undefined && {
             instructionLeases: parent.instructionLeases,
           }),
+          // The mount kernel's engagement state (9.58.0) — readonly input for
+          // the Evaluate advance. Threaded only for agents built with
+          // `.maps()`, so every other agent's engine args are the exact
+          // bytes they always were.
+          ...(deps.engagementPlan !== undefined &&
+            parent.mapEngagement !== undefined && {
+              mapEngagement: parent.mapEngagement,
+            }),
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -500,6 +517,13 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // every other agent's mapper output is the exact bytes it was.
           ...(sf.nextInstructionLeases !== undefined && {
             instructionLeases: sf.nextInstructionLeases,
+          }),
+          // The advanced engagement state (9.58.0), back onto the parent's
+          // key — the cursor/lease alias round trip. Value-conditional:
+          // Evaluate writes it on every pass `.maps()` is mounted, and never
+          // otherwise, so every other agent's mapper output is unchanged.
+          ...(sf.nextMapEngagement !== undefined && {
+            mapEngagement: sf.nextMapEngagement,
           }),
         }),
         // CRITICAL: footprintjs's default `applyOutputMapping`

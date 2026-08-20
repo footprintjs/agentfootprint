@@ -231,6 +231,16 @@
         "default": "./dist/doors/skill-graph.js"
       }
     },
+    "./maps": {
+      "import": {
+        "types": "./dist/esm/doors/maps.d.ts",
+        "default": "./dist/esm/doors/maps.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/maps.d.ts",
+        "default": "./dist/doors/maps.js"
+      }
+    },
     "./recipes": {
       "import": {
         "types": "./dist/esm/doors/recipes.d.ts",
@@ -283,6 +293,9 @@
       ],
       "recipes": [
         "./dist/types/doors/recipes.d.ts"
+      ],
+      "maps": [
+        "./dist/types/doors/maps.d.ts"
       ]
     }
   },

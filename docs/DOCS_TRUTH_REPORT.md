@@ -6,7 +6,7 @@ _Recorded 2026-08-20._
 
 ## In plain words
 
-The package publishes **14 import paths** carrying **1906 distinct named exports**, plus **103 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **14 import paths** carrying **1906 distinct named exports**, plus **105 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
 **1139 of 1906 exports (60%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
@@ -16,7 +16,7 @@ The package publishes **14 import paths** carrying **1906 distinct named exports
 - **600 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
 - **935 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
-On events: **57** of the 103 typed events are both described on the site and were seen firing in a real run. **10** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **36** are not described in prose on the site at all.
+On events: **57** of the 105 typed events are both described on the site and were seen firing in a real run. **10** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **36** are not described in prose on the site at all.
 
 ### Which number is "the" number
 

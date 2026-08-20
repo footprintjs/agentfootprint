@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**A map's cursor says where it stands. Nothing said whether it had earned
+its seat. Now something does — without touching the cursor.**
+
+From the same recorded consumer-integration corpus as 9.55.0–9.57.0. A
+person asked to "find the most recent **zone** redundancy run" — where
+"zone" was the name of a thing they wanted to find, not a task — and an
+entry regex read it as a task. The turn started standing on an audit skill
+and never left: the cursor law ("stay until an edge leaves") is correct,
+no edge could fire, and the skill's procedure plus its four never-called
+tools rode all 30 calls of a 359,000-token turn. 29 of 30 moves were
+"stay". The map behaved exactly as specified; what was missing is the
+layer that asks whether a contribution is still earning its place.
+
+### Added
+
+- **The maps kernel: `.maps()` — engagement, orthogonal to the cursor.**
+  A mounted map (the skill map today) keeps sole ownership of its
+  position, always. What the kernel owns is ENGAGEMENT: whether the map's
+  prompt and tools ride the next call. An engagement founded on a guess
+  (`lexical` keyword, `semantic` classifier) is renewed only by concrete
+  evidence — the map's own tool called, a declared route fired, the model
+  asking by name — and without corroboration for `renewalGrace`
+  consecutive passes (default 3) it is **parked**: skipped by the
+  evaluator with the honest reason `'parked'`, on every record, cursor
+  untouched. Explicit or structural evidence re-engages it on the spot —
+  an accepted `read_skill` pick is the recovery door, so parking is never
+  a trap. Engagements the system or the model founded (`structural`,
+  `explicit`) never decay; `nonParkable` maps never park. On the recorded
+  turn, the kernel parks the wrongly-guessed map on call four, saving the
+  remaining ~26 calls from re-serving ~7k characters of the wrong map.
+- **A new door, `agentfootprint/maps`** — the kernel's vocabulary as pure
+  data and pure functions: the lease machine (`advanceEngagement`), its
+  renewal feed (`renewalEvidenceOf`), the strength ladder, and
+  **`Claim<T>`** (`known` / `unknown` / `notApplicable`) — a value that
+  says how it knows itself, so an unknown count can never render as zero.
+- **Two typed events in a new domain**: `agentfootprint.map.engaged` and
+  `agentfootprint.map.parked` (with strength, witness, idle count),
+  bridged and wildcard-subscribable from day one — a rule whose
+  engagements always park with zero renewals is measurable decoration,
+  which is the declaration telemetry this ships.
+- Runnable example: `examples/context-engineering/21-park-the-wrong-map.ts`
+  reproduces the trap and runs it with the kernel off and on.
+
+Zero-delta when unmounted: no scope key, no events, and the evaluator's
+loop is byte-identical — the same guarantee `leaseActiveIds` (9.19.0)
+models, of which the park check is the deliberate mirror.
+
 ### Fixed
 
 - **The server Anthropic adapter now keeps both halves of the cache

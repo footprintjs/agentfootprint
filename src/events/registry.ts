@@ -121,6 +121,8 @@ import type {
   ArtifactExpiredPayload,
   ArtifactRefusedPayload,
   ArtifactPresentedPayload,
+  MapEngagedPayload,
+  MapParkedPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -208,6 +210,10 @@ export const EVENT_NAMES = {
     stepSkipped: 'agentfootprint.skill.step_skipped',
     stepsUnfinished: 'agentfootprint.skill.steps_unfinished',
     escalated: 'agentfootprint.skill.escalated',
+  },
+  map: {
+    engaged: 'agentfootprint.map.engaged',
+    parked: 'agentfootprint.map.parked',
   },
   validation: {
     argsInvalid: 'agentfootprint.validation.args_invalid',
@@ -713,6 +719,14 @@ export interface AgentfootprintEventMap {
     'agentfootprint.artifacts.presented',
     ArtifactPresentedPayload
   >;
+  'agentfootprint.map.engaged': AgentfootprintEventEnvelope<
+    'agentfootprint.map.engaged',
+    MapEngagedPayload
+  >;
+  'agentfootprint.map.parked': AgentfootprintEventEnvelope<
+    'agentfootprint.map.parked',
+    MapParkedPayload
+  >;
 }
 
 /** Union of every typed event. Consumers use this for exhaustive `switch`. */
@@ -829,4 +843,6 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.artifacts.expired',
   'agentfootprint.artifacts.refused',
   'agentfootprint.artifacts.presented',
+  'agentfootprint.map.engaged',
+  'agentfootprint.map.parked',
 ] as const;

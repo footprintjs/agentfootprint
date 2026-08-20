@@ -63,6 +63,7 @@ import { iterationsRemainingOf } from '../iterationBudget.js';
 import { evaluateInjections } from './evaluator.js';
 import {
   projectActiveInjection,
+  toolResultsOf,
   type ActiveInjection,
   type Injection,
   type InjectionContext,
@@ -87,6 +88,8 @@ import {
   type InstructionLease,
   type PendingToolTransition,
 } from '../../core/agent/toolEffects.js';
+import { advanceEngagement } from '../../maps/engagement/lease.js';
+import type { EngagementPlan, MapEngagement } from '../../maps/engagement/types.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -145,6 +148,15 @@ export interface InjectionEngineConfig {
    * ever written (zero-cost-when-unused).
    */
   readonly stepPlanFor?: StepPlanFor;
+  /**
+   * The mount kernel's plan (9.58.0) — present only when the agent was built
+   * with `.maps()`. The Evaluate stage advances every mounted map's
+   * engagement with the SAME ctx the triggers gate on, and hands the parked
+   * maps' member ids to the evaluator as the one framework-tier suppression
+   * (`ctx.parkedIds`, the `leaseActiveIds` admission's mirror). Absent →
+   * nothing here runs and the evaluation is byte-identical.
+   */
+  readonly engagement?: EngagementPlan;
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -245,6 +257,12 @@ interface InjectionEngineArgs {
    *  currentSkillId/nextSkillCursor alias discipline). Present only after
    *  a tool granted one. */
   instructionLeases?: readonly InstructionLease[];
+  /** The kernel's engagement state as of the PREVIOUS iteration (9.58.0) — a
+   *  readonly boundary INPUT (the currentSkillId/nextSkillCursor alias
+   *  discipline). Evaluate advances it and writes the fresh value under
+   *  `nextMapEngagement`; the mount mappers carry the alias back onto the
+   *  parent's `mapEngagement`. Present only on agents built with `.maps()`. */
+  mapEngagement?: MapEngagement;
 }
 
 /**
@@ -266,6 +284,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
         config.supersededEntries,
         config.stepPlanFor,
         config.reachableSkills,
+        config.engagement,
       ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
@@ -307,6 +326,7 @@ function makeEvaluateStage(
   supersededEntries?: (ctx: InjectionContext) => readonly string[],
   stepPlanFor?: StepPlanFor,
   reachableSkills?: (currentSkillId?: string) => readonly string[],
+  engagementPlan?: EngagementPlan,
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -434,6 +454,52 @@ function makeEvaluateStage(
         winner: { ...move.conflict.winner },
         losers: move.conflict.losers.map((l) => ({ ...l })),
       });
+    }
+
+    // ── Map engagement (9.58.0) — the mount kernel's one pass ──────────
+    // Advanced with the SAME facts the triggers gate on, BEFORE the
+    // evaluator runs, so a re-engagement earned this pass serves this pass
+    // and a park suppresses this pass — the record and the wire can never
+    // disagree. The state rides the boundary as a readonly INPUT
+    // (`mapEngagement`) and leaves under the DISTINCT key
+    // `nextMapEngagement` (the cursor/lease alias discipline). The cursor
+    // itself is untouched by every branch of this block: engagement is the
+    // kernel's axis, position is the map's.
+    if (engagementPlan !== undefined) {
+      const advance = advanceEngagement(engagementPlan, args.mapEngagement, {
+        iteration: ctx.iteration,
+        ...(cursor !== undefined && { currentNode: cursor }),
+        ...(move?.by !== undefined && { moveBy: move.by }),
+        ...(move?.witness?.text !== undefined && { witness: move.witness.text }),
+        toolResults: toolResultsOf(ctx),
+        ...(ctx.pendingSkillPick !== undefined && { pendingSkillPick: ctx.pendingSkillPick }),
+        activatedInjectionIds: ctx.activatedInjectionIds,
+      });
+      // Written on EVERY pass the feature is on (the `if (routes)` precedent)
+      // so a boundary never re-delivers stale engagement state.
+      scope.$setValue('nextMapEngagement', advance.next);
+      for (const change of advance.changes) {
+        if (change.kind === 'engaged') {
+          typedEmit(scope, 'agentfootprint.map.engaged', {
+            mapId: change.mapId,
+            iteration: change.iteration,
+            by: change.by,
+            ...(change.witness !== undefined && { witness: change.witness }),
+            ...(change.reengaged === true && { reengaged: true as const }),
+          });
+        } else {
+          typedEmit(scope, 'agentfootprint.map.parked', {
+            mapId: change.mapId,
+            iteration: change.iteration,
+            by: change.by,
+            idleCalls: change.idleCalls,
+            ...(change.witness !== undefined && { witness: change.witness }),
+          });
+        }
+      }
+      if (advance.parkedInjectionIds.length > 0) {
+        ctx = { ...ctx, parkedIds: advance.parkedInjectionIds };
+      }
     }
 
     const evaluation = evaluateInjections(injections, ctx);

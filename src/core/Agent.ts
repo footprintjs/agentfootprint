@@ -71,6 +71,7 @@ import { embeddingRecorder } from '../recorders/core/EmbeddingRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { credentialRecorder } from '../recorders/core/CredentialRecorder.js';
+import { mapRecorder } from '../recorders/core/MapRecorder.js';
 import { artifactsRecorder } from '../recorders/core/ArtifactsRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
@@ -680,6 +681,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  `agentfootprint.skill.graph_declared`; undefined = no graph, or a graph
    *  that could not state its map (the event then never fires). */
   private readonly skillGraphDeclared?: SkillGraphDeclaredMap;
+  /** The maps kernel's plan (9.58.0) — present only when built with `.maps()`. */
+  private readonly mapsPlan?: import('../maps/engagement/types.js').EngagementPlan;
   /** `AgentOptions.recordSystemPrompt` (9.50.0) — OFF by default. When true,
    *  every `stream.llm_start` carries the assembled system prompt verbatim as
    *  `systemPromptText`. */
@@ -729,6 +732,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     limitsTravelWithTheAnswer?: boolean,
     recipes?: readonly AppliedRecipe[],
     skillGraphDeclared?: SkillGraphDeclaredMap,
+    mapsPlan?: import('../maps/engagement/types.js').EngagementPlan,
   ) {
     super();
     this.provider = opts.provider;
@@ -763,6 +767,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
     this.appliedRecipes = recipes;
     this.skillGraphDeclared = skillGraphDeclared;
+    this.mapsPlan = mapsPlan;
     if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
@@ -2537,6 +2542,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // adapter that failed every call did so in a silence that read like health.
     // Always-on and zero-cost: the bridge drops an event nobody listens for.
     attachObserver(credentialRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Map engagement (9.58.0). Shipped WITH the domain, same lesson as above.
+    attachObserver(mapRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Artifact lifecycle (9.21.0). Shipped WITH the domain — the credential
     // bridge above is the record of what waiting costs. Always-on and
     // zero-cost: with no store attached nothing emits, and the bridge drops
@@ -3183,6 +3190,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }),
       // Steps (9.18.0): the Evaluate stage owns the pointer's tenure re-key.
       ...(stepPlanFor !== undefined && { stepPlanFor }),
+      // The maps kernel (9.58.0): the Evaluate stage owns the engagement
+      // advance, with the same ctx the triggers gate on.
+      ...(this.mapsPlan !== undefined && { engagement: this.mapsPlan }),
     });
     // The turn-start slot's occupant (SG-C). RouteTurn — the cascade — mounts
     // ONLY when the graph runs it: a classifier is configured, or the mount
@@ -3519,6 +3529,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         hasSteps: true,
         stepNudgeStage: buildStepNudgeStage(stepPlanFor) as (scope: never) => void,
       }),
+      // The maps kernel (9.58.0) — gates the mapEngagement alias round trip
+      // through the engine boundary. Same conditional-mount law as steps.
+      ...(this.mapsPlan !== undefined && { engagementPlan: this.mapsPlan }),
       // The evidence gate (9.35.0). `hasEvidenceGate` rides ANY posture (the
       // grouped chart needs the system-prompt records bubbled out to exempt
       // what the app itself supplied); the BRANCH is mounted only for a

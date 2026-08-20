@@ -526,8 +526,11 @@ export interface ContextEvaluatedPayload {
   readonly skippedDetails: readonly {
     readonly id: string;
     /** `'unknown-fact'` (9.57.0): a templated instruction named a run-time
-     *  fact this evaluation could not supply, so it was skipped whole. */
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
+     *  fact this evaluation could not supply, so it was skipped whole.
+     *  `'parked'` (9.58.0): a member of a map the mount kernel parked —
+     *  served without corroboration for the grace window; the map's own
+     *  cursor is untouched and evidence re-engages it. */
+    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
     readonly error?: string;
   }[];
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
@@ -2490,4 +2493,35 @@ export interface ArtifactPresentedPayload {
   /** The presenting call — the join to the trace. */
   readonly toolCallId: string;
   readonly iteration: number;
+}
+
+// ─── Map engagement (9.58.0) — the mount kernel's standing changes ──────
+
+/** A mounted map's contributions are riding the calls again (or for the
+ *  first time). `by` is the strength of the evidence the standing rests on
+ *  — `lexical`/`semantic` engagements decay without corroboration;
+ *  `structural`/`explicit` ones stand. `reengaged` marks a recovery from a
+ *  park. The map's own cursor is never touched by any of this: engagement
+ *  is the kernel's axis, position is the map's. */
+export interface MapEngagedPayload {
+  readonly mapId: string;
+  readonly iteration: number;
+  readonly by: 'explicit' | 'structural' | 'semantic' | 'lexical';
+  /** The matched text that founded a guessed engagement (bounded upstream). */
+  readonly witness?: string;
+  readonly reengaged?: true;
+}
+
+/** A mounted map was PARKED: its contribution was served for `idleCalls`
+ *  consecutive passes in which none of its tools was called while the turn
+ *  went elsewhere — the measured shape of the recorded 30-call stuck turn.
+ *  Its prompt and tools stop riding; its cursor stays exactly where the map
+ *  put it; explicit or structural evidence re-engages it. */
+export interface MapParkedPayload {
+  readonly mapId: string;
+  readonly iteration: number;
+  /** Strength of the evidence the parked engagement had rested on. */
+  readonly by: 'explicit' | 'structural' | 'semantic' | 'lexical';
+  readonly idleCalls: number;
+  readonly witness?: string;
 }

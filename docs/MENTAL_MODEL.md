@@ -447,13 +447,13 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**103 typed events / 22 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(13 — incl.
+**105 typed events / 23 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(13 — incl.
 `run_configured`, the run-configuration manifest, and `budget_exhausted`, what a
 turn that ran out of budget then DID about it)
 `stream.*`(8 — incl. `tool_progress`, a long tool reporting mid-call) `context.*`(5 — the thesis) `memory.*`(5) `tools.*`(16) `validation.*`(1) `skill.*`(11 — incl. `graph_declared`, the author's map as data) `permission.*`(4)
 `credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `resilience.*`(2 — the
 outputSchema fallback ladder; dispatched directly, not via `typedEmit`) `pause.*`(2)
-`checkin.*`(2) `middleware.*`(1) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(5 — the claim-check lifecycle).
+`checkin.*`(2) `middleware.*`(1) `embedding.*`(1) `risk.*`(1) `fallback.*`(1) `artifacts.*`(5 — the claim-check lifecycle) `map.*`(2 — the mount kernel's engagement standing: engaged / parked).
 Emitted via `typedEmit(scope,name,payload)` (compile-time-safe) → EmitRecorder →
 **`EmitBridge`** (prefix-match per domain) → `buildEventMeta` enriches
 (`runtimeStageId, subflowPath, runId, wallClockMs, compositionPath, turnIndex, iterIndex`) → dispatch.

@@ -263,6 +263,14 @@ export interface InjectionContext {
    */
   readonly leaseActiveIds?: readonly string[];
   /**
+   * Injection ids the mount kernel is SUPPRESSING this pass (9.58.0) —
+   * members of a parked map. The evaluator skips them with the honest
+   * reason `'parked'` before any trigger or lease is consulted. Absent
+   * unless the maps kernel is mounted AND something is parked, so the
+   * common evaluation is byte-identical to 9.57.0.
+   */
+  readonly parkedIds?: readonly string[];
+  /**
    * The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    * `.entryByRelevance()`) — written by the PickEntry stage at turn start.
    * `defineRelevanceHint()` reads it to detect a near-tie. Absent unless the graph
@@ -404,8 +412,13 @@ export interface InjectionEvaluation {
      * this evaluation cannot supply, so the WHOLE instruction was skipped.
      * All-or-nothing by design — a rendered gap, or a fabricated zero, is
      * worse than an instruction that did not speak.
+     *
+     * `'parked'` (9.58.0): the injection belongs to a map the mount kernel
+     * parked — its contribution was served without corroboration for the
+     * configured grace, so it stops riding until evidence re-engages it.
+     * The map's own cursor is untouched.
      */
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
+    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
     readonly error?: string;
   }>;
 }
