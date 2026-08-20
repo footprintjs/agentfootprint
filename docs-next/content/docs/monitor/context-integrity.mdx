@@ -1,0 +1,37 @@
+---
+title: Context Integrity
+description: Typed checks that catch a run contradicting itself — and a ledger that proves the checkers ran.
+---
+
+In a recorded turn, a subsystem was parked — its instructions stopped being sent — while four tools it owned kept riding every call. One channel said inactive, another showed it available, and nothing in the system was responsible for noticing. Context Integrity makes that noticing someone's job: deterministic checks at the seams where contradictions are CREATED, filed as typed events. Checks never block or rewrite anything — detection converts a silent inconsistency into an attributed one.
+
+## The finding event
+
+Every detected defect is one `agentfootprint.integrity.context_error` event — one per defect per run, however many passes re-detect it. The payload is the finding: `kind` (`'invariant-violation'` | `'dangling-reference'` today), `seam` (`'compose'` | `'wire'`), `subjects` (who it is about), `witnesses` (both channels' assertions — neither preferred), `message` (plain sentence naming the fix). Example:
+
+```ts
+agent.on('agentfootprint.integrity.context_error', (e) => {
+  console.log(e.payload.kind, e.payload.seam, e.payload.message);
+});
+```
+
+## The three checks that ship today
+
+1. **Parked but still served** (compose seam) — with `.maps()` mounted, every pass compares each parked map's owned tool names against the final merged wire list. Day one it caught a real leak: the park hold-out filters registry and skill tools, but a `.toolProvider()` copy of a parked member's name stays on the wire.
+2. **The wire manifest** (wire seam) — the anthropic and browser-anthropic adapters state `LLMResponse.wireManifest` (a `WireToolManifest`: the tool names read back from the FINAL serialized request body, after every transform). The loop compares it against the exact request it handed the adapter, so a frame that says "removed" while the body still carries the schemas is caught — the defect every pre-serialization check structurally misses. A provider that states no manifest leaves the call incomparable: silence, never a guess. An empty manifest is a stated zero.
+3. **Dangling reference** (compose seam) — a tool author declares where a tool's arguments come from: `defineTool({ name: 'screen_fire', argumentsFrom: ['whats_here'], ... })`. When a window strategy has evicted those results and nothing re-fetched them, offering the tool files a finding telling the model the honest fix (call the ground again). Never dropped = silent (not-yet-grounded is legitimate sequencing); re-fetched = silent.
+
+## The disposition ledger — proof the checkers ran
+
+A findings stream cannot distinguish "no defects" from "the checker was unhooked". So every run files ONE `agentfootprint.integrity.disposition` event at the run boundary (success, failure, or pause — and inside recordings): one row per registered check counting checked / findings / notApplicable / unreachable (e.g. a provider stating no wire manifest is unreachable — a different fact from clean), plus quarantined synthetic counts. Set `integrityPosture: 'dev'` on `Agent.create` to add the liveness theorems: a run-start canary proves each check still catches its own synthetic defect, and a finished run whose registered checkers demonstrably never ran fails with `CheckerDeadError` instead of returning green. Default `'observe'`: rows only, listener-gated like every typed event. Example:
+
+```ts
+const agent = Agent.create({ provider, model, integrityPosture: 'dev' })
+  .tool(myTool)
+  .build();
+agent.on('agentfootprint.integrity.disposition', (e) => {
+  for (const row of e.payload.rows) {
+    console.log(row.check, row.seam, `checked=${row.checked}`, `findings=${row.findings}`);
+  }
+});
+```

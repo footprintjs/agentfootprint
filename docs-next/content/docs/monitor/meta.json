@@ -4,6 +4,7 @@
   "pages": [
     "---[BarChart3]Observability---",
     "observability",
+    "context-integrity",
     "recordings",
     "exporters",
     "context-engineering-recorder",
