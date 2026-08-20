@@ -30,7 +30,10 @@ import type { InnerRunLookup } from './innerRunRecords.js';
  *   commit log records what each step WROTE; it has no clock and no notion
  *   of a tool call as a thing with a duration. `inspect_tool_call` reads
  *   timings and outcomes from here, and says ⚠ when the tail is absent
- *   rather than inventing them.
+ *   rather than inventing them. It is ALSO the only home of the Context
+ *   Integrity channel (`agentfootprint.integrity.context_error` and the
+ *   per-run `…disposition` accounting) — what `find_context_errors` reads,
+ *   and what it reports as ABSENT rather than green when the tail is gone.
  * - `innerRuns` — OPTIONAL lookup of the records TOOLS kept of their own
  *   runs, keyed by `toolCallId`. Present when the agent mounts a
  *   `flowchartAsTool({ keepRecord: true })`. With it, `inspect_tool_run`
@@ -77,6 +80,12 @@ export const TOOLPACK_HARD_CAPS = {
   narrativeMaxLines: 200,
   /** `find_in_trace` hits per call — a search is a pointer list, not a dump. */
   findMaxHits: 25,
+  /**
+   * `find_context_errors` findings per call. Findings are deduplicated at
+   * filing time, so a run rarely has many — and a run that does has a
+   * systemic problem the first page already shows.
+   */
+  contextErrorsMax: 25,
 } as const;
 
 export function resolveToolpackOptions(options?: TraceToolpackOptions): ResolvedToolpackOptions {

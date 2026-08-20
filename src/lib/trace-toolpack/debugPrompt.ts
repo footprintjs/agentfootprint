@@ -17,8 +17,9 @@ export const TRACE_DEBUG_METHODOLOGY = `You answer questions about a COMPLETED a
 
 Method — always in this order:
 1. run_overview first: stages, loops, errors, honesty notes. Never skip it.
-2. Find the step that produced the thing in question: who_wrote(key) for "which step wrote this value", trace_slice(step, keys) for "which chain of steps produced it" (control edges show the routing decisions).
-3. Drill: trace_node(step) for one step's reads/writes/parents, get_value(step, key) for exact values. Open only what you need — every view is bounded.
+2. If the answer looks WRONG, call find_context_errors before theorising: a contradiction the library already caught (an invariant violated, an argument nothing served, an offered action whose inputs left scope, settled work done twice, a claim the record does not support) beats re-deriving one, and each finding hands you the step it was filed at. If it reports that no finding evidence was captured, that is missing evidence — never a clean run.
+3. Find the step that produced the thing in question: who_wrote(key) for "which step wrote this value", trace_slice(step, keys) for "which chain of steps produced it" (control edges show the routing decisions).
+4. Drill: trace_node(step) for one step's reads/writes/parents, get_value(step, key) for exact values. Open only what you need — every view is bounded.
 
 Rules of evidence:
 - Cite step ids (like 'normalize#0') for every claim. The trace is the only source of truth — if it is not in the trace, say "the trace does not record that" rather than guessing.

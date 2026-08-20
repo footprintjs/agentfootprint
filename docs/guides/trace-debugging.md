@@ -10,7 +10,7 @@ Every agentfootprint/footprintjs run already produces a complete evidence trail:
 what it read), decision evidence from `decide()`, and the narrative. Feeding all of it to a model
 is expensive and mostly wasted — a debugger doesn't read the whole core dump, it **navigates**.
 
-`traceToolpack(artifacts)` turns the evidence into 5–6 tools, id-addressed like a debugger:
+`traceToolpack(artifacts)` turns the evidence into eleven tools, id-addressed like a debugger:
 
 ```typescript
 import { FlowChartExecutor } from 'footprintjs';
@@ -29,7 +29,7 @@ const tools = traceToolpack({
   snapshot: executor.getSnapshot(),
   controlDeps: ctrl.asLookup(),                                // optional: decision edges
   narrative: executor.getNarrativeEntries().map((e) => e.text), // optional: adds read_narrative
-  events: recorded.events,                                     // optional: tool-call timings
+  events: recorded.events,                                     // optional: timings + integrity findings
 });
 
 // Mount on a (cheap) debugging agent…
@@ -43,6 +43,7 @@ const overview = await callTraceTool(tools, 'run_overview');
 | Tool | Question it answers |
 |------|---------------------|
 | `run_overview()` | What happened, broadly? Stage list (id + name + description), loops, where errors appeared, honesty notes, and what the run cost. **The entry point.** |
+| `find_context_errors(kind?, limit?)` | **What did this run contradict itself about?** The Context Integrity findings already caught — invariant violated, argument nothing served, offered action whose inputs left scope, settled work done twice, unsupported claim — each with the step it was filed at, its witnesses, and the drill that opens the state behind it. Reads only; never re-checks. Says "no finding evidence" rather than "no errors" when the tail is absent. |
 | `find_in_trace(query, maxHits?)` | **Where does "…" appear in this run?** Free text → step ids and keys. The bridge from the user's words to something the other tools can take. |
 | `trace_node(runtimeStageId)` | What did step X write (bounded previews + true sizes), read, and where did its inputs come from (parents, with the routing decision's rule label)? |
 | `trace_slice(runtimeStageId, key?, maxDepth?, maxNodes?)` | Which chain of steps produced the data at X? Backward read→write slice with `[control: rule]` edges, as an indented tree of drillable ids. |
@@ -52,6 +53,51 @@ const overview = await callTraceTool(tools, 'run_overview');
 | `inspect_tool_call(toolCallId)` | **One tool call, end to end**: which tool, the args the model *proposed*, the args it actually *ran with*, the result, the outcome, the duration, the step that ran it. |
 | `inspect_tool_run(toolCallId, …)` | **Inside** one tool call — the run the tool itself recorded, when it kept one (`flowchartAsTool({ keepRecord: true })`). |
 | `read_narrative(offset?, maxLines?)` | The human-readable story, paginated (only when `narrative` was provided). |
+
+### `find_context_errors` — what the run contradicted itself about
+
+When an answer looks wrong, the cheapest move is not to re-derive the bug: it is
+to ask whether the library already caught it. Every Context Integrity check files
+its findings on the run's event stream, and this tool reads them — it never
+re-runs a check and never re-judges one.
+
+What it adds to the raw findings is the **join**. A finding on its own says two
+things disagreed; this says where, and hands you the next call:
+
+```
+CONTEXT ERRORS — 1 finding(s) filed by this run's integrity checks (showing 1 of 1).
+
+[1] dangling-reference @compose · iteration 4 — 'screen_fire' is being offered while the
+    results that ground its arguments have left the window (whats_here) and were not…
+    about: tool:screen_fire, tool:whats_here → find_in_trace('screen_fire')
+    filed at call-llm#88 → trace_node('call-llm#88') · trace_slice({ runtimeStageId: 'call-llm#88' })
+    witnesses (1): ⚠ none carries a step id in this run
+
+CHECKERS (posture: observe · the run did work a checker could see):
+- invariant-violation @wire: ran 0× · 0 findings — the checker ran and found nothing at this seam
+  · unreachable 9 ⚠ — no stamped identity edge, so those encounters were SILENT, not clean
+- dangling-reference @compose: ran 6× · 6 finding(s) · not-applicable 3 (out of scope by rule)
+
+⚠ Green means no REGISTERED check was violated — it does not mean no context error exists.
+```
+
+Three properties are the point:
+
+- **The findings are drillable.** The step a finding was filed at is a real
+  `runtimeStageId`; when a subject names a state key the commit log wrote, the
+  answer resolves its last writer inline and hands you `who_wrote` / `backtrack`.
+  An id that is *not* a step this run executed is marked ⚠ rather than offered.
+- **The checker rows are part of the answer.** "The checkers ran and found
+  nothing" and "no checker was registered for that seam" are different states,
+  and a registered check with zero encounters is named as wiring rot.
+- **Absence has its own sentences.** Artifacts with no event tail report *no
+  finding evidence*; a tail with no integrity events says the channel is empty
+  and why; rows that report findings the tail no longer carries say **evidence
+  missing**. None of them ever reads as a clean bill of health.
+
+Findings are deduplicated by identity when they are filed, so one defect
+re-detected on later iterations is one finding — when the rows count more
+encounters than the list shows entries, the output reconciles the two out loud.
 
 ### `find_in_trace` — the first move when you have words, not ids
 
@@ -243,7 +289,9 @@ Agent.create({ provider, model })
   run still captures — "why did you fail?" works.
 - **The captured turn carries three things**, not one: the snapshot, the
   narrative, and a bounded tail of the run's typed events. The last two are what
-  `read_narrative` and `inspect_tool_call`'s timings read, and both default ON.
+  `read_narrative`, `inspect_tool_call`'s timings and `find_context_errors` read,
+  and both default ON. Turning `events` off does not make a run look clean — it
+  makes `find_context_errors` report that the evidence channel is absent.
 - **`delegate` switches the model at that point:** the skill unlocks a single
   `explain_run` tool whose investigation runs on a nested `traceDebugAgent`
   at the delegate's (cheaper) price; the main conversation pays one tool call.
@@ -279,7 +327,7 @@ Two boundary notes, honestly: a turn that PAUSES (human-in-the-loop) has not
 completed — during the pause, "previous completed run" remains the older one;
 and after a resume, the explainable run covers the post-resume portion only
 (footprintjs Convention-4: control chains don't survive a pause/resume).
-Tool names `run_overview` · `find_in_trace` · `trace_node` · `trace_slice` ·
+Tool names `run_overview` · `find_context_errors` · `find_in_trace` · `trace_node` · `trace_slice` ·
 `backtrack` · `who_wrote` · `get_value` · `inspect_tool_call` ·
 `inspect_tool_run` · `read_narrative` (inline) and `explain_run` (delegate) are
 reserved at build time; a composed ToolProvider emitting those names would win
@@ -287,7 +335,7 @@ the slot's first-occurrence dedup and shadow the trace tools — don't. The
 reservation is read from the pack itself (`TRACE_TOOL_NAMES`), so it cannot
 fall behind it.
 
-Ten tool definitions land on the tools slot for the one activated iteration.
+Eleven tool definitions land on the tools slot for the one activated iteration.
 That is a real bulge past the 2000-char `contextBudget.tools` default — which is
 a **signal, not a limiter** (nothing is ever truncated). An agent that opted into
 `.selfExplain()` should raise it: `contextBudget: { tools: 7000 }`.

@@ -31,8 +31,10 @@
  *
  * 2. `buildSelfExplainSkill` — the skill in two modes:
  *
- *      - INLINE (default): the skill unlocks the 5 trace tools in the
- *        main agent's own loop (same model).
+ *      - INLINE (default): the skill unlocks the trace tools — every name
+ *        in `TRACE_TOOL_NAMES` (11 today) — in the main agent's own loop
+ *        (same model). The count is deliberately not restated anywhere
+ *        that could fall behind the pack.
  *      - DELEGATE: the skill unlocks ONE tool — `explain_run(question)` —
  *        whose execute runs a nested `traceDebugAgent` on the consumer's
  *        chosen (cheaper) provider/model and returns its evidence-cited
@@ -74,8 +76,11 @@ export interface SelfExplainInclude {
   readonly narrative?: boolean;
   /**
    * A bounded tail of the run's typed events → tool-call timings and
-   * outcomes in `inspect_tool_call`. Default true. Off means no wildcard
-   * event subscription is made at all, not a subscription that is ignored.
+   * outcomes in `inspect_tool_call`, and the Context Integrity findings
+   * `find_context_errors` reads. Default true. Off means no wildcard event
+   * subscription is made at all, not a subscription that is ignored — and
+   * `find_context_errors` then reports the evidence channel as ABSENT
+   * rather than reporting a run with no context errors.
    */
   readonly events?: boolean;
 }

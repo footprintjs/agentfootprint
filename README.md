@@ -922,7 +922,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - Tool-catalog lint — `npx agentfootprint-lint-tools` (any framework's tool list) + runtime `toolChoiceRecorder` margins
 - Contextual-bug localizer — `localizeContextBug` (causal slice → influence ranking → counterfactual ablation) + `bisectCulprits`
 - `toBacktrackTrace` — render any decision as the BacktrackView "why?" board
-- Trace toolpack — 10 bounded, LLM-callable tools so a debugger model walks the trace by id, including `inspect_tool_run`: the descent INTO a tool call, when the tool kept its own record (`flowchartAsTool({ keepRecord: true })`)
+- Trace toolpack — 11 bounded, LLM-callable tools so a debugger model walks the trace by id, including `find_context_errors` (what the run contradicted itself about, joined to the step that filed it) and `inspect_tool_run`: the descent INTO a tool call, when the tool kept its own record (`flowchartAsTool({ keepRecord: true })`)
 - `traceDebugAgent` (dedicated debugger session) · `.selfExplain()` (in-conversation why-questions, skill-gated, with a cheap-model `delegate` switch)
 - OTel GenAI span export · hash-chained tamper-evident audit bundles with an offline verifier
 

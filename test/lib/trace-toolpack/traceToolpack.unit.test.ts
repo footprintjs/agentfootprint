@@ -150,10 +150,11 @@ function manyStageArtifacts(count: number): TraceToolpackArtifacts {
 // ─── traceToolpack factory ─────────────────────────────────────────────────
 
 describe('traceToolpack — factory', () => {
-  it('returns the 9 core tools, plus read_narrative only when narrative is provided', () => {
+  it('returns the 10 core tools, plus read_narrative only when narrative is provided', () => {
     const withNarrative = traceToolpack(fixture.artifacts);
     expect(withNarrative.map((t) => t.schema.name)).toEqual([
       'run_overview',
+      'find_context_errors',
       'find_in_trace',
       'trace_node',
       'trace_slice',
@@ -166,12 +167,17 @@ describe('traceToolpack — factory', () => {
     ]);
     const bare = traceToolpack(fixture.artifactsBare);
     expect(bare.map((t) => t.schema.name)).not.toContain('read_narrative');
-    expect(bare).toHaveLength(9);
+    expect(bare).toHaveLength(10);
     // `inspect_tool_run` mounts UNCONDITIONALLY, like `inspect_tool_call`:
     // whether a tool kept a record is a per-run fact, and a tool that
     // disappears when the answer is "none" cannot say which switch turns
     // it on. It answers honestly instead.
     expect(bare.map((t) => t.schema.name)).toContain('inspect_tool_run');
+    // Same rule, and the sharper case: `find_context_errors` over artifacts
+    // with no event tail must be PRESENT to say the evidence channel is
+    // absent. A missing tool would leave "no context errors" as the only
+    // reading available, which is the one sentence this family forbids.
+    expect(bare.map((t) => t.schema.name)).toContain('find_context_errors');
   });
 
   it('TRACE_TOOL_NAMES is the pack, not a second list beside it (anti-drift)', () => {

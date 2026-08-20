@@ -31,6 +31,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stratum and a contract that checks nothing is the decay this family
   exists to prevent.
 
+- **`find_context_errors` — the 11th trace tool: "what did this run
+  contradict itself about, and why?"** The Context Integrity checks file
+  their findings on the event stream; until now a debugging model had no way
+  to ask for them. The new toolpack tool READS that channel — it never
+  re-runs a check and never re-judges one — and adds the join a findings
+  stream cannot carry: each finding lists its kind, seam, subjects, message,
+  the STEP it was filed at (`meta.runtimeStageId`) and its witnesses' steps,
+  in the exact shapes `trace_node` / `trace_slice` / `who_wrote` /
+  `backtrack` / `find_in_trace` accept; when a subject names a key the
+  commit log wrote, the last writer and a bounded value resolve inline. The
+  run's disposition rows ride along, so "the checkers ran and found nothing"
+  and "no checker was registered for that seam" stay different answers, and
+  a registered check with zero encounters is named as wiring rot. Honest
+  absence has its own sentences: no event tail is *no finding evidence*, a
+  tail with no integrity events says the channel is empty and why, and rows
+  reporting findings the tail no longer carries say **evidence missing** —
+  none of them ever reads as "no context errors found". Synthetic canaries
+  and advisories are shown but counted apart, and a run whose rows count
+  more encounters than the deduplicated list shows entries reconciles the
+  two out loud. Bounded like the rest of the pack (`limit`, default 10, hard
+  cap `TOOLPACK_HARD_CAPS.contextErrorsMax` = 25) and mounted
+  UNCONDITIONALLY — a tool that vanished with the event tail could not say
+  the evidence is missing. `TRACE_TOOL_NAMES` (and therefore
+  `.selfExplain()`'s reserved names) is now eleven.
+
 ## [Unreleased]
 
 ## [9.60.0] - 2026-08-20

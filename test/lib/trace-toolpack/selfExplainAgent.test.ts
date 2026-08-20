@@ -115,6 +115,7 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
     // exists. A run that lacks a part answers per-tool, not by vanishing.
     expect(tools.map((t) => t.schema.name)).toEqual([
       'run_overview',
+      'find_context_errors',
       'find_in_trace',
       'trace_node',
       'trace_slice',
@@ -128,7 +129,9 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
     for (const tool of tools) {
       // minimal valid args per tool so validation passes and execute runs
       const args =
-        tool.schema.name === 'run_overview' || tool.schema.name === 'read_narrative'
+        tool.schema.name === 'run_overview' ||
+        tool.schema.name === 'read_narrative' ||
+        tool.schema.name === 'find_context_errors'
           ? {}
           : tool.schema.name === 'who_wrote'
           ? { key: 'x' }
@@ -335,10 +338,10 @@ describe('.selfExplain() — inline mode', () => {
   });
 
   it('EVERY name the pack can mount is reserved — count-asserted, so a new tool cannot be forgotten', () => {
-    // 10 tools; the count is pinned deliberately. Adding one to the pack
+    // 11 tools; the count is pinned deliberately. Adding one to the pack
     // without adding it here fails HERE, which is the reminder that a new
     // toolpack tool also needs a CHANGELOG line and a CLAUDE.md update.
-    expect(TRACE_TOOL_NAMES).toHaveLength(10);
+    expect(TRACE_TOOL_NAMES).toHaveLength(11);
     for (const reserved of TRACE_TOOL_NAMES) {
       const shadow = defineTool<{ x: string }, string>({
         name: reserved,
