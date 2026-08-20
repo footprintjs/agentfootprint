@@ -21,7 +21,26 @@
  * `CacheStrategyContext` passed into `prepareRequest`.
  */
 
-import type { LLMRequest } from '../adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../adapters/types.js';
+import type { Claim } from '../lib/claim/claim.js';
+
+/**
+ * The usage a strategy is actually handed — the PORT shape, exactly as it
+ * rides `agentfootprint.stream.llm_end`.
+ *
+ * Named here rather than inlined because it is the load-bearing half of the
+ * 9.59.0 meter fix: the interface below used to take `unknown`, so three
+ * strategies parsed RAW WIRE names (`cache_read_input_tokens`,
+ * `prompt_tokens_details`) off a value that has never carried them, every
+ * field read `undefined`, and the meter recorded nothing while reporting a
+ * 0% hit rate. Adapters normalise the wire ONCE, at the adapter ring
+ * (`readCacheUsage`); a strategy reads the normalised result.
+ *
+ * The absence of `cacheRead` / `cacheWrite` is INFORMATION, not zero: the
+ * adapter sets them only when the provider reported a number, so
+ * absent = nobody measured, present-and-0 = measured zero.
+ */
+export type CacheUsage = LLMResponse['usage'];
 
 // ─── Layer 1: Consumer DSL ────────────────────────────────────────
 
@@ -177,14 +196,24 @@ export interface CacheStrategy {
     readonly markersApplied: readonly CacheMarker[];
   }>;
   /**
-   * Extract cache hit/miss metrics from the provider's `usage` field.
-   * Each provider names its cache fields differently:
-   * - Anthropic: `cache_creation_input_tokens` + `cache_read_input_tokens`
-   * - OpenAI: `prompt_tokens_details.cached_tokens`
+   * Read cache hit/miss metrics off the PORT usage the framework hands you
+   * ({@link CacheUsage}) — never off a raw provider payload. The adapter has
+   * already normalised the wire (Anthropic's `cache_read_input_tokens`,
+   * OpenAI's `prompt_tokens_details.cached_tokens`, …) onto
+   * `cacheRead` / `cacheWrite`.
    *
-   * Returns `undefined` for providers without cache reporting (Mock, NoOp).
+   * Returns a {@link Claim}, not `CacheMetrics | undefined`, because the
+   * three answers are genuinely different and the meter must never blur
+   * them:
+   * - `known(metrics, …)`   — the provider reported cache token counts.
+   * - `unknown(reason, …)`  — nothing measured this call (no usage payload,
+   *                           or the provider reported no cache fields). The
+   *                           report renders this as *unmeasured*, never 0.
+   * - `notApplicable(…)`    — this provider/adapter cannot report cache
+   *                           usage at all (NoOp; Bedrock until its adapter
+   *                           grows the read half).
    */
-  extractMetrics(usage: unknown): CacheMetrics | undefined;
+  extractMetrics(usage: CacheUsage | undefined): Claim<CacheMetrics>;
 }
 
 /**

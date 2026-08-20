@@ -30,7 +30,9 @@ import type {
   CacheMetrics,
   CacheStrategy,
   CacheStrategyContext,
+  CacheUsage,
 } from '../types.js';
+import { notApplicable, type Claim } from '../../lib/claim/claim.js';
 import type { LLMRequest } from '../../adapters/types.js';
 import { registerCacheStrategy } from '../strategyRegistry.js';
 
@@ -61,20 +63,21 @@ export class OpenAICacheStrategy implements CacheStrategy {
     return { request: req, markersApplied: [] };
   }
 
-  extractMetrics(usage: unknown): CacheMetrics | undefined {
-    if (!usage || typeof usage !== 'object') return undefined;
-    const u = usage as {
-      prompt_tokens?: number;
-      prompt_tokens_details?: { cached_tokens?: number };
-    };
-    const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
-    if (cached === 0) return undefined;
-    const totalPrompt = u.prompt_tokens ?? cached;
-    return {
-      cacheReadTokens: cached,
-      cacheWriteTokens: 0, // OpenAI doesn't charge a write premium
-      freshInputTokens: Math.max(0, totalPrompt - cached),
-    };
+  /**
+   * Always `not-applicable`, for the same adapter reason as Bedrock:
+   * OpenAI's wire DOES carry `prompt_tokens_details.cached_tokens`, but
+   * `OpenAIProvider` builds `usage` as `{ input, output }` at both its
+   * streaming and non-streaming sites and never lifts the cached count
+   * onto the port. OpenAI is the AUTO-caching provider, so this is the
+   * costliest of the three gaps — it is named here rather than hidden
+   * behind a per-call `unknown` that would suggest the measurement was
+   * attempted and merely came back empty.
+   */
+  extractMetrics(_usage: CacheUsage | undefined): Claim<CacheMetrics> {
+    return notApplicable(
+      'the OpenAI adapter does not lift prompt_tokens_details.cached_tokens onto the port ' +
+        'usage, so no cache tokens ever reach this strategy',
+    );
   }
 }
 

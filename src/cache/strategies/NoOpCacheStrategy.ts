@@ -18,7 +18,9 @@ import type {
   CacheMetrics,
   CacheStrategy,
   CacheStrategyContext,
+  CacheUsage,
 } from '../types.js';
+import { notApplicable, type Claim } from '../../lib/claim/claim.js';
 import type { LLMRequest } from '../../adapters/types.js';
 
 const NOOP_CAPABILITIES: CacheCapabilities = Object.freeze({
@@ -49,7 +51,9 @@ export class NoOpCacheStrategy implements CacheStrategy {
     return { request: req, markersApplied: [] };
   }
 
-  extractMetrics(_usage: unknown): CacheMetrics | undefined {
-    return undefined;
+  extractMetrics(_usage: CacheUsage | undefined): Claim<CacheMetrics> {
+    return notApplicable(
+      'the NoOp strategy stands in for providers with no cache reporting at all',
+    );
   }
 }

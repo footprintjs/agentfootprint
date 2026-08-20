@@ -7,6 +7,7 @@
     "recordings",
     "exporters",
     "context-engineering-recorder",
+    "cache-meter",
     "streaming",
     "locales",
     "---[Factory]Production---",

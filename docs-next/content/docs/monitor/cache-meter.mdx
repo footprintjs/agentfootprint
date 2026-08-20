@@ -1,0 +1,83 @@
+---
+title: The cache meter
+description: What prompt caching actually cost and saved on a turn — with "nobody measured" as a first-class answer, so an unmeasured turn can never render as a zero one.
+---
+
+<Aside type="note" title="Signature change in 9.59.0">
+`cacheRecorder().report()` now returns every provider-derived quantity as a `Claim`, not a bare `number`. Read them through `isKnown(...)`. The old bare numbers were not a contract worth keeping: the meter reported `hitRate: 0` for every turn, including turns that hit cache on every call.
+</Aside>
+
+## What was wrong
+
+A 20-call turn that hit cache on all 20 calls reported a hit rate of **zero**.
+
+Two faults, and the second is why the first went unnoticed:
+
+1. The strategies parsed **raw provider field names** — `cache_read_input_tokens`, `prompt_tokens_details.cached_tokens` — off a value that carries the framework's normalised **port** shape. Adapters normalise the wire once, at the adapter ring; a strategy is only ever handed `{ input, output, cacheRead?, cacheWrite? }`. So every field read `undefined`, `?? 0` turned that into a zero, the "no cache info" guard tripped, and nothing was ever recorded.
+2. The report typed its totals as plain `number`, so **"nobody measured" and "measured, and it was zero" rendered identically**.
+
+Fixing only the first would have left a meter that still cannot say *unmeasured*. And the test fixtures were themselves wire-shaped, which is how the bug survived a release with a green suite.
+
+## Reading the report
+
+```ts
+import { cacheRecorder, isKnown, describeClaim } from 'agentfootprint/cache';
+
+const meter = cacheRecorder({ strategy, pricing, model });
+const agent = Agent.create({ provider, model }).watch(meter).build();
+await agent.run('…');
+
+const report = meter.report();
+
+if (isKnown(report.hitRate)) {
+  console.log(`hit rate ${(report.hitRate.value * 100).toFixed(1)}%`);
+} else {
+  console.log(describeClaim(report.hitRate)); // "unknown — …the reason…"
+}
+```
+
+`isKnown` is the only door to a value. There is deliberately no accessor that hands you a bare number without your having branched — that door is exactly how an unknown becomes a zero on a dashboard.
+
+`valueOr(claim, fallback)` exists for when you genuinely want a default, and the fallback is a **required** argument: a silent `undefined` default would put the shrug straight back into the type that exists to remove it.
+
+## The denominator travels with the number
+
+A `CacheReportSummary` carries two counts the recorder made itself, so they are plain numbers:
+
+- `measuredIterations` — calls whose cache traffic the provider actually reported.
+- `unmeasuredIterations` — calls that reported nothing.
+
+Every rate is computed over the measured calls **only**, and says so in its own evidence sentence (`"summed over the 3 of 20 call(s) whose usage was measured"`). A rate from 3 of 20 calls is not the turn's rate, and this is how a reader can tell.
+
+## The row for one call
+
+`report().perIter` holds one `PerIterEntry` per LLM call: the iteration, which branch the cache gate took, the rule that fired if any, and that call's own `metrics`, `dollarsSpent` and `dollarsSavedVsNoCache` — each a `Claim`, so a single unmeasured call is visible as unmeasured rather than folded into the totals as a zero.
+
+## Four answers, not two
+
+`CacheStrategy.extractMetrics` takes the port usage — typed as `CacheUsage`, which is exactly the `usage` shape that rides `agentfootprint.stream.llm_end` — and returns a `Claim<CacheMetrics>`. The three arms mean genuinely different things:
+
+- `known` — the provider reported cache token counts. A **present zero is a real zero**.
+- `unknown` — a measurement was attempted and came back empty: no usage payload, or the provider reported no cache fields on this call.
+- `not-applicable` — nothing here can be measured at all, because this adapter cannot report it.
+
+That last distinction matters more than it looks. Reporting a per-call `unknown` for an adapter that structurally cannot report suggests a flaky provider and sends a reader hunting. `not-applicable` says the true thing, and names the gap.
+
+### A silent non-cache is observable
+
+Below a model's minimum cacheable prefix, a request is processed **without caching and no error is returned**. The adapter still reports the fields, so such a turn reads as `known` with a real hit rate of 0 — distinguishable from a turn nobody measured. Without that distinction the two cases look identical, and the most common cause of "my caching isn't working" would be invisible.
+
+## Which providers can actually feed it
+
+Naming this honestly is the point of the table:
+
+| Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
+|---|---|---|---|
+| `AnthropicCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
+| `OpenAICacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
+| `BedrockCacheStrategy` | **no** | **no** | `not-applicable` |
+| `NoOpCacheStrategy` | no | no | `not-applicable` |
+
+`BedrockCacheStrategy` declares `enabled: false`, and that is a statement about **this adapter**, not about Bedrock. AWS's Converse API does support prompt caching for Claude models and does report `cacheReadInputTokens`; our Bedrock provider implements neither half. Until 9.59.0 the strategy said `enabled: true` and clamped markers onto a request field the provider then discarded — a meter attached to a provider that cannot feed it. It stays registered rather than deleted so a Bedrock consumer asking the registry what it got is told the truth by name, instead of silently falling through to the wildcard.
+
+OpenAI is the costliest of the three gaps, because it is the auto-caching provider: caching is happening on every call and nothing lifts `prompt_tokens_details.cached_tokens` onto the port.

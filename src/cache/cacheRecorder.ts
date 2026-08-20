@@ -1,29 +1,45 @@
 /**
- * cacheRecorder() — observability for the v2.6 cache layer.
+ * cacheRecorder() — the cache layer's meter.
  *
  * Subscribes to:
- *   - `FlowRecorder.onDecision` — captures CacheGate routing decisions
- *     (apply-markers / no-markers + the rule that fired + evidence
- *     from `decide()`). Read directly from `event.evidence.rules[matched]`
- *     since footprintjs already auto-captures predicate `inputs[]`.
- *   - `agentfootprint.stream.llm_end` events — read provider's `usage`
- *     and call the agent's CacheStrategy.extractMetrics() to normalize
- *     into CacheMetrics (cacheReadTokens / cacheWriteTokens / fresh).
+ *   - `FlowRecorder.onDecision` — CacheGate routing decisions
+ *     (apply-markers / no-markers + the rule that fired + evidence from
+ *     `decide()`).
+ *   - `agentfootprint.stream.llm_end` — reads that event's `usage` (the PORT
+ *     shape: `{ input, output, cacheRead?, cacheWrite? }`) and asks the
+ *     agent's `CacheStrategy.extractMetrics` what is known about it.
  *
- * Produces:
- *   - per-iteration `agentfootprint.cache.applied` events (markers
- *     applied this iter or empty if skipped) — for Lens trace
- *   - per-iteration `agentfootprint.cache.metrics` events (hit/write
- *     token counts + estimated dollars via PricingTable) — for
- *     dashboards
- *   - a turn-end summary printable via `recorder.report()` —
- *     numeric tally plus dollars saved
+ * Produces: a per-turn report via `recorder.report()` — token tallies, hit
+ * rate and dollar estimates, each carried as a `Claim` so an UNMEASURED turn
+ * can never render as a zero one.
  *
- * v2.6 LIMITATION: doesn't yet write `scope.recentHitRate` back into
- * agent state. CacheGate's hit-rate-floor rule won't fire automatically;
- * consumers can manually wire feedback via `Agent.create(...).attach(rec)`.
- * Full feedback loop deferred to v2.7 (needs an agent-side accessor
- * convention since recorders don't normally write to scope).
+ * ── Why every number here is a Claim (9.59.0) ─────────────────────────
+ * The shipped 9.58.0 meter reported `hitRate: 0` for a 20-call turn that hit
+ * cache on every call. Two faults, and the second is why the first went
+ * unnoticed for so long: (1) the strategies parsed RAW WIRE field names off a
+ * value that carries the PORT shape, so every field read `undefined`; (2) the
+ * report typed its aggregates as bare `number`, so "nobody measured" and
+ * "measured, and it was zero" rendered identically. Fixing (1) alone would
+ * have left a meter that still cannot say "unmeasured" — hence `Claim<T>`,
+ * plus `measuredIterations` / `unmeasuredIterations` so a rate computed from
+ * 3 of 20 calls states its own denominator.
+ *
+ * Read the number through `isKnown(report.hitRate)` (or `describeClaim` for a
+ * one-line render). There is deliberately no door that hands you a bare
+ * number without your having branched.
+ *
+ * ── What this recorder does NOT do ────────────────────────────────────
+ * It emits no events. (Earlier prose here promised per-iteration
+ * `agentfootprint.cache.applied` / `agentfootprint.cache.metrics` events;
+ * neither name has ever existed in the event registry and no `typedEmit` has
+ * ever been in this file. The prose was the bug.)
+ *
+ * It does not write `scope.recentHitRate` back into agent state either, so
+ * CacheGate's hit-rate-floor rule never fires on its own — the loop is
+ * severed at both ends (the key is seeded `undefined` and written by
+ * nothing). Recorders do not write to chart scope, so closing that loop needs
+ * an agent-side accessor convention; it is separable work from measuring the
+ * number, which is what this file now does.
  */
 
 import type { CombinedRecorder } from 'footprintjs';
@@ -31,36 +47,58 @@ import type { FlowDecisionEvent } from 'footprintjs';
 import { splitStageId } from 'footprintjs/trace';
 import { STAGE_IDS } from '../conventions.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
-import type { CacheMetrics, CacheStrategy } from './types.js';
+import type { CacheMetrics, CacheStrategy, CacheUsage } from './types.js';
 import type { PricingTable } from '../adapters/types.js';
+import { known, unknown, isKnown, type Claim } from '../lib/claim/claim.js';
 
-interface PerIterEntry {
+/** One LLM call's row on the record. */
+export interface PerIterEntry {
   readonly iteration: number;
   readonly branch: 'apply-markers' | 'no-markers';
   readonly rule?: string;
-  readonly metrics?: CacheMetrics;
-  readonly dollarsSpent: number;
-  readonly dollarsSavedVsNoCache: number;
+  /**
+   * What the strategy could say about this call's cache traffic. `known` =
+   * the provider reported counts; `unknown` = nothing was measured;
+   * `not-applicable` = this adapter cannot report cache usage at all.
+   */
+  readonly metrics: Claim<CacheMetrics>;
+  /** Dollar estimates, `unknown` on any call whose metrics were not known. */
+  readonly dollarsSpent: Claim<number>;
+  readonly dollarsSavedVsNoCache: Claim<number>;
 }
 
-interface CacheReportSummary {
+/**
+ * The turn's tally. Every quantity derived from provider usage is a
+ * {@link Claim}: unmeasured is a first-class answer, never a zero.
+ */
+export interface CacheReportSummary {
+  /** LLM calls seen. Always known — the recorder counted them itself. */
   readonly totalIterations: number;
   readonly applyMarkersIterations: number;
   readonly noMarkersIterations: number;
-  readonly cacheReadTokensTotal: number;
-  readonly cacheWriteTokensTotal: number;
-  readonly freshInputTokensTotal: number;
-  readonly hitRate: number;
-  readonly estimatedDollarsSpent: number;
-  readonly estimatedDollarsSavedVsNoCache: number;
+  /**
+   * Calls whose cache traffic the provider actually reported. The DENOMINATOR
+   * every claim below is computed over — a rate from 3 of 20 calls is not the
+   * turn's rate, and this is how a reader can tell.
+   */
+  readonly measuredIterations: number;
+  /** Calls that reported nothing (no usage, no cache fields, or an adapter that cannot). */
+  readonly unmeasuredIterations: number;
+  readonly cacheReadTokensTotal: Claim<number>;
+  readonly cacheWriteTokensTotal: Claim<number>;
+  readonly freshInputTokensTotal: Claim<number>;
+  /** cacheRead / (cacheRead + cacheWrite + fresh), over MEASURED calls only. */
+  readonly hitRate: Claim<number>;
+  readonly estimatedDollarsSpent: Claim<number>;
+  readonly estimatedDollarsSavedVsNoCache: Claim<number>;
   readonly perIter: readonly PerIterEntry[];
 }
 
 export interface CacheRecorderOptions {
   /**
-   * The agent's CacheStrategy. Required for `extractMetrics` —
-   * normalizes provider-specific `usage` shapes into CacheMetrics.
-   * If not provided, recorder logs the raw usage and skips dollar math.
+   * The agent's CacheStrategy — the thing that reads the port usage. Without
+   * one every row's metrics are `unknown` (with that as the stated reason),
+   * which is the honest answer: nothing read the usage.
    */
   readonly strategy?: CacheStrategy;
   /**
@@ -89,6 +127,13 @@ export interface CacheRecorderHandle extends CombinedRecorder {
    * per-turn rather than per-session reporting.
    */
   reset(): void;
+}
+
+/** The metrics of a row already filtered by `isKnown`. Narrowing helper only. */
+function valueOfMetrics(entry: PerIterEntry): CacheMetrics {
+  return isKnown(entry.metrics)
+    ? entry.metrics.value
+    : { cacheReadTokens: 0, cacheWriteTokens: 0, freshInputTokens: 0 };
 }
 
 export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorderHandle {
@@ -126,8 +171,12 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
     onEmit(event: AgentfootprintEvent): void {
       if (event.type !== 'agentfootprint.stream.llm_end') return;
       iterationCounter++;
-      const usage = (event.payload as { usage?: unknown }).usage;
-      const metrics = options.strategy?.extractMetrics(usage);
+      // The PORT shape, which is the only shape this event has ever carried.
+      const usage = (event.payload as { usage?: CacheUsage }).usage;
+      const metrics: Claim<CacheMetrics> =
+        options.strategy === undefined
+          ? unknown('no CacheStrategy was given to cacheRecorder(), so nothing read the usage')
+          : options.strategy.extractMetrics(usage);
       const branch = lastDecision?.branch ?? 'apply-markers';
       // Compute dollar math:
       //   spent = freshInput * inputPrice
@@ -135,24 +184,39 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
       //         + cacheWrite * cacheWritePrice
       //   no-cache cost = (freshInput + cacheRead + cacheWrite) * inputPrice
       //   saved        = no-cache cost - spent
-      let dollarsSpent = 0;
-      let savedVsNoCache = 0;
-      if (metrics) {
-        dollarsSpent =
-          dollars(metrics.freshInputTokens, 'input') +
-          dollars(metrics.cacheReadTokens, 'cacheRead') +
-          dollars(metrics.cacheWriteTokens, 'cacheWrite');
+      let dollarsSpent: Claim<number>;
+      let savedVsNoCache: Claim<number>;
+      if (isKnown(metrics)) {
+        const m = metrics.value;
+        const spent =
+          dollars(m.freshInputTokens, 'input') +
+          dollars(m.cacheReadTokens, 'cacheRead') +
+          dollars(m.cacheWriteTokens, 'cacheWrite');
         const noCacheCost = dollars(
-          metrics.freshInputTokens + metrics.cacheReadTokens + metrics.cacheWriteTokens,
+          m.freshInputTokens + m.cacheReadTokens + m.cacheWriteTokens,
           'input',
         );
-        savedVsNoCache = noCacheCost - dollarsSpent;
+        const ev =
+          options.pricing === undefined
+            ? 'measured tokens, but no PricingTable was given — every price is 0'
+            : 'measured tokens priced with the given PricingTable';
+        dollarsSpent = known(spent, ev);
+        savedVsNoCache = known(noCacheCost - spent, ev);
+      } else {
+        // No tokens measured ⇒ no dollars. Carrying the metrics claim's own
+        // reason forward is what keeps a $0 estimate from reading as "free".
+        const why =
+          metrics.kind === 'unknown'
+            ? metrics.reason
+            : `no cache tokens are measurable here — ${metrics.evidence}`;
+        dollarsSpent = unknown<number>(why);
+        savedVsNoCache = unknown<number>(why);
       }
       const entry: PerIterEntry = {
         iteration: iterationCounter,
         branch,
         ...(lastDecision?.rule !== undefined && { rule: lastDecision.rule }),
-        ...(metrics !== undefined && { metrics }),
+        metrics,
         dollarsSpent,
         dollarsSavedVsNoCache: savedVsNoCache,
       };
@@ -163,23 +227,57 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
     report(): CacheReportSummary {
       const apply = perIter.filter((p) => p.branch === 'apply-markers').length;
       const skip = perIter.filter((p) => p.branch === 'no-markers').length;
-      const cacheRead = perIter.reduce((s, p) => s + (p.metrics?.cacheReadTokens ?? 0), 0);
-      const cacheWrite = perIter.reduce((s, p) => s + (p.metrics?.cacheWriteTokens ?? 0), 0);
-      const fresh = perIter.reduce((s, p) => s + (p.metrics?.freshInputTokens ?? 0), 0);
-      const totalRequest = cacheRead + cacheWrite + fresh;
-      const hitRate = totalRequest > 0 ? cacheRead / totalRequest : 0;
-      const dollarsSpent = perIter.reduce((s, p) => s + p.dollarsSpent, 0);
-      const dollarsSaved = perIter.reduce((s, p) => s + p.dollarsSavedVsNoCache, 0);
+      const measured = perIter.filter((p) => isKnown(p.metrics));
+      const n = measured.length;
+      const total = perIter.length;
+
+      // ONE reason, stated once, reused by every claim below — so a reader
+      // who prints any single field learns why the whole report is empty.
+      const why =
+        total === 0
+          ? 'no LLM call was observed, so there is nothing to measure'
+          : `none of the ${total} observed call(s) reported cache usage — ` +
+            (perIter[0]?.metrics.kind === 'not-applicable'
+              ? `this provider cannot report it (${perIter[0].metrics.evidence})`
+              : 'the provider reported no cache fields');
+      const evidence = `summed over the ${n} of ${total} call(s) whose usage was measured`;
+      const claimOf = (value: number): Claim<number> =>
+        n === 0 ? unknown<number>(why) : known(value, evidence);
+
+      const cacheRead = measured.reduce((s2, p) => s2 + valueOfMetrics(p).cacheReadTokens, 0);
+      const cacheWrite = measured.reduce((s2, p) => s2 + valueOfMetrics(p).cacheWriteTokens, 0);
+      const fresh = measured.reduce((s2, p) => s2 + valueOfMetrics(p).freshInputTokens, 0);
+      const requestTotal = cacheRead + cacheWrite + fresh;
+      const dollarsSpent = measured.reduce(
+        (s2, p) => s2 + (isKnown(p.dollarsSpent) ? p.dollarsSpent.value : 0),
+        0,
+      );
+      const dollarsSaved = measured.reduce(
+        (s2, p) => s2 + (isKnown(p.dollarsSavedVsNoCache) ? p.dollarsSavedVsNoCache.value : 0),
+        0,
+      );
+
       return Object.freeze({
-        totalIterations: perIter.length,
+        totalIterations: total,
         applyMarkersIterations: apply,
         noMarkersIterations: skip,
-        cacheReadTokensTotal: cacheRead,
-        cacheWriteTokensTotal: cacheWrite,
-        freshInputTokensTotal: fresh,
-        hitRate,
-        estimatedDollarsSpent: dollarsSpent,
-        estimatedDollarsSavedVsNoCache: dollarsSaved,
+        measuredIterations: n,
+        unmeasuredIterations: total - n,
+        cacheReadTokensTotal: claimOf(cacheRead),
+        cacheWriteTokensTotal: claimOf(cacheWrite),
+        freshInputTokensTotal: claimOf(fresh),
+        // A measured turn with zero prompt tokens is not a thing; guard it
+        // anyway rather than divide by zero and hand back NaN as a rate.
+        hitRate:
+          n === 0
+            ? unknown<number>(why)
+            : requestTotal === 0
+              ? unknown<number>(
+                  `the ${n} measured call(s) reported 0 prompt tokens in total, so a hit rate has no denominator`,
+                )
+              : known(cacheRead / requestTotal, evidence),
+        estimatedDollarsSpent: claimOf(dollarsSpent),
+        estimatedDollarsSavedVsNoCache: claimOf(dollarsSaved),
         perIter: Object.freeze([...perIter]),
       });
     },

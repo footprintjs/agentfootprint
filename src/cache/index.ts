@@ -9,12 +9,16 @@
  * Strategies registered as of v2.6:
  *   - NoOp (wildcard '*' fallback) — always available, registered by
  *     the registry module itself
- *   - AnthropicCacheStrategy ('anthropic', 'browser-anthropic')
+ *   - AnthropicCacheStrategy ('anthropic', 'browser-anthropic') — the one
+ *     end-to-end strategy: the adapter sends markers AND reads cache usage
+ *   - OpenAICacheStrategy ('openai', 'browser-openai') — pass-through
+ *     (OpenAI auto-caches); reports `not-applicable` metrics until the
+ *     adapter lifts `prompt_tokens_details.cached_tokens` onto the port
+ *   - BedrockCacheStrategy ('bedrock') — `enabled: false`; the Bedrock
+ *     adapter implements neither half of the cache contract
  *
- * Future strategies (Phase 8+):
- *   - OpenAICacheStrategy
- *   - BedrockCacheStrategy
- *   - GeminiCacheStrategy (v2.7+, async handle-based)
+ * Future strategies:
+ *   - GeminiCacheStrategy (async handle-based)
  *
  * Public types (re-exported for consumers):
  *   - CachePolicy, CacheMarker, CacheStrategy, CacheCapabilities,
@@ -35,7 +39,21 @@ export type {
   CacheStrategyContext,
   CacheCapabilities,
   CacheMetrics,
+  CacheUsage,
 } from './types.js';
+
+// The honesty primitive the meter is typed in (9.59.0). Re-exported
+// reference-equal from `src/lib/claim/` — the SAME symbols
+// `agentfootprint/maps` exports, so `known` from either door is one function.
+export {
+  known,
+  unknown,
+  notApplicable,
+  isKnown,
+  valueOr,
+  describeClaim,
+  type Claim,
+} from '../lib/claim/claim.js';
 
 // Strategy registry
 export {
@@ -52,4 +70,9 @@ export { BedrockCacheStrategy } from './strategies/BedrockCacheStrategy.js';
 
 // Recorder
 export { cacheRecorder } from './cacheRecorder.js';
-export type { CacheRecorderOptions, CacheRecorderHandle } from './cacheRecorder.js';
+export type {
+  CacheRecorderOptions,
+  CacheRecorderHandle,
+  CacheReportSummary,
+  PerIterEntry,
+} from './cacheRecorder.js';

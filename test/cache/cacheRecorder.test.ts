@@ -1,7 +1,19 @@
 /**
  * cacheRecorder() — 7-pattern test matrix.
  *
- * Phase 9 of v2.6 cache layer.
+ * ── THE FIXTURES ARE PORT-SHAPED, AND THAT IS THE POINT (9.59.0) ────────
+ * `llmEndEvent` below feeds `{ input, output, cacheRead?, cacheWrite? }` —
+ * the shape `agentfootprint.stream.llm_end` has ALWAYS carried. Until 9.59.0
+ * every fixture in this file fed RAW WIRE names (`cache_read_input_tokens`),
+ * which no strategy is ever handed. So the suite stayed green while the
+ * SHIPPED meter read `undefined` from every field, recorded nothing, and
+ * reported a 0% hit rate for turns that hit cache on every call. Wire-shaped
+ * fixtures are how that bug survived a release.
+ *
+ * The second half of the fix is the TYPE: every derived quantity is a
+ * `Claim`, so "nobody measured" and "measured, and it was zero" can no longer
+ * render identically. Assertions below go through `isKnown`, which is the only
+ * door to a value — an unmeasured report has no `.value` to read.
  *
  * 7-pattern coverage:
  *   - unit:        report shape; reset behavior (3)
@@ -20,6 +32,7 @@ import type { PricingTable, TokenKind } from '../../src/adapters/types';
 import type { FlowDecisionEvent } from 'footprintjs';
 import type { AgentfootprintEvent } from '../../src/events/registry';
 import { expectScalesLinearly } from '../helpers/perf.js';
+import { isKnown, describeClaim } from '../../src/lib/claim/claim.js';
 
 // Sonnet 4.5 simplified pricing — $3/M input, $0.30/M cache read, $3.75/M cache write
 const sonnetPricing: PricingTable = {
@@ -67,27 +80,45 @@ function decisionEvent(branch: 'apply-markers' | 'no-markers', rule?: string): F
   } as unknown as FlowDecisionEvent;
 }
 
-function llmEndEvent(usage: unknown): AgentfootprintEvent {
+/**
+ * One `llm_end` carrying PORT-shaped usage.
+ *
+ * `cacheRead` / `cacheWrite` are omitted unless given, exactly as an adapter
+ * omits them when the provider reported no number — their absence is the
+ * signal "nobody measured", and collapsing it to 0 is the original bug.
+ */
+function llmEndEvent(usage: {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+} | null): AgentfootprintEvent {
   return {
     type: 'agentfootprint.stream.llm_end',
-    payload: { usage },
+    payload: { usage: usage === null ? undefined : { output: 0, ...usage } },
   } as unknown as AgentfootprintEvent;
 }
 
 // ─── 1. Unit ──────────────────────────────────────────────────────
 
 describe('cacheRecorder — unit', () => {
-  it('initial report has zero iterations', () => {
+  it('an EMPTY report is unmeasured, not zero — and says why', () => {
     const rec = cacheRecorder();
     const r = rec.report();
+    // The counts the recorder made itself are plain numbers: it counted them.
     expect(r.totalIterations).toBe(0);
-    expect(r.cacheReadTokensTotal).toBe(0);
-    expect(r.hitRate).toBe(0);
+    expect(r.measuredIterations).toBe(0);
+    // Everything DERIVED from provider usage is a Claim. `hitRate: 0` here
+    // would be a lie a dashboard renders as "caching is not working".
+    expect(isKnown(r.hitRate)).toBe(false);
+    expect(isKnown(r.cacheReadTokensTotal)).toBe(false);
+    expect(r.hitRate.kind === 'unknown' && r.hitRate.reason).toMatch(/nothing to measure/);
+    expect(describeClaim(r.hitRate)).toMatch(/^unknown — /);
   });
 
   it('reset clears accumulated state', () => {
     const rec = cacheRecorder();
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     rec.reset();
     expect(rec.report().totalIterations).toBe(0);
   });
@@ -101,7 +132,7 @@ describe('cacheRecorder — unit', () => {
       traversalContext: { stageId: 'sf-route', runtimeStageId: 'sf-route#0' },
       chosen: 'final',
     } as unknown as FlowDecisionEvent);
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     const r = rec.report();
     expect(r.perIter[0].rule).toBeUndefined(); // no rule captured
   });
@@ -116,12 +147,19 @@ describe('cacheRecorder — boundary', () => {
     expect(rec.report().totalIterations).toBe(0);
   });
 
-  it('no strategy → metrics undefined; report still works', () => {
+  it('no strategy → the row states that NOTHING READ the usage', () => {
     const rec = cacheRecorder();
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     const r = rec.report();
     expect(r.totalIterations).toBe(1);
-    expect(r.perIter[0].metrics).toBeUndefined();
+    expect(r.measuredIterations).toBe(0);
+    expect(r.unmeasuredIterations).toBe(1);
+    const m = r.perIter[0]!.metrics;
+    expect(m.kind).toBe('unknown');
+    expect(m.kind === 'unknown' && m.reason).toMatch(/no CacheStrategy/);
+    // R5: unknown PROPAGATES through every derived metric.
+    expect(isKnown(r.perIter[0]!.dollarsSpent)).toBe(false);
+    expect(isKnown(r.hitRate)).toBe(false);
   });
 });
 
@@ -138,57 +176,50 @@ describe('cacheRecorder — scenario', () => {
     // Iter 1: cache write
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 240,
-        cache_creation_input_tokens: 3000,
-        cache_read_input_tokens: 0,
-      }),
+      llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }),
     );
 
     // Iter 2: cache hit
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 80,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 3000,
-      }),
+      llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
     );
 
     // Iter 3: cache hit
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 80,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 3000,
-      }),
+      llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
     );
 
     const r = rec.report();
     expect(r.totalIterations).toBe(3);
-    expect(r.cacheReadTokensTotal).toBe(6000);
-    expect(r.cacheWriteTokensTotal).toBe(3000);
+    expect(r.measuredIterations).toBe(3);
+    expect(r.unmeasuredIterations).toBe(0);
+    expect(isKnown(r.cacheReadTokensTotal) && r.cacheReadTokensTotal.value).toBe(6000);
+    expect(isKnown(r.cacheWriteTokensTotal) && r.cacheWriteTokensTotal.value).toBe(3000);
     // Hit rate: cacheRead / total = 6000 / (6000 + 3000 + 400) ≈ 0.638
-    expect(r.hitRate).toBeGreaterThan(0.6);
-    expect(r.hitRate).toBeLessThan(0.7);
+    expect(isKnown(r.hitRate)).toBe(true);
+    expect(isKnown(r.hitRate) && r.hitRate.value).toBeGreaterThan(0.6);
+    expect(isKnown(r.hitRate) && r.hitRate.value).toBeLessThan(0.7);
+    // NO PERCENTAGE WITHOUT ITS DENOMINATOR: the evidence sentence carries it.
+    expect(isKnown(r.hitRate) && r.hitRate.evidence).toMatch(/3 of 3/);
   });
 
   it("'no-markers' branch records the rule that fired", () => {
     const rec = cacheRecorder();
     rec.onDecision(decisionEvent('no-markers', 'kill switch active'));
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     expect(rec.report().perIter[0].rule).toContain('kill switch');
   });
 
   it('mixed apply / skip iterations counted separately', () => {
     const rec = cacheRecorder();
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     rec.onDecision(decisionEvent('no-markers', 'churn'));
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     rec.onDecision(decisionEvent('apply-markers'));
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     const r = rec.report();
     expect(r.applyMarkersIterations).toBe(2);
     expect(r.noMarkersIterations).toBe(1);
@@ -207,15 +238,16 @@ describe('cacheRecorder — property', () => {
       rec.onDecision(decisionEvent('apply-markers'));
       rec.onEmit(
         llmEndEvent({
-          input_tokens: 100 * (i + 1),
-          cache_creation_input_tokens: i === 0 ? 5000 : 0,
-          cache_read_input_tokens: i > 0 ? 5000 : 0,
+          input: 100 * (i + 1),
+          cacheWrite: i === 0 ? 5000 : 0,
+          cacheRead: i > 0 ? 5000 : 0,
         }),
       );
     }
     const r = rec.report();
-    expect(r.hitRate).toBeGreaterThanOrEqual(0);
-    expect(r.hitRate).toBeLessThanOrEqual(1);
+    expect(isKnown(r.hitRate)).toBe(true);
+    expect(isKnown(r.hitRate) && r.hitRate.value).toBeGreaterThanOrEqual(0);
+    expect(isKnown(r.hitRate) && r.hitRate.value).toBeLessThanOrEqual(1);
   });
 
   it('cache spend ≤ no-cache cost (caching is never net-cost-positive when strategy works)', () => {
@@ -227,35 +259,32 @@ describe('cacheRecorder — property', () => {
     // Simulate 5 cache-hit iterations after one initial write
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 240,
-        cache_creation_input_tokens: 3000,
-        cache_read_input_tokens: 0,
-      }),
+      llmEndEvent({ input: 240, cacheWrite: 3000, cacheRead: 0 }),
     );
     for (let i = 0; i < 5; i++) {
       rec.onDecision(decisionEvent('apply-markers'));
       rec.onEmit(
-        llmEndEvent({
-          input_tokens: 80,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 3000,
-        }),
+        llmEndEvent({ input: 80, cacheWrite: 0, cacheRead: 3000 }),
       );
     }
     const r = rec.report();
-    expect(r.estimatedDollarsSavedVsNoCache).toBeGreaterThan(0);
+    expect(isKnown(r.estimatedDollarsSavedVsNoCache)).toBe(true);
+    expect(
+      isKnown(r.estimatedDollarsSavedVsNoCache) && r.estimatedDollarsSavedVsNoCache.value,
+    ).toBeGreaterThan(0);
   });
 });
 
 // ─── 5. Security ──────────────────────────────────────────────────
 
 describe('cacheRecorder — security: defensive parsing', () => {
-  it('llm_end with null usage → no crash, metrics undefined', () => {
+  it('llm_end with no usage → no crash, and the row says why it is unknown', () => {
     const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
     rec.onEmit(llmEndEvent(null));
     const r = rec.report();
-    expect(r.perIter[0].metrics).toBeUndefined();
+    const m = r.perIter[0]!.metrics;
+    expect(m.kind).toBe('unknown');
+    expect(m.kind === 'unknown' && m.reason).toMatch(/no usage payload/);
   });
 
   it('decision with no evidence → branch captured but rule undefined', () => {
@@ -265,7 +294,7 @@ describe('cacheRecorder — security: defensive parsing', () => {
       chosen: 'apply-markers',
       // no evidence field
     } as unknown as FlowDecisionEvent);
-    rec.onEmit(llmEndEvent({ input_tokens: 100 }));
+    rec.onEmit(llmEndEvent({ input: 100 }));
     expect(rec.report().perIter[0].rule).toBeUndefined();
     expect(rec.report().perIter[0].branch).toBe('apply-markers');
   });
@@ -286,10 +315,7 @@ describe('cacheRecorder — performance', () => {
       for (let i = 0; i < iterations; i++) {
         rec.onDecision(decisionEvent('apply-markers'));
         rec.onEmit(
-          llmEndEvent({
-            input_tokens: 100,
-            cache_read_input_tokens: 1000,
-          }),
+          llmEndEvent({ input: 100, cacheRead: 1000 }),
         );
       }
       rec.report();
@@ -314,18 +340,16 @@ describe('cacheRecorder — ROI: dollar math', () => {
     });
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 0,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 1_000_000, // 1M tokens cached
-      }),
+      llmEndEvent({ input: 0, cacheWrite: 0, cacheRead: 1_000_000 }), // 1M tokens cached
     );
     const r = rec.report();
     // No-cache would cost $3.00 (1M * $3/M).
     // Cache read: 1M * $0.30/M = $0.30.
     // Saved: $3.00 - $0.30 = $2.70.
-    expect(r.estimatedDollarsSpent).toBeCloseTo(0.3, 2);
-    expect(r.estimatedDollarsSavedVsNoCache).toBeCloseTo(2.7, 2);
+    expect(isKnown(r.estimatedDollarsSpent) && r.estimatedDollarsSpent.value).toBeCloseTo(0.3, 2);
+    expect(
+      isKnown(r.estimatedDollarsSavedVsNoCache) && r.estimatedDollarsSavedVsNoCache.value,
+    ).toBeCloseTo(2.7, 2);
   });
 
   it('cache write costs 25% MORE; recorded as positive spend', () => {
@@ -336,15 +360,13 @@ describe('cacheRecorder — ROI: dollar math', () => {
     });
     rec.onDecision(decisionEvent('apply-markers'));
     rec.onEmit(
-      llmEndEvent({
-        input_tokens: 0,
-        cache_creation_input_tokens: 1_000_000, // 1M tokens written
-        cache_read_input_tokens: 0,
-      }),
+      llmEndEvent({ input: 0, cacheWrite: 1_000_000, cacheRead: 0 }), // 1M tokens written
     );
     const r = rec.report();
     // Write: 1M * $3.75/M = $3.75. No-cache equivalent: 1M * $3/M = $3.00.
-    expect(r.estimatedDollarsSpent).toBeCloseTo(3.75, 2);
-    expect(r.estimatedDollarsSavedVsNoCache).toBeCloseTo(-0.75, 2); // negative — write penalty
+    expect(isKnown(r.estimatedDollarsSpent) && r.estimatedDollarsSpent.value).toBeCloseTo(3.75, 2);
+    expect(
+      isKnown(r.estimatedDollarsSavedVsNoCache) && r.estimatedDollarsSavedVsNoCache.value,
+    ).toBeCloseTo(-0.75, 2); // negative — write penalty
   });
 });

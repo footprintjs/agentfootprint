@@ -74,11 +74,26 @@ describe('BedrockCacheStrategy — unit', () => {
     expect(getDefaultCacheStrategy('bedrock').providerName).toBe('bedrock');
   });
 
-  it('capabilities: 4 markers, both TTLs, all 3 fields (matching Bedrock-Claude)', () => {
+  it('capabilities say FALSE — a statement about the ADAPTER, not about Bedrock', () => {
+    // AWS's Converse API does support prompt caching for Claude models and does
+    // report cacheReadInputTokens. `BedrockProvider` implements NEITHER half:
+    // it never reads req.cacheMarkers and it builds usage as { input, output }
+    // at both its streaming and non-streaming sites. Claiming `enabled: true`
+    // here is what let a dead meter look alive — a strategy clamping markers
+    // onto a field the adapter then discarded, and reporting markersApplied for
+    // markers that never reached a wire.
     const s = new BedrockCacheStrategy();
-    expect(s.capabilities.maxMarkers).toBe(4);
-    expect(s.capabilities.ttls).toEqual(['short', 'long']);
-    expect(s.capabilities.fields).toEqual(['system', 'tools', 'messages']);
+    expect(s.capabilities.enabled).toBe(false);
+    expect(s.capabilities.maxMarkers).toBe(0);
+    expect(s.capabilities.ttls).toEqual([]);
+    expect(s.capabilities.fields).toEqual([]);
+  });
+
+  it('stays REGISTERED, so a Bedrock consumer is told the truth by name', () => {
+    // Deleting it would fall through to the wildcard NoOp and leave the
+    // consumer to guess. Never leave a meter attached to a provider that
+    // cannot feed it — and never hide that it cannot.
+    expect(getDefaultCacheStrategy('bedrock').providerName).toBe('bedrock');
   });
 });
 
@@ -114,12 +129,15 @@ describe('Phase 8 strategies — scenario', () => {
     expect(result.markersApplied).toEqual([]);
   });
 
-  it('Bedrock-Claude: markers attached (delegates to Anthropic-shape)', async () => {
+  it('Bedrock-Claude: markers are NOT attached — the adapter would discard them', async () => {
     const s = new BedrockCacheStrategy();
     const markers = [m('system', 0)];
     const result = await s.prepareRequest(claudeOnBedrock, markers, ctx());
-    expect(result.request.cacheMarkers).toEqual(markers);
-    expect(result.markersApplied).toEqual(markers);
+    // Writing req.cacheMarkers would be writing to a field BedrockProvider
+    // never reads; returning a non-empty markersApplied would put markers that
+    // never reached a wire onto the recorder's record.
+    expect(result.request.cacheMarkers).toBeUndefined();
+    expect(result.markersApplied).toEqual([]);
   });
 
   it('Bedrock-Llama: markers SILENTLY dropped (no cache support)', async () => {
@@ -133,39 +151,47 @@ describe('Phase 8 strategies — scenario', () => {
 // ─── 4. Property ──────────────────────────────────────────────────
 
 describe('Phase 8 strategies — property', () => {
-  it('Bedrock-Claude clamps to 4 markers (Anthropic-style limit)', async () => {
+  it('EVERY Bedrock model passes through — no model-detection theatre', async () => {
+    // The old strategy branched on `anthropic.claude*` and clamped to 4. Both
+    // halves were fiction: the adapter reads neither the markers nor the cache
+    // usage, so the model id changes nothing about what reaches a wire.
     const s = new BedrockCacheStrategy();
-    const markers = Array.from({ length: 8 }, (_, i) => m('system', i));
-    const result = await s.prepareRequest(claudeOnBedrock, markers, ctx());
-    expect(result.markersApplied).toHaveLength(4);
-  });
-
-  it('Bedrock model-detection: uppercase, lowercase, mixed all match anthropic.claude prefix', async () => {
-    const s = new BedrockCacheStrategy();
-    const variants = [
+    const models = [
       'anthropic.claude-3-5-sonnet-20240620-v1:0',
-      'ANTHROPIC.CLAUDE-OPUS-V2', // case-insensitive regex
-      'anthropic.claude-haiku-3-5',
+      'ANTHROPIC.CLAUDE-OPUS-V2',
+      'meta.llama3-70b-instruct-v1:0',
     ];
-    for (const model of variants) {
-      const result = await s.prepareRequest({ ...claudeOnBedrock, model }, [m('system', 0)], ctx());
-      expect(result.markersApplied).toHaveLength(1);
+    for (const model of models) {
+      const markers = Array.from({ length: 8 }, (_, i) => m('system', i));
+      const result = await s.prepareRequest({ ...claudeOnBedrock, model }, markers, ctx());
+      expect(result.markersApplied).toEqual([]);
+      expect(result.request.cacheMarkers).toBeUndefined();
     }
   });
 });
 
 // ─── 5. Security ──────────────────────────────────────────────────
 
-describe('Phase 8 strategies — security: extractMetrics defensive', () => {
-  it('OpenAI: undefined for null/non-object usage', () => {
+describe('Phase 8 strategies — security: extractMetrics is honest about WHY', () => {
+  // NOT-APPLICABLE vs UNKNOWN is the distinction these two arms exist for.
+  // `unknown` says "a measurement was attempted and came back empty";
+  // `not-applicable` says "nothing here can be measured at all". Reporting a
+  // per-call `unknown` for an adapter that structurally cannot report would
+  // suggest the former, and a reader would go looking for a flaky provider.
+  it('OpenAI: NOT-APPLICABLE, naming the adapter gap', () => {
     const s = new OpenAICacheStrategy();
-    expect(s.extractMetrics(null)).toBeUndefined();
-    expect(s.extractMetrics(42)).toBeUndefined();
+    const c = s.extractMetrics({ input: 100, output: 50 });
+    expect(c.kind).toBe('not-applicable');
+    expect(c.kind === 'not-applicable' && c.evidence).toMatch(/prompt_tokens_details/);
   });
 
-  it('Bedrock: undefined when no cache fields (response had no caching)', () => {
+  it('Bedrock: NOT-APPLICABLE, naming the adapter gap', () => {
     const s = new BedrockCacheStrategy();
-    expect(s.extractMetrics({ input_tokens: 100, output_tokens: 50 })).toBeUndefined();
+    const c = s.extractMetrics({ input: 100, output: 50, cacheRead: 9 });
+    // Even handed a cacheRead it answers not-applicable: BedrockProvider never
+    // puts one there, so a number in that position did not come from Bedrock.
+    expect(c.kind).toBe('not-applicable');
+    expect(c.kind === 'not-applicable' && c.evidence).toMatch(/Converse/);
   });
 });
 
@@ -198,18 +224,14 @@ describe('Phase 8 strategies — performance', () => {
 
 // ─── 7. ROI ───────────────────────────────────────────────────────
 
-describe('Phase 8 strategies — ROI', () => {
-  it('OpenAI extracts cached_tokens from prompt_tokens_details', () => {
+describe('Phase 8 strategies — ROI: the costliest gap is NAMED, not hidden', () => {
+  it('OpenAI says what is missing and where, in one sentence', () => {
+    // OpenAI is the AUTO-caching provider, so this is the most expensive of
+    // the three adapter gaps: caching is happening on every call and nothing
+    // measures it. Named here rather than buried behind a per-call `unknown`.
     const s = new OpenAICacheStrategy();
-    const usage = {
-      prompt_tokens: 5240,
-      prompt_tokens_details: { cached_tokens: 5000 },
-      completion_tokens: 80,
-    };
-    const m = s.extractMetrics(usage);
-    expect(m).toBeDefined();
-    expect(m?.cacheReadTokens).toBe(5000);
-    expect(m?.freshInputTokens).toBe(240);
-    expect(m?.cacheWriteTokens).toBe(0); // OpenAI no write premium
+    const c = s.extractMetrics({ input: 5240, output: 80 });
+    expect(c.kind).toBe('not-applicable');
+    expect(c.kind === 'not-applicable' && c.evidence).toMatch(/adapter does not lift/);
   });
 });

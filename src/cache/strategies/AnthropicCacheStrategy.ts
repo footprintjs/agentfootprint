@@ -15,7 +15,9 @@
  *
  * What this strategy DOES vs DOESN'T do:
  *   - DOES: clamp markers, attach to LLMRequest.cacheMarkers,
- *     extract metrics from response.usage
+ *     read cache metrics off the PORT usage the framework hands it
+ *     (`{ input, output, cacheRead?, cacheWrite? }`) — never off the raw
+ *     Anthropic wire, which the adapter has already normalised
  *   - DOES NOT: rewrite the wire body. The provider
  *     (BrowserAnthropicProvider) reads `cacheMarkers` and applies
  *     `cache_control` blocks during body construction. Separation of
@@ -32,7 +34,10 @@ import type {
   CacheMetrics,
   CacheStrategy,
   CacheStrategyContext,
+  CacheUsage,
 } from '../types.js';
+import type { Claim } from '../../lib/claim/claim.js';
+import { readPortCacheUsage } from '../portUsage.js';
 import type { LLMRequest } from '../../adapters/types.js';
 import { registerCacheStrategy } from '../strategyRegistry.js';
 
@@ -86,25 +91,8 @@ export class AnthropicCacheStrategy implements CacheStrategy {
     return { request, markersApplied };
   }
 
-  extractMetrics(usage: unknown): CacheMetrics | undefined {
-    if (!usage || typeof usage !== 'object') return undefined;
-    const u = usage as {
-      input_tokens?: number;
-      cache_creation_input_tokens?: number;
-      cache_read_input_tokens?: number;
-    };
-    const cacheRead = u.cache_read_input_tokens ?? 0;
-    const cacheWrite = u.cache_creation_input_tokens ?? 0;
-    const fresh = u.input_tokens ?? 0;
-    // If neither cache field present, response didn't involve caching.
-    // Returning undefined signals "no cache info" so cacheRecorder
-    // doesn't compute a misleading 0% hit rate.
-    if (cacheRead === 0 && cacheWrite === 0) return undefined;
-    return {
-      cacheReadTokens: cacheRead,
-      cacheWriteTokens: cacheWrite,
-      freshInputTokens: fresh,
-    };
+  extractMetrics(usage: CacheUsage | undefined): Claim<CacheMetrics> {
+    return readPortCacheUsage(usage, 'the Anthropic adapter');
   }
 }
 

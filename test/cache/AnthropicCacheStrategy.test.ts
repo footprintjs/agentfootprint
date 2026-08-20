@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { isKnown } from '../../src/lib/claim/claim.js';
 import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCacheStrategy';
 import { getDefaultCacheStrategy } from '../../src/cache/strategyRegistry';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
@@ -147,17 +148,26 @@ describe('AnthropicCacheStrategy — property', () => {
 describe('AnthropicCacheStrategy — security: extractMetrics defensive', () => {
   const s = new AnthropicCacheStrategy();
 
-  it('returns undefined for null usage', () => {
-    expect(s.extractMetrics(null)).toBeUndefined();
+  it('an absent usage payload is UNKNOWN, with its reason — never a zero', () => {
+    const c = s.extractMetrics(undefined);
+    expect(c.kind).toBe('unknown');
+    expect(c.kind === 'unknown' && c.reason).toMatch(/no usage payload/);
   });
 
-  it('returns undefined for non-object usage', () => {
-    expect(s.extractMetrics('not an object')).toBeUndefined();
-    expect(s.extractMetrics(42)).toBeUndefined();
+  it('a usage payload with NO cache fields is "nobody measured", not "no cache traffic"', () => {
+    // The distinction the whole meter rests on. An adapter sets cacheRead /
+    // cacheWrite ONLY when the provider reported a number, so their ABSENCE is
+    // information. Reading it as 0 is what produced a 0% hit rate for a turn
+    // that hit cache on every call.
+    const c = s.extractMetrics({ input: 100, output: 50 });
+    expect(c.kind).toBe('unknown');
+    expect(c.kind === 'unknown' && c.reason).toMatch(/nobody measured/);
   });
 
-  it('returns undefined when no cache fields present (response had no caching)', () => {
-    expect(s.extractMetrics({ input_tokens: 100, output_tokens: 50 })).toBeUndefined();
+  it('a PRESENT zero is a real measurement and stays known', () => {
+    const c = s.extractMetrics({ input: 100, output: 50, cacheRead: 0, cacheWrite: 0 });
+    expect(c.kind).toBe('known');
+    expect(isKnown(c) && c.value.cacheReadTokens).toBe(0);
   });
 });
 
@@ -190,29 +200,38 @@ describe('AnthropicCacheStrategy — performance', () => {
 describe('AnthropicCacheStrategy — ROI: metrics extraction', () => {
   const s = new AnthropicCacheStrategy();
 
-  it('extracts cache_creation_input_tokens (write) + cache_read_input_tokens (read)', () => {
-    const usage = {
-      input_tokens: 240,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 3000,
-      output_tokens: 50,
-    };
-    const m = s.extractMetrics(usage);
-    expect(m).toBeDefined();
-    expect(m?.cacheReadTokens).toBe(3000);
-    expect(m?.cacheWriteTokens).toBe(0);
-    expect(m?.freshInputTokens).toBe(240);
+  // ── THE FIXTURES ARE PORT-SHAPED, AND THAT IS THE POINT ─────────────
+  // Every fixture below feeds `{ input, output, cacheRead?, cacheWrite? }` —
+  // what `agentfootprint.stream.llm_end` has ALWAYS carried. The pre-9.59.0
+  // versions of these tests fed RAW WIRE names (`cache_read_input_tokens`,
+  // `prompt_tokens_details`) which no strategy is ever handed, so the suite
+  // stayed green while the shipped meter read `undefined` from every field and
+  // recorded nothing. Wire-shaped fixtures are how this bug survived a release;
+  // rebuilding them to port shape is what stops it coming back.
+
+  it('reads a cache HIT off the port usage', () => {
+    const c = s.extractMetrics({ input: 240, output: 50, cacheRead: 3000, cacheWrite: 0 });
+    expect(isKnown(c)).toBe(true);
+    expect(isKnown(c) && c.value.cacheReadTokens).toBe(3000);
+    expect(isKnown(c) && c.value.cacheWriteTokens).toBe(0);
+    expect(isKnown(c) && c.value.freshInputTokens).toBe(240);
   });
 
-  it('extracts cache_creation (first iter — cache write)', () => {
-    const usage = {
-      input_tokens: 240,
-      cache_creation_input_tokens: 3200,
-      cache_read_input_tokens: 0,
-      output_tokens: 50,
-    };
-    const m = s.extractMetrics(usage);
-    expect(m?.cacheWriteTokens).toBe(3200);
-    expect(m?.cacheReadTokens).toBe(0);
+  it('reads a cache WRITE (the first call of a turn) off the port usage', () => {
+    const c = s.extractMetrics({ input: 240, output: 50, cacheRead: 0, cacheWrite: 3200 });
+    expect(isKnown(c) && c.value.cacheWriteTokens).toBe(3200);
+    expect(isKnown(c) && c.value.cacheReadTokens).toBe(0);
+  });
+
+  it('a SILENT NON-CACHE is observable — measured zeros, not an absence', () => {
+    // Below the model's minimum cacheable prefix the request is processed
+    // WITHOUT caching and NO ERROR is returned. The adapter still reports the
+    // fields, so this reads as a real measurement of zero cache traffic —
+    // distinguishable from "the provider said nothing", which is the only way
+    // a silent non-cache can be told apart from an unsupported adapter.
+    const c = s.extractMetrics({ input: 400, output: 20, cacheRead: 0, cacheWrite: 0 });
+    expect(isKnown(c)).toBe(true);
+    expect(isKnown(c) && c.value.freshInputTokens).toBe(400);
+    expect(s.extractMetrics({ input: 400, output: 20 }).kind).toBe('unknown');
   });
 });

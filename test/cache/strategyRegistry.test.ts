@@ -152,10 +152,16 @@ describe('strategyRegistry — ROI', () => {
     expect(strategy.providerName).toBe('*'); // wildcard match
   });
 
-  it('extractMetrics on NoOp returns undefined (no false metrics for cacheRecorder)', () => {
+  it('extractMetrics on NoOp is NOT-APPLICABLE — never a false zero', () => {
+    // The NoOp stands in for providers with no cache reporting at all, so the
+    // honest answer is "this question does not apply here", with its reason.
+    // `undefined` used to mean the same thing by convention, and a convention
+    // is exactly what the recorder folded into a 0 default.
     const noop = new NoOpCacheStrategy();
-    expect(noop.extractMetrics({ input_tokens: 100 })).toBeUndefined();
-    expect(noop.extractMetrics({})).toBeUndefined();
-    expect(noop.extractMetrics(null)).toBeUndefined();
+    for (const usage of [{ input: 100, output: 0 }, undefined]) {
+      const c = noop.extractMetrics(usage);
+      expect(c.kind).toBe('not-applicable');
+      expect(c.kind === 'not-applicable' && c.evidence).toMatch(/no cache reporting/);
+    }
   });
 });
