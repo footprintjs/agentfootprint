@@ -56,7 +56,7 @@ export function claimRowsOf(
       iteration: source.iteration,
       ...(measuredAt !== undefined && { measuredAt }),
       ...over,
-    }) as ClaimLedgerRow;
+    } as ClaimLedgerRow);
 
   for (const fact of semantics.facts ?? []) {
     for (const [field, value] of Object.entries(fact)) {

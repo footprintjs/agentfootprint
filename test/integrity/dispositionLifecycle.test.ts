@@ -34,13 +34,16 @@ const ALL: IntegrityChecksPresent = { wire: true, composeInvariant: true, dangli
 
 describe('unit: beginIntegrityRun', () => {
   it('registers exactly the present checks — absence is not a row', () => {
-    const ledger = beginIntegrityRun({ wire: true, composeInvariant: false, dangling: false }, 'observe');
+    const ledger = beginIntegrityRun(
+      { wire: true, composeInvariant: false, dangling: false },
+      'observe',
+    );
     const rows = ledger.report();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ check: 'invariant-violation', seam: 'wire' });
   });
 
-  it("dev posture mints AND catches one canary per check — the pure checks prove themselves", () => {
+  it('dev posture mints AND catches one canary per check — the pure checks prove themselves', () => {
     const ledger = beginIntegrityRun(ALL, 'dev');
     for (const row of ledger.report()) {
       expect(row.synthetic).toBe(1);
@@ -109,7 +112,12 @@ describe('functional: the run files its disposition rows', () => {
       inputSchema: { type: 'object', properties: {} },
       execute: () => 'zones',
     });
-    const zoneAudit = defineSkill({ id: 'zone-audit', description: 'a', body: 'Z', tools: [zoneTool] });
+    const zoneAudit = defineSkill({
+      id: 'zone-audit',
+      description: 'a',
+      body: 'Z',
+      tools: [zoneTool],
+    });
     const billing = defineSkill({ id: 'billing', description: 'b', body: 'B' });
     const graph = skillGraph()
       .entry(zoneAudit, { match: { keywords: ['zone'] } })
@@ -157,7 +165,7 @@ describe('functional: the run files its disposition rows', () => {
     expect(compose!.lastFiredAt).toBeDefined();
   });
 
-  it("dev posture: a healthy run completes, canaries caught, synthetic counts quarantined", async () => {
+  it('dev posture: a healthy run completes, canaries caught, synthetic counts quarantined', async () => {
     const events: Array<Record<string, unknown>> = [];
     const agent = Agent.create({
       provider: mock({ replies: [done] }),

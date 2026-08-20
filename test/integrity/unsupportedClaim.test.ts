@@ -38,7 +38,12 @@ const declared = (answerField: string, entity: string, field: string) => ({
   entity,
   field,
 });
-const row = (entity: string, field: string, value: unknown, over: Record<string, unknown> = {}) => ({
+const row = (
+  entity: string,
+  field: string,
+  value: unknown,
+  over: Record<string, unknown> = {},
+) => ({
   entity,
   field,
   value,
@@ -79,14 +84,23 @@ describe('unit: the contradiction, and every fence', () => {
   });
 
   it('only the LATEST settled value asserts — earlier rows are quoted history', () => {
-    const ledger = [row('screen2', 'nav', 1, { iteration: 1 }), row('screen2', 'nav', 2, { iteration: 3 })];
+    const ledger = [
+      row('screen2', 'nav', 1, { iteration: 1 }),
+      row('screen2', 'nav', 2, { iteration: 3 }),
+    ];
     // Claiming the OLD value contradicts; the old row rides as a quoted witness.
-    const out = unsupportedClaimsOf([declared('nav_count', 'screen2', 'nav')], ledger, { nav_count: 1 }, 7);
+    const out = unsupportedClaimsOf(
+      [declared('nav_count', 'screen2', 'nav')],
+      ledger,
+      { nav_count: 1 },
+      7,
+    );
     expect(out.findings).toHaveLength(1);
     expect(out.findings[0]!.witnesses.some((w) => w.stratum === 'quoted')).toBe(true);
     // Claiming the LATEST passes.
     expect(
-      unsupportedClaimsOf([declared('nav_count', 'screen2', 'nav')], ledger, { nav_count: 2 }, 7).findings,
+      unsupportedClaimsOf([declared('nav_count', 'screen2', 'nav')], ledger, { nav_count: 2 }, 7)
+        .findings,
     ).toEqual([]);
   });
 
@@ -204,7 +218,7 @@ function claimAgent(finalAnswer: Record<string, unknown>) {
     findings.push(e.payload as unknown as Record<string, unknown>);
   });
   agent.on('agentfootprint.integrity.disposition', (e) => {
-    rows.push(...((e.payload as { rows: Array<Record<string, unknown>> }).rows));
+    rows.push(...(e.payload as { rows: Array<Record<string, unknown>> }).rows);
   });
   return { agent, findings, rows };
 }
@@ -238,7 +252,10 @@ describe('functional: the claim seam through the real loop', () => {
 
 describe('contract: the doors refuse what nobody could have meant', () => {
   const base = () =>
-    Agent.create({ provider: mock({ replies: [{ content: 'x', toolCalls: [], stopReason: 'stop' }] }), model: 'mock' }).system('s');
+    Agent.create({
+      provider: mock({ replies: [{ content: 'x', toolCalls: [], stopReason: 'stop' }] }),
+      model: 'mock',
+    }).system('s');
 
   it('an empty contract is refused — omitting the call is how "no claims" is said', () => {
     expect(() => base().claims({})).toThrow(/claims/);

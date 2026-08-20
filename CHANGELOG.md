@@ -56,8 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the evidence is missing. `TRACE_TOOL_NAMES` (and therefore
   `.selfExplain()`'s reserved names) is now eleven.
 
-## [Unreleased]
-
 ## [9.60.0] - 2026-08-20
 
 ### Added

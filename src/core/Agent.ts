@@ -88,10 +88,7 @@ import {
 import { buildEventMeta } from '../bridge/eventMeta.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
-import {
-  beginIntegrityRun,
-  type IntegrityPosture,
-} from '../integrity/disposition/lifecycle.js';
+import { beginIntegrityRun, type IntegrityPosture } from '../integrity/disposition/lifecycle.js';
 import type { DispositionLedger } from '../integrity/disposition/ledger.js';
 import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';

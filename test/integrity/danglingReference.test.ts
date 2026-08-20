@@ -99,9 +99,9 @@ describe('unit: the argumentsFrom declaration is refused when malformed', () => 
   };
 
   it('a blank name in the list joins the wrong subjects — refused, naming the tool', () => {
-    expect(() =>
-      defineTool({ ...base, name: 'screen_fire', argumentsFrom: [''] }),
-    ).toThrow(/argumentsFrom/);
+    expect(() => defineTool({ ...base, name: 'screen_fire', argumentsFrom: [''] })).toThrow(
+      /argumentsFrom/,
+    );
   });
 
   it('a tool grounded by itself is a declaration nobody could have meant', () => {
@@ -155,7 +155,12 @@ function scriptedProvider(rounds: number): LLMProvider {
     complete: async (): Promise<LLMResponse> => {
       call++;
       if (call > rounds) {
-        return { content: 'done', toolCalls: [], usage: { input: 10, output: 5 }, stopReason: 'end_turn' };
+        return {
+          content: 'done',
+          toolCalls: [],
+          usage: { input: 10, output: 5 },
+          stopReason: 'end_turn',
+        };
       }
       return {
         content: '',
