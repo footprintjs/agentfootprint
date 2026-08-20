@@ -165,6 +165,17 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * Omitted → exactly today's bytes (`source: 'registry'`).
    */
   readonly owner?: ToolOwner;
+  /**
+   * WHERE THIS TOOL'S ARGUMENTS COME FROM (9.60.0) — the names of tools
+   * whose RESULTS ground what a caller passes here (`screen_fire` fires at
+   * ids that `whats_here` listed). Declared by the author, never inferred:
+   * only the author knows the dependency. The dangling-reference check
+   * reads it at composition — when a declared ground's results have left
+   * the window (`WindowRecord.droppedObservations`) and were not
+   * re-established, offering this tool files a finding. Omitted → this
+   * tool is never that check's subject, byte-identical.
+   */
+  readonly argumentsFrom?: readonly string[];
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -500,6 +511,8 @@ export interface DefineToolOptions<TArgs, TResult> {
   readonly resultClass?: ToolResultClass;
   /** The stamped identity edge — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
+  /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
+  readonly argumentsFrom?: readonly string[];
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -628,6 +641,31 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
       );
     }
   }
+  // The grounds edge is judged at the same door and for the same reason: the
+  // dangling-reference check joins on these names, and a blank one — or a
+  // tool grounded by itself — would join the wrong subjects or none.
+  if (options.argumentsFrom !== undefined) {
+    if (options.argumentsFrom.length === 0) {
+      throw new Error(
+        `defineTool('${options.name}'): \`argumentsFrom\` must name at least one tool — ` +
+          `omitting the field is how "no grounds" is said.`,
+      );
+    }
+    for (const ground of options.argumentsFrom) {
+      if (typeof ground !== 'string' || ground.length === 0) {
+        throw new Error(
+          `defineTool('${options.name}'): \`argumentsFrom\` entries must be non-empty tool ` +
+            `names. Got ${JSON.stringify(ground)}.`,
+        );
+      }
+      if (ground === options.name) {
+        throw new Error(
+          `defineTool('${options.name}'): \`argumentsFrom\` names the tool itself — a tool ` +
+            `cannot be its own argument ground.`,
+        );
+      }
+    }
+  }
   return {
     schema: {
       name: options.name,
@@ -646,6 +684,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
     ...(options.owner !== undefined && { owner: options.owner }),
+    ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
     execute: options.execute,
   };
 }

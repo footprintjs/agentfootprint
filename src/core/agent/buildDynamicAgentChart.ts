@@ -253,6 +253,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         ...(parent.instructionLeases !== undefined && {
           instructionLeases: parent.instructionLeases,
         }),
+        // The window ledger (9.60.0) — readonly input for callLLM's
+        // dangling-reference check (which grounds left the window). Value-
+        // conditional: an agent with no window strategy crosses no new key.
+        ...(parent.compactions !== undefined && { compactions: parent.compactions }),
         // The mount kernel's engagement state (9.58.0) — the sf-llm-call
         // boundary's readonly input, for the Evaluate advance (the
         // stepPointer discipline verbatim).

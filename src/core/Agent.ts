@@ -3279,6 +3279,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .filter((r) => r.tool.owner !== undefined)
         .map((r) => [r.name, r.tool.owner!] as const),
     );
+    // The declared argument-ground edges (9.60.0) — same one-build harvest as
+    // the owner stamps; read by callLLM's dangling-reference check.
+    const toolGrounding = new Map(
+      registry
+        .filter((r) => r.tool.argumentsFrom !== undefined)
+        .map((r) => [r.name, r.tool.argumentsFrom!] as const),
+    );
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(toolOwners.size > 0 && { toolOwners }),
@@ -3309,6 +3316,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       get toolSchemas() {
         return toolSchemasResolved;
       },
+      // The declared argument-ground edges (9.60.0) — value-conditional, so
+      // an agent whose tools declare none runs the exact bytes it always did.
+      ...(toolGrounding.size > 0 && { toolGrounding }),
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
       ...(this.outputSchemaParser !== undefined && {
         outputSchemaParser: this.outputSchemaParser,

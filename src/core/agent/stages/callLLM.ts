@@ -32,7 +32,8 @@ import type {
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
-import { contextErrorIdentity } from '../../../integrity/finding/types.js';
+import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
+import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
@@ -57,6 +58,34 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
+
+/**
+ * File integrity findings on the shared seen-list rail (9.60.0): identity
+ * dedup across passes — freshest copy first, since the tools slot may have
+ * extended the list earlier THIS pass — so one defect emits ONE
+ * `integrity.context_error` per run, however many calls re-detect it.
+ * Every seam in this stage files through here; a second copy of this loop
+ * would eventually disagree with the first about what "already filed" means.
+ */
+function fileIntegrityFindings(
+  scope: TypedScope<AgentState>,
+  findings: readonly ContextError[],
+  iteration: number,
+): void {
+  if (findings.length === 0) return;
+  const seenIds =
+    (scope.$getValue('integrityFindingIds') as readonly string[] | undefined) ??
+    (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
+    [];
+  const newIds: string[] = [...seenIds];
+  for (const f of findings) {
+    const id = contextErrorIdentity({ ...f, epoch: undefined });
+    if (newIds.includes(id)) continue;
+    newIds.push(id);
+    typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
+  }
+  if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+}
 
 function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
   if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
@@ -90,6 +119,12 @@ export interface CallLLMStageDeps {
    *  pattern — toolSchemas is computed AFTER stage factories are
    *  built). The getter resolves the eventual value at run time. */
   readonly toolSchemas: readonly LLMToolSchema[];
+  /**
+   * The declared argument-ground edges (`Tool.argumentsFrom`), by tool name
+   * (9.60.0). Present only when at least one registered tool declared one;
+   * absent → the dangling-reference check never runs, byte-identical.
+   */
+  readonly toolGrounding?: ReadonlyMap<string, readonly string[]>;
   /** Optional rules-based reliability config (v2.11.5+). When set,
    *  the call is wrapped in a retry/fallback/fail-fast loop driven
    *  by `config.preCheck` and `config.postDecide` rules. Streaming
@@ -322,6 +357,38 @@ export function buildCallLLMStage(
     });
     const llmRequest = cachePrepared.request;
 
+    // THE CLOSURE CHECK (9.60.0, dangling-reference). At assembly, BEFORE the
+    // call — the composition defect exists whether or not the call lands. A
+    // served tool whose declared argument ground (`Tool.argumentsFrom`) has
+    // left the window (the union of every visit's droppedObservations) and
+    // has no fresh result in the frame is being offered without its evidence.
+    // Both fences live in the check: never-dropped is silent (not-yet-grounded
+    // is legitimate sequencing) and a re-fetched ground is silent.
+    if (deps.toolGrounding !== undefined && deps.toolGrounding.size > 0) {
+      const grounding = deps.toolGrounding;
+      const servedGrounded = (llmRequest.tools ?? [])
+        .filter((t) => grounding.has(t.name))
+        .map((t) => ({ name: t.name, argumentsFrom: grounding.get(t.name)! }));
+      if (servedGrounded.length > 0) {
+        const windowVisits =
+          (scope.compactions as readonly { droppedObservations?: readonly string[] }[] | undefined) ??
+          [];
+        const droppedResults = new Set(windowVisits.flatMap((v) => v.droppedObservations ?? []));
+        if (droppedResults.size > 0) {
+          const presentResults = new Set(
+            llmRequest.messages
+              .filter((m) => m.role === 'tool' && m.toolName !== undefined)
+              .map((m) => m.toolName!),
+          );
+          fileIntegrityFindings(
+            scope,
+            danglingReferencesOf(servedGrounded, droppedResults, presentResults, iteration),
+            iteration,
+          );
+        }
+      }
+    }
+
     // Streaming-first: when the provider implements `stream()` we
     // consume chunk-by-chunk so consumers see tokens as they arrive
     // instead of waiting for the full LLM call to finish. Each
@@ -520,11 +587,12 @@ export function buildCallLLMStage(
     // call is incomparable and nothing is guessed. Same seen-list rail as
     // the compose backstop, freshest copy first, so one defect files once
     // per run however many calls re-detect it.
-    {
-      // The composed side is llmRequest — the exact object HANDED TO the
-      // adapter, after the cache strategy's transform — so a strategy edit
-      // is never blamed on the adapter.
-      const wireFindings = wireViolationsOf(
+    // The composed side is llmRequest — the exact object HANDED TO the
+    // adapter, after the cache strategy's transform — so a strategy edit
+    // is never blamed on the adapter.
+    fileIntegrityFindings(
+      scope,
+      wireViolationsOf(
         {
           names: (llmRequest.tools ?? []).map((t) => t.name),
           provenance: 'callLLM (assembled request)',
@@ -533,22 +601,9 @@ export function buildCallLLMStage(
           ? undefined
           : { names: response.wireManifest.toolNames, provenance: provider.name },
         iteration,
-      );
-      if (wireFindings.length > 0) {
-        const seenIds =
-          (scope.$getValue('integrityFindingIds') as readonly string[] | undefined) ??
-          (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
-          [];
-        const newIds: string[] = [...seenIds];
-        for (const f of wireFindings) {
-          const id = contextErrorIdentity({ ...f, epoch: undefined });
-          if (newIds.includes(id)) continue;
-          newIds.push(id);
-          typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
-        }
-        if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
-      }
-    }
+      ),
+      iteration,
+    );
 
     // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
     // agent's, and the bill follows the call, not the configuration.

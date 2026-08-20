@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Tool.argumentsFrom` + the dangling-reference check** (the closure
+  check's decidable fragment). A tool author can now declare where a tool's
+  arguments come from — `defineTool({ name: 'screen_fire', argumentsFrom:
+  ['whats_here'] })` — and `callLLM` checks at request assembly that every
+  served tool's declared grounds still have results in the window: a ground
+  the window ledger says was evicted (`droppedObservations`) with nothing
+  re-established files a `dangling-reference` finding at seam `'compose'`,
+  once per run. Two fences keep it honest: a never-dropped ground is silent
+  (not-yet-grounded is legitimate sequencing), and a re-fetched ground is
+  silent however many drops preceded it. The last-tool-result pin remains
+  the first line of defense; this covers what the pin cannot — pins off, or
+  grounds older than its ceiling. No declaration → byte-identical.
+
 - **The wire seam: the manifest of what actually crossed** (T7b — the check
   the compose seam cannot do). Anthropic and browser-anthropic adapters now
   state `LLMResponse.wireManifest`, tool names read back from the FINAL
