@@ -65,6 +65,7 @@ const PURE_CORE = [
   `${IE}/promptTemplate.ts`,
   `${IE}/routingPolicy.ts`,
   `${IE}/skillContract.ts`,
+  `${IE}/skillEntryEvidence.ts`,
   `${IE}/skillExamples.ts`,
   `${IE}/skillGraph.ts`,
   `${IE}/skillGraphCheckup.ts`,

@@ -49,6 +49,19 @@ layer that asks whether a contribution is still earning its place.
   which is the declaration telemetry this ships.
 - Runnable example: `examples/context-engineering/21-park-the-wrong-map.ts`
   reproduces the trap and runs it with the kernel off and on.
+- **Two entry-evidence rows in `graph.checkup()`** — the build-time half of
+  the same repair, replacing the intuitive per-node exit lint (which flags
+  0 of 20 on the real failing graph, and 19 of 20 with its reachability
+  half dropped — both wrong). `one-way-entries` (warning, once per graph):
+  three or more rule-driven entries and more than half declare no outgoing
+  edge — the stated precondition of a permanent mis-entry, with the cures
+  named. `no-negative-evidence` (warning, once per graph): three or more
+  rule-driven entries with zero `examples` and zero `neverRoutes` — the
+  proving machinery ships and nothing uses it; the consumer that hit the
+  recorded failure declared neither, anywhere. Warnings, not refusals, by
+  the zero-delta law; and the recorded trap phrase declared as a
+  `neverRoutes` row against its own graph is a build ERROR with a witness
+  (pinned by test) — the incident as build-time arithmetic.
 
 Zero-delta when unmounted: no scope key, no events, and the evaluator's
 loop is byte-identical — the same guarantee `leaseActiveIds` (9.19.0)

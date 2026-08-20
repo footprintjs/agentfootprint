@@ -77,6 +77,7 @@ import { checkArtifactVocabularies } from './skillVocabulary.js';
 import { checkStartRuleExamples, validateStartRuleExamples } from './skillExamples.js';
 import { checkNeverRoutes, neverRouteKey, validateNeverRoutes } from './skillNeverRoutes.js';
 import { checkPartition } from './skillPartition.js';
+import { checkEntryEvidence } from './skillEntryEvidence.js';
 import {
   compileMatch,
   mermaidMatchCaption,
@@ -1499,6 +1500,19 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           entryCount: entries.length,
           isTree: treeRoot !== undefined,
         });
+        // The entry-evidence rows (9.58.0) — the two ONE-ROW facts about
+        // guessed entries (skillEntryEvidence.ts has the whole argument,
+        // including why the intuitive per-node exit lint is dead).
+        const entryEvidence = checkEntryEvidence({
+          entries: entries.map((e) => ({
+            id: e.id,
+            conditional: e.when !== undefined || e.match?.kind === 'intent',
+            hasExamples: (e.examples?.length ?? 0) > 0,
+          })),
+          routeFromIds: new Set(routes.map((r) => r.fromId)),
+          neverRoutesCount: neverRoutePhrases.length,
+          isTree: treeRoot !== undefined,
+        });
         const problems = [
           ...wiring.problems,
           ...intentDuplicates,
@@ -1507,6 +1521,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           ...examples.problems,
           ...negatives.problems,
           ...partition,
+          ...entryEvidence,
         ];
         // Notes are statements about the report's own REACH, and each check
         // brings its own — a graph that declared both examples and negative

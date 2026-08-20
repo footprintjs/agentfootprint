@@ -128,6 +128,16 @@ export type GraphProblemCode =
   //   skill is likely a wrapper around one SYSTEM rather than a capability.
   | 'few-declared-edges' // many skills, almost no declared routes — the handoffs live in
   //   prose, where nothing draws, checks, routes or offers them.
+  // Entry evidence (9.58.0, skillEntryEvidence.ts) — the two graph-level rows
+  // about GUESSED entries, one row each, warnings by the zero-delta law:
+  | 'one-way-entries' // WARNING — ≥3 rule-driven entries and more than half declare no
+  //   outgoing edge: the stated PRECONDITION of a permanent mis-entry (a guess drops the
+  //   cursor where no declared edge can ever move it off), not a verdict. Names the cures,
+  //   including the runtime one (.maps()).
+  | 'no-negative-evidence' // WARNING — ≥3 rule-driven entries, zero `examples`, zero
+  //   `neverRoutes`: nothing proves any rule routes what its author meant or refuses what
+  //   they did not, though the proving machinery ships. The recorded keyword-trap consumer
+  //   declared neither, anywhere.
   | 'skill-wraps-one-tool' // one tool and a body too thin to carry knowledge the tool
   //   schema does not already have — an endpoint with a name.
   // The artifact vocabularies (SG-F, 9.25.0) — WARNING, and never more:
