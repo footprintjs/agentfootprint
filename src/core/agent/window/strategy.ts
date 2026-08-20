@@ -25,9 +25,12 @@
  *
  *   1. **The refusal rules.** `planRemoval` arrives already bound to this
  *      iteration's turns and guards. A strategy cannot forget that an
- *      unanswered tool call must not leave the window, because it never gets
- *      the chance to decide that for itself — it asks, and it is told, with
- *      every refusal named. That is safety by construction, not by docs.
+ *      unanswered tool call must not leave the window — or that the CURRENT
+ *      REQUEST never does (9.55.0) — because it never gets the chance to
+ *      decide that for itself: it asks, and it is told, with every refusal
+ *      named. That is safety by construction, not by docs. It is also why a
+ *      rule added there arrives in every strategy at once, including the ones
+ *      consumers wrote before the rule existed.
  *   2. **Provenance.** `removalFacts` turns "these indices left" into the
  *      stage ids that wrote them and how long each lived. A strategy cannot
  *      file a removal it cannot name.
@@ -99,9 +102,9 @@ export interface WindowStrategyInput {
    * THE shared refusal engine, bound to this iteration.
    *
    * Answers: which contiguous span of turns may leave, and every turn that
-   * refused, named. Never removes the system envelope, the last
-   * `keepRecentTurns` turns, an unanswered tool call, the paused tool, or a
-   * pending check-in.
+   * refused, named. Never removes the system envelope, the CURRENT REQUEST,
+   * the last `keepRecentTurns` turns, an unanswered tool call, the paused
+   * tool, or a pending check-in.
    *
    * @param keepRecentTurns   how many trailing turns are off-limits
    * @param isExistingSummary optional predicate marking a turn that is a

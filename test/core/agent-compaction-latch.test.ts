@@ -178,7 +178,11 @@ describe('summarizeOldest — the refusal latch (8.14.0)', () => {
     const records = recordsOf(agent);
     const withinRun = records.filter((r) => r.summarizerSkipped === true);
     expect(withinRun).toHaveLength(0);
-    expect(sum.calls.length).toBe(records.length);
+    // One call per record that reached the summarizer at all. A boundary
+    // whose only foldable turn is the CURRENT REQUEST files its record and
+    // makes no call (9.55.0) — a decision not to spend is still recorded.
+    const asked = records.filter((r) => r.summarizerTokens !== undefined);
+    expect(sum.calls.length).toBe(asked.length);
   });
 
   it('the FIRST refusal still bills — that call really happened', async () => {

@@ -321,7 +321,8 @@ describe('slidingWindow — scenario', () => {
       const ran = new Set((agent.getLastSnapshot()?.commitLog ?? []).map((b) => b.runtimeStageId));
       for (const id of rec.removedStageIds) expect(ran.has(id)).toBe(true);
       const sw = rec as SlidingWindowRecord;
-      expect(sw.turnsAfter).toBeLessThanOrEqual(sw.keepRecentTurns + 1); // +1 = the notice
+      // +2 = the request the drop may not take (9.55.0), and the notice.
+      expect(sw.turnsAfter).toBeLessThanOrEqual(sw.keepRecentTurns + 2);
     }
     // The last request the model actually saw is bounded, not cumulative.
     const last = main.requests[main.requests.length - 1]!;

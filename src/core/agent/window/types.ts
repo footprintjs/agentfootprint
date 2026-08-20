@@ -44,6 +44,18 @@ export type WindowRefusalReason =
   /** The turn holds a `role: 'system'` message. The envelope never leaves. */
   | 'system-envelope'
   /**
+   * The turn holds the CURRENT REQUEST — the message this run is executing
+   * (9.55.0). It is the task's anchor: everything else in the window is
+   * evidence gathered in service of it, and a window that keeps the evidence
+   * and drops the request leaves a model working from momentum.
+   *
+   * It is also the oldest message in a fresh window, which is exactly what
+   * every strategy here removes first — so without this reason it went first,
+   * every time. Other history drops ahead of it; if nothing else can go,
+   * nothing goes, and this reason says why.
+   */
+  | 'current-request'
+  /**
    * An assistant `tool_use` in this turn has no matching `tool_result` in the
    * window. Removing an unanswered question destroys the answer's referent —
    * and the referent may still arrive (a paused run resumes).

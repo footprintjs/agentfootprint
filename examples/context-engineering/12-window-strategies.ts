@@ -24,9 +24,11 @@
  *      byte for byte. Each strategy files a record naming the
  *      `runtimeStageId`s whose messages left — the family's one-line
  *      differentiator: *every strategy here records what it removed, by id.*
- *   3. **One honest absence.** A drop puts an authored notice at the head of
- *      the window (the window must open on a user turn) and nothing else. No
- *      model wrote a word of it.
+ *   3. **One honest absence.** A drop puts an authored notice at the front of
+ *      what may leave and nothing else. No model wrote a word of it.
+ *   4. **One thing that never leaves.** The message you asked for is the
+ *      task's anchor: no strategy may drop it, so the model still knows what
+ *      it is doing at iteration 40. Everything else drops first.
  */
 
 import {
@@ -193,11 +195,18 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const window = stateOf(trimmed).history ?? [];
   console.log('\n── the live window after trimming ─────────────────');
   console.log(window.map((m) => `${m.role}: ${m.content.slice(0, 72)}…`).join('\n'));
+  const notice = window.find((m) => m.content.startsWith(DROP_NOTICE_PREFIX));
   console.log(
     `\nopens on a user turn (the provider contract): ${window[0]?.role === 'user'}\n` +
-      `and that turn is the library's own notice:    ` +
-      `${window[0]?.content.startsWith(DROP_NOTICE_PREFIX) === true}`,
+      `and that turn is what you actually asked for: ${window[0]?.content === input}\n` +
+      `the library's own notice sits just after it:  ` +
+      `${window[1]?.content.startsWith(DROP_NOTICE_PREFIX) === true}\n` +
+      `and the notice says the request was kept:     ` +
+      `${notice?.content.includes('Your current request is kept') === true}`,
   );
+  // The notice is the ONE place a model can read why its history got shorter,
+  // so it also says what did NOT go — verbatim, and written by this library.
+  console.log(`\n${notice?.content ?? '(nothing was dropped this run)'}`);
   // #endregion notice
 
   // ── The record the drop did not touch ──────────────────────────

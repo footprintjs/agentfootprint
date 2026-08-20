@@ -11,12 +11,14 @@
  * A drop makes no LLM call and writes no summary. What it must still do is
  * keep the request valid and keep the record honest:
  *
- *   • the span comes from the shared refusal engine, so an unanswered tool
- *     call, the paused tool, a pending check-in and the recent turns never
- *     leave, and each refusal is named;
- *   • when the span reaches the window's HEAD, an authored notice takes that
- *     position — the window must open on a user turn (see notice.ts), and a
- *     message we are forced to author should tell the truth;
+ *   • the span comes from the shared refusal engine, so the CURRENT REQUEST,
+ *     an unanswered tool call, the paused tool, a pending check-in and the
+ *     recent turns never leave, and each refusal is named;
+ *   • when the span reaches the front of what may leave, an authored notice
+ *     takes that position — the window must open on a user turn (see
+ *     notice.ts), and a message we are forced to author should tell the
+ *     truth. That position is the window's HEAD in the ordinary case, and the
+ *     slot just after the kept request when the request was the head;
  *   • when it does not, nothing is inserted: the original opening turn is
  *     still there, so there is no wire problem to solve.
  */
@@ -92,15 +94,28 @@ export function dropOldestSpan(
   let insertedAtMs: number | undefined;
   const droppedAtMs = input.now();
 
-  if (spanStart === 0) {
-    // The head is leaving: something must open the window, and it must be a
-    // user turn. Author the notice — and refuse the whole drop if that notice
+  // The drop stopped one turn short of the head because the CURRENT REQUEST
+  // was sitting there and refused (9.55.0). The wire is fine — the request is
+  // a user turn, so the window still opens on one — but the notice is still
+  // owed: this removal reaches the front of everything that MAY leave, and a
+  // model that reads the request must also be told what went missing under
+  // it. Read off the refusal the engine already filed rather than re-derived,
+  // so the notice can only move for the reason that actually moved the span.
+  const keptRequestAtHead =
+    plan.from === 1 &&
+    plan.refusals.some((r) => r.reason === 'current-request' && r.turnIndex === 0);
+
+  if (spanStart === 0 || keptRequestAtHead) {
+    // The front of the droppable window is leaving: something must occupy
+    // that position, and when it is the window's own head it must be a user
+    // turn. Author the notice — and refuse the whole drop if that notice
     // would not be smaller than what it replaces, because dropping two tiny
     // turns to insert a longer notice is pure loss.
     const notice = buildDropNotice({
       droppedMessageCount: span.length,
       iteration,
       strategy: strategyName,
+      ...(keptRequestAtHead && { currentRequestKept: true }),
     });
     if (notice.content.length >= windowChars(span)) {
       // `'replacement-not-smaller'` since 8.14.0. A drop writes no summary —
@@ -111,7 +126,10 @@ export function dropOldestSpan(
         ...plan.refusals,
       ]);
     }
-    window = [notice, ...tail];
+    // `head` is empty on the ordinary path, so this is byte-for-byte the
+    // `[notice, ...tail]` this function has always produced; when the request
+    // was kept it is `[request, notice, ...tail]`.
+    window = [...head, notice, ...tail];
     insertedAtMs = droppedAtMs;
   } else {
     window = [...head, ...tail];

@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.55.0] - 2026-08-19
+
+**The window can no longer forget what you asked for.**
+
+Caught in a real recorded run, and quiet enough that it finished the task
+anyway. A ten-iteration tool loop under a small window dropped the window's
+head at iteration 4 — and the head was the user's own request. The context the
+model worked from after that held the tool traffic, this line:
+
+```text
+[dropped history — 3 earlier message(s) were dropped from this window at iteration 4 …]
+```
+
+…and no statement of the objective anywhere. It finished by momentum. A longer
+walk forgets what it was doing halfway through, and nothing in the record says
+that is what happened.
+
+It was not a bug in one strategy. On a fresh window the request is the OLDEST
+message, and every window strategy here removes the oldest thing first — so it
+went first, every time, under all of them.
+
+### Fixed
+
+- **The current request is un-droppable, under every window strategy.**
+  `slidingWindow`, `tokenBudget`, `summarizeOldest` (`.compaction()`) — and a
+  strategy you write yourself, which inherits the rule without knowing it
+  exists. The fix is one refusal in the shared refusal engine, which is the
+  only place every strategy has to pass through, rather than three fixes in
+  three files that could drift apart.
+
+  Other history drops ahead of it. If the budget cannot hold even the request
+  plus the recent turns, nothing is removed at all: the window stays big, the
+  record says why, and the run proceeds. That is the right way round — a
+  request the model can no longer see is not a smaller context, it is a
+  different task.
+
+- **The refusal is named, like every other one:** `'current-request'`, a new
+  member of `WindowRefusalReason`, filed on the `WindowRecord` with the turn
+  and message index. A window that stayed big because of this rule says so.
+
+- **The drop notice says what it kept.** When a drop stops short of the head
+  because the request is sitting there, the authored notice takes the position
+  just after it and gains one sentence, in the library's own words:
+
+  ```text
+  Your current request is kept — it is still in this window, above this line,
+  and no window strategy may drop it.
+  ```
+
+  A model reading "3 earlier messages were dropped" and then finding a request
+  above it should be told which of the two facts to trust. The sentence appears
+  only on that path; every other notice is byte-identical to the one 9.54.0
+  wrote.
+
+- **Multi-turn is unchanged.** The anchor is the LATEST thing the person said —
+  matched against the message the run was started with. Earlier turns of a
+  restored conversation stay exactly as droppable as they were; only the turn
+  being executed is protected. Three kinds of `role: 'user'` message are
+  written by this library and none of them can become the anchor: a drop
+  notice, a compaction frame, and a message an injection delivered.
+
+### Nothing new to learn
+
+No new option, no new door, no new event. `WindowRefusalReason` gained a
+member, and a strategy you wrote yourself gets the rule without changing a
+line — the bound `planRemoval` refuses that turn, exactly as it refuses an
+unanswered tool call. The guards stay where they have always been: a strategy
+receives the answer, never the guards.
+
+### Unchanged, and pinned
+
+A window that never dropped the request keeps its exact bytes: same span, same
+notice wording, same record, same rebase. There is a test that pins it, and a
+test that reproduces the original ten-iteration run and asserts the request is
+present in EVERY iteration's context.
+
 ## [9.54.0] - 2026-08-19
 
 A mid-call tool report now reaches **the person watching**, not only the

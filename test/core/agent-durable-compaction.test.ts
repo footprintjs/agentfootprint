@@ -66,6 +66,16 @@ const sqliteAvailable = await (async (): Promise<boolean> => {
 /** The fact that only week one knows. Nothing else in the run mentions it. */
 const ACCOUNT = 'ACCT-8842';
 
+/**
+ * What the person asked for. It deliberately does NOT name {@link ACCOUNT}.
+ *
+ * Since 9.55.0 the current request is un-droppable, so a fact stated in it
+ * reaches week two whether or not anything was ever folded — and a test whose
+ * evidence travels by that route proves nothing about compaction. The account
+ * id therefore enters the run only through a tool result.
+ */
+const REQUEST = 'Audit the flagged account please';
+
 let calls = 0;
 function resetTool(): void {
   calls = 0;
@@ -280,7 +290,7 @@ describe('durable compaction — unit', () => {
 describe('durable compaction — the conversation carries the fold', () => {
   it('checkpoint().folded holds the originals, byte for byte and in order', async () => {
     const { agent, main } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
 
     const conversation = agent.checkpoint();
     expect(conversation).toBeDefined();
@@ -307,8 +317,10 @@ describe('durable compaction — the conversation carries the fold', () => {
       .reverse()
       .find((r) => !r.messages.some((m) => m.content.startsWith(COMPACTED_FRAME_PREFIX)))!;
     expect(beforeAnyFold).toBeDefined();
+    // The span starts one message in: index 0 is the request, which no fold
+    // may take (9.55.0), so the fold begins immediately after it.
     expect(span.messages!.map((m) => m.content)).toEqual(
-      beforeAnyFold.messages.slice(0, span.messageCount).map((m) => m.content),
+      beforeAnyFold.messages.slice(1, 1 + span.messageCount).map((m) => m.content),
     );
 
     // And the whole point: the account id left the window and is still here.
@@ -323,7 +335,7 @@ describe('durable compaction — the conversation carries the fold', () => {
 
   it('the span is reachable from its summary, by fingerprint and not by index', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     const summaries = conversation.history.filter(isCompactedSummary);
@@ -347,7 +359,7 @@ describe('durable compaction — the conversation carries the fold', () => {
 
   it('survives JSON — a store speaks bytes, not object graphs', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     const roundTripped = JSON.parse(JSON.stringify(toEnvelope(conversation))) as {
@@ -364,7 +376,7 @@ describe('durable compaction — the conversation carries the fold', () => {
 describe('durable compaction — LAW: the originals go only when you say so', () => {
   it('the DEFAULT keeps them — nobody has to know the option exists', async () => {
     const { agent } = weekOne(); // no `retain` passed at all
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     for (const span of conversation.folded ?? []) {
@@ -377,7 +389,7 @@ describe('durable compaction — LAW: the originals go only when you say so', ()
 
   it("'discard' loses the messages and STILL files the span — an absence is a fact", async () => {
     const { agent } = weekOne({ retain: 'discard' });
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     const spans = conversation.folded ?? [];
@@ -397,7 +409,7 @@ describe('durable compaction — LAW: the originals go only when you say so', ()
 
   it('a runtime with NO compaction still hands the spans on rather than dropping them', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     // Someone redeploys without `.compaction()`. The spans belong to the
@@ -418,7 +430,7 @@ describe('durable compaction — LAW: the originals go only when you say so', ()
 describe('durable compaction — LAW: the window change and the span are ONE commit', () => {
   it('no bundle shrinks the window without recording what left, in the same bundle', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
 
     const log = agent.getLastSnapshot()?.commitLog ?? [];
     let shrinks = 0;
@@ -473,7 +485,7 @@ describe('durable compaction — LAW: the window change and the span are ONE com
       })
       .build();
 
-    const answer = await agent.run({ message: `Audit ${ACCOUNT} please` });
+    const answer = await agent.run({ message: REQUEST });
     expect(answer).toBe('final answer');
 
     const conversation = agent.checkpoint()!;
@@ -503,7 +515,7 @@ describe.skipIf(!sqliteAvailable)(
 
       // ── Week one, in THIS process ────────────────────────────────
       const { agent } = weekOne();
-      await agent.run({ message: `Audit ${ACCOUNT} please` });
+      await agent.run({ message: REQUEST });
       const conversation = agent.checkpoint()!;
       expect(conversation.history.some(isCompactedSummary)).toBe(true);
 
@@ -604,7 +616,7 @@ describe('durable compaction — a conversation stored before 8.2', () => {
 describe('durable compaction — security', () => {
   it('a message that COPIES the frame cannot claim somebody else’s span', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
     const real = summaryIn(conversation);
     expect(foldedSpanFor(conversation, real)).toBeDefined();
@@ -626,7 +638,7 @@ describe('durable compaction — security', () => {
 
   it('a retained span is detached data, not a window into the live heap', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     // Mutating what a store was handed must not reach the agent's state.
@@ -643,7 +655,7 @@ describe('durable compaction — property', () => {
   it('identical scripts produce identical spans, modulo the clock and the run id', async () => {
     const shape = async (): Promise<unknown> => {
       const { agent } = weekOne();
-      await agent.run({ message: `Audit ${ACCOUNT} please` });
+      await agent.run({ message: REQUEST });
       return (agent.checkpoint()!.folded ?? []).map((s) => ({
         iteration: s.iteration,
         model: s.model,
@@ -658,9 +670,9 @@ describe('durable compaction — property', () => {
 
   it('retaining costs nothing on the wire: same requests, same summarizer calls', async () => {
     const kept = weekOne({ retain: 'conversation' });
-    await kept.agent.run({ message: `Audit ${ACCOUNT} please` });
+    await kept.agent.run({ message: REQUEST });
     const dropped = weekOne({ retain: 'discard' });
-    await dropped.agent.run({ message: `Audit ${ACCOUNT} please` });
+    await dropped.agent.run({ message: REQUEST });
 
     expect(kept.main.requests.length).toBe(dropped.main.requests.length);
     expect(kept.sum.calls).toBe(dropped.sum.calls);
@@ -675,7 +687,7 @@ describe('durable compaction — property', () => {
 describe('durable compaction — ROI: the window shrinks, the record does not', () => {
   it('the stored conversation is bigger than the window it will send', async () => {
     const { agent } = weekOne();
-    await agent.run({ message: `Audit ${ACCOUNT} please` });
+    await agent.run({ message: REQUEST });
     const conversation = agent.checkpoint()!;
 
     const windowChars = conversation.history.reduce((n, m) => n + m.content.length, 0);

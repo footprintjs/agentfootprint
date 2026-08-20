@@ -66,6 +66,7 @@ nothing was summarized, and nothing was lost — only un-sent.
 
 All three resolve what may leave through the same code, so a refusal reason means the same thing everywhere. Never removed, by any of them:
 
+- **the current request** — the message the run is executing. See [The request never leaves](#the-request-never-leaves);
 - **the system envelope** — it never enters the window at all (it rides `systemPrompt`);
 - **the last `keepRecentTurns` turns** — what the model is reasoning over right now;
 - **any turn holding an unresolved tool call** — an assistant `tool_use` with no matching `tool_result`. Removing an unanswered question destroys the referent of an answer that has not arrived yet;
@@ -76,6 +77,35 @@ This is why a message-counting trimmer is not the same thing as this: dropping h
 Every removal takes a **contiguous** span, so a turn that refused never ends up sitting after a summary of things that happened before it. A turn that ends the span this iteration is retried the next one — by which point the tool result it was waiting on has usually arrived.
 
 If nothing can be removed, nothing is. The window stays big and the record says why, with a reason per turn. It is never silently truncated.
+
+## The request never leaves
+
+**No strategy may drop the message you asked for.** Everything else in the window is evidence gathered in service of it; a window that keeps the evidence and loses the request leaves a model working from momentum.
+
+This one was caught in a real recorded run, and it is worth stating plainly because the failure is quiet. A ten-iteration tool loop under a small window dropped the window's head at iteration 4 — and on a fresh window the head *is* the request, because it is the oldest message and every strategy here removes the oldest thing first. From iteration 4 on, the model's context held the tool traffic, a drop notice, and no statement of the objective anywhere. It finished that task by momentum. A longer one would not have.
+
+So the turn holding it refuses, by name:
+
+```ts
+{
+  strategy: 'sliding-window',
+  removedMessageCount: 2,
+  refusals: [
+    { reason: 'current-request', turnIndex: 0, messageIndex: 0 },  // ← it stays
+    { reason: 'inside-keep-window', turnIndex: 3, messageIndex: 5 },
+  ],
+}
+```
+
+The rule lives in the refusal engine, not in the three shipped strategies — so a strategy **you** write inherits it without knowing it exists, the same way it inherits the tool-pair rules.
+
+Other history drops ahead of it. If the budget cannot hold even the request plus the recent turns, nothing is removed at all: the window stays big, the record names `current-request` beside every other refusal, and the run proceeds. Keeping the request and reporting the overrun is the right way round — a request the model can no longer see is not a smaller context, it is a different task.
+
+**Which message, exactly.** The window is a flat message list, so "turn" here means a wire boundary (a message plus the tool results answering it), not a conversational one. The anchor is the **latest thing the person said**, matched against the message the run was started with. Earlier turns of a multi-turn conversation stay droppable exactly as they were — only the turn being executed is protected. Three kinds of `role: 'user'` message are written by this library rather than by anybody, and none of them can become the anchor: a drop notice, a compaction frame, and a message an injection delivered.
+
+<Callout type="info">
+  A window with no identifiable request — hand-built, or seeded entirely from outside the run — has nothing to protect, and behaves exactly as it did before this rule existed.
+</Callout>
 
 ## What each visit records
 
@@ -143,19 +173,23 @@ Use `tokenBudget` over `summarizeOldest` when you would rather lose the old turn
 
 ## What a drop leaves behind
 
-When a drop removes the window's **head**, the library inserts one authored notice in its place:
+When a drop removes everything in front of the window, the library inserts one authored notice in its place:
 
 ```text
 [dropped history — 3 earlier message(s) were dropped from this window at iteration 5
-by the 'sliding-window' window strategy. Nothing was summarized: those turns are
-simply not being re-sent. They are retained verbatim in this run's commit log.]
+by the 'sliding-window' window strategy. Your current request is kept — it is still
+in this window, above this line, and no window strategy may drop it. Nothing was
+summarized: those turns are simply not being re-sent. They are retained verbatim in
+this run's commit log.]
 ```
+
+The middle sentence appears when the drop stopped short of the head because [the request was sitting there](#the-request-never-leaves) — which is the ordinary case for an agent's first turn. The notice then takes the position just after it. A model that reads "3 earlier messages were dropped" and then finds a request above it should be told which of the two facts to trust.
 
 The first reason for it is the **wire**, not the prose. An agent window looks like `user, assistant+tool, assistant+tool, …`, so dropping the oldest turns leaves an *assistant* message at the head — and the providers that care require the window to open on a user turn. Something has to occupy that position. Given that we must author a message there anyway, it should say what happened rather than be filler.
 
 Unlike the [compaction frame](doc:compaction), **no model wrote a word of it**: every character is a library constant plus a count. A drop makes no LLM call, so there is no summarizer output to quarantine.
 
-It appears only when the removal reaches the head. A removal in the middle leaves the original opening turn in place, so there is no wire problem to solve — and splicing a lone `user` message between two assistant turns is its own risk. The record names that removal either way.
+It appears only when the removal reaches the front of what may leave. A removal further in leaves the original opening turn in place, so there is no wire problem to solve — and splicing a lone `user` message between two assistant turns is its own risk. The record names that removal either way.
 
 It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if the notice would not be *smaller* than the span it replaces — a real case, when the only removable turn is a short one — the whole drop is abandoned under `replacement-not-smaller`, because dropping two tiny turns to insert a longer notice is pure loss.
 
@@ -186,7 +220,7 @@ const myStrategy: WindowStrategy = {
 
 Two things are deliberately not left to you:
 
-1. **The refusal rules.** `planRemoval` arrives already bound to this iteration's turns and guards. Your strategy never receives the guards, only the answer — so it *cannot* forget that an unanswered tool call must not leave. That is safety by construction, not by documentation.
+1. **The refusal rules.** `planRemoval` arrives already bound to this iteration's turns and guards. Your strategy never receives the guards, only the answer — so it *cannot* forget that an unanswered tool call must not leave, or that [the current request never does](#the-request-never-leaves). That is safety by construction, not by documentation.
 2. **Provenance.** `removalFacts(indices, atMs)` turns "these indices left" into the stage ids that wrote them and how long each lived. You cannot file a removal you are unable to name.
 
 The **trigger** is entirely yours: `plan` is called at every ReAct iteration boundary and returns `undefined` when your strategy did not engage. That is exactly how `slidingWindow` runs on a provider that reports nothing while the token-triggered ones refuse by name.

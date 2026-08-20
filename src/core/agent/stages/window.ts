@@ -51,6 +51,7 @@ import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMe
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
+import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
@@ -121,8 +122,17 @@ export function buildWindowStage(
     }
     const origins = meter.origins();
     const pausedToolCallId = scope.pausedToolCallId as string | undefined;
+    // The one message this run is executing (9.55.0). `scope.userMessage` is
+    // what the seed stage committed, so the match is against the run's own
+    // copy rather than a guess from position — see window/currentRequest.ts
+    // for what happens when the window was seeded from somewhere else.
+    const currentRequestIndex = currentRequestIndexOf(
+      history,
+      scope.userMessage as string | undefined,
+    );
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
+      ...(currentRequestIndex >= 0 && { currentRequestIndex }),
       ...(pausedToolCallId !== undefined && { pausedToolCallId }),
       ...(scope.pausedCheckIn === true && { pausedCheckIn: true }),
     };

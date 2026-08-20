@@ -78,6 +78,17 @@ export function segmentTurns(history: readonly LLMMessage[]): readonly Turn[] {
 export interface RemovalGuards {
   /** Every `toolCallId` answered anywhere in the window. */
   readonly answeredCallIds: ReadonlySet<string>;
+  /**
+   * Index in the window of the CURRENT REQUEST — the message this run is
+   * executing (9.55.0). The turn holding it refuses with `'current-request'`.
+   *
+   * Resolved by `currentRequestIndexOf`, which the stage calls with the run's
+   * own `scope.userMessage`. Absent (or `-1`) when the window holds no
+   * identifiable request, and then this rule simply does not apply — which is
+   * how a window that never had one behaves exactly as it did before the rule
+   * existed.
+   */
+  readonly currentRequestIndex?: number;
   /** The tool call this run is paused on, when it is paused. */
   readonly pausedToolCallId?: string;
   /** True when the pause is a check-in (human consent) rather than askHuman. */
@@ -103,6 +114,14 @@ export function answeredCallIds(history: readonly LLMMessage[]): ReadonlySet<str
  * reading the trace needs to see.
  */
 export function refusalFor(turn: Turn, guards: RemovalGuards): WindowRefusalReason | undefined {
+  // First, because it is the strongest rule in the family: the message the
+  // run is executing is the one thing the model cannot work without. A turn
+  // holds at most one non-`tool` message, so this never competes with the
+  // reasons below for the same turn.
+  const request = guards.currentRequestIndex;
+  if (request !== undefined && request >= turn.start && request < turn.start + turn.length) {
+    return 'current-request';
+  }
   for (const msg of turn.messages) {
     if (msg.role === 'system') return 'system-envelope';
   }

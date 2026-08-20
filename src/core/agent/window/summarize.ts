@@ -92,8 +92,12 @@ function retentionSentence(retain: CompactionRetention): string {
 /**
  * Build the message that replaces the folded span IN THE WINDOW.
  *
- * `role: 'user'` because the folded span always contains message 0 — the
+ * `role: 'user'` because the fold can reach the window's head, and the
  * providers that care (Anthropic) require the window to open on a user turn.
+ * Since 9.55.0 it usually does NOT reach it — the CURRENT REQUEST sits there
+ * and refuses to be folded, so the frame lands immediately after it — but the
+ * role is right either way and a fold of a window with no identifiable
+ * request still opens on one.
  *
  * The label is written by this function and always comes first. `summary` is
  * appended to it verbatim: the library never edits model output, and it never
