@@ -41,7 +41,23 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // reverting to a lying API reference is not. Headroom is deliberately thin
 // so the next unnoticed jump still trips it.
 const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 132_000_000 };
-const DEMO_ASYNC_GZIP_LIMIT = 400_000;
+// Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
+// `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
+// whole transitive graph ride this chunk — and this release added the
+// Context Integrity family (five checks, the assertion algebra, the
+// disposition ledger) to that graph. The growth is real library surface,
+// not chunking noise: the payload is the same 16 async assets, each a
+// little heavier.
+//
+// Worth stating plainly, because the number is the evidence: the integrity
+// family is NOT tree-shaken out for a browser consumer who enables none of
+// it. `zero-delta` is a promise about what a run DOES, never about what a
+// bundle WEIGHS, and these are different axes. Making the checks reachable
+// only through a dynamic import is the fix if this keeps climbing.
+//
+// Headroom stays deliberately thin (the ratchet's whole point), so the next
+// unnoticed jump still trips it.
+const DEMO_ASYNC_GZIP_LIMIT = 405_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
