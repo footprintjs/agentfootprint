@@ -666,6 +666,9 @@ describe('silent success — reading a run', () => {
 const REFUSES_A_SECOND_CALL = [
   'act',
   'checkIn',
+  // 9.61.0 — a claim contract is a policy, not a scalar: a second call would
+  // silently replace which answer fields are checked against which facts.
+  'claims',
   'compaction',
   'configure',
   'limitsTravelWithTheAnswer',
@@ -796,6 +799,10 @@ describe('silent success — the doctrine sweep', () => {
     const twice: Record<(typeof REFUSES_A_SECOND_CALL)[number], () => unknown> = {
       act: () => base().act({ maxIterations: 3 }).act({ maxIterations: 4 }),
       checkIn: () => base().tool(askTool).checkIn({}).checkIn({}),
+      claims: () =>
+        base()
+          .claims({ a: { entity: 'e', field: 'f' } })
+          .claims({ b: { entity: 'e', field: 'g' } }),
       compaction: () =>
         base()
           .compaction({ summarizer: recordingProvider().provider, model: 'm', keepRecent: 2 })

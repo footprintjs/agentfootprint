@@ -25,6 +25,7 @@ import { dispositionLedger, type DispositionLedger } from './ledger.js';
 import { invariantViolationsOf } from '../invariant-violation/check.js';
 import { wireViolationsOf } from '../invariant-violation/wire.js';
 import { danglingReferencesOf } from '../dangling-reference/check.js';
+import { unsupportedClaimsOf } from '../unsupported-claim/check.js';
 
 export type IntegrityPosture = 'observe' | 'dev';
 
@@ -33,6 +34,8 @@ export interface IntegrityChecksPresent {
   readonly wire: boolean;
   readonly composeInvariant: boolean;
   readonly dangling: boolean;
+  /** A `.claims()` contract is declared (9.61.0). */
+  readonly claim?: boolean;
 }
 
 /**
@@ -47,6 +50,7 @@ export function beginIntegrityRun(
   if (present.wire) ledger.register('invariant-violation', 'wire');
   if (present.composeInvariant) ledger.register('invariant-violation', 'compose');
   if (present.dangling) ledger.register('dangling-reference', 'compose');
+  if (present.claim === true) ledger.register('unsupported-claim', 'claim');
   if (posture !== 'dev') return ledger;
 
   // The canaries — one known-bad fixture per registered check, through the
@@ -77,6 +81,25 @@ export function beginIntegrityRun(
       -1,
     );
     if (caught.length > 0) ledger.noteSynthetic('dangling-reference', 'compose', 'caught');
+  }
+  if (present.claim === true) {
+    ledger.noteSynthetic('unsupported-claim', 'claim', 'minted');
+    const caught = unsupportedClaimsOf(
+      [{ answerField: 'canary', entity: 'canary-entity', field: 'canary-field' }],
+      [
+        {
+          entity: 'canary-entity',
+          field: 'canary-field',
+          value: 'settled',
+          toolName: 'canary',
+          toolCallId: 'canary',
+          iteration: -1,
+        },
+      ],
+      { canary: 'claimed-otherwise' },
+      -1,
+    );
+    if (caught.findings.length > 0) ledger.noteSynthetic('unsupported-claim', 'claim', 'caught');
   }
   return ledger;
 }

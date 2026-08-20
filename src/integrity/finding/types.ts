@@ -51,6 +51,17 @@ export interface ContextError {
   readonly epoch?: number;
   /** True when every witness is canary material — never mixed with real. */
   readonly synthetic?: true;
+  /**
+   * A SOFTER CLASS (9.61.0): the finding reports doubt rather than
+   * contradiction — today, an answer that declines to claim (`null`,
+   * `'unknown'`) a fact the run verified. Presence-only, and counted apart
+   * from real defects: an advisory is a thing worth seeing, never a thing
+   * that was wrong. `contextErrorIdentity` does not read it, so an
+   * advisory and a contradiction about the same subjects would collapse to
+   * one finding — which is correct: they are the same disagreement, and
+   * the first filing wins.
+   */
+  readonly advisory?: true;
   /** One plain sentence a person can act on. States the defect, never a verdict on who is right. */
   readonly message: string;
 }

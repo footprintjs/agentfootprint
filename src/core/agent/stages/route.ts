@@ -34,6 +34,10 @@ import {
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
 import type { ResolvedEvidenceGate } from '../evidence/types.js';
+import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
+import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
+import { contextErrorIdentity } from '../../../integrity/finding/types.js';
+import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 
 export type RouteBranch =
@@ -552,6 +556,10 @@ export function buildRouteDeciderStage(
    *  name a branch that does not exist, so this is build-time knowledge, not a
    *  scope read. `false` reproduces every earlier release exactly. */
   hasWrapUp = false,
+  /** The declared claim contract (9.61.0) and the run's disposition ledger.
+   *  Both absent → the claim seam never runs and not one line changes. */
+  claims?: readonly DeclaredClaim[],
+  integrityLedger?: { current: DispositionLedger | undefined },
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -563,7 +571,15 @@ export function buildRouteDeciderStage(
     return hasWrapUp ? buildSimpleDecider(true) : routeDeciderStage;
   }
   if (enforcement !== undefined)
-    return buildEnforcingDecider(chain, enforcement, stepPlanFor, evidence, hasWrapUp);
+    return buildEnforcingDecider(
+      chain,
+      enforcement,
+      stepPlanFor,
+      evidence,
+      hasWrapUp,
+      claims,
+      integrityLedger,
+    );
   if (stepPlanFor !== undefined || evidence !== undefined)
     return buildJudgingDecider(chain, stepPlanFor, evidence, hasWrapUp);
   return async (scope) => {
@@ -621,6 +637,93 @@ export function buildRouteDeciderStage(
  * Only agents that asked for one of those two receive this function —
  * everyone else keeps the exact decider (and event timing) they always had.
  */
+/**
+ * THE CLAIM SEAM (9.61.0) — the last judge, and the only one that changes
+ * nothing.
+ *
+ * It runs where the answer is about to be handed back: after the schema
+ * accepted it, after the procedure judge, after the evidence gate grounded
+ * its values. That order is the point — this check reads the VALIDATED
+ * answer object, so it can only run on an answer the schema already let
+ * stand, and it asks a question none of the others can: does what the
+ * answer SAYS agree with what the run SETTLED?
+ *
+ * It never re-routes. The other three judges can send the turn back for a
+ * revision; a contradiction between the answer and the ledger is a fact
+ * about a finished run, and re-asking the model would invite it to change
+ * the claim rather than the run to change the facts. So this files a
+ * finding and returns — detection converting a silent disagreement into an
+ * attributable one, exactly as every other seam in this family does.
+ */
+function judgeClaims(
+  scope: TypedScope<AgentState>,
+  claims: readonly DeclaredClaim[] | undefined,
+  ledgerHolder: { current: DispositionLedger | undefined } | undefined,
+): void {
+  if (claims === undefined || claims.length === 0) return;
+  const parser = undefined;
+  void parser;
+  const answer = readValidatedAnswer(scope);
+  const iteration = (scope.iteration as number | undefined) ?? 0;
+  if (answer === undefined) {
+    // The answer is not readable as the typed stratum (a parser that
+    // returns a non-object, an answer that is bare prose). Incomparable —
+    // stated per declared claim, never guessed at.
+    for (const claim of claims) {
+      ledgerHolder?.current?.note('unsupported-claim', 'claim', 'unreachable');
+      void claim;
+    }
+    return;
+  }
+  const { findings, dispositions } = unsupportedClaimsOf(
+    claims,
+    (scope.claimFacts as Parameters<typeof unsupportedClaimsOf>[1] | undefined) ?? [],
+    answer,
+    iteration,
+  );
+  for (const d of dispositions) {
+    ledgerHolder?.current?.note(
+      'unsupported-claim',
+      'claim',
+      d.disposition,
+      d.disposition === 'checked-fail' ? Date.now() : undefined,
+    );
+  }
+  if (findings.length === 0) return;
+  const seenIds =
+    (scope.$getValue('integrityFindingIds') as readonly string[] | undefined) ??
+    (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
+    [];
+  const newIds: string[] = [...seenIds];
+  for (const f of findings) {
+    const id = contextErrorIdentity({ ...f, epoch: undefined });
+    if (newIds.includes(id)) continue;
+    newIds.push(id);
+    typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
+  }
+  if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+}
+
+/**
+ * The answer as a typed object, or `undefined` when there is none to read.
+ *
+ * Deliberately re-parses the STRING the caller will receive rather than
+ * reaching for a parsed object: both output strategies normalize to that
+ * string (`tool-forced` re-serializes its tool args into it), so this is
+ * the one shape that exists on every path — and checking anything else
+ * would check an answer nobody gets.
+ */
+function readValidatedAnswer(scope: TypedScope<AgentState>): unknown | undefined {
+  const raw = scope.llmLatestContent as string | undefined;
+  if (typeof raw !== 'string' || raw.length === 0) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildJudgingDecider(
   chain: readonly MessageMiddleware[],
   stepPlanFor: StepPlanFor | undefined,
@@ -689,6 +792,8 @@ function buildEnforcingDecider(
   stepPlanFor: StepPlanFor | undefined,
   evidence: ResolvedEvidenceGate | undefined,
   hasWrapUp: boolean,
+  claims: readonly DeclaredClaim[] | undefined,
+  integrityLedger: { current: DispositionLedger | undefined } | undefined,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -765,6 +870,10 @@ function buildEnforcingDecider(
         emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
         return 'evidence-recheck';
       }
+      // LAST, and it re-routes nothing: this answer is the one being handed
+      // back, and a claim that disagrees with the run's settled facts is a
+      // fact about a finished run (see judgeClaims).
+      judgeClaims(scope, claims, integrityLedger);
       emitRouteDecided(scope, 'final', base.rationale);
       settleWrapUp(scope, base.earlyStop, false);
       return 'final';

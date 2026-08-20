@@ -283,6 +283,8 @@ export class AgentBuilder {
    *  resolved at build(), where the final injection list and the mounted
    *  graph both exist. Absent = no kernel, zero delta. */
   private mapsOptions?: MapsOptions;
+  /** `.claims()` (9.61.0) — the declared claim contract; resolved at build(). */
+  private claimsContract?: Readonly<Record<string, { entity: string; field: string }>>;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -1468,6 +1470,73 @@ export class AgentBuilder {
       }
     }
     this.mapsOptions = options;
+    return this;
+  }
+
+  /**
+   * WHICH ANSWER FIELDS ARE CLAIMS ABOUT WHICH FACTS (9.61.0) — the claim
+   * seam's contract.
+   *
+   * The evidence gate (`.evidence()`) grounds the answer's names and
+   * numbers: every value must appear in a tool result. Its own limit is
+   * stated in its docs — it cannot catch a false claim assembled from real
+   * values ("fc1/3 is healthy" when the data says the port is down uses
+   * entirely grounded tokens). This closes that hole for the facts you
+   * name: the run's semantic envelopes settle typed readings, and each
+   * declared field of the validated answer is compared against the one it
+   * claims to report.
+   *
+   * DECLARED, NEVER INFERRED — the `argumentsFrom` precedent. The library
+   * does not guess that an answer field named `nav_count` is about
+   * `nav(screen2)`; you say so, and the checker joins. Nothing is blocked:
+   * a disagreement files one `agentfootprint.integrity.context_error` at
+   * seam `'claim'`, and the answer is returned exactly as it was.
+   *
+   * Requires `.outputSchema()` — without a validated answer object there is
+   * no typed stratum to read, and prose is never checked. Refused at
+   * `build()` rather than skipped, because a contract that silently checks
+   * nothing is worse than no contract.
+   *
+   * @example
+   *   const agent = Agent.create({ provider, model })
+   *     .tool(screenTool)                       // returns semantic({ facts: [...] })
+   *     .outputSchema(AnswerSchema)
+   *     .claims({ nav_count: { entity: 'screen2', field: 'nav' } })
+   *     .build();
+   */
+  claims(contract: Readonly<Record<string, { entity: string; field: string }>>): this {
+    if (this.claimsContract !== undefined) {
+      throw new Error(
+        `Agent.claims(): the claim contract is already declared. One contract per agent — a ` +
+          `second call would silently replace the first. Merge the fields into one call.`,
+      );
+    }
+    const entries = Object.entries(contract);
+    if (entries.length === 0) {
+      throw new Error(
+        `Agent.claims(): the contract names no fields — omitting the call is how "this agent ` +
+          `claims nothing checkable" is said.`,
+      );
+    }
+    for (const [answerField, fact] of entries) {
+      // An identity edge with a blank half joins the wrong subjects — the
+      // same refusal `defineTool({ owner })` makes, for the same reason.
+      if (
+        fact === null ||
+        typeof fact !== 'object' ||
+        typeof fact.entity !== 'string' ||
+        fact.entity.length === 0 ||
+        typeof fact.field !== 'string' ||
+        fact.field.length === 0
+      ) {
+        throw new Error(
+          `Agent.claims(): '${answerField}' must name a non-empty entity and field — it is the ` +
+            `edge the claim check joins on, and a blank half joins the wrong subjects. Got ` +
+            `${JSON.stringify(fact)}.`,
+        );
+      }
+    }
+    this.claimsContract = contract;
     return this;
   }
 
@@ -2880,6 +2949,26 @@ export class AgentBuilder {
     // the mounted graph (member ids) and the final injection list (each
     // member's contributed tool names). Refusals live in the resolver.
     const mapsPlan = this.resolveMapsPlan(injections);
+    // The claim contract (9.61.0) — refused here rather than at `.claims()`,
+    // because `.outputSchema()` may legitimately be declared after it.
+    // A contract with no typed stratum to read would check nothing, and a
+    // check that silently checks nothing is the decay this family exists
+    // to prevent.
+    if (this.claimsContract !== undefined && this.outputSchemaParser === undefined) {
+      throw new Error(
+        `Agent.claims(): a claim contract needs a validated answer to read — add ` +
+          `.outputSchema(schema). The claim seam compares TYPED fields; prose is never ` +
+          `checked, so without a schema this contract would check nothing.`,
+      );
+    }
+    const claimContract =
+      this.claimsContract === undefined
+        ? undefined
+        : Object.entries(this.claimsContract).map(([answerField, fact]) => ({
+            answerField,
+            entity: fact.entity,
+            field: fact.field,
+          }));
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -2921,6 +3010,7 @@ export class AgentBuilder {
       this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
       this.skillGraphDeclared,
       mapsPlan,
+      claimContract,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

@@ -130,6 +130,7 @@ import {
   semanticsForModel,
 } from '../../../lib/semantics/envelope.js';
 import type { ToolSemantics } from '../../../lib/semantics/types.js';
+import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
 import {
   readCoverageResult,
   type CoverageFacts,
@@ -848,6 +849,19 @@ export function buildToolCallsHandler(
       iteration: call.iteration,
       semantics: detached as ToolSemantics,
     });
+    // THE CLAIM LEDGER (9.61.0). The envelope's typed readings are absorbed
+    // into tracked state here — the `coverageDeclared` shape one function
+    // up — because the projection returned below REPLACES the envelope on
+    // the wire, and after that the typed object exists nowhere a check
+    // could read it. Written only when a tool actually declares readings,
+    // so an agent whose tools return none commits exactly what it did
+    // before. Rows carry the DETACHED values: a ledger holding live
+    // references into a value the tool still owns would compare against
+    // whatever that value became later.
+    const rows = claimRowsOf(detached as ToolSemantics, call);
+    if (rows.length > 0) {
+      scope.claimFacts = [...(scope.claimFacts ?? []), ...rows];
+    }
     return semanticsForModel(sem);
   };
 

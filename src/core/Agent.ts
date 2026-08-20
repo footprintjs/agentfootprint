@@ -708,6 +708,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly skillGraphDeclared?: SkillGraphDeclaredMap;
   /** The maps kernel's plan (9.58.0) — present only when built with `.maps()`. */
   private readonly mapsPlan?: import('../maps/engagement/types.js').EngagementPlan;
+  /** `.claims()` (9.61.0) — the declared claim contract, or undefined. */
+  private readonly claimContract?: readonly import('../integrity/unsupported-claim/check.js').DeclaredClaim[];
   /** `AgentOptions.recordSystemPrompt` (9.50.0) — OFF by default. When true,
    *  every `stream.llm_start` carries the assembled system prompt verbatim as
    *  `systemPromptText`. */
@@ -758,6 +760,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     recipes?: readonly AppliedRecipe[],
     skillGraphDeclared?: SkillGraphDeclaredMap,
     mapsPlan?: import('../maps/engagement/types.js').EngagementPlan,
+    claimContract?: readonly import('../integrity/unsupported-claim/check.js').DeclaredClaim[],
   ) {
     super();
     this.provider = opts.provider;
@@ -793,6 +796,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.appliedRecipes = recipes;
     this.skillGraphDeclared = skillGraphDeclared;
     this.mapsPlan = mapsPlan;
+    this.claimContract = claimContract;
     if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
@@ -2694,6 +2698,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         wire: true,
         composeInvariant: this.mapsPlan !== undefined,
         dangling: this.integrityDanglingPresent,
+        claim: this.claimContract !== undefined,
       },
       this.integrityPosture,
     );
@@ -3531,6 +3536,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       stepPlanFor,
       this.evidenceGate,
       hasWrapUp,
+      this.claimContract,
+      this.integrityLedgerHolder,
     );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).

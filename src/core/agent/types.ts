@@ -1278,6 +1278,20 @@ export interface AgentState {
    * always did.
    */
   coverageDeclared?: ReadonlyArray<import('./coverage/index.js').DeclaredCoverage>;
+  /**
+   * The typed readings this run's tools settled (9.61.0) — one row per
+   * (entity, field, value) flattened out of each recognized semantic
+   * envelope, in declaration order, never rewritten. The claim seam reads
+   * it at answer time: the LAST row for a fact is the settled value, every
+   * earlier one is quotable history.
+   *
+   * The `coverageDeclared` key one line up is the shape and the reason:
+   * the envelope is replaced by its compact model projection on the wire,
+   * so without a tracked key the typed object exists nowhere a check could
+   * reach. Written only when a tool actually declares readings — an agent
+   * whose tools return none commits exactly what it always did.
+   */
+  claimFacts?: ReadonlyArray<import('../../integrity/unsupported-claim/check.js').ClaimLedgerRow>;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read

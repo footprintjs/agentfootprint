@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`.claims()` — the claim seam: what the answer says vs what the run
+  settled.** The evidence gate grounds an answer's names and numbers but
+  states its own limit: it cannot catch a false claim assembled from real
+  values ("fc1/3 is healthy" when the data says the port is down). This
+  closes that for the facts you name. Tools returning `semantic({ facts })`
+  now settle typed readings into the run's claim ledger (`scope.claimFacts`
+  — the `coverageDeclared` shape, written only when a tool declares
+  readings), and `.claims({ nav_count: { entity: 'screen2', field: 'nav' }})`
+  declares which validated-answer field claims which fact. Declared, never
+  inferred (the `argumentsFrom` precedent). A disagreement files one
+  `agentfootprint.integrity.context_error` at seam `'claim'` and changes
+  nothing else — it is the last of the four Route judges and the only one
+  that never re-routes, because a contradiction on a finished run is a fact
+  about the run, not a reason to re-ask the model. Fences: an uncollected
+  fact is `unreachable`, an omitted field `not-applicable`, only the latest
+  ledger row asserts (earlier ones ride as quoted history), and an answer of
+  `null`/`'unknown'` against a verified value files an **advisory**
+  (`ContextError.advisory`) counted apart from real defects. Requires
+  `.outputSchema()` — refused at build otherwise, since prose has no typed
+  stratum and a contract that checks nothing is the decay this family
+  exists to prevent.
+
+## [Unreleased]
+
 ## [9.60.0] - 2026-08-20
 
 ### Added
