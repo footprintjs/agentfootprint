@@ -1,0 +1,138 @@
+---
+title: Mounted maps
+description: An agent can be fed by more than one walkable map. Each map owns its cursor; the mount kernel owns only engagement — whether a map's prompt fragment and tools ride the next call at all.
+---
+
+<Aside type="note" title="What ships today">
+The kernel mounts with `.maps()` on top of a skill map and is live. Exactly one map mounts today (the skill map); the data model is already per-map, so the second tenant does not reshape it.
+</Aside>
+
+## The failure this exists for
+
+A recorded turn ran 30 calls and 359,000 tokens. At the start, an entry pattern matched the word "zone" inside *"find the most recent zone redundancy run"* — a noun the person wanted to **find**, not a task they wanted done. That match put the cursor on an audit skill.
+
+Nothing was broken. The map behaved exactly as written. The audit skill's four tools were never called once; 29 of the 30 cursor moves were "stay"; and roughly 7,000 characters of the wrong skill rode every single call to the end of the turn.
+
+The gap was that **nobody owned the question "is this contribution still earning its place?"** A map knows where its cursor is. No map is in a position to judge whether it should be talking at all.
+
+## The one idea
+
+Split the two axes that were tangled together:
+
+- **Position** is the map's. Which node the cursor is on. The map decides this and never surrenders it.
+- **Engagement** is the kernel's. Whether that map's prompt fragment and tools ride the next model call.
+
+The law in one sentence: **an engagement founded on a guess is renewed only by concrete evidence, and without corroboration it is parked — its cursor untouched.**
+
+Parking is not a rollback and not a cursor move. The map stays exactly where it was. It simply stops talking until something real justifies it talking again.
+
+## Mounting it
+
+```ts
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .skillGraph(myMap)
+  .maps({ renewalGrace: 3 })
+  .build();
+```
+
+`.maps()` takes `MapsOptions`. The one dial today is `renewalGrace` — how many corroboration-free passes a guessed engagement survives before it parks. It defaults to 3 and must be an integer of at least 1.
+
+Mounting requires a skill map: with nothing mounted there is nothing to engage or park, so the builder refuses rather than mounting a kernel over an empty set.
+
+When you do not call `.maps()`, nothing changes: no scope key, no events, and byte-identical evaluation. The kernel is opt-in.
+
+## How strong is the evidence?
+
+Every engagement carries the strength of what founded it. `EvidenceStrength` is the ladder, and it decides decay:
+
+- `explicit` — the model or a person asked for this map by name.
+- `structural` — a declared edge fired, or the map's own tool was called.
+- `semantic` — a classifier or scorer judged the person's words.
+- `lexical` — a pattern matched the person's words. A regex hit is a guess about intent, never a commitment.
+
+The top two stand until released. The bottom two are guesses, and guesses expire without corroboration — that is what `isTentative` answers. `strengthOfMove` maps a map's own cursor-move vocabulary onto this ladder, `strengthOfEvidence` does the same for a piece of renewal evidence, and `strongestOf` picks the winner when several arrive on one pass.
+
+The reason the ladder exists at all is the recorded turn above: a `lexical` match is exactly what put the wrong map on the wire, and treating it as equal to a user request is what kept it there.
+
+## What renews an engagement
+
+Each pass, the kernel asks what actually happened. `renewalEvidenceOf` reads an `EngagementPass` — the pass's cursor position, the clause that moved it, the tool results that came back, and the skill picks the gate accepted — and returns the `RenewalEvidence` it found. Three things count:
+
+- one of the map's **own tools** was called,
+- a **declared route** fired inside the map,
+- the model **asked for one of its members by name**.
+
+Anything else is not renewal. In particular, a pass where the cursor merely stayed put is not evidence of anything.
+
+## The idle test
+
+A tentative engagement counts one idle pass when all three of these hold:
+
+1. its contribution was actually **served** on the pass being judged,
+2. **none of its tools** was called,
+3. and the model **called something else instead**.
+
+All three matter. A pass with no tool calls at all counts nothing — the model was thinking, not ignoring. And a contribution that never reached the wire cannot have been ignored, so it earns no idle either.
+
+At `renewalGrace` consecutive idle passes, the map parks.
+
+## Reading the record
+
+`advanceEngagement` is the whole lease machine as one pure function: give it the `EngagementPlan` (the mounted maps and the grace window), the current `MapEngagement`, and this pass's `EngagementPass`, and it hands back an `EngagementAdvance` — the next state plus the list of changes.
+
+The state is a `MapEngagement`, an array of `MapEngagementRecord`. Each record names its map, its `EngagementStanding` (`engaged` or `parked`), the strength it currently rests on, the iteration that standing began, its idle count, and — when the engagement was a guess — the witness text that founded it.
+
+`MountedMap` is one map as the kernel sees it: an id, its member ids, and the tool names its members contribute. That is deliberately all the kernel knows. It never sees a cursor, because it has no business moving one.
+
+Each `EngagementChange` the advance returns becomes a typed event you can observe:
+
+- `agentfootprint.map.engaged` — a map's contributions are riding the calls again, or for the first time.
+- `agentfootprint.map.parked` — a map's contributions have stopped riding, with the idle count that earned it.
+
+Both carry the strength the standing rests on, so a recording shows you not just what the kernel did but what it thought it knew.
+
+## Stating a value honestly
+
+The maps door also exports the honesty primitive the kernel is built on. `Claim<T>` is a value that says how it knows itself: `known(value, evidence)`, `unknown(reason)`, or `notApplicable(evidence)`.
+
+The point is the third state. Two recorded failures came from a system stating a value it did not hold — a final summary written from a trimmed memory, and a served list whose silent cap read as completeness. A `Claim` makes "we do not know, and here is why" a value a consumer must branch on: `isKnown` is the only door to `.value`, `valueOr` makes the fallback a required argument so a silent `undefined` cannot creep back in, and `describeClaim` renders one plain sentence for a record or a prompt.
+
+```ts
+import { known, unknown, isKnown, describeClaim } from 'agentfootprint/maps';
+
+const total = known(11, 'the app declared total on the choices block');
+const cacheRead = unknown<number>('the provider reported no cache fields');
+
+if (isKnown(total)) console.log(total.value); // 11
+console.log(describeClaim(cacheRead)); // "unknown — the provider reported no cache fields"
+```
+
+An unknown count can never become a zero, because the type has no door from `unknown` to `.value`.
+
+## Testing the law yourself
+
+Everything above is plain data and pure functions, exported so you can reason about the lease law directly — no agent, no provider, no model call:
+
+```ts
+import { advanceEngagement } from 'agentfootprint/maps';
+
+const plan = {
+  maps: [{ id: 'skill-map', memberIds: ['audit'], toolNames: ['get_zones'] }],
+  renewalGrace: 3,
+};
+
+// iteration 1: an entry pattern placed the cursor — a lexical guess
+const { next, changes } = advanceEngagement(plan, undefined, {
+  iteration: 1,
+  currentNode: 'audit',
+  moveBy: 'entry',
+  witness: 'zone',
+  toolResults: [],
+  acceptedSkillPicks: [],
+  servedLastPass: [],
+});
+```
+
+Keep calling it with the passes that followed and you can watch the recorded turn park on call four.

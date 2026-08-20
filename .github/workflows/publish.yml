@@ -28,6 +28,19 @@ jobs:
       - run: npm run build
       - run: npm test
 
+      # Docs-truth RATCHET — the SAME gate CI runs on every push (ci.yml, job
+      # `docs-truth`). It lives here too because CI and the publish are wired to
+      # DIFFERENT triggers: CI runs on `push`, this workflow on `release:
+      # published`, and `release.sh` creates the GitHub release seconds after the
+      # push — so the two run concurrently and npm never waited on a CI verdict.
+      # A red ratchet used to reach the registry unopposed (9.58.0 shipped with
+      # 20 undocumented exports and 2 undocumented events). Running it inside the
+      # job the publish job already `needs:` makes that impossible regardless of
+      # HOW the release was created — the script, the web UI, another machine, a
+      # re-run. Free: this job has already done the `npm install` + `npm run
+      # build` the check requires.
+      - run: npm run docs:truth
+
       # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack

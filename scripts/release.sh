@@ -12,6 +12,7 @@ set -euo pipefail
 #   3. Build (CJS + ESM)
 #   4. Full test suite
 #   5. Examples (typecheck + tsx end-to-end run for every example)
+#   5.5 CI gate parity (test:types, docs:truth, publint, attw, doc-links)
 #   6. CHANGELOG entry exists
 #   Then: version bump → commit + tag + push → GitHub release → CI npm publish
 #
@@ -95,6 +96,42 @@ fi
 
 echo "[5/8] Examples ✓"
 
+# ── Gate 5.5: CI GATE PARITY ────────────────────────────────────────────
+# Everything CI runs on a push that this script used to skip. Before 9.59.0
+# the two lists were different sets, and the publish workflow triggers on the
+# `release: published` event — which `gh release create` fires SECONDS after
+# the push, concurrently with CI. So a gate could be red in CI and the bytes
+# still went to npm (9.58.0: `docs:truth` red on both post-release commits).
+# The real interlock now lives in .github/workflows/publish.yml, whose build
+# job runs docs:truth and which the publish job `needs:`. This block is the
+# cheap half: fail on THIS machine, before the version bump, instead of
+# discovering it at publish time with a tag already pushed.
+#
+# The one CI job with no counterpart here is `docs` (the docs-next Fumadocs
+# build): it needs its own `npm install` inside docs-next/ and several
+# minutes. It stays CI-only, on purpose.
+echo "==> Type-regression tests (test/type-regressions/)..."
+npm run test:types
+
+echo "==> Docs-truth ratchet (new undocumented exports/events)..."
+if ! npm run docs:truth; then
+  echo ""
+  echo "Error: docs:truth is RED. A new export or event has no prose describing it,"
+  echo "or the docs point a reader at something that does not exist."
+  echo "Fix the docs, or accept the debt consciously with: npm run docs:truth:baseline"
+  exit 1
+fi
+
+echo "==> Packaging correctness (publint + are-the-types-wrong)..."
+npx --yes publint
+npx --yes @arethetypeswrong/cli --pack
+
+echo "==> Doc-link integrity (every doc:<id> cross-reference resolves)..."
+npm install --no-save github-slugger >/dev/null 2>&1 || true
+node scripts/check-doc-links.mjs --strict
+
+echo "[5.5/8] CI gate parity ✓"
+
 # ── Version bump ────────────────────────────────────────────────────────
 npm version "$BUMP" --no-git-tag-version
 VERSION=$(node -p "require('./package.json').version")
@@ -162,6 +199,7 @@ echo "  2.85  Lint check              ✓  (eslint errors = 0)"
 echo "  3.    Build                   ✓  (CJS + ESM)"
 echo "  4.    Full test suite         ✓"
 echo "  5.    Examples                ✓  (typecheck + tsx end-to-end run)"
+echo "  5.5   CI gate parity          ✓  (types, docs:truth, publint, attw, doc-links)"
 echo "  6.    CHANGELOG               ✓"
 echo "  7.    Commit + tag + push     ✓"
 echo "  8.    GitHub release          ✓"

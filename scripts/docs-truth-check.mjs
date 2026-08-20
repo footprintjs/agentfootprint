@@ -71,7 +71,20 @@
  * Usage:
  *   node scripts/docs-truth-check.mjs                     # check (read-only)
  *   node scripts/docs-truth-check.mjs --json out.json
+ *   node scripts/docs-truth-check.mjs --report-only        # regenerate the REPORT only
  *   node scripts/docs-truth-check.mjs --update-baseline    # re-baseline + report
+ *
+ * ── WHY `--report-only` EXISTS (9.59.0) ────────────────────────────────
+ * docs/DOCS_TRUTH_REPORT.md is GENERATED. Until 9.59.0 the only way to
+ * regenerate it was `--update-baseline`, which also re-records the accepted
+ * debt — so an author who merely wanted the report's prose numbers to match
+ * reality faced a choice between accepting unrelated debt and editing the
+ * generated file by hand. They edited it by hand: the 9.58.0 release commit
+ * changed "103 typed events" to "105" in the report and touched nothing else,
+ * leaving the export count stale and the ratchet red, and the release shipped
+ * anyway. Separating "restate the truth" from "accept the debt" removes the
+ * incentive, and `test/docs/docs-truth-report-generated.test.ts` removes the
+ * possibility.
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
@@ -100,6 +113,8 @@ const REPORT_PATH = join(ROOT, 'docs', 'DOCS_TRUTH_REPORT.md');
 
 const argv = process.argv.slice(2);
 const UPDATE_BASELINE = argv.includes('--update-baseline');
+/** Regenerate the generated report WITHOUT touching the accepted-debt baseline. */
+const REPORT_ONLY = argv.includes('--report-only');
 const JSON_OUT = argv.includes('--json') ? argv[argv.indexOf('--json') + 1] : null;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1745,6 +1760,17 @@ if (JSON_OUT) {
     ) + '\n',
   );
   console.log(`wrote ${JSON_OUT}`);
+}
+
+if (REPORT_ONLY && !UPDATE_BASELINE) {
+  // The report restates CURRENT truth against the EXISTING baseline. It never
+  // writes the baseline, so regenerating the prose can never quietly accept a
+  // gap that no one reviewed.
+  const existing = existsSync(BASELINE_PATH)
+    ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+    : buildBaseline(result, surface, events, exercised);
+  writeFileSync(REPORT_PATH, buildReport(result, surface, events, exercised, docs, existing));
+  console.log(`report written  → ${relative(ROOT, REPORT_PATH)} (baseline untouched)`);
 }
 
 if (UPDATE_BASELINE) {
