@@ -21,6 +21,26 @@
  *     slot just after the kept request when the request was the head;
  *   • when it does not, nothing is inserted: the original opening turn is
  *     still there, so there is no wire problem to solve.
+ *
+ * ## The notice is owed to the WIRE, not to politeness (9.57.0)
+ *
+ * That distinction used to be missing here, and it produced a livelock. The
+ * notice was authored whenever the removal reached the front of what may
+ * leave, and the whole removal was abandoned when the notice was not smaller
+ * than the span — but the obligation being guarded is narrower: **the window
+ * must open on a user turn.** When the message that would BECOME the head is
+ * already a user turn (the kept request, or an older user turn from a restored
+ * conversation), no notice is owed at all, and its 245–358 characters had no
+ * business vetoing a legitimate drop.
+ *
+ * Because the span is the longest CONTIGUOUS removable run, a blocker one turn
+ * along caps it at the same small span at every boundary — so the same verdict
+ * came back for ever and the window grew without bound. Two locally-correct
+ * rules composing into non-progress.
+ *
+ * So the decision is a LADDER: the rich notice, else the plain one, else no
+ * notice at all — and `'replacement-not-smaller'` only when the wire genuinely
+ * needs a message in that position and none of them is smaller than the span.
  */
 
 import type { LLMMessage } from '../../../../adapters/types.js';
@@ -49,6 +69,32 @@ export interface DropOutcome {
   /** Turns in the window before / after. Counted from the segmentation. */
   readonly turnsBefore: number;
   readonly turnsAfter: number;
+}
+
+/**
+ * The first rung of the ladder that is SMALLER than the span it would replace,
+ * or `undefined` when none is.
+ *
+ * "Smaller", not "no larger": a notice exactly the size of the span buys
+ * nothing and costs the turns it replaced.
+ */
+function fittingNotice(
+  spanChars: number,
+  facts: {
+    readonly droppedMessageCount: number;
+    readonly iteration: number;
+    readonly strategy: string;
+  },
+  keptRequestAtHead: boolean,
+): LLMMessage | undefined {
+  // The kept-request sentence is not a courtesy and is never traded away for
+  // size: a model that reads "3 earlier messages were dropped" and then finds
+  // a request above it has to be told which of the two facts to trust.
+  const notice = buildDropNotice({
+    ...facts,
+    ...(keptRequestAtHead && { currentRequestKept: true }),
+  });
+  return notice.content.length < spanChars ? notice : undefined;
 }
 
 /**
@@ -106,18 +152,34 @@ export function dropOldestSpan(
     plan.refusals.some((r) => r.reason === 'current-request' && r.turnIndex === 0);
 
   if (spanStart === 0 || keptRequestAtHead) {
-    // The front of the droppable window is leaving: something must occupy
-    // that position, and when it is the window's own head it must be a user
-    // turn. Author the notice — and refuse the whole drop if that notice
-    // would not be smaller than what it replaces, because dropping two tiny
-    // turns to insert a longer notice is pure loss.
-    const notice = buildDropNotice({
-      droppedMessageCount: span.length,
-      iteration,
-      strategy: strategyName,
-      ...(keptRequestAtHead && { currentRequestKept: true }),
-    });
-    if (notice.content.length >= windowChars(span)) {
+    // The front of the droppable window is leaving. Ask the two questions
+    // separately, because they have different answers:
+    //
+    //   1. does the WIRE need a message in the head position? Only when the
+    //      message that would become the head is not a user turn already.
+    //      `head[0]` is the kept request on the 9.55.0 path (a user turn by
+    //      definition); on the ordinary path `head` is empty and the new head
+    //      is the first survivor. An empty result (reachable only from a
+    //      strategy that keeps zero recent turns) counts as needing one.
+    //   2. does a notice FIT — is it smaller than what it replaces? Dropping
+    //      two tiny turns to insert a longer notice is pure loss.
+    const newHead = head[0] ?? tail[0];
+    const wireNeedsNotice = newHead === undefined || newHead.role !== 'user';
+    const spanChars = windowChars(span);
+    // The ladder. The rich notice is the one that names the tools whose
+    // results left; the plain one drops that sentence and keeps the rest.
+    const notice = fittingNotice(
+      spanChars,
+      { droppedMessageCount: span.length, iteration, strategy: strategyName },
+      keptRequestAtHead,
+    );
+    if (notice !== undefined) {
+      // `head` is empty on the ordinary path, so this is byte-for-byte the
+      // `[notice, ...tail]` this function has always produced; when the
+      // request was kept it is `[request, notice, ...tail]`.
+      window = [...head, notice, ...tail];
+      insertedAtMs = droppedAtMs;
+    } else if (wireNeedsNotice) {
       // `'replacement-not-smaller'` since 8.14.0. A drop writes no summary —
       // it never calls a summarizer at all — and the reason's old spelling
       // (`'summary-not-smaller'`) named one that does not exist on this path.
@@ -125,12 +187,11 @@ export function dropOldestSpan(
         { reason: 'replacement-not-smaller', turnIndex: plan.from, messageIndex: spanStart },
         ...plan.refusals,
       ]);
+    } else {
+      // Nothing is owed and nothing fits: drop silently. The record still
+      // names what left, which is where a reader looks anyway.
+      window = [...head, ...tail];
     }
-    // `head` is empty on the ordinary path, so this is byte-for-byte the
-    // `[notice, ...tail]` this function has always produced; when the request
-    // was kept it is `[request, notice, ...tail]`.
-    window = [...head, notice, ...tail];
-    insertedAtMs = droppedAtMs;
   } else {
     window = [...head, ...tail];
   }
