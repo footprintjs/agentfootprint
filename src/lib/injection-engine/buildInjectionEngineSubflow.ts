@@ -89,6 +89,7 @@ import {
   type PendingToolTransition,
 } from '../../core/agent/toolEffects.js';
 import { advanceEngagement } from '../../maps/engagement/lease.js';
+import { parkCard, PARK_CARD_ID } from '../../maps/engagement/parkCard.js';
 import type { EngagementPlan, MapEngagement } from '../../maps/engagement/types.js';
 
 export interface InjectionEngineConfig {
@@ -266,26 +267,29 @@ interface InjectionEngineArgs {
    *  turn, which silently switched the kernel off. Threaded only for agents
    *  built with `.maps()`. */
   acceptedSkillPicks?: readonly string[];
+  /**
+   * The injection ids that actually reached the wire on the PREVIOUS pass
+   * (9.59.0) — the idle test's SERVED clause, and a purpose-built carrier
+   * rather than a reading of the Delta round-trip.
+   *
+   * It cannot come from `priorActiveByslot`: in the GROUPED chart the
+   * sf-llm-call scope re-seeds each turn and `activeByslot` is never bubbled
+   * to the outer scope, so that value is permanently empty there (its own
+   * comment says so). Reading the served clause off it made the grouped
+   * chart's kernel unable to park anything at all — the honest implementation
+   * of one clause silently disabling the feature on one chart shape.
+   *
+   * So the kernel carries its own fact, under its own key, through the same
+   * alias round trip as `mapEngagement` (out as `nextServedInjectionIds`).
+   * Present only for agents built with `.maps()`.
+   */
+  servedInjectionIds?: readonly string[];
   /** The kernel's engagement state as of the PREVIOUS iteration (9.58.0) — a
    *  readonly boundary INPUT (the currentSkillId/nextSkillCursor alias
    *  discipline). Evaluate advances it and writes the fresh value under
    *  `nextMapEngagement`; the mount mappers carry the alias back onto the
    *  parent's `mapEngagement`. Present only on agents built with `.maps()`. */
   mapEngagement?: MapEngagement;
-}
-
-/**
- * Every injection id that reached the wire last pass, across all three slots.
- * The idle test's "was it actually served?" clause, answered from data the
- * Evaluate stage already receives.
- */
-function servedIdsOf(prior: ActiveBySlot | undefined): readonly string[] {
-  if (prior === undefined) return [];
-  const out = new Set<string>();
-  for (const slot of [prior.systemPrompt, prior.messages, prior.tools]) {
-    for (const r of slot) out.add(r.id);
-  }
-  return [...out];
 }
 
 /**
@@ -488,6 +492,7 @@ function makeEvaluateStage(
     // `nextMapEngagement` (the cursor/lease alias discipline). The cursor
     // itself is untouched by every branch of this block: engagement is the
     // kernel's axis, position is the map's.
+    let parkCardText: string | undefined;
     if (engagementPlan !== undefined) {
       const advance = advanceEngagement(engagementPlan, args.mapEngagement, {
         iteration: ctx.iteration,
@@ -498,11 +503,9 @@ function makeEvaluateStage(
         ...(ctx.pendingSkillPick !== undefined && { pendingSkillPick: ctx.pendingSkillPick }),
         // PER-PASS picks (9.59.0), not the turn-cumulative activation list.
         acceptedSkillPicks: args.acceptedSkillPicks ?? [],
-        // The idle test's SERVED clause (9.59.0), from the previous pass's
-        // per-slot active set — already a boundary arg here, so this costs
-        // no new plumbing. Flattened across the three slots: a contribution
-        // that reached the wire through ANY slot was served.
-        servedLastPass: servedIdsOf(args.priorActiveByslot),
+        // The idle test's SERVED clause (9.59.0) — what the engine actually
+        // put on the wire last pass, carried under the kernel's own key.
+        servedLastPass: args.servedInjectionIds ?? [],
       });
       // Written on EVERY pass the feature is on (the `if (routes)` precedent)
       // so a boundary never re-delivers stale engagement state.
@@ -535,6 +538,16 @@ function makeEvaluateStage(
           });
         }
       }
+      // ── The MODEL-VISIBLE surface (9.59.0) ──────────────────────────
+      // Everything above lands on the RECORD, which the model never reads.
+      // The card is the one thing it does read: cursor and engagement shown
+      // as SEPARATE fields, the reason, and the way back named as a concrete
+      // call. Built from the state that was just advanced, so the card and
+      // the suppression are two views of one decision.
+      parkCardText = parkCard(engagementPlan, advance.next);
+      // Tools come off the wire on the ENGAGEMENT axis, independently of
+      // `scopeTools` — see `EngagementAdvance.parkedToolNames`.
+      scope.$setValue('parkedToolNames', advance.parkedToolNames);
       if (advance.parkedInjectionIds.length > 0) {
         ctx = { ...ctx, parkedIds: advance.parkedInjectionIds };
       }
@@ -598,7 +611,29 @@ function makeEvaluateStage(
     // content are both in scope, so a templated instruction is rendered here
     // and every reader downstream sees the same plain text it always saw.
     const activePOJOs = evaluation.active.map((inj) => projectActiveInjection(inj, ctx));
+    // The park card rides as its own row — a reserved id, so it is one
+    // identifiable line on the record (composition, budget, the context
+    // ledger) instead of an anonymous string glued onto somebody's fragment.
+    // Appended LAST: it is a framework aside about the map, and it should
+    // read after the content it is commenting on.
+    if (parkCardText !== undefined) {
+      activePOJOs.push({
+        id: PARK_CARD_ID,
+        flavor: 'steering',
+        description: 'the mount kernel telling the model which maps are parked, and the way back',
+        inject: { systemPrompt: parkCardText },
+      } as (typeof activePOJOs)[number]);
+    }
     scope.$setValue('activeInjections', activePOJOs);
+    // The kernel's SERVED carrier (9.59.0) — this pass's answer, read as the
+    // previous pass's on the next one. Written on EVERY pass the kernel is
+    // mounted (even as []), so a boundary never re-delivers a stale set.
+    if (engagementPlan !== undefined) {
+      scope.$setValue(
+        'nextServedInjectionIds',
+        activePOJOs.map((i) => i.id),
+      );
+    }
 
     const routing = routingEntriesOf(evaluation.active);
     // Structural copy (the events layer stays decoupled from `CursorMove`), and a

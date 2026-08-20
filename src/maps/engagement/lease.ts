@@ -50,6 +50,19 @@ export interface EngagementAdvance {
   readonly next: MapEngagement;
   /** Injection ids whose contributions are suppressed THIS pass (parked maps' members). */
   readonly parkedInjectionIds: readonly string[];
+  /**
+   * Tool NAMES held off the wire this pass — every tool contributed by a
+   * parked map's members (9.59.0).
+   *
+   * The engagement axis suppresses tools on its OWN authority, independently
+   * of `scopeTools`. The two are orthogonal and always were: `scopeTools`
+   * answers "do this map's tools follow the CURSOR?", parking answers "is this
+   * map talking at all?". Before this field, parking answered only the first
+   * half of its own promise — with `scopeTools` false (the default for flat
+   * graphs until 10.0.0) a parked map's prompt stopped and all four of its
+   * tool schemas kept riding, so the wire actively contradicted the park.
+   */
+  readonly parkedToolNames: readonly string[];
   /** Standing changes this pass, for the typed events. Empty on a quiet pass. */
   readonly changes: readonly EngagementChange[];
 }
@@ -82,17 +95,22 @@ export function advanceEngagement(
   const nextRecords: MapEngagementRecord[] = [];
   const changes: EngagementChange[] = [];
   const parkedInjectionIds: string[] = [];
+  const parkedToolNames: string[] = [];
   const priorByMap = new Map((prior ?? []).map((r) => [r.mapId, r]));
 
   for (const map of plan.maps) {
     const record = advanceOne(map, priorByMap.get(map.id), pass, plan.renewalGrace, changes);
     if (record !== undefined) {
       nextRecords.push(record);
-      if (record.standing === 'parked') parkedInjectionIds.push(...map.memberIds);
+      if (record.standing === 'parked') {
+        parkedInjectionIds.push(...map.memberIds);
+        // A parked map's tools come off the wire whatever the tool posture.
+        parkedToolNames.push(...map.toolNames);
+      }
     }
   }
 
-  return { next: nextRecords, parkedInjectionIds, changes };
+  return { next: nextRecords, parkedInjectionIds, parkedToolNames, changes };
 }
 
 function advanceOne(

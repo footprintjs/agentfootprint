@@ -79,6 +79,32 @@ All three matter. A pass with no tool calls at all counts nothing — the model 
 
 At `renewalGrace` consecutive idle passes, the map parks.
 
+## What the model is told
+
+Everything above lands on the **record** — skip reasons, `agentfootprint.map.parked` events. The model reads none of it. So while a map is parked, the model sees a compact status card in its system prompt:
+
+```
+Map status (the framework is telling you this; it is not part of the task):
+  - skill-map — cursor: zone-audit (unchanged) · engagement: PARKED · reason: no recent evidence that it is the right map for this turn · re-engage: available
+    Its instructions and its tools are not being sent right now. To bring them back,
+    call read_skill for any of: zone-audit, billing. That is allowed even for the skill
+    the cursor is already on — it changes ENGAGEMENT (whether this map is sent to you),
+    not POSITION (where the cursor is). If this map is not what this turn needs, ignore
+    this and carry on.
+```
+
+Cursor and engagement are printed as **separate fields** on purpose. That is the teaching move: the model is shown the distinction rather than left to infer a contradiction from a skill that is somehow both "where I am" and "not talking". Then the reason, so the state is not arbitrary. Then the way back, as a concrete call — with the one sentence that stops it being read as a cursor move.
+
+A door the model cannot see is not a door. Before this card, re-engagement was reachable in principle and unreachable in practice: nothing told the model that re-picking a skill it appears to already be in means anything at all.
+
+### The tools actually leave
+
+Parking stops the prompt fragment **and** the tools, and until 9.59.0 the second half was only true on one posture.
+
+With `scopeTools: false` — the default for flat graphs until 10.0.0 — a skill's tools are pre-loaded into the static tool registry and ride from iteration 1 whatever the cursor says. So parking suppressed the fragment and every one of the parked map's tool schemas kept going out. The wire did not merely stay silent about the park; it contradicted it, showing the model tools for a skill whose instructions had just vanished.
+
+Parking now holds those schemas off the wire on its own authority. This is **not** a change to `scopeTools` and does not touch the 10.0.0 ledger: the two dials answer different questions. `scopeTools` asks *do this map's tools follow the cursor?* Parking asks *is this map talking at all?* Keeping those apart is the kernel's whole thesis.
+
 ## Three facts, not one standing
 
 An engagement record answers three different questions, and keeping them apart is the difference between a causal record and a plausible story:

@@ -66,11 +66,17 @@ export function evaluateInjections(
       skipped.push({
         id: inj.id,
         reason: 'parked',
+        // States exactly what the lease machine checked, and nothing more.
+        // Until 9.59.0 this sentence asserted that the contribution HAD been
+        // served — a fact the idle test did not check and could not check
+        // where it ran. It is checked now, so the sentence is true; it stays
+        // written this carefully because the rule is that a record never
+        // claims a fact nobody verified.
         error:
-          `its map is parked: the contribution was served without one of its tools being ` +
-          `called while the turn went elsewhere. The cursor has not moved; explicit or ` +
-          `structural evidence (a read_skill pick, a declared route, its own tool called) ` +
-          `re-engages it.`,
+          `its map is parked: for the grace window its contribution was served, none of ` +
+          `its tools was called, and the turn went elsewhere. The cursor has not moved; ` +
+          `explicit or structural evidence (a read_skill pick, a declared route, its own ` +
+          `tool called) re-engages it.`,
       });
       continue;
     }

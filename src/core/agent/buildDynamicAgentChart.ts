@@ -260,6 +260,18 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           parent.mapEngagement !== undefined && {
             mapEngagement: parent.mapEngagement,
           }),
+        // The kernel's PER-PASS pick feed (9.59.0) — every read_skill pick the
+        // gate accepted last iteration. Threaded beside the engagement state and
+        // under the same gate, so an agent without `.maps()` is unchanged.
+        ...(deps.engagementPlan !== undefined && {
+          acceptedSkillPicks: (parent.acceptedSkillPicks as readonly string[] | undefined) ?? [],
+        }),
+        // The kernel's SERVED carrier (9.59.0) — what actually reached the
+        // wire last pass, feeding the idle test's first clause. Its own key,
+        // because the Delta round-trip is empty in the grouped chart.
+        ...(deps.engagementPlan !== undefined && {
+          servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
+        }),
       }),
       outputMapper: (sf) => ({
         activeInjections: sf.activeInjections,
@@ -289,6 +301,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // unless `.maps()` is mounted.
         ...(sf.nextMapEngagement !== undefined && {
           nextMapEngagement: sf.nextMapEngagement,
+        }),
+        // The kernel's SERVED carrier (9.59.0) — first hop.
+        ...(sf.nextServedInjectionIds !== undefined && {
+          nextServedInjectionIds: sf.nextServedInjectionIds,
+        }),
+        // The engagement axis's TOOL suppression (9.59.0) — first hop of the
+        // same round trip. Value-conditional, like everything beside it.
+        ...(sf.parkedToolNames !== undefined && {
+          parkedToolNames: sf.parkedToolNames,
         }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
@@ -371,6 +392,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         iteration: parent.iteration as number | undefined,
         activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+        // The parked maps' tool names (9.59.0) — the tools slot holds these
+        // out of the STATIC list, which is the only place a parked map's
+        // tools can be reached on the default `scopeTools` posture.
+        parkedToolNames: parent.parkedToolNames as readonly string[] | undefined,
         activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
         runIdentity: parent.runIdentity as
           | { tenant?: string; principal?: string; conversationId: string }
@@ -586,6 +611,18 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // cross-iteration read like the step pointer one block up.
           ...(deps.engagementPlan !== undefined &&
             p.mapEngagement !== undefined && { mapEngagement: p.mapEngagement }),
+          // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
+          // on the OUTER scope, read by the engine mapper INSIDE this
+          // boundary. Same gate as the engagement state above.
+          ...(deps.engagementPlan !== undefined && {
+            acceptedSkillPicks: (p.acceptedSkillPicks as readonly string[] | undefined) ?? [],
+          }),
+          // The kernel's SERVED carrier (9.59.0) — outer key into
+          // sf-llm-call, so the inner engine mapper one level down can read
+          // it. Same gate as the engagement state above.
+          ...(deps.engagementPlan !== undefined && {
+            servedInjectionIds: (p.servedInjectionIds as readonly string[] | undefined) ?? [],
+          }),
           // The escalation flip (9.19.0) — written by tool-calls on the
           // OUTER scope, read by callLLM INSIDE this boundary (`brainFor`'s
           // second argument). Gated on the policy being declared, so every
@@ -685,6 +722,14 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // round trip, onto the outer `mapEngagement` key. Value-conditional.
           ...(s.nextMapEngagement !== undefined && {
             mapEngagement: s.nextMapEngagement,
+          }),
+          // Second hop, onto the outer key the next iteration reads.
+          ...(s.nextServedInjectionIds !== undefined && {
+            servedInjectionIds: s.nextServedInjectionIds,
+          }),
+          // Second hop, onto the outer key the tools slot reads.
+          ...(s.parkedToolNames !== undefined && {
+            parkedToolNames: s.parkedToolNames,
           }),
         };
       },

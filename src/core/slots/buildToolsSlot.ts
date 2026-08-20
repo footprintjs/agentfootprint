@@ -377,10 +377,36 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
     // current step's tool with the banner. No step in progress → the exact
     // array from the line above, untouched.
-    const tools =
+    const steppedTools =
       stepNow !== undefined
         ? substituted.filter((t) => !stepHoldOut.has(t.name)).map(bannered)
         : substituted;
+
+    // ── PARK HOLD-OUT (9.59.0) — the mount kernel's own axis ────────────
+    // A parked map's tools come off the wire here, in the STATIC list, which
+    // is the only place they can be reached on the default posture.
+    //
+    // With `scopeTools` false (the default for flat graphs until 10.0.0) a
+    // skill's tools are pre-loaded into the static registry and ride from
+    // iteration 1 whatever the cursor says. So suppressing the ACTIVE set —
+    // which is all parking used to do — stopped the prompt fragment and left
+    // all four tool schemas riding: the wire did not merely stay silent about
+    // the park, it contradicted it, showing the model tools for a skill whose
+    // instructions had just vanished.
+    //
+    // This is NOT a change to `scopeTools` and does not touch the 10.0.0
+    // ledger. The two dials are orthogonal and always were: `scopeTools`
+    // answers "do this map's tools follow the CURSOR?", parking answers "is
+    // this map talking at all?" — the kernel's whole thesis is that those are
+    // different questions. Absent the kernel the set is empty and this line
+    // returns the same array it was given.
+    const parkedToolNames =
+      (scope.$getValue('parkedToolNames') as readonly string[] | undefined) ?? [];
+    const parkHoldOut = parkedToolNames.length > 0 ? new Set(parkedToolNames) : undefined;
+    const tools =
+      parkHoldOut !== undefined
+        ? steppedTools.filter((t) => !parkHoldOut.has(t.name))
+        : steppedTools;
 
     const injections: InjectionRecord[] = tools.map((t, i) => {
       const summary = `${t.name}: ${t.description}`;
@@ -433,6 +459,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       if (!injTools || injTools.length === 0) continue;
       for (const tool of injTools) {
         if (stepNow !== undefined && stepHoldOut.has(tool.schema.name)) continue;
+        // A parked map's tools never ride, by whichever route they arrive.
+        if (parkHoldOut?.has(tool.schema.name) === true) continue;
         const schema = bannered(tool.schema);
         dynamicSchemas.push(schema);
         const summary = `${schema.name}: ${schema.description}`;

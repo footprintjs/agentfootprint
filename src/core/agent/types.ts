@@ -1240,6 +1240,11 @@ export interface AgentState {
    * so recordings carry the kernel's standing beside the cursor it never
    * touches.
    */
+  /** The `read_skill` picks the gate accepted THIS pass (9.59.0) — cleared at
+   *  the top of every dispatching iteration, exactly like `pendingSkillPick`.
+   *  The mount kernel's renewal feed reads it; written only on agents built
+   *  with `.maps()`. */
+  acceptedSkillPicks?: readonly string[];
   mapEngagement?: import('../../maps/engagement/types.js').MapEngagement;
 
   /**

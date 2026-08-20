@@ -3420,6 +3420,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         openSkillIds: this.openSkillIds(),
         skillGraphIsTree: this.skillGraphIsTree,
       }),
+      // The mount kernel's plan (9.59.0) — the gate's THIRD admission class.
+      // A `read_skill` pick of a PARKED map's member is a re-engagement, not
+      // a hop: admitted even though the reachable set excludes the node the
+      // cursor already stands on, and it never touches the cursor. Value-
+      // conditional, so an agent without `.maps()` hands the handler exactly
+      // the deps object it always did.
+      ...(this.mapsPlan !== undefined && { engagementPlan: this.mapsPlan }),
       // The mount's routing posture (SG-C). `'assist'` — the default — is
       // deliberately NOT threaded: undefined keeps the gate byte-identical.
       ...(this.skillGraphCascade !== undefined &&

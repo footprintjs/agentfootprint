@@ -57,6 +57,8 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
+import { parkedMemberIds } from '../../../maps/engagement/types.js';
+import type { MapEngagement } from '../../../maps/engagement/types.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
@@ -233,6 +235,13 @@ export interface ToolCallsHandlerDeps {
    * hop. Only meaningful alongside `allowedSkillIds`.
    */
   readonly openSkillIds?: readonly string[];
+  /**
+   * The mount kernel's plan (9.59.0) — present only on agents built with
+   * `.maps()`. Read for exactly one thing: to tell a cursor move from a
+   * RE-ENGAGEMENT at the gate below. Everything else about engagement stays
+   * the kernel's business.
+   */
+  readonly engagementPlan?: import('../../../maps/engagement/types.js').EngagementPlan;
   /**
    * Is the mounted graph a decision `tree()`? Changes only the REFUSAL TEXT (8.5.0).
    *
@@ -2149,6 +2158,17 @@ export function buildToolCallsHandler(
       // pick "validated"); a plain read_skill agent never sees this key.
       if (deps.allowedSkillIds) scope.pendingSkillPick = undefined;
 
+      // ── The pass's ACCEPTED picks (9.59.0) — per-pass by construction ──
+      // Same one-shot discipline as `pendingSkillPick` one line up, and for
+      // the same reason: the mount kernel's renewal feed must see evidence
+      // from THIS pass. It used to read `activatedInjectionIds`, which is
+      // cleared only at run start, so one accepted pick anywhere kept the
+      // kernel disarmed for the whole turn. Every accepted pick lands here —
+      // hops, open skills and re-engagements alike — while
+      // `pendingSkillPick` keeps its exact meaning (the last accepted HOP,
+      // the cursor's input). Written only for agents with the kernel mounted.
+      if (deps.engagementPlan) scope.acceptedSkillPicks = [];
+
       // ── The iteration's tool-result batch, in call order (9.16.0) ────
       // Reset here, appended beside every `lastToolResult` write — each entry
       // stamped as its result lands, so a pause mid-batch commits exactly the
@@ -2910,7 +2930,35 @@ export function buildToolCallsHandler(
             const hops = deps.allowedSkillIds(currentSkillId);
             skillHop = hops.includes(reqId);
             const allowed = dedupeIds([...hops, ...(deps.openSkillIds ?? [])]);
-            if (!allowed.includes(reqId)) {
+            // ── The RE-ENGAGEMENT arm (9.59.0) — a third admission class ──
+            // A pick must be routed by INTENT. The reachable set deliberately
+            // excludes the node the cursor already occupies (`makeReachableSkills`
+            // filters it out), which is right for a MOVE and wrong for an
+            // ENGAGEMENT: parking never moves the cursor, so a parked map is
+            // parked exactly WHERE the model wants to return, and the refusal
+            // then told the model to "answer with the current skill" — whose
+            // prompt and tools had just been suppressed. For a single-member
+            // map that made parking permanent for the rest of the turn, under
+            // documentation calling this pick the recovery door.
+            //
+            // So: a pick of a PARKED map's member is admitted, activates, and
+            // does NOT touch the cursor — the same shape as an OPEN skill
+            // ("they ACTIVATE and never move the cursor"). `skillHop` stays
+            // false, `pendingSkillPick` stays unwritten, and the pick lands on
+            // `acceptedSkillPicks`, which the kernel's renewal feed reads as
+            // explicit evidence and re-engages on the very next pass.
+            const parked =
+              deps.engagementPlan === undefined
+                ? undefined
+                : parkedMemberIds(
+                    deps.engagementPlan,
+                    scope.mapEngagement as MapEngagement | undefined,
+                  );
+            const reengaging = parked?.has(reqId) === true;
+            if (reengaging) {
+              // Admitted. Nothing to refuse and no posture to apply: this is
+              // not a hop, and a posture governs routing, not engagement.
+            } else if (!allowed.includes(reqId)) {
               skillRejected = true;
               result = skillRefusal(reqId, allowed, deps.skillGraphIsTree === true);
               typedEmit(scope, 'agentfootprint.skill.rejected', {
@@ -3174,6 +3222,15 @@ export function buildToolCallsHandler(
             //     from a non-node nothing can fire. It activates through its own
             //     `llm-activated` trigger and the graph stays exactly where it was.
             if (deps.allowedSkillIds && skillHop) scope.pendingSkillPick = requestedId;
+            // The kernel's per-pass feed: every pick the gate accepted, hop
+            // or not. A re-engagement is here and NOT in `pendingSkillPick`,
+            // which is the whole point — it changes engagement, not position.
+            if (deps.engagementPlan) {
+              const picks = (scope.acceptedSkillPicks as readonly string[] | undefined) ?? [];
+              if (!picks.includes(requestedId)) {
+                scope.acceptedSkillPicks = [...picks, requestedId];
+              }
+            }
           }
         }
 

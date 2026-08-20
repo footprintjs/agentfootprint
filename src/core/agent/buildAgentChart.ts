@@ -496,6 +496,18 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
             parent.mapEngagement !== undefined && {
               mapEngagement: parent.mapEngagement,
             }),
+          // The kernel's PER-PASS pick feed (9.59.0) — every read_skill pick the
+          // gate accepted last iteration. Threaded beside the engagement state and
+          // under the same gate, so an agent without `.maps()` is unchanged.
+          ...(deps.engagementPlan !== undefined && {
+            acceptedSkillPicks: (parent.acceptedSkillPicks as readonly string[] | undefined) ?? [],
+          }),
+          // The kernel's SERVED carrier (9.59.0) — what actually reached the
+          // wire last pass, feeding the idle test's first clause. Its own key,
+          // because the Delta round-trip is empty in the grouped chart.
+          ...(deps.engagementPlan !== undefined && {
+            servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
+          }),
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -524,6 +536,17 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // otherwise, so every other agent's mapper output is unchanged.
           ...(sf.nextMapEngagement !== undefined && {
             mapEngagement: sf.nextMapEngagement,
+          }),
+          // The kernel's SERVED carrier (9.59.0), back onto the parent key.
+          ...(sf.nextServedInjectionIds !== undefined && {
+            servedInjectionIds: sf.nextServedInjectionIds,
+          }),
+          // The engagement axis's TOOL suppression (9.59.0) — a parked map's
+          // tools come off the wire whatever the `scopeTools` posture. Written
+          // on every pass the kernel is mounted; absent otherwise, so every
+          // other agent's mapper output is the exact bytes it was.
+          ...(sf.parkedToolNames !== undefined && {
+            parkedToolNames: sf.parkedToolNames,
           }),
         }),
         // CRITICAL: footprintjs's default `applyOutputMapping`
@@ -635,6 +658,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         iteration: parent.iteration as number | undefined,
         activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+        // The parked maps' tool names (9.59.0) — the tools slot holds these
+        // out of the STATIC list, which is the only place a parked map's
+        // tools can be reached on the default `scopeTools` posture.
+        parkedToolNames: parent.parkedToolNames as readonly string[] | undefined,
         // The slot subflow reads these to build the per-iteration
         // ToolDispatchContext when an external `.toolProvider()` is
         // configured. Without them the provider sees activeSkillId
