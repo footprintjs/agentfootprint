@@ -28,6 +28,12 @@
  *   AFTER   .maps()      → engaged on the guess, parked on call four,
  *                          every later call travels light — and the
  *                          `agentfootprint.map.*` events narrate it.
+ *   WHAT THE MODEL SEES  → the park card, printed verbatim: cursor and
+ *                          engagement as SEPARATE fields, the reason, and
+ *                          the way back.
+ *   RECOVERY             → the model reads the card, asks for the skill it
+ *                          is ALREADY ON, and the map comes back — prompt
+ *                          and tools — without the cursor ever moving.
  */
 
 import { Agent, defineTool } from '../../src/index.js';
@@ -105,12 +111,32 @@ interface Outcome {
   /** Per iteration: did the zone-audit skill's contribution ride the call? */
   rode: boolean[];
   events: string[];
+  /** What the MODEL actually received, per call — snapshotted, never held by
+   *  reference (the framework reuses the request object across iterations). */
+  wire: Array<{ system: string; tools: string[] }>;
 }
 
-async function driveTurn(withKernel: boolean): Promise<Outcome> {
+async function driveTurn(
+  withKernel: boolean,
+  script: readonly unknown[] = replies,
+): Promise<Outcome> {
   const rode: boolean[] = [];
   const events: string[] = [];
-  let builder = Agent.create({ provider: mock({ replies: replies as never }), model: 'mock', maxIterations: 8 })
+  const wire: Array<{ system: string; tools: string[] }> = [];
+  let i = 0;
+  let builder = Agent.create({
+    provider: mock({
+      respond: (req) => {
+        wire.push({
+          system: req.systemPrompt ?? '',
+          tools: (req.tools ?? []).map((t) => t.name),
+        });
+        return (script[i++] ?? script[script.length - 1]) as never;
+      },
+    }),
+    model: 'mock',
+    maxIterations: 8,
+  })
     .system('You help people find and audit things.')
     .tool(screenOpen)
     .skillGraph(buildMap());
@@ -125,10 +151,22 @@ async function driveTurn(withKernel: boolean): Promise<Outcome> {
         }
         if (e.name === 'agentfootprint.map.engaged') {
           const p = pay;
+          // `explicit` and `structural` are not guesses — say so. Naming a
+          // user request a "guess" is the same category error the kernel
+          // exists to stop the RECORD making.
+          const strength = String(p.by);
+          const kind =
+            strength === 'explicit' || strength === 'structural'
+              ? `${strength} evidence`
+              : `${strength} guess`;
           events.push(
-            `call ${String(p.iteration)}: ENGAGED by a ${String(p.by)} guess` +
+            `call ${String(p.iteration)}: ENGAGED by ${kind}` +
               (p.witness !== undefined ? ` (witness: "${String(p.witness)}")` : '') +
-              (p.reengaged === true ? ' — recovered from a park' : ''),
+              (p.reengaged === true ? ' — recovered from a park' : '') +
+              (p.upgraded === true ? ` — UPGRADED (founded ${String(p.foundedBy)})` : '') +
+              (p.tenantChanged === true
+                ? ` — cursor moved to '${String(p.at)}', eligibility re-derived (founded ${String(p.foundedBy)})`
+                : ''),
           );
         }
         if (e.name === 'agentfootprint.map.parked') {
@@ -142,7 +180,7 @@ async function driveTurn(withKernel: boolean): Promise<Outcome> {
     })
     .build();
   const answer = String(await agent.run(meta.defaultInput ?? ''));
-  return { answer, rode, events };
+  return { answer, rode, events, wire };
 }
 
 function report(label: string, o: Outcome): void {
@@ -154,6 +192,21 @@ function report(label: string, o: Outcome): void {
   console.log(`  final answer                             : ${o.answer}`);
 }
 
+/** The turn where the model READS the card and acts on it. */
+const recoveryReplies = [
+  toolCall('c1', 'screen_open'),
+  toolCall('c2', 'screen_open'),
+  toolCall('c3', 'screen_open'),
+  // Call 4 is where the card first appears. The model does what it says —
+  // and asks for the skill the cursor is ALREADY sitting on.
+  {
+    content: '',
+    toolCalls: [{ id: 'c4', name: 'read_skill', args: { id: 'zone-audit' } }],
+    stopReason: 'tool_use' as const,
+  },
+  { content: 'Re-engaged; auditing now.', toolCalls: [], stopReason: 'stop' as const },
+];
+
 export async function run(_input: string): Promise<string> {
   const before = await driveTurn(false);
   report('BEFORE — no kernel: the guess rides every call', before);
@@ -161,10 +214,40 @@ export async function run(_input: string): Promise<string> {
   const after = await driveTurn(true);
   report('AFTER — .maps({ renewalGrace: 3 })', after);
 
+  // ── ACT 3: what the MODEL is told ─────────────────────────────────────
+  // Everything above is the RECORD, which the model never reads. This is the
+  // one part it does. A door the model cannot see is not a door.
+  const parkedCall = after.wire.find((w) => w.system.includes('engagement: PARKED'));
+  console.log('\n━━ WHAT THE MODEL SEES ON THE PARKED CALL ━━━━━━━━━━━━━━━━━━━');
+  if (parkedCall) {
+    const card = parkedCall.system
+      .split('\n')
+      .filter((l) => l.includes('Map status') || l.trim().startsWith('- skill-map') || l.includes('read_skill for any of'))
+      .join('\n');
+    console.log(card.replace(/^/gm, '  '));
+    console.log(
+      `\n  tools on this call: [${parkedCall.tools.join(', ')}]` +
+        `\n  ...note get_zone_info is GONE. Before 9.59.0 the prompt fragment` +
+        `\n  stopped and every one of the map's tool schemas kept riding, so the` +
+        `\n  model was shown tools for a skill whose instructions had vanished.`,
+    );
+  }
+
+  // ── ACT 4: the model acts on it ───────────────────────────────────────
+  const recovered = await driveTurn(true, recoveryReplies);
+  console.log('\n━━ THE MODEL RE-ENGAGES IT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  for (const line of recovered.events) console.log(`  ${line}`);
+  const last = recovered.wire[recovered.wire.length - 1];
   console.log(
-    '\n  The cursor never moved in either run — parking is the KERNEL’s axis,\n' +
-      '  position is the MAP’s. A read_skill pick, a declared route, or the\n' +
-      '  map’s own tool re-engages it; see src/maps/README.md for the law.',
+    `  after the re-pick — procedure back: ${String(last?.system.includes('ZONE AUDIT PROCEDURE'))}` +
+      `, tools back: ${String(last?.tools.includes('get_zone_info'))}`,
+  );
+
+  console.log(
+    '\n  The cursor never moved in ANY of these runs — not when the map parked,\n' +
+      '  and not when it came back. Parking is the KERNEL’s axis; position is\n' +
+      '  the MAP’s. That is why a pick of the node you are already on is a\n' +
+      '  legal re-engagement rather than a refused move.',
   );
   return after.answer;
 }

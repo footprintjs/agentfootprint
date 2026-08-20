@@ -26,9 +26,14 @@
  *   // iteration 1: an entry regex placed the cursor — a lexical guess
  *   ({ next: state } = advanceEngagement(plan, state, {
  *     iteration: 1, currentNode: 'audit', moveBy: 'entry', witness: 'zone',
- *     toolResults: [], activatedInjectionIds: [],
+ *     toolResults: [], acceptedSkillPicks: [], servedLastPass: [],
  *   }));
  *   // iterations 2..4: the model works elsewhere; on the 4th pass the map parks
+ *
+ * The two per-pass feeds are the 9.59.0 shape and both matter: `acceptedSkillPicks`
+ * is THIS pass's accepted `read_skill` picks (turn-cumulative evidence renewed a
+ * guess forever), and `servedLastPass` is what actually reached the wire last pass
+ * (a contribution that never rode cannot have been ignored).
  */
 
 export {
@@ -39,7 +44,7 @@ export {
   valueOr,
   describeClaim,
   type Claim,
-} from '../maps/claim/claim.js';
+} from '../lib/claim/claim.js';
 
 export type {
   EvidenceStrength,
