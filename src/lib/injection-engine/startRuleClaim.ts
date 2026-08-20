@@ -73,8 +73,10 @@ export const COLD_CONTEXT_PHRASE =
   'a COLD-START context (iteration 1, the phrase as `userMessage`, empty `history`, no ' +
   'cursor and no activated injections)';
 
-/** One claimant of a phrase: the entry, and its position in declaration order. */
-export interface Claim {
+/** One claimant of a phrase: the entry, and its position in declaration order.
+ *  (Named Claimant since 9.58.0 — `Claim<T>` on the `/maps` door is the
+ *  honesty primitive, a different thing; one name, one meaning.) */
+export interface Claimant {
   readonly entry: StartRuleDecl;
   readonly index: number;
 }
@@ -107,9 +109,9 @@ export function describeCondition(entry: StartRuleDecl): string {
  */
 export interface ClaimLaws {
   /** First claimant under the declaration-order cold walk, or undefined. */
-  readonly underColdWalk: (phrase: string) => Claim | undefined;
+  readonly underColdWalk: (phrase: string) => Claimant | undefined;
   /** First claimant under the turn-start cascade's tier 1, or undefined. */
-  readonly underCascade: (phrase: string) => Claim | undefined;
+  readonly underCascade: (phrase: string) => Claimant | undefined;
 }
 
 /** Build both laws' claim finders over one entry list, in declaration order. */
