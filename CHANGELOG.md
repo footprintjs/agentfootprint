@@ -68,6 +68,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     reads **⚠ UNANSWERABLE — nothing ever looked for one, so silence about
     it is not evidence of its absence**.
 
+- **`dangling-reference` no longer accuses a window that HAS been
+  re-grounded.** The check compares two name sets, and the two were derived
+  by different rules: the dropped side came off the window ledger, which
+  names a tool result with `window/toolNames.ts` — the helper that recovers
+  the name from the assistant turn that asked when the result itself carries
+  no `toolName` — while the present side read `message.toolName` directly.
+  `LLMMessage.toolName` is optional, so a conversation restored from an older
+  release (or from a host that speaks the wire shape and nothing more) names
+  its tools through `toolCalls[].id` alone; the SAME message was then
+  evidence-that-left on one side and not-present on the other, and a
+  legitimate re-fetch was reported as a dangling reference. The present side
+  now asks the same helper the same question. One helper, two sides, so the
+  two can never disagree about what a message is — and the check's second
+  fence ("a re-fetched ground is silent") holds for windows that never
+  carried the field.
+
 ### Added
 
 - **`.claims()` — the claim seam: what the answer says vs what the run
@@ -116,24 +132,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UNCONDITIONALLY — a tool that vanished with the event tail could not say
   the evidence is missing. `TRACE_TOOL_NAMES` (and therefore
   `.selfExplain()`'s reserved names) is now eleven.
-
-### Fixed
-
-- **`dangling-reference` no longer accuses a window that HAS been
-  re-grounded.** The check compares two name sets, and the two were derived
-  by different rules: the dropped side came off the window ledger, which
-  names a tool result with `window/toolNames.ts` — the helper that recovers
-  the name from the assistant turn that asked when the result itself carries
-  no `toolName` — while the present side read `message.toolName` directly.
-  `LLMMessage.toolName` is optional, so a conversation restored from an older
-  release (or from a host that speaks the wire shape and nothing more) names
-  its tools through `toolCalls[].id` alone; the SAME message was then
-  evidence-that-left on one side and not-present on the other, and a
-  legitimate re-fetch was reported as a dangling reference. The present side
-  now asks the same helper the same question. One helper, two sides, so the
-  two can never disagree about what a message is — and the check's second
-  fence ("a re-fetched ground is silent") holds for windows that never
-  carried the field.
 
 ## [9.60.0] - 2026-08-20
 

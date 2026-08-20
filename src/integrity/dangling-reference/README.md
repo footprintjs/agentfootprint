@@ -19,6 +19,7 @@ messages is dangling. One finding per tool naming every missing ground; the shar
 dedups to one `integrity.context_error` per defect per run.
 
 **The two fences** (they are the check's honesty):
+
 - a ground **never dropped** is silent even with no result in the window — the model simply has not
   called it yet, and offering the dependent tool ahead of that is legitimate sequencing;
 - a **re-fetched** ground (fresh result present) is silent, however many drops preceded it.
@@ -40,7 +41,7 @@ import { danglingReferencesOf } from './check.js';
 const findings = danglingReferencesOf(
   [{ name: 'screen_fire', argumentsFrom: ['whats_here'] }],
   new Set(['whats_here']), // dropped this run (window ledger)
-  new Set(),               // nothing re-established in the current frame
+  new Set(), // nothing re-established in the current frame
   4,
 );
 // → one 'dangling-reference' at seam 'compose'; the message tells the model

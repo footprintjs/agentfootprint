@@ -28,6 +28,7 @@ import { Agent, defineTool } from '../../src/index.js';
 import { semantic } from '../../src/lib/semantics/envelope.js';
 import { mock } from '../../src/llm-providers.js';
 import { unknown as unknownClaim } from '../../src/lib/claim/claim.js';
+import { contextErrorIdentity, dedupeContextErrors } from '../../src/integrity/finding/types.js';
 
 // ---------------------------------------------------------------------------
 // The pure check
@@ -277,5 +278,111 @@ describe('contract: the doors refuse what nobody could have meant', () => {
         .claims({ nav: { entity: 's', field: 'f' } })
         .build(),
     ).toThrow(/outputSchema/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the adversarial review (each defect shipped, was caught,
+// and is pinned here so it cannot come back)
+// ---------------------------------------------------------------------------
+
+describe('regression: two fields of one entity are two defects, not one', () => {
+  it('the identity discriminates by field — both findings survive dedup', () => {
+    const out = unsupportedClaimsOf(
+      [declared('nav_count', 'screen2', 'nav'), declared('tap_count', 'screen2', 'taps')],
+      [row('screen2', 'nav', 2), row('screen2', 'taps', 7)],
+      { nav_count: 5, tap_count: 9 },
+      7,
+    );
+    expect(out.findings).toHaveLength(2);
+    const ids = out.findings.map((f) => contextErrorIdentity({ ...f, epoch: undefined }));
+    expect(new Set(ids).size).toBe(2);
+    // …and the ledger's count agrees with what a consumer would receive.
+    expect(dedupeContextErrors(out.findings)).toHaveLength(2);
+    expect(out.dispositions.filter((d) => d.disposition === 'checked-fail')).toHaveLength(2);
+  });
+
+  it('an advisory never swallows a real contradiction about another field', () => {
+    const out = unsupportedClaimsOf(
+      [declared('scope', 'run', 'scope'), declared('count', 'run', 'count')],
+      [row('run', 'scope', 'verified'), row('run', 'count', 2)],
+      { scope: null, count: 99 },
+      7,
+    );
+    expect(dedupeContextErrors(out.findings)).toHaveLength(2);
+    const real = out.findings.filter((f) => f.advisory !== true);
+    expect(real).toHaveLength(1);
+    expect(real[0]!.message).toContain('count');
+  });
+
+  it('the SAME field re-detected still deduplicates to one', () => {
+    const once = unsupportedClaimsOf(
+      [declared('nav_count', 'screen2', 'nav')],
+      [row('screen2', 'nav', 2)],
+      { nav_count: 5 },
+      7,
+    );
+    expect(dedupeContextErrors([...once.findings, ...once.findings])).toHaveLength(1);
+  });
+});
+
+describe('regression: agreement on a doubted value is agreement, not doubt', () => {
+  it('answering null where the run settled null files nothing', () => {
+    const out = unsupportedClaimsOf(
+      [declared('scope', 'run', 'scope')],
+      [row('run', 'scope', null)],
+      { scope: null },
+      7,
+    );
+    expect(out.findings).toEqual([]);
+    expect(out.dispositions).toEqual([{ claim: 'scope', disposition: 'checked-pass' }]);
+  });
+
+  it("and 'unknown' against a settled 'unknown' likewise", () => {
+    const out = unsupportedClaimsOf(
+      [declared('scope', 'run', 'scope')],
+      [row('run', 'scope', 'unknown')],
+      { scope: 'unknown' },
+      7,
+    );
+    expect(out.findings).toEqual([]);
+  });
+});
+
+describe('regression: the claim ledger is gated on a declared contract', () => {
+  const semanticAgent = (withContract: boolean) => {
+    let b = Agent.create({
+      provider: mock({
+        replies: [
+          {
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'whats_here', args: {} }],
+            stopReason: 'tool_use',
+          },
+          { content: JSON.stringify({ nav_count: 2 }), toolCalls: [], stopReason: 'stop' },
+        ],
+      }),
+      model: 'mock',
+      maxIterations: 4,
+    })
+      .system('s')
+      .tool(screenTool())
+      .outputSchema(answerParser);
+    if (withContract) b = b.claims({ nav_count: { entity: 'screen2', field: 'nav' } });
+    return b.build();
+  };
+
+  it('an agent with no contract commits no claimFacts — zero-delta', async () => {
+    const agent = semanticAgent(false);
+    await agent.run('how many navs?');
+    const state = agent.getLastSnapshot()?.sharedState as { claimFacts?: unknown };
+    expect(state.claimFacts).toBeUndefined();
+  });
+
+  it('an agent WITH a contract collects them', async () => {
+    const agent = semanticAgent(true);
+    await agent.run('how many navs?');
+    const state = agent.getLastSnapshot()?.sharedState as { claimFacts?: readonly unknown[] };
+    expect((state.claimFacts ?? []).length).toBeGreaterThan(0);
   });
 });

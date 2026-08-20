@@ -330,7 +330,9 @@ describe('regression: a re-fetched ground stays silent when the window speaks wi
     expect(reGrounded).toBeDefined();
     expect(reGrounded!.toolName).toBeUndefined();
     expect(
-      history.some((m) => (m.toolCalls ?? []).some((c) => c.id === 'h2' && c.name === 'whats_here')),
+      history.some((m) =>
+        (m.toolCalls ?? []).some((c) => c.id === 'h2' && c.name === 'whats_here'),
+      ),
     ).toBe(true);
 
     // So the second fence holds: evidence in reach, nothing to accuse.

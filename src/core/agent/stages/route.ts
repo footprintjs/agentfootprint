@@ -38,6 +38,7 @@ import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import { contextErrorIdentity } from '../../../integrity/finding/types.js';
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
+import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 
 export type RouteBranch =
@@ -661,18 +662,13 @@ function judgeClaims(
   ledgerHolder: { current: DispositionLedger | undefined } | undefined,
 ): void {
   if (claims === undefined || claims.length === 0) return;
-  const parser = undefined;
-  void parser;
   const answer = readValidatedAnswer(scope);
   const iteration = (scope.iteration as number | undefined) ?? 0;
   if (answer === undefined) {
     // The answer is not readable as the typed stratum (a parser that
     // returns a non-object, an answer that is bare prose). Incomparable —
     // stated per declared claim, never guessed at.
-    for (const claim of claims) {
-      ledgerHolder?.current?.note('unsupported-claim', 'claim', 'unreachable');
-      void claim;
-    }
+    noteClaims(claims, ledgerHolder, 'unreachable');
     return;
   }
   const { findings, dispositions } = unsupportedClaimsOf(
@@ -702,6 +698,28 @@ function judgeClaims(
     typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
   }
   if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+}
+
+/**
+ * File one disposition per declared claim WITHOUT comparing anything.
+ *
+ * The two terminal exits an answer can leave by without ever being judged —
+ * a schema the model never satisfied, and a middleware denial — still hand
+ * something back to the caller, so a claim contract that filed nothing there
+ * would leave the run's accounting silent about checks it registered. And
+ * silence is the one thing this ledger exists to make impossible: the
+ * difference between "the checker ran and agreed" and "no checker was
+ * watching" is exactly what a disposition row carries.
+ */
+function noteClaims(
+  claims: readonly DeclaredClaim[] | undefined,
+  ledgerHolder: { current: DispositionLedger | undefined } | undefined,
+  disposition: Disposition,
+): void {
+  if (claims === undefined || claims.length === 0) return;
+  for (let i = 0; i < claims.length; i++) {
+    ledgerHolder?.current?.note('unsupported-claim', 'claim', disposition);
+  }
 }
 
 /**
@@ -843,6 +861,9 @@ function buildEnforcingDecider(
     // nobody gets this string; asking the model for a better-shaped version
     // of it would be the library routing around that decision.
     if (denied) {
+      // The claim seam never runs on a denied answer — nobody receives it —
+      // but the run must still SAY that, per declared claim.
+      noteClaims(claims, integrityLedger, 'not-applicable');
       emitRouteDecided(scope, 'final', base.rationale);
       settleWrapUp(scope, base.earlyStop, false);
       return 'final';
@@ -930,6 +951,10 @@ function buildEnforcingDecider(
       fallbackConfigured: enforcement.hasFallback,
       ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
     });
+    // The claim seam cannot read an answer the schema rejected: there is no
+    // typed stratum to compare. Unreachable, stated per claim — never
+    // silence, and never a pass.
+    noteClaims(claims, integrityLedger, 'unreachable');
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
     // unspent → one teaching re-ask (its turn may well fix both).

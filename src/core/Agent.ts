@@ -2709,7 +2709,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private assertIntegrityAlive(): void {
     if (this.integrityPosture !== 'dev') return;
-    this.integrityLedgerHolder.current?.assertAlive({ workExisted: true });
+    this.integrityLedgerHolder.current?.assertAlive({
+      workExisted: this.integrityWorkExisted(),
+    });
+  }
+
+  /**
+   * Did this run reach work a registered check should have seen?
+   *
+   * MEASURED, not asserted — and measured from a signal the integrity code
+   * does not write. `llmLatestContent` is committed by the LLM stage's own
+   * core path on every completed call, so its presence proves a call
+   * happened; its absence proves the run died or paused before one, and a
+   * checker that filed nothing THERE is not rot, it is a run that never got
+   * started. Deriving this from the checks' own encounter counts would be
+   * circular: an unhooked check would report "no work existed" and silence
+   * the very alarm it should be tripping.
+   */
+  private integrityWorkExisted(): boolean {
+    const state = this.getLastSnapshot()?.sharedState as { llmLatestContent?: unknown } | undefined;
+    return state !== undefined && state.llmLatestContent !== undefined;
   }
 
   /**
@@ -2730,7 +2749,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         type,
         payload: {
           posture: this.integrityPosture,
-          workExisted: true,
+          workExisted: this.integrityWorkExisted(),
           rows: ledger.report(),
         },
         meta: buildEventMeta(
@@ -3540,6 +3559,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
       registryByName,
+      // The claim ledger accumulates only for an agent that declared a
+      // contract to read it (9.61.0) — value-conditional, so every other
+      // agent commits exactly what it always did.
+      ...(this.claimContract !== undefined && { collectClaimFacts: true }),
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),

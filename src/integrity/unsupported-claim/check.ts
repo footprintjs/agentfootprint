@@ -122,12 +122,25 @@ export function unsupportedClaimsOf(
       (settledRow.measuredAt !== undefined ? `, measured_at ${String(settledRow.measuredAt)}` : '');
 
     if (isDoubt(claimed)) {
+      // …unless the RUN settled a non-reading too. Reporting `null` for a
+      // fact whose settled value is `null` is agreement, not doubt — the
+      // model declined nothing. Checked here rather than by falling through
+      // to the comparison below, because the advisory's whole premise is
+      // "a verified value existed and the answer declined it".
+      if (isDoubt(settledValue)) {
+        dispositions.push({ claim: claim.answerField, disposition: 'checked-pass' });
+        continue;
+      }
       // The model declined to claim a fact the run verified — an advisory.
       findings.push({
         kind: 'unsupported-claim',
         seam: 'claim',
         advisory: true,
         subjects: [subject],
+        // Two fields of one entity are two disagreements: without the
+        // predicate their identities collide and the second is deduplicated
+        // away, leaving the event channel disagreeing with the ledger.
+        predicate: claim.field,
         witnesses: [
           {
             subject,
@@ -192,6 +205,7 @@ export function unsupportedClaimsOf(
       kind: 'unsupported-claim',
       seam: 'claim',
       subjects: [subject],
+      predicate: claim.field,
       witnesses,
       epoch,
       message:

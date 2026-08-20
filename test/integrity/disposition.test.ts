@@ -89,11 +89,18 @@ describe('contract: the canary (theorem ii) — synthetic counts stay apart', ()
     expect(row.synthetic).toBe(1);
   });
 
-  it('a minted canary also satisfies theorem i (the mint proves wiring reaches the check)', () => {
+  it('a minted canary does NOT satisfy theorem i — it proves the function, never the wiring', () => {
+    // The canary is minted by calling the pure check directly, so a check
+    // whose pipeline wiring was deleted still mints and still catches. If
+    // that satisfied theorem (i), the wiring-rot alarm could never fire in
+    // a dev-posture run — the exact decay this ledger exists to catch.
     const l = dispositionLedger();
     l.register('invariant-violation', 'write');
     l.noteSynthetic('invariant-violation', 'write', 'minted');
     l.noteSynthetic('invariant-violation', 'write', 'caught');
+    expect(() => l.assertAlive({ workExisted: true })).toThrow(CheckerDeadError);
+    // One real encounter — of any disposition — is what proves the wiring.
+    l.note('invariant-violation', 'write', 'not-applicable');
     expect(() => l.assertAlive({ workExisted: true })).not.toThrow();
   });
 });

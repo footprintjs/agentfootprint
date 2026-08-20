@@ -47,6 +47,21 @@ export interface ContextError {
   readonly subjects: readonly SubjectRef[];
   /** The two-or-more assertions that prove it — copies, plain data. */
   readonly witnesses: readonly Assertion[];
+  /**
+   * WHICH RELATION the defect is about, when the subjects alone do not
+   * determine it (9.61.0).
+   *
+   * The substrate already treats the predicate as identity-bearing —
+   * `assertionKey` is `(subject, predicate, epoch)` — and a finding's
+   * identity was strictly coarser than the algebra key one file over. That
+   * gap lost real defects: two claims about two FIELDS of one entity
+   * rendered the same identity, so the second was deduplicated away and the
+   * event channel disagreed with the disposition ledger about the same run.
+   *
+   * Absent on the checks whose subjects already discriminate (a tool name
+   * is the whole story there), which keeps their identities byte-identical.
+   */
+  readonly predicate?: string;
   /** The epoch the conflict was judged at, when the witnesses carry one. */
   readonly epoch?: number;
   /** True when every witness is canary material — never mixed with real. */
@@ -78,7 +93,11 @@ export function contextErrorIdentity(e: ContextError): string {
     .sort()
     .join(' + ');
   const epoch = e.epoch === undefined ? '' : String(e.epoch);
-  return `${e.kind} @${e.seam} [${subjects}] ${epoch}`;
+  // The predicate rides between the subjects and the epoch, mirroring
+  // `assertionKey`. Absent renders '', so every finding filed before this
+  // field existed keeps exactly the identity it had.
+  const predicate = e.predicate ?? '';
+  return `${e.kind} @${e.seam} [${subjects}] ${predicate} ${epoch}`;
 }
 
 /** Keep the FIRST filing of each identity, in input order. */

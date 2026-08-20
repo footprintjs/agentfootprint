@@ -131,6 +131,7 @@ import {
 } from '../../../lib/semantics/envelope.js';
 import type { ToolSemantics } from '../../../lib/semantics/types.js';
 import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
+import type { ClaimLedgerRow } from '../../../integrity/unsupported-claim/check.js';
 import {
   readCoverageResult,
   type CoverageFacts,
@@ -154,6 +155,14 @@ export interface ToolCallsHandlerDeps {
    *  registry (static .tool() entries + read_skill if any skills +
    *  shared skill tools). The dispatch primary lookup. */
   readonly registryByName: ReadonlyMap<string, Tool>;
+  /**
+   * True when the agent declared a `.claims()` contract (9.61.0). The claim
+   * ledger accumulates ONLY then: an agent whose tools return semantic
+   * envelopes but who declared no contract has nothing that would ever read
+   * those rows, and writing them would be committed state — and a growing
+   * checkpoint — bought for nobody.
+   */
+  readonly collectClaimFacts?: boolean;
   /** Optional external `.toolProvider()` for per-iteration dynamic
    *  tools (skill-scoped, multi-tenant, etc.). Consulted only when
    *  the static registry doesn't have the tool. */
@@ -858,9 +867,17 @@ export function buildToolCallsHandler(
     // before. Rows carry the DETACHED values: a ledger holding live
     // references into a value the tool still owns would compare against
     // whatever that value became later.
-    const rows = claimRowsOf(detached as ToolSemantics, call);
-    if (rows.length > 0) {
-      scope.claimFacts = [...(scope.claimFacts ?? []), ...rows];
+    // GATED on a declared contract: with nothing to read these rows, they
+    // would be committed state and checkpoint weight bought for nobody.
+    if (deps.collectClaimFacts === true) {
+      const rows = claimRowsOf(detached as ToolSemantics, call);
+      if (rows.length > 0) {
+        // `concat` over spread: one copy of the existing rows instead of
+        // re-spreading element by element. The write itself is still a
+        // fresh array — committed state is immutable-after-swap, so the
+        // prior value must never be mutated in place.
+        scope.claimFacts = ((scope.claimFacts ?? []) as ClaimLedgerRow[]).concat(rows);
+      }
     }
     return semanticsForModel(sem);
   };
