@@ -88,6 +88,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, resolve, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as nodeModule from 'node:module';
@@ -345,10 +346,37 @@ function buildDocIndex() {
   // (2) + (3) generated trees — enumerated ONLY to quantify the trap they pose.
   const generatedInSite = walkFiles(GENERATED_IN_SITE, ['.md', '.mdx'], []).sort();
   const generatedLegacy = walkFiles(GENERATED_LEGACY, ['.md'], []).sort();
-  // (4) repo-internal prose.
+  // (4) repo-internal prose — GIT-TRACKED ONLY.
+  //
+  // The filter matters, and it is not cosmetic (9.59.0). Without it the scan
+  // counts whatever `.md` files happen to sit in the working tree, including
+  // GITIGNORED ones. That made this report un-reproducible: the author's
+  // machine had one ignored scratch page, so the committed report claimed 56
+  // repo-internal pages while a clean checkout of the same commit produces 55.
+  // A published number that depends on the author's untracked files is a
+  // number nobody else can verify — the exact failure mode this whole report
+  // exists to catch, one level up.
+  //
+  // `git ls-files` is the authority on what the repo contains. If git is not
+  // available (a tarball, a vendored copy), fall back to the plain walk rather
+  // than crashing: a slightly-off count beats no report.
+  const trackedFiles = (() => {
+    try {
+      return new Set(
+        execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' })
+          .split('\0')
+          .filter(Boolean)
+          .map((rel) => join(ROOT, rel)),
+      );
+    } catch {
+      return null;
+    }
+  })();
   const repoPages = REPO_PROSE_ROOTS.flatMap((r) =>
     walkFiles(r, ['.md'], [GENERATED_LEGACY, DATA_DIR, REPORT_PATH]),
-  ).sort();
+  )
+    .filter((f) => trackedFiles === null || trackedFiles.has(f))
+    .sort();
 
   const siteProse = new Map(); // token → Set<page>
   const siteCode = new Map();
