@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`src/integrity/` — the Context Integrity family begins, accounting
+  first.** `disposition/` files one of four dispositions per check
+  encounter — `checked-pass` / `checked-fail` / `not-applicable` /
+  `unreachable` — so "zero findings" and "zero checks ran" are different
+  observable states. `assertAlive()` carries both dead-detector theorems:
+  a registered check that filed nothing while work existed fails the run
+  by name, and a dev-posture canary that was minted and never caught
+  fails it even when there was nothing real to find. Synthetic counts
+  never touch real ones; `unreachable` is the falsification instrument —
+  if it dominates, applications are not stamping identity edges and the
+  design's own thesis is failing, measurably. Internal for now; the
+  public surface arrives with the finding type.
+
 - **A capped event tail says WHERE its kept window starts** (Context
   Integrity, phase 0). `EventTailSnapshot.firstRetainedIndex` states the
   original stream position of the first retained event — the retained
