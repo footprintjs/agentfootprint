@@ -5,23 +5,23 @@
   "recordedAt": "2026-08-20",
   "surface": {
     "subpaths": 15,
-    "declaredSymbols": 1934,
-    "declaredEvents": 105,
-    "eventSource": "src/events/registry.ts:742"
+    "declaredSymbols": 1935,
+    "declaredEvents": 107,
+    "eventSource": "src/events/registry.ts:756"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 969,
+      "documented-never-exercised": 970,
       "exercised-undocumented": 34,
       "undocumented-unexercised": 600,
-      "site-code-sample-only": 13,
+      "site-code-sample-only": 12,
       "written-but-not-published": 114,
-      "ok": 204
+      "ok": 205
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 12,
+      "documented-never-exercised": 14,
       "exercised-undocumented": 11,
       "undocumented-unexercised": 13,
       "site-code-sample-only": 5,
@@ -793,7 +793,6 @@
     "toolResultsOf",
     "toolsRecorder",
     "traceToStepGraph",
-    "traceToolpack",
     "typedEmit",
     "validateIntentScores",
     "warnIfInvalidToolName",

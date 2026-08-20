@@ -7,7 +7,7 @@ In a recorded turn, a subsystem was parked — its instructions stopped being se
 
 ## The finding event
 
-Every detected defect is one `agentfootprint.integrity.context_error` event — one per defect per run, however many passes re-detect it. The payload is the finding: `kind` (`'invariant-violation'` | `'dangling-reference'` today), `seam` (`'compose'` | `'wire'`), `subjects` (who it is about), `witnesses` (both channels' assertions — neither preferred), `message` (plain sentence naming the fix). Example:
+Every detected defect is one `agentfootprint.integrity.context_error` event — one per defect per run, however many passes re-detect it. The payload is the finding: `kind` (`'invariant-violation'` | `'dangling-reference'` | `'unsupported-claim'` today), `seam` (`'compose'` | `'wire'` | `'claim'`), `subjects` (who it is about), `witnesses` (both channels' assertions — neither preferred), `message` (plain sentence naming the fix). A finding may also carry `advisory: true` — a seam saying "this is not a defect" (the model declining to claim a verified fact is doubt, not contradiction); advisories are counted apart from defects everywhere the family reports. Example:
 
 ```ts
 agent.on('agentfootprint.integrity.context_error', (e) => {
@@ -15,11 +15,26 @@ agent.on('agentfootprint.integrity.context_error', (e) => {
 });
 ```
 
-## The three checks that ship today
+## The four checks that ship today
 
 1. **Parked but still served** (compose seam) — with `.maps()` mounted, every pass compares each parked map's owned tool names against the final merged wire list. Day one it caught a real leak: the park hold-out filters registry and skill tools, but a `.toolProvider()` copy of a parked member's name stays on the wire.
 2. **The wire manifest** (wire seam) — the anthropic and browser-anthropic adapters state `LLMResponse.wireManifest` (a `WireToolManifest`: the tool names read back from the FINAL serialized request body, after every transform). The loop compares it against the exact request it handed the adapter, so a frame that says "removed" while the body still carries the schemas is caught — the defect every pre-serialization check structurally misses. A provider that states no manifest leaves the call incomparable: silence, never a guess. An empty manifest is a stated zero.
 3. **Dangling reference** (compose seam) — a tool author declares where a tool's arguments come from: `defineTool({ name: 'screen_fire', argumentsFrom: ['whats_here'], ... })`. When a window strategy has evicted those results and nothing re-fetched them, offering the tool files a finding telling the model the honest fix (call the ground again). Never dropped = silent (not-yet-grounded is legitimate sequencing); re-fetched = silent.
+4. **Unsupported claim** (claim seam) — the answer against the run's own settled facts. See below.
+
+## `.claims()` — the answer checked against the facts
+
+The evidence gate (`.evidence()`) grounds the answer's names and numbers: every value must appear in a tool result. Its stated limit is that a FALSE CLAIM ASSEMBLED FROM REAL VALUES passes — "fc1/3 is healthy" when the data says the port is down uses entirely grounded tokens. `.claims()` closes that hole for the facts you name. Tools that return `semantic({ facts: [...] })` settle typed readings; you declare which answer field reports which fact, and the checker joins:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(screenTool)                      // returns semantic({ facts: [...] })
+  .outputSchema(AnswerSchema)            // required — prose is never checked
+  .claims({ nav_count: { entity: 'screen2', field: 'nav' } })
+  .build();
+```
+
+DECLARED, NEVER INFERRED (the `argumentsFrom` precedent): the library does not guess that a field named `nav_count` is about `nav(screen2)` — you say so. Nothing is blocked: a disagreement files one finding at seam `'claim'` and the answer is returned exactly as it was. `.outputSchema()` is required, and a contract without one is refused at `build()` rather than silently checking nothing. The fences are the check's honesty: **latest settles, earlier rows quote** (claiming a superseded value contradicts the history on the record); **uncollected is unreachable**, never an accusation, and an unknown fact propagates as unknown; **doubt is an advisory** (`null` or `'unknown'` where the ledger holds a value files `advisory: true`, counted apart).
 
 ## The disposition ledger — proof the checkers ran
 
@@ -35,3 +50,18 @@ agent.on('agentfootprint.integrity.disposition', (e) => {
   }
 });
 ```
+
+## Reading it back — `find_context_errors`
+
+Findings and the ledger ride the **event stream**, and typed events are delivered live and dropped when nothing is listening. So the read-out needs a recording: wire [`recordRun`](doc:file-a-bug) before the run (or build with [`.selfExplain()`](doc:self-explain), whose event tail is on by default), and open the recording with the trace toolpack:
+
+```ts
+import { recordRun, openRecording, traceToolpack, callTraceTool } from 'agentfootprint/observe';
+
+const recorder = recordRun(agent);              // BEFORE run()
+await agent.run({ message });
+const tools = traceToolpack(openRecording(recorder.toRecording()));
+console.log(await callTraceTool(tools, 'find_context_errors', {}));
+```
+
+`find_context_errors` mounts unconditionally on `traceToolpack()`, so a debugger model always has it. Without an event tail it says so — *"no evidence", never a clean bill of health* — rather than reporting a clean run, and it distinguishes four absences: no tail, a tail with no integrity events, no check registered, and a check registered that never checked anything. Its green is bounded and says so: a headline names how many of the registered checks actually checked something, and every report repeats that green means no REGISTERED check was violated, not that no context error exists. Two of the five defect classes the `kind` union names (`'unsupported-argument'`, `'duplicate-execution'`) have no check in this build; the tool withholds them from its menu and refuses to answer about them instead of implying silence is absence.

@@ -96,6 +96,8 @@ const FINDING_SUBJECT_CAP = 6;
 const FINDING_WITNESS_CAP = 6;
 /** Disposition rows printed. Real packs register ~3; the cap is a fence. */
 const DISPOSITION_ROW_CAP = 12;
+/** Checks named in the partial-coverage headline before it says "and N more". */
+const SILENT_CHECK_NAME_CAP = 4;
 /** Result preview for `inspect_tool_call` (its own dial: results are the answer). */
 const TOOL_RESULT_PREVIEW_CHARS = 400;
 /** Schemas embed an `enum` of valid ids/keys only when the set is small —
@@ -1057,6 +1059,15 @@ function buildFindContextErrors(
       const neverRanRows = (rows ?? []).filter(
         (report) => num(report.checked) + num(report.notApplicable) + num(report.unreachable) === 0,
       ).length;
+      // Checks that CHECKED nothing — a superset of `neverRanRows`: a check
+      // whose every encounter was out of scope or unreachable also passed
+      // nothing. Named, because the headline must not average them away.
+      const silentChecks = (rows ?? [])
+        .filter((report) => num(report.checked) === 0)
+        .map(
+          (report) =>
+            `${typeof report.check === 'string' ? report.check : '?'} @${report.seam ?? '?'}`,
+        );
 
       /** Nothing matched: WHICH absence is this? The rows decide, not the silence. */
       const absenceHeadline = (): string => {
@@ -1092,9 +1103,29 @@ function buildFindContextErrors(
             `every seam, not a clean run.`
           );
         }
+        // Green, but not evenly. A headline that sums `checked` across every
+        // row reads as coverage the rows do not support: one busy check can
+        // carry a total while another registered check looked at NOTHING.
+        // The per-check rows already say so; a reader who stops at the
+        // headline must not get the rosier story. Same law as the rows —
+        // "ran 0×" is silence about that seam, never a pass.
+        if (silentChecks.length > 0) {
+          const named = silentChecks.slice(0, SILENT_CHECK_NAME_CAP).join(', ');
+          const more =
+            silentChecks.length > SILENT_CHECK_NAME_CAP
+              ? `, and ${silentChecks.length - SILENT_CHECK_NAME_CAP} more`
+              : '';
+          return (
+            `CONTEXT ERRORS — none filed, ⚠ AND COVERAGE IS PARTIAL. ` +
+            `${rows.length - silentChecks.length} of ${rows.length} registered check(s) ` +
+            `actually checked something (${totalChecked} checked encounter(s)) and found ` +
+            `nothing; ${silentChecks.length} checked NOTHING at all — silent about its seam, ` +
+            `not clean: ${named}${more}. This green covers only the checks that ran.`
+          );
+        }
         return (
-          `CONTEXT ERRORS — none filed. The checkers below RAN (${totalChecked} checked ` +
-          `encounter(s)); nothing they cover was violated.`
+          `CONTEXT ERRORS — none filed. All ${rows.length} registered check(s) below RAN ` +
+          `(${totalChecked} checked encounter(s)); nothing they cover was violated.`
         );
       };
 

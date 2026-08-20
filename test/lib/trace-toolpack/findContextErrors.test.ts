@@ -27,6 +27,7 @@ import type { CheckReport } from '../../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../../src/integrity/finding/types.js';
 import {
   callTraceTool,
+  openRecording,
   recordRun,
   TOOLPACK_HARD_CAPS,
   TRACE_TOOL_NAMES,
@@ -369,6 +370,42 @@ describe('find_context_errors — honest absence', () => {
     expect(out).toMatch(/ran and found nothing|0 finding/);
     // The standing bound travels with every green answer.
     expect(out).toMatch(/does not mean no context error exists/i);
+  });
+
+  it('a green HEADLINE never claims coverage a silent check did not give it', async () => {
+    // One busy check and one that checked nothing (every encounter out of
+    // scope). Summing `checked` across the rows makes the run look covered;
+    // the rows say otherwise, and the headline is what a reader stops at.
+    const out = await ask(
+      artifactsWith([
+        disposition([
+          row({ check: 'invariant-violation', seam: 'wire', checked: 2 }),
+          row({ check: 'dangling-reference', seam: 'compose', notApplicable: 2 }),
+        ]),
+      ]),
+    );
+    const headline = out.split('\n')[0];
+    expect(headline).toContain('⚠');
+    expect(headline).toMatch(/COVERAGE IS PARTIAL/);
+    // It NAMES the silent check in the headline, not only in the rows below.
+    expect(headline).toContain('dangling-reference @compose');
+    // And it must not read as blanket green.
+    expect(headline).not.toMatch(/All \d+ registered check\(s\) below RAN/);
+    expect(out).toMatch(/⚠ ran 0×/); // the row still says it too
+  });
+
+  it('the unqualified green headline is reserved for rows that ALL checked', async () => {
+    const out = await ask(
+      artifactsWith([
+        disposition([
+          row({ check: 'invariant-violation', seam: 'wire', checked: 2 }),
+          row({ check: 'dangling-reference', seam: 'compose', checked: 1, notApplicable: 2 }),
+        ]),
+      ]),
+    );
+    const headline = out.split('\n')[0];
+    expect(headline).toMatch(/All 2 registered check\(s\) below RAN/);
+    expect(headline).not.toMatch(/COVERAGE IS PARTIAL/);
   });
 
   it('"no checker was registered" is not "the checkers found nothing"', async () => {
@@ -741,6 +778,16 @@ describe('find_context_errors — over a real completed run', () => {
     expect(out).toContain('whats_here');
     expect(out).toContain('screen_fire');
     expect(out).toContain('CHECKERS');
+
+    // The DOCUMENTED door (docs: monitor/context-integrity) is the recording
+    // itself, not hand-assembled artifacts: recordRun → openRecording →
+    // traceToolpack must reach the same finding, or the page teaches a path
+    // that does not work.
+    const documented = await callTraceTool(
+      traceToolpack(openRecording(recording)),
+      'find_context_errors',
+    );
+    expect(documented).toContain('dangling-reference @compose');
 
     // The join is real: the step id the answer hands back opens in trace_node.
     const filedAt = /trace_node\('([^']+)'\)/.exec(out)?.[1];

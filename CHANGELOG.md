@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.61.1] - 2026-08-20
+
+### Fixed
+
+- **`find_context_errors` no longer reports a greener run than its own rows
+  support.** The all-clear headline summed `checked` across every registered
+  check, so one busy check could carry the total while another check looked
+  at nothing at all — the per-check rows said so underneath (`⚠ ran 0×`), but
+  a reader who stops at the headline got the rosier story. The headline now
+  states coverage: either *all* registered checks ran, or it says COVERAGE IS
+  PARTIAL and names the checks that checked nothing. Same law as the rows —
+  a check that never saw a subject is silent about its seam, never a pass.
+
+### Documentation
+
+- **The claim seam is documented where a reader will find it.** The Context
+  Integrity page was written before the claim seam shipped and still named
+  two defect kinds and three checks. It now covers `.claims()` (what it
+  catches that the evidence gate states it cannot, the `.outputSchema()`
+  requirement, and the three fences: latest settles / uncollected is
+  unreachable / doubt is an advisory), the third filable kind
+  `unsupported-claim`, and the `'claim'` seam.
+- **The step nobody told you about.** Findings and the disposition ledger
+  ride the event stream, and typed events are dropped when nothing is
+  listening — so `find_context_errors` needs a recording. The page now shows
+  the whole door (`recordRun` → `openRecording` → `traceToolpack`), and a
+  test runs exactly that path so the page cannot teach one that does not
+  work.
+- **The two switches that turn the feature on are named in the README**:
+  `integrityPosture: 'dev'` and `.claims()`, with a link to the page. The
+  feature previously appeared there only as a clause in one bullet.
+
 ## [9.61.0] - 2026-08-20
 
 ### Fixed
