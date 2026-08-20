@@ -33,6 +33,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   honestly ABSENT (never fabricated as 0), and a stated value that is not a
   stream position is refused by name.
 
+## [9.59.1] - 2026-08-20
+
+**9.59.0 exists so that an unknown number always carries its own reason. Its
+own cache report did not.** Found by the clean-room probe of the published
+bytes.
+
+These bytes also carry the two entries still listed under Unreleased above
+(the internal `src/integrity/` disposition accounting, and
+`firstRetainedIndex` on a capped event tail) — they were already on `main`
+when this patch was cut, and they are additive.
+
+### Fixed
+
+- **The cache report no longer invents a cause for a turn it could not
+  measure.** *What changed:* when `cacheRecorder().report()` hands back an
+  unknown hit rate, the sentence attached to it is now the one the calls
+  themselves gave — most often "no CacheStrategy was given to
+  `cacheRecorder()`, so nothing read the usage". When the calls disagree about
+  why, the summary says they disagreed and lists the reasons (up to three, then
+  a count of the rest) rather than silently choosing one. *Why it was not
+  there:* the summary sentence was typed into the code as a fixed string, "the
+  provider reported no cache fields" — true for the case the author had in
+  mind, a guess for every other, and it overwrote what each call had already
+  stated. *How it improves:* run without a strategy against a provider that DID
+  report cache traffic, and 9.59.0 told you your provider was reporting
+  nothing — sending you off to debug a provider that was working fine, instead
+  of naming the one line missing from your own setup. You now read the real
+  cause. The same fault had a quieter half, also fixed: a provider that cannot
+  report cache usage at all was only named when it happened to be the turn's
+  FIRST call.
+
 ## [9.59.0] - 2026-08-20
 
 **The kernel we shipped in 9.58.0 was right about the law and quiet about

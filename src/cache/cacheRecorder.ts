@@ -28,6 +28,15 @@
  * one-line render). There is deliberately no door that hands you a bare
  * number without your having branched.
  *
+ * ── And an unknown carries ITS OWN reason (9.59.1) ────────────────────
+ * 9.59.0 enforced that law per call and then broke it in `report()`, which
+ * hardcoded "the provider reported no cache fields" for the whole turn no
+ * matter what the rows said. With no strategy passed and a provider that DID
+ * report cache fields, the row said "nothing read the usage" and the summary
+ * blamed the provider — pointing the reader away from their actual mistake.
+ * The summary now carries the rows' own reasons, and says so plainly when the
+ * rows disagree rather than picking one.
+ *
  * ── What this recorder does NOT do ────────────────────────────────────
  * It emits no events. (Earlier prose here promised per-iteration
  * `agentfootprint.cache.applied` / `agentfootprint.cache.metrics` events;
@@ -128,6 +137,12 @@ export interface CacheRecorderHandle extends CombinedRecorder {
    */
   reset(): void;
 }
+
+/**
+ * How many distinct reasons a disagreeing summary spells out before it
+ * switches to counting the rest. A summary sentence must stay readable.
+ */
+const MAX_LISTED_REASONS = 3;
 
 /** The metrics of a row already filtered by `isKnown`. Narrowing helper only. */
 function valueOfMetrics(entry: PerIterEntry): CacheMetrics {
@@ -233,13 +248,48 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
 
       // ONE reason, stated once, reused by every claim below — so a reader
       // who prints any single field learns why the whole report is empty.
+      //
+      // ── The summary CARRIES the rows' reasons; it never invents one (9.59.1)
+      // 9.59.0 hardcoded 'the provider reported no cache fields' here. That
+      // sentence is a fabrication whenever the rows said something else — most
+      // painfully when no CacheStrategy was passed and the provider DID report
+      // cacheRead/cacheWrite: the rows said "nothing read the usage", and the
+      // summary blamed the provider for the caller's own omission. An unknown
+      // must carry ITS OWN reason. That is the law this file exists to
+      // enforce, and this is it applied to the summary too.
+      const unmeasured = perIter.filter((p) => !isKnown(p.metrics));
+      const reasons: string[] = [];
+      for (const row of unmeasured) {
+        const m = row.metrics;
+        // `unmeasured` already excluded 'known'; this narrows the type.
+        if (isKnown(m)) continue;
+        const stated =
+          m.kind === 'not-applicable' ? `this provider cannot report it (${m.evidence})` : m.reason;
+        if (!reasons.includes(stated)) reasons.push(stated);
+      }
+      // Rows can disagree — a turn may mix an adapter that cannot report with
+      // calls that carried no usage at all. Picking one silently would state a
+      // cause for calls that stated a different one, so the summary says there
+      // was more than one and lists them. Bounded by construction: at most
+      // MAX_LISTED_REASONS are spelled out and the remainder is COUNTED, so a
+      // strategy whose reason varies per call cannot grow this into a wall.
+      const listed = reasons.slice(0, MAX_LISTED_REASONS);
+      const remaining = reasons.length - listed.length;
+      const [onlyReason] = reasons;
+      const carried =
+        reasons.length === 1 && onlyReason !== undefined
+          ? onlyReason
+          : `the calls did not agree on why — ${reasons.length} different reasons were ` +
+            `given: ${listed.map((r, i) => `(${i + 1}) ${r}`).join('; ')}` +
+            (remaining > 0 ? `; and ${remaining} more not listed here` : '');
       const why =
         total === 0
           ? 'no LLM call was observed, so there is nothing to measure'
-          : `none of the ${total} observed call(s) reported cache usage — ` +
-            (perIter[0]?.metrics.kind === 'not-applicable'
-              ? `this provider cannot report it (${perIter[0].metrics.evidence})`
-              : 'the provider reported no cache fields');
+          : reasons.length === 0
+          ? // Unreachable where `why` is USED (it is read only when nothing
+            // was measured, and an unmeasured row always states a reason).
+            `all ${total} observed call(s) reported cache usage`
+          : `none of the ${total} observed call(s) reported cache usage — ${carried}`;
       const evidence = `summed over the ${n} of ${total} call(s) whose usage was measured`;
       const claimOf = (value: number): Claim<number> =>
         n === 0 ? unknown<number>(why) : known(value, evidence);
@@ -272,10 +322,10 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
           n === 0
             ? unknown<number>(why)
             : requestTotal === 0
-              ? unknown<number>(
-                  `the ${n} measured call(s) reported 0 prompt tokens in total, so a hit rate has no denominator`,
-                )
-              : known(cacheRead / requestTotal, evidence),
+            ? unknown<number>(
+                `the ${n} measured call(s) reported 0 prompt tokens in total, so a hit rate has no denominator`,
+              )
+            : known(cacheRead / requestTotal, evidence),
         estimatedDollarsSpent: claimOf(dollarsSpent),
         estimatedDollarsSavedVsNoCache: claimOf(dollarsSaved),
         perIter: Object.freeze([...perIter]),
