@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.56.0] - 2026-08-19
+
+**Running out of budget now ends with an honest summary, not a fragment.**
+
+From two real recorded runs of the same shape. An agent hit `maxIterations`
+mid-task, the loop stopped, and the turn's "final answer" was whatever text
+happened to ride the last call:
+
+```text
+The third finding focus is not settling… Let me check what's on screen now:
+```
+
+That sentence went to the person as if it were the answer. The status said
+`ok`. Nothing on the record said the budget had run out, and the model never
+got a chance to wrap up.
+
+`maxIterations` is a cap on ACTIONS, and the model does not know it is about to
+be hit. Every turn that ends against it ends mid-thought — that is not an edge
+case, it is what the limit does.
+
+### Added
+
+- **One last call, with the tools withheld.** When `maxIterations` runs out
+  while the model is still asking for tools, the run now spends one more LLM
+  call carrying one instruction, and hands back what comes back:
+
+  > Your action budget for this turn is exhausted. Do not request tools. Give
+  > your best final answer from what you have: what you completed, what remains
+  > undone, and anything the person should know.
+
+  The tools coming off is the mechanism, not a courtesy. A model that was
+  offered no tools has nothing to ask for, so the call can only answer — which
+  is why it is exempt from `maxIterations` by construction rather than by an
+  exception someone has to trust. It costs one call, and it is on the record
+  like any other turn: its own `iteration_start`, `llm_start` and `cost.tick`,
+  and a `wrap-up` box on the chart.
+
+  On by default, because a half-sentence delivered as an answer is never what
+  anyone wanted. `wrapUpAtMaxIterations: false` keeps the old behaviour.
+
+- **`agentfootprint.agent.budget_exhausted`** — the budget ran out, and what
+  the run then DID about it: `action: 'wrapped-up'` or `'cut-short'`. It fires
+  beside `cost.limit_hit` rather than instead of it — that event reports a
+  limit being crossed and stays exactly that; this one is the difference
+  between an outcome chip that says "answered" and one that says "answered
+  after the budget ran out". It fires for a halting `costBudget` too.
+
+- **`stoppedEarly.wrappedUp`** and **`turn_end.stoppedEarly`.** The same fact,
+  where each reader already looks: `agent.stoppedEarly()` for proof after the
+  run, `turn_end` for the consumer drawing an outcome the moment the answer
+  exists. When a turn was wrapped up, `answerWasEmpty` describes the answer the
+  caller actually received — not the fragment it replaced.
+
+### Changed
+
+- A turn that runs out of `maxIterations` with tool calls pending now makes one
+  more LLM call than it did in 9.55.0, and its answer is that call's answer
+  rather than the last fragment. This is the fix, and it is worth stating as a
+  change: an agent whose tests assert the old empty-or-fragment answer will see
+  the new one.
+
+  It rides the ITERATION budget only. A halting `costBudget` is unchanged —
+  there you capped the money, and one more call would spend past the cap you
+  set; an action cap says nothing about a call that takes no action.
+
+  **A turn that never runs out of budget is byte-identical**: same calls, same
+  events, same committed state down to the key set. So is an agent with no
+  tools to withhold, which never mounts the branch at all.
+
 ## [9.55.0] - 2026-08-19
 
 **The window can no longer forget what you asked for.**

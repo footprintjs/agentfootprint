@@ -36,8 +36,12 @@ describe('AgentBuilder.maxIterations', () => {
       .maxIterations(2) // override
       .build();
     await agent.run({ message: 'go' });
-    // With maxIterations=2, the loop stops after 2 LLM calls
-    expect(calls).toBeLessThanOrEqual(2);
+    // With maxIterations=2 the loop stops after 2 BUDGETED calls. Since 9.56.0
+    // a third goes out — the wrap-up, with the tools withheld — because a turn
+    // that runs out of budget mid-task ends with a summary, not with whatever
+    // fragment rode the last call. It is exempt from the budget by
+    // construction: a model offered no tools has nothing to ask for.
+    expect(calls).toBe(3);
   });
 
   it('throws on non-positive integer', () => {

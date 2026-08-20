@@ -49,7 +49,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 20 known stage IDs', () => {
+  it('has the 21 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -83,6 +83,11 @@ describe('STAGE_IDS — single source of truth', () => {
         // bounded revision per turn when the answer states values no tool
         // result carried:
         'evidence-recheck',
+        // The out-of-budget wrap-up (9.56.0) — mounted on any agent that can
+        // call a tool unless `wrapUpAtMaxIterations: false` turned it off; one
+        // last call with the tools withheld when `maxIterations` runs out
+        // while the model is still asking for them:
+        'wrap-up',
         // Cache layer (v2.6+):
         'update-skill-history',
         'cache-gate',

@@ -431,6 +431,54 @@ export interface AgentOptions {
    */
   readonly repeatedCallNudge?: boolean;
   /**
+   * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
+   * Default **on**.
+   *
+   * `maxIterations` is a cap on actions, and the model does not know it is
+   * about to be hit. Before this, a turn that reached the cap while the model
+   * was still asking for tools handed back whatever text happened to ride that
+   * last call — which, mid-task, is a fragment: *"The third finding focus is
+   * not settling… Let me check what's on screen now:"*. That sentence went to
+   * the person as if it were the answer, and nothing on the record said the
+   * budget had run out.
+   *
+   * With this on, the run spends ONE more LLM call with **the tools withheld**
+   * and this instruction appended, then hands back what comes back:
+   *
+   * > *Your action budget for this turn is exhausted. Do not request tools.
+   * > Give your best final answer from what you have: what you completed, what
+   * > remains undone, and anything the person should know.*
+   *
+   * That call is exempt from `maxIterations` by design — it cannot loop,
+   * because with no tools on the wire there is nothing for the model to ask
+   * for. It costs one call and it is on the record like any other turn (its
+   * own `iteration_start` / `llm_start` / `cost.tick`).
+   *
+   * It rides the ITERATION budget only. A halting `costBudget` keeps today's
+   * behaviour, because there the person capped the MONEY and one more call
+   * would spend past the cap; an action cap says nothing about a call that
+   * takes no action.
+   *
+   * The fact is on the record either way — `agent.stoppedEarly()` and
+   * `agentfootprint.agent.budget_exhausted` both say whether the turn was
+   * wrapped up (`action: 'wrapped-up'`) or cut short (`'cut-short'`), so a
+   * dashboard can tell "answered" from "answered after the budget ran out".
+   *
+   * **A turn that never runs out of budget is byte-identical either way** —
+   * same calls, same events, same tracked state down to the key set.
+   *
+   * Set `false` to keep the pre-9.56.0 behaviour: the turn ends on whatever
+   * the last call produced. Worth doing when a caller renders `stoppedEarly`
+   * itself and would rather not pay for the extra call.
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider, model, maxIterations: 8 });                     // wraps up
+   * Agent.create({ provider, model, wrapUpAtMaxIterations: false });         // cuts short
+   * ```
+   */
+  readonly wrapUpAtMaxIterations?: boolean;
+  /**
    * What the run does when a tool's DECLARED credential (`needs: { credential }`)
    * comes back `authorization-required` — a person has to click a consent link
    * before the tool can run. Default **`'pause'`** (8.6.0).
@@ -898,6 +946,25 @@ export interface AgentState {
    *  the EvidenceRecheck branch; reset at seed. Absent on an agent without
    *  the gate, and on one whose posture is `'assist'` (which never revises). */
   evidenceRevisionSpent?: boolean;
+
+  // ── The out-of-budget wrap-up (`wrapUpAtMaxIterations`, 9.56.0) ─────────
+  /**
+   * The turn's action budget ran out and the ONE wrap-up call has been asked
+   * for. Written by the WrapUp branch, read by two places and no others:
+   *
+   *   • `callLLM`, at request assembly — this is what withholds the tools, so
+   *     the last call cannot ask for an action the budget already refused;
+   *   • the Route decider, on the pass after — the latch that stops a second
+   *     wrap-up and the signal to settle `stoppedEarly` against the answer
+   *     that actually came back.
+   *
+   * **Deliberately NOT seeded.** The key is written only on the turn that runs
+   * out, so an agent that finishes inside its budget commits exactly the keys
+   * it always did — the whole feature is invisible in its commit log, its
+   * snapshot and its recordings (`stepNudgeSpent`'s gate, taken one step
+   * further because this behaviour is on by default rather than opted into).
+   */
+  wrapUpAsked?: boolean;
   /**
    * The answer this run hands back states values that appear in no tool
    * result (9.35.0).
@@ -963,6 +1030,22 @@ export interface AgentState {
     readonly pendingToolCalls: number;
     /** True when the answer handed back is `''` — the loudest form of this. */
     readonly answerWasEmpty: boolean;
+    /**
+     * Present only when the turn was WRAPPED UP (9.56.0): the run spent one
+     * more call with the tools withheld, asking for a final summary, and that
+     * summary is the answer the caller received.
+     *
+     * This is what separates *answered* from *answered after the budget ran
+     * out*. Without it a consumer holding a `stoppedEarly` record cannot tell
+     * whether the string beside it is a fragment the loop stopped in the
+     * middle of or a deliberate wrap-up. Absent when the turn was cut short
+     * (`wrapUpAtMaxIterations: false`, a halting `costBudget`, or an agent
+     * with no tools to withhold).
+     *
+     * When it is set, `answerWasEmpty` describes the WRAP-UP's answer — the
+     * one the caller actually received — not the fragment it replaced.
+     */
+    readonly wrappedUp?: true;
   };
   // Injection Engine state ─────────────────────────────────────
   /** Active set output by InjectionEngine subflow each iteration —

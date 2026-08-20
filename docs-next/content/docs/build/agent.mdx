@@ -47,18 +47,70 @@ Because the framework owns the loop, observability is just attaching listeners �
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-102 typed events fire across 22 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
+103 typed events fire across 22 domains during a single `agent.run()`. See the [Observability guide](doc:observability) for the full taxonomy.
 
 ## maxIterations
 
 Every Agent has a `maxIterations` cap (default 10). The loop exits when:
 
 1. The LLM returns text with no tool calls (normal completion)
-2. `maxIterations` is reached (forced exit; final iteration's text becomes the result)
+2. `maxIterations` is reached (forced exit — see *Running out of budget* below)
 3. A tool throws (propagates as an error; subject to `withRetry` if wrapped)
 4. The agent pauses via `askHuman` / `pauseHere` (`run()` returns a `RunnerPauseOutcome` instead of a string — narrow it with the `isPaused()` guard)
 
 Tune `maxIterations` to your tool budget. Tool-heavy agents (research, code-gen) commonly run 15–30; chat agents 3–5.
+
+### Running out of budget
+
+`maxIterations` is a cap on **actions**, and the model does not know it is about to be hit.
+Through 9.55.0, a turn that reached the cap while the model was still asking for tools handed
+back whatever text happened to ride that last call. Mid-task, that is a fragment:
+
+> "The third finding focus is not settling… Let me check what's on screen now:"
+
+That sentence reached the person as if it were the answer, with nothing on the record saying the
+budget had run out.
+
+**Since 9.56.0 the run spends one more LLM call with the tools withheld**, carrying one
+instruction, and hands back what comes back:
+
+> Your action budget for this turn is exhausted. Do not request tools. Give your best final
+> answer from what you have: what you completed, what remains undone, and anything the person
+> should know.
+
+That call is exempt from `maxIterations` by construction, not by exception: a model offered no
+tools has nothing to ask for, so it can only answer. It costs one call, and it is on the record
+like any other turn — its own `iteration_start`, `llm_start` and `cost.tick`.
+
+The fact is on the record three ways — `agent.stoppedEarly()`,
+`agentfootprint.agent.budget_exhausted`, and a `stoppedEarly` field on
+`agentfootprint.agent.turn_end` — so a dashboard can tell *answered* from *answered after the
+budget ran out*:
+
+```ts
+const answer = await agent.run({ message: 'Audit the three findings' });
+
+agent.stoppedEarly();
+// { reason: 'max-iterations', iteration: 8, pendingToolCalls: 1,
+//   answerWasEmpty: false, wrappedUp: true }
+
+agent.on('agentfootprint.agent.budget_exhausted', (e) => e.payload);
+// { reason: 'max-iterations', iteration: 8, limit: 8,
+//   pendingToolCalls: 1, action: 'wrapped-up' }
+
+agent.on('agentfootprint.agent.turn_end', (e) => e.payload.stoppedEarly);
+// { reason: 'max-iterations', iteration: 8, pendingToolCalls: 1, wrappedUp: true }
+```
+
+It rides the **iteration** budget only. A halting `costBudget` keeps the old behaviour, because
+there you capped the money and one more call would spend past the cap — an action cap says
+nothing about a call that takes no action.
+
+Turn it off with `wrapUpAtMaxIterations: false` (the fact is still recorded, as
+`action: 'cut-short'`). A turn that never runs out of budget is byte-identical either way —
+same calls, same events, same committed state.
+
+<CodeFile path="examples/features/67-out-of-budget-wrap-up.ts" region="wrap-up" title="examples/features/67-out-of-budget-wrap-up.ts (region: wrap-up)" />
 
 ## Identity for multi-tenant memory
 

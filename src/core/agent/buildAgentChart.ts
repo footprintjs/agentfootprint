@@ -216,6 +216,21 @@ export interface AgentChartDeps {
   readonly evidenceRecheckStage?: (scope: never) => void;
 
   /**
+   * The out-of-budget wrap-up branch (9.56.0). Present on any agent that can
+   * CALL a tool — a registered tool, or a `ToolProvider` that might list one —
+   * unless `wrapUpAtMaxIterations: false` turned it off. An agent with no tool
+   * surface can never run out of budget mid-action (a limit only cuts a turn
+   * short when tool calls were pending), so it mounts no branch and its chart
+   * is drawn exactly as it always was.
+   *
+   * One more branch of the Route decider carrying the same `{ loopTo }` the
+   * tool branch does, because a wrap-up is one more ordinary turn (the
+   * SchemaRetry mechanism verbatim). Absent → no branch, no stage, no scope
+   * key, no event.
+   */
+  readonly wrapUpStage?: (scope: never) => void;
+
+  /**
    * The evidence gate is mounted (9.35.0), at ANY posture. In the GROUPED
    * chart this gates bubbling `systemPromptInjections` out of `sf-llm-call`:
    * the slot writes it INSIDE the subflow and the outer Route decider needs
@@ -770,6 +785,21 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'EvidenceRecheck',
       deps.evidenceRecheckStage as never,
       'Answer stated values no tool result carried — naming them back for one revision',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The out-of-budget wrap-up — conditional mount (9.56.0) ─────────
+  // The SchemaRetry mechanism a fourth time: same loop target, same "a last
+  // ask is one more ordinary turn" reasoning. What is different is WHY it
+  // cannot loop forever — not a spent latch but an empty tool list, withheld
+  // at request assembly, so the call it buys has nothing to ask for.
+  if (deps.wrapUpStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.WRAP_UP,
+      'WrapUp',
+      deps.wrapUpStage as never,
+      'Action budget exhausted — one last call with the tools withheld, for a real answer',
       { loopTo: loopTarget },
     );
   }

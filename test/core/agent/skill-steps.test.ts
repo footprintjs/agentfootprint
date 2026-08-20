@@ -626,6 +626,11 @@ describe('integration: the nudge truth table', () => {
         call('read_skill', 't1', { id: 'refund' }),
         call('lookup', 't2'),
         call('charge', 't3'), // maxIterations reached — the loop refuses this
+        // Since 9.56.0 the exhausted turn buys ONE more call — the wrap-up,
+        // with the tools withheld — so the script needs the answer it asks
+        // for. The nudge table is judged on THAT answer, and the verdict is
+        // the same: a limit fired, so the procedure is cut short, not nudged.
+        { content: 'I looked the order up but never got to the charge.', toolCalls: [] },
       ],
       [refundSkill()],
       { maxIterations: 3 },
@@ -634,6 +639,7 @@ describe('integration: the nudge truth table', () => {
     expect(unfinished).toHaveLength(1);
     expect(unfinished[0]).toMatchObject({ action: 'cut-short' });
     expect(routed.map((r) => r.chosen)).not.toContain('step-nudge');
+    expect(routed.map((r) => r.chosen)).toContain('wrap-up');
   });
 });
 

@@ -41,7 +41,8 @@ export type RouteBranch =
   | 'final'
   | 'output-retry'
   | 'step-nudge'
-  | 'evidence-recheck';
+  | 'evidence-recheck'
+  | 'wrap-up';
 
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
@@ -65,8 +66,16 @@ function decideBranch(scope: TypedScope<AgentState>): {
   // A limit only CUT SHORT a turn if the model still wanted to do something.
   // A turn that ended because the model was done is not an early stop, however
   // many iterations it spent getting there.
+  //
+  // 9.56.0 — with ONE addition: a turn that already spent its wrap-up is cut
+  // short for every judge downstream, whether or not this last answer still
+  // asked for tools. The budget that forced the wrap-up has not come back, and
+  // the wrap-up call is the last one this turn buys — a step nudge or an
+  // evidence revision here would loop past a limit that already fired. (It
+  // does not double-record: `settleWrapUp` sees the latch first and corrects
+  // the existing record instead of writing a second one.)
   const earlyStop =
-    chosen === 'final' && toolCalls.length > 0
+    chosen === 'final' && (toolCalls.length > 0 || scope.wrapUpAsked === true)
       ? outOfIterations
         ? ('max-iterations' as const)
         : costHalt
@@ -121,6 +130,9 @@ function decideBranch(scope: TypedScope<AgentState>): {
 function recordEarlyStop(
   scope: TypedScope<AgentState>,
   reason: 'max-iterations' | 'cost-budget',
+  /** True when the WrapUp branch is about to run, so the answer the caller
+   *  receives is not the one being measured here yet (9.56.0). */
+  wrapUp: boolean,
 ): void {
   const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
   const iteration = scope.iteration as number;
@@ -142,7 +154,30 @@ function recordEarlyStop(
     });
   }
 
-  if (answerWasEmpty) {
+  // 9.56.0 — a FOURTH channel, and the one a dashboard reads. `limit_hit`
+  // reports a limit being crossed and has to stay exactly that (it is the
+  // reserved cost vocabulary, and a cost budget fires its own). This one
+  // reports what the run DID about the crossing, which is the difference
+  // between an outcome chip that says "answered" and one that says "answered
+  // after the budget ran out". Emitted for BOTH limits: the fact is true
+  // either way, and only `action` differs.
+  typedEmit(scope, 'agentfootprint.agent.budget_exhausted', {
+    reason,
+    iteration,
+    // `limit` only where the run actually HOLDS the limit. For a cost budget it
+    // holds the cumulative spend instead, and reporting spend as a limit is the
+    // exact mistake the `cost.limit_hit` comment above exists to avoid.
+    ...(reason === 'max-iterations' && { limit: scope.maxIterations as number }),
+    pendingToolCalls: toolCalls.length,
+    action: wrapUp ? 'wrapped-up' : 'cut-short',
+  });
+
+  // Held back when a wrap-up is about to run: the answer this warning is
+  // about does not exist yet, and warning about a string that is being
+  // replaced would be the library complaining about its own draft.
+  // `settleWrapUp` warns on the pass after, if the wrap-up came back empty
+  // too.
+  if (answerWasEmpty && !wrapUp) {
     // eslint-disable-next-line no-console
     console.warn(
       `[agentfootprint] this turn stopped at iteration ${iteration} because ` +
@@ -155,6 +190,79 @@ function recordEarlyStop(
         `show.`,
     );
   }
+}
+
+/**
+ * Is this would-be-final turn going to be WRAPPED UP instead (9.56.0)?
+ *
+ * Pure, so the four deciders can announce the branch they are really taking
+ * before anything is recorded — the ordering every one of them already has
+ * (`route_decided`, then the early-stop record).
+ *
+ * Only the ITERATION budget is wrapped up. A halting `costBudget` capped the
+ * MONEY, and one more call would spend past the cap the person set; an action
+ * cap says nothing about a call that takes no action. `wrapUpAsked` is the
+ * one-per-turn latch: the wrap-up call itself can never buy a second one.
+ */
+function wantsWrapUp(
+  scope: TypedScope<AgentState>,
+  earlyStop: 'max-iterations' | 'cost-budget' | undefined,
+  hasWrapUp: boolean,
+): boolean {
+  return hasWrapUp && earlyStop === 'max-iterations' && scope.wrapUpAsked !== true;
+}
+
+/**
+ * File what a limit did to this turn (9.56.0) — called at every moment the
+ * four deciders answer `'final'` or `'wrap-up'`. Three outcomes:
+ *
+ *   • the wrap-up already ran → its answer IS the turn's answer: correct the
+ *     committed record to describe that string (not the fragment it replaced),
+ *     mark it `wrappedUp`, and warn only if even the wrap-up came back empty.
+ *     Never a second `limit_hit`, never a second `budget_exhausted` — one
+ *     crossing, one report;
+ *   • a limit just fired → today's `recordEarlyStop`, told whether a wrap-up
+ *     is about to run (which holds back the empty-answer warning, since the
+ *     answer it is about does not exist yet);
+ *   • neither → nothing, after one `undefined` check.
+ */
+function settleWrapUp(
+  scope: TypedScope<AgentState>,
+  earlyStop: 'max-iterations' | 'cost-budget' | undefined,
+  wrapUp: boolean,
+): void {
+  if (scope.wrapUpAsked === true) {
+    const cut = scope.stoppedEarly;
+    // Unreachable through the decider (the branch only runs after the record
+    // is written), but a hand-built chart mounting the branch without the
+    // decider must not take down a run — the SchemaRetry discipline.
+    if (cut === undefined) return;
+    const answer = (scope.llmLatestContent as string | undefined) ?? '';
+    scope.stoppedEarly = { ...cut, answerWasEmpty: answer === '', wrappedUp: true };
+    if (answer === '') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[agentfootprint] this turn stopped at iteration ${cut.iteration} because ` +
+          `maxIterations was reached, while the model was still asking for ` +
+          `${cut.pendingToolCalls} tool call(s). One more call went out with the tools ` +
+          `withheld, asking for a final summary, and it came back EMPTY — so the answer ` +
+          `handed back is still the empty string. Raise the limit, or read ` +
+          `agent.stoppedEarly() and decide what to show.`,
+      );
+    }
+    return;
+  }
+  if (earlyStop === undefined) return;
+  recordEarlyStop(scope, earlyStop, wrapUp);
+}
+
+/** The `route_decided` rationale for a wrap-up. */
+function wrapUpRationale(scope: TypedScope<AgentState>): string {
+  const pending = (scope.llmLatestToolCalls as readonly { name: string }[]).length;
+  return (
+    `maxIterations reached with ${pending} tool call(s) still pending — asking once more ` +
+    `with the tools withheld, so the turn ends with a summary instead of a fragment`
+  );
 }
 
 function emitRouteDecided(
@@ -365,12 +473,33 @@ function stepNudgeRationale(scope: TypedScope<AgentState>): string {
   );
 }
 
-export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch => {
-  const { chosen, rationale, earlyStop } = decideBranch(scope);
-  emitRouteDecided(scope, chosen, rationale);
-  if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
-  return chosen;
-};
+/**
+ * The decider every plain agent runs: decide, announce, file whatever a limit
+ * did. `hasWrapUp` is the ONE build-time fact it needs — a decider may never
+ * name a branch the chart did not mount.
+ */
+function buildSimpleDecider(hasWrapUp: boolean): (scope: TypedScope<AgentState>) => RouteBranch {
+  return (scope) => {
+    const { chosen, rationale, earlyStop } = decideBranch(scope);
+    // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
+    // FIRST, and before the output chain or any judge: a fragment the loop is
+    // about to replace is not the final answer, so it is not middlewared, not
+    // schema-judged and not grounded — the step nudge's reasoning, one branch
+    // over. `false` for hasWrapUp short-circuits here in one comparison.
+    if (chosen === 'final' && wantsWrapUp(scope, earlyStop, hasWrapUp)) {
+      emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
+      settleWrapUp(scope, earlyStop, true);
+      return 'wrap-up';
+    }
+    emitRouteDecided(scope, chosen, rationale);
+    if (chosen === 'final') settleWrapUp(scope, earlyStop, false);
+    return chosen;
+  };
+}
+
+/** The wrap-up-less decider, kept as a module constant because it is the exact
+ *  function reference every pre-9.56.0 chart was handed. */
+export const routeDeciderStage = buildSimpleDecider(false);
 
 /**
  * Build the Route decider, optionally carrying the `'output'` half of the
@@ -419,6 +548,10 @@ export function buildRouteDeciderStage(
   enforcement?: ResolvedOutputEnforcement,
   stepPlanFor?: StepPlanFor,
   evidence?: ResolvedEvidenceGate,
+  /** Whether the chart mounted the WrapUp branch (9.56.0). A decider may never
+   *  name a branch that does not exist, so this is build-time knowledge, not a
+   *  scope read. `false` reproduces every earlier release exactly. */
+  hasWrapUp = false,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -427,14 +560,24 @@ export function buildRouteDeciderStage(
     stepPlanFor === undefined &&
     evidence === undefined
   ) {
-    return routeDeciderStage;
+    return hasWrapUp ? buildSimpleDecider(true) : routeDeciderStage;
   }
   if (enforcement !== undefined)
-    return buildEnforcingDecider(chain, enforcement, stepPlanFor, evidence);
+    return buildEnforcingDecider(chain, enforcement, stepPlanFor, evidence, hasWrapUp);
   if (stepPlanFor !== undefined || evidence !== undefined)
-    return buildJudgingDecider(chain, stepPlanFor, evidence);
+    return buildJudgingDecider(chain, stepPlanFor, evidence, hasWrapUp);
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
+    // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
+    // FIRST, and before the output chain or any judge: a fragment the loop is
+    // about to replace is not the final answer, so it is not middlewared, not
+    // schema-judged and not grounded — the step nudge's reasoning, one branch
+    // over. `false` for hasWrapUp short-circuits here in one comparison.
+    if (chosen === 'final' && wantsWrapUp(scope, earlyStop, hasWrapUp)) {
+      emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
+      settleWrapUp(scope, earlyStop, true);
+      return 'wrap-up';
+    }
     emitRouteDecided(scope, chosen, rationale);
     if (chosen !== 'final') return chosen;
 
@@ -460,7 +603,7 @@ export function buildRouteDeciderStage(
     scope.llmLatestContent = verdict.content;
     // AFTER the chain: `answerWasEmpty` has to be judged on the string the
     // caller will actually receive, and the chain may have rewritten it.
-    if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
+    settleWrapUp(scope, earlyStop, false);
     return chosen;
   };
 }
@@ -482,12 +625,23 @@ function buildJudgingDecider(
   chain: readonly MessageMiddleware[],
   stepPlanFor: StepPlanFor | undefined,
   evidence: ResolvedEvidenceGate | undefined,
+  hasWrapUp: boolean,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
     if (chosen !== 'final') {
       emitRouteDecided(scope, chosen, rationale);
       return chosen;
+    }
+    // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
+    // FIRST, and before the output chain or any judge: a fragment the loop is
+    // about to replace is not the final answer, so it is not middlewared, not
+    // schema-judged and not grounded — the step nudge's reasoning, one branch
+    // over. `false` for hasWrapUp short-circuits here in one comparison.
+    if (wantsWrapUp(scope, earlyStop, hasWrapUp)) {
+      emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
+      settleWrapUp(scope, earlyStop, true);
+      return 'wrap-up';
     }
     let denied = false;
     if (chain.length > 0) {
@@ -518,7 +672,7 @@ function buildJudgingDecider(
       return 'evidence-recheck';
     }
     emitRouteDecided(scope, 'final', rationale);
-    if (earlyStop !== undefined) recordEarlyStop(scope, earlyStop);
+    settleWrapUp(scope, earlyStop, false);
     return 'final';
   };
 }
@@ -532,14 +686,25 @@ function buildJudgingDecider(
 function buildEnforcingDecider(
   chain: readonly MessageMiddleware[],
   enforcement: ResolvedOutputEnforcement,
-  stepPlanFor?: StepPlanFor,
-  evidence?: ResolvedEvidenceGate,
+  stepPlanFor: StepPlanFor | undefined,
+  evidence: ResolvedEvidenceGate | undefined,
+  hasWrapUp: boolean,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
     if (base.chosen !== 'final') {
       emitRouteDecided(scope, base.chosen, base.rationale);
       return base.chosen;
+    }
+    // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
+    // FIRST, and before the output chain or any judge: a fragment the loop is
+    // about to replace is not the final answer, so it is not middlewared, not
+    // schema-judged and not grounded — the step nudge's reasoning, one branch
+    // over. `false` for hasWrapUp short-circuits here in one comparison.
+    if (wantsWrapUp(scope, base.earlyStop, hasWrapUp)) {
+      emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
+      settleWrapUp(scope, base.earlyStop, true);
+      return 'wrap-up';
     }
 
     let denied = false;
@@ -574,7 +739,7 @@ function buildEnforcingDecider(
     // of it would be the library routing around that decision.
     if (denied) {
       emitRouteDecided(scope, 'final', base.rationale);
-      if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
+      settleWrapUp(scope, base.earlyStop, false);
       return 'final';
     }
 
@@ -601,7 +766,7 @@ function buildEnforcingDecider(
         return 'evidence-recheck';
       }
       emitRouteDecided(scope, 'final', base.rationale);
-      if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
+      settleWrapUp(scope, base.earlyStop, false);
       return 'final';
     }
 
@@ -677,7 +842,7 @@ function buildEnforcingDecider(
         : `final answer failed the output schema (${failure.stage}) and ` +
             `${enforcement.retries} retry/retries were spent`,
     );
-    if (base.earlyStop !== undefined) recordEarlyStop(scope, base.earlyStop);
+    settleWrapUp(scope, base.earlyStop, false);
     return 'final';
   };
 }

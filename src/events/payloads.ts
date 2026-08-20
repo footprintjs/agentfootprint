@@ -102,7 +102,7 @@ export interface LoopIterationExitPayload {
   readonly reason: 'budget' | 'guard_false' | 'break' | 'body_complete';
 }
 
-// agent.* (6)
+// agent.* (7)
 export interface AgentTurnStartPayload {
   readonly turnIndex: number;
   readonly userPrompt: string;
@@ -115,6 +115,65 @@ export interface AgentTurnEndPayload {
   readonly totalOutputTokens: number;
   readonly iterationCount: number;
   readonly durationMs: number;
+  /**
+   * Why the loop stopped before the model said it was done (9.56.0) — present
+   * ONLY on a turn a limit cut short, absent on every normal finish.
+   *
+   * It rides `turn_end` because that is the event a consumer already reads to
+   * render an outcome: the moment the answer exists. Reading `finalContent`
+   * without it, a dashboard cannot tell a finished answer from the fragment a
+   * loop stopped in the middle of — which is exactly how a half-sentence gets
+   * shown to a person under a green tick.
+   *
+   * `wrappedUp` says which of the two this is. `true` = the run spent one more
+   * call with the tools withheld and `finalContent` is that summary; absent =
+   * the turn ended on whatever the last call produced. Mirrors the committed
+   * `stoppedEarly` record (`agent.stoppedEarly()`), never a second source of
+   * it.
+   */
+  readonly stoppedEarly?: {
+    readonly reason: 'max-iterations' | 'cost-budget';
+    readonly iteration: number;
+    readonly pendingToolCalls: number;
+    readonly wrappedUp?: true;
+  };
+}
+
+/**
+ * A turn's budget ran out while the model was still working (9.56.0).
+ *
+ * Fires ONCE per turn, from the Route decider, at the boundary that refused to
+ * run the tool calls the model just asked for — the same moment
+ * `cost.limit_hit { kind: 'max_iterations' }` fires, and beside it rather than
+ * instead of it: that event reports a LIMIT being crossed, this one reports
+ * what the run then DID about it.
+ *
+ * `action` is the whole point. `'wrapped-up'` means one more call went out with
+ * the tools withheld and its answer is the turn's answer; `'cut-short'` means
+ * the turn ended on whatever text rode the last call — a fragment, mid-task,
+ * more often than not. A consumer that only ever sees `'wrapped-up'` is
+ * looking at a healthy default; one seeing `'cut-short'` is looking at a turn
+ * whose answer nobody should trust as complete.
+ */
+export interface AgentBudgetExhaustedPayload {
+  /** Which budget ran out. Only `'max-iterations'` is ever wrapped up. */
+  readonly reason: 'max-iterations' | 'cost-budget';
+  /** The iteration the budget ran out on. */
+  readonly iteration: number;
+  /**
+   * The budget itself — present ONLY for `'max-iterations'`, where it is
+   * `maxIterations`.
+   *
+   * Absent for `'cost-budget'`, deliberately: the run's committed state carries
+   * the cumulative SPEND, not the cap, and reporting spend as `limit` is the
+   * exact mistake `cost.limit_hit` documents and avoids. The real USD cap rides
+   * that event, emitted the moment the budget was crossed.
+   */
+  readonly limit?: number;
+  /** How many tool calls the model asked for that will never run. */
+  readonly pendingToolCalls: number;
+  /** What the run did about it. */
+  readonly action: 'wrapped-up' | 'cut-short';
 }
 
 export interface AgentIterationStartPayload {
@@ -148,9 +207,19 @@ export interface AgentRouteDecidedPayload {
    * nudge still unspent. `'evidence-recheck'` (9.35.0) appears only on an
    * agent built with `.namesAndNumbersFromEvidence({ posture: 'guard' |
    * 'rails' })`, and only on a turn whose would-be-final answer stated values
-   * no tool result carried, with the one revision still unspent.
+   * no tool result carried, with the one revision still unspent. `'wrap-up'`
+   * (9.56.0) appears only on a turn whose `maxIterations` ran out while the
+   * model was still asking for tools, on an agent that did not set
+   * `wrapUpAtMaxIterations: false` — the loop is about to spend one last call
+   * with the tools withheld so the turn ends with a summary.
    */
-  readonly chosen: 'tool-calls' | 'final' | 'output-retry' | 'step-nudge' | 'evidence-recheck';
+  readonly chosen:
+    | 'tool-calls'
+    | 'final'
+    | 'output-retry'
+    | 'step-nudge'
+    | 'evidence-recheck'
+    | 'wrap-up';
   readonly rationale?: string;
 }
 

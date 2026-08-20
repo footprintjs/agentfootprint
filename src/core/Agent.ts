@@ -150,6 +150,7 @@ import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
 import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
+import { wrapUpStage } from './agent/stages/wrapUp.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
@@ -465,6 +466,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The repeated-call nudge (9.26.0) — `false` only when the operator turned
    *  it off. See AgentOptions.repeatedCallNudge. */
   private readonly repeatedCallNudge?: boolean;
+  /** The out-of-budget wrap-up (9.56.0) — `false` only when the operator
+   *  turned it off. See AgentOptions.wrapUpAtMaxIterations. */
+  private readonly wrapUpAtMaxIterations?: boolean;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -838,6 +842,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // default, and storing `true` would make the thread-when-off rule below
     // read as a coincidence.
     if (opts.repeatedCallNudge === false) this.repeatedCallNudge = false;
+    // Same discipline (9.56.0): `undefined` and `true` are the same default, so
+    // only a deliberate opt-out is stored — which keeps the conditional mount
+    // below reading as the decision it is.
+    if (opts.wrapUpAtMaxIterations === false) this.wrapUpAtMaxIterations = false;
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
     // competing one through, so "one per agent" is a fact of the type rather
@@ -3334,11 +3342,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // turn's own tool results when `.namesAndNumbersFromEvidence()` is
     // configured. Without it this is the same function reference the chart
     // has always been handed.
+    // ── The out-of-budget wrap-up (9.56.0) — one build-time decision ───
+    // Mounted when the agent can CALL a tool and did not opt out. The tool
+    // test is not a nicety: a limit only cuts a turn short when tool calls
+    // were pending (`decideBranch`'s `earlyStop`), so an agent with nothing to
+    // call can never reach the branch — and mounting a node that can never run
+    // would put a WrapUp box on every toolless agent's chart, in every
+    // recording, forever. A `ToolProvider` counts even though its list is only
+    // known per iteration: it might list one, and "might" is the whole
+    // question a build-time mount can answer.
+    const canCallTools = registryByName.size > 0 || this.externalToolProvider !== undefined;
+    const hasWrapUp = canCallTools && this.wrapUpAtMaxIterations !== false;
+
     const routeDecider = buildRouteDeciderStage(
       this.messageMiddleware,
       this.outputEnforcement,
       stepPlanFor,
       this.evidenceGate,
+      hasWrapUp,
     );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
@@ -3501,6 +3522,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // agent that did not ask, so both builders mount the final-branch stage
       // function they have always mounted.
       ...(this.limitsTravelWithTheAnswerValue && { attachCoverageLimits: true }),
+      // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
+      // above, decided once beside the Route decider that routes to it so the
+      // two can never disagree about whether the branch exists.
+      ...(hasWrapUp && { wrapUpStage: wrapUpStage as (scope: never) => void }),
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
       ...(routeTurnStage && { routeTurnStage: routeTurnStage as (scope: never) => Promise<void> }),

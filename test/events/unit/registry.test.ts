@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 91 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 103 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 risk + 1 fallback
@@ -187,7 +187,15 @@ describe('event registry — names + exhaustiveness', () => {
     //     only the compact rendering-free projection. Emitted BEFORE the
     //     result ceiling is measured, so the caveats survive to recordings
     //     even when the content itself was refused as oversized.)
-    expect(ALL_EVENT_TYPES.length).toBe(102);
+    //    (agent.budget_exhausted added in 9.56.0 — a turn's budget ran out
+    //     while the model was still working, AND what the run then did about
+    //     it: `action: 'wrapped-up'` (one last call with the tools withheld,
+    //     whose answer is the turn's answer) or `'cut-short'` (the turn ended
+    //     on whatever text rode the refused call). `cost.limit_hit` reports
+    //     the LIMIT being crossed and stays exactly that; this one is the
+    //     difference between an outcome chip that says "answered" and one that
+    //     says "answered after the budget ran out".)
+    expect(ALL_EVENT_TYPES.length).toBe(103);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

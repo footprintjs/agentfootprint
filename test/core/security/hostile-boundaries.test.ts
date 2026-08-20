@@ -170,8 +170,11 @@ describe('security — iteration budget enforcement', () => {
     await agent.run({ message: 'hi' });
     // Last route must be 'final' — budget kicked in.
     expect(routes[routes.length - 1]).toBe('final');
-    // Exactly maxIterations route decisions were made.
-    expect(routes.length).toBeLessThanOrEqual(3);
+    // maxIterations route decisions, plus the one wrap-up (9.56.0). A hostile
+    // provider that ignores the withholding and asks for a tool anyway buys
+    // NOTHING with it: the wrap-up is latched to once per turn, so the loop
+    // still terminates in a bounded number of decisions.
+    expect(routes).toEqual(['tool-calls', 'tool-calls', 'wrap-up', 'final']);
   });
 
   it('Agent — maxIterations of 1 forces final on the first iteration', async () => {
@@ -198,8 +201,11 @@ describe('security — iteration budget enforcement', () => {
     );
 
     const out = await agent.run({ message: 'hi' });
+    // The wrap-up call went out with no tools; this hostile provider answers
+    // the same way regardless, so `'partial'` is still what comes back — and
+    // the loop still stops, because the wrap-up is spent.
     expect(out).toBe('partial');
-    expect(routes).toEqual(['final']);
+    expect(routes).toEqual(['wrap-up', 'final']);
   });
 });
 

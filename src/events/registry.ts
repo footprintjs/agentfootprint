@@ -21,6 +21,7 @@ import type {
   AgentHandoffPayload,
   AgentIterationEndPayload,
   AgentIterationStartPayload,
+  AgentBudgetExhaustedPayload,
   AgentRouteDecidedPayload,
   AgentTurnEndPayload,
   AgentTurnStartPayload,
@@ -149,6 +150,7 @@ export const EVENT_NAMES = {
     evidenceChecked: 'agentfootprint.agent.evidence_checked',
     runConfigured: 'agentfootprint.agent.run_configured',
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
+    budgetExhausted: 'agentfootprint.agent.budget_exhausted',
   },
   stream: {
     llmStart: 'agentfootprint.stream.llm_start',
@@ -359,6 +361,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.thinking_parse_failed': AgentfootprintEventEnvelope<
     'agentfootprint.agent.thinking_parse_failed',
     AgentThinkingParseFailedPayload
+  >;
+  'agentfootprint.agent.budget_exhausted': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.budget_exhausted',
+    AgentBudgetExhaustedPayload
   >;
   // stream
   'agentfootprint.stream.llm_start': AgentfootprintEventEnvelope<
@@ -740,6 +746,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.evidence_checked',
   'agentfootprint.agent.run_configured',
   'agentfootprint.agent.thinking_parse_failed',
+  'agentfootprint.agent.budget_exhausted',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',
   'agentfootprint.stream.token',

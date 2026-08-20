@@ -573,6 +573,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // is stable within a run.
           ...(deps.hasEscalation === true &&
             p.skillEscalated !== undefined && { skillEscalated: p.skillEscalated }),
+          // The out-of-budget wrap-up (9.56.0) — written by the WrapUp branch
+          // on the OUTER scope, read by callLLM INSIDE this boundary, which is
+          // where the request is assembled and therefore where the tools come
+          // off. Value-conditional: the key exists only on the one turn that
+          // ran out of budget, so every other boundary's args are the exact
+          // bytes they always were.
+          ...(p.wrapUpAsked === true && { wrapUpAsked: true }),
           // `.configure()` results, resolved + committed by seed on the OUTER
           // chart. callLLM and the System Prompt slot both live in here, so
           // the values have to cross the boundary. Read-only inside (nothing
@@ -713,6 +720,20 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       'EvidenceRecheck',
       deps.evidenceRecheckStage as never,
       'Answer stated values no tool result carried — naming them back for one revision',
+      { loopTo: loopTarget },
+    );
+  }
+
+  // ── The out-of-budget wrap-up — conditional mount (9.56.0) ─────────
+  // Byte-twin of the flat chart's mount: same loop target, same "one more
+  // ordinary turn" mechanism, absent on an agent with no tool surface and on
+  // one that set `wrapUpAtMaxIterations: false`.
+  if (deps.wrapUpStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.WRAP_UP,
+      'WrapUp',
+      deps.wrapUpStage as never,
+      'Action budget exhausted — one last call with the tools withheld, for a real answer',
       { loopTo: loopTarget },
     );
   }

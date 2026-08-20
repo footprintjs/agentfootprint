@@ -169,6 +169,14 @@ export const STAGE_IDS = {
    *  more — the SchemaRetry mechanism verbatim (an ordinary iteration, not a
    *  mode). At most once per turn. */
   EVIDENCE_RECHECK: 'evidence-recheck',
+  /** The Route decider's out-of-budget branch (9.56.0), mounted on any agent
+   *  that can call tools unless `wrapUpAtMaxIterations: false` turned it off.
+   *  When `maxIterations` runs out while the model is still asking for tools,
+   *  it appends one instruction and the loop turns ONCE more with the tools
+   *  withheld — the SchemaRetry mechanism verbatim (an ordinary iteration, not
+   *  a mode). At most once per turn, and that last call cannot loop: with no
+   *  tools on the wire there is nothing for the model to ask for. */
+  WRAP_UP: 'wrap-up',
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
@@ -327,6 +335,10 @@ const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
   // And for the evidence recheck (9.35.0): the run telling the model it made
   // a value up is the single most interesting stop a reader can find.
   STAGE_IDS.EVIDENCE_RECHECK,
+  // And for the wrap-up (9.56.0): the run telling the model its action budget
+  // is gone is exactly why the answer that follows reads like a summary
+  // instead of the next step. Muting it would hide the reason.
+  STAGE_IDS.WRAP_UP,
 ]);
 
 /**
@@ -424,6 +436,10 @@ export function milestoneFor(id: string): Milestone | null {
     // went back (9.35.0) — everything after it is the model's second try.
     case STAGE_IDS.EVIDENCE_RECHECK:
       return { kind: 'decision', label: 'Evidence recheck' };
+    // The action budget ran out and the turn was wrapped up (9.56.0) —
+    // everything after it is the model summarizing with no tools to call.
+    case STAGE_IDS.WRAP_UP:
+      return { kind: 'decision', label: 'Wrap up' };
     default:
       return null;
   }

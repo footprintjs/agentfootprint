@@ -468,9 +468,14 @@ describe('edge: nothing to check, and limits that refuse a revision', () => {
 
     await agent.run({ message: 'which array port?' });
 
-    // A correction would spend an iteration the limit just refused, so the
-    // turn goes straight to `final` — but the verdict is still filed.
-    expect(caps.routed.map((r) => r.chosen)).toEqual(['final']);
+    // Since 9.56.0 the exhausted turn is WRAPPED UP first — one last call with
+    // the tools withheld — so the route reads `wrap-up` then `final`. The
+    // fragment the wrap-up replaced is deliberately not judged (an answer
+    // about to be replaced is not the final answer — the step nudge's
+    // reasoning), so there is still exactly ONE verdict, on the answer the
+    // caller actually receives. And a correction would still spend an
+    // iteration the limit refused, so it is recorded and not asked for.
+    expect(caps.routed.map((r) => r.chosen)).toEqual(['wrap-up', 'final']);
     expect(caps.checks.map((c) => c.action)).toEqual(['flagged']);
   });
 });

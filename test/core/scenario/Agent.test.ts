@@ -147,8 +147,12 @@ describe('Agent — maxIterations guard', () => {
     });
 
     const out = await agent.run({ message: 'go' });
-    // Final forced on iteration 3 (maxIterations) — 2 tool-call iters + 1 final
-    expect(routes).toEqual(['tool-calls@1', 'tool-calls@2', 'final@3']);
+    // The budget is spent on iteration 3 (maxIterations) — 2 tool-call iters,
+    // then the wrap-up (9.56.0): one last call with the tools withheld, so the
+    // turn ends with an answer rather than whatever rode the refused call.
+    // This provider ignores the withholding, but the wrap-up is latched to
+    // once per turn, so `final` follows immediately.
+    expect(routes).toEqual(['tool-calls@1', 'tool-calls@2', 'wrap-up@3', 'final@4']);
     expect(out).toBe('thinking...');
   });
 });

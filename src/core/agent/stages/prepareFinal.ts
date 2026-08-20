@@ -68,6 +68,13 @@ const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void
     iterIndex: iteration,
     toolCallCount: 0,
   });
+  // 9.56.0 — a turn a LIMIT cut short says so ON `turn_end`, the event a
+  // consumer already reads to render an outcome. Without it, `finalContent`
+  // alone cannot tell a finished answer from the fragment a loop stopped in
+  // the middle of, which is how a half-sentence ends up under a green tick.
+  // Value-conditional and projected (never the whole committed record): a turn
+  // that finished normally emits the exact payload it always did.
+  const cut = scope.stoppedEarly;
   typedEmit(scope, 'agentfootprint.agent.turn_end', {
     turnIndex: 0,
     finalContent: scope.finalContent,
@@ -75,6 +82,14 @@ const captureTurnPayload = (scope: TypedScope<AgentState>, answer: string): void
     totalOutputTokens: scope.totalOutputTokens,
     iterationCount: iteration,
     durationMs: Date.now() - scope.turnStartMs,
+    ...(cut !== undefined && {
+      stoppedEarly: {
+        reason: cut.reason,
+        iteration: cut.iteration,
+        pendingToolCalls: cut.pendingToolCalls,
+        ...(cut.wrappedUp === true && { wrappedUp: true as const }),
+      },
+    }),
   });
 };
 

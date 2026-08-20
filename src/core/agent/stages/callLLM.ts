@@ -51,6 +51,10 @@ import type { AgentState } from '../types.js';
  * nothing allocates nothing — and the array's length and order are untouched
  * either way, which is what keeps `CacheMarker{field:'messages'}` honest.
  */
+/** The wrap-up call's tool list (9.56.0). A frozen module constant so the
+ *  withholding allocates nothing on the one call it applies to. */
+const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
+
 function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
   if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
   return messages.map((m) => {
@@ -236,8 +240,22 @@ export function buildCallLLMStage(
     // schemas at startup before the tools slot has run. Computed BEFORE the
     // llm_start emit so the event reports what the model ACTUALLY saw this call
     // (count + the name/description catalog), not the static startup set.
+    //
+    // 9.56.0 — unless this is the WRAP-UP call, in which case the tools come
+    // OFF. They are withheld HERE, at request assembly, for the same reason
+    // the schema tool is ADDED here: this is the one seam that decides what
+    // goes on the wire, so the change never has to be known by the tools slot,
+    // the registry, `tools.offered`, an MCP server's served list or the
+    // dispatcher that runs tools. Nothing downstream learns a new mode — the
+    // model is simply handed a request with no tools, which is what makes the
+    // wrap-up terminal by construction rather than by another rule.
+    //
+    // `llm_start` reports the truth (`toolsCount: 0`, no catalog), because its
+    // whole claim is what the model actually saw this call.
     const registeredToolSchemas =
-      (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
+      scope.wrapUpAsked === true
+        ? EMPTY_TOOL_SCHEMAS
+        : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
     // Under `'tool-forced'` the schema rides along as one more tool ON THE
     // WIRE. It is reported in `llm_start` too, and deliberately: that event's
     // whole claim is "what the model actually saw this call", and a tool the
