@@ -138,6 +138,10 @@ export interface RunRecorder {
   readonly eventCount: number;
   /** Events discarded to stay under `maxEvents`. `0` on a normal turn. */
   readonly droppedEvents: number;
+  /** Original stream position of the first retained event (9.60.0) — the
+   *  captured events are stream positions
+   *  `[firstRetainedEventIndex, firstRetainedEventIndex + eventCount)`. */
+  readonly firstRetainedEventIndex: number;
   /**
    * Stop recording. The events already captured stay readable, so
    * `toRecording()` after `stop()` is the normal end of a run; call it
@@ -218,6 +222,9 @@ export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRe
     },
     get droppedEvents() {
       return tail.dropped;
+    },
+    get firstRetainedEventIndex() {
+      return tail.firstRetainedIndex;
     },
     stop: () => {
       // Idempotent: a consumer that stops in both a finally block and an

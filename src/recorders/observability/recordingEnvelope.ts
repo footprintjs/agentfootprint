@@ -140,6 +140,17 @@ export interface RecordingRun {
    * "none were dropped", proven — never "we did not look".
    */
   readonly droppedEvents: number;
+  /**
+   * The ORIGINAL stream position of the first retained event (9.60.0) — the
+   * envelope's events are stream positions
+   * `[firstRetainedEventIndex, firstRetainedEventIndex + events.length)`.
+   * A drop COUNT says how much is gone; this says WHERE the kept window
+   * starts, which is what lets a reader align this tail against another
+   * record of the same run. Present exactly when the source could prove it
+   * (the live recordRun handle, or the caller's own statement beside
+   * `droppedEvents`); absent means "not proven", never 0-by-assumption.
+   */
+  readonly firstRetainedEventIndex?: number;
 }
 
 /** What the agent was configured as — names and ids only, no values. */
@@ -214,6 +225,12 @@ export interface RecordingRunFacts {
    * carries no count.
    */
   readonly droppedEvents?: number;
+  /**
+   * Where the kept event window starts in the original stream. Read off a
+   * live handle automatically; state it only when persisting a bare
+   * `Recording` AND you can prove it. Refused if negative or fractional.
+   */
+  readonly firstRetainedEventIndex?: number;
 }
 
 /**
@@ -399,6 +416,30 @@ function resolvePrivacy(privacy: PersistRecordingOptions['privacy']): RecordingP
   return { mode: 'full', policyId: privacy?.policyId ?? FULL_PRIVACY_POLICY_ID };
 }
 
+/**
+ * Where the kept window starts — proven, stated, or honestly ABSENT.
+ *
+ * Unlike `droppedEvents` (whose absence would make the envelope's timeline
+ * claim unverifiable, so a bare Recording is REFUSED there), the offset is
+ * an alignment aid: an envelope without it is still honest — it says
+ * "window start unproven" by omission — so a bare Recording resolves to
+ * `undefined` rather than a refusal.
+ */
+function resolveFirstRetained(source: RecordingSource, stated: number | undefined): number | undefined {
+  if (stated !== undefined) {
+    if (!Number.isInteger(stated) || stated < 0) {
+      throw new IndeterminateRunFactError(
+        'firstRetainedEventIndex',
+        `${JSON.stringify(stated)} is not a stream position. Pass a non-negative integer.`,
+      );
+    }
+    return stated;
+  }
+  const recorder = asRunRecorder(source);
+  if (recorder !== undefined) return recorder.firstRetainedEventIndex;
+  return undefined;
+}
+
 /** How many events the cap discarded — proven, or asked for. */
 function resolveDroppedEvents(source: RecordingSource, stated: number | undefined): number {
   if (stated !== undefined) {
@@ -461,6 +502,7 @@ export function buildRecordingEnvelope(
     : [];
 
   const droppedEvents = resolveDroppedEvents(source, facts.droppedEvents);
+  const firstRetainedEventIndex = resolveFirstRetained(source, facts.firstRetainedEventIndex);
 
   // ── runId ──
   let runId: string;
@@ -563,6 +605,7 @@ export function buildRecordingEnvelope(
       ...(endedAt !== undefined && { endedAt }),
       complete: facts.complete,
       droppedEvents,
+      ...(firstRetainedEventIndex !== undefined && { firstRetainedEventIndex }),
     },
     ...(configuration !== undefined && { configuration }),
     privacy,

@@ -649,3 +649,51 @@ describe('fileRecordingSink — one archive per run, atomically', () => {
     rec.stop();
   });
 });
+
+describe('firstRetainedEventIndex — where the kept window starts (9.60.0)', () => {
+  it('is proven from a live handle: 0 when nothing dropped', async () => {
+    const a = agent();
+    const rec = recordRun(a);
+    await a.run('hello');
+    const env = buildRecordingEnvelope(rec, { run: { complete: true } });
+    expect(env.run.droppedEvents).toBe(0);
+    expect(env.run.firstRetainedEventIndex).toBe(0);
+  });
+
+  it('equals the drop count once the cap has evicted the head', async () => {
+    const a = agent();
+    const rec = recordRun(a, { maxEvents: 5 });
+    await a.run('hello');
+    expect(rec.droppedEvents).toBeGreaterThan(0);
+    // With a dropped head, startedAt must be STATED (the shipped honesty rule:
+    // the earliest retained event is the overflow moment, not the run's start).
+    const env = buildRecordingEnvelope(rec, {
+      run: { complete: true, startedAt: 1 },
+    });
+    expect(env.run.firstRetainedEventIndex).toBe(env.run.droppedEvents);
+    // The alignment claim: retained window is [first, first + kept).
+    expect(env.run.firstRetainedEventIndex! + env.recording.events.length).toBe(
+      env.run.droppedEvents + rec.eventCount,
+    );
+  });
+
+  it('is honestly ABSENT on a bare Recording — never fabricated as 0', async () => {
+    const a = agent();
+    const rec = recordRun(a);
+    await a.run('hello');
+    const bare: Recording = rec.toRecording();
+    const env = buildRecordingEnvelope(bare, { run: { complete: true, droppedEvents: 0 } });
+    expect('firstRetainedEventIndex' in env.run).toBe(false);
+  });
+
+  it('refuses a stated value that is not a stream position', async () => {
+    const a = agent();
+    const rec = recordRun(a);
+    await a.run('hello');
+    expect(() =>
+      buildRecordingEnvelope(rec.toRecording(), {
+        run: { complete: true, droppedEvents: 0, firstRetainedEventIndex: -3 },
+      }),
+    ).toThrow(IndeterminateRunFactError);
+  });
+});

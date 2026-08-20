@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A capped event tail says WHERE its kept window starts** (Context
+  Integrity, phase 0). `EventTailSnapshot.firstRetainedIndex` states the
+  original stream position of the first retained event — the retained
+  window is `[firstRetainedIndex, firstRetainedIndex + events.length)` —
+  and rides the live handle (`RunRecorder.firstRetainedEventIndex`) and the
+  archive (`RecordingEnvelope.run.firstRetainedEventIndex`). A drop COUNT
+  says how much is gone; the offset is what lets a reader align a capped
+  tail against another record of the same run. On a bare `Recording` it is
+  honestly ABSENT (never fabricated as 0), and a stated value that is not a
+  stream position is refused by name.
+
 ## [9.59.0] - 2026-08-20
 
 **The kernel we shipped in 9.58.0 was right about the law and quiet about

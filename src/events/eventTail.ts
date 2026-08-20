@@ -39,6 +39,21 @@ export interface EventTailSnapshot {
   readonly events: readonly AgentfootprintEvent[];
   /** How many events were discarded to stay under the cap. `0` normally. */
   readonly dropped: number;
+  /**
+   * The ORIGINAL stream position of `events[0]` (9.60.0) — the retained
+   * window is `[firstRetainedIndex, firstRetainedIndex + events.length)`
+   * of the stream as fired, so `events[i]` was stream event
+   * `firstRetainedIndex + i`.
+   *
+   * Under oldest-first eviction from one stream this is always equal to
+   * `dropped` — stated as its own named field because a drop COUNT alone
+   * cannot say WHICH range is gone: a reader aligning this tail against
+   * another record of the same run (a commit log, a second recording)
+   * needs the offset, not just the loss. Before this field, an archived
+   * envelope could say "312 events dropped" and nothing could say where
+   * the retained window starts.
+   */
+  readonly firstRetainedIndex: number;
 }
 
 /** A bounded tail of one event stream. */
@@ -49,6 +64,9 @@ export interface EventTail {
   readonly count: number;
   /** How many were discarded to stay under the cap. `0` on a normal turn. */
   readonly dropped: number;
+  /** Original stream position of the oldest retained event — see
+   *  {@link EventTailSnapshot.firstRetainedIndex}. */
+  readonly firstRetainedIndex: number;
   /** Freeze the tail — a fresh array plus the drop count beside it. */
   snapshot(): EventTailSnapshot;
 }
@@ -80,6 +98,9 @@ export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
     get dropped() {
       return dropped;
     },
-    snapshot: () => ({ events: events.slice(), dropped }),
+    get firstRetainedIndex() {
+      return dropped;
+    },
+    snapshot: () => ({ events: events.slice(), dropped, firstRetainedIndex: dropped }),
   };
 }
