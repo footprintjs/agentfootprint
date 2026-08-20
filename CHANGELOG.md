@@ -76,8 +76,10 @@ Nothing in the conversation said the evidence had gone. That is the release.
 - **A drop now says whose results it took.** The authored notice gains one
   sentence: *"Tool results are among them (whats_here, pan_view) — call the
   tool again if you need its output; do not reconstruct ids or values from
-  memory."* That sentence is the difference between a re-fetch and a
-  fabrication. Tool names are the only caller data that reaches it, and they
+  memory."* The drop is now STATED rather than silent — whether that sentence
+  changes what a model does next is **not measured here**: the five archived
+  runs have not been re-run with it on, so it ships as an honesty fix and not
+  as a performance claim. Tool names are the only caller data that reaches it, and they
   are shape-filtered to a plain identifier and **dropped, never truncated**,
   when they are not one — at most four, then `…`.
 

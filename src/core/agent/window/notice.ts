@@ -26,8 +26,11 @@
  * not told about is how a model came to invent an id: its `whats_here` result
  * left the window, nothing said so, and it assembled a plausible-looking id
  * out of an entity name it remembered. "Tool results are among them
- * (whats_here) — call the tool again" is the difference between a re-fetch
- * and a fabrication.
+ * (whats_here) — call the tool again" states the absence instead of leaving
+ * it silent. Whether it changes what the model does next is NOT measured: the
+ * archived runs behind 9.57.0 were not re-run with this sentence on. It ships
+ * as honesty (a drop the model is not told about is unfindable from inside the
+ * conversation), not as a behaviour claim.
  *
  * It appears ONLY when the removal reaches the front of what may leave. That
  * is the window's head in the ordinary case; since 9.55.0 it is the position

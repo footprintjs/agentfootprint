@@ -15,8 +15,9 @@
  *
  * Nothing in the conversation said the evidence had gone. The drop notice
  * counted the messages and named the strategy; it did not say that a TOOL
- * RESULT was among them, which is the one fact that turns a fabrication into
- * a re-fetch.
+ * RESULT was among them — the one fact a model would need to re-fetch instead
+ * of reconstruct. Whether it does is not measured here; these cases pin that
+ * the fact is SAID and RECORDED, which is what was missing.
  *
  * ## What ships (9.57.0)
  *
