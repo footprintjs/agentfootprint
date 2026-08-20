@@ -20,7 +20,13 @@ fired, the model asking by name. Without corroboration for `renewalGrace` consec
 (default 3) it is **parked**: skipped by the evaluator with the honest reason `'parked'`, on the
 record. Explicit or structural evidence re-engages it on the spot — an accepted `read_skill` pick
 is the shipped recovery door, so parking is never a trap. Engagements backed by `explicit` or
-`structural` evidence never decay. `nonParkable` maps (policy maps) never park.
+`structural` evidence never decay. `nonParkable` maps (policy maps) never park — mount one with
+`.maps({ nonParkable: true })`.
+
+While anything is parked the MODEL is told so, in its own system prompt: cursor and engagement as
+separate fields, the reason, and the way back (`parkCard.ts`). Parking also takes the parked map's
+TOOLS off the wire, on the engagement axis and independently of `scopeTools` — the two dials answer
+different questions.
 
 **Units in this family:**
 
