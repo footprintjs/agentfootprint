@@ -525,7 +525,9 @@ export interface ContextEvaluatedPayload {
   /** Why each skipped injection was skipped (errors / unknown trigger kinds). */
   readonly skippedDetails: readonly {
     readonly id: string;
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind';
+    /** `'unknown-fact'` (9.57.0): a templated instruction named a run-time
+     *  fact this evaluation could not supply, so it was skipped whole. */
+    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
     readonly error?: string;
   }[];
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */

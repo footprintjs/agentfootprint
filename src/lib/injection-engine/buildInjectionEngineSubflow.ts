@@ -490,7 +490,10 @@ function makeEvaluateStage(
     // survive footprintjs's transactional scope buffer (which clones on
     // write). Tool schemas are preserved + tagged by injectionId so the
     // Agent's closure-held registry can look up the executable.
-    const activePOJOs = evaluation.active.map(projectActiveInjection);
+    // The ctx goes in (9.57.0): this is the one moment the context and the
+    // content are both in scope, so a templated instruction is rendered here
+    // and every reader downstream sees the same plain text it always saw.
+    const activePOJOs = evaluation.active.map((inj) => projectActiveInjection(inj, ctx));
     scope.$setValue('activeInjections', activePOJOs);
 
     const routing = routingEntriesOf(evaluation.active);

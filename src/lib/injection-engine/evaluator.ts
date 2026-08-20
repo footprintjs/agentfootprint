@@ -35,17 +35,19 @@
 
 import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionEvaluation } from './types.js';
+import { missingFactsFor } from './promptTemplate.js';
 
 export function evaluateInjections(
   injections: readonly Injection[],
   ctx: InjectionContext,
 ): InjectionEvaluation {
-  const active: Injection[] = [];
+  const admitted: Injection[] = [];
   const skipped: Array<{
     id: string;
-    reason: 'predicate-threw' | 'unknown-trigger-kind';
+    reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
     error?: string;
   }> = [];
+  const active: Injection[] = [];
 
   for (const inj of injections) {
     // The lease admission (9.19.0) — a granted `require-instruction` push.
@@ -54,18 +56,18 @@ export function evaluateInjections(
     // which also means a leased rule's throwing predicate cannot mark a
     // framework-granted delivery as skipped.
     if (ctx.leaseActiveIds !== undefined && ctx.leaseActiveIds.includes(inj.id)) {
-      active.push(inj);
+      admitted.push(inj);
       continue;
     }
     const t = inj.trigger;
     switch (t.kind) {
       case 'always': {
-        active.push(inj);
+        admitted.push(inj);
         break;
       }
       case 'rule': {
         try {
-          if (t.activeWhen(ctx)) active.push(inj);
+          if (t.activeWhen(ctx)) admitted.push(inj);
         } catch (err) {
           skipped.push({
             id: inj.id,
@@ -82,11 +84,11 @@ export function evaluateInjections(
         const matches = toolResultsOf(ctx).some((r) =>
           typeof t.toolName === 'string' ? t.toolName === r.toolName : t.toolName.test(r.toolName),
         );
-        if (matches) active.push(inj);
+        if (matches) admitted.push(inj);
         break;
       }
       case 'llm-activated': {
-        if (ctx.activatedInjectionIds.includes(inj.id)) active.push(inj);
+        if (ctx.activatedInjectionIds.includes(inj.id)) admitted.push(inj);
         break;
       }
       default: {
@@ -100,6 +102,31 @@ export function evaluateInjections(
         });
       }
     }
+  }
+
+  // ── The template gate (9.57.0), after membership and before anything
+  // reads the content. A templated instruction whose named facts this
+  // evaluation cannot supply is skipped WHOLE, by name: a rendered gap is
+  // worse than an absent instruction, and a fabricated zero is worse again —
+  // nothing downstream, and no model, can tell it from a real one.
+  for (const inj of admitted) {
+    if (inj.templated !== true || inj.inject.systemPrompt === undefined) {
+      active.push(inj);
+      continue;
+    }
+    const missing = missingFactsFor(inj.inject.systemPrompt, ctx);
+    if (missing.length === 0) {
+      active.push(inj);
+      continue;
+    }
+    skipped.push({
+      id: inj.id,
+      reason: 'unknown-fact',
+      error:
+        `promptTemplate names ${missing.map((m) => `{{${m}}}`).join(', ')}, and this ` +
+        `evaluation has no action budget to fill them from. The whole instruction was ` +
+        `skipped rather than rendered with a gap or a made-up number.`,
+    });
   }
 
   return { active, skipped };

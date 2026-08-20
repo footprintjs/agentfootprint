@@ -62,6 +62,7 @@ const PURE_CORE = [
   `${IE}/evaluator.ts`,
   `${IE}/hostContract.ts`,
   `${IE}/intentScorer.ts`,
+  `${IE}/promptTemplate.ts`,
   `${IE}/routingPolicy.ts`,
   `${IE}/skillContract.ts`,
   `${IE}/skillExamples.ts`,
@@ -97,6 +98,12 @@ const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
     'src/memory/embedding/types.ts',
     '`Embedder` — the one-method port `embeddingScorer` scores against. A type with no ' +
       'imports; the implementations live behind `agentfootprint/providers`.',
+  ],
+  [
+    'src/lib/iterationBudget.ts',
+    '`iterationsRemainingOf` — one line of arithmetic over two numbers, extracted so the ' +
+      'injection engine, the cache decision and the request assembly cannot drift by one ' +
+      'about how many actions a turn has left. No imports, no runtime, nothing agent-shaped.',
   ],
   [
     'src/memory/embedding/cosine.ts',

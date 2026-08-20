@@ -20,6 +20,7 @@
 import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
 import type { ToolResultStatus } from './toolOutcome.js';
+import { renderTemplate } from './promptTemplate.js';
 
 // ─── Trigger — WHEN does this Injection activate? ──────────────────
 
@@ -353,6 +354,22 @@ export interface Injection {
   /** WHAT to contribute (one or more slots). */
   readonly inject: InjectionContent;
   /**
+   * `true` when `inject.systemPrompt` is a TEMPLATE — it names run-time facts
+   * from the closed vocabulary in `promptTemplate.ts` and must be rendered
+   * before it reaches anything (9.57.0).
+   *
+   * Top-level rather than a `metadata` key on purpose. At least one live path
+   * rebuilds `metadata` wholesale (`toolsFromActiveSkill`), and a marker lost
+   * there means the literal `{{actionsRemaining}}` reaches the model — the
+   * exact class of failure this feature exists to prevent. Top-level fields
+   * survive every `{...injection}` spread in the repo.
+   *
+   * The template text stays in `inject.systemPrompt`, so the nine build-time
+   * readers that ask length/existence questions about it keep answering them
+   * unchanged.
+   */
+  readonly templated?: true;
+  /**
    * Optional flavor-specific metadata. Engine ignores keys it doesn't
    * recognize; flavor factories use this for opt-in fields without
    * widening the Injection contract.
@@ -382,7 +399,13 @@ export interface InjectionEvaluation {
   readonly active: readonly Injection[];
   readonly skipped: ReadonlyArray<{
     readonly id: string;
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind';
+    /**
+     * `'unknown-fact'` (9.57.0): a templated instruction named a run-time fact
+     * this evaluation cannot supply, so the WHOLE instruction was skipped.
+     * All-or-nothing by design — a rendered gap, or a fabricated zero, is
+     * worse than an instruction that did not speak.
+     */
+    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact';
     readonly error?: string;
   }>;
 }
@@ -484,8 +507,24 @@ export interface ActiveInjection {
   };
 }
 
-/** Project a full Injection (with functions) into a scope-safe POJO. */
-export function projectActiveInjection(inj: Injection): ActiveInjection {
+/**
+ * Project a full Injection (with functions) into a scope-safe POJO.
+ *
+ * `ctx` (9.57.0) is THE rendering seam: it is the one moment the context and
+ * the content are both in scope, and every downstream reader — the slots, the
+ * cache decision, Deliver, the ledger, the recorders, a foreign host —
+ * continues to see the same static `ActiveInjection` it always saw. Optional,
+ * so a caller from before 9.57.0 still compiles.
+ *
+ * A TEMPLATED injection projected with no usable ctx comes back with NO
+ * `systemPrompt` at all. Absence is honest; a literal `{{actionsRemaining}}`
+ * in front of the model is not. Through the engine that path is unreachable —
+ * `evaluateInjections` has already skipped such an injection by name.
+ */
+export function projectActiveInjection(
+  inj: Injection,
+  ctx?: Pick<InjectionContext, 'iteration' | 'maxIterations'>,
+): ActiveInjection {
   // Project per-skill metadata that slot subflows need to dispatch on.
   // `surfaceMode` drives the system-prompt-suppression decision.
   // `autoActivate` drives runtime tool gating: it tells the tools slot that
@@ -494,6 +533,15 @@ export function projectActiveInjection(inj: Injection): ActiveInjection {
   const meta = inj.metadata as
     | { surfaceMode?: string; autoActivate?: string; cache?: unknown }
     | undefined;
+  // Rendered HERE, once, so the projection every reader shares is already
+  // plain text. `undefined` = a template whose facts this ctx cannot supply,
+  // and then the piece is absent rather than gappy.
+  const systemPrompt =
+    inj.templated === true && inj.inject.systemPrompt !== undefined
+      ? ctx === undefined
+        ? undefined
+        : renderTemplate(inj.inject.systemPrompt, ctx)
+      : inj.inject.systemPrompt;
   const out: ActiveInjection = {
     id: inj.id,
     flavor: inj.flavor,
@@ -509,7 +557,7 @@ export function projectActiveInjection(inj: Injection): ActiveInjection {
       cache: meta.cache as ActiveInjection['cache'],
     }),
     inject: {
-      ...(inj.inject.systemPrompt && { systemPrompt: inj.inject.systemPrompt }),
+      ...(systemPrompt !== undefined && systemPrompt.length > 0 && { systemPrompt }),
       ...(inj.inject.messages && { messages: inj.inject.messages.map((m) => ({ ...m })) }),
       ...(inj.inject.tools && {
         tools: inj.inject.tools.map((t) => ({
