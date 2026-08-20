@@ -558,19 +558,68 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
 // ── find_context_errors ────────────────────────────────────────────────────
 
 /**
- * The five ContextErrorKinds as a schema enum — and a compile-time pin.
- * The record's KEY type is `ContextErrorKind`, so a kind added to the
- * finding type without joining this list fails to compile HERE, rather than
- * becoming a value the tool's enum silently rejects at run time.
+ * The five ContextErrorKinds — each mapped to the check that can FILE it in
+ * this build, or `false` when no check ships for that class.
+ *
+ * Two jobs in one table:
+ *
+ *   - the compile-time pin. The record's KEY type is `ContextErrorKind`, so
+ *     a kind added to the finding type without joining this list fails to
+ *     compile HERE, rather than becoming a value the tool's enum silently
+ *     rejects at run time.
+ *   - the honesty gate. `ContextErrorKind` names five defect classes;
+ *     `src/integrity/` ships three checks. Offering the other two in the
+ *     schema enum invites a query whose only possible answer is a negative
+ *     verdict about a class nothing in the library could have filed — the
+ *     tool telling a model "no duplicate-execution errors" when nothing on
+ *     earth was looking for one. Only filable kinds reach the enum; the
+ *     description and the refusal are generated from this same table, so a
+ *     check that lands is advertised everywhere by flipping one entry.
  */
-const CONTEXT_ERROR_KIND_SET: Record<ContextErrorKind, true> = {
-  'invariant-violation': true,
-  'unsupported-argument': true,
-  'dangling-reference': true,
-  'duplicate-execution': true,
-  'unsupported-claim': true,
+const CONTEXT_ERROR_KIND_CHECKS: Record<ContextErrorKind, string | false> = {
+  'invariant-violation': 'src/integrity/invariant-violation (write + wire)',
+  'unsupported-argument': false,
+  'dangling-reference': 'src/integrity/dangling-reference (compose)',
+  'duplicate-execution': false,
+  'unsupported-claim': 'src/integrity/unsupported-claim (claim)',
 };
-const CONTEXT_ERROR_KINDS = Object.keys(CONTEXT_ERROR_KIND_SET) as ContextErrorKind[];
+const ALL_CONTEXT_ERROR_KINDS = Object.keys(CONTEXT_ERROR_KIND_CHECKS) as ContextErrorKind[];
+/** The kinds the tool OFFERS — the ones a shipped check can actually file. */
+const CONTEXT_ERROR_KINDS = ALL_CONTEXT_ERROR_KINDS.filter(
+  (kind) => CONTEXT_ERROR_KIND_CHECKS[kind] !== false,
+);
+/** Named in the finding type, filable by nothing here. Said out loud, never offered. */
+const UNFILABLE_CONTEXT_ERROR_KINDS = ALL_CONTEXT_ERROR_KINDS.filter(
+  (kind) => CONTEXT_ERROR_KIND_CHECKS[kind] === false,
+);
+
+/**
+ * The answer for a `kind` this build cannot report on.
+ *
+ * It runs BEFORE the evidence checks on purpose: whether a class is filable
+ * is a fact about the BUILD, not about the run, and it stays true however
+ * much evidence the tail carries. Args validation is a dial
+ * (`toolArgValidation: 'off' | 'warn'`), so the enum is a menu rather than a
+ * wall — `execute` really is reachable with a kind it never offered, and the
+ * one answer it must never give there is a negative verdict.
+ */
+function unanswerableKind(kind: string): string | undefined {
+  const offered = CONTEXT_ERROR_KINDS.join(', ');
+  if (!Object.prototype.hasOwnProperty.call(CONTEXT_ERROR_KIND_CHECKS, kind)) {
+    return (
+      `find_context_errors: ⚠ '${kind}' is not a defect class this library knows — it is not a ` +
+      `Context Integrity kind at all, so nothing was ever filed under that word and this answer ` +
+      `says nothing about the run. Classes this build can file: ${offered}.`
+    );
+  }
+  if (CONTEXT_ERROR_KIND_CHECKS[kind as ContextErrorKind] !== false) return undefined;
+  return (
+    `find_context_errors: ⚠ UNANSWERABLE — '${kind}' is a defect class the finding type names, ` +
+    `and no check in this build can file it. Nothing ever looked for one, so silence about it is ` +
+    `not evidence of its absence. Classes this build can file: ${offered} — call again with one ` +
+    `of those, or with no 'kind' at all.`
+  );
+}
 
 const CONTEXT_ERROR_EVENT = 'agentfootprint.integrity.context_error';
 const DISPOSITION_EVENT = 'agentfootprint.integrity.disposition';
@@ -684,11 +733,16 @@ function dispositionLine(report: CheckReport): string {
       `is wired and nothing fed it (wiring rot); its silence is not health.`
     );
   }
+  // `ran 0×` with encounters on the other counters is NOT "found nothing":
+  // every encounter was out of scope or unreachable, so this seam went
+  // unchecked. Saying it found nothing would read the count backwards.
   const parts = [
-    `ran ${checked}×`,
-    findings > 0
-      ? `${findings} finding(s)`
-      : '0 findings — the checker ran and found nothing at this seam',
+    checked > 0 ? `ran ${checked}×` : `⚠ ran 0× — nothing at this seam was actually checked`,
+    ...(findings > 0
+      ? [`${findings} finding(s)`]
+      : checked > 0
+      ? ['0 findings — the checker ran and found nothing at this seam']
+      : []),
   ];
   if (notApplicable > 0) {
     parts.push(`not-applicable ${notApplicable} (out of scope by rule)`);
@@ -721,17 +775,27 @@ function dispositionLine(report: CheckReport): string {
  * assemble by hand.
  *
  * HONEST ABSENCE is the reason the tool exists in this family at all, and
- * it has three distinct sentences that must never collapse into one:
+ * its sentences must never collapse into one:
  *
- *   - no event tail at all       → NO EVIDENCE. Findings ride the event
- *                                  stream; without it this run cannot be
- *                                  reported on either way.
- *   - a tail with no integrity   → no checker was registered, or the tail
- *     events                       was capped before they landed.
- *   - disposition rows, no       → the checkers RAN and found nothing —
- *     findings                     health, stated with the rows that prove
- *                                  it, and with the standing bound that a
- *                                  seam nobody checks files nothing.
+ *   - a kind no check can file  → UNANSWERABLE, said before any evidence is
+ *                                 read: which classes are filable is a fact
+ *                                 about the build, not about the run.
+ *   - no event tail at all      → NO EVIDENCE. Findings ride the event
+ *                                 stream; without it this run cannot be
+ *                                 reported on either way.
+ *   - a tail with no integrity  → no checker was registered, or the tail
+ *     events                      was capped before they landed.
+ *   - rows, but zero `checked`  → NOTHING WAS CHECKED. Every encounter was
+ *     encounters                  unreachable, out of scope, or never met —
+ *                                 silence, and never a clean bill.
+ *   - rows with real `checked`  → the checkers RAN and found nothing —
+ *     encounters, no findings     health, stated with the encounter count
+ *                                 that earned it and the rows that prove it,
+ *                                 and with the standing bound that a seam
+ *                                 nobody checks files nothing.
+ *
+ * The green sentence is the one that must be EARNED: it is chosen by summing
+ * the rows' `checked` counts, never by the mere absence of a finding.
  */
 function buildFindContextErrors(
   artifacts: TraceToolpackArtifacts,
@@ -868,12 +932,15 @@ function buildFindContextErrors(
     name: 'find_context_errors',
     description:
       'What did this run CONTRADICT ITSELF about? Lists the Context Integrity findings the ' +
-      'library already caught — an invariant violated, an argument nothing served, an offered ' +
-      'action whose inputs left scope, settled work done twice, a claim the record does not ' +
-      'support — each with the step it was filed at and the exact drill that opens the state ' +
-      'behind it. Call it EARLY when an answer looks wrong: a contradiction the library already ' +
-      'caught beats re-deriving one. Reads only; nothing is re-checked or re-judged. When no ' +
-      'finding evidence was captured it says so plainly rather than reporting a clean run. ' +
+      'library already caught — an invariant violated, an offered action whose inputs left ' +
+      'scope, a claim the record does not support — each with the step it was filed at and the ' +
+      'exact drill that opens the state behind it. Call it EARLY when an answer looks wrong: a ' +
+      'contradiction the library already caught beats re-deriving one. Reads only; nothing is ' +
+      're-checked or re-judged. When no finding evidence was captured it says so plainly rather ' +
+      `than reporting a clean run. The finding type also names ${UNFILABLE_CONTEXT_ERROR_KINDS.map(
+        (kind) => `'${kind}'`,
+      ).join(' and ')}, and no check in this build files them — this tool cannot report on ` +
+      'those classes at all, so its silence about them is not evidence. ' +
       `Bounded by limit (default ${FINDINGS_DEFAULT}, hard cap ${TOOLPACK_HARD_CAPS.contextErrorsMax}).`,
     inputSchema: {
       type: 'object',
@@ -881,7 +948,9 @@ function buildFindContextErrors(
         kind: {
           type: 'string',
           enum: CONTEXT_ERROR_KINDS,
-          description: 'Optional: only findings of this defect class. Omit to see every finding.',
+          description:
+            'Optional: only findings of this defect class. Omit to see every finding. Only ' +
+            'classes a check in this build can file are listed here.',
         },
         limit: {
           type: 'integer',
@@ -891,6 +960,20 @@ function buildFindContextErrors(
       additionalProperties: false,
     },
     execute: ({ kind, limit }) => {
+      // ── a question no build of this library can answer ──────────────────
+      // Ahead of every evidence check, because which classes are FILABLE is a
+      // property of the build, not of the run. The one exception is evidence
+      // itself: if the tail really does carry findings under that kind (a
+      // foreign filer, or a recording made by a build that shipped the
+      // check), listing them beats refusing them — the refusal claims nothing
+      // ever looked, and here something did.
+      if (kind !== undefined) {
+        const refusal = unanswerableKind(kind);
+        const carried =
+          artifacts.events !== undefined && readFindings().some((f) => f.error.kind === kind);
+        if (refusal !== undefined && !carried) return refusal;
+      }
+
       // ── absence, stated in the sentence the situation deserves ──────────
       if (artifacts.events === undefined) {
         return (
@@ -954,6 +1037,67 @@ function buildFindContextErrors(
       const matchingAdvisories = matching.filter(isAdvisory).length;
       const matchingDefects = matching.length - matchingAdvisories;
 
+      // ── what the rows actually say a check DID ──────────────────────────
+      // The disposition rows are the only witness that a check ever looked,
+      // and a green headline is earned by `checked` encounters alone: an
+      // `unreachable` encounter is one the check could not see the evidence
+      // for, a `not-applicable` one is out of its scope by rule, and a
+      // registered check with zero encounters never met a subject. Summing
+      // them defensively — a tail parsed back from JSON can carry anything.
+      const sumRows = (pick: (report: CheckReport) => unknown): number =>
+        (rows ?? []).reduce((sum, report) => {
+          const value = pick(report);
+          return sum + (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+        }, 0);
+      const num = (value: unknown): number =>
+        typeof value === 'number' && Number.isFinite(value) ? value : 0;
+      const totalChecked = sumRows((report) => report.checked);
+      const totalUnreachable = sumRows((report) => report.unreachable);
+      const totalNotApplicable = sumRows((report) => report.notApplicable);
+      const neverRanRows = (rows ?? []).filter(
+        (report) => num(report.checked) + num(report.notApplicable) + num(report.unreachable) === 0,
+      ).length;
+
+      /** Nothing matched: WHICH absence is this? The rows decide, not the silence. */
+      const absenceHeadline = (): string => {
+        if (rows === undefined) {
+          return (
+            `CONTEXT ERRORS — ⚠ NONE FILED, AND NOTHING RECORDS WHICH CHECKS RAN. This tail ` +
+            `carries no disposition accounting (${DISPOSITION_EVENT}), so no check is known to ` +
+            `have run and none is known to have passed. Read it as unmeasured, not as clean.`
+          );
+        }
+        if (rows.length === 0) {
+          return (
+            `CONTEXT ERRORS — ⚠ NONE FILED, AND NO CHECK WAS REGISTERED. This agent's ` +
+            `configuration made no Context Integrity check applicable, so nothing was checked ` +
+            `and nothing could be found. That is honest absence, not health.`
+          );
+        }
+        if (totalChecked === 0) {
+          const why = [
+            totalUnreachable > 0
+              ? `${totalUnreachable} unreachable (no stamped identity edge, so the check could ` +
+                `not see the evidence)`
+              : '',
+            totalNotApplicable > 0 ? `${totalNotApplicable} out of scope by rule` : '',
+            neverRanRows > 0 ? `${neverRanRows} check(s) never met a subject at all` : '',
+          ].filter(Boolean);
+          return (
+            `CONTEXT ERRORS — ⚠ NOTHING WAS CHECKED. The ${rows.length} registered check(s) ` +
+            `below reached zero checked encounter(s)${
+              why.length > 0 ? `: ${why.join(' · ')}` : ''
+            }` +
+            `. A check that never saw a subject cannot have passed one, so this is silence about ` +
+            `every seam, not a clean run.`
+          );
+        }
+        return (
+          `CONTEXT ERRORS — none filed. The checkers below RAN (${totalChecked} checked ` +
+          `encounter(s)); nothing they cover was violated.`
+        );
+      };
+
       const lines: string[] = [];
       if (matching.length === 0 && nonSynthetic.length === 0 && rowFindings > 0) {
         lines.push(
@@ -969,9 +1113,7 @@ function buildFindContextErrors(
             `finding(s) of other kinds: ${kinds}. Call again without 'kind' to see them.`,
         );
       } else if (matching.length === 0) {
-        lines.push(
-          `CONTEXT ERRORS — none filed. The checkers below RAN; nothing they cover was violated.`,
-        );
+        lines.push(absenceHeadline());
       } else {
         const cap = clampParam(limit, FINDINGS_DEFAULT, 1, TOOLPACK_HARD_CAPS.contextErrorsMax);
         const shown = matching.slice(0, cap);

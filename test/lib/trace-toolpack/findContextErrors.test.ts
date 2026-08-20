@@ -376,6 +376,9 @@ describe('find_context_errors — honest absence', () => {
     expect(out).toContain('⚠');
     expect(out).toMatch(/no .*check.* was registered|none registered/i);
     expect(out).not.toMatch(/ran and found nothing/);
+    // The HEADLINE says it too, not only the rows underneath it.
+    expect(out).toMatch(/NO CHECK WAS REGISTERED/);
+    expect(out).not.toMatch(/nothing they cover was violated/i);
   });
 
   it('a registered check that never encountered a subject is named as wiring rot', async () => {
@@ -419,6 +422,64 @@ describe('find_context_errors — honest absence', () => {
     expect(out).toMatch(/deduplicated by identity \(1 distinct/);
   });
 
+  it('registered checks that never actually checked anything is silence, not a clean bill', async () => {
+    // THE DEFECT this guards: the green headline used to be printed without
+    // ever reading the rows it claims to summarise. A run where every
+    // encounter was `unreachable` (the check could not see the evidence) had
+    // nothing checked at all — calling that "nothing they cover was violated"
+    // is the exact sentence this family exists to refuse.
+    const out = await ask(
+      artifactsWith([
+        disposition([
+          row({ check: 'invariant-violation', seam: 'wire', unreachable: 9 }),
+          row({ check: 'dangling-reference', seam: 'compose' }),
+        ]),
+      ]),
+    );
+    expect(out).toContain('⚠');
+    expect(out).toMatch(/NOTHING WAS CHECKED/);
+    expect(out).toMatch(/unreachable/i);
+    expect(out).not.toMatch(/nothing they cover was violated/i);
+    expect(out).not.toMatch(/checkers below ran/i);
+    expect(out).not.toMatch(/none filed\./);
+  });
+
+  it('checks that only ever ruled themselves out of scope did not pass anything either', async () => {
+    const out = await ask(
+      artifactsWith([
+        disposition([row({ check: 'dangling-reference', seam: 'compose', notApplicable: 5 })]),
+      ]),
+    );
+    expect(out).toMatch(/NOTHING WAS CHECKED/);
+    expect(out).toMatch(/out of scope by rule/);
+    expect(out).not.toMatch(/nothing they cover was violated/i);
+  });
+
+  it('the green headline names the checked encounters that earned it', async () => {
+    const out = await ask(
+      artifactsWith([
+        disposition([
+          row({ check: 'invariant-violation', seam: 'wire', checked: 12 }),
+          row({ check: 'dangling-reference', seam: 'compose', checked: 3, unreachable: 4 }),
+        ]),
+      ]),
+    );
+    expect(out).toMatch(/15 checked encounter/);
+    expect(out).toContain('nothing they cover was violated');
+  });
+
+  it('a tail whose only findings are canaries, with no rows, is not reported as green', async () => {
+    // No disposition event at all: nothing records which checks ran, so the
+    // absence of a real finding is unmeasured rather than clean.
+    const out = await ask(
+      artifactsWith([finding({ ...WIRE_ERROR, synthetic: true }, 'call-llm#1')]),
+    );
+    expect(out).toContain('⚠');
+    expect(out).toMatch(/no disposition/i);
+    expect(out).not.toMatch(/nothing they cover was violated/i);
+    expect(out).not.toMatch(/checkers below ran/i);
+  });
+
   it('rows reporting findings the tail does not carry is EVIDENCE MISSING, not a clean run', async () => {
     const out = await ask(
       artifactsWith([
@@ -438,6 +499,89 @@ describe('find_context_errors — honest absence', () => {
     expect(out).toContain('1 finding(s)');
     expect(out).toContain('CHECKERS');
     expect(out).toMatch(/no disposition/i);
+  });
+});
+
+/* ── honesty: the tool only offers defect classes a check can file ─────── */
+
+describe('find_context_errors — the kind vocabulary it can answer for', () => {
+  const findTool = () =>
+    traceToolpack(artifactsWith(undefined)).find((t) => t.schema.name === 'find_context_errors')!;
+
+  const kindEnum = (): readonly string[] => {
+    const properties = (
+      findTool().schema.inputSchema as {
+        properties?: Record<string, { enum?: readonly string[] }>;
+      }
+    ).properties;
+    return properties?.kind?.enum ?? [];
+  };
+
+  it('offers only the classes a check in this build can actually file', () => {
+    // `ContextErrorKind` names five classes; `src/integrity/` ships three
+    // checks. Offering the other two invites a query whose only possible
+    // answer is a negative verdict about a class nothing could have filed.
+    expect([...kindEnum()].sort()).toEqual([
+      'dangling-reference',
+      'invariant-violation',
+      'unsupported-claim',
+    ]);
+    expect(kindEnum()).not.toContain('duplicate-execution');
+    expect(kindEnum()).not.toContain('unsupported-argument');
+  });
+
+  it('the description does not advertise a defect class the pack cannot report', () => {
+    const description = findTool().schema.description ?? '';
+    expect(description).not.toMatch(/settled work done twice/i);
+    expect(description).not.toMatch(/an argument nothing served/i);
+    // It says out loud that two named classes have no checker here.
+    expect(description).toMatch(/duplicate-execution/);
+    expect(description).toMatch(/unsupported-argument/);
+    expect(description).toMatch(/no check .*files them|cannot report/i);
+  });
+
+  it('answers honestly when a caller asks for a class no check can file', async () => {
+    // Args validation is a DIAL (`toolArgValidation: 'off' | 'warn'`), so the
+    // enum is a menu, not a wall: `execute` really is reachable with a kind
+    // it never offered. A negative verdict here would be a lie about a class
+    // nothing on earth could have filed.
+    const out = String(await findTool().execute({ kind: 'duplicate-execution' }, {} as never));
+    expect(out).toContain('⚠');
+    expect(out).toMatch(/no check in this build .*file/i);
+    expect(out).toMatch(/duplicate-execution/);
+    expect(out).not.toMatch(/no 'duplicate-execution' findings in this run/);
+    expect(out).not.toMatch(/none filed/);
+  });
+
+  it('lists findings a tail really carries under an unfilable kind rather than refusing them', async () => {
+    // The refusal claims nothing ever looked. If the tail carries findings
+    // under that kind anyway — a foreign filer, or a recording from a build
+    // that shipped the check — refusing would be the lie in the other
+    // direction, and would drop real evidence on the floor.
+    const foreign = {
+      ...WIRE_ERROR,
+      kind: 'duplicate-execution' as const,
+      message: 'the four-step sequence ran twice',
+    };
+    const out = String(
+      await traceToolpack(
+        artifactsWith([
+          finding(foreign, 'call-llm#1'),
+          disposition([row({ check: 'duplicate-execution', seam: 'choice', checked: 2 })]),
+        ]),
+      )
+        .find((t) => t.schema.name === 'find_context_errors')!
+        .execute({ kind: 'duplicate-execution' }, {} as never),
+    );
+    expect(out).toContain('the four-step sequence ran twice');
+    expect(out).not.toMatch(/UNANSWERABLE/);
+  });
+
+  it('a kind outside the finding type at all is refused as an unknown class', async () => {
+    const out = String(await findTool().execute({ kind: 'not-a-kind' }, {} as never));
+    expect(out).toContain('⚠');
+    expect(out).toMatch(/not a defect class|not a Context Integrity/i);
+    expect(out).not.toMatch(/none filed/);
   });
 });
 

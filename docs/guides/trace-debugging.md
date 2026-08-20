@@ -43,7 +43,7 @@ const overview = await callTraceTool(tools, 'run_overview');
 | Tool | Question it answers |
 |------|---------------------|
 | `run_overview()` | What happened, broadly? Stage list (id + name + description), loops, where errors appeared, honesty notes, and what the run cost. **The entry point.** |
-| `find_context_errors(kind?, limit?)` | **What did this run contradict itself about?** The Context Integrity findings already caught — invariant violated, argument nothing served, offered action whose inputs left scope, settled work done twice, unsupported claim — each with the step it was filed at, its witnesses, and the drill that opens the state behind it. Reads only; never re-checks. Says "no finding evidence" rather than "no errors" when the tail is absent. |
+| `find_context_errors(kind?, limit?)` | **What did this run contradict itself about?** The Context Integrity findings already caught — invariant violated, offered action whose inputs left scope, unsupported claim — each with the step it was filed at, its witnesses, and the drill that opens the state behind it. Reads only; never re-checks. Says "no finding evidence" rather than "no errors" when the tail is absent. `kind` offers only the classes a check in this build can file. |
 | `find_in_trace(query, maxHits?)` | **Where does "…" appear in this run?** Free text → step ids and keys. The bridge from the user's words to something the other tools can take. |
 | `trace_node(runtimeStageId)` | What did step X write (bounded previews + true sizes), read, and where did its inputs come from (parents, with the routing decision's rule label)? |
 | `trace_slice(runtimeStageId, key?, maxDepth?, maxNodes?)` | Which chain of steps produced the data at X? Backward read→write slice with `[control: rule]` edges, as an indented tree of drillable ids. |
@@ -74,7 +74,7 @@ CONTEXT ERRORS — 1 finding(s) filed by this run's integrity checks (showing 1 
     witnesses (1): ⚠ none carries a step id in this run
 
 CHECKERS (posture: observe · the run did work a checker could see):
-- invariant-violation @wire: ran 0× · 0 findings — the checker ran and found nothing at this seam
+- invariant-violation @wire: ⚠ ran 0× — nothing at this seam was actually checked
   · unreachable 9 ⚠ — no stamped identity edge, so those encounters were SILENT, not clean
 - dangling-reference @compose: ran 6× · 6 finding(s) · not-applicable 3 (out of scope by rule)
 
@@ -94,6 +94,17 @@ Three properties are the point:
   finding evidence*; a tail with no integrity events says the channel is empty
   and why; rows that report findings the tail no longer carries say **evidence
   missing**. None of them ever reads as a clean bill of health.
+- **The green headline is earned by counting, not by silence.** "The checkers
+  RAN; nothing they cover was violated" is printed only when the rows sum to at
+  least one `checked` encounter, and it names the number. A run whose encounters
+  were all `unreachable` or out of scope, or whose registered checks never met a
+  subject, reads **⚠ NOTHING WAS CHECKED** with the reason — silence, not health.
+- **It only offers defect classes a check can file.** `ContextErrorKind` names
+  five classes; this build ships checks for `invariant-violation`,
+  `dangling-reference` and `unsupported-claim`, and the `kind` enum lists exactly
+  those. `unsupported-argument` and `duplicate-execution` have no checker here, so
+  asking for one is answered **⚠ UNANSWERABLE** — nothing ever looked, and silence
+  about a class nobody checks is not evidence of its absence.
 
 Findings are deduplicated by identity when they are filed, so one defect
 re-detected on later iterations is one finding — when the rows count more

@@ -41,6 +41,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `.claims()` and appends without the quadratic copy — restoring the
     zero-delta promise for every agent that configured none of this.
 
+- **Two honesty defects in `find_context_errors`**, both caught by the same
+  adversarial review and both red-proved by a failing test first.
+  - *The green headline never read the counts it claimed to summarise.*
+    "The checkers below RAN; nothing they cover was violated" was printed on
+    the mere absence of a finding, so a run whose every encounter was
+    `unreachable` (the check could not see the evidence), whose checks all
+    ruled themselves out of scope, or whose registered checks never met a
+    subject still got a clean bill of health. The headline is now chosen by
+    summing the disposition rows' `checked` counts: real checked encounters
+    earn the green sentence and it names how many; zero checked encounters
+    read **⚠ NOTHING WAS CHECKED** with the reason (unreachable / out of
+    scope / never met a subject); no rows at all, and no registered check at
+    all, each keep their own sentence. A checker ROW with zero `checked`
+    stopped saying "the checker ran and found nothing at this seam" for the
+    same reason.
+  - *The tool advertised defect classes no check can file.* The `kind` enum
+    was pinned to the whole `ContextErrorKind` union, so it offered
+    `unsupported-argument` and `duplicate-execution` — classes no check in
+    this build files — and answering one returned a negative verdict about
+    something nothing on earth could have produced. The compile-time pin
+    stays (a new kind still fails the build until it is listed), but each
+    entry now declares whether a check ships for it: only filable kinds
+    reach the enum, the description says out loud which two have no checker
+    here, and a caller who passes one anyway (args validation is a dial)
+    reads **⚠ UNANSWERABLE — nothing ever looked for one, so silence about
+    it is not evidence of its absence**.
+
 ### Added
 
 - **`.claims()` — the claim seam: what the answer says vs what the run
