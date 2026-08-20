@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The first live check: `invariant-violation`, at the compose seam.**
+  A parked map whose owned tool names are still on the final merged wire
+  list is the recorded two-channels contradiction — one channel says
+  inactive, another shows it available, in the same call — and it is
+  still reachable today through provider shadowing (the park hold-out
+  filters registry and skill lists; provider schemas merge unfiltered,
+  and a provider copy of a parked member's name keeps riding). The check
+  runs once per parked map over the merged list, hands both channels to
+  the shared exclusion algebra (so the quotation/unknown/epoch fences
+  apply for free), files ONE `integrity.context_error` per defect per run
+  (identity dedup threaded across passes and both chart shapes), and
+  never alters the composition — detection converts a silent
+  inconsistency into an attributed one. The healthy park stays silent.
+  One stated deviation from the design brief, documented in the unit's
+  README: the brief placed this at the write seam; in this architecture
+  the park's own pass is when both facts first coexist wrongly, so the
+  check runs at compose and still names the guilty write.
+
 - **The assertion algebra and the one visible finding type.** An
   `Assertion` is keyed by `(subject, predicate, epoch)` with two rules
   that do the work: *serving is asserting; history is quotation* (checks

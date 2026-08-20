@@ -396,6 +396,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // out of the STATIC list, which is the only place a parked map's
         // tools can be reached on the default `scopeTools` posture.
         parkedToolNames: parent.parkedToolNames as readonly string[] | undefined,
+        // Integrity findings already filed this run (9.60.0) — the dedup
+        // seen-list, in under the alias (inputMapper keys are frozen inside
+        // the subflow; the slot writes the fresh list under the base key).
+        ...(parent.integrityFindingIds !== undefined && {
+          priorIntegrityFindingIds: parent.integrityFindingIds,
+        }),
         activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
         runIdentity: parent.runIdentity as
           | { tenant?: string; principal?: string; conversationId: string }
@@ -424,6 +430,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
         dynamicToolSchemas: sf.toolSchemas,
+        ...(sf.integrityFindingIds !== undefined && {
+          integrityFindingIds: sf.integrityFindingIds,
+        }),
       }),
       arrayMerge: ArrayMergeMode.Replace,
       // STRUCTURE-ONLY merge target. When skills are off, UpdateSkillHistory
@@ -611,6 +620,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // cross-iteration read like the step pointer one block up.
           ...(deps.engagementPlan !== undefined &&
             p.mapEngagement !== undefined && { mapEngagement: p.mapEngagement }),
+          // The integrity dedup seen-list (9.60.0) — crosses into
+          // sf-llm-call so the tools slot's compose backstop files one
+          // finding per defect per RUN, not per pass. Value-conditional.
+          ...(p.integrityFindingIds !== undefined && {
+            integrityFindingIds: p.integrityFindingIds,
+          }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.
@@ -722,6 +737,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // round trip, onto the outer `mapEngagement` key. Value-conditional.
           ...(s.nextMapEngagement !== undefined && {
             mapEngagement: s.nextMapEngagement,
+          }),
+          // The integrity seen-list's second hop (9.60.0). Value-conditional.
+          ...(s.integrityFindingIds !== undefined && {
+            integrityFindingIds: s.integrityFindingIds,
           }),
           // Second hop, onto the outer key the next iteration reads.
           ...(s.nextServedInjectionIds !== undefined && {

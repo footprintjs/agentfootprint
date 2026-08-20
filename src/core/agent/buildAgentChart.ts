@@ -662,6 +662,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // out of the STATIC list, which is the only place a parked map's
         // tools can be reached on the default `scopeTools` posture.
         parkedToolNames: parent.parkedToolNames as readonly string[] | undefined,
+        // Integrity findings already filed this run (9.60.0) — the dedup
+        // seen-list, in under the alias (inputMapper keys are frozen inside
+        // the subflow; the slot writes the fresh list under the base key).
+        ...(parent.integrityFindingIds !== undefined && {
+          priorIntegrityFindingIds: parent.integrityFindingIds,
+        }),
         // The slot subflow reads these to build the per-iteration
         // ToolDispatchContext when an external `.toolProvider()` is
         // configured. Without them the provider sees activeSkillId
@@ -695,6 +701,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // Pass merged tool schemas (registry + injection-supplied)
         // back up so callLLM uses the right list for THIS iteration.
         dynamicToolSchemas: sf.toolSchemas,
+        // The integrity dedup seen-list, back onto the parent key —
+        // value-conditional, so agents with no findings are byte-identical.
+        ...(sf.integrityFindingIds !== undefined && {
+          integrityFindingIds: sf.integrityFindingIds,
+        }),
       }),
       // Same array-concat hazard as InjectionEngine — replace, don't
       // concatenate. Without Replace the deduped tool list re-acquires

@@ -19,6 +19,8 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
+import { invariantViolationsOf } from '../../integrity/invariant-violation/check.js';
+import { contextErrorIdentity } from '../../integrity/finding/types.js';
 import { buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
 import {
   currentStepOf,
@@ -57,6 +59,15 @@ export interface ToolsSlotConfig {
    * Absent or unmatched → exactly today's bytes.
    */
   readonly toolOwners?: ReadonlyMap<string, import('../tools.js').ToolOwner>;
+  /**
+   * The mount kernel's map cards (9.60.0) — id + owned tool names, for the
+   * compose-seam integrity backstop below. Present only when `.maps()` is
+   * mounted; absent → the backstop never runs, byte-identical.
+   */
+  readonly mountedMaps?: ReadonlyArray<{
+    readonly id: string;
+    readonly toolNames: readonly string[];
+  }>;
   /**
    * Optional `ToolProvider` consulted PER-ITERATION (Block A5 follow-up).
    * When set, the slot calls `provider.list(ctx)` each iteration with
@@ -539,6 +550,46 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       merged.push(t);
     }
     scope.toolSchemas = merged;
+    // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
+    // The park hold-out filters the registry and skill lists, but PROVIDER
+    // schemas merge unfiltered — a provider tool sharing a parked member's
+    // name stays on the wire (the shadowing seam: provider wins the wire,
+    // skill wins dispatch). That is the recorded two-channels contradiction
+    // still reachable today, so the final merged list is checked against
+    // every parked map's owned names. One finding per defect (identity
+    // dedup via a scope-held seen list, written only when something fires),
+    // filed as a typed event; the composition itself is never altered —
+    // detection converts a silent inconsistency into an attributed one.
+    if (config.mountedMaps !== undefined && parkHoldOut !== undefined) {
+      const servedNames = merged.map((t) => t.name);
+      const seenIds =
+        (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ?? [];
+      const newIds: string[] = [...seenIds];
+      for (const map of config.mountedMaps) {
+        const parkedOwned = map.toolNames.filter((n) => parkHoldOut.has(n));
+        if (parkedOwned.length === 0) continue;
+        const findings = invariantViolationsOf(
+          {
+            mapId: map.id,
+            standing: 'parked',
+            iteration,
+            ownedToolNames: parkedOwned,
+          },
+          { names: servedNames, provenance: 'tools slot (merged wire list)' },
+        );
+        for (const f of findings) {
+          const id = contextErrorIdentity({ ...f, epoch: undefined });
+          if (newIds.includes(id)) continue;
+          newIds.push(id);
+          typedEmit(scope, 'agentfootprint.integrity.context_error', {
+            ...f,
+            seam: 'compose',
+            iteration,
+          });
+        }
+      }
+      if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+    }
     reportShadowedTools(scope, {
       iteration,
       ...(toolProvider?.id && { providerId: toolProvider.id }),

@@ -3275,11 +3275,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Registration-time owner stamps (9.60.0) — the identity edges the
     // integrity checks read. Built once per chart from the registry.
     const toolOwners = new Map(
-      registry.filter((r) => r.tool.owner !== undefined).map((r) => [r.name, r.tool.owner!] as const),
+      registry
+        .filter((r) => r.tool.owner !== undefined)
+        .map((r) => [r.name, r.tool.owner!] as const),
     );
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(toolOwners.size > 0 && { toolOwners }),
+      // The kernel's map cards, for the compose-seam integrity backstop.
+      ...(this.mapsPlan !== undefined && {
+        mountedMaps: this.mapsPlan.maps.map((m) => ({ id: m.id, toolNames: m.toolNames })),
+      }),
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(readSkillFor && { readSkillFor }),
