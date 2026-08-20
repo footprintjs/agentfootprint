@@ -92,6 +92,7 @@ export type DomainWildcard =
   // 9.58.0 — the mount kernel's engagement domain, added WITH its bridge and
   // wildcard in the same change (the credential.* lesson above, applied).
   | 'agentfootprint.map.*'
+  | 'agentfootprint.integrity.*'
   | 'agentfootprint.risk.*'
   | 'agentfootprint.fallback.*'
   | 'agentfootprint.cost.*'

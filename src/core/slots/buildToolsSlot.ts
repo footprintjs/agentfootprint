@@ -51,6 +51,13 @@ export interface ToolsSlotConfig {
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
   readonly tools: readonly LLMToolSchema[];
   /**
+   * Registration-time owner stamps by tool name (9.60.0) — the identity
+   * edges `Tool.owner` declared. The record then attributes a registry
+   * tool to its OWNING subsystem instead of deriving `source:'registry'`.
+   * Absent or unmatched → exactly today's bytes.
+   */
+  readonly toolOwners?: ReadonlyMap<string, import('../tools.js').ToolOwner>;
+  /**
    * Optional `ToolProvider` consulted PER-ITERATION (Block A5 follow-up).
    * When set, the slot calls `provider.list(ctx)` each iteration with
    * the current `{ iteration, activeSkillId, identity, signal }`.
@@ -408,6 +415,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ? steppedTools.filter((t) => !parkHoldOut.has(t.name))
         : steppedTools;
 
+    const ownerOf = config.toolOwners ?? new Map<string, import('../tools.js').ToolOwner>();
     const injections: InjectionRecord[] = tools.map((t, i) => {
       const summary = `${t.name}: ${t.description}`;
       // `source: 'registry'` — tools configured at build time via
@@ -415,13 +423,18 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // to the LLM), NOT context engineering. Skills / Instructions
       // that gate tools dynamically tag their injections with their
       // flavor below.
+      // A registration-time owner stamp (9.60.0) wins over the derived
+      // default: the record then names the OWNING subsystem instead of the
+      // tool's own name, which is what lets a checker ask "who owns X"
+      // without a slot pass having run.
+      const owner = ownerOf.get(t.name);
       return {
         contentSummary: truncate(summary, 80),
         contentHash: fnv1a(`tool:${t.name}:${t.description}`),
         slot: 'tools',
-        source: 'registry',
-        sourceId: t.name,
-        reason: 'tool registry',
+        source: owner?.kind ?? 'registry',
+        ...(owner !== undefined ? { sourceId: owner.id } : { sourceId: t.name }),
+        reason: owner !== undefined ? `owned by ${owner.kind} '${owner.id}'` : 'tool registry',
         rawContent: summary,
         position: i,
       };

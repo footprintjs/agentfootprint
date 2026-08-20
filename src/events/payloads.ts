@@ -2545,3 +2545,19 @@ export interface MapParkedPayload {
   readonly idleCalls: number;
   readonly witness?: string;
 }
+
+// ─── Context Integrity (9.60.0) — detected context errors ───────────────
+
+/**
+ * One detected context error, filed as a finding: two channels asserted
+ * things that cannot both be true, an argument nothing served, an offered
+ * action whose inputs left scope, a settled action re-executed, or a claim
+ * the record does not support. The payload IS the finding — uniform across
+ * seams so findings are a corpus; deduplicated by identity upstream, so
+ * one defect is one event however many passes re-detect it. Synthetic
+ * (canary) findings carry `synthetic` and are quarantined from real counts.
+ */
+export type IntegrityContextErrorPayload = import('../integrity/finding/types.js').ContextError & {
+  /** The iteration the finding was filed on, when filed mid-loop. */
+  readonly iteration?: number;
+};

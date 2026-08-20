@@ -72,6 +72,7 @@ import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { credentialRecorder } from '../recorders/core/CredentialRecorder.js';
 import { mapRecorder } from '../recorders/core/MapRecorder.js';
+import { integrityRecorder } from '../recorders/core/IntegrityRecorder.js';
 import { artifactsRecorder } from '../recorders/core/ArtifactsRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
@@ -2544,6 +2545,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     attachObserver(credentialRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Map engagement (9.58.0). Shipped WITH the domain, same lesson as above.
     attachObserver(mapRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Context Integrity findings (9.60.0). Same lesson, applied again.
+    attachObserver(integrityRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Artifact lifecycle (9.21.0). Shipped WITH the domain — the credential
     // bridge above is the record of what waiting costs. Always-on and
     // zero-cost: with no store attached nothing emits, and the bridge drops
@@ -3269,8 +3272,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const providerToolCache: ProviderToolCache = { current: [] };
     const readSkillFor = this.readSkillOfferFor();
     const hiddenSkillIds = this.hiddenSkillIdsNow();
+    // Registration-time owner stamps (9.60.0) — the identity edges the
+    // integrity checks read. Built once per chart from the registry.
+    const toolOwners = new Map(
+      registry.filter((r) => r.tool.owner !== undefined).map((r) => [r.name, r.tool.owner!] as const),
+    );
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
+      ...(toolOwners.size > 0 && { toolOwners }),
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(readSkillFor && { readSkillFor }),

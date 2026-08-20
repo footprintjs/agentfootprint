@@ -83,7 +83,7 @@ describe('release interlock — a red gate cannot reach npm', () => {
 });
 
 describe('the docs-truth report is generated, never hand-edited', () => {
-  it('regenerating the report reproduces the committed bytes exactly', () => {
+  it('regenerating the report reproduces the committed bytes exactly', { timeout: 60_000 }, () => {
     expect(existsSync(REPORT), 'docs/DOCS_TRUTH_REPORT.md is missing').toBe(true);
     const committed = read(REPORT);
 

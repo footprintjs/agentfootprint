@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The assertion algebra and the one visible finding type.** An
+  `Assertion` is keyed by `(subject, predicate, epoch)` with two rules
+  that do the work: *serving is asserting; history is quotation* (checks
+  never fire across the quoted stratum — the whole stale-but-honest
+  false-positive class, closed structurally) and *single-valued by
+  default* (you declare exemptions, never rules). Unknown `Claim`s never
+  participate in a comparison. `conflictsOf()` is the pure exclusion
+  comparison; `ContextError` is the uniform finding — plain kinds
+  (`invariant-violation`, `unsupported-argument`, `dangling-reference`,
+  `duplicate-execution`, `unsupported-claim`), five seams, witnesses,
+  deduplicated by identity so one defect is one finding however many
+  passes re-detect it. Findings ride a new typed event domain,
+  `agentfootprint.integrity.context_error`, bridged and
+  wildcard-subscribable from day one.
+- **Tools carry their identity edge.** `defineTool({ owner: { kind, id } })`
+  stamps WHO owns a tool at registration — the one moment the code knows
+  both ends — and the per-pass record then attributes the tool to its
+  owning subsystem instead of deriving `'registry'`. A blank half is
+  refused by name; omitted is byte-identical. Integrity checks read
+  stamps and never infer; unstamped tools are `unreachable` to
+  subject-joined checks, which the disposition ledger counts.
 - **`src/integrity/` — the Context Integrity family begins, accounting
   first.** `disposition/` files one of four dispositions per check
   encounter — `checked-pass` / `checked-fail` / `not-applicable` /

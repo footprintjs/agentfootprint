@@ -152,7 +152,29 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * result that carries the `af_semantics` marker.
    */
   readonly resultClass?: ToolResultClass;
+  /**
+   * WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
+   * moment the code demonstrably knows both ends: registration. Before
+   * this field, ownership was only DERIVABLE (from the per-pass
+   * InjectionRecord, or the maps kernel's MountedMap) — a checker asking
+   * "who owns get_zones" between registration and the first tools-slot
+   * pass had no answer, and a static `.tool()` registration's sourceId
+   * was just the tool's own name. The Context Integrity checks read this
+   * stamp and never infer identity; a tool without one is `unreachable`
+   * to subject-joined checks, which the disposition ledger counts.
+   * Omitted → exactly today's bytes (`source: 'registry'`).
+   */
+  readonly owner?: ToolOwner;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/**
+ * The stamped identity edge a tool carries (9.60.0): which subsystem it
+ * belongs to, in the vocabulary the record already uses for sources.
+ */
+export interface ToolOwner {
+  readonly kind: import('../events/types.js').ContextSource;
+  readonly id: string;
 }
 
 /**
@@ -476,6 +498,8 @@ export interface DefineToolOptions<TArgs, TResult> {
    *  (see {@link Tool.resultClass}). Keys the `check:semantics` per-class
    *  rules. Omitted → no class rules. */
   readonly resultClass?: ToolResultClass;
+  /** The stamped identity edge — see {@link Tool.owner}. */
+  readonly owner?: ToolOwner;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -587,6 +611,23 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     options.wants,
     options.inputSchema ?? { type: 'object', properties: {} },
   );
+  // An identity edge with a blank half is worse than none: a checker would
+  // join on it and compare the wrong subjects. Refused HERE, naming the tool.
+  if (options.owner !== undefined) {
+    const { kind, id } = options.owner;
+    if (
+      typeof kind !== 'string' ||
+      kind.length === 0 ||
+      typeof id !== 'string' ||
+      id.length === 0
+    ) {
+      throw new Error(
+        `defineTool('${options.name}'): \`owner\` must carry a non-empty kind and id — it is ` +
+          `the identity edge integrity checks join on, and a blank half joins the wrong ` +
+          `subjects. Got ${JSON.stringify(options.owner)}.`,
+      );
+    }
+  }
   return {
     schema: {
       name: options.name,
@@ -604,6 +645,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.capabilities !== undefined && { capabilities: options.capabilities }),
     ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
+    ...(options.owner !== undefined && { owner: options.owner }),
     execute: options.execute,
   };
 }
