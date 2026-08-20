@@ -41,6 +41,10 @@ const agent = Agent.create({ provider, model })
 
 Mounting requires a skill map: with nothing mounted there is nothing to engage or park, so the builder refuses rather than mounting a kernel over an empty set.
 
+Pass `nonParkable: true` to mount the map as **mandatory** — it is never parked, whatever the idle count. For a policy map, a compliance map, a safety brief: content whose absence is a defect even when the turn never touches it. Note what it does *not* do: a mandatory map still accrues idle, and a tentative standing still reads tentative. It suppresses the park, not the measurement — so the record still shows you a map riding every call unused.
+
+Mounting also requires a map that can **explain its cursor moves**. The kernel decides engagement by *why* the cursor is where it is — a declared route is system evidence, a keyword match is a guess — so a graph with no `explainNextSkill` gives it nothing to weigh, and mounting is refused rather than reduced to a timer over a fact it never learns. Every graph `skillGraph().build()` produces supplies the clause; only a hand-written structurally-typed graph can hit this.
+
 When you do not call `.maps()`, nothing changes: no scope key, no events, and byte-identical evaluation. The kernel is opt-in.
 
 ## How strong is the evidence?

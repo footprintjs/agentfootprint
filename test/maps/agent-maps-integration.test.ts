@@ -74,6 +74,7 @@ const capture = () => {
 const buildTrapAgent = (args: {
   replies: readonly unknown[];
   maps?: boolean;
+  nonParkable?: boolean;
   reactMode?: 'dynamic-grouped';
 }) => {
   const caps = capture();
@@ -86,7 +87,11 @@ const buildTrapAgent = (args: {
     .system('s')
     .tool(screenTool)
     .skillGraph(trapGraph());
-  if (args.maps !== false) builder = builder.maps({ renewalGrace: 3 });
+  if (args.maps !== false)
+    builder = builder.maps({
+      renewalGrace: 3,
+      ...(args.nonParkable === true && { nonParkable: true }),
+    });
   const agent = builder.watch(caps.recorder).build();
   return { agent, ...caps };
 };
@@ -222,6 +227,61 @@ describe('security: .maps() without a mounted map is refused at build', () => {
         renewalGrace: 0,
       }),
     ).toThrow(/renewalGrace must be an integer >= 1/);
+  });
+
+  it('refuses a graph that cannot explain its cursor moves', () => {
+    // (c) — a hand-written structurally-typed graph with nodes and no
+    // `explainNextSkill`. The kernel judges an engagement by WHY the cursor is
+    // where it is; with no clause every pass reads "nobody said why" and the
+    // kernel is a timer over a fact it never learns. Before the `assumed` rung
+    // this failed the OTHER way and silently: an absent clause was written
+    // down as `structural`, the strongest non-decaying category, so such a
+    // graph could never park anything at all — no event, no warning.
+    const mute = {
+      skills: [defineSkill({ id: 'a', description: 'a', body: 'A' })],
+      nodes: [{ id: 'a' }],
+      nextSkill: () => 'a',
+      // explainNextSkill: deliberately absent
+    };
+    expect(() =>
+      Agent.create({ provider: mock({ replies: [final] }), model: 'mock' })
+        .system('s')
+        .skillGraph(mute as never)
+        .maps()
+        .build(),
+    ).toThrow(/cannot explain its cursor moves/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// (h) nonParkable — documented as shipped, and unreachable until 9.59.0
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('a MANDATORY map never parks, however long the turn ignores it', () => {
+  it('.maps({ nonParkable: true }) reaches the kernel and suppresses the park', async () => {
+    const { agent, evaluated, mapEvents } = buildTrapAgent({
+      nonParkable: true,
+      replies: [
+        call('c1', 'screen_open'),
+        call('c2', 'screen_open'),
+        call('c3', 'screen_open'),
+        call('c4', 'screen_open'),
+        final,
+      ],
+    });
+    await agent.run(TRAP_MESSAGE);
+    // Same timeline that parks on pass 4 without the flag — and it does not.
+    for (let i = 0; i < 5; i++) expect(activeIdsAt(evaluated, i)).toContain('zone-audit');
+    expect(mapEvents.filter((e) => e.name === 'agentfootprint.map.parked')).toEqual([]);
+
+    // It suppresses the PARK, not the MEASUREMENT: the record still shows a
+    // map riding every call unused, which is the honest half of the bargain.
+    const shared = agent.getLastSnapshot()?.sharedState as {
+      mapEngagement?: Array<{ standing: string; idle: number; by: string }>;
+    };
+    expect(shared.mapEngagement?.[0]?.standing).toBe('engaged');
+    expect(shared.mapEngagement?.[0]?.idle).toBeGreaterThanOrEqual(3);
+    expect(shared.mapEngagement?.[0]?.by).toBe('lexical');
   });
 });
 
