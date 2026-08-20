@@ -52,11 +52,13 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import { currentRequestIndexOf } from '../window/currentRequest.js';
+import { toolResultPinsOf } from '../window/lastToolResult.js';
+import { DEFAULT_KEEP_LAST_TOOL_RESULTS } from '../window/options.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
 import { droppedToolNames } from '../window/toolNames.js';
-import type { FoldedSpan, WindowRecord } from '../window/types.js';
+import type { FoldedSpan, WindowObservations, WindowRecord } from '../window/types.js';
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
@@ -79,8 +81,45 @@ export interface WindowStageDeps {
   readonly pricingTable?: PricingTable;
   /** Optional cumulative USD cap per run. */
   readonly costBudget?: ResolvedCostBudget;
+  /**
+   * How many tools' most recent results stay in the window beyond
+   * `keepRecentTurns` (9.57.0). `false` (or 0) switches the pin off entirely
+   * and reproduces 9.56.0 byte for byte.
+   *
+   * Threaded value-conditionally by `Agent` — the `repeatedCallNudge`
+   * grammar — so an agent on the default hands this stage exactly the deps
+   * object it always did.
+   */
+  readonly keepLastToolResults?: number | false;
   /** Injectable clock (tests pin survivalMs). */
   readonly now?: () => number;
+}
+
+/**
+ * True when the pin is PROVABLY what is stopping the window from shrinking:
+ * the two most recent visits both removed nothing AND both named
+ * `'last-tool-result'`.
+ *
+ * Two, not one: a single blocked boundary is ordinary (the next tool result
+ * arrives and the pin moves). Two in a row with the pin named in both is
+ * non-progress, and the pin releases for one visit rather than let a window
+ * grow without bound — which is reachable under `summarizeOldest`, where a
+ * lone existing summary sitting in front of a pinned turn short-circuits the
+ * whole plan to "remove nothing" for ever.
+ *
+ * Deliberately a release-under-PROVEN-NON-PROGRESS rule and not a
+ * release-under-budget-pressure one: budget pressure peaks exactly when the
+ * model is most likely to fabricate, which is the worst moment to throw its
+ * evidence away.
+ */
+function pinIsBlocking(records: readonly WindowRecord[]): boolean {
+  const recent = records.slice(-2);
+  return (
+    recent.length === 2 &&
+    recent.every(
+      (r) => r.removedMessageCount === 0 && r.refusals.some((f) => f.reason === 'last-tool-result'),
+    )
+  );
 }
 
 /** Build the window stage. */
@@ -134,12 +173,33 @@ export function buildWindowStage(
       history,
       scope.userMessage as string | undefined,
     );
+    // The last-tool-result pin (9.57.0). Candidates are resolved here, in the
+    // stage, for the same reason the anchor is: this is the one place holding
+    // the window, the anchor and the run's own state together. The CEILING is
+    // spent inside `planRemoval`, where the keep window is known — a pin that
+    // is already safe must not spend a slot.
+    const limit =
+      deps.keepLastToolResults === false
+        ? 0
+        : deps.keepLastToolResults ?? DEFAULT_KEEP_LAST_TOOL_RESULTS;
+    const standDown = limit > 0 && pinIsBlocking(priorRecords);
+    const pins =
+      limit > 0 && !standDown ? toolResultPinsOf(turns, history, currentRequestIndex) : [];
+
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
       ...(currentRequestIndex >= 0 && { currentRequestIndex }),
       ...(pausedToolCallId !== undefined && { pausedToolCallId }),
       ...(scope.pausedCheckIn === true && { pausedCheckIn: true }),
+      // Value-conditional: with no pinnable result the guards are the exact
+      // object this stage has always built.
+      ...(pins.length > 0 && { toolResultPins: pins, keepLastToolResults: limit }),
     };
+
+    // What the pin actually did, captured off the plan the strategy asked
+    // for. A strategy may ask more than once; the last answer is the one that
+    // decided the window.
+    let observed: WindowObservations | undefined;
 
     const result = await strategy.plan({
       history,
@@ -156,8 +216,11 @@ export function buildWindowStage(
       now,
       // The refusal engine, bound. A strategy cannot skip it: it never
       // receives the guards, only the answer.
-      planRemoval: (keepRecentTurns, isExistingSummary) =>
-        planRemoval(turns, keepRecentTurns, guards, isExistingSummary),
+      planRemoval: (keepRecentTurns, isExistingSummary) => {
+        const plan = planRemoval(turns, keepRecentTurns, guards, isExistingSummary);
+        if (plan.observations !== undefined) observed = plan.observations;
+        return plan;
+      },
       removalFacts: (indices, atMs) => removalFacts(origins, indices, atMs),
     });
 
@@ -188,8 +251,18 @@ export function buildWindowStage(
       .map((e) => history[e.index])
       .filter((m): m is LLMMessage => m !== undefined);
     const droppedObservations = droppedToolNames(evicted, history);
+    // A stand-down is a decision, so it is filed even though it kept nothing.
+    const observations: WindowObservations | undefined = standDown
+      ? { pinned: [], yielded: 0, limit, standDown: true }
+      : observed;
     const record: WindowRecord =
-      droppedObservations.length > 0 ? { ...result.record, droppedObservations } : result.record;
+      droppedObservations.length > 0 || observations !== undefined
+        ? {
+            ...result.record,
+            ...(droppedObservations.length > 0 && { droppedObservations }),
+            ...(observations !== undefined && { observations }),
+          }
+        : result.record;
 
     const prior = priorRecords;
     scope.compactions = [...prior, record];

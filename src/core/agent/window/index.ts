@@ -33,6 +33,7 @@ export type {
   SlidingWindowRecord,
   TokenBudgetOptions,
   TokenBudgetRecord,
+  WindowObservations,
   WindowRecord,
   WindowRefusal,
   WindowRefusalReason,

@@ -37,6 +37,7 @@ import type {
   WindowEviction,
   WindowRecord,
   WindowRefusal,
+  WindowObservations,
   WindowRefusalReason,
   WindowStrategy,
   WindowStrategyInput,
@@ -268,5 +269,88 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
     // @ts-expect-error 'summary-not-smaller' left WindowRefusalReason in 9.0.0
     const removed: WindowRefusalReason = 'summary-not-smaller';
     void removed;
+  });
+
+  it("'last-tool-result' is a member, and the union did not lose one (9.57.0)", () => {
+    const pinned: WindowRefusalReason = 'last-tool-result';
+    expect(pinned).toBe('last-tool-result');
+
+    // An exhaustive switch must now handle it. This is a deliberate,
+    // compile-time break for a consumer who narrows the whole union — the
+    // 9.55.0 precedent — and it is the point: a reason that appears at
+    // runtime and nowhere in your code is a reason nobody reads.
+    const describeReason = (reason: WindowRefusalReason): string => {
+      switch (reason) {
+        case 'system-envelope':
+          return 'the envelope';
+        case 'current-request':
+          return 'the request';
+        case 'unresolved-tool-call':
+          return 'an unanswered call';
+        case 'paused-tool':
+          return 'the paused tool';
+        case 'pending-check-in':
+          return 'a check-in';
+        case 'inside-keep-window':
+          return 'the recent window';
+        case 'only-existing-summary':
+          return 'a summary of a summary';
+        case 'summarizer-failed':
+          return 'the summarizer';
+        case 'replacement-not-smaller':
+          return 'no smaller';
+        case 'last-tool-result':
+          return "a tool's latest result";
+        default: {
+          const exhaustive: never = reason;
+          return exhaustive;
+        }
+      }
+    };
+    expect(describeReason('last-tool-result')).toBe("a tool's latest result");
+    expect(describeReason('current-request')).toBe('the request');
+  });
+
+  it('WindowObservations is the record shape the pin writes (9.57.0)', () => {
+    const observations: WindowObservations = {
+      pinned: [{ toolName: 'whats_here', turnIndex: 3, chars: 5800 }],
+      yielded: 1,
+      limit: 2,
+    };
+    const record: WindowRecord = {
+      strategy: 'sliding-window',
+      iteration: 9,
+      removedStageIds: [],
+      removedMessageCount: 0,
+      windowCharsBefore: 10,
+      windowCharsAfter: 10,
+      refusals: [{ reason: 'last-tool-result', turnIndex: 3, messageIndex: 6 }],
+      droppedObservations: ['pan_view'],
+      observations,
+    };
+    expect(record.observations?.pinned[0]?.toolName).toBe('whats_here');
+    // Both new record fields are OPTIONAL: a 9.56.0-shaped record still is one.
+    const older: WindowRecord = {
+      strategy: 'sliding-window',
+      iteration: 1,
+      removedStageIds: [],
+      removedMessageCount: 0,
+      windowCharsBefore: 1,
+      windowCharsAfter: 1,
+      refusals: [],
+    };
+    expect('observations' in older).toBe(false);
+
+    // A stand-down is the only other shape, and `standDown` is `true` or absent.
+    const stoodDown: WindowObservations = { pinned: [], yielded: 0, limit: 2, standDown: true };
+    expect(stoodDown.standDown).toBe(true);
+    const falseStandDown: WindowObservations = {
+      pinned: [],
+      yielded: 0,
+      limit: 2,
+      // @ts-expect-error standDown is `true | undefined` — never `false`
+      standDown: false,
+    };
+    void falseStandDown;
   });
 });

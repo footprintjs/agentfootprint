@@ -68,6 +68,26 @@ export type WindowRefusalReason =
   /** Inside `keepRecentTurns` — the recent window is never a candidate. */
   | 'inside-keep-window'
   /**
+   * The turn holds the MOST RECENT RESULT of a tool the agent is using
+   * (9.57.0). It is the other half of `'current-request'`: that rule keeps
+   * the task, this one keeps the evidence the task needs.
+   *
+   * Measured, not imagined. In a recorded run a `whats_here` result carrying
+   * the only list of valid ids left the window after about two iterations;
+   * the request stayed, so the model still knew what to do and no longer knew
+   * what to do it to. It assembled a plausible id from an entity name it
+   * remembered, was refused, and spent actions on it.
+   *
+   * One pin per tool NAME, always the latest result, superseded the moment
+   * that tool answers again — so this can never accumulate past the tool
+   * roster, and `keepLastToolResults` (default 2) caps it well below that.
+   * Nothing at or before the current request is pinnable, so a new user turn
+   * releases the whole previous loop. And a pin that has provably been
+   * blocking progress for two consecutive boundaries stands down, on the
+   * record, rather than let a window grow without bound.
+   */
+  | 'last-tool-result'
+  /**
    * The only removable candidate is a summary a previous fold wrote. Folding
    * a summary of a summary with nothing new to add spends a call to lose
    * detail. Only `summarizeOldest` can report this: a drop spends nothing.
@@ -157,6 +177,54 @@ export interface WindowRecord {
    * said the evidence had gone.
    */
   readonly droppedObservations?: readonly string[];
+  /**
+   * What the last-tool-result pin did on this visit (9.57.0). Present only
+   * when it did something: held a turn, turned one away at the ceiling, or
+   * stood down.
+   *
+   * See {@link WindowObservations}. An agent with `keepLastToolResults: false`
+   * — or one whose window held no pinnable tool result — never carries this
+   * key, so its records are the exact shape they were before 9.57.0.
+   */
+  readonly observations?: WindowObservations;
+}
+
+/**
+ * What the last-tool-result pin did at one iteration boundary (9.57.0).
+ *
+ * Plain data, `structuredClone`-safe, committed with the rest of the record —
+ * because a pin that KEEPS something has to be as visible as a drop that
+ * removes something. The whole point of this release is that a model was
+ * working from evidence nobody could see had gone; evidence nobody can see
+ * was kept is the same defect facing the other way.
+ */
+export interface WindowObservations {
+  /**
+   * The turns the pin held, newest first. `chars` is the whole TURN's content
+   * length (an assistant's call and its results leave together), so
+   * `windowCharsAfter` minus these is what the window would have been without
+   * the pin — the cost of the feature, computable by any reader.
+   */
+  readonly pinned: readonly {
+    readonly toolName: string;
+    readonly turnIndex: number;
+    readonly chars: number;
+  }[];
+  /** How many otherwise-pinnable turns the ceiling turned away. */
+  readonly yielded: number;
+  /** The ceiling this visit measured against (`keepLastToolResults`). */
+  readonly limit: number;
+  /**
+   * Present and `true` when the pin STOOD DOWN for this visit: the two
+   * previous visits both removed nothing AND both named `'last-tool-result'`,
+   * so the pin is provably what is blocking progress, and it releases rather
+   * than let the window grow without bound. Bounds the pin's blast radius at
+   * two consecutive boundaries under ANY strategy, including one you wrote.
+   *
+   * It is recorded rather than done quietly because a policy that reverses
+   * itself has to say so — a silent reversal is indistinguishable from a bug.
+   */
+  readonly standDown?: true;
 }
 
 /**

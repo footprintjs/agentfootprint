@@ -431,6 +431,41 @@ export interface AgentOptions {
    */
   readonly repeatedCallNudge?: boolean;
   /**
+   * How many tools' most recent results the window keeps beyond
+   * `keepRecentTurns` (9.57.0). **On by default, at 2.** Only meaningful
+   * beside `.window(...)` / `.compaction(...)`; an agent with no window
+   * strategy never builds the stage and pays nothing either way.
+   *
+   * The failure it addresses is measured, not imagined. An agent drove a
+   * screen through tools; one tool result carried the only list of valid ids.
+   * Under a small window that result left after about two iterations — while
+   * the 9.55.0 anchor kept the REQUEST, so the model still knew what it had
+   * been asked to do and no longer had what it needed to do it. It assembled
+   * a plausible id out of an entity name it remembered, was refused, and
+   * spent actions on it. In one archived run the final answer to the person
+   * named a host that appears in no tool result at all.
+   *
+   * So for each tool that has spoken since the request, the window keeps that
+   * tool's MOST RECENT result — at most this many beyond the recent-turns
+   * window — until the agent calls that tool again or the person asks
+   * something new. One pin per tool name, superseded on the next call, so it
+   * cannot accumulate past your tool roster; a parallel batch is one turn and
+   * costs one slot; and a pin that has provably blocked two consecutive
+   * boundaries stands down ON THE RECORD rather than let a window grow.
+   *
+   * What it costs, and how to see it: `WindowRecord.observations` names every
+   * turn the pin held and its exact character count, so the window's size
+   * without the pin is computable from the record. What it gets wrong is
+   * documented rather than buried — the pin is CONTENT-BLIND (a tool's last
+   * result may be a one-word acknowledgement while the load-bearing one was
+   * the call before), and under `summarizeOldest` a pinned turn stays raw
+   * while everything around it is folded.
+   *
+   * Set `false` (or `0`) to switch it off — no pins, no `observations` key,
+   * and the window behaves exactly as it did in 9.56.0.
+   */
+  readonly keepLastToolResults?: number | false;
+  /**
    * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
    * Default **on**.
    *

@@ -397,6 +397,7 @@ export {
   type TokenBudgetRecord,
   type Turn,
   type WindowEviction,
+  type WindowObservations,
   type WindowRecord,
   type WindowRefusal,
   type WindowRefusalReason,

@@ -26,6 +26,38 @@ import type {
 export const DEFAULT_KEEP_RECENT_TURNS = 6;
 
 /**
+ * How many tools' most recent results the window holds beyond
+ * `keepRecentTurns` when nobody said (9.57.0). ON by default, at 2.
+ *
+ * On by default for the same reason 9.55.0's anchor is: the counterfactual to
+ * a pinned 5,800-character tool result is not 5,800 bytes saved, it is a
+ * fabricated id, a refusal, a wasted action out of a small budget, and the
+ * same 5,800 bytes fetched again. That is a correctness failure the framework
+ * caused, and those are fixed on by default.
+ *
+ * TWO rather than one because the ceiling is spent newest-first among STALE
+ * candidates: a one-word acknowledgement from an actuator the model has
+ * stopped using can occupy a slot ahead of an older load-bearing observation.
+ * Two slots absorb that. `false` or `0` switches the pin off entirely.
+ */
+export const DEFAULT_KEEP_LAST_TOOL_RESULTS = 2;
+
+/**
+ * Validate the `keepLastToolResults` dial. Refused at construction, never
+ * mid-run — the house rule for every window option.
+ */
+export function requireKeepLastToolResults(value: unknown, label: string): void {
+  if (value === false) return;
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(
+      `${label}: keepLastToolResults must be a whole number >= 0, or false, got ` +
+        `${String(value)}. It is how many tools' most recent results stay in the window ` +
+        `beyond keepRecentTurns; 0 and false both switch the pin off.`,
+    );
+  }
+}
+
+/**
  * What happens to folded messages when nobody said. The originals ride with
  * the conversation: losing them has to be a choice somebody typed, not a
  * default they inherited.

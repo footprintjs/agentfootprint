@@ -22,7 +22,8 @@
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
-import type { WindowRefusal, WindowRefusalReason } from './types.js';
+import type { ToolResultPin } from './lastToolResult.js';
+import type { WindowObservations, WindowRefusal, WindowRefusalReason } from './types.js';
 
 /**
  * One turn: a `user` / `assistant` / `system` message plus every `tool`
@@ -93,6 +94,21 @@ export interface RemovalGuards {
   readonly pausedToolCallId?: string;
   /** True when the pause is a check-in (human consent) rather than askHuman. */
   readonly pausedCheckIn?: boolean;
+  /**
+   * Candidate LAST-TOOL-RESULT pins (9.57.0), newest first, from
+   * `toolResultPinsOf`. An INPUT to `planRemoval`, not to `refusalFor`: the
+   * ceiling can only be spent once the keep window is known, so `planRemoval`
+   * admits some of these and hands `refusalFor` the answer.
+   */
+  readonly toolResultPins?: readonly ToolResultPin[];
+  /** The ceiling on admitted pins (`keepLastToolResults`). 0 = the pin is off. */
+  readonly keepLastToolResults?: number;
+  /**
+   * The ADMITTED pins, by turn index — what `refusalFor` actually reads.
+   * Derived by `planRemoval`; a caller building guards by hand may set it
+   * directly to ask `refusalFor` about one turn.
+   */
+  readonly pinnedTurnIndexes?: ReadonlySet<number>;
 }
 
 /** Every tool_call id that has a matching `role: 'tool'` message. */
@@ -138,6 +154,12 @@ export function refusalFor(turn: Turn, guards: RemovalGuards): WindowRefusalReas
       if (!guards.answeredCallIds.has(call.id)) return 'unresolved-tool-call';
     }
   }
+  // LAST, because every reason above is a fact about the WIRE or about a
+  // human, and this one is a policy. A pinned turn that also holds an
+  // unanswered call reports the unanswered call: that is the reason a reader
+  // needs, and it is the one that would still be true with the pin switched
+  // off.
+  if (guards.pinnedTurnIndexes?.has(turn.index) === true) return 'last-tool-result';
   return undefined;
 }
 
@@ -148,6 +170,44 @@ export interface RemovalPlan {
   /** Last turn index in the span (inclusive); -1 when nothing may be removed. */
   readonly to: number;
   readonly refusals: readonly WindowRefusal[];
+  /**
+   * What the last-tool-result pin did on this plan (9.57.0) — which turns it
+   * held and what the ceiling turned away. Absent when it held nothing, so a
+   * window with no pinnable result plans exactly as it did before.
+   */
+  readonly observations?: WindowObservations;
+}
+
+/**
+ * Spend the pin's ceiling, and only on turns that would otherwise leave.
+ *
+ * A pin inside `keepRecentTurns` is already safe — `planRemoval` never even
+ * asks about those turns — so it is filtered out here and costs nothing. The
+ * rest are admitted newest first, up to the ceiling; the remainder is counted
+ * as `yielded` so the record can say the pin wanted more than it was given.
+ */
+function admitPins(
+  guards: RemovalGuards,
+  candidateCount: number,
+): { readonly guards: RemovalGuards; readonly observations?: WindowObservations } {
+  const limit = guards.keepLastToolResults ?? 0;
+  const pins = guards.toolResultPins ?? [];
+  if (limit <= 0 || pins.length === 0) return { guards };
+  const contested = pins.filter((p) => p.turnIndex < candidateCount);
+  const admitted = contested.slice(0, limit);
+  if (admitted.length === 0) return { guards };
+  return {
+    guards: { ...guards, pinnedTurnIndexes: new Set(admitted.map((p) => p.turnIndex)) },
+    observations: {
+      pinned: admitted.map((p) => ({
+        toolName: p.toolName,
+        turnIndex: p.turnIndex,
+        chars: p.chars,
+      })),
+      yielded: contested.length - admitted.length,
+      limit,
+    },
+  };
 }
 
 /**
@@ -190,12 +250,18 @@ export function planRemoval(
   }
   if (candidateCount === 0) return { from: -1, to: -1, refusals };
 
+  // Spend the pin ceiling before asking anything, so `refusalFor` is answering
+  // one settled question per turn.
+  const admission = admitPins(guards, candidateCount);
+  const effective = admission.guards;
+  const observed = admission.observations;
+
   const before: WindowRefusal[] = [];
   let from = -1;
   let to = -1;
   for (let i = 0; i < candidateCount; i++) {
     const turn = turns[i]!;
-    const reason = refusalFor(turn, guards);
+    const reason = refusalFor(turn, effective);
     if (reason === undefined) {
       if (from === -1) from = i;
       to = i;
@@ -222,10 +288,16 @@ export function planRemoval(
         { reason: 'only-existing-summary', turnIndex: from, messageIndex: turns[from]!.start },
         ...refusals,
       ],
+      ...(observed !== undefined && { observations: observed }),
     };
   }
 
-  return { from, to, refusals: [...before, ...refusals] };
+  return {
+    from,
+    to,
+    refusals: [...before, ...refusals],
+    ...(observed !== undefined && { observations: observed }),
+  };
 }
 
 /** Total characters of message content in a window. Exact; not tokens. */

@@ -119,6 +119,7 @@ const RUN_MANIFEST_STAGE_ID = 'run-configured#0';
 const GRAPH_DECLARED_STAGE_ID = 'graph-declared#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
+import { requireKeepLastToolResults } from './agent/window/options.js';
 import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
 import {
   messagesContentRefusal,
@@ -469,6 +470,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The out-of-budget wrap-up (9.56.0) — `false` only when the operator
    *  turned it off. See AgentOptions.wrapUpAtMaxIterations. */
   private readonly wrapUpAtMaxIterations?: boolean;
+  /** The last-tool-result pin (9.57.0) — set only when the operator named a
+   *  value other than the default 2. See AgentOptions.keepLastToolResults. */
+  private readonly keepLastToolResults?: number | false;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -846,6 +850,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // only a deliberate opt-out is stored — which keeps the conditional mount
     // below reading as the decision it is.
     if (opts.wrapUpAtMaxIterations === false) this.wrapUpAtMaxIterations = false;
+    // Same discipline (9.57.0): the default is 2, so only a value the
+    // operator actually named is stored — which keeps the value-conditional
+    // thread into the window stage reading as the decision it is. Refused at
+    // construction, never mid-run.
+    if (opts.keepLastToolResults !== undefined) {
+      requireKeepLastToolResults(opts.keepLastToolResults, 'Agent');
+      this.keepLastToolResults = opts.keepLastToolResults;
+    }
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
     // competing one through, so "one per agent" is a fact of the type rather
@@ -3319,6 +3331,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               agentModel: model,
               providerName: provider.name,
               getRunId: () => this.currentRunContext?.runId,
+              // Value-conditional (the `repeatedCallNudge` precedent): an
+              // agent on the default hands the stage exactly the deps object
+              // it always did.
+              ...(this.keepLastToolResults !== undefined && {
+                keepLastToolResults: this.keepLastToolResults,
+              }),
               ...(pricingTable !== undefined && { pricingTable }),
               ...(costBudget !== undefined && { costBudget }),
             }),
