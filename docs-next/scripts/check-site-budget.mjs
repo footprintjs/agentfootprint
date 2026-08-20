@@ -32,7 +32,15 @@ const ROUTES = [
 ];
 
 const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_500, duplicateRscBytes: 125_000_000 };
+// Raised for 9.57.0. The generated API reference had been three releases
+// stale (the 9.53.0 semantics surface was never regenerated), so this
+// release's regeneration added 25 pages at once and the export crossed both
+// ceilings — 6,514 files and 127.13 MB of duplicate sibling RSC payloads.
+// The ceiling is a RATCHET against growth nobody noticed, and this growth is
+// API pages the generator already owed; raising it is the honest response,
+// reverting to a lying API reference is not. Headroom is deliberately thin
+// so the next unnoticed jump still trips it.
+const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 132_000_000 };
 const DEMO_ASYNC_GZIP_LIMIT = 400_000;
 
 function formatBytes(bytes) {
