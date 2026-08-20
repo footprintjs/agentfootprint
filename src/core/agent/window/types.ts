@@ -140,6 +140,23 @@ export interface WindowRecord {
   readonly windowCharsAfter: number;
   /** Every turn that refused to leave, named. */
   readonly refusals: readonly WindowRefusal[];
+  /**
+   * The tools whose RESULTS left the window on this visit, in first-appearance
+   * order (9.57.0). Present only when at least one did.
+   *
+   * This is the record's half of the sentence the drop notice says on the
+   * wire, and it is filed even when no notice was authored at all — a removal
+   * further into the window tells the model nothing, and then this is the only
+   * place the fact exists. Uncapped and unfiltered, because the record is not
+   * the wire: the notice prints at most four names and only plain identifiers,
+   * this prints every name exactly as the tool declared it.
+   *
+   * The failure it exists for was measured: a model whose `whats_here` result
+   * had been evicted assembled a plausible id from an entity name it
+   * remembered, was refused, and spent actions on it — and nothing in the run
+   * said the evidence had gone.
+   */
+  readonly droppedObservations?: readonly string[];
 }
 
 /**

@@ -55,6 +55,7 @@ import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { removalFacts } from '../window/removal.js';
 import type { WindowStrategy } from '../window/strategy.js';
 import { answeredCallIds, planRemoval, segmentTurns, type RemovalGuards } from '../window/turns.js';
+import { droppedToolNames } from '../window/toolNames.js';
 import type { FoldedSpan, WindowRecord } from '../window/types.js';
 import type { AgentState } from '../types.js';
 
@@ -121,6 +122,9 @@ export function buildWindowStage(
       );
     }
     const origins = meter.origins();
+    // Read once, used twice: the append below, and the pin's stand-down check
+    // (9.57.0). One tracked read of the same key either way.
+    const priorRecords = (scope.compactions as readonly WindowRecord[] | undefined) ?? [];
     const pausedToolCallId = scope.pausedToolCallId as string | undefined;
     // The one message this run is executing (9.55.0). `scope.userMessage` is
     // what the seed stage committed, so the match is against the run's own
@@ -173,8 +177,22 @@ export function buildWindowStage(
       scope.history = result.window;
     }
 
-    const prior = (scope.compactions as readonly WindowRecord[] | undefined) ?? [];
-    scope.compactions = [...prior, result.record];
+    // The record's honesty pass (9.57.0). The strategy files WHAT it did; the
+    // stage — which is the one place that holds the pre-change window and the
+    // eviction indices together — files WHOSE EVIDENCE left. It is stamped
+    // here rather than inside a strategy so a strategy a consumer wrote gets
+    // it too, and so it is filed on the removals that authored no notice at
+    // all: a drop further into the window tells the model nothing, and then
+    // the record is the only place the fact exists.
+    const evicted = result.evictions
+      .map((e) => history[e.index])
+      .filter((m): m is LLMMessage => m !== undefined);
+    const droppedObservations = droppedToolNames(evicted, history);
+    const record: WindowRecord =
+      droppedObservations.length > 0 ? { ...result.record, droppedObservations } : result.record;
+
+    const prior = priorRecords;
+    scope.compactions = [...prior, record];
 
     // The durable half, written in the SAME commit as the window change and
     // the record above. That co-location is the guarantee: there is no state,

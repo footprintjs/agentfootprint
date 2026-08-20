@@ -320,20 +320,24 @@ describe('the refusal engine refuses it for everyone', () => {
     }
   });
 
-  it('LAW — pinned: a window that never dropped the request is byte-identical', async () => {
+  it('LAW — pinned: a window with no request drops from the head, as it always did', async () => {
     // `currentRequestIndex: -1` is what a window with no identifiable request
-    // gets. Under it, every strategy must produce exactly what it produced
-    // before the rule existed — the span starts at turn 0, and the notice
-    // takes the head position with its original wording.
+    // gets. Under it, every strategy must behave exactly as it did before the
+    // rule existed — the span starts at turn 0, and the notice takes the head
+    // position. The notice's WORDING gained one sentence in 9.57.0 (it names
+    // the tools whose results left); the 9.55.0 half — that the kept-request
+    // sentence is absent here — is the part this case pins.
     const sliding = await planWith(slidingWindow({ keepRecentTurns: 2 }), -1);
     expect(sliding!.record.refusals.map((r) => r.reason)).not.toContain('current-request');
     expect(sliding!.rebase).toEqual({ headCount: 0, keptTailCount: 4, insertedAtMs: 2000 });
     expect(sliding!.window![0]!.content).toBe(
       `${DROP_NOTICE_PREFIX} — 3 earlier message(s) were dropped from this window at ` +
-        `iteration 4 by the 'sliding-window' window strategy. Nothing was summarized: those ` +
-        `turns are simply not being re-sent. They are retained verbatim in this run's commit ` +
-        `log.]`,
+        `iteration 4 by the 'sliding-window' window strategy. Tool results are among them ` +
+        `(look) — call the tool again if you need its output; do not reconstruct ids or ` +
+        `values from memory. Nothing was summarized: those turns are simply not being ` +
+        `re-sent. They are retained verbatim in this run's commit log.]`,
     );
+    expect(sliding!.window![0]!.content).not.toContain('Your current request is kept');
     // The request is gone in that world — which is exactly the defect, and
     // exactly why the rule exists.
     expect(sliding!.window!.some((m) => m.content === TASK)).toBe(false);

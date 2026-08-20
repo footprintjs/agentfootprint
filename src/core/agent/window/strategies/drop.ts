@@ -45,6 +45,7 @@
 
 import type { LLMMessage } from '../../../../adapters/types.js';
 import { buildDropNotice } from '../notice.js';
+import { droppedToolNames } from '../toolNames.js';
 import { indexRange } from '../removal.js';
 import type { WindowEviction, WindowStrategyInput } from '../strategy.js';
 import { segmentTurns, windowChars } from '../turns.js';
@@ -86,15 +87,20 @@ function fittingNotice(
     readonly strategy: string;
   },
   keptRequestAtHead: boolean,
+  toolNames: readonly string[],
 ): LLMMessage | undefined {
   // The kept-request sentence is not a courtesy and is never traded away for
   // size: a model that reads "3 earlier messages were dropped" and then finds
-  // a request above it has to be told which of the two facts to trust.
-  const notice = buildDropNotice({
-    ...facts,
-    ...(keptRequestAtHead && { currentRequestKept: true }),
-  });
-  return notice.content.length < spanChars ? notice : undefined;
+  // a request above it has to be told which of the two facts to trust. The
+  // TOOL NAMES are the rung that can be traded — losing them costs the model
+  // a hint, while losing the drop costs it the whole window.
+  const base = { ...facts, ...(keptRequestAtHead && { currentRequestKept: true }) };
+  if (toolNames.length > 0) {
+    const rich = buildDropNotice({ ...base, toolNames });
+    if (rich.content.length < spanChars) return rich;
+  }
+  const plain = buildDropNotice(base);
+  return plain.content.length < spanChars ? plain : undefined;
 }
 
 /**
@@ -172,6 +178,7 @@ export function dropOldestSpan(
       spanChars,
       { droppedMessageCount: span.length, iteration, strategy: strategyName },
       keptRequestAtHead,
+      droppedToolNames(span, history),
     );
     if (notice !== undefined) {
       // `head` is empty on the ordinary path, so this is byte-for-byte the
