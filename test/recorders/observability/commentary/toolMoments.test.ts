@@ -104,6 +104,26 @@ describe('tools.repeated_call commentary', () => {
     expect(text).not.toContain('a1b2c3');
     expect(text).not.toContain('d4e5f6');
   });
+
+  // The arguments-only variant (9.62.0): the tool declared `repeatedWhen:
+  // 'arguments'`, so the match never looked at the result — the sentence
+  // must not claim it did.
+  it('an arguments-only match never claims the answer was the same', () => {
+    const argsOnly = ev('agentfootprint.tools.repeated_call', {
+      toolName: 'render_screen',
+      toolCallId: 'call-9',
+      iteration: 2,
+      occurrences: 2,
+      argsFingerprint: 'a1b2c3',
+      resultFingerprint: 'd4e5f6',
+      mode: 'arguments',
+    });
+    expect(line(argsOnly)).toBe(
+      '`render_screen` was called with the same arguments as before — this tool does not ' +
+        'compare its result — that makes 2 identical calls this turn, and the model was told so.',
+    );
+    expect(line(argsOnly)).not.toContain('gave back the same answer');
+  });
 });
 
 // ── tools.effect ──────────────────────────────────────────────────────

@@ -513,3 +513,212 @@ describe('repeated-call nudge — ROI', () => {
     expect(notes[0]).toContain('2 times this turn');
   });
 });
+
+// ─── 8. `repeatedWhen: 'arguments'` — the screen/UI-tool fix ──────────
+//
+// The gap this closes: a tool that stamps a fresh value into every result
+// (a version number, a timestamp, a cursor) never produces two matching
+// default-mode keys, so the detector above is silently inert for it even
+// when the model fires the byte-identical call twice. `repeatedWhen:
+// 'arguments'` fingerprints on the arguments alone.
+
+describe('noteRepeatedCall — arguments-only mode, unit truth table', () => {
+  it('fires on the SECOND identical-argument call even though the result differs', () => {
+    const first = noteRepeatedCall(
+      undefined,
+      'render_screen',
+      { view: 'home' },
+      'rendered home @v1',
+      'arguments',
+    );
+    const second = noteRepeatedCall(
+      first.ledger,
+      'render_screen',
+      { view: 'home' },
+      'rendered home @v2',
+      'arguments',
+    );
+    expect(first.note).toBeUndefined();
+    expect(second.note).toBeDefined();
+    expect(second.mode).toBe('arguments');
+    // The wording must not claim the RESULT matched — it did not.
+    expect(second.note).not.toContain('returned exactly this result');
+    expect(second.note).toContain("'render_screen'");
+    expect(second.note).toContain("repeatedWhen: 'arguments'");
+  });
+
+  it('DIFFERENT arguments are still not a repeat in arguments mode', () => {
+    const first = noteRepeatedCall(undefined, 'render_screen', { view: 'home' }, 'v1', 'arguments');
+    const second = noteRepeatedCall(
+      first.ledger,
+      'render_screen',
+      { view: 'settings' },
+      'v2',
+      'arguments',
+    );
+    expect(second.note).toBeUndefined();
+  });
+
+  it('THE DEFAULT IS UNCHANGED: the exact same landings, without the mode, produce no note', () => {
+    // Same tool, same arguments, same differing results as the first test —
+    // the only difference is the mode is omitted. This is the failure the
+    // feature exists to fix: it must reproduce here, and stay reproduced,
+    // for every tool that has not opted in.
+    const first = noteRepeatedCall(
+      undefined,
+      'render_screen',
+      { view: 'home' },
+      'rendered home @v1',
+    );
+    const second = noteRepeatedCall(
+      first.ledger,
+      'render_screen',
+      { view: 'home' },
+      'rendered home @v2',
+    );
+    expect(second.note).toBeUndefined();
+    expect(second.mode).toBeUndefined();
+    expect(first.mode).toBeUndefined();
+  });
+
+  it('a THIRD identical-argument landing adds no second note, same as default mode', () => {
+    let ledger: RepeatedCallLedger | undefined;
+    const notes: (string | undefined)[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const out = noteRepeatedCall(ledger, 't', { a: 1 }, `result-${i}`, 'arguments');
+      ledger = out.ledger;
+      notes.push(out.note);
+    }
+    expect(notes.map((n) => n !== undefined)).toEqual([false, true, false]);
+  });
+});
+
+describe('repeated-call nudge — arguments-only mode, integration', () => {
+  it('(a) THE FIX: a tool stamping a fresh value into every result now trips the detector', async () => {
+    // The measured failure: a screen/UI tool returns a version/timestamp/
+    // cursor that changes every call, so the default fingerprint (which
+    // folds the result in) never repeats — the detector was silently inert
+    // for it even on a byte-identical re-fire.
+    let calls = 0;
+    const screenTool = defineTool({
+      name: 'render_screen',
+      description: 'renders the named screen and stamps a fresh version',
+      inputSchema: { type: 'object', properties: { view: { type: 'string' } } },
+      repeatedWhen: 'arguments',
+      execute: (args: Record<string, unknown>) => {
+        calls += 1;
+        return Promise.resolve(`rendered ${String(args.view)} @v${calls}`);
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'a', name: 'render_screen', args: { view: 'home' } }] },
+          { toolCalls: [{ id: 'b', name: 'render_screen', args: { view: 'home' } }] },
+          { content: 'done' },
+        ],
+      }),
+      model: 'm',
+      maxIterations: 4,
+    })
+      .tool(screenTool)
+      .build();
+
+    const events: AgentfootprintEvent[] = [];
+    agent.on('agentfootprint.tools.repeated_call', (e) => events.push(e));
+    agent.on('agentfootprint.stream.tool_end', (e) => events.push(e));
+
+    const notes = await notesFrom(agent);
+    expect(notes).toHaveLength(1);
+
+    const repeated = events.filter((e) => e.type === 'agentfootprint.tools.repeated_call');
+    expect(repeated).toHaveLength(1);
+    expect((repeated[0] as { payload?: { mode?: string } }).payload?.mode).toBe('arguments');
+
+    // (c) THE ANTI-GUARANTEE: the tool ran BOTH times. The note never
+    // suppressed execution — `calls` is the tool's own execution counter,
+    // incremented inside `execute`, which only runs if the framework
+    // actually called it.
+    expect(calls).toBe(2);
+    const toolEnds = events.filter((e) => e.type === 'agentfootprint.stream.tool_end');
+    expect(toolEnds).toHaveLength(2);
+    // And the two results genuinely differed — the note fired DESPITE that,
+    // not because of a coincidental match.
+    const resultsSeen = toolEnds.map(
+      (e) => (e as { payload?: { result?: unknown } }).payload?.result,
+    );
+    expect(resultsSeen[0]).not.toBe(resultsSeen[1]);
+  });
+
+  it('(b) a tool WITHOUT the option is unaffected by the identical shape of stamped result', async () => {
+    // Byte-for-byte the same scenario as (a), minus `repeatedWhen` — proves
+    // the option is opt-in and the default detector stays inert for a tool
+    // whose result legitimately changes every call.
+    let calls = 0;
+    const screenTool = defineTool({
+      name: 'render_screen',
+      description: 'renders the named screen and stamps a fresh version',
+      inputSchema: { type: 'object', properties: { view: { type: 'string' } } },
+      execute: (args: Record<string, unknown>) => {
+        calls += 1;
+        return Promise.resolve(`rendered ${String(args.view)} @v${calls}`);
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'a', name: 'render_screen', args: { view: 'home' } }] },
+          { toolCalls: [{ id: 'b', name: 'render_screen', args: { view: 'home' } }] },
+          { content: 'done' },
+        ],
+      }),
+      model: 'm',
+      maxIterations: 4,
+    })
+      .tool(screenTool)
+      .build();
+
+    expect(await notesFrom(agent)).toHaveLength(0);
+    // (c) Still ran both times — absence of the option suppresses nothing.
+    expect(calls).toBe(2);
+  });
+
+  it('the typed event carries `mode` only for the arguments-only match', async () => {
+    const screenTool = defineTool({
+      name: 'render_screen',
+      description: 'renders a screen',
+      inputSchema: { type: 'object', properties: {} },
+      repeatedWhen: 'arguments',
+      execute: () => Promise.resolve(`v${Date.now()}-${Math.random()}`),
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'a', name: 'render_screen', args: {} }] },
+          { toolCalls: [{ id: 'b', name: 'render_screen', args: {} }] },
+          { content: 'done' },
+        ],
+      }),
+      model: 'm',
+      maxIterations: 4,
+    })
+      .tool(screenTool)
+      .build();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('agentfootprint.tools.repeated_call', (e) => events.push(e));
+    await agent.run({ message: 'go' });
+    expect(events).toHaveLength(1);
+    const payload = (events[0] as unknown as { payload?: Record<string, unknown> }).payload ?? {};
+    expect(payload.mode).toBe('arguments');
+    // Additive: every other key from the default shape is still there.
+    expect(Object.keys(payload).sort()).toEqual([
+      'argsFingerprint',
+      'iteration',
+      'mode',
+      'occurrences',
+      'resultFingerprint',
+      'toolCallId',
+      'toolName',
+    ]);
+  });
+});

@@ -176,6 +176,55 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * tool is never that check's subject, byte-identical.
    */
   readonly argumentsFrom?: readonly string[];
+  /**
+   * FINGERPRINT THE REPEATED-CALL LEDGER ON ARGUMENTS ALONE (9.62.0) —
+   * `'arguments'` tells `core/agent/repeatedCall.ts` that this tool's own
+   * RESULT is not evidence of repetition and must not be folded into the
+   * match key.
+   *
+   * The repeated-call nudge exists to catch a model calling the same tool
+   * with the same arguments and getting nowhere. By default it proves "got
+   * nowhere" by also requiring the RESULT to match — a `check status` call
+   * returning a different status is progress, not a loop, and the default
+   * rule (correctly) says nothing about it. That default quietly breaks for
+   * a tool whose result is not a function of its arguments on purpose: a
+   * screen/UI tool that stamps a fresh version number, timestamp, or cursor
+   * into every answer so a human or a downstream cache can tell which
+   * render is current. Call a tool like that twice with byte-identical
+   * arguments and the default fingerprint never matches — the detector is
+   * silently inert for it, forever. This was found in a real recorded
+   * failure: an agent re-fired a completed navigation sequence and nothing
+   * noticed, because each fire's fresh stamp made it look like new
+   * information.
+   *
+   * Declared, never inferred — the `capabilities` / `resultClass` law. Only
+   * the tool's author knows whether its result is signal or a stamp;
+   * guessing from a name or a response shape would rest a detector on a
+   * heuristic the framework cannot verify. The note's wording changes to
+   * match when this fires (it stops claiming the result matched, because it
+   * did not) — see `repeatedCall.ts` for both sentences.
+   *
+   * **This never suppresses execution.** The ledger only ever appends a
+   * teaching sentence to a result the tool already returned, strictly AFTER
+   * `execute` ran — the same anti-guarantee `runCheckpoint.ts` and
+   * `Agent.ts` document for tool calls generally (durability replay,
+   * resumed runs, and every retry of this kind still execute the tool; there
+   * is no dedup here or anywhere else in this library).
+   *
+   * Omitted → byte-identical behavior: the ledger keeps folding the result
+   * into the key exactly as it always has, for every tool that does not
+   * declare this.
+   *
+   * @example a screen tool whose result always carries a fresh version stamp
+   *   defineTool({
+   *     name: 'render_screen',
+   *     description: 'Render the named screen',
+   *     repeatedWhen: 'arguments',
+   *     inputSchema: { … },
+   *     execute: async ({ view }) => `rendered ${view} @v${Date.now()}`,
+   *   });
+   */
+  readonly repeatedWhen?: 'arguments';
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -513,6 +562,10 @@ export interface DefineToolOptions<TArgs, TResult> {
   readonly owner?: ToolOwner;
   /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
   readonly argumentsFrom?: readonly string[];
+  /** Fingerprint the repeated-call ledger on arguments alone, ignoring this
+   *  tool's own result — see {@link Tool.repeatedWhen}. Omitted →
+   *  byte-identical (the ledger keeps comparing results, as always). */
+  readonly repeatedWhen?: 'arguments';
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -685,6 +738,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
     ...(options.owner !== undefined && { owner: options.owner }),
     ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
+    ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
     execute: options.execute,
   };
 }

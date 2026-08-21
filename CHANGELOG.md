@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.62.0] - 2026-08-21
+
+**Three ways a check could be there and do nothing, and nobody could tell.**
+
+### Fixed
+
+- **An unarmed Context Integrity check is now a row, not a silence.**
+  `invariant-violation` at the compose seam, `dangling-reference` and
+  `unsupported-claim` only ever ran when the application declared their
+  precondition — a `.maps()` plan, a tool declaring `argumentsFrom`, a
+  `.claims()` contract. An application that declared none of them filed only
+  the always-on `wire` row: checked, green, and indistinguishable from a run
+  where all three looked and found nothing. This library's own reference
+  agent shipped that way for weeks, and a second integration reported
+  reaching the same state independently.
+
+  All three now register on every run, and one with no subject this run is
+  noted `not-applicable` immediately — the literal truth, in the vocabulary
+  the ledger already had. Per check, deliberately: the common shape is
+  PARTIAL, where an app arms one and never learns the other two sat out, so
+  arming one check must never suppress the rows for the two it didn't.
+
+  No new event and no new field. The rows travel through the existing
+  `agentfootprint.integrity.disposition` event and `find_context_errors`'s
+  partial-coverage headline, unchanged at every consumer.
+
+- **`integrityPosture: 'dev'` now mints a canary for every registered check,
+  not only the armed ones.** Otherwise the fix above would have removed an
+  ambiguity at the arming level and reintroduced it one level down: a checker
+  that has rotted and a checker that simply had no subject file an identical
+  `not-applicable` row. The canary — one pure function against a deliberately
+  contradictory fixture — is the only thing that separates them. The cost is
+  a function call; the alternative is that whoever finally declares
+  `.claims()` inherits whatever state that checker rotted into while nobody
+  was looking.
+
+- **A parked map's tools no longer reach the wire through a tool provider.**
+  Parking held its owned tools out of the registry list and the skill
+  injection list, but provider schemas merged unfiltered — so a provider tool
+  sharing a parked member's name still rode the wire, and the compose-seam
+  backstop could only report it after the fact. It is now held out on all
+  three routes.
+
+  It has to be filtered there rather than by the provider: `ToolDispatchContext`
+  carries the active skill but nothing about engagement standing, so a
+  `ToolProvider` cannot see that a map was parked. This is not the
+  provider-wins-the-wire law, which governs two ACTIVE sources disagreeing
+  about a name — a parked map is not competing, it is not talking at all. The
+  backstop stays as a regression guard, now expected to be silent.
+
+### Added
+
+- **`repeatedWhen: 'arguments'` on a tool** — fingerprint repeated calls on
+  arguments alone, ignoring the result. The detector keys on tool + args +
+  result, so a tool that stamps a fresh value into every result (a screen
+  tool returning a version, a cursor, a timestamp) never produces two
+  matching keys and the detector is silently inert for it, even when the
+  agent fires the byte-identical call twice. Declared per tool, because the
+  default is right for tools whose results carry meaning.
+
+  It still only NOTES. The documented anti-guarantee holds unchanged — tools
+  will execute again, there is no built-in call-id dedup, and durability
+  replay depends on that. The note is appended after execution and changes
+  nothing about whether the call runs.
+
 ## [9.61.1] - 2026-08-20
 
 ### Fixed

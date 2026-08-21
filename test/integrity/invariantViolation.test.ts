@@ -91,6 +91,10 @@ const call = (id: string, name: string) => ({
 const done = { content: 'done', toolCalls: [], stopReason: 'stop' as const };
 
 function trapAgent(withShadowingProvider: boolean) {
+  // Mutable sinks the caller reads AFTER `agent.run(...)` completes —
+  // filled by listeners attached to the built agent, below.
+  const toolsPerCall: Array<{ iteration: number; names: string[] }> = [];
+  const park: { iteration: number | undefined } = { iteration: undefined };
   const zoneTool = defineTool({
     name: 'get_zone_info',
     description: 'zone info (skill copy)',
@@ -151,19 +155,45 @@ function trapAgent(withShadowingProvider: boolean) {
   agent.on('agentfootprint.integrity.context_error', (e) => {
     events.push(e.payload as unknown as Record<string, unknown>);
   });
-  return { agent, events };
+  // `llm_start` reports what the model ACTUALLY saw each call (LLMStartPayload.
+  // tools — "the tool catalog … in request order"), so it is the ground truth
+  // for "was the parked name still on the wire", independent of whether the
+  // compose backstop had anything to say about it. `map.parked` marks the
+  // iteration after which the park hold-out applies, so calls before it
+  // legitimately still carry the tool (the map is still engaged then).
+  agent.on('agentfootprint.stream.llm_start', (e) => {
+    toolsPerCall.push({
+      iteration: e.payload.iteration,
+      names: (e.payload.tools ?? []).map((t) => t.name),
+    });
+  });
+  agent.on('agentfootprint.map.parked', (e) => {
+    park.iteration = e.payload.iteration;
+  });
+  return { agent, events, toolsPerCall, park };
 }
 
 describe('integration: the compose backstop fires on the provider-shadowing leak', () => {
-  it('a parked map whose tool name a provider still serves → ONE finding, typed', async () => {
-    const { agent, events } = trapAgent(true);
+  it('a parked map’s tool is absent from every route — the provider-shadowing leak no longer reaches the wire', async () => {
+    // The premise in the ORIGINAL title ("a provider still serves") is no
+    // longer reachable: Change A (buildToolsSlot.ts) applies the park
+    // hold-out to the provider route too, exactly like the registry and
+    // dynamic routes already had it. This is now the REGRESSION GUARD —
+    // src/ keeps the compose-seam backstop deliberately, against a future
+    // fourth tool-schema source repeating the gap — so what this test
+    // proves is that the leak stays closed and the backstop stays silent
+    // because there is nothing left for it to find.
+    const { agent, events, toolsPerCall, park } = trapAgent(true);
     await agent.run('find the most recent zone redundancy run');
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      kind: 'invariant-violation',
-      seam: 'compose',
-    });
-    expect(String(events[0]!.message)).toContain('get_zone_info');
+    // Sanity: the scenario is real — the map actually parked.
+    expect(park.iteration).toBeDefined();
+    // The provider's copy of `get_zone_info` never reaches the model on
+    // any call made after the park.
+    const afterPark = toolsPerCall.filter((c) => c.iteration > park.iteration!);
+    expect(afterPark.length).toBeGreaterThan(0);
+    for (const call of afterPark) expect(call.names).not.toContain('get_zone_info');
+    // With nothing on the wire to contradict, the backstop files nothing.
+    expect(events).toEqual([]);
   });
 
   it('the healthy park (no shadowing provider) files nothing', async () => {
@@ -174,7 +204,24 @@ describe('integration: the compose backstop fires on the provider-shadowing leak
 });
 
 describe('integration: the grouped chart threads the dedup across its extra boundary', () => {
-  it('one finding, not one per pass, under reactMode dynamic-grouped', async () => {
+  it('reactMode dynamic-grouped also serves nothing for the parked-owned name — no finding left to dedup', async () => {
+    // Same root cause as the ungrouped test above: the leak this test used
+    // to provoke through the grouped chart's extra boundary is closed at
+    // the source (Change A, buildToolsSlot.ts), so there is no longer a
+    // finding for any pass to duplicate here either.
+    //
+    // The dedup coverage this test used to carry ("one finding, not one
+    // per pass") isn't relocated so much as made MOOT for this route —
+    // there is nothing left to dedup once nothing fires. It doesn't
+    // disappear from the suite, though: `invariantViolationsOf`'s own
+    // unit test above ("ten compositions of the same defect deduplicate
+    // to one finding", in the first `describe` block of this file)
+    // already pins the dedup guarantee directly at the pure-function
+    // layer, provoking the defect on purpose rather than needing a live
+    // leak to reach it through either chart topology. What THIS test
+    // still needs to prove is narrower and still worth a live run: that
+    // the grouped chart's extra boundary doesn't somehow reopen a leak
+    // the ungrouped chart no longer has.
     const zoneTool = defineTool({
       name: 'get_zone_info',
       description: 'zone info (skill copy)',
@@ -198,7 +245,9 @@ describe('integration: the grouped chart threads the dedup across its extra boun
       .entry(zoneAudit, { match: { keywords: ['zone'] } })
       .route(zoneAudit, billing)
       .build();
-    const events: unknown[] = [];
+    const events: Array<Record<string, unknown>> = [];
+    const toolsPerCall: Array<{ iteration: number; names: string[] }> = [];
+    let parkedAtIteration: number | undefined;
     const agent = Agent.create({
       provider: mock({
         replies: [
@@ -229,8 +278,23 @@ describe('integration: the grouped chart threads the dedup across its extra boun
         ],
       })
       .build();
-    agent.on('agentfootprint.integrity.context_error', (e) => events.push(e.payload));
+    agent.on('agentfootprint.integrity.context_error', (e) => {
+      events.push(e.payload as unknown as Record<string, unknown>);
+    });
+    agent.on('agentfootprint.stream.llm_start', (e) => {
+      toolsPerCall.push({
+        iteration: e.payload.iteration,
+        names: (e.payload.tools ?? []).map((t) => t.name),
+      });
+    });
+    agent.on('agentfootprint.map.parked', (e) => {
+      parkedAtIteration = e.payload.iteration;
+    });
     await agent.run('find the most recent zone redundancy run');
-    expect(events).toHaveLength(1);
+    expect(parkedAtIteration).toBeDefined();
+    const afterPark = toolsPerCall.filter((c) => c.iteration > parkedAtIteration!);
+    expect(afterPark.length).toBeGreaterThan(0);
+    for (const call of afterPark) expect(call.names).not.toContain('get_zone_info');
+    expect(events).toEqual([]);
   });
 });

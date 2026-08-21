@@ -22,6 +22,8 @@
  */
 
 import { dispositionLedger, type DispositionLedger } from './ledger.js';
+import type { IntegritySeam } from './types.js';
+import type { ContextErrorKind } from '../finding/types.js';
 import { invariantViolationsOf } from '../invariant-violation/check.js';
 import { wireViolationsOf } from '../invariant-violation/wire.js';
 import { danglingReferencesOf } from '../dangling-reference/check.js';
@@ -48,13 +50,59 @@ export function beginIntegrityRun(
 ): DispositionLedger {
   const ledger = dispositionLedger();
   if (present.wire) ledger.register('invariant-violation', 'wire');
-  if (present.composeInvariant) ledger.register('invariant-violation', 'compose');
-  if (present.dangling) ledger.register('dangling-reference', 'compose');
-  if (present.claim === true) ledger.register('unsupported-claim', 'claim');
+  // An UNARMED check is a row, not a silence.
+  //
+  // Every optional check is registered whether or not this run armed it, and
+  // one the app never opted into is noted `not-applicable` immediately —
+  // which is the literal truth: the check looked for its subject (a maps
+  // plan, a tool declaring `argumentsFrom`, a claims contract) and this run
+  // has none. Before this, an unarmed check filed NO row at all, and the
+  // always-on `wire` row sat there green beside it; read casually — which is
+  // exactly how the library's own reference agent got read for weeks — a run
+  // that checked nothing was indistinguishable from a run where everything
+  // passed.
+  //
+  // Per check, deliberately, rather than one all-or-nothing block for the
+  // case where the app armed none of them. The common shape in the field is
+  // PARTIAL: a consumer declares `argumentsFrom`, arms grounding, and never
+  // learns that the other two never ran. An all-or-nothing block goes quiet
+  // the moment one check is armed, which is precisely when the remaining
+  // blind spots start to matter.
+  //
+  // This reuses the ledger's existing vocabulary rather than adding a flag or
+  // a second channel, so the rows travel through `report()`, the
+  // `agentfootprint.integrity.disposition` event and `find_context_errors`'s
+  // partial-coverage headline with no change at any consumer. And
+  // `notApplicable` counts as touched in `assertAlive`'s theorem, so an
+  // unarmed check can never itself trip `CheckerDeadError`: not opting in is
+  // not wiring rot, and the two must stay tellable apart.
+  const armed = (kind: ContextErrorKind, seam: IntegritySeam, isArmed: boolean): void => {
+    ledger.register(kind, seam);
+    if (!isArmed) ledger.note(kind, seam, 'not-applicable');
+  };
+  armed('invariant-violation', 'compose', present.composeInvariant === true);
+  armed('dangling-reference', 'compose', present.dangling === true);
+  armed('unsupported-claim', 'claim', present.claim === true);
+
   if (posture !== 'dev') return ledger;
 
-  // The canaries — one known-bad fixture per registered check, through the
+  // The canaries — one known-bad fixture per REGISTERED check, through the
   // REAL pure function. Epoch -1 marks them as no run iteration's business.
+  //
+  // Registered, note, and no longer only armed. The three optional checks now
+  // file a row whether or not this run had a subject for them, and a
+  // `not-applicable` row with no canary beside it is the exact ambiguity this
+  // whole change set exists to remove: a checker that has ROTTED and a checker
+  // that simply had nothing to look at produce an identical row. The canary is
+  // the only thing that tells them apart, and it costs a pure function call on
+  // a fixture.
+  //
+  // The alternative — canary only what the app armed — reads reasonable and is
+  // wrong for the same reason a green report from a check that never ran is
+  // decoration: the moment somebody DOES arm `.claims()`, they inherit whatever
+  // state that checker rotted into while nobody was looking, and nothing in the
+  // record will say how long it had been dead. Dev posture is a library-health
+  // instrument, so it proves the machinery, not this run's subset of it.
   if (present.wire) {
     ledger.noteSynthetic('invariant-violation', 'wire', 'minted');
     const caught = wireViolationsOf(
@@ -64,7 +112,7 @@ export function beginIntegrityRun(
     );
     if (caught.length > 0) ledger.noteSynthetic('invariant-violation', 'wire', 'caught');
   }
-  if (present.composeInvariant) {
+  {
     ledger.noteSynthetic('invariant-violation', 'compose', 'minted');
     const caught = invariantViolationsOf(
       { mapId: 'canary-map', standing: 'parked', iteration: -1, ownedToolNames: ['canary_tool'] },
@@ -72,7 +120,7 @@ export function beginIntegrityRun(
     );
     if (caught.length > 0) ledger.noteSynthetic('invariant-violation', 'compose', 'caught');
   }
-  if (present.dangling) {
+  {
     ledger.noteSynthetic('dangling-reference', 'compose', 'minted');
     const caught = danglingReferencesOf(
       [{ name: 'canary_tool', argumentsFrom: ['canary_ground'] }],
@@ -82,7 +130,7 @@ export function beginIntegrityRun(
     );
     if (caught.length > 0) ledger.noteSynthetic('dangling-reference', 'compose', 'caught');
   }
-  if (present.claim === true) {
+  {
     ledger.noteSynthetic('unsupported-claim', 'claim', 'minted');
     const caught = unsupportedClaimsOf(
       [{ answerField: 'canary', entity: 'canary-entity', field: 'canary-field' }],

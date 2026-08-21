@@ -3167,6 +3167,22 @@ export function buildToolCallsHandler(
         // Only for a call that RAN: a permission denial, a gate rejection and
         // a ceiling refusal each already teach their own lesson, and stacking
         // a second one would bury it.
+        //
+        // ONE tool-dispatch door, deliberately. Verified by search, not
+        // assumed: `tool.execute(...)` is invoked from exactly four places in
+        // this library — this batch loop; `resolveCredentialAndExecute`
+        // above (the check-in RESUME door, same file); `mcp/mcpServe.ts`
+        // (serving a tool to an external MCP client); and
+        // `trace-toolpack/traceToolpack.ts` (offline replay against a
+        // recorded run). Only this one, the main ReAct loop, gets the nudge.
+        // The other three never see a live multi-turn conversation the way
+        // this loop does — a resumed check-in is a single call with no
+        // "again" to notice, an MCP-served call has no ledger to be a run's
+        // (the caller IS the loop, elsewhere), and a trace replay is judging
+        // a run that already happened, not steering one in flight. Wiring
+        // any of them would mean a second ledger with its own eviction and
+        // its own idea of "this run", for a door that cannot act on the note
+        // even if it fired one. Keep it this way.
         if (deps.repeatedCallNudge !== false && executed && !denied && !skillRejected) {
           // Counted beside the run, never inside its state: a tracked write is
           // a commit-log entry, a snapshot key, a narrative line and a row in
@@ -3175,11 +3191,21 @@ export function buildToolCallsHandler(
           // the same accessor `ctx.runId` is composed from — one answer to
           // "which run is this", not a second spelling of it.
           const runKey = deps.currentRun?.().runId ?? UNSCOPED_RUN;
+          // `repeatedWhen: 'arguments'` (9.62.0) — read off the RESOLVED tool,
+          // never off the call: only the tool's own definition knows whether
+          // its result is signal or a stamp (a fresh version/timestamp/cursor
+          // that changes on every call by design). `tool` here is the same
+          // lookup the credential/wants/execute steps above already used for
+          // this call, so a tool with no static or provider match (`tool ===
+          // undefined`, already handled earlier as an error path before this
+          // point is reachable) never reads `.repeatedWhen` on `undefined`.
+          const repeatMode = tool?.repeatedWhen === 'arguments' ? 'arguments' : undefined;
           const repeat = noteRepeatedCall(
             repeatLedgers.read(runKey),
             tc.name,
             callArgs,
             deliveredResult,
+            repeatMode,
           );
           repeatLedgers.write(runKey, repeat.ledger);
           if (repeat.note !== undefined) {
@@ -3191,6 +3217,7 @@ export function buildToolCallsHandler(
               occurrences: repeat.occurrences,
               argsFingerprint: repeat.argsFingerprint,
               resultFingerprint: repeat.resultFingerprint,
+              ...(repeat.mode !== undefined && { mode: repeat.mode }),
             });
           }
         }

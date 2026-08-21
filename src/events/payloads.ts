@@ -1459,6 +1459,20 @@ export interface ToolRepeatedCallPayload {
   readonly argsFingerprint: string;
   /** Digest of the result — never the result. */
   readonly resultFingerprint: string;
+  /**
+   * Which fingerprint decided the match, when it was not the usual pair
+   * (9.62.0). `'arguments'` means this landing matched on the tool's
+   * arguments ALONE — the tool declared `repeatedWhen: 'arguments'`
+   * (`core/tools.ts`), so `resultFingerprint` above is still a true digest
+   * of what came back but played no part in deciding this was a repeat.
+   *
+   * Additive and default-omitted: every event this library emitted before
+   * 9.62.0, and every event for a tool that has not opted in, carries no
+   * `mode` key at all — not `mode: undefined` written out, the key simply
+   * absent — so an existing payload-key-set assertion anywhere does not see
+   * a new field appear under it.
+   */
+  readonly mode?: 'arguments';
 }
 
 /**

@@ -462,9 +462,27 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const providerSchemas: LLMToolSchema[] = [];
     if (toolProvider && providerToolCache) {
       for (const t of providerToolCache.current) {
-        // Never held out (a provider is an active owner, so its names are
-        // excluded from stepHoldOut by construction) — but a provider serving
-        // the CURRENT step's tool still gets the banner the model reads.
+        // PARK HOLD-OUT, the same rule the registry list above and the
+        // dynamic list below already apply. A provider tool sharing a parked
+        // map's owned name used to merge here unfiltered and ride the wire,
+        // and the compose-seam backstop further down could only REPORT it —
+        // so parking, whose whole contract is that a parked map contributes
+        // nothing by any route, leaked through exactly one of the three.
+        //
+        // It has to be filtered here rather than by the provider itself:
+        // `ToolDispatchContext` carries the active skill but nothing about
+        // engagement standing, so a `ToolProvider` cannot see that a map was
+        // parked and this is the only layer that can.
+        //
+        // Not the same thing as the provider-wins-the-wire law on
+        // `reportShadowedTools` below. That governs two ACTIVE sources
+        // genuinely disagreeing about which schema should win. A parked map
+        // is not competing — it is not talking at all.
+        if (parkHoldOut?.has(t.schema.name) === true) continue;
+        // Never held out by the STEP narrowing (a provider is an active
+        // owner, so its names are excluded from stepHoldOut by construction)
+        // — but a provider serving the CURRENT step's tool still gets the
+        // banner the model reads.
         const schema = bannered(t.schema);
         providerSchemas.push(schema);
         const summary = `${schema.name}: ${schema.description}`;

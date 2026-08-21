@@ -38,6 +38,30 @@
  * *calling again will not change it* — rather than a vague "you seem to be
  * repeating yourself".
  *
+ * ── The escape hatch: `repeatedWhen: 'arguments'` ───────────────────────────
+ * The rule above assumes a tool's result is a FUNCTION of its arguments —
+ * nothing different in, nothing different out. Some tools break that on
+ * purpose: a screen/UI tool that stamps a fresh version number, timestamp, or
+ * cursor into every answer, so a human or a downstream cache can tell which
+ * render is current. For a tool like that the default fingerprint — which
+ * folds the RESULT in — never repeats, so the detector is silently inert for
+ * it even when the model fires the byte-identical call twice in a row. This
+ * was found in a real recorded failure: an agent re-fired a completed
+ * navigation sequence and nothing noticed, because every fire stamped a fresh
+ * value and so looked like new information each time.
+ *
+ * A tool that declares `repeatedWhen: 'arguments'` on itself (see
+ * `Tool.repeatedWhen` in `core/tools.ts`) tells the ledger to fingerprint on
+ * the ARGUMENTS ALONE — the result never enters the key, and the note's
+ * wording changes to match (it cannot honestly say "returned exactly this
+ * result" when the whole point is that the result is not being compared).
+ * Declared, never inferred, for the same reason `capabilities` and
+ * `resultClass` are: only the tool's author knows whether its result is
+ * signal or a stamp, and guessing from a name or a shape would rest a
+ * detector on a heuristic. A tool that does NOT declare it keeps today's rule
+ * exactly — this is additive, and every function below is byte-identical on
+ * its default path.
+ *
  * ── What is stored, and what is deliberately not ────────────────────────────
  * A short non-cryptographic FINGERPRINT of the arguments and the result, never
  * the values. Tool arguments routinely carry the things redaction exists for,
@@ -177,19 +201,27 @@ function fingerprint(text: string): string {
  * Kept apart on the way out so a debugger reading the event can tell "same
  * call, different answer" from "same call, same answer" — without either value
  * being present anywhere.
+ *
+ * `mode: 'arguments'` drops the result fingerprint out of the KEY (a `'*'`
+ * stands in for it — never an 8-hex digest, so an arguments-only key can
+ * never collide with a default-mode key for the same tool+args). The result
+ * fingerprint is still computed and still returned: a tool declaring the
+ * mode still gets a truthful digest on the record, it just isn't part of
+ * what decides "is this the same call".
  */
 export function repeatedCallKey(
   toolName: string,
   args: unknown,
   result: string,
+  mode?: 'arguments',
 ): { readonly key: string; readonly argsFingerprint: string; readonly resultFingerprint: string } {
   const argsFingerprint = fingerprint(stableString(args));
   const resultFingerprint = fingerprint(result);
-  return {
-    key: `${toolName}:${argsFingerprint}:${resultFingerprint}`,
-    argsFingerprint,
-    resultFingerprint,
-  };
+  const key =
+    mode === 'arguments'
+      ? `${toolName}:${argsFingerprint}:*`
+      : `${toolName}:${argsFingerprint}:${resultFingerprint}`;
+  return { key, argsFingerprint, resultFingerprint };
 }
 
 /** What one landing came to. `occurrences` counts THIS one. */
@@ -205,6 +237,11 @@ export interface RepeatedCallOutcome {
   readonly argsFingerprint: string;
   /** Digest of the result — never the result. */
   readonly resultFingerprint: string;
+  /** Which key this landing was fingerprinted under. Present only when the
+   *  tool declared `repeatedWhen: 'arguments'` — omitted, not a `'result'`
+   *  default value, because the omission IS the default: every existing
+   *  caller reads `undefined` here today and must keep reading it. */
+  readonly mode?: 'arguments';
 }
 
 /**
@@ -214,8 +251,26 @@ export interface RepeatedCallOutcome {
  * fact it cannot see), what follows from it (calling again is not going to
  * help), and what to do instead (two named options, neither of which is "stop"
  * — a model told only to stop tends to stop answering).
+ *
+ * `mode` branches the wording, not just the trigger: the default sentence
+ * claims the RESULT came back identical, which is true there and would be a
+ * LIE for an arguments-only tool (its result is, by declaration, not being
+ * compared — it may well differ every time). The default branch below is
+ * pinned byte-for-byte by test/core/repeated-call-nudge.test.ts and MUST stay
+ * that way; only the new branch is free to change.
  */
-function noteFor(toolName: string, occurrences: number): string {
+function noteFor(toolName: string, occurrences: number, mode?: 'arguments'): string {
+  if (mode === 'arguments') {
+    return (
+      `\n\n[identical call: '${toolName}' has now been called ${occurrences} times this turn ` +
+      `with exactly these arguments (this tool declares \`repeatedWhen: 'arguments'\`, so its ` +
+      `result is not part of the comparison — only the request is). Calling it again with the ` +
+      `same arguments is unlikely to accomplish anything new — act on what you have, or change ` +
+      `the arguments (a different target, a different filter, a different tool). If you are ` +
+      `deliberately repeating a legitimate action, say so in your answer rather than calling ` +
+      `again.]`
+    );
+  }
   return (
     `\n\n[identical call: '${toolName}' has now returned exactly this result ${occurrences} ` +
     `times this turn, for exactly these arguments. Calling it again will not change it — ` +
@@ -236,17 +291,31 @@ function noteFor(toolName: string, occurrences: number): string {
  * and fourth identical call add nothing further: the model has been told, and
  * repeating the lesson every iteration would be the framework doing the very
  * thing it is complaining about.
+ *
+ * `mode` — omitted for every tool that has not opted in, so this parameter is
+ * additive: an existing 3-arg call site keeps compiling and keeps producing
+ * the exact ledger key and note it always has. Pass `'arguments'` (read off
+ * `Tool.repeatedWhen` at the call site — this function never imports the
+ * agent, so it cannot read it itself) to fingerprint on the arguments alone;
+ * see the module header for why a tool would ever want that.
  */
 export function noteRepeatedCall(
   ledger: RepeatedCallLedger | undefined,
   toolName: string,
   args: unknown,
   result: string,
+  mode?: 'arguments',
 ): RepeatedCallOutcome {
-  const { key, argsFingerprint, resultFingerprint } = repeatedCallKey(toolName, args, result);
+  const { key, argsFingerprint, resultFingerprint } = repeatedCallKey(toolName, args, result, mode);
   const occurrences = (ledger?.[key] ?? 0) + 1;
   const next: RepeatedCallLedger = { ...(ledger ?? {}), [key]: occurrences };
-  const outcome = { ledger: next, occurrences, argsFingerprint, resultFingerprint };
+  const outcome = {
+    ledger: next,
+    occurrences,
+    argsFingerprint,
+    resultFingerprint,
+    ...(mode !== undefined && { mode }),
+  };
   if (occurrences !== REPEATED_CALL_THRESHOLD) return outcome;
-  return { ...outcome, note: noteFor(toolName, occurrences) };
+  return { ...outcome, note: noteFor(toolName, occurrences, mode) };
 }

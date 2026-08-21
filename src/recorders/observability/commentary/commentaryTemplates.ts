@@ -245,6 +245,14 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'tools.repeated_call':
     '`{{toolName}}` was called with the same inputs and gave back the same answer as ' +
     'before — that makes {{occurrences}} identical calls this turn, and the model was told so.',
+  // The arguments-only variant (9.62.0): this tool declared `repeatedWhen:
+  // 'arguments'`, so the match was on the request alone — the sentence must
+  // not claim the ANSWER matched too, because for a tool like this it may
+  // well not have (a screen tool's version stamp, a timestamp, a cursor).
+  'tools.repeated_call.argsOnly':
+    '`{{toolName}}` was called with the same arguments as before — this tool does not ' +
+    'compare its result — that makes {{occurrences}} identical calls this turn, and the ' +
+    'model was told so.',
 
   // artifacts.* — the claim-check lifecycle (9.21.0–9.23.0). One law runs
   // through every line here: META ONLY. Sizes are humanized ("41.2 KB"), kinds
@@ -512,7 +520,14 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return 'tools.result_refused';
 
     case 'agentfootprint.tools.repeated_call':
-      return 'tools.repeated_call';
+      // Same event, two truths it can tell (9.62.0): the default match
+      // compared the result too, so the sentence can say "gave back the
+      // same answer"; an arguments-only match (the tool declared
+      // `repeatedWhen: 'arguments'`) must not claim that, because it never
+      // looked.
+      return event.payload.mode === 'arguments'
+        ? 'tools.repeated_call.argsOnly'
+        : 'tools.repeated_call';
 
     case 'agentfootprint.artifacts.minted':
       return 'artifacts.minted';
