@@ -46,7 +46,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 
 | Location | Files | Counts as documentation? |
 |---|---|---|
-| `docs-next/content/docs/**.mdx` (hand-written) | 100 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
+| `docs-next/content/docs/**.mdx` (hand-written) | 101 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 510 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 510 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 55 | **No** — but tracked as its own state, "written but not published". |
@@ -57,7 +57,7 @@ Neither generated tree is trustworthy as documentation for a second reason: **no
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 498 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **294 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 503 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **298 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -146,8 +146,8 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.artifacts.expired` | `docs-next/content/docs/build/artifacts.mdx` |
 | `agentfootprint.map.engaged` | `docs-next/content/docs/build/mounted-maps.mdx` |
 | `agentfootprint.map.parked` | `docs-next/content/docs/build/mounted-maps.mdx` |
-| `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/context-integrity.mdx` |
-| `agentfootprint.integrity.disposition` | `docs-next/content/docs/monitor/context-integrity.mdx` |
+| `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/context-integrity.mdx` |
+| `agentfootprint.integrity.disposition` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/context-integrity.mdx` |
 
 **Functions and classes described on the site but not touched by any reference run (314).** The other 656 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 

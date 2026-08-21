@@ -5,6 +5,7 @@
     "---[BarChart3]Observability---",
     "observability",
     "context-integrity",
+    "arming-context-integrity",
     "recordings",
     "exporters",
     "context-engineering-recorder",
