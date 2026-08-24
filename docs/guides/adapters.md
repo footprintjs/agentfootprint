@@ -25,6 +25,7 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 | OpenAI (GPT) | `openai()` | `agentfootprint/providers` | `openai` | `OPENAI_API_KEY` |
 | **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/providers` | `openai` | `api-key` (Azure) |
 | OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LM Studio, LiteLLM gateway, …) | `openai({ baseURL })` | `agentfootprint/providers` | `openai` | `Bearer` |
+| OpenAI-compatible behind a **short-lived token** (Vertex AI, Entra / managed identity, any OAuth gateway) | `openai({ baseURL, apiKey: async () => token })` | `agentfootprint/providers` | `openai` | `Bearer`, re-read per request |
 | Ollama (local) | `ollama()` | `agentfootprint/providers` | `openai` | none |
 | AWS Bedrock | `bedrock()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | AWS IAM |
 | Anthropic via `fetch` (browser/edge) | `browserAnthropic()` | `agentfootprint` (main) | none | key |
@@ -42,8 +43,14 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 1. **OpenAI-compatible** (a base URL + key + `Bearer`): most gateways and "we expose
    an OpenAI-compatible API" setups → `openai({ baseURL, apiKey })`. No new code.
 2. **Azure OpenAI** (`*.openai.azure.com`, `api-key` header, `api-version`,
-   deployment-as-model): → `azureOpenai({ endpoint, apiKey, apiVersion, deployment })`.
-3. **Anything else** → implement the `LLMProvider` interface (below) — ~30 lines.
+   deployment-as-model, and a **string API key**): →
+   `azureOpenai({ endpoint, apiKey, apiVersion, deployment })`.
+3. **OpenAI-compatible, but the credential expires** (Vertex AI, Entra / managed
+   identity, any OAuth-fronted gateway): → `openai({ baseURL, apiKey: async () => token })`.
+   Pass a **function**, not a string — see [Rotating credentials](#rotating-credentials-a-token-that-expires)
+   below. This is the bucket an Entra-authenticated endpoint belongs in;
+   `azureOpenai()` cannot express it.
+4. **Anything else** → implement the `LLMProvider` interface (below) — ~30 lines.
 
 ### Provider Factories
 
@@ -65,6 +72,8 @@ const azure = azureOpenai({
   // names for it and reach the identical URL; a trailing slash, or a value that
   // already ends in `/openai`, is handled.
   endpoint: process.env.OPENAI_BASE_URL,            // https://my-co.openai.azure.com
+  // A STRING key. This factory has no credential callback — if the resource is
+  // fronted by Entra / managed identity, use `openai({ baseURL, apiKey: async fn })`.
   apiKey: process.env.AZURE_OPENAI_API_KEY,
   apiVersion: process.env.AZURE_OPENAI_API_VERSION, // e.g. 2024-12-01-preview
   deployment: process.env.MODEL_NAME,               // e.g. gpt-4o-128k
@@ -81,10 +90,56 @@ const llama = ollama({ model: 'llama3' });
 const bedrockClaude = bedrock({ model: 'anthropic.claude-3-sonnet-20240229-v1:0' });
 ```
 
-> **Azure ≠ OpenAI-compatible.** Don't point `openai({ baseURL })` at an
-> `*.openai.azure.com` URL — Azure uses a deployment-scoped path, `api-key` header
-> auth, and an `api-version` param. Use `azureOpenai(...)`, which wraps the SDK's
-> `AzureOpenAI` client and reuses the same completion/streaming/tool logic.
+> **A deployment-scoped Azure URL is not OpenAI-compatible.** Don't point
+> `openai({ baseURL })` at an `*.openai.azure.com` **deployment** path — that
+> surface uses a deployment-scoped route, `api-key` header auth, and an
+> `api-version` param. Use `azureOpenai(...)`, which wraps the SDK's `AzureOpenAI`
+> client and reuses the same completion/streaming/tool logic.
+>
+> This is about the **URL shape, not the vendor.** When an Azure or Foundry
+> resource also exposes an OpenAI-v1-compatible route and authenticates with an
+> Entra bearer token rather than a key, `azureOpenai()` is the wrong door — it
+> takes a string `apiKey` and has no credential callback. Point
+> `openai({ baseURL, apiKey: async () => token })` at the compatible route
+> instead. Verify which route your resource actually serves before choosing.
+
+### Rotating credentials: a token that expires
+
+`apiKey` accepts **a function as well as a string** on `openai()` (and on
+`googleGenAI()`). That is what makes this adapter usable in front of an endpoint
+whose credential is a short-lived OAuth or Entra token rather than a durable key
+— Vertex AI's OpenAI-compatible endpoint being the case that forced it in 9.29.0.
+
+**No other factory takes a callback.** `anthropic()`, `ollama()`, `azureOpenai()`,
+and the browser providers all declare `apiKey` as a plain `string`. An expiring
+credential has to reach the model through `openai()`.
+
+```typescript
+import { openai } from 'agentfootprint/providers';
+
+const provider = openai({
+  baseURL: 'https://…/openapi',
+  // A CALLBACK, not a string. A one-hour token refreshes without anyone
+  // rebuilding the provider — or finding out it didn't, at 3am.
+  apiKey: async () => (await credential.getToken(scope)).token,
+});
+```
+
+The boundary, stated so nobody has to guess:
+
+- called **once per request**, before the request is built;
+- the SDK client is rebuilt **only when the returned string changed**, so a cached
+  token costs one function call;
+- **a stream keeps the key it started with** — nothing can re-authenticate a
+  socket that is already open;
+- **what expiry means is the callback's business.** This adapter does not inspect,
+  decode, or schedule anything; it asks every time and uses what it is given.
+
+Worked example: [`examples/features/60-gemini-field-truths.ts`](../../examples/features/60-gemini-field-truths.ts).
+
+**`azureOpenai()` does not have this.** Its `apiKey` is a plain string. An Azure
+resource behind Entra or a managed identity has to go through `openai()` with a
+callback, against a route that speaks the OpenAI wire format.
 
 Each factory returns an `LLMProvider` directly — ready to pass to
 `Agent.create({ provider })` or `LLMCall.create({ provider })`.
