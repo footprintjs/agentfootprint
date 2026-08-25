@@ -101,9 +101,9 @@ Three properties are the point:
   subject, reads **⚠ NOTHING WAS CHECKED** with the reason — silence, not health.
 - **It only offers defect classes a check can file.** `ContextErrorKind` names
   five classes; this build ships checks for `invariant-violation`,
-  `dangling-reference` and `unsupported-claim`, and the `kind` enum lists exactly
-  those. `unsupported-argument` and `duplicate-execution` have no checker here, so
-  asking for one is answered **⚠ UNANSWERABLE** — nothing ever looked, and silence
+  `dangling-reference`, `unsupported-argument` and `unsupported-claim`, and the
+  `kind` enum lists exactly those. `duplicate-execution` has no checker here, so
+  asking for it is answered **⚠ UNANSWERABLE** — nothing ever looked, and silence
   about a class nobody checks is not evidence of its absence.
 
 Findings are deduplicated by identity when they are filed, so one defect

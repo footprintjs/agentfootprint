@@ -34,6 +34,19 @@ the check passes it without a murmur. So does *"the outage started at 08:15"*
 when 08:15 is a timestamp belonging to a different port. If you read this as a
 hallucination check you will trust it for the one thing it cannot do.
 
+It cannot catch **mis-referral** either — an answer whose every sentence is true
+*of the wrong thing*. The gate judges values against evidence, so *"that machine
+has no backup record"* passes with every value grounded even when the machine
+the sentence is about was never the one you asked about. That is a recorded
+failure: a model resolved "that machine" out of its own earlier answer, called
+the lookup tool with a truncated job name, and got a genuine "nothing found"
+back — which the gate then grounded, correctly, in a genuine tool result. The
+referent was bound wrong one seam earlier, at the **argument**, and that is the
+defect [Context Integrity](doc:context-integrity)'s choice-seam check owns
+(`unsupported-argument`, armed by `argumentsFrom` on the tool). By the time an
+answer exists the wrong lookup has already been served as evidence, so this
+check is not the place it could ever be caught.
+
 It is also conservative in the other direction. Small numbers, all-letters names
 and quantities with units (`32G`, `47 flaps`, `892 CRC errors`) are not
 examined, because a **false accusation costs a real turn** — and on a weak model

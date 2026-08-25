@@ -3,7 +3,7 @@ title: Arming Context Integrity
 description: Each Context Integrity check only runs once the application declares its precondition. This is the smallest declaration that arms each one — and what an unarmed check used to hide.
 ---
 
-[Context Integrity](doc:context-integrity) ships three checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` needs a tool that says where its arguments come from, `unsupported-claim` needs a claim contract — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
+[Context Integrity](doc:context-integrity) ships four checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` and `unsupported-argument` both need a tool that says where its arguments come from (one declaration, two seams), `unsupported-claim` needs a claim contract — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
 
 That is not hypothetical. This library's own reference agent shipped for weeks with every optional check unarmed, and a second, independent integration reported reaching the exact same state without knowing about the first. Nobody had declared the preconditions, nothing said so, and the report stayed green throughout. A consumer running this in production put it plainly: a page listing the cheapest way to arm each check would move more people to actually arm them than a fourth check ever would. This is that page.
 
@@ -16,9 +16,10 @@ That is not hypothetical. This library's own reference agent shipped for weeks w
 | `invariant-violation` | `wire` | **none** — armed by the provider, not by you | a provider that states `LLMResponse.wireManifest` (`mock`, `anthropic`, `browser-anthropic` all do) |
 | `invariant-violation` | `compose` | `.maps()` | a mounted skill map (`.skillGraph(map)`) |
 | `dangling-reference` | `compose` | `argumentsFrom: ['groundingTool']` on the dependent tool | nothing else |
+| `unsupported-argument` | `choice` | the SAME `argumentsFrom` field — nothing more to declare | nothing else |
 | `unsupported-claim` | `claim` | `.claims({ field: { entity, field } })` | `.outputSchema()` and a tool returning `semantic({ facts: [...] })` |
 
-Three of these are one field. The fourth (`invariant-violation` at `compose`) is one call — `.maps()` with no arguments — but only once a skill map already exists; if nothing is mounted yet, `.maps()` refuses at `build()` rather than mounting a kernel over an empty set, because there would be nothing for it to park.
+Three of these are one field, and one of those three fields buys two checks at two different seams. The remaining one (`invariant-violation` at `compose`) is one call — `.maps()` with no arguments — but only once a skill map already exists; if nothing is mounted yet, `.maps()` refuses at `build()` rather than mounting a kernel over an empty set, because there would be nothing for it to park.
 
 ## `invariant-violation` — two channels disagreeing about the same fact
 
@@ -74,6 +75,16 @@ Declared, never inferred — the library has no way to know that `screen_fire`'s
 
 **What you'll see.** Nothing fires while `whats_here`'s result is still in the window, and nothing fires if it gets re-fetched — those are the check's two fences, and both are silence by design (not-yet-grounded is legitimate sequencing; a re-fetch re-establishes the ground however many times it was dropped before). The finding only files in the third state: grounded, evicted, never re-established, still offered. Then one `agentfootprint.integrity.context_error` fires with `kind: 'dangling-reference'`, `seam: 'compose'`, and a message telling the model the honest fix — call `whats_here` again. The disposition row `dangling-reference @ compose` shows `checked-fail` for that pass, and `checked-pass`/`not-applicable` on every other pass depending on whether anything was actually served-and-grounded to compare.
 
+## `unsupported-argument` — acted on a value nothing served
+
+**The failure.** The same declaration, one seam later, and the failure it catches is the one that survives every other rail. On turn two of a triage conversation, the window dropped the user message carrying the true machine id and kept the assistant's own rendered answer. Asked for "the status for that machine", the model resolved the reference out of its OWN prior prose — taking the fragment `4417-ganymede` from the job name `bkp-4417-ganymede-tier2` it had rendered a minute earlier — called the lookup tool with it, got an honest "nothing found", and reported that a protected machine had no backup record. The coverage envelope was complete, the absence envelope truthful, and the evidence gate passed the answer, because every value in it really was grounded. The defect was the **referent**, bound wrong at the argument.
+
+**The cheapest declaration.** None beyond the one above. `argumentsFrom` arms this check too — the compose seam asks whether the ground is still in reach while the tool is **offered**, and the choice seam asks whether the value the model chose came from that ground when the tool was **called**. Declaring the field on `screen_fire` in the previous section already armed both.
+
+**What you'll see.** After each response, every identifier-like string argument of an armed call must appear (case-insensitive substring) in the system prompt, a user message, or a tool result of the exact request that call was assembled from. Assistant messages are deliberately not ground. Silence for: non-string arguments, values under four characters, anything served anywhere in the frame, and anything the tool's own `inputSchema` declares in an `enum`. A finding files in exactly two states, with different messages because they need different fixes — the value's only ground is the model's own earlier answer (re-fetch the real ground; the message names the `argumentsFrom` tools), or the value appears nowhere in the frame at all. The finding carries `predicate` = the argument's dot-path, so two bad arguments of one call are two defects. Nothing is blocked; the call goes out exactly as the model made it.
+
+Two limits, stated: a value the model **composed** from several grounds (`"host1,host2"`) matches no single served string and will file — a tool whose arguments are legitimately model-composed should not declare `argumentsFrom`. And a value inside ANY tool result passes, even an unrelated one: this catches fabrication and self-reference, not misattribution.
+
 ## `unsupported-claim` — the answer says more than the run settled
 
 **The failure.** The evidence gate (`.namesAndNumbersFromEvidence()`) grounds every name and number in the final answer against a tool result — but it cannot catch a false claim **assembled from real values**. "fc1/3 is healthy" when the data says the port is down uses entirely grounded tokens: `fc1/3` is in the evidence, and "healthy" is just a word. Token grounding passes it without a murmur. So does an answer reporting `budget_start: 2` when the run's own ledger recorded 30.
@@ -118,17 +129,18 @@ agent.on('agentfootprint.integrity.disposition', (e) => {
 });
 ```
 
-Here is a real-shaped report — an agent that declared `argumentsFrom` on one tool and nothing else (no `.maps()`, no `.claims()`), after a short run where one call actually hit a dangling reference:
+Here is a real-shaped report — an agent that declared `argumentsFrom` on one tool and nothing else (no `.maps()`, no `.claims()`), after a short run where one call actually hit a dangling reference. Note that the one declaration produced **two** armed rows, at two seams:
 
 ```json
 {
   "posture": "observe",
   "workExisted": true,
   "rows": [
-    { "check": "invariant-violation", "seam": "wire",     "checked": 3, "findings": 0, "notApplicable": 0, "unreachable": 0, "synthetic": 0 },
-    { "check": "invariant-violation", "seam": "compose",  "checked": 0, "findings": 0, "notApplicable": 1, "unreachable": 0, "synthetic": 0 },
-    { "check": "dangling-reference",  "seam": "compose",  "checked": 1, "findings": 1, "notApplicable": 2, "unreachable": 0, "synthetic": 0, "lastFiredAt": 1755738000000 },
-    { "check": "unsupported-claim",   "seam": "claim",    "checked": 0, "findings": 0, "notApplicable": 1, "unreachable": 0, "synthetic": 0 }
+    { "check": "invariant-violation",  "seam": "wire",     "checked": 3, "findings": 0, "notApplicable": 0, "unreachable": 0, "synthetic": 0 },
+    { "check": "invariant-violation",  "seam": "compose",  "checked": 0, "findings": 0, "notApplicable": 1, "unreachable": 0, "synthetic": 0 },
+    { "check": "dangling-reference",   "seam": "compose",  "checked": 1, "findings": 1, "notApplicable": 2, "unreachable": 0, "synthetic": 0, "lastFiredAt": 1755738000000 },
+    { "check": "unsupported-argument", "seam": "choice",   "checked": 2, "findings": 0, "notApplicable": 1, "unreachable": 0, "synthetic": 0 },
+    { "check": "unsupported-claim",    "seam": "claim",    "checked": 0, "findings": 0, "notApplicable": 1, "unreachable": 0, "synthetic": 0 }
   ]
 }
 ```
@@ -137,6 +149,7 @@ Read the rows, not just the totals:
 
 - **`invariant-violation @ compose` and `unsupported-claim @ claim`** both read `checked: 0, findings: 0` — and on their own those two numbers would be indistinguishable from a check that ran three times and found nothing. `notApplicable: 1` is the fact that tells you the real story: neither `.maps()` nor `.claims()` was ever declared, so the check registered and immediately said "no subject this run" exactly once. This is the whole reason the field exists — before 9.62.0 these two rows did not appear **at all**, and the report above would have shown two checks instead of four with nothing marking the difference.
 - **`dangling-reference @ compose`** is the armed, active case: `checked: 1, findings: 1` is the pass that actually caught something (`lastFiredAt` stamps when), and `notApplicable: 2` covers the passes before anything had been dropped from the window — legitimate sequencing, not silence.
+- **`unsupported-argument @ choice`** is armed by the same one field, and reads `checked: 2, findings: 0`: two responses called the armed tool and every argument was served. Its `notApplicable: 1` is the response that called no armed tool at all — a turn this check had nothing to be about, stated rather than left blank.
 - **`invariant-violation @ wire`** is always-on and ran cleanly every pass — `checked: 3, findings: 0` with nothing to explain, because `mock` states a `wireManifest` on every call.
 
 The one row shape to watch for and that this report does **not** contain: `checked: 0, findings: 0, notApplicable: 0, unreachable: 0` all at once, on a run where `workExisted: true`. That is a registered check that filed **nothing** — not pass, not fail, not not-applicable, not unreachable — while the run did real work. It reads exactly like the healthy rows above at a glance (all zeros where you'd expect a small number), and it is the one shape that means the checker itself is unwired. `find_context_errors`'s own report labels a row in that state `⚠ REGISTERED BUT NEVER RAN` rather than folding it into a green summary.
@@ -162,13 +175,13 @@ Default posture is `'observe'`: rows only, no canary, no throw — the right cho
 
 ## What this doesn't cover — and says so
 
-The finding type names five defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`. **Three ship as checks.** `unsupported-argument` (acted on a value nothing served) and `duplicate-execution` (did settled work again) have no implementation in this build — no code anywhere is looking for either one.
+The finding type names five defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`. **Four ship as checks.** `duplicate-execution` (did settled work again) has no implementation in this build — no code anywhere is looking for it.
 
-That absence is stated, not hidden. `find_context_errors` — the tool a debugging agent calls to read findings back from a recording — never offers those two kinds in its schema, and if something calls it with one anyway, it answers with an explicit refusal rather than a clean-sounding negative:
+That absence is stated, not hidden. `find_context_errors` — the tool a debugging agent calls to read findings back from a recording — never offers that kind in its schema, and if something calls it with it anyway, it answers with an explicit refusal rather than a clean-sounding negative:
 
-> `find_context_errors: ⚠ UNANSWERABLE — 'duplicate-execution' is a defect class the finding type names, and no check in this build can file it. Nothing ever looked for one, so silence about it is not evidence of its absence. Classes this build can file: invariant-violation, dangling-reference, unsupported-claim — call again with one of those, or with no 'kind' at all.`
+> `find_context_errors: ⚠ UNANSWERABLE — 'duplicate-execution' is a defect class the finding type names, and no check in this build can file it. Nothing ever looked for one, so silence about it is not evidence of its absence. Classes this build can file: invariant-violation, unsupported-argument, dangling-reference, unsupported-claim — call again with one of those, or with no 'kind' at all.`
 
-The alternative — silently returning "no duplicate-execution findings" — would be a false negative wearing the same green as a check that actually looked and found nothing. A doc page (or a tool response) that implies coverage that doesn't exist is exactly the disease this whole family exists to cure, so it refuses instead. If your agent's real risk is duplicate tool execution or an argument value nobody ever served, arming the three shipped checks buys you nothing there yet — that gap is open, named, and unclaimed by any declaration in this doc.
+The alternative — silently returning "no duplicate-execution findings" — would be a false negative wearing the same green as a check that actually looked and found nothing. A doc page (or a tool response) that implies coverage that doesn't exist is exactly the disease this whole family exists to cure, so it refuses instead. If your agent's real risk is settled work being repeated, arming the four shipped checks buys you nothing there yet — that gap is open, named, and unclaimed by any declaration in this doc.
 
 ## See also
 

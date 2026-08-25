@@ -570,7 +570,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
  *     compile HERE, rather than becoming a value the tool's enum silently
  *     rejects at run time.
  *   - the honesty gate. `ContextErrorKind` names five defect classes;
- *     `src/integrity/` ships three checks. Offering the other two in the
+ *     `src/integrity/` ships four checks. Offering the fifth in the
  *     schema enum invites a query whose only possible answer is a negative
  *     verdict about a class nothing in the library could have filed — the
  *     tool telling a model "no duplicate-execution errors" when nothing on
@@ -580,7 +580,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
  */
 const CONTEXT_ERROR_KIND_CHECKS: Record<ContextErrorKind, string | false> = {
   'invariant-violation': 'src/integrity/invariant-violation (write + wire)',
-  'unsupported-argument': false,
+  'unsupported-argument': 'src/integrity/unsupported-argument (choice)',
   'dangling-reference': 'src/integrity/dangling-reference (compose)',
   'duplicate-execution': false,
   'unsupported-claim': 'src/integrity/unsupported-claim (claim)',
@@ -935,14 +935,18 @@ function buildFindContextErrors(
     description:
       'What did this run CONTRADICT ITSELF about? Lists the Context Integrity findings the ' +
       'library already caught — an invariant violated, an offered action whose inputs left ' +
-      'scope, a claim the record does not support — each with the step it was filed at and the ' +
+      'scope, an argument nothing served, a claim the record does not support — each with the ' +
+      'step it was filed at and the ' +
       'exact drill that opens the state behind it. Call it EARLY when an answer looks wrong: a ' +
       'contradiction the library already caught beats re-deriving one. Reads only; nothing is ' +
       're-checked or re-judged. When no finding evidence was captured it says so plainly rather ' +
       `than reporting a clean run. The finding type also names ${UNFILABLE_CONTEXT_ERROR_KINDS.map(
         (kind) => `'${kind}'`,
-      ).join(' and ')}, and no check in this build files them — this tool cannot report on ` +
-      'those classes at all, so its silence about them is not evidence. ' +
+      ).join(' and ')}, and no check in this build files ${
+        UNFILABLE_CONTEXT_ERROR_KINDS.length === 1 ? 'it' : 'them'
+      } — this tool cannot report on ` +
+      `that class${UNFILABLE_CONTEXT_ERROR_KINDS.length === 1 ? '' : 'es'} at all, so its ` +
+      'silence about it is not evidence. ' +
       `Bounded by limit (default ${FINDINGS_DEFAULT}, hard cap ${TOOLPACK_HARD_CAPS.contextErrorsMax}).`,
     inputSchema: {
       type: 'object',

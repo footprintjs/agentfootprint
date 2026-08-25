@@ -33,6 +33,10 @@ import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
+import {
+  declaredEnumValuesOf,
+  unsupportedArgumentsOf,
+} from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
@@ -123,7 +127,13 @@ export interface CallLLMStageDeps {
   /**
    * The declared argument-ground edges (`Tool.argumentsFrom`), by tool name
    * (9.60.0). Present only when at least one registered tool declared one;
-   * absent → the dangling-reference check never runs, byte-identical.
+   * absent → neither the dangling-reference check nor the unsupported-argument
+   * check runs, byte-identical.
+   *
+   * ONE DECLARATION, TWO SEAMS (9.63.0). `dangling-reference` asks, at request
+   * assembly, whether the ground is still in reach while the tool is OFFERED;
+   * `unsupported-argument` asks, after the response lands, whether the value
+   * the model chose came from that ground when the tool was CALLED.
    */
   readonly toolGrounding?: ReadonlyMap<string, readonly string[]>;
   /**
@@ -647,6 +657,63 @@ export function buildCallLLMStage(
       wireFindings.length > 0 ? Date.now() : undefined,
     );
     fileIntegrityFindings(scope, wireFindings, iteration);
+
+    // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
+    // asks what the library put in front of the model; this asks what the
+    // model did with it. For every call to an ARMED tool (one whose author
+    // declared `argumentsFrom`), each identifier-like string argument must
+    // appear somewhere in the frame this very call was assembled from.
+    //
+    // THE CORPUS IS SPLIT, and the split is the whole check. The system
+    // prompt, every user message and every tool result are things the RUN
+    // served. The assistant turns are things the MODEL wrote — deliberately
+    // not ground, because a value whose only source is the model's own
+    // rendered prose has been re-derived from a rendering instead of read
+    // from evidence. That is the recorded failure exactly: a truncated job
+    // name mined out of a prior answer, passed as a machine name, answered
+    // with an honest "nothing found", reported to a person as fact.
+    //
+    // `llmRequest` is the frame — the object handed to the adapter, after the
+    // cache strategy's transform — so the check judges the choice against
+    // what the model actually saw, never against scope history it did not.
+    if (deps.toolGrounding !== undefined && deps.toolGrounding.size > 0) {
+      const grounding = deps.toolGrounding;
+      const armedCalls = response.toolCalls.filter((c) => grounding.has(c.name));
+      if (armedCalls.length > 0) {
+        const schemaOf = new Map(
+          (llmRequest.tools ?? []).map((t) => [t.name, t.inputSchema] as const),
+        );
+        const frameMessages = llmRequest.messages;
+        const argumentFindings = unsupportedArgumentsOf(
+          armedCalls.map((c) => ({
+            toolName: c.name,
+            toolCallId: c.id,
+            args: c.args,
+            argumentsFrom: grounding.get(c.name) ?? [],
+            declaredEnums: declaredEnumValuesOf(schemaOf.get(c.name)),
+          })),
+          {
+            grounded: [
+              ...(llmRequest.systemPrompt === undefined ? [] : [llmRequest.systemPrompt]),
+              ...frameMessages.filter((m) => m.role !== 'assistant').map((m) => m.content),
+            ],
+            assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
+          },
+          iteration,
+        );
+        deps.integrityLedger?.current?.note(
+          'unsupported-argument',
+          'choice',
+          argumentFindings.length > 0 ? 'checked-fail' : 'checked-pass',
+          argumentFindings.length > 0 ? Date.now() : undefined,
+        );
+        fileIntegrityFindings(scope, argumentFindings, iteration);
+      } else {
+        // No armed tool was called this turn — a response with nothing this
+        // check could be about. Stated, never silence.
+        deps.integrityLedger?.current?.note('unsupported-argument', 'choice', 'not-applicable');
+      }
+    }
 
     // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
     // agent's, and the bill follows the call, not the configuration.

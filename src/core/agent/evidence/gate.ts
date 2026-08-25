@@ -24,6 +24,19 @@
  * 08:15 is a timestamp from a different port. Anyone who reads this as a
  * hallucination check will trust it for the thing it provably cannot do.
  *
+ * **It cannot catch MIS-REFERRAL either — an answer that is true of the WRONG
+ * THING.** The gate judges VALUES against evidence, and every value in
+ * "that machine has no backup record" can be perfectly grounded while the
+ * machine the sentence is about was never the one the user asked about. That
+ * is a recorded failure, not a hypothetical: a model resolved "that machine"
+ * out of its own earlier prose, called the lookup tool with a truncated job
+ * name, and got a real "nothing found" back — which the gate then grounded,
+ * correctly, in a real tool result. The referent was bound wrong one seam
+ * earlier, at the ARGUMENT, and that is the defect the choice-seam check owns
+ * (`src/integrity/unsupported-argument`, armed by `Tool.argumentsFrom`). This
+ * check is not the place to fix it: by the time an answer exists, the wrong
+ * lookup has already been served as evidence.
+ *
  * It is also deliberately incomplete in the other direction: the extractor is
  * conservative (see `extract.ts`), so small numbers and all-letters names pass
  * unexamined. A missed fabrication is a miss; a false accusation costs a real

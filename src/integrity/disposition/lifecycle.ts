@@ -8,8 +8,11 @@
  * Role:    a check is registered exactly when its preconditions exist on
  *          THIS agent (wire: always — every run calls the model;
  *          compose-invariant: a mount kernel is configured; dangling: at
- *          least one tool declared `argumentsFrom`). Registration is what
- *          makes silence auditable — an unregistered check is honest
+ *          least one tool declared `argumentsFrom`, which arms BOTH the
+ *          compose-seam dangling-reference check and the choice-seam
+ *          unsupported-argument check off the same declaration).
+ *          Registration is what makes silence auditable — an unregistered
+ *          check is honest
  *          absence, a registered one that never notes is the wiring rot
  *          `assertAlive` exists to name.
  *
@@ -27,6 +30,7 @@ import type { ContextErrorKind } from '../finding/types.js';
 import { invariantViolationsOf } from '../invariant-violation/check.js';
 import { wireViolationsOf } from '../invariant-violation/wire.js';
 import { danglingReferencesOf } from '../dangling-reference/check.js';
+import { unsupportedArgumentsOf } from '../unsupported-argument/check.js';
 import { unsupportedClaimsOf } from '../unsupported-claim/check.js';
 
 export type IntegrityPosture = 'observe' | 'dev';
@@ -35,6 +39,14 @@ export type IntegrityPosture = 'observe' | 'dev';
 export interface IntegrityChecksPresent {
   readonly wire: boolean;
   readonly composeInvariant: boolean;
+  /**
+   * At least one tool declared `Tool.argumentsFrom`. ONE FLAG, TWO CHECKS
+   * (9.63.0): the same declaration arms `dangling-reference` at the compose
+   * seam and `unsupported-argument` at the choice seam — one asks whether the
+   * ground is still in reach while the tool is offered, the other whether the
+   * value the model chose came from that ground when it was called. They are
+   * not separated here because nothing can arm one without arming the other.
+   */
   readonly dangling: boolean;
   /** A `.claims()` contract is declared (9.61.0). */
   readonly claim?: boolean;
@@ -64,8 +76,9 @@ export function beginIntegrityRun(
   //
   // Per check, deliberately, rather than one all-or-nothing block for the
   // case where the app armed none of them. The common shape in the field is
-  // PARTIAL: a consumer declares `argumentsFrom`, arms grounding, and never
-  // learns that the other two never ran. An all-or-nothing block goes quiet
+  // PARTIAL: a consumer declares `argumentsFrom`, arms the two checks that
+  // field carries, and never learns that the rest never ran. An
+  // all-or-nothing block goes quiet
   // the moment one check is armed, which is precisely when the remaining
   // blind spots start to matter.
   //
@@ -82,6 +95,7 @@ export function beginIntegrityRun(
   };
   armed('invariant-violation', 'compose', present.composeInvariant === true);
   armed('dangling-reference', 'compose', present.dangling === true);
+  armed('unsupported-argument', 'choice', present.dangling === true);
   armed('unsupported-claim', 'claim', present.claim === true);
 
   if (posture !== 'dev') return ledger;
@@ -89,7 +103,7 @@ export function beginIntegrityRun(
   // The canaries — one known-bad fixture per REGISTERED check, through the
   // REAL pure function. Epoch -1 marks them as no run iteration's business.
   //
-  // Registered, note, and no longer only armed. The three optional checks now
+  // Registered, note, and no longer only armed. The four optional checks now
   // file a row whether or not this run had a subject for them, and a
   // `not-applicable` row with no canary beside it is the exact ambiguity this
   // whole change set exists to remove: a checker that has ROTTED and a checker
@@ -129,6 +143,25 @@ export function beginIntegrityRun(
       -1,
     );
     if (caught.length > 0) ledger.noteSynthetic('dangling-reference', 'compose', 'caught');
+  }
+  {
+    // The choice-seam canary: an ARMED call carrying a value the corpus does
+    // not contain. The fixture's corpus deliberately says nothing that could
+    // match, so a check that still finds nothing is a check that cannot fire.
+    ledger.noteSynthetic('unsupported-argument', 'choice', 'minted');
+    const caught = unsupportedArgumentsOf(
+      [
+        {
+          toolName: 'canary_tool',
+          toolCallId: 'canary',
+          args: { id: 'canary-fabricated-id' },
+          argumentsFrom: ['canary_ground'],
+        },
+      ],
+      { grounded: ['canary: this frame served no identifiers'], assistant: [] },
+      -1,
+    );
+    if (caught.length > 0) ledger.noteSynthetic('unsupported-argument', 'choice', 'caught');
   }
   {
     ledger.noteSynthetic('unsupported-claim', 'claim', 'minted');

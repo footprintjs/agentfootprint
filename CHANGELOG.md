@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`unsupported-argument` — the check at the CHOICE seam, and the fifth and
+  last of the Context Integrity family.** In a recorded triage turn the window
+  dropped the user message holding the true entity id and kept the assistant's
+  own rendered answer; asked for "the status for that machine", the model
+  resolved the reference out of its OWN prior prose, took a truncated job-name
+  fragment for a machine name, called the lookup tool with it, got an honest
+  "nothing found", and told the person their protected machine had no backup
+  record. Every shipped rail passed honestly — the coverage envelope, the
+  absence envelope and the evidence gate all held, because every value in the
+  answer really was grounded; the defect was the REFERENT, bound wrong at the
+  argument, at the one seam that had no check.
+
+  After each response, every identifier-like string argument of a call to an
+  armed tool must appear in the frame the model chose from: the system prompt,
+  a USER message, or a TOOL result of the exact request the call was assembled
+  from. Assistant messages are deliberately not ground — a value whose only
+  source is the model's own rendered prose has been re-derived from a rendering
+  rather than read from evidence. Detection only; nothing is blocked.
+
+  **`argumentsFrom` now does double duty**: the one field that arms
+  `dangling-reference` at the compose seam (is the ground still in reach while
+  the tool is OFFERED?) arms this at the choice seam (did the value the model
+  chose come from that ground when the tool was CALLED?). Nothing new to
+  declare, and a tool that declares nothing is still never either check's
+  subject.
+
+  The fences are the check's honesty and each has a test: non-strings are never
+  checked, values under four characters are never checked, a value served
+  anywhere in the frame passes, and a value the tool's own `inputSchema`
+  declares in an `enum` passes. The two remaining states file DIFFERENT
+  messages, because they need different fixes — grounded only in the model's
+  own prose (re-fetch the real ground, named), and grounded nowhere at all.
+
+  `find_context_errors` now offers `'unsupported-argument'` in its `kind` menu;
+  only `'duplicate-execution'` remains a class the finding type names and no
+  check in this build can file. The disposition report grows from four rows to
+  five, and one `argumentsFrom` declaration now produces two armed rows at two
+  seams.
+
 ## [9.62.0] - 2026-08-21
 
 **Three ways a check could be there and do nothing, and nobody could tell.**

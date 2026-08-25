@@ -55,8 +55,10 @@ describe('unit: beginIntegrityRun', () => {
     );
     const rows = ledger.report();
     // wire + compose/invariant-violation (armed) + compose/dangling-reference
-    // (unarmed) + claim/unsupported-claim (unarmed) — four rows, always.
-    expect(rows).toHaveLength(4);
+    // (unarmed) + choice/unsupported-argument (unarmed — same `argumentsFrom`
+    // declaration arms it) + claim/unsupported-claim (unarmed) — five rows,
+    // always.
+    expect(rows).toHaveLength(5);
     expect(rows.find((r) => r.seam === 'wire')).toMatchObject({ check: 'invariant-violation' });
     // The armed check: registered, and genuinely armed.
     const composeInvariantRow = rows.find(
@@ -72,24 +74,33 @@ describe('unit: beginIntegrityRun', () => {
       checked: 0,
       findings: 0,
     });
+    // One declaration arms two checks, so an unarmed `argumentsFrom` leaves
+    // BOTH of them as honest not-applicable rows, at their own seams.
+    expect(rows.find((r) => r.check === 'unsupported-argument')).toMatchObject({
+      seam: 'choice',
+      notApplicable: 1,
+      checked: 0,
+      findings: 0,
+    });
     const claimRow = rows.find((r) => r.check === 'unsupported-claim');
     expect(claimRow).toMatchObject({ seam: 'claim', notApplicable: 1, checked: 0, findings: 0 });
   });
 
-  it('nothing opted-in registers all three opt-in checks as not-applicable, not silence', () => {
+  it('nothing opted-in registers all four opt-in checks as not-applicable, not silence', () => {
     // The exact shape that used to be indistinguishable from "everything
-    // passed": only `wire` present, none of the three opt-in checks armed.
+    // passed": only `wire` present, none of the opt-in checks armed.
     const ledger = beginIntegrityRun(
       { wire: true, composeInvariant: false, dangling: false },
       'observe',
     );
     const rows = ledger.report();
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     const wireRow = rows.find((r) => r.seam === 'wire');
     expect(wireRow).toMatchObject({ check: 'invariant-violation' });
     for (const [check, seam] of [
       ['invariant-violation', 'compose'],
       ['dangling-reference', 'compose'],
+      ['unsupported-argument', 'choice'],
       ['unsupported-claim', 'claim'],
     ] as const) {
       const row = rows.find((r) => r.check === check && r.seam === seam);
@@ -120,13 +131,14 @@ describe('unit: beginIntegrityRun', () => {
       'observe',
     );
     const rows = ledger.report();
-    // wire + all three opt-ins, armed or not — four rows, always.
-    expect(rows).toHaveLength(4);
+    // wire + all four opt-ins, armed or not — five rows, always.
+    expect(rows).toHaveLength(5);
     const claimRow = rows.find((r) => r.check === 'unsupported-claim');
     expect(claimRow).toMatchObject({ seam: 'claim', notApplicable: 0 });
     for (const [check, seam] of [
       ['invariant-violation', 'compose'],
       ['dangling-reference', 'compose'],
+      ['unsupported-argument', 'choice'],
     ] as const) {
       const row = rows.find((r) => r.check === check && r.seam === seam);
       expect(row).toMatchObject({ notApplicable: 1 });
@@ -152,14 +164,16 @@ describe('unit: beginIntegrityRun', () => {
     // been dead.
     const ledger = beginIntegrityRun(ALL, 'dev');
     const rows = ledger.report();
-    // wire + compose/invariant-violation + compose/dangling-reference (all
-    // three armed by `ALL`) + claim/unsupported-claim (NOT armed — `ALL`
-    // omits `claim`, so it registers as not-applicable, canary-less).
-    expect(rows).toHaveLength(4);
+    // wire + compose/invariant-violation + compose/dangling-reference +
+    // choice/unsupported-argument (all four armed by `ALL`, the last two off
+    // the one `dangling` declaration) + claim/unsupported-claim (NOT armed —
+    // `ALL` omits `claim`, so it registers as not-applicable, canary-less).
+    expect(rows).toHaveLength(5);
     const registeredChecks = [
       { check: 'invariant-violation', seam: 'wire' },
       { check: 'invariant-violation', seam: 'compose' },
       { check: 'dangling-reference', seam: 'compose' },
+      { check: 'unsupported-argument', seam: 'choice' },
     ] as const;
     for (const { check, seam } of registeredChecks) {
       const row = rows.find((r) => r.check === check && r.seam === seam)!;
@@ -205,10 +219,10 @@ const screen = () =>
   });
 
 describe('functional: the run files its disposition rows', () => {
-  it('a healthy default agent: one event, a checked-pass wire row PLUS the three opt-ins as not-applicable', async () => {
+  it('a healthy default agent: one event, a checked-pass wire row PLUS the four opt-ins as not-applicable', async () => {
     // This agent declares no maps plan, no `argumentsFrom` tool, no claims
     // contract — the exact "nothing armed" shape the per-check registration
-    // law makes observable (see 'nothing opted-in registers all three
+    // law makes observable (see 'nothing opted-in registers all four
     // opt-in checks as not-applicable, not silence', above).
     const events: Array<Record<string, unknown>> = [];
     const agent = Agent.create({
@@ -225,13 +239,14 @@ describe('functional: the run files its disposition rows', () => {
     await agent.run('go');
     expect(events).toHaveLength(1);
     const rows = events[0]!.rows as CheckReport[];
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     const wireRow = rows.find((r) => r.seam === 'wire')!;
     expect(wireRow).toMatchObject({ check: 'invariant-violation', findings: 0 });
     expect(wireRow.checked).toBeGreaterThanOrEqual(2); // one per LLM call
     for (const [check, seam] of [
       ['invariant-violation', 'compose'],
       ['dangling-reference', 'compose'],
+      ['unsupported-argument', 'choice'],
       ['unsupported-claim', 'claim'],
     ] as const) {
       expect(rows.find((r) => r.check === check && r.seam === seam)).toMatchObject({

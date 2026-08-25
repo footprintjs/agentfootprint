@@ -555,26 +555,26 @@ describe('find_context_errors — the kind vocabulary it can answer for', () => 
   };
 
   it('offers only the classes a check in this build can actually file', () => {
-    // `ContextErrorKind` names five classes; `src/integrity/` ships three
-    // checks. Offering the other two invites a query whose only possible
-    // answer is a negative verdict about a class nothing could have filed.
+    // `ContextErrorKind` names five classes; `src/integrity/` ships four
+    // checks. Offering the fifth invites a query whose only possible answer
+    // is a negative verdict about a class nothing could have filed.
     expect([...kindEnum()].sort()).toEqual([
       'dangling-reference',
       'invariant-violation',
+      'unsupported-argument',
       'unsupported-claim',
     ]);
     expect(kindEnum()).not.toContain('duplicate-execution');
-    expect(kindEnum()).not.toContain('unsupported-argument');
   });
 
   it('the description does not advertise a defect class the pack cannot report', () => {
     const description = findTool().schema.description ?? '';
     expect(description).not.toMatch(/settled work done twice/i);
-    expect(description).not.toMatch(/an argument nothing served/i);
-    // It says out loud that two named classes have no checker here.
+    // The choice seam ships now, so the tool DOES advertise it.
+    expect(description).toMatch(/an argument nothing served/i);
+    // It still says out loud that the one remaining class has no checker here.
     expect(description).toMatch(/duplicate-execution/);
-    expect(description).toMatch(/unsupported-argument/);
-    expect(description).toMatch(/no check .*files them|cannot report/i);
+    expect(description).toMatch(/no check .*files it|cannot report/i);
   });
 
   it('answers honestly when a caller asks for a class no check can file', async () => {
