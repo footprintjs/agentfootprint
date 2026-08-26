@@ -148,6 +148,72 @@ deliberately when it is genuinely relaying another source's tool — and
 [`mcpServe`](doc:mcp-serve)'s serving-side chain reads the same field, so a
 re-served tool keeps its provenance across the boundary.
 
+## Bulk-register from MCP: the declarations come too
+
+`.tools(await client.tools())` is a bulk register, and until 9.71.0 what it
+registered was thin. A tool that arrived over MCP carried a name, a description
+and an input schema — so every rail that reads a *declaration* went quiet for
+it. The dangling-reference and unsupported-argument checks never armed; artifact
+placement minted a kind no `wants` could spend; subject-joined checks had no
+owner to join on. An MCP server could be your whole tool catalogue and still be
+a second-class citizen of every check this library ships.
+
+It is not thin any more. A server that speaks the `_meta.agentfootprint` bag
+([the serving side describes it](doc:mcp-serve#declarations-travel-execution-does-not))
+hands over five declarations, and they land on the registered `Tool` exactly as
+if you had written them in `defineTool`:
+
+| field | what it arms |
+|---|---|
+| `argumentsFrom` | the dangling-reference and unsupported-argument [integrity checks](doc:context-integrity) |
+| `resultKind` | placement's mint — a placed result a `wants` argument can spend |
+| `owner` | the identity edge subject-joined checks read |
+| `resultClass` | the per-class `check:semantics` rules |
+| `resultCeiling` | the author's refusing ceiling on an oversized result |
+
+Nothing that governs **execution** is on that list — `needs`, `checkIn`, the
+session hooks. They decide how a tool runs, and the tool runs on the server.
+
+```ts
+const fleet = await mcpClient({ name: 'fleet-mcp', transport });
+
+const agent = Agent.create({ provider, model })
+  .tools(await fleet.tools())   // backup_status declares argumentsFrom: ['fleet_report']
+  .build();
+
+// …and the choice-seam check now fires for it, exactly as for a local tool.
+```
+
+### Ingest never throws
+
+The bag comes from a server you do not control, so every field is read
+defensively — and judged by the **same rule** `defineTool` enforces, because it
+is literally the same function. A field that fails that rule is:
+
+1. **warned about once**, naming the server, the tool, the field, and the rule
+   it broke;
+2. **dropped**, so the `Tool` registers without that one declaration;
+3. **left alone otherwise** — the rest of the bag still lands, and the other
+   thirty-nine tools in the same bulk register are untouched.
+
+One server's typo must never kill a whole catalogue, and a rail that quietly
+stopped arming must never look like a rail that ran and agreed. That is why the
+warning is unconditional rather than a dev-mode nicety: the symptom of a dropped
+declaration is *silence*.
+
+A field this library does not recognise is ignored **in silence** — a newer
+server talking to an older client is not an error, and warning about it would
+make every upgrade noisy at the wrong end.
+
+**No bag at all is byte-identical to before.** No `_meta`, a `_meta` holding
+only someone else's keys, or a non-object under ours: the registered `Tool` has
+exactly `schema`, `source` and `execute`, and nothing warns.
+
+`mockMcpClient` takes the same `_meta` on each scripted tool and reads it
+through the same reader, so a rail armed by a remote declaration — and the
+unhappy path where a declaration is malformed — can both be tested before the
+real server exists.
+
 ## What the package exports
 
 From `agentfootprint/providers`:
@@ -160,6 +226,12 @@ From `agentfootprint/providers`:
 | `McpHttpTransport` | `{ transport: 'http', url, headers?, fetch? }`. |
 | `McpCallToolResult` | The `tools/call` union: today's `content` arm, or the legacy `toolResult` arm. |
 | `McpSdkClient` | The minimal SDK surface this client speaks — what `_client` takes in tests. |
+| `MCP_TOOL_EXTRAS_KEY` | The `_meta` key declarations travel under — `'agentfootprint'`. |
+| `McpToolExtras` | The shape inside that key: `argumentsFrom`, `resultKind`, `owner`, `resultClass`, `resultCeiling`, all optional. |
+
+`MCP_TOOL_EXTRAS_KEY` and `McpToolExtras` are public so a server this library
+did not write can speak the bag: put `McpToolExtras`-shaped data under that key
+in your tool's `_meta` and an agentfootprint client reads it.
 
 `_client` is a test hook and is documented as one: it skips the SDK import and
 the transport entirely, which also means it skips the `fetch` you configured.

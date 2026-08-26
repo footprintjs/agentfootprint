@@ -22,6 +22,12 @@
  * Role:    Layer-3 integration. Sits next to `defineTool` — same
  *          shape, different source. Once tools land on the agent,
  *          the rest of the library doesn't know they came from MCP.
+ *          Since 9.71.0 that is true of DECLARATIONS too: a server's
+ *          `_meta` bag becomes `argumentsFrom` / `resultKind` / `owner`
+ *          / `resultClass` / `resultCeiling` on the registered `Tool`,
+ *          so the integrity checks, the placement mint and the identity
+ *          joins arm for a remote tool exactly as for a local one. The
+ *          reading NEVER throws — see `toolExtras.ts`.
  *
  * Emits:   N/A — wrapped tools emit the standard
  *          `agentfootprint.stream.tool_start` / `tool_end` events
@@ -39,9 +45,11 @@ import type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  McpListedTool,
   McpSdkClient,
   McpTransport,
 } from './types.js';
+import { readToolExtras } from './toolExtras.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
 import { lazyRequire } from '../lazyRequire.js';
@@ -210,11 +218,7 @@ async function buildTransport(
 function wrapMcpTool(
   serverName: string,
   sdk: McpSdkClient,
-  mcp: {
-    readonly name: string;
-    readonly description?: string;
-    readonly inputSchema: Readonly<Record<string, unknown>>;
-  },
+  mcp: McpListedTool,
   signal?: AbortSignal,
 ): Tool {
   const tool: Tool = {
@@ -227,6 +231,13 @@ function wrapMcpTool(
     // bare tool name cannot tell two servers' identically-named tools apart;
     // this is the fact that lets it. See `Tool.source`.
     source: serverName,
+    // The DECLARATIONS the server sent in MCP's `_meta` bag (9.71.0) — read
+    // defensively, per field, by the same rules `defineTool` enforces, and
+    // NEVER throwing: a malformed field is warned about once and dropped, and
+    // this tool still registers. That is what keeps one bad tool from killing
+    // a forty-tool bulk register. A server that sent no bag adds no keys here,
+    // so the Tool is byte-identical to one built before this existed.
+    ...readToolExtras(mcp._meta, { server: serverName, tool: mcp.name }),
     execute: async (args) => {
       // The agent passes args as `unknown` per Tool contract. MCP
       // expects a JSON object — non-object inputs become `{}` rather

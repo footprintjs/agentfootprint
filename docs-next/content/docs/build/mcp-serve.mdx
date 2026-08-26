@@ -96,6 +96,54 @@ That is also why this builds on the SDK's low-level `Server` rather than its
 which would mean converting a JSON Schema you already have *into* zod (a new
 dependency) to convert it straight back.
 
+## Declarations travel; execution does not
+
+A `Tool` is two things at once. Half of it is **execution** — the handler, the
+credential it needs, the human it wants to check in with. The other half is
+**declaration**: flat, inert facts about the tool that no code runs and every
+consumer-side rail *reads*.
+
+Only the declaration half is meaningful to somebody else's process, and it is
+what `mcpServe` now sends — in MCP's own `_meta` bag, under one namespaced key
+(`MCP_TOOL_EXTRAS_KEY`, the string `agentfootprint`):
+
+```ts
+// what a client sees on tools/list
+{
+  name: 'backup_status',
+  description: 'Reads the backup record for one machine.',
+  inputSchema: { /* … */ },
+  _meta: {
+    agentfootprint: {
+      argumentsFrom: ['fleet_report'],
+      resultKind: 'dataset/backups',
+      owner: { kind: 'registry', id: 'fleet-desk' },
+      resultClass: 'triage',
+      resultCeiling: { maxChars: 4000, narrowBy: ['machine'] },
+    },
+  },
+}
+```
+
+| declaration | what it arms on the consuming side |
+|---|---|
+| `argumentsFrom` | the dangling-reference and unsupported-argument [integrity checks](doc:context-integrity) |
+| `resultKind` | placement's mint, so a placed result is spendable by a `wants` argument |
+| `owner` | the identity edge subject-joined checks read |
+| `resultClass` | the per-class `check:semantics` rules |
+| `resultCeiling` | the author's refusing ceiling on an oversized result |
+
+**The bar for this list is one sentence:** *a declaration a consumer-side check
+or rail reads; nothing that governs execution.* So `needs` (credentials),
+`checkIn` (human consent) and the session hooks never travel and never will —
+they govern how a tool **runs**, and the tool runs on your server. A client
+holding a consent gate the only executor already held would be theatre; one
+holding a gate *nobody* is holding would be worse.
+
+**Absent means absent.** A tool that declares none of the five is listed without
+a `_meta` key at all — not with an empty bag — so a server whose tools carry no
+declarations puts exactly the bytes on the wire it always did.
+
 ## Transports
 
 ```ts

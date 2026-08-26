@@ -30,6 +30,7 @@
  */
 
 import type { Tool } from '../../core/tools.js';
+import { readToolExtras } from './toolExtras.js';
 import type { McpClient } from './types.js';
 
 /** A scripted tool exposed by the mock MCP server. */
@@ -43,6 +44,32 @@ export interface MockMcpTool {
    * registry verbatim — same as a real MCP server's `listTools()`.
    */
   readonly inputSchema: Readonly<Record<string, unknown>>;
+  /**
+   * MCP's extensibility bag, exactly as a real server would send it (9.71.0).
+   *
+   * agentfootprint's tool DECLARATIONS — `argumentsFrom`, `resultKind`,
+   * `owner`, `resultClass`, `resultCeiling` — ride under the `agentfootprint`
+   * key here, and this mock reads them through the SAME defensive reader
+   * `mcpClient` uses. So a rail armed by a remotely-declared tool can be
+   * developed and tested before the real server exists, and so can the
+   * unhappy path: put a malformed declaration in and watch the field get
+   * dropped, the warning name the rule, and the tool register anyway.
+   *
+   * ```ts
+   * mockMcpClient({
+   *   name: 'fleet-mcp',
+   *   tools: [{
+   *     name: 'backup_status',
+   *     inputSchema: { type: 'object', properties: { machine: { type: 'string' } } },
+   *     _meta: { agentfootprint: { argumentsFrom: ['fleet_report'] } },
+   *   }],
+   * });
+   * ```
+   *
+   * Omitted → the registered `Tool` carries no declarations, exactly as
+   * before this existed.
+   */
+  readonly _meta?: Readonly<Record<string, unknown>>;
   /**
    * Async handler that runs when the agent calls this tool. Receives
    * the args the LLM produced; returns the string result the agent
@@ -120,6 +147,10 @@ function wrapMockTool(
     // governs by server name has to be testable against the mock, or the swap
     // from mock to real server changes what the policy sees.
     source: serverName,
+    // …and the same declarations, through the same reader (9.71.0). A rail
+    // that arms on a remotely-declared `argumentsFrom` must arm here too, or
+    // the mock proves nothing about the server it stands in for.
+    ...readToolExtras(mcp._meta, { server: serverName, tool: mcp.name }),
     execute: async (args) => {
       const argsObj =
         args !== null && typeof args === 'object' && !Array.isArray(args)

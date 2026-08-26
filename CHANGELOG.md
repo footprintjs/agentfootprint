@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An MCP tool server is a first-class agentfootprint citizen — the
+  declarations travel, both directions.** A `Tool` is two things at once: an
+  EXECUTION half (the handler, the credential it needs, the human it wants to
+  check in with) and a DECLARATION half — flat, inert facts no code runs and
+  every consumer-side rail reads. Only the execution half used to cross an MCP
+  boundary, so a tool that arrived over MCP was thin: the dangling-reference and
+  unsupported-argument checks never armed for it, artifact placement minted a
+  kind no `wants` could spend, and subject-joined checks had no owner to join
+  on. An MCP server could be somebody's whole tool catalogue and still be a
+  second-class citizen of every check this library ships.
+
+  `mcpServe` now writes five declarations into MCP's own `_meta` bag, under one
+  namespaced key (`MCP_TOOL_EXTRAS_KEY`, the string `agentfootprint`), and
+  `mcpClient` / `mockMcpClient` read them back onto the registered `Tool`:
+
+  | field | what it arms on the consuming side |
+  |---|---|
+  | `argumentsFrom` | the dangling-reference and unsupported-argument checks |
+  | `resultKind` | placement's mint — a placed result a `wants` argument can spend |
+  | `owner` | the identity edge subject-joined checks read |
+  | `resultClass` | the per-class `check:semantics` rules |
+  | `resultCeiling` | the author's refusing ceiling on an oversized result |
+
+  ```ts
+  const fleet = await mcpClient({ name: 'fleet-mcp', transport });
+  const agent = Agent.create({ provider, model })
+    .tools(await fleet.tools())   // backup_status declares argumentsFrom: ['fleet_report']
+    .build();
+  // …and the choice seam now files `unsupported-argument` for it, exactly as
+  // it would for a local defineTool — pinned end to end, disposition row included.
+  ```
+
+  **The inclusion bar, stated where the list lives:** *a declaration a
+  consumer-side check or rail reads; nothing that governs execution.* `needs`
+  (credentials), `checkIn` (human consent) and the session hooks are excluded
+  and always will be — they decide how a tool RUNS, and the tool runs on the
+  server. A client holding a consent gate the only executor already held is
+  theatre; one holding a gate nobody is holding is worse. A bag that names them
+  anyway cannot smuggle them onto the `Tool`.
+
+  **Ingest never throws.** The bag comes from a server this process does not
+  control, and one server's typo must not kill a bulk register of forty tools.
+  Each field is judged by the SAME rule `defineTool` enforces — literally the
+  same exported assert, so `assertToolOwner` and `assertArgumentsFrom` were
+  extracted from `defineTool` rather than copied. A field that fails is warned
+  about ONCE (naming the server, the tool, the field, and the rule it broke) and
+  DROPPED; the tool registers without it and the rest of the bag still lands.
+  The warning is unconditional rather than dev-gated, following the
+  uncompilable-`pattern` precedent in `toolArgsValidation`: the symptom of a
+  dropped declaration is silence, which looks exactly like a rail that ran and
+  agreed. A field this library does not recognise is ignored in silence — a
+  newer server talking to an older client is not an error.
+
+  **Absent means absent, in both directions.** A served tool that declares none
+  of the five gets no `_meta` key at all — not an empty bag. A client that
+  receives no bag registers a `Tool` with exactly `schema`, `source` and
+  `execute`, pinned field by field by a regression test.
+
+  **The carrier was verified against a real socket, not assumed.** `_meta` is
+  declared on the spec's `Tool` object and `@modelcontextprotocol/sdk` 1.30.0
+  types it as `z.record(z.string(), z.unknown()).optional()` on `ToolSchema`, so
+  it survives the SDK's own `tools/list` validation both ways — proved by
+  `test/lib/mcp/mcpToolExtras.real.test.ts`, which serves over Streamable HTTP
+  on a real port and reads the five fields back through `mcpClient`.
+
+  New from `agentfootprint/providers`: `MCP_TOOL_EXTRAS_KEY` and the
+  `McpToolExtras` type, public so a server this library did not write can speak
+  the bag.
+
 ## [9.70.0] - 2026-08-26
 
 ### Added

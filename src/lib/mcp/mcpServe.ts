@@ -43,6 +43,14 @@
  *   - `needs` (declare-and-push credentials) needs a provider; without
  *     one the tool would run with `ctx.credential` undefined.
  *
+ * ── Declarations travel; execution does not (9.71.0) ─────────────────
+ * A served tool's DECLARATIONS — `argumentsFrom`, `resultKind`, `owner`,
+ * `resultClass`, `resultCeiling` — are written into MCP's own `_meta` bag
+ * under one namespaced key, so an agentfootprint client arms the checks and
+ * rails that read them exactly as it would for a local `defineTool`. The
+ * execution-side fields never go: see `toolExtras.ts` for the bar and the
+ * reasoning. A tool declaring none of the five lists exactly as before.
+ *
  * ── Schemas ──────────────────────────────────────────────────────────
  * Tools already carry JSON Schema in `schema.inputSchema`, and MCP's
  * `tools/list` wants JSON Schema, so the mapping is the identity
@@ -71,6 +79,7 @@ import type {
   McpServeTransport,
 } from './types.js';
 import { lazyRequire } from '../lazyRequire.js';
+import { MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
 import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
@@ -96,11 +105,20 @@ export async function mcpServe(
   const byName = validateServableTools(tools, name, opts.credentials);
   const credentials = opts.credentials ?? unconfiguredCredentialProvider();
 
-  const listing = tools.map((t) => ({
-    name: t.schema.name,
-    ...(t.schema.description !== undefined && { description: t.schema.description }),
-    inputSchema: t.schema.inputSchema ?? { type: 'object', properties: {} },
-  }));
+  const listing = tools.map((t) => {
+    // The declaration half of the tool, in MCP's own extensibility bag
+    // (9.71.0). Absent fields stay absent and a tool that declares NOTHING
+    // gets no `_meta` key at all, so a server whose tools carry no
+    // declarations lists exactly the bytes it always did. See toolExtras.ts
+    // for the inclusion bar and for why `needs` / `checkIn` never travel.
+    const extras = toolExtrasOf(t);
+    return {
+      name: t.schema.name,
+      ...(t.schema.description !== undefined && { description: t.schema.description }),
+      inputSchema: t.schema.inputSchema ?? { type: 'object', properties: {} },
+      ...(extras !== undefined && { _meta: { [MCP_TOOL_EXTRAS_KEY]: extras } }),
+    };
+  });
 
   // Order matters: the server is resolved FIRST so that a missing SDK is
   // reported by the message that tells you how to install it, rather than

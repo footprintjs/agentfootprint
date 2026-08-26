@@ -330,8 +330,8 @@ source is the canonical reference.
 ### MCP (Model Context Protocol)
 
 Connect to an MCP server, snapshot its tools as agentfootprint `Tool[]`, then
-register them on any agent. agentfootprint's MCP adapter is **client-only** — it
-consumes MCP servers.
+register them on any agent. The adapter goes both ways: `mcpClient` consumes
+someone else's server, `mcpServe` exposes your own `Tool[]` as one.
 
 ```typescript
 import { mcpClient } from 'agentfootprint';
@@ -356,8 +356,20 @@ interface McpClient {
 }
 ```
 
+**Declarations travel with the tool.** A served tool's `argumentsFrom`,
+`resultKind`, `owner`, `resultClass` and `resultCeiling` ride in MCP's own
+`_meta` bag under one namespaced key (`MCP_TOOL_EXTRAS_KEY`), so a tool that
+arrived over MCP arms the integrity checks, the placement mint and the identity
+joins exactly as a local `defineTool` does. Execution-side fields — `needs`,
+`checkIn`, the session hooks — never travel: they govern how the tool runs, and
+it runs on the server. Ingest is defensive and **never throws**: a malformed
+declaration is warned about once (naming the server, tool, field and rule) and
+dropped, and the tool still registers. A server that sends no bag registers
+exactly what it always did.
+
 For development and tests, `mockMcpClient` gives an in-memory server with the
-same `McpClient` shape — swap it for `mcpClient` once the real server is ready:
+same `McpClient` shape — and takes the same `_meta` bag, so a rail armed by a
+remote declaration is testable before the real server exists:
 
 ```typescript
 import { mockMcpClient } from 'agentfootprint';

@@ -6,6 +6,9 @@
  */
 export { mcpClient } from './mcpClient.js';
 export { mcpServe } from './mcpServe.js';
+// The declaration bag both directions speak (9.71.0) — one namespaced `_meta`
+// key, and the shape a non-agentfootprint server writes to be understood.
+export { MCP_TOOL_EXTRAS_KEY, type McpToolExtras } from './toolExtras.js';
 export { mockMcpClient, type MockMcpClientOptions, type MockMcpTool } from './mockMcpClient.js';
 export {
   gatewayTransport,

@@ -276,13 +276,7 @@ export interface McpSdkClient {
   listTools(
     params?: undefined,
     options?: McpRequestOptions,
-  ): Promise<{
-    readonly tools: ReadonlyArray<{
-      readonly name: string;
-      readonly description?: string;
-      readonly inputSchema: Readonly<Record<string, unknown>>;
-    }>;
-  }>;
+  ): Promise<{ readonly tools: ReadonlyArray<McpListedTool> }>;
   callTool(
     params: {
       readonly name: string;
@@ -293,6 +287,24 @@ export interface McpSdkClient {
     options?: McpRequestOptions,
   ): Promise<McpCallToolResult>;
   close(): Promise<void>;
+}
+
+/**
+ * One entry of a `tools/list` answer, narrowed to what this client reads.
+ *
+ * `_meta` is the spec's own extensibility bag on a `Tool` object, and it is in
+ * this shim because agentfootprint's tool DECLARATIONS ride in it under one
+ * namespaced key (see `toolExtras.ts`). It is typed as a loose record on
+ * purpose: everything in it is written by a server this process does not
+ * control, so the shim promises only that it is an object, and
+ * `readToolExtras` does the judging.
+ */
+export interface McpListedTool {
+  readonly name: string;
+  readonly description?: string;
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  /** MCP's extensibility bag. Absent from most servers' tools. */
+  readonly _meta?: Readonly<Record<string, unknown>>;
 }
 
 /**

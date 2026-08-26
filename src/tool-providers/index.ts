@@ -68,6 +68,10 @@ export {
   mockMcpClient,
   gatewayTransport,
   GatewayAuthorizationRequiredError,
+  // The `_meta` key agentfootprint's tool declarations travel under, in both
+  // directions (9.71.0). Public so a server this library did not write can
+  // speak it, and so a client can read a bag it received.
+  MCP_TOOL_EXTRAS_KEY,
 } from '../lib/mcp/index.js';
 // Reaching an AWS Bedrock AgentCore Gateway (9.66.0). A configuration of
 // `gatewayTransport` plus the four facts that are AgentCore's alone — kept in
@@ -104,4 +108,5 @@ export type {
   McpStdioServeTransport,
   McpHttpServeTransport,
   McpSdkServer,
+  McpToolExtras,
 } from '../lib/mcp/index.js';

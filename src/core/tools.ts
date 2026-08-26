@@ -312,8 +312,12 @@ export function assertResultCeiling(
   ceiling: ToolResultCeiling | undefined,
 ): void {
   if (ceiling === undefined) return;
-  const { maxChars, narrowBy } = ceiling;
-  if (!Number.isFinite(maxChars) || !Number.isInteger(maxChars) || maxChars <= 0) {
+  // Destructured through a fallback because this rule is also asked about
+  // values NO COMPILER vetted — a `_meta` bag from a foreign MCP server
+  // (`readToolExtras`). A `null` or a number must reach the teaching refusal
+  // below, not blow up on the destructuring on the way to it.
+  const { maxChars, narrowBy } = (ceiling ?? {}) as Partial<ToolResultCeiling>;
+  if (!Number.isFinite(maxChars) || !Number.isInteger(maxChars) || (maxChars as number) <= 0) {
     throw new Error(
       `defineTool: tool '${toolName}' declares resultCeiling.maxChars = ${String(maxChars)}, ` +
         `which is not a positive whole number of characters. The ceiling is the size over ` +
@@ -385,6 +389,80 @@ export function assertResultKind(toolName: string, resultKind: string | undefine
         `Name the kind your consumers declare, or omit the field — omitting it mints ` +
         `\`tool-result/${toolName}\`, exactly as before.`,
     );
+  }
+}
+
+/**
+ * Refuse an `owner` stamp with a blank half, at definition time — naming the
+ * tool and what a blank half would do.
+ *
+ * An identity edge with a blank half is worse than none: the Context Integrity
+ * checks JOIN on it, so a blank `kind` or `id` joins the wrong subjects rather
+ * than no subjects. Extracted from `defineTool` (9.71.0) so the MCP ingest
+ * boundary can hold the SAME line on a declaration that arrived over the wire —
+ * one rule, one message, two doors.
+ *
+ * Deliberately NOT a closed-set check on `kind`: the union is enforced by the
+ * compiler for anyone calling `defineTool`, and the value is only ever read
+ * into a prose reason (`owned by <kind> '<id>'`), never switched on.
+ */
+export function assertToolOwner(toolName: string, owner: ToolOwner | undefined): void {
+  if (owner === undefined) return;
+  // Same reason as `assertResultCeiling`: this is also asked about untyped
+  // values from a foreign MCP server, so a scalar or a `null` must land on the
+  // message rather than on a TypeError from the destructuring.
+  const { kind, id } = (owner ?? {}) as Partial<ToolOwner>;
+  if (
+    typeof owner !== 'object' ||
+    typeof kind !== 'string' ||
+    kind.length === 0 ||
+    typeof id !== 'string' ||
+    id.length === 0
+  ) {
+    throw new Error(
+      `defineTool('${toolName}'): \`owner\` must carry a non-empty kind and id — it is ` +
+        `the identity edge integrity checks join on, and a blank half joins the wrong ` +
+        `subjects. Got ${JSON.stringify(owner)}.`,
+    );
+  }
+}
+
+/**
+ * Refuse an `argumentsFrom` edge that could never join, at definition time.
+ *
+ * The dangling-reference and unsupported-argument checks join on these names,
+ * so a blank one — or a tool grounded by itself — would join the wrong subjects
+ * or none at all. Extracted from `defineTool` (9.71.0) for the same reason as
+ * {@link assertToolOwner}: the MCP ingest boundary enforces the identical rule
+ * on a declaration a remote server sent.
+ */
+export function assertArgumentsFrom(
+  toolName: string,
+  argumentsFrom: readonly string[] | undefined,
+): void {
+  if (argumentsFrom === undefined) return;
+  // The array check is part of the rule, not a formality: a foreign server can
+  // put a bare string here, and `for…of` over one would walk its CHARACTERS
+  // and refuse them one letter at a time.
+  if (!Array.isArray(argumentsFrom) || argumentsFrom.length === 0) {
+    throw new Error(
+      `defineTool('${toolName}'): \`argumentsFrom\` must name at least one tool — ` +
+        `omitting the field is how "no grounds" is said.`,
+    );
+  }
+  for (const ground of argumentsFrom) {
+    if (typeof ground !== 'string' || ground.length === 0) {
+      throw new Error(
+        `defineTool('${toolName}'): \`argumentsFrom\` entries must be non-empty tool ` +
+          `names. Got ${JSON.stringify(ground)}.`,
+      );
+    }
+    if (ground === toolName) {
+      throw new Error(
+        `defineTool('${toolName}'): \`argumentsFrom\` names the tool itself — a tool ` +
+          `cannot be its own argument ground.`,
+      );
+    }
   }
 }
 
@@ -750,46 +828,11 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   );
   // An identity edge with a blank half is worse than none: a checker would
   // join on it and compare the wrong subjects. Refused HERE, naming the tool.
-  if (options.owner !== undefined) {
-    const { kind, id } = options.owner;
-    if (
-      typeof kind !== 'string' ||
-      kind.length === 0 ||
-      typeof id !== 'string' ||
-      id.length === 0
-    ) {
-      throw new Error(
-        `defineTool('${options.name}'): \`owner\` must carry a non-empty kind and id — it is ` +
-          `the identity edge integrity checks join on, and a blank half joins the wrong ` +
-          `subjects. Got ${JSON.stringify(options.owner)}.`,
-      );
-    }
-  }
+  assertToolOwner(options.name, options.owner);
   // The grounds edge is judged at the same door and for the same reason: the
   // dangling-reference check joins on these names, and a blank one — or a
   // tool grounded by itself — would join the wrong subjects or none.
-  if (options.argumentsFrom !== undefined) {
-    if (options.argumentsFrom.length === 0) {
-      throw new Error(
-        `defineTool('${options.name}'): \`argumentsFrom\` must name at least one tool — ` +
-          `omitting the field is how "no grounds" is said.`,
-      );
-    }
-    for (const ground of options.argumentsFrom) {
-      if (typeof ground !== 'string' || ground.length === 0) {
-        throw new Error(
-          `defineTool('${options.name}'): \`argumentsFrom\` entries must be non-empty tool ` +
-            `names. Got ${JSON.stringify(ground)}.`,
-        );
-      }
-      if (ground === options.name) {
-        throw new Error(
-          `defineTool('${options.name}'): \`argumentsFrom\` names the tool itself — a tool ` +
-            `cannot be its own argument ground.`,
-        );
-      }
-    }
-  }
+  assertArgumentsFrom(options.name, options.argumentsFrom);
   return {
     schema: {
       name: options.name,
