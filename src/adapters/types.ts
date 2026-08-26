@@ -896,6 +896,86 @@ export interface PricingTable {
  *
  * Implement it for your own backend; ship it to `codeRunnerTool({ runner })`.
  */
+/** One screenshot a browser session took. */
+export interface BrowserShot {
+  /** Image bytes. */
+  readonly data: Uint8Array;
+  /** Image format, lower-case (`'png'`). */
+  readonly format: string;
+}
+
+/** Who is driving a browser session right now. */
+export type BrowserDriver = 'agent' | 'person';
+
+/**
+ * A browser an agent can drive — the PORT (9.68.0).
+ *
+ * Deliberately small, and deliberately not a browser automation API. Page-level
+ * work (navigate, find an element, fill a form) is what CDP and Playwright
+ * already do far better than any interface here would; a session exposes
+ * {@link BrowserSession.automationEndpoint} so those attach directly. What this
+ * port carries is what an automation library CANNOT do on its own: open and
+ * release a managed session, reach the operating system above the page, and —
+ * the one that matters — hand the controls to a person and take them back.
+ */
+export interface BrowserRunner {
+  /** Stable id — reported on every tool-session event, so a row names its backend. */
+  readonly id: string;
+  /**
+   * Open a session.
+   *
+   * `key` is the ISOLATION key the caller derived. An adapter may use it to
+   * name the remote session; it must never widen it.
+   */
+  start(req: { readonly key: string; readonly signal?: AbortSignal }): Promise<BrowserSession>;
+}
+
+/** One open browser session. */
+export interface BrowserSession {
+  /** The backend's own id for this session. */
+  readonly id: string;
+  /**
+   * Where an automation client attaches — a CDP WebSocket, for Playwright and
+   * friends. Absent on a backend that offers no such channel.
+   *
+   * This library does not drive the page for you and does not depend on
+   * Playwright; it hands you the endpoint and stays out of the way.
+   */
+  readonly automationEndpoint?: string;
+  /** Where a PERSON can watch this session, when the backend offers a view. */
+  readonly liveViewEndpoint?: string;
+  /** Click at a point, in the operating system rather than in the page. */
+  click(req: {
+    readonly x: number;
+    readonly y: number;
+    readonly button?: 'left' | 'middle' | 'right';
+    readonly clicks?: number;
+  }): Promise<void>;
+  /** Type text, as a keyboard would. */
+  type(text: string): Promise<void>;
+  /** Press a named key, optionally more than once. */
+  press(req: { readonly key: string; readonly times?: number }): Promise<void>;
+  /** Take a screenshot of the session as it is now. */
+  screenshot(): Promise<BrowserShot>;
+  /**
+   * Hand the controls to a person, or take them back (optional).
+   *
+   * This is the seam a human-in-the-loop browsing flow is built on: the agent
+   * stops driving, a person finishes the step that needed them — a login, a
+   * consent screen, a CAPTCHA — and the agent resumes on the page they left.
+   * Absent on a backend with no such notion; feature-detect before offering it.
+   */
+  handControlTo?(driver: BrowserDriver): Promise<void>;
+  /**
+   * Release the session.
+   *
+   * Must tolerate a session the far side already reaped — an idle timeout is
+   * the reality on every managed backend, and a stop on a dead session is a
+   * no-op, not an error.
+   */
+  stop(): Promise<void>;
+}
+
 export interface CodeRunner {
   /** Stable id — reported on every `agentfootprint.tools.session_*` event so a
    *  row names its backend, not just its tool. */

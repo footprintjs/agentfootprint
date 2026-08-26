@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.69.0] - 2026-08-26
+
+### Added
+
+- **`BrowserRunner` — a browser an agent drives, and a PERSON can take over**
+  (`agentfootprint`, with `agentCoreBrowser()` on `agentfootprint/providers`).
+  The port is deliberately small and deliberately not a browser-automation API:
+  `click`, `type`, `press`, `screenshot` (→ `BrowserShot`), `stop`, and the one
+  that earns the port its keep —
+
+  ```ts
+  await session.handControlTo('person');   // the automation stream stops
+  // …they sign in, clear the CAPTCHA, approve the consent screen, watching live
+  await session.handControlTo('agent');    // and the agent carries on
+  ```
+
+  Pair it with a check-in and the agent **pauses** rather than guesses: the
+  handover, the wait and the resume are ordinary events in the trace, so "why
+  did this run take four minutes" has an answer that names a person and a login
+  screen.
+
+  **A session has two doors, and the adapter refuses to blur them.**
+  `BrowserSession.automationEndpoint` is a CDP WebSocket, and everything
+  page-shaped — navigate, find an element, fill a form — belongs there, driven
+  by Playwright or another CDP client. This library takes no dependency on
+  Playwright and does no page work; it hands the endpoint over.
+  `liveViewEndpoint` is where a person watches.
+
+  **What verification changed.** The `InvokeBrowser` action union, read off a
+  real install of `@aws-sdk/client-bedrock-agentcore` 3.1118.0, is exactly
+  `mouseClick | mouseMove | mouseDrag | mouseScroll | keyType | keyPress |
+  keyShortcut | screenshot` — with **no navigate member at all**. An adapter
+  written from memory would have invented page verbs for a door that has none.
+  The same pass fixed `MouseClickArguments` (`{ x, y, button?, clickCount? }`,
+  buttons `LEFT|MIDDLE|RIGHT`), `KeyPressArguments` (`{ key, presses? }`) and
+  `ScreenshotResult` (`{ status, error?, data? }`) — which is why an empty
+  screenshot refuses with the service's own status instead of answering with a
+  blank image that reads as a blank page. All four commands joined the systemic
+  name pin.
+
+  `stop()` tolerates a session the backend already reaped: an idle timeout is
+  the ordinary case on a managed browser, and a teardown that succeeded must
+  not report failure.
+
+  **One contradiction left as AWS wrote it:** the devguide says a session
+  defaults to 15 minutes and `StartBrowserSession`'s API reference says 3600
+  seconds. The adapter sends no timeout unless `sessionTimeoutSeconds` is
+  passed, so the service applies whichever it means rather than this library
+  picking a side in somebody else's disagreement.
+
+### Changed
+
+- The AgentCore guide's "Code Interpreter / Browser — wrap as tools" section is
+  gone. It advised writing a tool by hand and not building a port "until a
+  second backend has real pull" — a second backend arrived (`localCodeRunner`),
+  so the advice was followed and then outgrown, which is the outcome it wanted.
+  Both are ports with backends behind them now, and the page says so.
+
 ## [9.68.0] - 2026-08-26
 
 ### Added

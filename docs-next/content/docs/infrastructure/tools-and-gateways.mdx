@@ -444,6 +444,67 @@ tool boundary to the inner stage that ran the code, so "why is this number
 wrong?" resolves to a stage rather than to a tool call. Same runner, same port —
 the difference is whether the work has steps worth naming.
 
+## BrowserRunner — a browser the agent drives, and a person can take
+
+`CodeRunner` computes outside the window; `BrowserRunner` (9.68.0) reaches a
+real browser. `agentCoreBrowser()` is the first backend — AWS Bedrock AgentCore
+Browser, a managed Chrome — and `AWS_SYSTEM_BROWSER` is the resource it uses
+unless you name a custom one via `AgentCoreBrowserOptions`.
+
+```ts
+import { agentCoreBrowser } from 'agentfootprint/providers';
+
+const browser = agentCoreBrowser({ region: 'us-east-1' });
+const session = await browser.start({ key: toolSessionKey(ctx, 'run') });
+```
+
+**A session has two doors, and confusing them costs a day.** `BrowserSession`
+exposes `automationEndpoint` — a CDP WebSocket — and everything page-shaped
+(navigate, find an element, fill a form) happens there, driven by Playwright or
+another CDP client. This library does not depend on Playwright and does not do
+page work; it hands you the endpoint. What the port itself carries is what an
+automation library cannot do on its own: `click`, `type`, `press` and
+`screenshot` (returning a `BrowserShot`), which are operating-system input
+*above* the page.
+
+<Callout>
+The `InvokeBrowser` action union, read off the SDK rather than remembered, is
+exactly `mouseClick | mouseMove | mouseDrag | mouseScroll | keyType | keyPress |
+keyShortcut | screenshot`. **There is no navigate action.** That is not a gap in
+this adapter — it is which door navigation lives behind.
+</Callout>
+
+### The takeover
+
+```ts
+await session.handControlTo('person');   // the automation stream stops
+// …they sign in, clear the CAPTCHA, approve the consent screen, watching live
+await session.handControlTo('agent');    // and the agent carries on
+```
+
+`handControlTo` takes a `BrowserDriver` — `'person'` or `'agent'` — and is
+optional on the port, so feature-detect before offering it. Underneath it sets
+the automation stream to `DISABLED` and back: the live-view user
+(`liveViewEndpoint`) is already connected, and stopping automation is what lets
+their input through.
+
+Pair it with a check-in and the agent **pauses** rather than guesses. The
+handover, the wait and the resume are ordinary events in the trace, so "why did
+this run take four minutes?" has an answer that names a person and a login
+screen.
+
+`agentCoreBrowser` talks to AWS through `send(new Command(...))` — its four
+commands are pinned by the same systemic test as every other AWS adapter — and
+`AgentCoreBrowserClientLike` / `BedrockAgentCoreBrowserSdkModule` are the
+injection seams for tests. `stop()` tolerates a session the backend already
+reaped, because an idle timeout is the ordinary case on a managed browser and a
+teardown that succeeded must not report failure.
+
+**One contradiction left as AWS wrote it:** the devguide says a session defaults
+to 15 minutes, `StartBrowserSession`'s API reference says 3600 seconds. The
+adapter sends no timeout unless you pass `sessionTimeoutSeconds`, so the service
+applies whichever it means rather than this library picking a side.
+
 ## Serving tools, not only consuming them
 
 `mcpServe` turns an agentfootprint agent's governed tools into an MCP server, so

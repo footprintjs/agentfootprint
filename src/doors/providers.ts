@@ -35,6 +35,16 @@ export * from '../thinking/index.js';
 // types themselves live on the main barrel with `codeRunnerTool`, alongside the
 // other adapter ports.
 export { localCodeRunner, type LocalCodeRunnerOptions } from '../adapters/code/local.js';
+// A managed browser behind the `BrowserRunner` port (9.68.0). Page work goes
+// over CDP through `session.automationEndpoint`; what this carries is the
+// session, the OS-level input above the page, and the human takeover.
+export {
+  agentCoreBrowser,
+  AWS_SYSTEM_BROWSER,
+  type AgentCoreBrowserOptions,
+  type AgentCoreBrowserClientLike,
+  type BedrockAgentCoreBrowserSdkModule,
+} from '../adapters/browser/agentcore.js';
 export {
   agentCoreCodeRunner,
   type AgentCoreCodeRunnerOptions,

@@ -131,6 +131,30 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
     commands: ['CreateEventCommand', 'ListEventsCommand'],
   },
   {
+    adapter: 'agentCoreBrowser',
+    sources: ['src/adapters/browser/agentcore.ts'],
+    sdkPackage: '@aws-sdk/client-bedrock-agentcore',
+    client: 'BedrockAgentCoreClient',
+    commands: [
+      'StartBrowserSessionCommand',
+      'InvokeBrowserCommand',
+      'UpdateBrowserStreamCommand',
+      'StopBrowserSessionCommand',
+    ],
+    note:
+      'Verified against a real install of 3.1118.0 before this adapter shipped (9.68.0) — the ' +
+      'four names AND the shapes the design would otherwise have guessed. The one that changed ' +
+      'the design: `BrowserAction` is a union of `mouseClick | mouseMove | mouseDrag | ' +
+      'mouseScroll | keyType | keyPress | keyShortcut | screenshot` and has NO navigate member ' +
+      'at all — page work happens on the CDP automation stream, not through InvokeBrowser, so ' +
+      'the adapter hands that endpoint over instead of inventing page verbs. Also read off the ' +
+      'package: `MouseClickArguments` is `{ x, y, button?, clickCount? }` with MouseButton ' +
+      'LEFT|MIDDLE|RIGHT, `KeyPressArguments` is `{ key, presses? }`, `ScreenshotResult` is ' +
+      "`{ status, error?, data? }` (which is why an empty screenshot refuses by the service's " +
+      'own status rather than answering with a blank image), and the takeover toggle is ' +
+      '`streamUpdate.automationStreamUpdate.streamStatus` ENABLED|DISABLED.',
+  },
+  {
     adapter: 'agentCoreCodeRunner',
     sources: ['src/adapters/code/agentcore.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
