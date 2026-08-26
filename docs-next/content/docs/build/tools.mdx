@@ -59,7 +59,63 @@ For mock-first development of MCP integrations without spawning a subprocess, us
 
 The other direction is [`mcpServe(tools)`](doc:mcp-serve) — expose the tools you already wrote AS an MCP server, so another team's agent or a desktop MCP host can call them.
 
-## Tool errors
+## Argument validation — a declared shape is an enforced shape (9.64.0)
+
+Before a call is dispatched, its arguments are checked against the tool's own
+`inputSchema`: types, required fields, `enum` values — and, since 9.64.0, the
+three string-shape keywords `pattern`, `minLength` and `maxLength`.
+
+**Why.** In a recorded triage turn, a tool result ended with an offer — "I can
+also map these WWNs to volume names" — and the person answered "yes please".
+The model bound those two words AS THE WWN ARGUMENT and dispatched. The tool
+refused it correctly, but only after a round trip that told the person their
+word was not a WWN. The tool's schema knew exactly what a WWN looks like; the
+validator just never read that part. Now it does — the call dies at the door,
+and the refusal teaches:
+
+```
+Invalid arguments for tool 'lookup_wwn' — the call was not executed.
+- 'wwn': expected a string matching ^[0-9a-f]{2}(:[0-9a-f]{2}){7}$, got "yes please"
+  'wwn' is described as: A world-wide name: eight colon-separated hex pairs.
+Fix the arguments to match the tool's input schema and call it again.
+```
+
+The parameter's own `description` rides the refusal — that sentence is where
+you write what a valid value LOOKS like, and it is precisely the correction the
+model needs. Declare shapes for anything identifier-like:
+
+```ts
+inputSchema: {
+  type: 'object',
+  properties: {
+    wwn: {
+      type: 'string',
+      pattern: '^[0-9a-f]{2}(:[0-9a-f]{2}){7}$',
+      description: 'A world-wide name: eight colon-separated hex pairs.',
+    },
+  },
+  required: ['wwn'],
+}
+```
+
+**The dial.** String-shape enforcement rides the existing `toolArgValidation`
+option, identically to type/enum/required: `'enforce'` (the default — the call
+is refused and the model reads the teaching message), `'warn'` (the
+`agentfootprint.validation.args_invalid` event fires with `enforced: false`
+and the call proceeds), `'off'` (nothing runs, byte-identical to before).
+If you already declare patterns and run the default dial, 9.64.0 starts
+enforcing them — that is the fix, stated loudly.
+
+Three edges, stated: a `pattern` that is not a valid regex is treated as
+unconstrained with a one-time dev warning (a schema typo must never crash
+dispatch); when both `pattern` and a length bound would complain, only the
+pattern speaks (one mistake, one sentence); and the refusal quotes the
+offending value capped at 80 characters — the value is the model's own
+argument, already verbatim in the same history, while structural errors
+(wrong type, missing field) echo nothing, and telemetry projections stay
+value-free.
+
+## When a tool throws
 
 When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](doc:error-handling) for the typed error contract + retry decorators.
 
