@@ -1042,6 +1042,15 @@ export interface ValidationArgsInvalidPayload {
     readonly path: string;
     readonly expected: string;
     readonly got: string;
+    /**
+     * A capped excerpt of the offending STRING — present on string-shape
+     * issues (`pattern` / `minLength` / `maxLength`) only, where the
+     * complaint IS the value's shape. Structural issues (type, enum,
+     * required, additionalProperties) still carry no value at all.
+     */
+    readonly value?: string;
+    /** The parameter's own schema `description`, when it declares one. */
+    readonly hint?: string;
   }>;
   readonly enforced: boolean;
 }

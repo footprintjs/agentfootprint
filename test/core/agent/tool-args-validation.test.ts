@@ -4,8 +4,12 @@
  * Covers: the honest subset (type/union, required, properties recursion,
  * items recursion, enum primitives, explicit additionalProperties:false),
  * permissiveness on everything outside it (never false-reject, never throw),
- * the MAX_ISSUES flood cap, and the security contract: issues/messages name
- * paths and TYPES, never the supplied values.
+ * the MAX_ISSUES flood cap, and the security contract for STRUCTURAL issues:
+ * they name paths and TYPES, never the supplied values.
+ *
+ * The string SHAPE keywords (`pattern` / `minLength` / `maxLength`) are the
+ * one part of the subset whose issues DO echo a capped value, and they have
+ * their own file: tool-args-string-shape.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -113,16 +117,18 @@ describe('#9 validateToolArgs — honest subset', () => {
 });
 
 describe('#9 validateToolArgs — permissive outside the subset', () => {
-  it('ignores unsupported keywords (pattern, minimum, oneOf, format)', () => {
+  it('ignores unsupported keywords (minimum, oneOf, format)', () => {
     const schema = {
       type: 'object',
       properties: {
-        email: { type: 'string', pattern: '^x$', format: 'email' },
+        email: { type: 'string', format: 'email' },
         count: { type: 'number', minimum: 100 },
         mix: { oneOf: [{ type: 'string' }] },
       },
     };
-    // Violates pattern/minimum/oneOf — but those are out of subset → pass.
+    // Violates format/minimum/oneOf — but those are out of subset → pass.
+    // `pattern` LEFT this list: string shape is enforced now, and its own
+    // coverage lives in tool-args-string-shape.test.ts.
     expect(validateToolArgs({ email: 'whatever', count: 1, mix: 42 }, schema).ok).toBe(true);
   });
 
@@ -188,7 +194,7 @@ describe('#9 — flood cap + security contract', () => {
     expect(result.issues.length).toBeLessThanOrEqual(10);
   });
 
-  it('NEVER echoes supplied values in issues or the formatted message', () => {
+  it('a STRUCTURAL issue never echoes supplied values, in issues or the message', () => {
     const sentinel = 'SECRET_VALUE_XYZ_4242';
     const result = validateToolArgs(
       { city: 99, units: sentinel, extra: sentinel },

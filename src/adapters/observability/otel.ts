@@ -637,8 +637,11 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
         break;
       }
 
-      // #9 tool-arg validation rejections. Issues carry paths /
-      // expectations / received TYPES — never values (PII contract).
+      // #9 tool-arg validation rejections. The span event renders paths /
+      // expectations / received TYPES only. A string-shape issue also carries
+      // `value` (a capped excerpt) and `hint` for the MODEL's correction —
+      // deliberately NOT projected here: third-party telemetry stays
+      // value-free (PII contract).
       case 'agentfootprint.validation.args_invalid': {
         const issues = (p.issues ?? []) as ReadonlyArray<{
           path?: string;

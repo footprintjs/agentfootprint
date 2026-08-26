@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A declared `pattern` is now an ENFORCED pattern. Consumers who already
+  wrote one in a tool's `inputSchema` will see calls refused under
+  `toolArgValidation: 'enforce'` (the default) that used to dispatch — that is
+  the fix, and it is worth reading before upgrading.**
+
+  The field story: a tool result ended with an offer — "I can also map these
+  ids to volume names" — and the person answered "yes please". The model bound
+  *that sentence* as the identifier argument and dispatched. The tool's schema
+  DECLARED the identifier's shape, in a `pattern` that "yes please" could never
+  match; the pre-dispatch validator simply did not read the keyword. So the
+  call went out, failed downstream, and cost a round trip — and the consumer
+  hand-rolled a blocklist of affirmative phrases to do the job the declaration
+  already described. A declared shape a boundary ignores is worse than no
+  declaration at all: the author believes it is enforced.
+
+  `pattern`, `minLength` and `maxLength` now join `type` / `enum` / `required`
+  in the honest subset — same place in dispatch, same
+  `agentfootprint.validation.args_invalid` event, same tool-result shape, and
+  the same dial in every mode. `'warn'` emits and executes anyway; `'off'` is
+  byte-for-byte what it always was. `pattern` follows JSON Schema exactly:
+  unanchored, ECMA-262, strings only. A `pattern` that does not compile is
+  IGNORED with one developer warning rather than throwing — a schema author's
+  typo must never take dispatch down with it.
+
+  **The refusal teaches.** `expected string, got string` is unactionable when
+  the complaint IS the shape, so a string-shape issue names the argument path,
+  quotes a capped (80-character) excerpt of the offending value, states the
+  declared pattern or bound, and carries the parameter's own `description`
+  sentence when the schema has one — that sentence is where an author writes
+  what the identifier looks like, and it is usually the whole correction. The
+  `value` and `hint` fields are new and OPTIONAL on the event payload's issues;
+  structural issues (type, enum, required, additionalProperties) still name
+  types and never values, and the OTel span event still projects
+  path/expected/got only, so third-party telemetry stays value-free.
+
 ## [9.63.0] - 2026-08-25
 
 ### Added

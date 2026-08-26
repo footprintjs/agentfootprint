@@ -221,12 +221,17 @@ export interface AgentOptions {
    * are validated against the tool's declared `inputSchema` BEFORE dispatch.
    * On mismatch the tool is NOT executed — the model receives a structured
    * retry message as the tool result (paths + expected shapes + received
-   * TYPES, never the supplied values) and corrects itself on the next
-   * iteration. Emits `agentfootprint.validation.args_invalid`.
+   * TYPES) and corrects itself on the next iteration. Emits
+   * `agentfootprint.validation.args_invalid`.
    * `'warn'` emits the event but executes anyway; `'off'` disables.
    * Validation is an honest JSON-Schema subset (type/required/properties/
-   * items/enum/explicit additionalProperties:false) — unsupported keywords
-   * are ignored, never false-rejecting.
+   * items/enum/explicit additionalProperties:false, plus the string SHAPE
+   * keywords pattern/minLength/maxLength) — unsupported keywords are
+   * ignored, never false-rejecting.
+   *
+   * A string-shape refusal quotes a CAPPED excerpt of the offending value
+   * and the parameter's own `description`, because "expected string, got
+   * string" cannot be acted on; every other issue still names types only.
    */
   readonly toolArgValidation?: ToolArgValidationMode;
   /**
