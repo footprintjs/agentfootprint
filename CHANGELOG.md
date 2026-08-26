@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.65.0] - 2026-08-26
+
+### Added
+
+- **`foundryResponsesHost()` — an agent behind Microsoft Foundry Toolkit's
+  Agent Inspector** (`agentfootprint/hosting`). One inbound hosting adapter on
+  the same `AgentHost` port every other host uses: `HEAD /responses` answers
+  the Inspector's capability probe with 204, `GET /readiness` answers
+  `{"status":"healthy"}`, `POST /responses` takes a turn — `input` as text or
+  as user-message items with `input_text` parts — on port 8088
+  (`DEFAULT_FOUNDRY_PORT`; `FOUNDRY_INVOKE_PATH`, `FOUNDRY_READINESS_PATH` and
+  `FOUNDRY_SESSION_FIELDS` are exported beside it, and every knob lives on
+  `FoundryResponsesHostOptions`). `stream: true` **in the body** selects the
+  nine-event Responses SSE lifecycle, `response.created` through
+  `response.completed`, with stable ids and a monotonic `sequence_number`;
+  failures end with `response.failed`. The session is read from
+  `conversation` / `agent_session_id` / `session_id`, first present wins.
+  Image/file input, non-message items, non-user roles, and the `awaiting` /
+  `artifact` / `sessions` terminals are refused BY NAME — never silently
+  dropped, never an invented success. It is an inbound hosting adapter, not a
+  model provider (a Foundry Local model stays `openai({ baseURL })`), and it
+  does not feed the Workflow Visualizer — the wire carries the conversation,
+  not the agent's topology. Passes the same host conformance suite as
+  `nodeHost` and `agentCoreRuntimeHost` over a real socket; the request and
+  lifecycle shapes were captured from a real Toolkit 1.6.9 Inspector session.
+  Guide: `docs-next` → Infrastructure → Microsoft Foundry; runnable example:
+  `examples/deploy/foundry-responses.ts`.
+
+- **`responsesWire()` — the Responses protocol as a plain `HttpWire`, with no
+  vendor in it** (`agentfootprint/hosting`). `foundryResponsesHost` is a
+  CONFIGURATION of it — Foundry's paths, port, probe body and session aliases —
+  so the next runtime that speaks Responses composes
+  `httpHost({ wire: responsesWire(), ... })` instead of copying a protocol.
+  `ResponsesWireOptions` carries `defaultModel`, `sessionFields`
+  (`DEFAULT_SESSION_FIELDS`) and `health`; `readResponsesInput` and
+  `readResponsesSession` are the exported readers; `PUBLIC_FAILURE_MESSAGE` is
+  what a caller sees when a handler THREW — an uncaught exception's text never
+  travels, while `reply.fail(error)`'s chosen words always do.
+
+- **Four provider-neutral seams on `httpHost`,** each defaulting to exactly the
+  incumbent behavior: `wire.wantsStream?(facts)` (a dialect that selects
+  streaming from the body instead of the `Accept` header), `wire.stream?(facts)`
+  returning a per-response `StreamFraming` of `StreamFrame`s (protocols that
+  frame a stream as a named-event lifecycle rather than one `chunk` per piece —
+  the old shape is itself the default framing), `maxBodyBytes` (bounded body
+  reads refusing at the crossing byte with the typed `RequestTooLargeError`,
+  413; **default remains unbounded** so no existing deployment starts refusing
+  — set it), and `invokeHeadProbe` (opt-in 204 for a bare HEAD on the invoke
+  path). `WireRequestRefusal` lets a dialect refuse a request it cannot carry
+  from `readRequest`, with its own status and code, before a turn is paid for;
+  `FailureOrigin` (`'refused' | 'threw'`) tells a dialect which kind of failure
+  it is describing, so sanitization replaces exception text and never a
+  handler's chosen words. `nodeHost` and `agentCoreRuntimeHost` are
+  byte-for-byte unchanged on the wire.
+
+- **The host conformance suite learned that sanitizing is not a free pass:**
+  a subject declaring `sanitizesThrownErrors` must still REPORT a thrown
+  handler's failure, and is now asserted NOT to have repeated the thrown words.
+  The vendor-name guard on `src/hosting/` grew `foundry`, `microsoft` and the
+  `/readiness` route literal (the `/invocations` reasoning, applied again);
+  `/responses` is deliberately NOT on the list — it is a protocol's path,
+  spoken by more than one runtime and owned by none.
+
 ## [9.64.0] - 2026-08-26
 
 ### Added
