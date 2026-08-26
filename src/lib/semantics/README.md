@@ -31,6 +31,15 @@ forgot them.
   content is refused as oversized. The `coverage` field is additionally
   declared through the same channel `coverage()` uses.
 
+## The marker and the note cross a language boundary (9.70.0)
+
+`SEMANTICS_MARKER` and `SEMANTICS_NOTE` are bytes a foreign process must
+reproduce exactly to mint an envelope this library will recognize. They are
+published as data alongside the coverage/absence family in
+`canonical-notes.json` at the package root — GENERATED from the built barrel
+by `scripts/gen-canonical-notes.mjs`, never hand-maintained. See
+`src/core/agent/coverage/README.md` for the argument.
+
 ## Composition
 
 `{ content: semantic({…}), effects: […], status }` — the effects envelope

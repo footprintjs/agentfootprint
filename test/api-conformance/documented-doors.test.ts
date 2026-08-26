@@ -50,14 +50,24 @@ function claudeMd(): string {
   return readFileSync(join(REPO_ROOT, 'CLAUDE.md'), 'utf-8');
 }
 
+/**
+ * Subpaths that publish DATA, not code.
+ *
+ * `./package.json` is a Node convention for reading one's own manifest;
+ * `./canonical-notes.json` (9.70.0) publishes the canonical wire strings so a
+ * consumer in another language can read them instead of scraping the compiled
+ * ESM. Neither is a door a consumer imports code from — they carry no types,
+ * no conditions and no symbols, so the door prose has nothing to name about
+ * them. `subpath-exports.test.ts` pins both as data entries.
+ */
+const DATA_SUBPATHS: ReadonlySet<string> = new Set(['./package.json', './canonical-notes.json']);
+
 function publishedSubpaths(): string[] {
   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8')) as {
     exports: Record<string, unknown>;
   };
-  // `./package.json` is a Node convention for reading one's own manifest, not a
-  // door a consumer imports code from — subpath-exports.test.ts pins it as such.
   return Object.keys(pkg.exports)
-    .filter((k) => k !== './package.json')
+    .filter((k) => !DATA_SUBPATHS.has(k))
     .sort();
 }
 

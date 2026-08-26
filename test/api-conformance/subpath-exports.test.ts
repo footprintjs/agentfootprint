@@ -5,10 +5,11 @@
  * as a deprecated alias. 9.0.0 executed that ledger: sixteen alias subpaths
  * left `package.json`. What ships now is exactly
  *
- *   root  +  the twelve doors  +  `./reliability`  +  `./package.json`
+ *   root  +  the twelve doors  +  `./reliability`  +  the DATA entries
  *
  * (The eleventh, `./skill-graph`, arrived in 9.34.0; the twelfth, `./recipes`,
- * in 9.48.0 — see the list below.)
+ * in 9.48.0 — see the list below. The data entries are `./package.json` and,
+ * since 9.70.0, `./canonical-notes.json`.)
  *
  * This file is the MANIFEST half of the pin. Its sibling
  * `door-aliases.test.ts` reads the built `.d.ts` files and pins the SURFACE
@@ -32,8 +33,8 @@
  *                  for every one of the sixteen absorbed barrels
  *   - property:    the removed list and the surviving list are pinned by
  *                  exact content — neither can quietly grow or shrink
- *   - edge:        `./package.json` is a plain string by Node convention and
- *                  is exempt from the per-condition rules
+ *   - edge:        the data entries are plain strings by convention and are
+ *                  exempt from the per-condition rules — asserted, not assumed
  *   - security:    everything is asserted against what `package.json`
  *                  actually publishes, not against a hand-kept list of files
  */
@@ -194,7 +195,25 @@ const REMOVED_SUBPATHS = [
 
 const REMOVED_SUBPATH_NAMES = REMOVED_SUBPATHS.map((r) => r.subpath);
 
-/** Everything `package.json` still publishes, `./package.json` aside. */
+/**
+ * The DATA entries — plain-string targets that publish a file, not a module.
+ *
+ * `./package.json` is the Node convention (it lets the library read its own
+ * version at runtime for `auditExport` genesis records, and lets tooling
+ * deep-import the manifest). `./canonical-notes.json` (9.70.0) publishes the
+ * canonical wire strings — the coverage/absence/semantics notes and their
+ * reserved markers — as data, so a consumer written in another language reads
+ * a file instead of regex-scraping `dist/esm` (which is what one really did).
+ *
+ * They are exempt from every per-condition rule below because they have no
+ * conditions: no `import`/`require` split, no types, no `typesVersions` row.
+ * That exemption is asserted, not assumed — each one must BE the plain string
+ * it claims to be.
+ */
+const DATA_SUBPATHS = ['./package.json', './canonical-notes.json'] as const;
+const isDataSubpath = (key: string): boolean => (DATA_SUBPATHS as readonly string[]).includes(key);
+
+/** Everything `package.json` still publishes, the DATA entries aside. */
 const SURVIVING_SUBPATHS = [
   '.',
   './providers',
@@ -274,9 +293,9 @@ describe('9.0.0 — the sixteen removed subpaths are absent from the manifest', 
     expect(new Set(REMOVED_SUBPATH_NAMES).size, 'the removed list has a duplicate').toBe(16);
   });
 
-  it('the exports map is exactly the survivors plus ./package.json', () => {
+  it('the exports map is exactly the survivors plus the data entries', () => {
     const actual = Object.keys(loadPkg().exports).slice().sort();
-    expect(actual).toEqual([...SURVIVING_SUBPATHS, './package.json'].slice().sort());
+    expect(actual).toEqual([...SURVIVING_SUBPATHS, ...DATA_SUBPATHS].slice().sort());
   });
 });
 
@@ -310,11 +329,11 @@ describe('the exports and typesVersions tables agree', () => {
 
   it('every code entry serves per-condition types (import→ESM, require→CJS)', () => {
     for (const [key, entry] of Object.entries(loadPkg().exports)) {
-      // The package.json self-reference is a plain string by Node convention
-      // — it lets the library read its own version at runtime (auditExport
-      // genesis records) and lets tooling deep-import the manifest.
-      if (key === './package.json') {
-        expect(entry).toBe('./package.json');
+      // The data entries are plain strings by convention — see DATA_SUBPATHS.
+      // Asserted rather than skipped: an entry that grew conditions would be
+      // claiming to serve code, and the rules below would never see it.
+      if (isDataSubpath(key)) {
+        expect(entry).toBe(key);
         continue;
       }
       const code = entry as PkgExportEntry;
@@ -331,7 +350,7 @@ describe('the exports and typesVersions tables agree', () => {
 
   it('import points into dist/esm, require into dist — never crossed', () => {
     for (const [key, entry] of Object.entries(loadPkg().exports)) {
-      if (key === './package.json') continue;
+      if (isDataSubpath(key)) continue;
       const code = entry as PkgExportEntry;
       expect(code.import.types, `${key} import.types`).toMatch(/^\.\/dist\/esm\//);
       expect(code.import.default, `${key} import.default`).toMatch(/^\.\/dist\/esm\//);
@@ -347,7 +366,7 @@ describe('the exports and typesVersions tables agree', () => {
     const pkg = loadPkg();
     const tv = pkg.typesVersions['*'];
     for (const key of Object.keys(pkg.exports)) {
-      if (key === '.' || key === './package.json') continue;
+      if (key === '.' || isDataSubpath(key)) continue;
       expect(tv[key.slice(2)], `typesVersions missing ${key}`).toBeDefined();
     }
   });
@@ -356,7 +375,7 @@ describe('the exports and typesVersions tables agree', () => {
     const pkg = loadPkg();
     const tv = pkg.typesVersions['*'];
     for (const [key, entry] of Object.entries(pkg.exports)) {
-      if (key === '.' || key === './package.json' || typeof entry === 'string') continue;
+      if (key === '.' || isDataSubpath(key) || typeof entry === 'string') continue;
       expect(tv[key.slice(2)], `typesVersions drifted for ${key}`).toEqual([entry.require.types]);
     }
   });
@@ -365,7 +384,7 @@ describe('the exports and typesVersions tables agree', () => {
     const pkg = loadPkg();
     const published = new Set(
       Object.keys(pkg.exports)
-        .filter((k) => k !== '.' && k !== './package.json')
+        .filter((k) => k !== '.' && !isDataSubpath(k))
         .map((k) => k.slice(2)),
     );
     for (const key of Object.keys(pkg.typesVersions['*'])) {

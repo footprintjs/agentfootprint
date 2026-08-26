@@ -541,6 +541,68 @@ All from `agentfootprint`:
 - `COVERAGE_BLOCK_HEADING` — the appended block's opening line, for anything
   that has to find or strip it downstream.
 
+### Reading the canonical notes from another language (9.70.0)
+
+Not every tool is written in JavaScript. A sidecar in Python, Go or Rust that
+mints one of these shapes has to reproduce the note and the marker **byte for
+byte**, or the recognizer will not take its envelope and the note on the wire
+will not be the sentence the docs promise. Field report: a Python sidecar did
+the only thing the package made possible and regex-scraped the compiled ESM
+under `node_modules/agentfootprint/dist/esm` at import time. Reading the value
+rather than copying it was the right instinct; the door was wrong, and the
+wrong door was ours.
+
+The package now publishes the strings as data, at a stable path inside the
+installed package:
+
+```
+node_modules/agentfootprint/canonical-notes.json
+```
+
+It is also an exports entry (`agentfootprint/canonical-notes.json`), so a Node
+script can hand a sidecar the resolved path rather than guessing at a layout:
+
+```js
+const path = require.resolve('agentfootprint/canonical-notes.json');
+```
+
+The whole scrape becomes one read:
+
+```python
+import json, pathlib
+
+notes = json.load(open("node_modules/agentfootprint/canonical-notes.json"))
+
+ABSENCE_NOTE = notes["notes"]["ABSENCE_NOTE"]
+ABSENCE_MARKER = notes["markers"]["ABSENCE_MARKER"]   # "af_absent"
+
+def absent(checked, not_checked=(), cannot_cover=()):
+    return {ABSENCE_MARKER: {
+        "checked": list(checked),
+        "not_checked": list(not_checked),
+        "cannot_cover": list(cannot_cover),
+        "note": ABSENCE_NOTE,
+    }}
+```
+
+Three things are worth knowing about the file:
+
+- **Keys are the exported constant names**, in three groups — `notes`
+  (`ABSENCE_NOTE`, `COVERAGE_NOTE`, `SEMANTICS_NOTE`), `markers` (the reserved
+  keys) and `headings` (`COVERAGE_BLOCK_HEADING`). The same value is reachable
+  as a TypeScript import from `agentfootprint`, so the two sides of a polyglot
+  system quote one source.
+- **It is generated at build time from the package's own compiled exports**,
+  never hand-maintained, so it cannot disagree with the code that ships. The
+  test suite pins both directions: every value byte-equals its constant, and
+  the packed tarball really carries the file.
+- **It holds no version.** Read `package.json` (also an exports entry) if you
+  need one — a version copied into this file could be a release stale.
+
+What is deliberately *not* in it: model-facing prose the library injects for
+itself, like the out-of-budget wrap-up instruction. No foreign process mints
+those, and publishing them would turn an interop contract into an inventory.
+
 ## The result ceiling — refuse, never truncate (9.20.0)
 
 A tool once returned ~191,000 characters. The tempting fix — truncate it — is the

@@ -134,6 +134,23 @@ function readExportMap() {
   return out;
 }
 
+/**
+ * The DATA subpaths — export entries that publish a FILE, not a module.
+ *
+ * They are plain strings in the map, which is exactly why `readExportMap`
+ * skips them: there is no `.d.ts` behind them and no symbols to enumerate.
+ * They still resolve, though, so anything asking "does this import path
+ * exist?" has to count them. Read from the manifest, never hardcoded.
+ */
+function dataSubpaths() {
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  return new Set(
+    Object.entries(pkg.exports ?? {})
+      .filter(([, value]) => typeof value === 'string')
+      .map(([subpath]) => subpath),
+  );
+}
+
 const KIND_ORDER = ['function', 'class', 'const', 'enum', 'interface', 'type', 'other'];
 
 function symbolKind(sym, checker) {
@@ -1088,9 +1105,17 @@ function classify(surface, docs, exercised, events) {
   }
 
   const importedSpecs = new Set(docs.importUses.map((u) => u.spec));
+  const dataPaths = dataSubpaths();
   for (const [spec, pages] of docs.subpathMentions) {
     const subpath = `.${spec.slice('agentfootprint'.length)}`;
-    if (surface.perSubpath.has(subpath) || spec === 'agentfootprint/package.json') continue;
+    // `surface.perSubpath` only knows CODE subpaths — `readExportMap` skips
+    // plain-string entries because they have no `.d.ts` to read. Those entries
+    // resolve perfectly well (`./package.json`, and since 9.70.0
+    // `./canonical-notes.json`, which publishes the canonical wire strings as
+    // data), so prose naming one is TRUE. Read them from the manifest rather
+    // than naming them here: a hardcoded exemption list is how the next data
+    // entry gets reported as a phantom path that in fact works.
+    if (surface.perSubpath.has(subpath) || dataPaths.has(subpath)) continue;
     if (importedSpecs.has(spec)) continue; // already gated above as missing-subpath
     advisories.push({
       kind: 'prose-subpath-claim',

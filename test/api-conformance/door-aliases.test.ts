@@ -127,7 +127,17 @@ function pkgExports(): Record<string, PkgExportEntry | string> {
 }
 
 const EXPORTS = pkgExports();
-const codeSubpaths = Object.keys(EXPORTS).filter((k) => k !== './package.json');
+/**
+ * The subpaths that serve CODE — everything with conditions.
+ *
+ * Filtered by SHAPE, not by name. A plain-string entry publishes a file, not a
+ * module: `./package.json` by Node convention, and since 9.70.0
+ * `./canonical-notes.json`, which publishes the canonical wire strings as data
+ * for consumers in other languages. Neither has a `.d.ts` to read, and naming
+ * them one by one is a list that goes stale the next time a data entry is
+ * added — this file reads declarations, so "has conditions" IS the question.
+ */
+const codeSubpaths = Object.keys(EXPORTS).filter((k) => typeof EXPORTS[k] !== 'string');
 
 function typesPathFor(subpath: string): string {
   const entry = EXPORTS[subpath];

@@ -144,6 +144,23 @@ stated the limits, and it does not refuse an answer that did not.
 | `evidence.ts` | what an absence is allowed to ground |
 | `answer.ts` | folding the run's declarations into one appended block |
 
+## The notes cross a language boundary (9.70.0)
+
+`ABSENCE_NOTE`, `COVERAGE_NOTE` and the two markers are bytes, not prose: the
+recognizers take the markers verbatim and the docs promise the notes word for
+word. A tool that is not JavaScript has to reproduce them exactly, and the
+only door this package used to offer was the compiled ESM — which a Python
+sidecar regex-scraped at import time. Right instinct, wrong door, our fault.
+
+They are now also published as data at the package root, in
+`canonical-notes.json` (with `SEMANTICS_NOTE` / `SEMANTICS_MARKER` from
+`lib/semantics/` and `COVERAGE_BLOCK_HEADING` from `answer.ts`).
+**Do not hand-edit that file** — `scripts/gen-canonical-notes.mjs` regenerates
+it from the BUILT barrel on every `npm run build`, so it cannot disagree with
+the constants here, and `test/docs/canonical-notes.test.ts` fails if it does.
+Renaming or un-exporting one of these constants is therefore a breaking change
+for consumers in other languages, not only for TypeScript importers.
+
 ## Zero-cost when unused
 
 An agent whose tools return neither shape is byte-identical: two `typeof`

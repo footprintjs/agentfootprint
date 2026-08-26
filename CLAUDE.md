@@ -48,6 +48,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 | asking a debugging model "what did this run contradict itself about, and why?" — the Context Integrity findings, joined to the step that filed them | `find_context_errors` | `src/lib/trace-toolpack/traceToolpack.ts` | 9.61.0 |
 | a tool answering "I looked and found nothing", routably | `absent` | `src/core/agent/coverage/absent.ts` | 9.43.0 |
 | stating what a clean answer does NOT rule out | `coverage` | `src/core/agent/coverage/ledger.ts` | 9.43.0 |
+| minting one of those shapes from a tool that is NOT JavaScript — the canonical note sentences and reserved marker keys as DATA, so a Python/Go/Rust sidecar reads a file instead of regex-scraping `dist/esm` (which a consumer really did) | `canonical-notes.json` at the package root + the `./canonical-notes.json` exports entry, GENERATED from the built barrel by `scripts/gen-canonical-notes.mjs` | `scripts/gen-canonical-notes.mjs` | 9.70.0 |
 | proving a session store really honours the port | `runSessionLifecycleConformance` | `src/hosting/conformance/` | 9.37.0 |
 | deciding who owns a contested session write | `resolveSessionOwner` | `src/hosting/sessionOwnership.ts` | 9.37.0 |
 | making a caller-supplied id safe for a backend | `encodeIdentityField` | `src/memory/identity/encode.ts` | 9.40.0 |

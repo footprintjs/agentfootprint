@@ -57,7 +57,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist coverage node_modules",
-    "build": "rm -rf dist && tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs",
+    "build": "rm -rf dist && tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs && node scripts/gen-canonical-notes.mjs",
     "watch": "tsc -w",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage",
@@ -89,6 +89,7 @@
     "!dist/esm/**/test-barrel*",
     "ai-instructions/**/*",
     "bin/**/*",
+    "canonical-notes.json",
     "CLAUDE.md",
     "AGENTS.md"
   ],
@@ -252,7 +253,8 @@
         "default": "./dist/doors/recipes.js"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./canonical-notes.json": "./canonical-notes.json"
   },
   "typesVersions": {
     "*": {

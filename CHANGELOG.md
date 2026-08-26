@@ -46,6 +46,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     byte. `placedResultKind(toolName, declared?)` gained an optional second
     argument and remains the one place the kind is decided.
 
+- **`canonical-notes.json` — the canonical wire strings, published as data.**
+  `absent()`, `coverage()` and `semantic()` mint shapes carrying a static,
+  never-interpolated note and a reserved marker key. Those bytes are a
+  contract: the strict recognizers take the markers verbatim, and the notes
+  are what the docs promise a model reads. A tool that is not written in
+  JavaScript has to reproduce them exactly — and the only door this package
+  offered was the compiled ESM, which a Python sidecar in the field duly
+  regex-scraped out of `node_modules/agentfootprint/dist/esm` at import time.
+  Reading the value rather than copying it was the right instinct; the door
+  was wrong, and the wrong door was ours.
+
+  The strings now ship as a JSON file at the package root, reachable both as a
+  path and through the exports map:
+
+  ```python
+  notes = json.load(open("node_modules/agentfootprint/canonical-notes.json"))
+  ABSENCE_NOTE = notes["notes"]["ABSENCE_NOTE"]
+  ```
+
+  ```js
+  const path = require.resolve('agentfootprint/canonical-notes.json');
+  ```
+
+  - **Seven strings, in three groups**, keyed by the exported constant names
+    so the same value is reachable as a TypeScript import: `notes`
+    (`ABSENCE_NOTE`, `COVERAGE_NOTE`, `SEMANTICS_NOTE`), `markers`
+    (`ABSENCE_MARKER`, `COVERAGE_MARKER`, `SEMANTICS_MARKER`) and `headings`
+    (`COVERAGE_BLOCK_HEADING`). The bar for inclusion is a string a foreign
+    process must reproduce or match byte for byte to interoperate — model-facing
+    prose the library injects for itself is deliberately out.
+  - **GENERATED, never hand-maintained.** `scripts/gen-canonical-notes.mjs`
+    runs at the end of `npm run build` and reads the BUILT barrel, so the file
+    cannot disagree with the code that ships. It fails loudly if a constant was
+    renamed or un-exported rather than emitting a hole.
+  - **`./canonical-notes.json` joins `./package.json` as the second DATA entry**
+    in the exports map — a plain-string target that publishes a file, not a
+    module. Without it Node's exhaustive exports map would refuse
+    `require.resolve`, which is the same wrong-door failure again.
+  - Also fixes a false positive the change surfaced: the docs-truth advisory
+    "prose names a non-existent import path" read only CODE subpaths, so it
+    reported a data entry that resolves perfectly well. It now reads the data
+    entries from the manifest instead of naming `./package.json` by hand.
+
 ## [9.68.0] - 2026-08-26
 
 ### Added
