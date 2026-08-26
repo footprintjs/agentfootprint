@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.71.0] - 2026-08-26
+
 ### Added
 
 - **An MCP tool server is a first-class agentfootprint citizen — the
