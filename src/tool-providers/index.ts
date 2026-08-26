@@ -69,6 +69,23 @@ export {
   gatewayTransport,
   GatewayAuthorizationRequiredError,
 } from '../lib/mcp/index.js';
+// Reaching an AWS Bedrock AgentCore Gateway (9.66.0). A configuration of
+// `gatewayTransport` plus the four facts that are AgentCore's alone — kept in
+// the vendor's own file so the transport above stays able to say, truthfully,
+// that nothing in it is vendor-specific.
+export {
+  agentCoreGatewayTransport,
+  agentCoreGatewayUrl,
+  gatewaySearchTool,
+  hasGatewaySearch,
+  AGENTCORE_GATEWAY_SEARCH_TOOL,
+  AGENTCORE_POLICY_SESSION_HEADER,
+  AGENTCORE_SIGV4_SERVICE,
+} from '../adapters/mcp/agentcore.js';
+export type {
+  AgentCoreGatewayTransportOptions,
+  AgentCoreGatewayUrlOptions,
+} from '../adapters/mcp/agentcore.js';
 export type {
   GatewayTransportOptions,
   McpCallToolResult,

@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.67.0] - 2026-08-26
+
+### Added
+
+- **`agentCoreGatewayTransport()` — reaching an AgentCore Gateway without
+  looking anything up** (`agentfootprint/providers`). `gatewayTransport` says of
+  itself that nothing in it is vendor-specific, and that stays true because the
+  four facts which ARE AgentCore's now live in one file beside it:
+  - **the endpoint** — `agentCoreGatewayUrl({ gatewayId, region })` builds
+    `https://{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp`,
+    a hostname nobody recalls correctly, which is why it is a function and not a
+    line in a README;
+  - **the policy session** — `AGENTCORE_POLICY_SESSION_HEADER`, stamped per
+    request from `policySessionId`. AgentCore's temporal policies decide on
+    SEQUENCES of actions, and a sequence needs a boundary. **Pass a function on
+    any transport more than one person shares:** it is resolved per request, so
+    `() => currentSessionId` keeps each caller's history their own, where a
+    fixed string would merge everybody into one policy session and make one
+    person's earlier actions count against another person's rule. The header
+    rides the transport's `fetch` seam precisely so a function is possible;
+  - **the catalogue's own search** — `AGENTCORE_GATEWAY_SEARCH_TOOL`, with
+    `gatewaySearchTool(tools)` / `hasGatewaySearch(tools)`. Both answer
+    permanently rather than transiently: semantic search is enabled when a
+    Gateway is CREATED and cannot be turned on later, so absence is a fact about
+    that gateway, not something to retry;
+  - **the signing name** — `AGENTCORE_SIGV4_SERVICE`.
+
+  Deliberately absent: a `search(gateway, query)` convenience. Executing a tool
+  needs a `ToolExecutionContext` that belongs to the agent loop, and a call made
+  on a fabricated one appears in NO TRACE — the model would be handed a
+  shortlist whose origin nothing can later explain, which is the opposite of
+  what this library is for. The search tool is registered like any other tool,
+  and the search becomes an ordinary, attributable tool call.
+
+### Changed
+
+- The AgentCore guide and the AWS adapters page now record that a Gateway is
+  **also a model router** — it serves `/v1/chat/completions`, so the existing
+  `openai({ baseURL, apiKey: async () => … })` reaches it with no new code. The
+  callback form of `apiKey` matters there for the usual reason: a gateway token
+  expires.
+
 ## [9.66.0] - 2026-08-26
 
 ### Added

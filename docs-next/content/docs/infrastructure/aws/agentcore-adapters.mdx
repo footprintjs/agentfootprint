@@ -384,6 +384,69 @@ cannot run a consent flow mid-request, so it says so instead of hanging.
 `stdio` and `http` are untouched — `gateway` is a third member of the same
 union.
 
+### The four facts that ARE AgentCore's (9.66.0)
+
+Because `gatewayTransport` names no vendor, four AgentCore specifics had nowhere
+to live. `agentCoreGatewayTransport` is where they went — a configuration of the
+transport above, in the vendor's own file, so the sentence "nothing about this is
+AgentCore-specific" stays true of the thing it describes:
+
+```ts
+import { agentCoreGatewayTransport, mcpClient } from 'agentfootprint/providers';
+
+const gateway = await mcpClient({
+  name: 'gateway',
+  transport: agentCoreGatewayTransport({
+    gatewayId: 'my-gateway-a1b2c3d4e5',
+    region: 'us-east-1',
+    credentials: agentCoreIdentity({ region: 'us-east-1' }),
+    policySessionId: () => currentSessionId,
+  }),
+});
+```
+
+**The endpoint.** `agentCoreGatewayUrl({ gatewayId, region })` — taking
+`AgentCoreGatewayUrlOptions` — builds
+`https://{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp`. It is
+a function rather than a line in a README because nobody recalls that hostname
+correctly, and `AgentCoreGatewayTransportOptions` extends it with the credential,
+scope and session settings.
+
+**The policy session.** AgentCore's *temporal* policies decide on SEQUENCES of
+actions — "not after three refunds", "only once this was approved" — and a
+sequence needs a boundary. `AGENTCORE_POLICY_SESSION_HEADER` is that boundary,
+stamped on every request when you pass `policySessionId`.
+
+<Callout type="warn">
+On any transport more than one person shares, pass a **function**, not a string.
+The header is resolved per request, so `() => currentSessionId` keeps each
+caller's history their own. A fixed string merges every caller into one policy
+session — which is not a small mistake: it makes one person's earlier actions
+count against another person's rule.
+</Callout>
+
+**The catalogue's own search.** `AGENTCORE_GATEWAY_SEARCH_TOOL` is the wire name
+of the Gateway's semantic search; `gatewaySearchTool(tools)` finds it and
+`hasGatewaySearch(tools)` tests for it. Both answer permanently rather than
+transiently — semantic search is enabled when a Gateway is CREATED and cannot be
+turned on later, so absence is a fact about that gateway, not something to retry.
+
+There is deliberately no `search(gateway, query)` convenience. Executing a tool
+needs a `ToolExecutionContext` that belongs to the agent loop, and a call made on
+a fabricated one appears in no trace — the model would be handed a shortlist
+whose origin nothing can later explain. Register the search tool like any other
+tool, and the search becomes an ordinary, attributable tool call.
+
+**The signing name.** `AGENTCORE_SIGV4_SERVICE` is `'bedrock-agentcore'`, what a
+SigV4 signature for a Gateway is computed against.
+
+### A Gateway is also a model router
+
+Since mid-2026 a Gateway can front model providers as well as tools, serving
+`/v1/chat/completions`. That needs nothing new — it is an OpenAI-shaped endpoint,
+so `openai({ baseURL, apiKey: async () => … })` reaches it, and the callback form
+of `apiKey` matters for the usual reason: a gateway token expires.
+
 ## Memory search: the one place a port had to give
 
 `AgentCoreStore.search()` now wraps `RetrieveMemoryRecords`. Getting there

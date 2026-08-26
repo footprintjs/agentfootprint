@@ -243,6 +243,69 @@ token is used once and dropped: never cached, never stored on the transport,
 never logged, and never in an error message. The plain `http` transport is still
 there for a static API key.
 
+### `agentCoreGatewayTransport` — the four facts that are AgentCore's (9.66.0)
+
+`gatewayTransport` is deliberately vendor-free, so four AgentCore specifics had
+nowhere to live. They now live in one file, and one call configures the lot:
+
+```ts
+import { agentCoreGatewayTransport, mcpClient } from 'agentfootprint/providers';
+
+const gateway = await mcpClient({
+  name: 'gateway',
+  transport: agentCoreGatewayTransport({
+    gatewayId: 'my-gateway-a1b2c3d4e5',
+    region: 'us-east-1',
+    credentials: agentCoreIdentity({ region: 'us-east-1' }),
+    policySessionId: () => currentSessionId,   // see below
+  }),
+});
+```
+
+- **The endpoint shape** — `agentCoreGatewayUrl({ gatewayId, region })` builds
+  `https://{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp`,
+  which nobody remembers correctly.
+- **`AGENTCORE_POLICY_SESSION_HEADER`** — AgentCore's *temporal* policies decide
+  on SEQUENCES of actions ("not after three refunds", "only once approved"), and
+  a sequence needs a boundary. Pass `policySessionId` and it is stamped on every
+  request. **Pass a function, not a string, on any transport more than one
+  person shares** — the header is resolved per request, so `() => currentSessionId`
+  keeps each caller's history their own. A fixed string on a shared transport
+  merges everybody into one policy session, which makes one person's earlier
+  actions count against another person's rule.
+- **`AGENTCORE_GATEWAY_SEARCH_TOOL`** — the catalogue's own semantic search,
+  `x_amz_bedrock_agentcore_search`. `gatewaySearchTool(tools)` finds it and
+  `hasGatewaySearch(tools)` tests for it; both answer `undefined`/`false`
+  permanently rather than transiently, because semantic search is enabled when a
+  Gateway is CREATED and cannot be turned on later.
+
+  Note what is deliberately absent: a `search(gateway, query)` convenience.
+  Executing a tool needs a `ToolExecutionContext` that belongs to the agent
+  loop, and a call made on a fabricated one appears in no trace — the model
+  would get a shortlist whose origin nothing can explain. Register the search
+  tool like any other tool instead, and the search becomes an ordinary,
+  attributable tool call.
+- **`AGENTCORE_SIGV4_SERVICE`** — `'bedrock-agentcore'`, the name a SigV4
+  signature for a Gateway is computed against.
+
+### The Gateway is also a model router
+
+Since mid-2026 a Gateway can front model providers as well as tools, serving
+`/v1/chat/completions` and friends. Nothing new is needed for that — it is an
+OpenAI-shaped endpoint, so the existing provider reaches it:
+
+```ts
+import { openai } from 'agentfootprint/providers';
+
+const provider = openai({
+  baseURL: 'https://my-gateway-a1b2c3d4e5.gateway.bedrock-agentcore.us-east-1.amazonaws.com/v1',
+  apiKey: async () => (await credentials.getCredential({ service: 'gateway' })).credential.token,
+});
+```
+
+The callback form matters here for the same reason it does everywhere else: a
+gateway token expires, and `apiKey` is re-read before every request.
+
 ---
 
 ## Identity — downstream OAuth (`agentCoreIdentity`)
