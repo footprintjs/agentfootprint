@@ -144,6 +144,35 @@ the start of the run:
 was **built** with, so a resolver can decide relative to it rather than restating
 it. The return value is a `RunConfig`; the resolver's own type is `RunConfigFn`.
 
+### Typing a resolver that lives somewhere else
+
+The inline form above needs no annotations — TypeScript infers `ctx` from
+`.configure()`. A resolver you keep in its own module does need them, so
+`RunConfigFn`, `RunConfigContext` and `RunConfig` are all exported from
+`agentfootprint`. Import them rather than re-declaring the shape by hand: a
+hand copy stops matching the moment the context grows a field, and it stops
+matching silently.
+
+```ts
+import type { RunConfig, RunConfigContext, RunConfigFn } from 'agentfootprint';
+
+// A named resolver, testable on its own and shared across agents.
+export const pickBrain: RunConfigFn = (ctx) =>
+  ctx.message.length > 500 ? { model: 'big-model' } : {};
+
+// A factory naming its own return type.
+export function houseRulesFor(tenant: string) {
+  return (ctx: RunConfigContext): RunConfig => ({
+    instructions: `${ctx.defaults.instructions}\n\n${rulesFor(tenant)}`,
+  });
+}
+
+const agent = Agent.create({ provider, model: 'small-model' })
+  .system('You answer support questions.')
+  .configure(pickBrain)
+  .build();
+```
+
 ### What gets resolved gets committed
 
 This is the part that matters. A run that changed its own model without recording

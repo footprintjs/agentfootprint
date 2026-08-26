@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`RunConfigFn`, `RunConfigContext` and `RunConfig` are exported from
+  `agentfootprint`.** `.configure(fn)` has been a public door since 7.13.0, so
+  the shape of `fn` was a public contract that could not be named — a consumer
+  who wanted a resolver in its own module had to re-declare it by hand, and a
+  hand copy stops matching the moment the context grows a field. `RunConfig`
+  ships alongside the other two because it is what a resolver RETURNS: without
+  it a factory cannot annotate its own return type. No runtime change; the
+  types were already the ones `.configure()` used.
+
 ### Fixed
 
 - **An absence's extra keys are evidence now — every field it carries except

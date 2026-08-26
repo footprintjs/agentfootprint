@@ -350,6 +350,15 @@ export {
   type AgentOptions,
   type AgentOutput,
   type ObserverDeliveryOptions,
+  // `.configure(fn)` — the per-run resolver's own contract. `.configure()` is
+  // a public door, so the shape of `fn` is public too: without these a
+  // consumer declaring a resolver in its own module had to re-declare the
+  // contract by hand, and a hand copy drifts the first time the context grows
+  // a field. `RunConfig` ships with them because it is what a resolver
+  // RETURNS, and a factory cannot name its own return type otherwise.
+  type RunConfig,
+  type RunConfigContext,
+  type RunConfigFn,
   // `.skillGraph(graph, options)` mount options (SG-C, 9.17.0): routing
   // posture (`strictness`) + cursor span (`continuity`) + per-skill brains,
   // escalation and the tier-3 decider (9.19.0).
