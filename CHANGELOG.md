@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.70.0] - 2026-08-26
+
 ### Added
 
 - **`Tool.resultKind` — a placed result the `wants` rail can spend.** Two
