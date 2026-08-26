@@ -374,10 +374,14 @@ understand cannot stop a retry loop or keep a value out of the evidence corpus:
 - the model reads a frame that says, in prose and as data, that a retry with the
   same arguments returns the same result — the loop this ends is a model
   re-asking an identical question because a mismatch looked like a fluke;
-- and the evidence gate indexes its coverage **only**. An absence quotes what
-  was looked for, which in practice quotes the arguments the model passed;
-  indexing the whole frame would ground an invented identifier through the one
-  operation that proves nothing about it.
+- and the evidence gate indexes **everything the tool authored except
+  `looked_for`**. The coverage lists, the `tryInstead` sentence, and any extra
+  key you attach to the envelope — a `known_shares` list of the real names on
+  the filer, say — are the tool speaking about the world, so an answer that
+  takes the absence's own advice is grounded by it. `looked_for` is the one
+  field whose job is to quote what was asked for, which in practice quotes the
+  arguments the model passed; indexing that would ground an invented identifier
+  through the one operation that proves nothing about it.
 
 Nothing else changes: no `error: true`, no retry, no refusal, no gate flag.
 

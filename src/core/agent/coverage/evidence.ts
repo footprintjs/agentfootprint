@@ -25,41 +25,81 @@
  * machine**, and adding a primitive whose purpose is to make failed lookups
  * informative would have made it cheaper still.
  *
- * So an absence grounds its COVERAGE and nothing else. `checked`,
- * `not_checked` and `cannot_cover` are the tool's own words about the world —
- * a fabric name, a collector, a window — and they are exactly what an answer
- * built on an absence should be allowed to cite. `looked_for`, `try_instead`,
- * the note and the marker are not.
+ * ## The line, and where it actually falls
  *
- * The consequence is deliberate and worth stating: if the USER named the
- * thing, it is exempt anyway (their message is the exempt corpus), so a real
- * question about a real port is unaffected. Only a value that appears *for
- * the first time* in an absence loses its grounding — which is the only case
- * where it was never evidence to begin with.
+ * The first cut of this file drew the line at the coverage lists. That was too
+ * narrow, and the field said so: a share-lookup tool returned its absence with
+ * the answer attached — an extra `known_shares` key holding the 40 real share
+ * names on the filer — and a `try_instead` telling the model to pick one. The
+ * model did exactly that, and the gate called the share it picked ungrounded.
+ * Following the tool's own advice produced a flagged answer, which makes the
+ * advice worthless and the gate wrong.
+ *
+ * So the line is not "coverage vs everything else". It is **tool-authored
+ * knowledge vs caller echo**:
+ *
+ *   • Everything a recognized absence carries is the TOOL speaking about the
+ *     world — the coverage lists, an extra key like `known_shares`, the
+ *     author's `try_instead`, the library's own note. Tool knowledge is
+ *     precisely what the corpus is for, so all of it grounds.
+ *   • `looked_for` is the one field that quotes the REQUEST rather than
+ *     stating what the tool knows. It never grounds. See
+ *     {@link CALLER_ECHO_FIELD}.
+ *
+ * This widens leniency — the gate accuses less — which is the safe direction
+ * on an accusation boundary: a missed fabrication costs a value nobody
+ * checked, a false accusation costs a correct answer and a real turn.
+ *
+ * The consequence of the exclusion is deliberate and worth stating: if the
+ * USER named the thing, it is exempt anyway (their message is the exempt
+ * corpus), so a real question about a real port is unaffected. Only a value
+ * that appears *for the first time* in an absence's `looked_for` loses its
+ * grounding — which is the only case where it was never evidence to begin
+ * with.
  *
  * ## What this does NOT close, said plainly
  *
- * The whitelist rests on "coverage is the tool's own words about the world".
- * An author who interpolates an unvalidated argument into a coverage entry —
- * a `checked` line built by string-interpolating the `switch` argument the
- * model passed — puts a model-supplied token back into the corpus through the
- * one list this file admits. That is narrower than the hole it closes (the
- * author chose to echo, rather than the primitive echoing by design), and it
- * is not detectable from here: this library cannot tell which characters of a
- * sentence a tool composed and which it copied. The guidance is on the door
- * itself — interpolate identifiers you RESOLVED, not identifiers you were
- * handed. It is also the general limit of the evidence corpus, not a new one:
- * any tool that echoes its arguments into its result has always grounded
- * them.
+ * The rule rests on "everything but `looked_for` is the tool's own words about
+ * the world". An author who interpolates an unvalidated argument into any
+ * other field — a `checked` line built by string-interpolating the `switch`
+ * argument the model passed, an extra key echoing the request back — puts a
+ * model-supplied token into the corpus by hand. That is narrower than the hole
+ * this file closes (the author chose to echo, rather than the primitive
+ * echoing by design), and it is not detectable from here: this library cannot
+ * tell which characters of a sentence a tool composed and which it copied. The
+ * guidance is on the door itself — interpolate identifiers you RESOLVED, not
+ * identifiers you were handed. It is also the general limit of the evidence
+ * corpus, not a new one: any tool that echoes its arguments into its result
+ * has always grounded them.
  */
 
 import { readAbsence } from './absent.js';
 import { readCoverageLedger } from './ledger.js';
-import type { CoverageItem, ToolAbsence } from './types.js';
+import type { ToolAbsence } from './types.js';
 
-/** The coverage lists of one absence, as the only thing it grounds. */
-function coverageOnly(absence: ToolAbsence): ReadonlyArray<readonly CoverageItem[]> {
-  return [absence.checked ?? [], absence.not_checked ?? [], absence.cannot_cover ?? []];
+/**
+ * The ONE field of an absence that is withheld from the evidence corpus.
+ *
+ * Tool-authored knowledge grounds; caller echoes never do. Every other field —
+ * the coverage lists, the note, `try_instead`, and any extra key the tool
+ * attached — is the tool stating what it knows about the world, and that is
+ * what an answer built on an absence is entitled to cite. `looked_for` states
+ * what was ASKED FOR, and in practice quotes the arguments the model passed,
+ * so indexing it would ground every identifier a model invented as long as it
+ * handed the invention to one tool that found nothing.
+ *
+ * The distinction is about the SOURCE of the words, not their position in the
+ * shape: a tool author who interpolates an unvalidated argument into any other
+ * field re-opens the same hole by hand — see "What this does NOT close" above.
+ */
+const CALLER_ECHO_FIELD = 'looked_for';
+
+/** One absence, minus the caller's echo. */
+function toolAuthoredOnly(absence: ToolAbsence): unknown {
+  // Entries, not fields: a tool may spread `absent(…)` and attach keys the
+  // `ToolAbsence` type never named, and those are the point of this widening.
+  const entries: ReadonlyArray<readonly [string, unknown]> = Object.entries(absence);
+  return Object.fromEntries(entries.filter(([key]) => key !== CALLER_ECHO_FIELD));
 }
 
 /**
@@ -68,19 +108,23 @@ function coverageOnly(absence: ToolAbsence): ReadonlyArray<readonly CoverageItem
  * indexes exactly as it always did.
  *
  * Two shapes carry one: a bare absence, and an absence bounded by a coverage
- * ledger (`coverage(absent(…), …)`). A ledger's own lists are all tool
- * prose, so they are indexed whole; only the absence inside it is narrowed.
- * An absence buried deeper than that — inside a tool's own domain object —
- * is NOT found, and is left indexed as ordinary data: this projection
- * recognizes the shapes this library mints, and does not go hunting through
- * values it did not write.
+ * ledger (`coverage(absent(…), …)`). A ledger's own lists are all tool prose,
+ * so they are indexed whole; the absence inside it loses the same one field a
+ * bare absence loses, and nothing else. An absence buried deeper than that —
+ * inside a tool's own domain object — is NOT found, and is left indexed as
+ * ordinary data: this projection recognizes the shapes this library mints, and
+ * does not go hunting through values it did not write.
+ *
+ * What comes back is a value to WALK, not a set of strings: the caller's
+ * indexer does the leaf and key work, so an extra key holding a nested object
+ * or an array of names is projected without this file knowing its shape.
  */
 export function absenceEvidenceProjection(parsed: unknown): unknown | undefined {
   const absence = readAbsence(parsed);
-  if (absence !== undefined) return coverageOnly(absence);
+  if (absence !== undefined) return toolAuthoredOnly(absence);
   const covered = readCoverageLedger(parsed);
   if (covered === undefined) return undefined;
   const inner = readAbsence(covered.result);
   if (inner === undefined) return undefined;
-  return [covered.af_coverage, ...coverageOnly(inner)];
+  return [covered.af_coverage, toolAuthoredOnly(inner)];
 }

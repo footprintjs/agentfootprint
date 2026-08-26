@@ -72,7 +72,7 @@ has ever returned takes the path it always took, byte for byte.
 | delivered status | `'absent'` — the seventh `ToolResultStatus`, routable by `onToolStatus` | unchanged |
 | event | `agentfootprint.tools.absent` | `agentfootprint.tools.coverage_declared` |
 | tracked state | appended to `coverageDeclared` | appended to `coverageDeclared` |
-| evidence corpus | grounds its **coverage only** | indexed as ordinary data |
+| evidence corpus | grounds **every field but `looked_for`** | indexed as ordinary data |
 | final answer | folds into the block, with `.limitsTravelWithTheAnswer()` | same |
 
 ### What deliberately does NOT change
@@ -91,23 +91,30 @@ has ever returned takes the path it always took, byte for byte.
 The evidence corpus is every `role: 'tool'` result. An absence's job is to say
 what was looked FOR — which in practice quotes the arguments the model passed.
 Indexed whole, an invented identifier would become **grounded** by the one
-operation that proves nothing about it: a lookup that found nothing. So an
-absence grounds `checked` / `not_checked` / `cannot_cover` and nothing else
-(`evidence.ts`). It is `evidence/frames.ts`'s argument on the tool side of the
-conversation.
+operation that proves nothing about it: a lookup that found nothing. It is
+`evidence/frames.ts`'s argument on the tool side of the conversation.
+
+The line is **tool-authored knowledge vs caller echo**, not "coverage vs the
+rest". `looked_for` is withheld and nothing else is (`evidence.ts`): the
+coverage lists, the `note`, `try_instead`, and any extra key the tool attached
+to the envelope all ground. The first cut drew the line at the coverage lists
+and the field found the hole — a lookup tool returned its absence with the 40
+real share names attached under `known_shares` and a `try_instead` telling the
+model to pick one; the model did, and the gate called the answer ungrounded.
+An answer that follows the absence's own advice must not be flagged for it.
 
 If the user named the value, it is exempt anyway. Only a value appearing for
-the first time inside an absence loses grounding — the case where it was never
-evidence to begin with.
+the first time inside an absence's `looked_for` loses grounding — the case
+where it was never evidence to begin with.
 
-**What that does not close.** The whitelist rests on "coverage is the tool's own
-words about the world". An author who string-interpolates an unvalidated
-argument into a `checked` line puts a model-supplied token back into the corpus
-through the one list the whitelist admits, and no library can tell which
-characters of a sentence a tool composed and which it copied. Interpolate
-identifiers you RESOLVED, not identifiers you were handed. It is the general
-limit of the evidence corpus rather than a new one — any tool that echoes its
-arguments into its result has always grounded them.
+**What that does not close.** The rule rests on "everything but `looked_for` is
+the tool's own words about the world". An author who string-interpolates an
+unvalidated argument into any other field puts a model-supplied token back into
+the corpus, and no library can tell which characters of a sentence a tool
+composed and which it copied. Interpolate identifiers you RESOLVED, not
+identifiers you were handed. It is the general limit of the evidence corpus
+rather than a new one — any tool that echoes its arguments into its result has
+always grounded them.
 
 ## Survival: appended, not requested
 

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An absence's extra keys are evidence now — every field it carries except
+  the one that echoes the caller.** A share-lookup tool returned its absence
+  with the answer attached: an extra `known_shares` key holding the 40 real
+  share names on the filer, and a `try_instead` telling the model to pick one
+  of them. The model did exactly that. The evidence gate then called the share
+  it picked ungrounded, because the absence projection indexed the coverage
+  lists and excluded every other key. Following the tool's own advice produced
+  a flagged answer, which makes the advice worthless and the gate wrong.
+
+  The line was never "coverage vs the rest" — it is **tool-authored knowledge
+  vs caller echo**. A recognized absence now projects every string and number
+  leaf it carries: the coverage lists as before, plus extra keys, plus the
+  tool-authored `try_instead` and the library's `note`. `looked_for` stays
+  excluded, alone, because it is the one field whose job is to quote the
+  REQUEST rather than state what the tool knows — index it and a fabricated
+  name grounds itself by being handed to one tool that found nothing, which is
+  the cheapest laundering machine there is. The laundering fence has its own
+  test and did not move.
+
+  This widens leniency: the gate accuses less. That is the safe direction on an
+  accusation boundary — a missed fabrication costs a value nobody checked, a
+  false accusation costs a correct answer and a real turn.
+
 ### Changed
 
 - **A declared `pattern` is now an ENFORCED pattern. Consumers who already

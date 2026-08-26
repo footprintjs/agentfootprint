@@ -29,17 +29,20 @@
  *
  * ## Why the note is never interpolated
  *
- * Everything in the rendered absence except the coverage lists is either
- * static library text or the author's prose about the request — and the
- * author's prose about the request usually quotes the model's own arguments
- * ("no FLOGI entries on fc1/3", where `fc1/3` came from the model). Tool
- * results are the evidence gate's corpus, so an absence that echoed arguments
- * into that corpus would GROUND every identifier a model invented, as long as
- * it handed it to one tool that found nothing. That is laundering an
- * invention through a failed lookup — the same bug `evidence/frames.ts`
- * exists to stop on the other side of the conversation. The gate therefore
- * indexes an absence's COVERAGE only (see `evidenceIndex.ts`), and the note
- * is kept free of interpolation so the whitelist has nothing to leak around.
+ * Tool results are the evidence gate's corpus, so an absence that echoed the
+ * model's own arguments into that corpus would GROUND every identifier a model
+ * invented, as long as it handed the invention to one tool that found nothing.
+ * That is laundering an invention through a failed lookup — the same bug
+ * `evidence/frames.ts` exists to stop on the other side of the conversation.
+ *
+ * The gate therefore withholds `looked_for`, and only `looked_for` (see
+ * `coverage/evidence.ts`): it is the one field whose job is to quote the
+ * request. Everything else the absence carries — the coverage lists, the
+ * author's `tryInstead`, any extra key the tool attached to the envelope — is
+ * the TOOL speaking about the world and does ground, because an answer that
+ * follows the absence's own advice must not be called ungrounded for doing so.
+ * The note is kept free of interpolation for the same reason the exclusion
+ * exists: static library text has nothing of the caller's to leak.
  */
 
 import { normalizeCoverageList } from './items.js';
