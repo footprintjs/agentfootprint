@@ -112,7 +112,7 @@ The declaration's shape is the exported `ToolWants` type — `Readonly<Record<ar
 
 ### The placement threshold — oversized results become tickets automatically
 
-The object form of the option (the exported `AgentArtifactsOptions` — `{ store, placement? }`) carries the operator's dial, an `ArtifactPlacement`: `artifacts: { store, placement: { maxInlineChars: N } }`. Any tool result whose finalized text exceeds N is checked into the store as kind `tool-result/<toolName>` — the exported `placedResultKind(toolName)` composes that vocabulary, so a `wants` declaration can name it without spelling the prefix — with label `<toolName> result` (the payload is the **exact text the model would have read**), and every channel — history, `stream.tool_end`, recorders — carries the one-shape `PlacedToolResult` substitute instead:
+The object form of the option (the exported `AgentArtifactsOptions` — `{ store, placement? }`) carries the operator's dial, an `ArtifactPlacement`: `artifacts: { store, placement: { maxInlineChars: N } }`. Any tool result whose finalized text exceeds N is checked into the store as kind `tool-result/<toolName>` — the exported `placedResultKind(toolName)` composes that vocabulary, so a `wants` declaration can name it without spelling the prefix, and a tool that declares its own `resultKind` ([below](#resultkind--a-placed-result-the-wants-rail-can-spend-9700)) is minted under that instead — with label `<toolName> result` (the payload is the **exact text the model would have read**), and every channel — history, `stream.tool_end`, recorders — carries the one-shape `PlacedToolResult` substitute instead:
 
 ```json
 { "placed": true, "ref": "art_h7Kq…", "kind": "tool-result/get_data",
@@ -131,6 +131,54 @@ Branch on `.placed` (`isPlacedToolResult`); the decision is never silent — the
 A placed result is a **ticket, not a refusal**: declared [tool effects](doc:tools) are still judged and procedure steps advance normally — the result arrived; it just travels by reference. Errored/denied/refused calls are never placed (`tool-result/<name>` must never claim an error is the tool's result). Placement cannot be spelled without a store — the option's own shape refuses it.
 
 **One trap to know before you pick a number:** the substitute replaces the result string everywhere downstream — history, `lastToolResult`, `toolResults` — which is exactly where skill-graph `when` edges and `rule` triggers look, so turning placement on or moving `maxInlineChars` can change which edge fires for a graph that matches on result *text*. It is the intended layering (routing judges what the model was told), and the way to be immune to it is to key edges on `onToolReturn` or `onToolStatus`. Reasoned through in [Artifact architecture](doc:artifacts-architecture#the-footgun-placement-rewrites-the-string-your-routing-reads).
+
+### `resultKind` — a placed result the wants rail can spend (9.70.0)
+
+Read the two rules above together and a gap falls out. The `wants` kind check
+is **exact** — no wildcards, no hierarchy — and placement mints under
+`tool-result/<toolName>`. So an agent whose consuming tool declares
+`wants: { dataset: 'dataset/rows' }` refuses the very ticket placement just
+minted, as a kind mismatch. The framework hands out a ticket its own rail
+will not take, and the honest workaround was to re-mint by hand at the seam.
+
+`Tool.resultKind` closes it from the producing end. A tool declares the
+artifact kind its placed result is minted under, in its consumers' vocabulary:
+
+```ts
+const getRows = defineTool({
+  name: 'get_rows',
+  description: 'Fetch the Q3 sales rows (large).',
+  resultKind: 'dataset/rows', // ← what a wants argument names
+  execute: () => bigArrayOfRows,
+});
+
+const chart = defineTool<{ dataset: string }, string>({
+  name: 'chart',
+  description: 'Chart a stored dataset. Pass the art_… ref from get_rows.',
+  inputSchema: { type: 'object', properties: { dataset: { type: 'string' } }, required: ['dataset'] },
+  wants: { dataset: 'dataset/rows' }, // ← resolves now
+  execute: async (args) => summarize(JSON.parse(args.dataset)),
+});
+```
+
+- **The matcher is untouched.** Nothing here loosens `wants`; exact match is
+  what makes a ticket a promise, and a rail that guessed at families would
+  hand a tool the wrong parcel. What changes is the **mint**, which now speaks
+  the author's vocabulary instead of the framework's.
+- **Declared, never inferred** — the `capabilities` / `resultClass` law. Only
+  the tool's author knows what it produces; a kind guessed from a tool name
+  would be a promise the library cannot keep.
+- **Refused at `defineTool` if it could never be redeemed.** A blank or
+  whitespace-only kind throws by name (the exported `assertResultKind` is the
+  same check, for consumers assembling `Tool` objects by hand) — a kind is
+  what a ticket is matched against, and a blank one matches nothing.
+- **Zero-cost when omitted:** the mint is `tool-result/<toolName>`,
+  byte for byte what it always was. `placedResultKind(toolName, declared?)`
+  is the one place that decision is made, and it is exported so a `wants`
+  declaration can compose the default without spelling the prefix.
+- **It only ever moves the KIND.** The ref, the payload, the ticket's shape,
+  the `artifacts.minted` event and the precedence order are all unchanged —
+  the kind simply travels through `meta.kind` into every one of them.
 
 ### `present` — hand a ref to the screen, with a durable snapshot
 

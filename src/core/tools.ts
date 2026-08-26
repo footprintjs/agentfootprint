@@ -153,6 +153,42 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    */
   readonly resultClass?: ToolResultClass;
   /**
+   * THE ARTIFACT KIND A PLACED RESULT IS MINTED UNDER (9.70.0) — this tool's
+   * result in the CONSUMER's vocabulary (`'dataset/rows'`), not the
+   * framework's.
+   *
+   * Artifact PLACEMENT (`artifacts: { store, placement }`) checks an oversized
+   * result into the store and hands the model a claim ticket. Absent this
+   * field it mints under `tool-result/<toolName>` — honest, and unspendable:
+   * `wants` is exact-match on kind BY LAW (no wildcards, no hierarchy), so a
+   * downstream `wants: { dataset: 'dataset/rows' }` refuses the very ticket
+   * the framework just minted, as a kind mismatch. Field-verified: the
+   * consumer had to re-mint by hand at the seam, which is the framework
+   * declining to carry its own ref.
+   *
+   * The fix is DECLARED, never inferred (the `capabilities` / `resultClass`
+   * law) and never a loosening of the matcher: only the author knows what
+   * their tool actually produces, and `wants` staying exact is what makes a
+   * ticket a promise. Declaring `resultKind` makes the MINT speak the
+   * consumer's vocabulary instead.
+   *
+   * A non-empty string; an empty or blank one is refused at `defineTool`,
+   * because a kind is what a ticket is redeemed against and a blank kind
+   * redeems against nothing. Omitted → exactly today's bytes
+   * (`tool-result/<toolName>`, and no measurement at all without placement).
+   *
+   * @example a tool whose placed result a `wants` consumer can spend
+   *   defineTool({
+   *     name: 'get_rows',
+   *     description: 'Fetch the rows of a dataset',
+   *     resultKind: 'dataset/rows',
+   *     inputSchema: { … },
+   *     execute: async () => …,
+   *   });
+   *   // elsewhere: defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' }, … })
+   */
+  readonly resultKind?: string;
+  /**
    * WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
    * moment the code demonstrably knows both ends: registration. Before
    * this field, ownership was only DERIVABLE (from the per-pass
@@ -320,6 +356,34 @@ export function assertResultClass(
         `carries a rule \`check:semantics\` can prove ('triage'/'inventory' results must ` +
         `declare coverage). To declare no class, omit the field (the semantic-envelope rules ` +
         `still apply to any result carrying the af_semantics marker).`,
+    );
+  }
+}
+
+/**
+ * Refuse a `resultKind` that could never be redeemed, at definition time —
+ * naming the tool and the fix (the `assertResultCeiling` / `assertResultClass`
+ * law: a declaration this library cannot honor fails HERE, never at the first
+ * oversized result of the first run). Exported beside them for consumers
+ * assembling `Tool` objects by hand.
+ *
+ * The one rule is non-blankness, and it is not a formality: the kind is what a
+ * `wants` argument is matched against by exact string equality, so a blank or
+ * whitespace-only kind mints a ticket no declaration can ever name — the same
+ * refusal `assertToolWants` raises on the consuming end, raised on the
+ * producing end too. There is deliberately NO charset or shape rule: the kind
+ * is the consumer's vocabulary, and the library does not own it.
+ */
+export function assertResultKind(toolName: string, resultKind: string | undefined): void {
+  if (resultKind === undefined) return;
+  if (typeof resultKind !== 'string' || resultKind.trim().length === 0) {
+    throw new Error(
+      `defineTool: tool '${toolName}' declares resultKind ${JSON.stringify(resultKind)}, which ` +
+        `is not a kind anything could want. It is the artifact kind a PLACED result is minted ` +
+        `under, matched by exact string equality against a consuming tool's ` +
+        `\`wants\` (e.g. 'dataset/rows'), so a blank kind is a ticket no argument can redeem. ` +
+        `Name the kind your consumers declare, or omit the field — omitting it mints ` +
+        `\`tool-result/${toolName}\`, exactly as before.`,
     );
   }
 }
@@ -558,6 +622,10 @@ export interface DefineToolOptions<TArgs, TResult> {
    *  (see {@link Tool.resultClass}). Keys the `check:semantics` per-class
    *  rules. Omitted → no class rules. */
   readonly resultClass?: ToolResultClass;
+  /** The artifact kind a PLACED result is minted under, in the consumer's
+   *  vocabulary (see {@link Tool.resultKind}). Omitted →
+   *  `tool-result/<name>`, byte-identical. */
+  readonly resultKind?: string;
   /** The stamped identity edge — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
   /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
@@ -652,6 +720,9 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // A class outside the closed set fails HERE too — not at the first
   // `check:semantics` run of the first CI pipeline.
   assertResultClass(options.name, options.resultClass);
+  // A placed-result kind nothing could want fails HERE too — not at the first
+  // oversized result of the first run with placement configured.
+  assertResultKind(options.name, options.resultKind);
   // A decision component for a gate that never fires is configuration that
   // lies — configured-and-inert looks exactly like configured-and-working
   // (the `.checkIn({ scorer })`-with-minimal-evidence precedent). And a
@@ -736,6 +807,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.capabilities !== undefined && { capabilities: options.capabilities }),
     ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
+    ...(options.resultKind !== undefined && { resultKind: options.resultKind }),
     ...(options.owner !== undefined && { owner: options.owner }),
     ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),

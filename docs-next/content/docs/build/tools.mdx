@@ -606,6 +606,15 @@ maxInlineChars } }`) — over it, the result is checked into the store and the m
 reads a claim ticket. The stated precedence: the tool's `resultCeiling` first, then
 placement, then `maxToolResultChars` last (which then measures the ticket).
 
+That ticket is minted under a kind, and `Tool.resultKind` (9.70.0) is where the
+tool author names it: `resultKind: 'dataset/rows'` makes the placed result
+redeemable by a consuming tool that declares `wants: { dataset: 'dataset/rows' }`,
+where the framework's default `tool-result/<toolName>` would have been refused as a
+kind mismatch — `wants` matches kinds exactly, by law. Declared, never inferred; a
+blank kind is refused at `defineTool` (`assertResultKind`); omitted → the default
+kind, byte-identical. The full argument is in
+[Artifacts](doc:artifacts#resultkind--a-placed-result-the-wants-rail-can-spend-9700).
+
 ## `wants` — artifact refs as tool arguments (9.22.0)
 
 The [`needs`](doc:identity-and-credentials) precedent applied to data. A tool declares which of its

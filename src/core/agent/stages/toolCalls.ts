@@ -195,8 +195,9 @@ export interface ToolCallsHandlerDeps {
    * The placement threshold (9.22.0) — the operator's ref-ing dial. When set
    * (only ever beside `artifactStore`; the Agent option's shape enforces it),
    * every finalized tool result on every dispatch path is measured, and one
-   * whose text exceeds `maxInlineChars` is checked into the store (kind
-   * `tool-result/<toolName>`) with the model reading the claim ticket
+   * whose text exceeds `maxInlineChars` is checked into the store (under the
+   * tool's declared `resultKind`, or `tool-result/<toolName>` when it
+   * declares none) with the model reading the claim ticket
    * instead. Judged AFTER the tool's own `resultCeiling` and the after-tool
    * chain, BEFORE the `maxToolResultChars` truncation net. Undefined — the
    * default — and results are never measured against it (zero-cost).
@@ -1733,7 +1734,13 @@ export function buildToolCallsHandler(
       // `mediaType` states what that text is: a JSON serialization when the
       // tool returned a value, plain text when it returned a string.
       meta = await bound.artifacts.put({
-        kind: placedResultKind(call.toolName),
+        // The tool's own `resultKind` when it declared one (9.70.0), the
+        // framework's `tool-result/<name>` when it did not. Resolved HERE
+        // rather than threaded through the five dispatch doors: `lookupTool`
+        // is the closure's one resolver (registry + this iteration's cached
+        // provider list), so a sixth door added later cannot forget to carry
+        // the declaration — the `capResults` landmine, avoided by shape.
+        kind: placedResultKind(call.toolName, lookupTool(call.toolName)?.resultKind),
         mediaType: typeof values.modelResult === 'string' ? 'text/plain' : 'application/json',
         data: text,
         label: `${call.toolName} result`,

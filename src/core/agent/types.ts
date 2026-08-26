@@ -72,8 +72,9 @@ export interface AgentArtifactsOptions {
   readonly store: ArtifactStore;
   /**
    * The placement threshold. A tool result whose finalized text exceeds
-   * `maxInlineChars` is checked into the store (kind
-   * `tool-result/<toolName>`) and the model reads the claim ticket instead.
+   * `maxInlineChars` is checked into the store (under the tool's declared
+   * `resultKind`, or `tool-result/<toolName>` when it declares none) and the
+   * model reads the claim ticket instead.
    * Judged AFTER the tool's own `resultCeiling` (the author's refusal comes
    * first) and BEFORE the agent-level `maxToolResultChars` truncation net
    * (which then measures the ticket, so it should rarely fire). Omitted →

@@ -4,7 +4,8 @@
  * An OPTIONAL operator dial on the agent's artifacts wiring:
  * `Agent.create({ artifacts: { store, placement: { maxInlineChars: N } } })`.
  * A tool result whose finalized text exceeds the threshold is checked into
- * the store (kind `tool-result/<toolName>`) and the model receives the claim
+ * the store (kind `tool-result/<toolName>`, or the tool's declared
+ * `resultKind` — see `placedResultKind`) and the model receives the claim
  * ticket instead — a SHORT substitute naming ref + meta + how to consume it.
  * The whole 879,073-token failure class, retired by configuration.
  *
@@ -74,12 +75,25 @@ export function assertArtifactPlacement(
   }
 }
 
-/** The kind vocabulary a placement mint declares: `tool-result/<toolName>`.
- *  Honest — it says exactly what the payload is and which tool produced it —
- *  and it is what a `wants` declaration or a `present` call names to consume
- *  the placed result. */
-export function placedResultKind(toolName: string): string {
-  return `tool-result/${toolName}`;
+/**
+ * The kind vocabulary a placement mint declares — THE one decision, and the
+ * only place it is made.
+ *
+ * Default: `tool-result/<toolName>`. Honest — it says exactly what the payload
+ * is and which tool produced it — and it is what a `wants` declaration or a
+ * `present` call names to consume the placed result.
+ *
+ * `declared` is the tool's own `Tool.resultKind` (9.70.0), and when a tool
+ * declares one it WINS. The reason is the exact-match law on the consuming
+ * end: `wants` matches kinds by exact string equality — no wildcards, no
+ * hierarchy — so the framework's default vocabulary is a ticket a
+ * `wants: { dataset: 'dataset/rows' }` argument must refuse. Rather than
+ * loosen the matcher (a ticket would stop being a promise) or make consumers
+ * re-mint at the seam (the framework declining to carry its own ref), the
+ * MINT speaks the author's vocabulary. Absent → today's bytes exactly.
+ */
+export function placedResultKind(toolName: string, declared?: string): string {
+  return declared ?? `tool-result/${toolName}`;
 }
 
 /**
@@ -92,7 +106,8 @@ export interface PlacedToolResult {
   /** Always `true`. The field a consumer branches on. */
   readonly placed: true;
   readonly ref: string;
-  /** `tool-result/<toolName>` — what a consumer names to want it. */
+  /** The minted kind — what a consumer names to want it. The tool's declared
+   *  `Tool.resultKind` when it has one, `tool-result/<toolName>` otherwise. */
   readonly kind: string;
   readonly mediaType: string;
   /** The stored payload's true size — the chars the window did NOT pay. */

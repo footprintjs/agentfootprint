@@ -537,6 +537,11 @@ export {
   assertValidToolName,
   assertResultCeiling,
   assertResultClass,
+  // The placed-result kind (9.70.0) — `Tool.resultKind` lets a tool declare
+  // the artifact kind its PLACED result is minted under, so the ticket speaks
+  // the vocabulary a `wants` argument names. Exported beside the other two
+  // for consumers assembling `Tool` objects by hand.
+  assertResultKind,
   warnIfInvalidToolName,
 } from './core/tools.js';
 // Typed tool effects (9.19.0) — the result envelope a tool may return to

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`Tool.resultKind` — a placed result the `wants` rail can spend.** Two
+  rules the library already had, read together, were a gap. `wants` matches
+  artifact kinds by **exact string equality** — no wildcards, no hierarchy —
+  and artifact **placement** minted oversized tool results under
+  `tool-result/<toolName>`. So a consumer declaring
+  `wants: { dataset: 'dataset/rows' }` was refused, as a kind mismatch, the
+  very ticket placement had just minted for it. Found in the field, where the
+  answer was to re-mint by hand at the seam: the framework declining to carry
+  its own ref.
+
+  The fix is on the PRODUCING end. A tool declares the kind its placed result
+  is minted under, in its consumers' vocabulary:
+
+  ```ts
+  const getRows = defineTool({
+    name: 'get_rows',
+    description: 'Fetch the Q3 sales rows (large).',
+    resultKind: 'dataset/rows', // ← what a wants argument names
+    execute: () => bigArrayOfRows,
+  });
+
+  // elsewhere — resolves now, and would have been a kind mismatch before
+  defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' }, /* … */ });
+  ```
+
+  - **The matcher is untouched.** Nothing here loosens `wants`; exact match is
+    what makes a ticket a promise. What moved is the mint.
+  - **Declared, never inferred** (the `capabilities` / `resultClass` law).
+  - **Refused at `defineTool`** if it could never be redeemed: a blank or
+    whitespace-only kind throws by name. `assertResultKind` is exported beside
+    `assertResultCeiling` / `assertResultClass` for hand-built `Tool` objects.
+    There is deliberately no charset rule — the kind is the consumer's
+    vocabulary, not the library's.
+  - **Zero-cost when omitted:** the mint is `tool-result/<toolName>`, byte for
+    byte. `placedResultKind(toolName, declared?)` gained an optional second
+    argument and remains the one place the kind is decided.
+
 ## [9.68.0] - 2026-08-26
 
 ### Added
