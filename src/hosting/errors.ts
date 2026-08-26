@@ -845,6 +845,60 @@ export class SessionsNotCarriedError extends Error {
  *   // or branch instead of insisting:
  *   if (host.capabilities.includes('streaming')) { ... }
  */
+/**
+ * Thrown when a request body exceeds the ceiling the host was given.
+ *
+ * A body is memory this process pays for while somebody else fills it, so a
+ * host with a ceiling stops reading at it rather than discovering the limit as
+ * an out-of-memory kill. The read is abandoned at the byte that crossed the
+ * line — nothing further is buffered, and the bytes already read are dropped.
+ *
+ * There is no default ceiling: see `HttpHostOptions.maxBodyBytes` for why the
+ * absence is deliberate and what it costs.
+ */
+export class RequestTooLargeError extends Error {
+  readonly code = 'ERR_REQUEST_TOO_LARGE' as const;
+
+  constructor(readonly limitBytes: number, hostName: string) {
+    super(
+      `[hosting] the '${hostName}' host refuses a request body over ${String(limitBytes)} ` +
+        `bytes. Raise maxBodyBytes if this deployment genuinely carries larger requests.`,
+    );
+    this.name = 'RequestTooLargeError';
+  }
+}
+
+/**
+ * A dialect's refusal of THIS request — its own status, its own code.
+ *
+ * `readRequest` is a wire's one chance to look at a body before a turn is paid
+ * for, and some dialects can tell from the shape alone that they cannot serve
+ * it: an input item kind this dialect does not carry, a field whose type is
+ * wrong. Throwing this says so with a status the caller can act on, instead of
+ * a 500 that reads as "the server broke" for a request the caller could fix.
+ *
+ * The distinction it keeps: this is the REQUEST being wrong. A dialect that
+ * throws anything else from `readRequest` still gets that request's 500, which
+ * is the honest answer when the dialect itself is what failed.
+ *
+ * @example  A dialect refusing an input kind it does not carry
+ *   throw new WireRequestRefusal(
+ *     'unsupported_input',
+ *     'image input is not carried by this dialect',
+ *   );
+ */
+export class WireRequestRefusal extends Error {
+  constructor(
+    readonly code: string,
+    detail: string,
+    /** HTTP status for this refusal. Default 400 — the request is what is wrong. */
+    readonly status: number = 400,
+  ) {
+    super(`[hosting] ${detail}`);
+    this.name = 'WireRequestRefusal';
+  }
+}
+
 export function requireCapability(
   host: AgentHost | ConversationHost,
   capability: HostCapability,

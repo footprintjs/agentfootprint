@@ -109,8 +109,11 @@ export type {
   HttpHost,
   HttpHostHandle,
   HttpHostOptions,
+  FailureOrigin,
   HttpRequestFacts,
   HttpWire,
+  StreamFrame,
+  StreamFraming,
 } from './httpHost.js';
 
 export { memorySessions } from './memorySessions.js';
@@ -160,6 +163,8 @@ export {
   SessionNotFoundError,
   SessionOwnershipConflictError,
   SessionsNotCarriedError,
+  RequestTooLargeError,
+  WireRequestRefusal,
 } from './errors.js';
 export type { IdentityFailureClass } from './errors.js';
 

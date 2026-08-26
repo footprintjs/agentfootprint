@@ -25,6 +25,19 @@
  *     idleMs: 900000 }` declared, session affinity readable from header or
  *     query, and a `Sec-WebSocket-Protocol` bearer mapped into
  *     `headers.authorization`.
+ *   • `foundryResponsesHost({ port?, hostname?, model?, maxBodyBytes? })` — an
+ *     `AgentHost` for Microsoft Foundry's hosted-agent contract: `POST
+ *     /responses`, a `HEAD` capability probe on the same path, `GET /readiness`
+ *     answering `{"status":"healthy"}`, port 8088, and the session read from
+ *     `conversation` / `agent_session_id` / `session_id` in that order. It
+ *     streams when the BODY says `stream: true` — not the `Accept` header —
+ *     and frames that stream as the Responses lifecycle.
+ *     **Inbound only:** it is the door callers arrive at, and says nothing
+ *     about which model the agent calls. It does NOT provide Workflow
+ *     Visualizer topology; see the adapter's header.
+ *   • `responsesWire({ defaultModel?, sessionFields?, health? })` — the
+ *     Responses PROTOCOL as an `HttpWire`, with no vendor in it, for the next
+ *     runtime that speaks it on paths of its own.
  *   • `agentCoreSessions({ store })` — a `SessionLifecycle` whose checkpoint
  *     home you choose at construction: a JSON file in the runtime's own session
  *     storage (survives a stop/resume, needs no SDK), or one AgentCore Memory
@@ -94,6 +107,30 @@ export {
   agentCoreSessions,
   DEFAULT_SESSION_STORAGE_PATH,
 } from './adapters/hosting/agentcore.js';
+
+export {
+  foundryResponsesHost,
+  DEFAULT_FOUNDRY_PORT,
+  FOUNDRY_INVOKE_PATH,
+  FOUNDRY_READINESS_PATH,
+  FOUNDRY_SESSION_FIELDS,
+} from './adapters/hosting/foundryResponses.js';
+
+export type { FoundryResponsesHostOptions } from './adapters/hosting/foundryResponses.js';
+
+// The protocol under it, on the barrel in its own right: a deployment that
+// speaks Responses on paths of its own is a `httpHost` away, and having to
+// import a vendor-named module to reach a vendor-neutral dialect would be the
+// split this pair exists to make.
+export {
+  responsesWire,
+  readResponsesInput,
+  readResponsesSession,
+  DEFAULT_SESSION_FIELDS,
+  PUBLIC_FAILURE_MESSAGE,
+} from './adapters/hosting/responsesWire.js';
+
+export type { ResponsesWireOptions } from './adapters/hosting/responsesWire.js';
 
 export {
   agentEngineSessions,

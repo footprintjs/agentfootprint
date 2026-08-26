@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { nodeHost } from '../../src/hosting/index.js';
 import type { PendingAsk } from '../../src/hosting/index.js';
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
-import { agentCoreRuntimeHost } from '../../src/hosting-providers.js';
+import { agentCoreRuntimeHost, foundryResponsesHost } from '../../src/hosting-providers.js';
 import { inProcessHost, type InProcessHost } from './testHost.js';
 import {
   contractHandler,
@@ -206,6 +206,102 @@ function parseAgentCoreSSE(body: string): HostObservation {
   };
 }
 
+// ─── Subject 4: a hosted-agent contract in somebody else's protocol ──
+//
+// The fourth adapter differs from the third in a way the port had never been
+// asked about: it does not merely rename the fields, it frames the STREAM
+// differently — nine named lifecycle events instead of one `chunk` per piece —
+// and it decides to stream from the BODY rather than the `Accept` header. Every
+// assertion in the suite holds for it unchanged, which is the claim: a protocol
+// with a different SHAPE is still a wire, not a second host.
+
+const foundrySubject: HostUnderTest = {
+  label: 'foundryResponsesHost (Responses protocol)',
+  create: () => foundryResponsesHost({ port: 0, hostname: '127.0.0.1' }),
+  // A public door: an uncaught exception's words do not travel. See the flag's
+  // note on hostContract.HostUnderTest.
+  sanitizesThrownErrors: true,
+  invoke: async (handle, request) => {
+    const { url } = handle as NodeHostHandle;
+    let response: Response;
+    try {
+      response = await fetch(`${url}/responses`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(request.headers ?? {}) },
+        body: JSON.stringify({
+          input: [
+            {
+              type: 'message',
+              role: 'user',
+              content: [{ type: 'input_text', text: request.input }],
+            },
+          ],
+          // The dialect's own signal — no `Accept` header anywhere.
+          ...(request.stream === true ? { stream: true } : {}),
+          ...(request.sessionId !== undefined ? { conversation: request.sessionId } : {}),
+        }),
+      });
+    } catch (err) {
+      return { error: `is closed (${(err as Error).message})`, chunks: [] };
+    }
+    const body = await response.text();
+    return response.headers.get('content-type')?.includes('text/event-stream')
+      ? parseResponsesSSE(body)
+      : parseResponsesJson(body);
+  },
+};
+
+/** A `response` object, or an error envelope, back into port vocabulary. */
+function parseResponsesJson(body: string): HostObservation {
+  const parsed = JSON.parse(body) as {
+    status?: string;
+    output?: { content?: { text?: string }[] }[];
+    error?: { message?: string; code?: string } | null;
+  };
+  const text = parsed.output?.[0]?.content?.[0]?.text;
+  return {
+    ...(parsed.status === 'completed' && text !== undefined ? { output: text } : {}),
+    ...(parsed.error ? { error: parsed.error.message ?? '', code: parsed.error.code } : {}),
+    chunks: [],
+  };
+}
+
+/** The nine-event lifecycle back into port vocabulary. */
+function parseResponsesSSE(body: string): HostObservation {
+  const chunks: string[] = [];
+  let output: string | undefined;
+  let error: string | undefined;
+  let code: string | undefined;
+  for (const frame of body.split('\n\n')) {
+    const name = /^event: (.+)$/m.exec(frame)?.[1];
+    const data = /^data: (.+)$/m.exec(frame)?.[1];
+    if (!name || !data) continue;
+    const payload = JSON.parse(data) as {
+      delta?: string;
+      response?: {
+        output?: { content?: { text?: string }[] }[];
+        error?: { message?: string; code?: string } | null;
+      };
+    };
+    if (name === 'response.output_text.delta' && typeof payload.delta === 'string') {
+      chunks.push(payload.delta);
+    }
+    if (name === 'response.completed') {
+      output = payload.response?.output?.[0]?.content?.[0]?.text;
+    }
+    if (name === 'response.failed') {
+      error = payload.response?.error?.message ?? '';
+      code = payload.response?.error?.code;
+    }
+  }
+  return {
+    ...(output !== undefined && { output }),
+    ...(error !== undefined && { error }),
+    ...(code !== undefined && { code }),
+    chunks,
+  };
+}
+
 // ─── Subject 2: the minimal in-process host (see ./testHost.ts) ──────
 
 let latest: InProcessHost | undefined;
@@ -223,16 +319,17 @@ const inProcessSubject: HostUnderTest = {
 describeHostContract(nodeSubject);
 describeHostContract(inProcessSubject);
 describeHostContract(agentCoreSubject);
+describeHostContract(foundrySubject);
 
 // ─── And directly against each other ─────────────────────────────────
 
-describe('one handler, three hosts', () => {
+describe('one handler, four hosts', () => {
   const cases: ContractRequest[] = [
     { input: 'hello' },
     { input: 'with a session', sessionId: 's-1' },
     { input: 'with a header', headers: { 'x-probe': 'yes' } },
   ];
-  const subjects = [nodeSubject, inProcessSubject, agentCoreSubject];
+  const subjects = [nodeSubject, inProcessSubject, agentCoreSubject, foundrySubject];
 
   it('produces byte-identical answers on every host', async () => {
     for (const request of cases) {

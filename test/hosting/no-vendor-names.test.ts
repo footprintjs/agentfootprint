@@ -39,8 +39,16 @@ const FORBIDDEN: readonly RegExp[] = [
   /\bdynamodb\b/i,
   /\bcloudwatch\b/i,
   /\bfirebase\b/i,
+  /\bfoundry\b/i,
+  /\bmicrosoft\b/i,
   // A borrowed route literal is vendor shape even when no vendor is named.
   /\/invocations\b/,
+  // `/readiness` is one runtime's probe spelling, on the list for exactly the
+  // reason `/invocations` is. Note what is NOT here: `/responses`. That one is
+  // a PROTOCOL's path, spoken by more than one runtime and owned by none, and
+  // banning it would be this test mistaking a protocol for a vendor. The line
+  // the list draws is who decides the spelling, not who happens to use it.
+  /\/readiness\b/,
 ];
 
 /**

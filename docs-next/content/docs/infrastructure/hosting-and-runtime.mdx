@@ -253,6 +253,41 @@ a library that promises not to know about one.
 that needs those exact bodies with something else changed reuses it rather than
 retyping it and getting one field subtly wrong.
 
+Four more dialect decisions became seams when the first protocol arrived that
+needed them (9.65.0), and every one defaults to exactly what the host did
+before, so a wire written earlier keeps working unchanged:
+
+- **How a caller asks for a stream.** By default the HTTP answer — an `Accept`
+  of `text/event-stream`. A dialect whose callers say it in the body instead
+  (`stream: true`) implements `wantsStream(facts)`, and that answer is final.
+- **What a stream is made of.** The default frames one `chunk` per piece and
+  one terminal frame, carrying the wire's own body shapes. A protocol that
+  frames a stream as a *lifecycle* — named events sharing a response id and a
+  sequence counter — returns a `StreamFraming` from `stream(facts)`: one
+  per response, holding that response's state, mapping each host lifecycle
+  point to a list of `StreamFrame` values (`{ event, data }`). The incumbent
+  shape is itself expressed as the default framing, which is the evidence the
+  seam is in the right place.
+- **Whether a failure's words travel.** `failure()` (and a framing's) receives a
+  `FailureOrigin`: `'refused'` is a handler *choosing* to fail with words it
+  picked for the caller; `'threw'` is an exception the host caught, whose
+  message is the author's note to their own logs. A dialect serving a public
+  door replaces the second and never the first. Throwing a `WireRequestRefusal`
+  from `readRequest` is the matching inbound move: the dialect refusing a
+  request it cannot carry, with its own status and code, before a turn is paid
+  for.
+- **How large a body may be.** `maxBodyBytes` refuses at the byte that crosses
+  the line with the typed `RequestTooLargeError` (413), dropping what was
+  buffered. **The default is still no ceiling** — not because unbounded is
+  right, but because a number chosen here would silently start refusing
+  requests existing deployments are serving; set it, and the shipped vendor
+  adapters do. `invokeHeadProbe` sits beside it: opt-in `204` for a bare HEAD
+  on the invoke path, for contracts that probe a door before using it.
+
+The first protocol that needed all four is the Responses dialect behind
+[`foundryResponsesHost`](doc:microsoft-foundry) — port and paths aside, nothing
+Microsoft-specific reached this file, which is the point of it having seams.
+
 `HttpHostOptions` also takes `server` — a `node:http` server *you* own, for when
 the port cannot be the host's alone. That is the next section, and every adapter
 built on `httpHost` inherits it.

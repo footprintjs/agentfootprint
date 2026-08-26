@@ -18,6 +18,7 @@
     "---[Plug]Providers---",
     "aws",
     "google-cloud",
+    "microsoft-foundry",
     "on-premises"
   ]
 }

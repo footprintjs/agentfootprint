@@ -70,6 +70,25 @@ export interface HostUnderTest {
   create(): AgentHost;
   /** Drive one request into a serving host and report only what a CALLER sees. */
   invoke(handle: HostHandle, request: ContractRequest): Promise<HostObservation>;
+  /**
+   * This adapter replaces the text of an UNCAUGHT exception before it reaches
+   * the caller.
+   *
+   * What the contract requires is that a handler which throws is REPORTED as a
+   * failure rather than hanging the caller. Whether the exception's own words
+   * travel is a dialect's decision, and a dialect serving a public door has
+   * good reason to decide no: a thrown message is the author's note to their
+   * own logs and can name a query, a path or a token.
+   *
+   * Declaring this does not relax the case — it INVERTS it. A host that
+   * sanitises must still report the failure, and must be shown NOT to have
+   * repeated the words it was given.
+   *
+   * Note the narrowness: this covers `throw`, never `reply.fail(error)`. A
+   * handler that fails deliberately chose those words for the caller, and
+   * every host delivers them intact.
+   */
+  readonly sanitizesThrownErrors?: boolean;
 }
 
 // ─── The one handler every host serves ───────────────────────────────
@@ -244,7 +263,14 @@ export function describeHostContract(subject: HostUnderTest): void {
       try {
         const observed = await subject.invoke(handle, { input: THROW });
         expect(observed.output).toBeUndefined();
-        expect(observed.error).toContain('handler exploded');
+        // The contract: a failure is REPORTED. What it is allowed to say about
+        // it is the dialect's call, and both answers are checked for real.
+        expect(observed.error).toBeDefined();
+        if (subject.sanitizesThrownErrors === true) {
+          expect(observed.error).not.toContain('handler exploded');
+        } else {
+          expect(observed.error).toContain('handler exploded');
+        }
       } finally {
         await handle.close();
       }

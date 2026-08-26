@@ -1,0 +1,109 @@
+---
+title: Microsoft Foundry — Agent Inspector hosting
+description: foundryResponsesHost serves the Foundry Toolkit's hosted-agent contract — HEAD/POST /responses and GET /readiness on port 8088, the Responses SSE lifecycle, and the contract's session aliases — as one inbound hosting adapter on the AgentHost port. Under it, responsesWire is the Responses protocol with no vendor in it.
+---
+
+> **An inbound hosting adapter, not a model provider.** This page is about the
+> door requests arrive at. Which model your agent calls is a separate decision —
+> for a Foundry Local model it is the existing `openai({ baseURL })` provider,
+> and nothing on this page changes it.
+
+The [Foundry Toolkit for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-windows-ai-studio.windows-ai-studio)
+talks to a locally hosted agent over the **Responses** protocol. `foundryResponsesHost`
+speaks that contract on the same `AgentHost` port every other host uses, so the
+Inspector can invoke an agent you already built:
+
+```ts
+import { foundryResponsesHost, memorySessions, standingAgent } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: memorySessions(),
+  host: foundryResponsesHost(),   // 8088 — HEAD/POST /responses, GET /readiness
+});
+process.on('SIGTERM', () => void handle.close());
+```
+
+Point Agent Inspector at `http://localhost:8088` and chat. The runnable,
+self-testing version is `examples/deploy/foundry-responses.ts`.
+
+## What the contract is, exactly
+
+`foundryResponsesHost` is a *configuration* of `httpHost` — the shared HTTP
+machinery keeps its own promises (draining on close, aborting on disconnect,
+failing a handler that throws or answers nothing), and this adapter supplies
+only what is genuinely this runtime's:
+
+- **`FOUNDRY_INVOKE_PATH`** (`/responses`) takes a turn by POST, and answers the
+  Inspector's capability probe — a bare HEAD — with 204.
+- **`FOUNDRY_READINESS_PATH`** (`/readiness`) answers `{"status":"healthy"}`.
+- **`DEFAULT_FOUNDRY_PORT`** is 8088. Pass `port: 0` in tests for an ephemeral
+  socket; every option lives on `FoundryResponsesHostOptions` (`port`,
+  `hostname`, `model`, `maxBodyBytes`, or attach to your own `server`).
+- **`FOUNDRY_SESSION_FIELDS`** is the session-alias precedence the contract
+  reads: `conversation` (object or bare string), then `agent_session_id`, then
+  `session_id` — first present wins, and whichever alias the caller used lands
+  on the same `HostRequest.sessionId`.
+- Streaming is chosen by **`stream: true` in the body** — not the `Accept`
+  header — and a streamed success walks the nine-event Responses lifecycle from
+  `response.created` through `response.completed` with stable ids and a
+  monotonic `sequence_number`; a failure ends with `response.failed`.
+- A request body over the ceiling (default one MiB) is refused with the typed
+  `RequestTooLargeError` refusal, read about on
+  [Hosting & runtime](doc:hosting-and-runtime).
+- An uncaught handler exception is reported as a failed response carrying
+  **`PUBLIC_FAILURE_MESSAGE`** — the thrown text never travels. A handler that
+  *chose* `reply.fail(error)` chose its words for the caller, and those travel
+  unchanged.
+
+## What it refuses, by name
+
+Image and file input parts, non-message items such as `function_call_output`,
+and non-user roles are each answered 400 **before your agent runs** — never
+silently reduced to the text around them. The `awaiting`, `artifact` and
+`sessions` reply terminals have no shape in this protocol, so they fail
+explicitly rather than answering with an invented success.
+
+Two more limits, stated so nobody discovers them in a demo: the adapter is the
+captured local-Inspector text subset, not the full Responses API (no response
+retrieval or storage, no background mode, no tool-call continuation) — and it
+does **not** feed the Toolkit's Workflow Visualizer. The Inspector renders the
+conversation; your agent's internal topology is readable from agentfootprint's
+own recorders, not from this wire.
+
+## `responsesWire` — the protocol without the vendor
+
+Under the adapter sits `responsesWire`, the Responses protocol as a plain
+`HttpWire` with no vendor's spelling in it. A deployment that speaks Responses
+on paths of its own composes it with `httpHost` directly:
+
+```ts
+import { httpHost, responsesWire } from 'agentfootprint/hosting';
+
+const host = httpHost({
+  name: 'myResponsesHost',
+  wire: responsesWire({ defaultModel: 'my-agent' }),
+  invokePath: '/responses',
+  healthPath: '/health',
+});
+```
+
+`ResponsesWireOptions` carries the three seams a deployment configures:
+`defaultModel` (echoed in `response` objects when the request names none),
+`sessionFields` (the alias precedence; `DEFAULT_SESSION_FIELDS` is
+`['conversation', 'session_id']`, and the Foundry adapter passes its own
+three-alias list), and `health` (the probe body).
+
+Two of its readers are exported for tests and for dialects built beside it:
+`readResponsesInput` turns a Responses `input` — a bare string or user-message
+items — into the turn's text, refusing what it cannot carry, and
+`readResponsesSession` resolves a body's session aliases in precedence order.
+
+## Verified how
+
+The adapter passes the same host conformance suite as `nodeHost` and
+`agentCoreRuntimeHost`, over a real socket, plus a contract suite carrying the
+request and lifecycle shapes captured from a real Toolkit 1.6.9 Agent Inspector
+session — connection, streaming and final-answer rendering were observed live.
+Cloud-hosted Inspector behavior and Foundry Hosted Agent deployment are not
+covered, and are not claimed.

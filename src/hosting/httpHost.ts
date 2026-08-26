@@ -76,7 +76,9 @@ import {
   ArtifactNotCarriedError,
   HostClosedError,
   InvalidWireOpError,
+  RequestTooLargeError,
   SessionsNotCarriedError,
+  WireRequestRefusal,
 } from './errors.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
@@ -118,6 +120,75 @@ export interface HttpRequestFacts {
  * going out as one body or as a stream of frames — those are {@link httpHost}'s
  * job, identical for every wire, which is the entire point of separating them.
  */
+/**
+ * One Server-Sent Event: the name it is announced under, and the body that
+ * rides with it.
+ */
+/**
+ * Where a failure came from.
+ *
+ * `'refused'` is the handler CHOOSING to fail with words it picked for the
+ * caller. `'threw'` is an exception this host caught — the message is the
+ * author's note to their own logs, and may name a query, a path or a token.
+ *
+ * The distinction exists because a dialect that sanitises has to sanitise the
+ * right one: replacing both silences deliberate refusals, and replacing
+ * neither publishes stack-trace prose to whoever is on the other end.
+ */
+export type FailureOrigin = 'refused' | 'threw';
+
+export interface StreamFrame {
+  readonly event: string;
+  readonly data: unknown;
+}
+
+/**
+ * The frames ONE streaming response is made of.
+ *
+ * ── Why this exists ──────────────────────────────────────────────────────────
+ * A wire's body methods answer "what do the fields say". This answers a
+ * different question: "what SHAPE is a stream". This host's own dialect frames
+ * one homogeneous `chunk` per piece and one terminal frame, and that is a real
+ * shape — but it is not the only one. Several protocols in wide use frame a
+ * stream as a LIFECYCLE instead: named events that open a response, announce
+ * that output is beginning, carry deltas, close each part, and close the
+ * response — every event referring to one response object by id, often
+ * numbered.
+ *
+ * Those cannot be expressed as "a body shape per chunk", because one host
+ * lifecycle point becomes SEVERAL frames, and because the frames share state
+ * (an id minted once, a counter that only goes up). So a dialect that frames
+ * this way supplies one of these PER RESPONSE and keeps that state in it.
+ *
+ * ── The default is one of these ──────────────────────────────────────────────
+ * A wire that supplies none gets framing built from its own body methods —
+ * `chunk`/`complete`/`error`, exactly as before. The incumbent shape is an
+ * INSTANCE of this seam rather than a special case beside it, which is the
+ * reason to believe the seam is in the right place.
+ */
+export interface StreamFraming {
+  /**
+   * Frames to write the moment the stream opens, before the handler runs.
+   * Absent or empty means the stream announces itself with nothing, which is
+   * this host's own behaviour.
+   */
+  open?(): readonly StreamFrame[];
+  /** Frames for one piece of streamed output. */
+  chunk(text: string): readonly StreamFrame[];
+  /** Frames that close a response that completed. */
+  complete(output: string): readonly StreamFrame[];
+  /** Frames that close a response that failed. */
+  failure(message: string, code?: string, origin?: FailureOrigin): readonly StreamFrame[];
+  /**
+   * Frames that close a response ending in one of the other terminals. Absent
+   * means the single-frame default, so a framing written for text alone keeps
+   * working when an artifact or a paused run comes back through it.
+   */
+  awaiting?(pending: PendingAsk): readonly StreamFrame[];
+  artifact?(result: ArtifactWireResult): readonly StreamFrame[];
+  sessions?(result: SessionWireResult): readonly StreamFrame[];
+}
+
 export interface HttpWire {
   /**
    * Pull the port's vocabulary out of one request. Anything the wire cannot
@@ -179,12 +250,52 @@ export interface HttpWire {
      */
     readonly responseHeaders?: Readonly<Record<string, string>>;
   };
+  /**
+   * Did THIS caller ask for a stream?
+   *
+   * Absent, the answer is the HTTP one: an `Accept` of `text/event-stream`.
+   * That is the right default and the wrong rule for dialects that carry the
+   * choice in the body instead — where a client sets a field and never touches
+   * `Accept`, and a host reading only the header answers one JSON body to a
+   * caller waiting for events.
+   *
+   * Present, this is the whole answer: a dialect that says how its callers ask
+   * is not second-guessed by the header. Read before any reply is framed, so it
+   * decides `content-type` for the request.
+   */
+  wantsStream?(facts: HttpRequestFacts): boolean;
+  /**
+   * Framing for ONE streaming response — see {@link StreamFraming}.
+   *
+   * Called once per streaming request, so whatever the framing has to remember
+   * across its frames (an id minted for this response, a sequence counter) is
+   * per-response state and never shared between callers. Absent, this host
+   * frames the stream with the wire's own body shapes.
+   */
+  stream?(facts: HttpRequestFacts): StreamFraming;
   /** Body for a health probe. `uptimeMs` is how long this host has been serving. */
   health(uptimeMs: number): unknown;
-  /** Body for a reply that completed. */
-  output(output: string): unknown;
-  /** Body for a reply that failed. `code` is the refusal's stable code, when it has one. */
-  failure(message: string, code?: string): unknown;
+  /**
+   * Body for a reply that completed.
+   *
+   * `facts` is the request that produced it, for dialects whose reply repeats
+   * something the request said — a model name, a conversation id. Absent only
+   * where there is no request to show: this host has none to give when a body
+   * is built outside a request's own lifecycle.
+   */
+  output(output: string, facts?: HttpRequestFacts): unknown;
+  /**
+   * Body for a reply that failed. `code` is the refusal's stable code, when it
+   * has one — and its PRESENCE is the signal that the message was authored by
+   * this library rather than thrown by somebody's handler, which is what lets a
+   * dialect decide what is safe to repeat to a caller.
+   */
+  failure(
+    message: string,
+    code?: string,
+    facts?: HttpRequestFacts,
+    origin?: FailureOrigin,
+  ): unknown;
   /** Body for one streamed piece, when the caller asked for Server-Sent Events. */
   chunk(text: string): unknown;
   /**
@@ -384,6 +495,34 @@ export interface HttpHostOptions {
    *   });
    */
   readonly onUnhandled?: (req: IncomingMessage, res: ServerResponse) => void;
+  /**
+   * Ceiling on a request body, in bytes. Default: **none**.
+   *
+   * ── Why the default is no ceiling ────────────────────────────────────────
+   * Not because unbounded is right — it is not. A body is memory this process
+   * pays for while somebody else fills it, and a host without a ceiling can be
+   * stopped by one caller with a large POST. The default is absent because
+   * every adapter built on this file inherited unbounded reads before this
+   * option existed, and a number chosen here would silently start refusing
+   * requests that deployments are serving today.
+   *
+   * **Set it.** A deployment that knows the largest body it legitimately
+   * carries should say so; a request over the line is refused with
+   * `ERR_REQUEST_TOO_LARGE` (413) and the read is abandoned at the byte that
+   * crossed it, rather than buffered to the end and then judged.
+   */
+  readonly maxBodyBytes?: number;
+  /**
+   * Answer `HEAD` on the invoke path with 204, instead of the 404 an unowned
+   * method gets. Default `false`.
+   *
+   * Some deployment contracts probe a door before using it — "is the agent
+   * here?" — and a probe is not a turn: nothing is read, nothing is run, and
+   * the body is empty by definition. Opt-in, because a host that answered it
+   * unasked would change what every existing adapter says to a method it has
+   * always declined.
+   */
+  readonly invokeHeadProbe?: boolean;
 }
 
 /** A {@link HostHandle} that also says where it landed. */
@@ -468,6 +607,7 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_SESSION_OP_NEEDS_IDENTITY: 501,
   ERR_SESSION_INDEX_UNAVAILABLE: 501,
   ERR_SESSIONS_NOT_CARRIED: 501,
+  ERR_REQUEST_TOO_LARGE: 413,
 };
 
 /**
@@ -505,6 +645,14 @@ const DEFAULT_CONVERSATION_LIMITS = {
  */
 export function httpHost(options: HttpHostOptions): HttpHost {
   const { name, wire, invokePath, healthPath, conversationPath } = options;
+  const { maxBodyBytes, invokeHeadProbe = false } = options;
+  if (maxBodyBytes !== undefined && (!Number.isInteger(maxBodyBytes) || maxBodyBytes <= 0)) {
+    throw new TypeError(
+      `[hosting] ${name}: maxBodyBytes must be a positive integer; received ${String(
+        maxBodyBytes,
+      )}.`,
+    );
+  }
   const ownServer = options.server;
   // Refused at construction, not ignored at serve time: a `port` next to a
   // server this host does not bind is a caller who believes something untrue
@@ -752,6 +900,13 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           sendJson(res, 200, wire.health(Date.now() - startedAt));
           return;
         }
+        // A capability probe, not a turn: nothing is read and nothing is run,
+        // so it is answered before the body machinery below ever sees it.
+        if (invokeHeadProbe && req.method === 'HEAD' && path === invokePath) {
+          res.writeHead(204, { allow: 'HEAD, POST' });
+          res.end();
+          return;
+        }
         if (req.method !== 'POST' || path !== invokePath) {
           // On a server we own, an unmatched path is nobody else's, so saying
           // so is the honest answer. On a server the CALLER owns it is theirs,
@@ -779,7 +934,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           return;
         }
 
-        const served = serveOne(req, res, handler, wire, name);
+        const served = serveOne(req, res, handler, wire, name, maxBodyBytes);
         inFlight.add(served);
         // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
@@ -857,9 +1012,10 @@ async function serveOne(
   handler: HostHandler,
   wire: HttpWire,
   hostName: string,
+  maxBodyBytes: number | undefined,
 ): Promise<void> {
   try {
-    await dispatchOne(req, res, handler, wire, hostName);
+    await dispatchOne(req, res, handler, wire, hostName, maxBodyBytes);
   } catch (err) {
     // Everything inside answers its own failures; anything that got past them
     // — a dialect that threw, a body that would not stringify — is still this
@@ -874,23 +1030,37 @@ async function dispatchOne(
   handler: HostHandler,
   wire: HttpWire,
   hostName: string,
+  maxBodyBytes: number | undefined,
 ): Promise<void> {
-  const wantsStream = (req.headers.accept ?? '').includes('text/event-stream');
   const controller = new AbortController();
 
   let body: Record<string, unknown>;
   try {
-    body = await readJson(req);
+    body = await readJson(req, maxBodyBytes, hostName);
   } catch (err) {
+    // A body over the ceiling is not a malformed body, and telling the caller
+    // its JSON was invalid would send them looking for a syntax error that is
+    // not there.
+    if (err instanceof RequestTooLargeError) {
+      sendJson(res, STATUS_BY_CODE[err.code] ?? 413, wire.failure(err.message, err.code));
+      return;
+    }
     sendJson(res, 400, wire.failure(`invalid JSON body: ${asError(err).message}`));
     return;
   }
 
   const headers = lowerCasedHeaders(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+  const facts: HttpRequestFacts = { body, headers, query };
+  // Read AFTER the body, because a dialect that carries the choice in the body
+  // cannot answer before there is one. Defaults to the HTTP question when the
+  // dialect does not say.
+  const wantsStream = wire.wantsStream
+    ? wire.wantsStream(facts)
+    : (req.headers.accept ?? '').includes('text/event-stream');
   let read: ReturnType<HttpWire['readRequest']>;
   try {
-    read = wire.readRequest({ body, headers, query });
+    read = wire.readRequest(facts);
   } catch (err) {
     // A body that NAMED a wire operation this dialect does not speak — or
     // named one and left out what it needs. The request is what is wrong, so
@@ -898,7 +1068,15 @@ async function dispatchOne(
     // to a model turn. Anything else a dialect throws stays what it always
     // was: this request's 500, via serveOne's catch.
     if (err instanceof InvalidWireOpError) {
-      sendJson(res, STATUS_BY_CODE[err.code] ?? 400, wire.failure(err.message, err.code));
+      sendJson(res, STATUS_BY_CODE[err.code] ?? 400, wire.failure(err.message, err.code, facts));
+      return;
+    }
+    // A dialect that looked at the body and refused it by name — an input kind
+    // it does not carry, a field of the wrong type. Same law as above: the
+    // REQUEST is what is wrong, so it gets a status the caller can act on and
+    // never falls through to a model turn.
+    if (err instanceof WireRequestRefusal) {
+      sendJson(res, err.status, wire.failure(err.message, err.code, facts));
       return;
     }
     throw err;
@@ -910,6 +1088,10 @@ async function dispatchOne(
   // one JSON body and Server-Sent Events on the caller's behalf.
   const extraHeaders = withoutContentType(responseHeaders);
 
+  // One framing per streaming response, so whatever it remembers across its
+  // frames belongs to this caller alone.
+  const framing = wantsStream ? wire.stream?.(facts) ?? defaultFraming(wire, facts) : undefined;
+
   if (wantsStream) {
     res.writeHead(200, {
       ...extraHeaders,
@@ -917,9 +1099,11 @@ async function dispatchOne(
       'cache-control': 'no-cache',
       connection: 'keep-alive',
     });
+    writeFrames(res, framing?.open?.() ?? []);
   }
 
   let settled = false;
+  let handlerThrew = false;
   // The caller hung up before we answered — tell the handler so it can stop
   // paying for work nobody is waiting for.
   res.once('close', () => {
@@ -937,16 +1121,16 @@ async function dispatchOne(
       // Not streaming? The chunk is a preview of text `complete` will deliver
       // in full, so there is nothing to send and nothing to keep.
       if (settled || !wantsStream) return;
-      res.write(encodeSSE('chunk', wire.chunk(chunk)));
+      writeFrames(res, framing?.chunk(chunk) ?? []);
     },
     complete(output: string): void {
       if (settled) return;
       settled = true;
       if (wantsStream) {
-        res.write(encodeSSE('complete', wire.output(output)));
+        writeFrames(res, framing?.complete(output) ?? []);
         res.end();
       } else {
-        sendJson(res, 200, wire.output(output), extraHeaders);
+        sendJson(res, 200, wire.output(output, facts), extraHeaders);
       }
     },
     artifact(result): void {
@@ -962,7 +1146,7 @@ async function dispatchOne(
       settled = true;
       const payload = wire.artifact(result);
       if (wantsStream) {
-        res.write(encodeSSE('artifact', payload));
+        writeFrames(res, framing?.artifact?.(result) ?? [{ event: 'artifact', data: payload }]);
         res.end();
       } else {
         sendJson(res, 200, payload, extraHeaders);
@@ -985,7 +1169,7 @@ async function dispatchOne(
       settled = true;
       const payload = wire.sessions(result);
       if (wantsStream) {
-        res.write(encodeSSE('sessions', payload));
+        writeFrames(res, framing?.sessions?.(result) ?? [{ event: 'sessions', data: payload }]);
         res.end();
       } else {
         sendJson(res, 200, payload, extraHeaders);
@@ -1010,7 +1194,7 @@ async function dispatchOne(
       settled = true;
       const payload = wire.awaiting(pending);
       if (wantsStream) {
-        res.write(encodeSSE('awaiting', payload));
+        writeFrames(res, framing?.awaiting?.(pending) ?? [{ event: 'awaiting', data: payload }]);
         res.end();
       } else {
         sendJson(res, AWAITING_STATUS, payload, extraHeaders);
@@ -1020,9 +1204,10 @@ async function dispatchOne(
       if (settled) return;
       settled = true;
       const code = (error as { code?: string }).code;
-      const payload = wire.failure(error.message, code);
+      const origin: FailureOrigin = handlerThrew ? 'threw' : 'refused';
+      const payload = wire.failure(error.message, code, facts, origin);
       if (wantsStream) {
-        res.write(encodeSSE('error', payload));
+        writeFrames(res, framing?.failure(error.message, code, origin) ?? []);
         res.end();
       } else {
         sendJson(
@@ -1050,7 +1235,10 @@ async function dispatchOne(
       reply,
     );
   } catch (err) {
-    // A handler that throws is a failed request, never a hung one.
+    // A handler that throws is a failed request, never a hung one — and the
+    // words it threw are not the same kind of thing as the words a handler
+    // CHOOSES to fail with. Dialects that care are told which this was.
+    handlerThrew = true;
     reply.fail(asError(err));
   }
   // A handler that returned without answering gets one authored answer rather
@@ -1091,18 +1279,76 @@ async function dispatchOne(
  * was found to break: a surprise this file has not imagined yet becomes THIS
  * REQUEST's 400 or 500, the failure of the thing that caused it.
  */
-function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+/**
+ * Write a framing's frames, in order, as Server-Sent Events.
+ *
+ * A framing that returns nothing writes nothing — which is how "this lifecycle
+ * point has no frame in this dialect" is said.
+ */
+function writeFrames(res: ServerResponse, frames: readonly StreamFrame[]): void {
+  for (const frame of frames) res.write(encodeSSE(frame.event, frame.data));
+}
+
+/**
+ * This host's own stream shape, expressed as a {@link StreamFraming}.
+ *
+ * One `chunk` frame per piece, one terminal frame, both carrying the wire's own
+ * body shapes — byte for byte what this file wrote before the seam existed. It
+ * lives here as an ordinary framing rather than as a branch, so the shape every
+ * shipped adapter depends on is exercised by the same code path a dialect's own
+ * framing takes.
+ */
+function defaultFraming(wire: HttpWire, facts: HttpRequestFacts): StreamFraming {
+  return {
+    chunk: (text) => [{ event: 'chunk', data: wire.chunk(text) }],
+    complete: (output) => [{ event: 'complete', data: wire.output(output, facts) }],
+    failure: (message, code, origin) => [
+      { event: 'error', data: wire.failure(message, code, facts, origin) },
+    ],
+  };
+}
+
+/**
+ * Read one JSON body, refusing at the ceiling rather than after it.
+ *
+ * The refusal fires on the chunk that CROSSES the line: what was buffered is
+ * dropped and nothing further is kept, so a caller cannot spend this process's
+ * memory by sending a body it was always going to be refused for. With no
+ * ceiling the read is what it has always been.
+ */
+function readJson(
+  req: IncomingMessage,
+  maxBodyBytes: number | undefined,
+  hostName: string,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+    let chunks: Buffer[] = [];
+    let bytes = 0;
+    let refused = false;
     req.on('data', (c: Buffer | string) => {
+      if (refused) return;
       try {
-        chunks.push(typeof c === 'string' ? Buffer.from(c, 'utf8') : c);
+        const chunk = typeof c === 'string' ? Buffer.from(c, 'utf8') : c;
+        bytes += chunk.byteLength;
+        if (maxBodyBytes !== undefined && bytes > maxBodyBytes) {
+          refused = true;
+          // Let go of what was read: this request is already answered, and
+          // holding its bytes until the socket drains is the cost the ceiling
+          // exists to refuse.
+          chunks = [];
+          reject(new RequestTooLargeError(maxBodyBytes, hostName));
+          return;
+        }
+        chunks.push(chunk);
       } catch (err) {
         reject(asError(err));
       }
     });
-    req.on('error', reject);
+    req.on('error', (err) => {
+      if (!refused) reject(err);
+    });
     req.on('end', () => {
+      if (refused) return;
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
         if (!raw) return resolve({});
