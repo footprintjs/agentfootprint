@@ -179,6 +179,48 @@ events**, so ingress refusals — a 401 from `identity.verify`, a 429 from
 stream for those, and it deliberately does **not** join this chain.
 </Callout>
 
+## Being scored by somebody else's evaluator
+
+A trace-scoring service reads spans your agent already emits — but only if it can
+CLASSIFY them, and only if the content it is grading is on them. Two settings on
+`otelObservability` decide both, and both are opt-in:
+
+- **`scopeName`** — the instrumentation scope every span is recorded under
+  (default `'agentfootprint'`). Some consumers ROUTE on this name rather than
+  read it, and a name they do not recognise is skipped in silence — which looks
+  exactly like an agent with nothing wrong. The default does not change, because
+  a rename moves every existing dashboard's spans out from under it.
+- **`captureContent`** (default `false`) — puts the turn's prompt on
+  `gen_ai.task.input` and its answer on `gen_ai.task.output`. This adapter's
+  standing rule is that content does not ride spans; enabling it **exports raw
+  prompt and answer text** to whatever backend your tracer points at, where it is
+  typically retained and searchable. Enable it when a consumer's whole purpose is
+  to read the content — a scorer cannot grade a turn it cannot see — and not to
+  make a dashboard richer. Per-inference message arrays are deliberately not
+  emitted: the `llm_start` / `llm_end` events carry model, usage and stop reason,
+  never the messages, so there is nothing truthful to put there.
+
+AWS Bedrock **AgentCore Evaluations** is the consumer that forced both. Since
+July 2026 it scores agents that do not run on AWS, and `agentCoreEvaluationSpans`
+in `agentfootprint/observe` is the configuration it needs:
+
+```ts
+import { agentCoreEvaluationSpans } from 'agentfootprint/observe';
+
+agent.enable.observability({ strategy: agentCoreEvaluationSpans({ serviceName: 'support-agent' }) });
+```
+
+That is a configuration of `otelObservability` — same spans, same attributes —
+with the scope name their classifier accepts
+(`AGENTCORE_EVALUATIONS_SCOPE_NAME`) and `captureContent` on. The scope name is
+not overridable through it: honouring an override would produce spans the
+service skips, which is the failure the named function exists to prevent.
+Delivering those spans to CloudWatch is separate and yours.
+
+Worth stating plainly, because the two are easy to confuse: **their evaluators
+say what the score is; the agentfootprint trace says why it happened.** They
+compose, and neither replaces the other.
+
 ## Axis 2 — composition
 
 `composeObservability(children)` returns one `ObservabilityStrategy` named

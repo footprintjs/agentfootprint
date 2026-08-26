@@ -22,8 +22,16 @@ onto AgentCore.
 | **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/providers` |
 | **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/security` |
 | **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
-| **Policy** | ⛔ enforced at the Gateway | `agentCorePolicy()` is retired in 9.4.0 (it dispatched a command AgentCore does not have). Use `PermissionPolicy` / `.toolMiddleware()` for rules you own — `agentfootprint/security` |
-| **Evaluations** | ✅ overlaps | emit `$eval` + `QualityRecorder`; export via the observability adapter |
+| **Policy** | ⛔ enforced at the Gateway, by design | Policy reached GA in March 2026 — Cedar rules attached to a **Gateway**, evaluated inside it. There is still **no dry-run/evaluate API** (re-verified against `@aws-sdk/client-bedrock-agentcore-control` 3.1118.0, all 165 commands enumerated), so `agentCorePolicy()` stays retired: nothing exists for an adapter to call. Use `PermissionPolicy` / `.toolMiddleware()` for rules you own — `agentfootprint/security` |
+| **Evaluations** | ✅ adapter + fork | `agentCoreEvaluationSpans()` shapes spans so AWS's evaluators can score them — `agentfootprint/observe`. Our own `$eval` + `QualityRecorder` stay: **their evaluators say what the score is, our trace says why** |
+
+> **Not a competitor to AWS's own SDK.** AWS ships `bedrock-agentcore` on npm, whose
+> `BedrockAgentCoreApp` serves the same `/invocations` + `/ping` contract our runtime host does.
+> If all you need is to serve that contract, use theirs. What agentfootprint adds is the part
+> that is not the contract: the same agent moves between clouds because only the *adapter*
+> changes, every host passes one conformance suite over a real socket, sessions and checkpoints
+> are a port with several stores behind it, and the whole run leaves a causal trace. Pick on
+> that basis, not on who serves HTTP.
 
 **How much of this is verified:** the Runtime host is plain HTTP with no AWS SDK on its path
 and passes the host conformance suite over a real socket. Every adapter that calls an AWS SDK
@@ -239,6 +247,27 @@ there for a static API key.
 
 ## Identity — downstream OAuth (`agentCoreIdentity`)
 
+> **Three ways to get a credential, since 9.66.0.** A *machine* request vends the
+> agent's own token (`M2M`). A *user* request does one of two things, chosen by
+> `userFlow`: `'consent'` (the default) sends the person to an approval screen
+> once and remembers it, while `'exchange'` trades the login they already have
+> for a scoped downstream token with no screen at all — available only where the
+> credential provider was configured for that exchange, and a decision to make
+> deliberately, since the consent screen is what asks the person. Services whose
+> credential is an API key rather than an OAuth token are named in
+> `apiKeyServices` and come back as an `apiKey` credential.
+>
+> When a consent screen *is* shown, the round-trip ends in **your** web app:
+> `completeAgentCoreAuthorization({ sessionId, userId | userToken })` is the
+> handshake your callback route calls after it has confirmed who the browser
+> belongs to. It lives outside the provider on purpose — that route runs in a
+> different process from the agent, and often a different service.
+>
+> The shape this takes in agentfootprint is a **pause**: the first vend answers
+> `authorization-required`, the person approves, your route completes the
+> handshake, and the same request re-run is `issued`. The consent, and the wait,
+> are both in the trace.
+
 When a tool needs to call GitHub/Slack/Google **on behalf of the user**, AgentCore
 Identity vends the token. The recommended pattern is **declare-and-push**: the
 tool *declares* the credential it needs, and the framework resolves it **before**
@@ -361,6 +390,21 @@ second backend has real pull.
   authorization call at all. The export remains and refuses at construction with
   the full explanation.
 
+  **Still true after Policy went GA (March 2026).** The service is real now —
+  Cedar (and Dogwood, for rules about *sequences* of actions) evaluated inside a
+  Gateway you attach a policy engine to, default-deny, forbid-wins. What has not
+  appeared is anything to call: re-enumerating all 165 commands of
+  `@aws-sdk/client-bedrock-agentcore-control` 3.1118.0 finds no `EvaluatePolicy`,
+  no `TestPolicy`, no `IsAuthorized`. AWS's own testing story is deploying the
+  engine in `LOG_ONLY` mode and reading the traces. So the retirement was not a
+  gap we left open — it was the architecture, and it held.
+
+  One thing a client *can* do, and this library will: temporal (session-aware)
+  policies group a caller's actions by the
+  `x-amzn-bedrock-agentcore-policy-session-id` request header. Stamping our
+  session id there is what lets AWS's rules reason about a conversation instead
+  of a single call.
+
   For rules you own, the `PermissionChecker` port is unchanged:
 
   ```ts
@@ -374,8 +418,35 @@ second backend has real pull.
   gate decides what the model is *shown*, the checker decides what actually
   *runs*. A local allowlist also doubles as a sync `gatedTools` predicate; a
   remote checker cannot, because that predicate is synchronous.
-- **Evaluations** (quality monitoring) → emit `$eval(name, score)` and use
-  `QualityRecorder`; export the scores through the observability adapter.
+- **Evaluations** (quality monitoring) → two things that compose, not two
+  things that compete.
+
+  **Theirs.** AgentCore Evaluations reached GA in March 2026 with 13 built-in
+  evaluators, and since July 2026 it scores agents that **do not run on AWS** —
+  any agent whose OpenTelemetry spans reach CloudWatch and match its contract.
+  Two details decide whether yours do, and both are settings on our OTel
+  adapter:
+
+  ```ts
+  import { agentCoreEvaluationSpans } from 'agentfootprint/observe';
+
+  agent.enable.observability({ strategy: agentCoreEvaluationSpans({ serviceName: 'support-agent' }) });
+  ```
+
+  That is a *configuration* of `otelObservability`, not a second adapter: it
+  sets the instrumentation scope name their classifier routes on
+  (`AGENTCORE_EVALUATIONS_SCOPE_NAME`) and turns on `captureContent`, which puts
+  the turn's prompt and answer on the span where a scorer can read them. Both
+  are opt-in on the neutral adapter, because content on a span is an export of
+  content — see `captureContent` before you enable it. Getting those spans to
+  CloudWatch is separate and yours (an OTLP exporter with AWS's documented
+  headers, or a runtime that does it for you).
+
+  **Ours.** Keep emitting `$eval(name, score)` and `QualityRecorder`. The
+  division worth stating plainly: **AWS's evaluators tell you what the score is;
+  the agentfootprint trace tells you why it happened.** A low
+  tool-selection score is a number until you can see which context the choice
+  was made from — that part is not something an evaluator computes.
 
 ---
 

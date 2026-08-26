@@ -131,10 +131,57 @@ export interface OtelObservabilityOptions {
   /** Service name on every emitted span. Surfaces in your OTel
    *  backend's service map. Required. */
   readonly serviceName: string;
-  /** OTel Tracer to use. Defaults to
-   *  `trace.getTracer('agentfootprint', AGENTFOOTPRINT_VERSION)`
-   *  (where `trace` is the lazy-imported `@opentelemetry/api`). */
+  /** OTel Tracer to use. Defaults to `trace.getTracer(scopeName)` — where
+   *  `trace` is the lazy-imported `@opentelemetry/api` and `scopeName` is the
+   *  option below. */
   readonly tracer?: OtelTracerLike;
+  /**
+   * The INSTRUMENTATION SCOPE name every span is recorded under — what a
+   * backend shows as `scope.name`. Default `'agentfootprint'`.
+   *
+   * ── Why this is a knob and not a constant ────────────────────────────────
+   * Some telemetry consumers ROUTE on this name rather than read it. AWS
+   * Bedrock AgentCore Evaluations is the case that forced the option: it will
+   * score any agent's traces, from anywhere, but only classifies spans whose
+   * scope name begins `opentelemetry.instrumentation.` or
+   * `openinference.instrumentation.` — everything else is skipped in silence,
+   * which is indistinguishable from "your agent was fine".
+   *
+   * The default does NOT change, because a rename moves every existing
+   * dashboard's spans out from under it. Consumers who need a routable name
+   * pass one; `agentCoreEvaluationSpans()` in the AgentCore adapter is that
+   * one consumer's spelling, kept in that vendor's own file.
+   *
+   * Ignored when `tracer` is supplied — a tracer you built already has a name.
+   */
+  readonly scopeName?: string;
+  /**
+   * Put the turn's PROMPT and ANSWER TEXT on the agent span (default
+   * `false`): `gen_ai.task.input` from the user's prompt and
+   * `gen_ai.task.output` from the final answer.
+   *
+   * ── Off by default, deliberately ─────────────────────────────────────────
+   * This adapter's standing rule is that content does not ride spans — the
+   * snapshot / audit-log channel carries it under the consumer's own
+   * redaction policy. Turning this on EXPORTS raw prompt and answer text to
+   * whatever backend the tracer points at, where it is typically retained and
+   * searchable, and no redaction of ours stands between the two.
+   *
+   * ── Why it exists ────────────────────────────────────────────────────────
+   * Trace-scoring services read the answer they are grading off the span.
+   * AgentCore Evaluations reads exactly these two attributes (after an event
+   * body it only emits in its own runtime), so a scorer sees an empty turn
+   * without them. Enable it when a consumer's whole purpose is to read the
+   * content, and not to make dashboards prettier.
+   *
+   * ── What it is NOT ───────────────────────────────────────────────────────
+   * Per-inference message arrays (`gen_ai.input.messages` /
+   * `gen_ai.output.messages`) are NOT emitted: this adapter's `llm_start` /
+   * `llm_end` events carry model, usage and stop reason, never the messages,
+   * so there is nothing truthful to put there. Turn-level input and output is
+   * what we have and all this claims.
+   */
+  readonly captureContent?: boolean;
   /** 0..1 — sample rate for turn-level spans. Default `1.0`.
    *  Sampling decisions are normally an OTel SDK concern (via
    *  `Sampler`); this option is a per-strategy override for cases
@@ -175,6 +222,13 @@ export interface OtelObservabilityOptions {
    * construction, but visible at the call site.
    */
   readonly onError?: (error: Error, event?: AgentfootprintEvent) => void;
+  /**
+   * @internal Pre-resolved `@opentelemetry/api` module, for tests that need
+   * the path where this adapter builds its OWN tracer — the only path on
+   * which {@link OtelObservabilityOptions.scopeName} is observable. Skips the
+   * lazy require, exactly as `_client` does on the SDK-backed adapters.
+   */
+  readonly _otelApi?: OtelApiModule;
 }
 
 // ─── OTel-shaped surfaces (subset we use) ────────────────────────────
@@ -387,12 +441,14 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   const sampleRate = opts.sampleRate ?? 1;
   const genAiNames = opts.genAiSpanNames === true;
   const explainability = opts.explainability !== false;
+  const scopeName = opts.scopeName ?? 'agentfootprint';
+  const captureContent = opts.captureContent === true;
 
   // Lazy-resolve tracer if not injected. Defer the API import until
   // first event so consumers who don't actually fire events (no agent
   // run yet) don't even hit the OTel API surface.
   let tracer: OtelTracerLike | undefined = opts.tracer;
-  let otelApi: OtelApiModule | undefined;
+  let otelApi: OtelApiModule | undefined = opts._otelApi;
   function ensureTracer(): OtelTracerLike {
     if (tracer) return tracer;
     if (!otelApi) {
@@ -413,7 +469,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
         'otelObservability: `@opentelemetry/api` is installed but `trace.getTracer` not found. Update the package.',
       );
     }
-    tracer = otelApi.trace.getTracer('agentfootprint');
+    tracer = otelApi.trace.getTracer(scopeName);
     return tracer;
   }
 
@@ -730,7 +786,8 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
           // `invoke_agent` span per the GenAI agent-span conventions.
           // `gen_ai.provider.name` / `gen_ai.request.model` (conditionally
           // required) are back-filled on the first llm_start — unknown here.
-          // `userPrompt` is deliberately NOT emitted (PII).
+          // `userPrompt` rides the span ONLY when the consumer asked for it
+          // (`captureContent`) — see that option for what enabling it exports.
           // We emit `agentfootprint.run.id` (not `gen_ai.conversation.id`):
           // a run is one turn, not a conversation/session — agentfootprint
           // has no session primitive yet, and mislabeling would corrupt
@@ -759,6 +816,10 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
                 'agentfootprint.principal.id': actor.principal,
               }),
               ...(actor?.tenant !== undefined && { 'agentfootprint.tenant.id': actor.tenant }),
+              ...(captureContent &&
+                typeof (event.payload as { userPrompt?: unknown }).userPrompt === 'string' && {
+                  'gen_ai.task.input': (event.payload as { userPrompt: string }).userPrompt,
+                }),
             },
           );
         }
@@ -775,8 +836,11 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
             totalInputTokens?: number;
             totalOutputTokens?: number;
             iterationCount?: number;
+            finalContent?: string;
           };
           setAttrs(t.root, {
+            ...(captureContent &&
+              typeof p.finalContent === 'string' && { 'gen_ai.task.output': p.finalContent }),
             ...(typeof p.totalInputTokens === 'number' && {
               'gen_ai.usage.input_tokens': p.totalInputTokens,
             }),

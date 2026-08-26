@@ -47,6 +47,11 @@
 
 export {
   agentcoreObservability,
+  // Spans shaped for AgentCore Evaluations (9.66.0) — a configuration of
+  // `otelObservability`, kept in the vendor's file because the requirement
+  // (the scope name their classifier routes on) is the vendor's.
+  agentCoreEvaluationSpans,
+  AGENTCORE_EVALUATIONS_SCOPE_NAME,
   type AgentcoreObservabilityOptions,
 } from './adapters/observability/agentcore.js';
 export {

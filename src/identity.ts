@@ -63,9 +63,14 @@ export {
 } from './identity/withCredentialRetry.js';
 export {
   agentCoreIdentity,
+  // The consent handshake (9.66.0) — called from YOUR callback route, not from
+  // the agent run, which is why it is a function of its own rather than a
+  // method on the provider that route never sees.
+  completeAgentCoreAuthorization,
   type AgentCoreIdentityOptions,
   type AgentCoreIdentityClientLike,
   type AgentCoreOauthResponse,
+  type CompleteAgentCoreAuthorizationOptions,
 } from './adapters/identity/agentcore.js';
 // HashiCorp-Vault-compatible KV v2, over plain HTTP (9.8.0) — no SDK, no
 // vendor client. V1 is token auth + KV v2 + no leases, and every other shape

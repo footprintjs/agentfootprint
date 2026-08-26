@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.66.0] - 2026-08-26
+
+### Added
+
+- **`agentCoreEvaluationSpans()` — an agentfootprint agent can now be scored by
+  AWS's own evaluators, hosted anywhere** (`agentfootprint/observe`). Since July
+  2026 AgentCore Evaluations grades agents that do not run on AWS, from spans
+  that reach CloudWatch. Ours were invisible to it, and the reason was two
+  fields: their classifier routes on the instrumentation scope name and skips
+  anything not under `opentelemetry.instrumentation.*` **silently**, and their
+  scorers read the turn's text off attributes we deliberately never emitted.
+  Both are now options on the NEUTRAL adapter, because both are OpenTelemetry
+  concepts rather than anybody's product: `otelObservability({ scopeName })`
+  (default `'agentfootprint'`, unchanged — a rename moves every existing
+  dashboard's spans out from under it) and `otelObservability({ captureContent })`
+  (default **false** — enabling it exports raw prompt and answer text as
+  `gen_ai.task.input` / `gen_ai.task.output`). `agentCoreEvaluationSpans()` is a
+  CONFIGURATION of that adapter with the two settings AWS requires, exported
+  from the vendor's own file beside `AGENTCORE_EVALUATIONS_SCOPE_NAME`; the
+  scope name is deliberately not overridable through it, since honouring an
+  override would produce spans the service skips. Per-inference message arrays
+  are NOT emitted: `llm_start` / `llm_end` carry model, usage and stop reason,
+  never the messages, so there is nothing truthful to put there. The division
+  stated plainly, in the docs and here: **their evaluators say what the score
+  is; the agentfootprint trace says why it happened.**
+
+- **`agentCoreIdentity` learned the three operations AgentCore Identity grew
+  after 9.4.0** (`agentfootprint/security`), each verified against a real
+  install of `@aws-sdk/client-bedrock-agentcore` **3.1118.0** — names, request
+  shapes and enum values read off the package rather than remembered, which is
+  the 9.4.0 law:
+  - **`userFlow: 'consent' | 'exchange'`** — `'exchange'` sends
+    `ON_BEHALF_OF_TOKEN_EXCHANGE`, trading the person's existing login for a
+    scoped downstream token with no consent screen at any point. Default stays
+    `'consent'` (`USER_FEDERATION`), and `mode: 'machine'` is untouched: M2M has
+    no user to act for. Not simply the nicer flow — the consent screen is what
+    asks the person, and choosing `'exchange'` is a deployment saying it does
+    not need to.
+  - **`apiKeyServices` + `apiKeyHeader`** — services whose credential is an API
+    key are vended with `GetResourceApiKey` and come back as an `apiKey`
+    credential. No auto-detection: AgentCore holds both kinds in one vault
+    behind two operations and the provider name does not say which, so guessing
+    would mean a failed call, a retry, and an ambiguous error. A missing
+    workload identity token is refused BY NAME rather than sent (the field is
+    required on `GetResourceApiKeyRequest` — read off the SDK's types).
+  - **`completeAgentCoreAuthorization({ sessionId, userToken | userId })`** —
+    the handshake that closes a consent round-trip, exported as a FUNCTION and
+    not a provider method because it runs in your web callback route: a
+    different process from the agent run, often a different service. Naming the
+    person twice, or not at all, is refused before any call, because the field
+    it maps to (`userIdentifier`) is a one-of. The shape this takes in
+    agentfootprint is a **pause**: first vend answers `authorization-required`,
+    the person approves, your route completes the handshake, and the same
+    request re-run is `issued` — pinned end to end by a test.
+  - The AWS command-name pin grew both new commands; five of AgentCore
+    Identity's six data-plane operations are now covered.
+
+- **`otelObservability({ _otelApi })`** — an internal test seam for the path
+  where the adapter builds its own tracer, which is the only path `scopeName` is
+  observable on. Mirrors the `_client` / `_sdk` seams every SDK-backed adapter
+  already has.
+
+### Changed
+
+- **The AgentCore guide stopped describing the 2025 platform.** Policy reached
+  GA in March 2026 and `agentCorePolicy()` stays retired — re-enumerating all
+  165 commands of `@aws-sdk/client-bedrock-agentcore-control` 3.1118.0 finds no
+  `EvaluatePolicy`, `TestPolicy` or `IsAuthorized`, so the 9.4.0 reading
+  (enforcement lives inside the Gateway, `LOG_ONLY` is the testing story) was
+  the architecture rather than a gap we left open. The Evaluations row now names
+  the bridge, and a new note says plainly that AWS ships its own TypeScript
+  serve-app: if all you need is the `/invocations` contract, use theirs — what
+  this library adds is the part that is not the contract.
+
+- `otelObservability`'s `tracer` docstring named a version constant that has
+  never existed in this package. It now describes what the code does.
+
 ## [9.65.0] - 2026-08-26
 
 ### Added

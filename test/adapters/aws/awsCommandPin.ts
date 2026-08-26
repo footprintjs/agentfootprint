@@ -91,6 +91,8 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'GetResourceOauth2TokenCommand',
       'GetWorkloadAccessTokenForUserIdCommand',
       'GetWorkloadAccessTokenForJWTCommand',
+      'GetResourceApiKeyCommand',
+      'CompleteResourceTokenAuthCommand',
     ],
     note:
       'The JWT exchange (9.12.0) was verified against a real install of 3.1108.0 before it ' +
@@ -100,8 +102,14 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'described by the service as "an opaque token representing the identity of both the ' +
       'workload and the user". That is the same field the by-userId exchange answers with, ' +
       "which is why both feed `GetResourceOauth2Token`'s `workloadIdentityToken` unchanged. " +
-      "Three of AgentCore Identity's six data-plane operations are covered; " +
-      'GetWorkloadAccessToken, GetResourceApiKey and CompleteResourceTokenAuth are not.',
+      'API-key vending and the consent handshake joined in 9.66.0: ' +
+      '`GetResourceApiKeyRequest` is `{ resourceCredentialProviderName, ' +
+      'workloadIdentityToken }` answering `{ apiKey }`, and ' +
+      '`CompleteResourceTokenAuthRequest` is `{ sessionUri, userIdentifier }` where ' +
+      'userIdentifier is a UNION with exactly one member set — which is why the adapter ' +
+      "refuses both-or-neither before it ever sends. Five of AgentCore Identity's six " +
+      'data-plane operations are now covered; GetWorkloadAccessToken (the no-user variant) ' +
+      'is not, because every path here binds a user.',
   },
   {
     adapter: 'AgentCoreStore',

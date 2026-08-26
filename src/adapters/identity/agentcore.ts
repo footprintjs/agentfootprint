@@ -89,7 +89,7 @@ import type {
   CredentialRequest,
   CredentialResult,
 } from '../../identity/types.js';
-import { bearer } from '../../identity/kinds.js';
+import { apiKey, bearer } from '../../identity/kinds.js';
 
 /** Raw result shape we consume from the AgentCore identity client. */
 export interface AgentCoreOauthResponse {
@@ -112,7 +112,7 @@ export interface AgentCoreIdentityClientLike {
   getResourceOauth2Token(input: {
     readonly resourceCredentialProviderName: string;
     readonly scopes: readonly string[];
-    readonly oauth2Flow: 'M2M' | 'USER_FEDERATION';
+    readonly oauth2Flow: 'M2M' | 'USER_FEDERATION' | 'ON_BEHALF_OF_TOKEN_EXCHANGE';
     readonly forceAuthentication: boolean;
     readonly workloadIdentityToken?: string;
   }): Promise<AgentCoreOauthResponse>;
@@ -131,6 +131,23 @@ export interface AgentCoreIdentityClientLike {
     readonly workloadName: string;
     readonly userToken: string;
   }): Promise<{ readonly workloadAccessToken?: string }>;
+  /** Optional — required only for services named in `apiKeyServices`. AgentCore
+   *  keeps API keys in the same vault as OAuth tokens, behind a different
+   *  operation, so this is a sibling of `getResourceOauth2Token` rather than a
+   *  mode of it. */
+  getResourceApiKey?(input: {
+    readonly resourceCredentialProviderName: string;
+    /** REQUIRED on the wire — `GetResourceApiKeyRequest` declares it non-optional. */
+    readonly workloadIdentityToken: string;
+  }): Promise<{ readonly apiKey?: string }>;
+  /** Optional — required only by {@link completeAgentCoreAuthorization}. Tells
+   *  AgentCore that the person behind `sessionId` finished consenting, which is
+   *  what releases the token into the vault for the next vend. */
+  completeResourceTokenAuth?(input: {
+    readonly sessionId: string;
+    readonly userToken?: string;
+    readonly userId?: string;
+  }): Promise<void>;
 }
 
 export interface AgentCoreIdentityOptions {
@@ -171,6 +188,42 @@ export interface AgentCoreIdentityOptions {
     readonly principal?: string;
     readonly tenant?: string;
   }) => string | undefined;
+  /**
+   * How a `mode: 'user'` request gets its token (9.66.0). Default `'consent'`.
+   *
+   *   `'consent'`  — AgentCore's `USER_FEDERATION`. If the vault has no grant
+   *                  for this (workload, user), the result is an
+   *                  `authorization-required` with a URL to send the person to.
+   *                  They approve once; later calls return a token directly.
+   *   `'exchange'` — AgentCore's `ON_BEHALF_OF_TOKEN_EXCHANGE`. The person's
+   *                  own login is TRADED for a scoped downstream token, with no
+   *                  consent screen at any point.
+   *
+   * `'exchange'` is not simply the nicer one. It works only where the
+   * downstream provider was configured for it (an on-behalf-of exchange grant
+   * on the credential provider) and where trading the user's session for
+   * downstream access is a decision your organisation has already made — the
+   * consent screen is what asks the person, and this flow is the deployment
+   * saying it does not need to. Choose it deliberately.
+   *
+   * `mode: 'machine'` is unaffected: M2M has no user to act for.
+   */
+  readonly userFlow?: 'consent' | 'exchange';
+  /**
+   * Services whose credential is an API KEY, not an OAuth token (9.66.0).
+   *
+   * AgentCore's vault holds both kinds behind two different operations, and the
+   * provider NAME alone does not say which — so a request for a service named
+   * here is vended with `GetResourceApiKey` and comes back as an
+   * {@link apiKey} credential. Everything else takes the OAuth path.
+   *
+   * There is no auto-detection on purpose: guessing would mean calling one
+   * operation, catching a failure, and retrying with the other, which turns a
+   * configuration mistake into two round-trips and an ambiguous error.
+   */
+  readonly apiKeyServices?: readonly string[];
+  /** Header an API-key credential is sent in. Default `'x-api-key'`. */
+  readonly apiKeyHeader?: string;
   /** Stable provider id (default 'agentcore-identity'). */
   readonly id?: string;
   /** Test seam — inject a client implementing {@link AgentCoreIdentityClientLike}.
@@ -189,6 +242,8 @@ export interface BedrockAgentCoreIdentitySdkModule {
   readonly GetResourceOauth2TokenCommand?: new (input: unknown) => unknown;
   readonly GetWorkloadAccessTokenForUserIdCommand?: new (input: unknown) => unknown;
   readonly GetWorkloadAccessTokenForJWTCommand?: new (input: unknown) => unknown;
+  readonly GetResourceApiKeyCommand?: new (input: unknown) => unknown;
+  readonly CompleteResourceTokenAuthCommand?: new (input: unknown) => unknown;
 }
 
 /**
@@ -360,6 +415,23 @@ function createIdentityClient(options: AgentCoreIdentityOptions): AgentCoreIdent
         )) as { workloadAccessToken?: string } | null) ?? {}
       );
     },
+    async getResourceApiKey(input) {
+      const r = (await send(mod.GetResourceApiKeyCommand, 'GetResourceApiKeyCommand', input)) as {
+        apiKey?: string;
+      } | null;
+      return { ...(r?.apiKey !== undefined && { apiKey: r.apiKey }) };
+    },
+    async completeResourceTokenAuth(input) {
+      // `CompleteResourceTokenAuthRequest` is `{ sessionUri, userIdentifier }`,
+      // where userIdentifier is a UNION with exactly one member set — the
+      // person's own token, or the id the agent asserts for them. Success is an
+      // empty 200, so there is nothing to map back.
+      await send(mod.CompleteResourceTokenAuthCommand, 'CompleteResourceTokenAuthCommand', {
+        sessionUri: input.sessionId,
+        userIdentifier:
+          input.userToken !== undefined ? { userToken: input.userToken } : { userId: input.userId },
+      });
+    },
     async getWorkloadAccessTokenForJWT(input) {
       // `GetWorkloadAccessTokenForJWTRequest` is `{ workloadName, userToken }`,
       // both required, and the response is `{ workloadAccessToken }` — verified
@@ -477,14 +549,60 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
     );
   };
 
+  const userFlow = options.userFlow ?? 'consent';
+  const apiKeyServices = new Set(options.apiKeyServices ?? []);
+  const apiKeyHeader = options.apiKeyHeader ?? 'x-api-key';
+
   return {
     id: options.id ?? 'agentcore-identity',
     async getCredential(req: CredentialRequest): Promise<CredentialResult> {
       const workloadIdentityToken = await resolveWorkloadToken(req);
+
+      // An API-key service never touches the OAuth path: different operation,
+      // different credential kind, and no consent round-trip exists for it.
+      if (apiKeyServices.has(req.service)) {
+        const c = getClient();
+        if (!c.getResourceApiKey) {
+          throw new Error(
+            `agentCoreIdentity: '${req.service}' is listed in \`apiKeyServices\` but the ` +
+              'injected `_client` has no getResourceApiKey. Implement it, or drop the service ' +
+              'from the list to vend it as OAuth.',
+          );
+        }
+        if (!workloadIdentityToken) {
+          // Required on `GetResourceApiKeyRequest`, exactly as on the OAuth
+          // call — verified against the real SDK's types, not assumed. Sending
+          // without one buys an opaque ValidationException; this names the two
+          // ways to supply it instead.
+          throw new Error(
+            `agentCoreIdentity: GetResourceApiKey for '${req.service}' requires a workload ` +
+              'identity token, and none was available for this request.\n' +
+              '  Inside AgentCore Runtime the container is given one — pass it as ' +
+              '`workloadIdentityToken`.\n' +
+              '  Elsewhere, configure `workloadName` so a per-user token is resolved first.',
+          );
+        }
+        const keyRes = await c.getResourceApiKey({
+          resourceCredentialProviderName: req.service,
+          workloadIdentityToken,
+        });
+        if (!keyRes.apiKey) {
+          throw new Error(
+            `agentCoreIdentity: GetResourceApiKey for '${req.service}' returned no key.`,
+          );
+        }
+        return { status: 'issued', credential: apiKey(keyRes.apiKey, apiKeyHeader) };
+      }
+
       const res = await getClient().getResourceOauth2Token({
         resourceCredentialProviderName: req.service,
         scopes: req.scopes ?? [],
-        oauth2Flow: req.mode === 'user' ? 'USER_FEDERATION' : 'M2M',
+        oauth2Flow:
+          req.mode === 'user'
+            ? userFlow === 'exchange'
+              ? 'ON_BEHALF_OF_TOKEN_EXCHANGE'
+              : 'USER_FEDERATION'
+            : 'M2M',
         forceAuthentication: req.forceReauth ?? false,
         ...(workloadIdentityToken && { workloadIdentityToken }),
       });
@@ -510,4 +628,97 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
       );
     },
   };
+}
+
+/** Connection options for {@link completeAgentCoreAuthorization}. */
+export interface CompleteAgentCoreAuthorizationOptions {
+  /** The 3LO round-trip this completes — the `sessionId` from the
+   *  `authorization-required` result the agent returned. */
+  readonly sessionId: string;
+  /** The person's own IdP-issued JWT, if your callback has it. Preferred: it is
+   *  the artifact their provider signed. */
+  readonly userToken?: string;
+  /** The user id you asserted for them, when no JWT is available. Exactly one
+   *  of `userToken` / `userId` is required. */
+  readonly userId?: string;
+  readonly region?: string;
+  /** Test seam — same client surface the provider uses. */
+  readonly _client?: AgentCoreIdentityClientLike;
+  /** @internal Test injection — the AWS SDK module. */
+  readonly _sdk?: BedrockAgentCoreIdentitySdkModule;
+}
+
+/**
+ * Tell AgentCore the person finished consenting, so the token lands in the vault.
+ *
+ * ── Where this runs, and why it is not a provider method ─────────────────────
+ * A 3LO consent has three actors and two processes. The agent asks for a
+ * credential and gets back `authorization-required` with a URL and a session
+ * id; the PERSON opens that URL in their browser and approves; AgentCore then
+ * redirects their browser to a callback route **your web app** owns. That route
+ * is where this belongs — a different process from the agent run, often a
+ * different service — so it takes its own connection options rather than
+ * pretending to be a method on a provider that route has never seen.
+ *
+ * Your route's job before calling this is the part nobody else can do: confirm
+ * the browser session really belongs to the user you are about to name. This
+ * function is the handshake, not the authentication.
+ *
+ * ── After it returns ─────────────────────────────────────────────────────────
+ * Nothing is handed back — success is an empty acknowledgement. The token now
+ * exists in the vault for that (workload, user), and the way to obtain it is to
+ * run the agent's request again: the next `getCredential` for that service
+ * returns `issued` where the last one returned `authorization-required`. In
+ * agentfootprint terms the consent is a PAUSE, and this is what makes the
+ * resume succeed.
+ *
+ * The authorization URL and its session are short-lived (AWS documents ten
+ * minutes) — a person who wanders off has to start the consent again, and the
+ * refusal you get is AgentCore's, not this adapter's.
+ *
+ * @example  An Express-style callback route
+ *   app.get('/oauth/callback', async (req, res) => {
+ *     const user = await requireSignedInUser(req);   // yours, and load-bearing
+ *     await completeAgentCoreAuthorization({
+ *       sessionId: String(req.query.session),
+ *       userId: user.id,
+ *       region: 'us-east-1',
+ *     });
+ *     res.send('Approved — you can return to the assistant.');
+ *   });
+ */
+export async function completeAgentCoreAuthorization(
+  options: CompleteAgentCoreAuthorizationOptions,
+): Promise<void> {
+  if (!options.sessionId) {
+    throw new Error(
+      'completeAgentCoreAuthorization: `sessionId` is required — it is the `sessionId` from ' +
+        'the `authorization-required` result that started this consent.',
+    );
+  }
+  if ((options.userToken === undefined) === (options.userId === undefined)) {
+    // Both or neither. Naming a person twice is ambiguous; naming them zero
+    // times completes a consent for nobody.
+    throw new Error(
+      'completeAgentCoreAuthorization: pass exactly one of `userToken` (the person’s own JWT, ' +
+        'preferred) or `userId` (an id you assert for them).',
+    );
+  }
+  const client =
+    options._client ??
+    createIdentityClient({
+      ...(options.region !== undefined && { region: options.region }),
+      ...(options._sdk !== undefined && { _sdk: options._sdk }),
+    });
+  if (!client.completeResourceTokenAuth) {
+    throw new Error(
+      'completeAgentCoreAuthorization: the injected `_client` has no ' +
+        'completeResourceTokenAuth. Implement it, or omit `_client` to use the SDK.',
+    );
+  }
+  await client.completeResourceTokenAuth({
+    sessionId: options.sessionId,
+    ...(options.userToken !== undefined && { userToken: options.userToken }),
+    ...(options.userId !== undefined && { userId: options.userId }),
+  });
 }
