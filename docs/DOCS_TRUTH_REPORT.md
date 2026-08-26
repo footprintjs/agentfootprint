@@ -49,7 +49,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | `docs-next/content/docs/**.mdx` (hand-written) | 102 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 510 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 510 | **No — excluded.** |
-| `docs/**.md` + `README.md` (repo-internal prose) | 55 | **No** — but tracked as its own state, "written but not published". |
+| `docs/**.md` + `README.md` (repo-internal prose) | 56 | **No** — but tracked as its own state, "written but not published". |
 
 Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **148** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
