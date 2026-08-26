@@ -49,6 +49,11 @@ const FORBIDDEN: readonly RegExp[] = [
   // banning it would be this test mistaking a protocol for a vendor. The line
   // the list draws is who decides the spelling, not who happens to use it.
   /\/readiness\b/,
+  // `/ping` is one runtime's health spelling — `nodeHost` uses `/health`, and
+  // the day a port defaults to `/ping` is the day that runtime has leaked in.
+  // Note again what is NOT here: `/.well-known/agent-card.json`, which belongs
+  // to the A2A protocol and to no vendor, and lives in a neutral wire file.
+  /\/ping\b/,
 ];
 
 /**

@@ -26,7 +26,11 @@ import { describe, expect, it } from 'vitest';
 import { nodeHost } from '../../src/hosting/index.js';
 import type { PendingAsk } from '../../src/hosting/index.js';
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
-import { agentCoreRuntimeHost, foundryResponsesHost } from '../../src/hosting-providers.js';
+import {
+  agentCoreRuntimeHost,
+  foundryResponsesHost,
+  agentCoreA2AHost,
+} from '../../src/hosting-providers.js';
 import { inProcessHost, type InProcessHost } from './testHost.js';
 import {
   contractHandler,
@@ -302,6 +306,81 @@ function parseResponsesSSE(body: string): HostObservation {
   };
 }
 
+// ─── Subject 5: an OPEN protocol, on a runtime's container contract ──
+//
+// The fifth adapter is the first whose envelope is not ours at all: JSON-RPC
+// 2.0, where the reply must echo the request's `id` and the answer is buried in
+// an artifact rather than named as an output. Every assertion in the suite
+// holds for it unchanged, which is the point being made for the third time —
+// the port did not move.
+
+const a2aSubject: HostUnderTest = {
+  label: 'agentCoreA2AHost (A2A / JSON-RPC 2.0)',
+  create: () =>
+    agentCoreA2AHost({
+      card: { name: 'contract', description: 'the shared handler', version: '1.0.0' },
+      port: 0,
+      hostname: '127.0.0.1',
+    }),
+  // A public door: an uncaught exception's words do not travel.
+  sanitizesThrownErrors: true,
+  invoke: async (handle, request) => {
+    const { url } = handle as NodeHostHandle;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(request.headers ?? {}),
+          ...(request.sessionId !== undefined
+            ? { 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': request.sessionId }
+            : {}),
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'contract-1',
+          method: 'message/send',
+          params: {
+            message: {
+              role: 'user',
+              parts: [{ kind: 'text', text: request.input }],
+              messageId: 'contract-msg',
+            },
+          },
+        }),
+      });
+    } catch (err) {
+      return { error: `is closed (${(err as Error).message})`, chunks: [] };
+    }
+    return parseA2A(await response.text());
+  },
+};
+
+/** A JSON-RPC envelope back into port vocabulary. */
+function parseA2A(body: string): HostObservation {
+  let parsed: {
+    result?: { artifacts?: { parts?: { text?: string }[] }[] };
+    error?: { code?: number; message?: string };
+  };
+  try {
+    parsed = JSON.parse(body) as typeof parsed;
+  } catch {
+    // A body that is not JSON at all is still a refusal a caller can see.
+    return { error: body || 'empty response', chunks: [] };
+  }
+  const text = parsed.result?.artifacts?.[0]?.parts?.[0]?.text;
+  return {
+    ...(text !== undefined && { output: text }),
+    ...(parsed.error ? { error: parsed.error.message ?? '' } : {}),
+    // A2A carries no incremental delivery on this wire — the host declares
+    // streaming, but `message/send` has nowhere to put a chunk, so a caller
+    // observes none. The suite asserts chunks against the CAPABILITY, so this
+    // subject would fail if it claimed to stream.
+    chunks: [],
+  };
+}
+
 // ─── Subject 2: the minimal in-process host (see ./testHost.ts) ──────
 
 let latest: InProcessHost | undefined;
@@ -320,6 +399,7 @@ describeHostContract(nodeSubject);
 describeHostContract(inProcessSubject);
 describeHostContract(agentCoreSubject);
 describeHostContract(foundrySubject);
+describeHostContract(a2aSubject);
 
 // ─── And directly against each other ─────────────────────────────────
 

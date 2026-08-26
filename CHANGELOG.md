@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.68.0] - 2026-08-26
+
+### Added
+
+- **`agentCoreA2AHost()` — other agents can call yours** (`agentfootprint/hosting`).
+  AgentCore Runtime speaks four protocols and **A2A** is the agent-to-agent one:
+  another agent (Strands, LangGraph, Google ADK, a Marketplace listing)
+  discovers yours through its agent card and calls it. The same split as 9.65.0,
+  for the third time:
+  - **`a2aWire()`** is the A2A PROTOCOL — JSON-RPC 2.0, `message/send`, text
+    parts, artifacts, `A2A_PROTOCOL_VERSION` `0.3.0` — an open protocol with no
+    vendor in it, exported in its own right along with
+    `a2aAgentCardDocument(card)` for deployments that must serve the discovery
+    document from somewhere this wire does not own.
+  - **`agentCoreA2AHost()`** is the CONTAINER CONTRACT: port 9000 (its own, not
+    HTTP's 8080 nor MCP's 8000), the agent at `/`, `GET /ping` answering
+    `{"status":"Healthy"}`, and the session from
+    `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`.
+
+  It needed no new machinery in `httpHost`, and one seam explains why: JSON-RPC
+  requires a reply to ECHO the request's `id`, which is possible only because
+  `HttpWire`'s body methods receive the request that produced them — a seam
+  added in 9.65.0 for an unrelated protocol.
+
+  **The A2A spec is broken here on purpose, and not by us.** The specification
+  delivers JSON-RPC errors over HTTP 200; AgentCore returns the real status with
+  the JSON-RPC error body. `agentCoreA2AErrorCode` is the runtime's published
+  table (`-32051` … `-32055`, `-32603`), exported so a client shares one table
+  with the host rather than keeping a copy that drifts — it is what tells a
+  caller that `-32054` "Session operation in progress" must be retried with
+  backoff, which A2A clients do not do on their own.
+
+  **What it does not do, in the code as well as the prose:** `message/send`
+  only. No `message/stream`, no task lifecycle, no non-text parts — each refused
+  BY NAME before the agent runs. So the host declares **no** streaming
+  capability and its card says `streaming: false`. AWS's own sample card says
+  `true`; ours says what is true of ours, and a test pins the two agreeing.
+
+- The host conformance suite gained a **fifth** subject. A2A is the first whose
+  envelope is not ours at all — the reply echoes a JSON-RPC id and the answer is
+  buried in an artifact rather than named as an output — and every assertion
+  held unchanged. Nothing in `src/hosting/types.ts` moved to let it pass.
+
+### Fixed
+
+- **A capability this library claimed and could not honour.** `httpHost`
+  declares `['streaming']` by default, so the A2A host inherited it while
+  `message/send` has nowhere to put a chunk: `requireCapability(host,
+  'streaming')` would have passed for a host that then delivered none. The
+  conformance suite caught it — it asserts chunks *if and only if* the
+  capability is declared — and the adapter now declares `[]`.
+
+### Changed
+
+- The vendor-name guard on `src/hosting/` grew `/ping`: one runtime's health
+  spelling, on the list for the same reason as `/invocations` and `/readiness`.
+  Still deliberately absent: `/.well-known/agent-card.json`, which belongs to
+  the A2A protocol and to no vendor.
+
 ## [9.67.0] - 2026-08-26
 
 ### Added

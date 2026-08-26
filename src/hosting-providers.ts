@@ -25,6 +25,21 @@
  *     idleMs: 900000 }` declared, session affinity readable from header or
  *     query, and a `Sec-WebSocket-Protocol` bearer mapped into
  *     `headers.authorization`.
+ *   • `agentCoreA2AHost({ card, port?, hostname?, maxBodyBytes? })` — an
+ *     `AgentHost` for AgentCore's **A2A** container contract, so OTHER AGENTS
+ *     can call yours: JSON-RPC 2.0 at `POST /` on port 9000, the agent card at
+ *     `/.well-known/agent-card.json`, `GET /ping` answering
+ *     `{"status":"Healthy"}`, and the session read from
+ *     `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`. It declares NO streaming
+ *     capability and its card says `streaming: false`, because `message/send`
+ *     has nowhere to put a chunk — the two agree on purpose. Errors carry a
+ *     REAL HTTP status alongside the JSON-RPC error body (the platform's
+ *     documented deviation from the A2A spec); `agentCoreA2AErrorCode` is the
+ *     table, exported so a client shares it rather than keeping a copy.
+ *   • `a2aWire({ card, health?, errorCodeFor? })` — the A2A PROTOCOL as an
+ *     `HttpWire`, with no vendor in it, for the next runtime that speaks it.
+ *     `a2aAgentCardDocument(card)` builds the discovery document on its own,
+ *     for deployments that must serve it from somewhere else.
  *   • `foundryResponsesHost({ port?, hostname?, model?, maxBodyBytes? })` — an
  *     `AgentHost` for Microsoft Foundry's hosted-agent contract: `POST
  *     /responses`, a `HEAD` capability probe on the same path, `GET /readiness`
@@ -107,6 +122,33 @@ export {
   agentCoreSessions,
   DEFAULT_SESSION_STORAGE_PATH,
 } from './adapters/hosting/agentcore.js';
+
+export {
+  agentCoreA2AHost,
+  agentCoreA2AErrorCode,
+  DEFAULT_AGENTCORE_A2A_PORT,
+  AGENTCORE_A2A_INVOKE_PATH,
+  AGENTCORE_PING_PATH,
+  AGENTCORE_SESSION_HEADER,
+} from './adapters/hosting/agentCoreA2A.js';
+
+export type { AgentCoreA2AHostOptions } from './adapters/hosting/agentCoreA2A.js';
+
+// The protocol under it, on the barrel in its own right — A2A is an open
+// protocol, and reaching it should not mean importing a vendor's module.
+export {
+  a2aWire,
+  a2aAgentCardDocument,
+  readA2AMessageText,
+  A2A_PROTOCOL_VERSION,
+  A2A_AGENT_CARD_PATH,
+  A2A_SEND_METHOD,
+  JSONRPC_METHOD_NOT_FOUND,
+  JSONRPC_INVALID_PARAMS,
+  JSONRPC_INTERNAL_ERROR,
+} from './adapters/hosting/a2aWire.js';
+
+export type { A2AWireOptions, A2AAgentCard, A2ASkill } from './adapters/hosting/a2aWire.js';
 
 export {
   foundryResponsesHost,

@@ -447,6 +447,59 @@ Since mid-2026 a Gateway can front model providers as well as tools, serving
 so `openai({ baseURL, apiKey: async () => … })` reaches it, and the callback form
 of `apiKey` matters for the usual reason: a gateway token expires.
 
+## Other agents calling yours: A2A (9.67.0)
+
+AgentCore Runtime speaks four protocols, and **A2A** is the one for agent-to-agent
+work: another agent — Strands, LangGraph, Google ADK, a Marketplace listing —
+discovers yours and calls it. `agentCoreA2AHost` serves that contract:
+
+```ts
+import { agentCoreA2AHost, memorySessions, standingAgent } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: memorySessions(),
+  host: agentCoreA2AHost({
+    card: { name: 'triage', description: 'Triages SAN alerts.', version: '1.0.0' },
+  }),
+});
+```
+
+The split is the one this library keeps making. `a2aWire` is the **A2A protocol**
+— JSON-RPC 2.0, `message/send`, text parts, artifacts, and `A2A_PROTOCOL_VERSION`
+`0.3.0` — an open protocol with no vendor in it, reachable on its own along with
+`a2aAgentCardDocument(card)` (for deployments that must serve the discovery
+document from a CDN or a framework route), `readA2AMessageText`,
+`A2A_SEND_METHOD`, `A2A_AGENT_CARD_PATH`, and the JSON-RPC reserved codes
+`JSONRPC_METHOD_NOT_FOUND` / `JSONRPC_INVALID_PARAMS` / `JSONRPC_INTERNAL_ERROR`.
+`A2AWireOptions`, `A2AAgentCard` and `A2ASkill` are its types.
+
+`agentCoreA2AHost` — taking `AgentCoreA2AHostOptions` — is the **container
+contract**: `DEFAULT_AGENTCORE_A2A_PORT` 9000 (its own port, not HTTP's 8080 or
+MCP's 8000), the agent at `AGENTCORE_A2A_INVOKE_PATH` `/`, health at
+`AGENTCORE_PING_PATH` `/ping` answering `{"status":"Healthy"}`, and the session
+read from `AGENTCORE_SESSION_HEADER`.
+
+<Callout type="warn">
+**Errors break the A2A spec here, deliberately — on AWS's side.** The
+specification delivers JSON-RPC errors over HTTP 200; AgentCore returns the real
+status (409, 404, …) *with* the JSON-RPC error body. A client must therefore
+parse the body even on a non-2xx response, or it will miss `-32054` and the
+`Session operation in progress, please retry` that must be retried with backoff —
+A2A clients do not retry it on their own. `agentCoreA2AErrorCode` is the table
+this host maps outward, exported so a client can share it instead of keeping a
+second copy that drifts.
+</Callout>
+
+**What it does not do, and says so.** `message/send` only — no `message/stream`,
+no task lifecycle, no non-text parts (each refused by name before your agent
+runs). So the host declares **no streaming capability** and its agent card says
+`streaming: false`. AWS's own sample card says `true`; ours says what is true of
+ours. The two agreeing is itself pinned by a test, because the host conformance
+suite caught precisely that mismatch when this adapter was written: it asserts
+chunks *if and only if* the capability is declared, and a host that claimed
+streaming here would have passed `requireCapability` and then delivered nothing.
+
 ## Memory search: the one place a port had to give
 
 `AgentCoreStore.search()` now wraps `RetrieveMemoryRecords`. Getting there
