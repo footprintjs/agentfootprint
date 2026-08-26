@@ -100,6 +100,15 @@ describe('the docs-truth report is generated, never hand-edited', () => {
     }
     const regenerated = read(REPORT);
 
+    // The one line the comparison must NOT read: the generator stamps
+    // `_Recorded <today>._`, so a byte-exact compare goes red on every
+    // calendar day after the commit — a gate that rots daily is a gate that
+    // gets deleted. The date is metadata about WHEN the truth was restated;
+    // the ratchet's subject is the truth itself, so the stamp is normalized
+    // out of both sides and everything else stays byte-exact.
+    const stripStamp = (s: string): string =>
+      s.replace(/^_Recorded \d{4}-\d{2}-\d{2}\._$/m, '_Recorded <date>._');
+
     if (regenerated !== committed) {
       // Restore, so a failing run never leaves the tree dirty for the next one.
       const { writeFileSync } = require('node:fs') as typeof import('node:fs');
@@ -107,13 +116,13 @@ describe('the docs-truth report is generated, never hand-edited', () => {
     }
 
     expect(
-      regenerated,
+      stripStamp(regenerated),
       'docs/DOCS_TRUTH_REPORT.md does not match what the generator produces, which means ' +
         'it was edited by hand or is stale. That is precisely what happened in the 9.58.0 ' +
         'release commit: "103 typed events" was changed to "105" by hand, the export count ' +
         'was left stale at 1906, and because nobody ran the generator nobody saw the ' +
         'ratchet was red. Run `npm run docs:truth:report` and commit the result.',
-    ).toBe(committed);
+    ).toBe(stripStamp(committed));
   });
 
   it('the report-only path exists and cannot write the baseline', () => {
