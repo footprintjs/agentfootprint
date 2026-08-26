@@ -21,7 +21,8 @@ onto AgentCore.
 | **Gateway** (tools) | ✅ via MCP | `gatewayTransport()` + `mcpClient()` — per-request vended auth — `agentfootprint/providers` |
 | **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/providers` |
 | **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/security` |
-| **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
+| **Code Interpreter** | ✅ adapter | `agentCoreCodeRunner()` behind the `CodeRunner` port — `agentfootprint/providers` |
+| **Browser** | ✅ adapter | `agentCoreBrowser()` behind the `BrowserRunner` port, incl. the human takeover — `agentfootprint/providers` |
 | **Policy** | ⛔ enforced at the Gateway, by design | Policy reached GA in March 2026 — Cedar rules attached to a **Gateway**, evaluated inside it. There is still **no dry-run/evaluate API** (re-verified against `@aws-sdk/client-bedrock-agentcore-control` 3.1118.0, all 165 commands enumerated), so `agentCorePolicy()` stays retired: nothing exists for an adapter to call. Use `PermissionPolicy` / `.toolMiddleware()` for rules you own — `agentfootprint/security` |
 | **Evaluations** | ✅ adapter + fork | `agentCoreEvaluationSpans()` shapes spans so AWS's evaluators can score them — `agentfootprint/observe`. Our own `$eval` + `QualityRecorder` stay: **their evaluators say what the score is, our trace says why** |
 
@@ -411,30 +412,64 @@ const agent = Agent.create({
 
 ---
 
-## Code Interpreter / Browser — wrap as tools
+## Code Interpreter and Browser — two ports, two backends
 
-These are AgentCore *services your agent calls*, so they're just tools. Keep the
-tool vendor-neutral and let the backend swap:
+Both are AgentCore *services your agent calls*, and both now sit behind a port
+of their own rather than inside a hand-written tool. (This page used to say
+"wrap them as tools, and don't build a port until a second backend has real
+pull." A second backend showed up — `localCodeRunner` — so the advice was
+followed and then outgrown, which is the outcome it was hoping for.)
+
+### Code Interpreter — the `CodeRunner` port
+
+`agentCoreCodeRunner()` is a real managed sandbox; `localCodeRunner()` is
+process isolation on this machine and says so. `codeRunnerTool` is the tool that
+holds one, with the session leased per run through `ctx.onTeardown`.
+
+### Browser — the `BrowserRunner` port (9.68.0)
 
 ```ts
-import { defineTool } from 'agentfootprint';
+import { agentCoreBrowser } from 'agentfootprint/providers';
 
-const codeInterpreter = defineTool({
-  name: 'code_interpreter',
-  description: 'Run Python in a sandbox; returns stdout/stderr.',
-  // input schema …
-  execute: async ({ code }) => {
-    // call AgentCore Code Interpreter via @aws-sdk/client-bedrock-agentcore;
-    // or E2B / a local Docker sandbox — the agent + prompt never change.
-    return runInSandbox(code);
-  },
-});
+const browser = agentCoreBrowser({ region: 'us-east-1' });
+const session = await browser.start({ key: toolSessionKey(ctx, 'run') });
 ```
 
-The same shape wraps **Browser** (managed headless browser). If you later need a
-second backend (E2B, Browserbase, local), lift the body behind a small
-`SandboxBackend` / `BrowserBackend` interface — but don't build that until a
-second backend has real pull.
+**A browser session has two doors, and confusing them costs a day.**
+
+- **The automation stream** is a CDP WebSocket, and it is where everything
+  page-shaped happens: navigate, find an element, fill a form. Attach Playwright
+  or another CDP client to `session.automationEndpoint`. This library does not
+  depend on Playwright and does not drive the page for you — it hands you the
+  endpoint and stays out of the way.
+- **`InvokeBrowser`** is what the adapter calls, and it is operating-system
+  input *above* the page: `click`, `type`, `press`, `screenshot`. Its action
+  union — read off the SDK rather than remembered — is exactly `mouseClick |
+  mouseMove | mouseDrag | mouseScroll | keyType | keyPress | keyShortcut |
+  screenshot`. **There is no navigate action.** If you came here looking for
+  one, you want the other door.
+
+### The takeover — a person finishes the step the agent cannot
+
+```ts
+await session.handControlTo('person');   // the automation stream stops
+// …they sign in, clear the CAPTCHA, approve the consent screen, watching live
+await session.handControlTo('agent');    // and the agent carries on
+```
+
+Underneath, that is `UpdateBrowserStream` setting the automation stream to
+`DISABLED` and back to `ENABLED`: the live-view user is already connected, and
+stopping automation is what lets their input through.
+
+This is the shape agentfootprint is for. Pair it with a check-in and the agent
+*pauses* rather than guesses — the handover, the wait, and the resume are all
+ordinary events in the trace, so "why did this run take four minutes?" has an
+answer that names a person and a login screen.
+
+**One contradiction left as AWS wrote it:** the devguide says a session defaults
+to 15 minutes and `StartBrowserSession`'s API reference says 3600 seconds. The
+adapter sends no timeout unless you pass `sessionTimeoutSeconds`, so the service
+applies whichever it actually means rather than this library picking a side.
 
 ---
 
