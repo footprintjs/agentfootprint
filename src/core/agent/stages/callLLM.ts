@@ -36,6 +36,7 @@ import { danglingReferencesOf } from '../../../integrity/dangling-reference/chec
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
+  type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
@@ -92,6 +93,27 @@ function fileIntegrityFindings(
   if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
 }
 
+/**
+ * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
+ * provider that throws, or returns anything but an array, contributes
+ * nothing — the check then runs on exactly what the run itself served, as if
+ * the door were closed. An accounting door must never change a run's
+ * outcome (the fileIntegrityDisposition rule, one tier down). Entry-level
+ * hygiene — dropping blank values and unlabeled sources — lives in the
+ * check itself, beside the fences it joins.
+ */
+function readExternalGrounds(
+  provider: (() => readonly ExternalGround[]) | undefined,
+): readonly ExternalGround[] {
+  if (provider === undefined) return [];
+  try {
+    const entries = provider();
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+
 function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
   if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
   return messages.map((m) => {
@@ -136,6 +158,14 @@ export interface CallLLMStageDeps {
    * the model chose came from that ground when the tool was CALLED.
    */
   readonly toolGrounding?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The app's external-ground provider (9.72.0) — see
+   * `AgentOptions.externalGrounds`. Consulted once per response with an armed
+   * call; its entries join the choice-seam corpus and each excusal files
+   * `agentfootprint.integrity.external_ground_used` with the entry's source
+   * label. Absent → the corpus is exactly what it always was.
+   */
+  readonly externalGrounds?: () => readonly ExternalGround[];
   /**
    * The per-run disposition ledger, by REFERENCE (9.60.0) — plumbing shared
    * through the build closure like ProviderToolCache, never scope state.
@@ -684,7 +714,15 @@ export function buildCallLLMStage(
           (llmRequest.tools ?? []).map((t) => [t.name, t.inputSchema] as const),
         );
         const frameMessages = llmRequest.messages;
-        const argumentFindings = unsupportedArgumentsOf(
+        // THE EXTERNAL-GROUND DOOR (9.72.0). The app may vouch for values the
+        // run never served — a human clicked a row, the app verified the
+        // clicked cells against the artifact the panel renders — and those
+        // entries join the grounded corpus for THIS response only, consulted
+        // fresh each time because the selection moves between turns. The
+        // library records what the app asserts; the source label rides every
+        // excusal so a reader can audit the chain.
+        const external = readExternalGrounds(deps.externalGrounds);
+        const { findings: argumentFindings, externalGroundings } = unsupportedArgumentsOf(
           armedCalls.map((c) => ({
             toolName: c.name,
             toolCallId: c.id,
@@ -698,6 +736,7 @@ export function buildCallLLMStage(
               ...frameMessages.filter((m) => m.role !== 'assistant').map((m) => m.content),
             ],
             assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
+            ...(external.length > 0 && { external }),
           },
           iteration,
         );
@@ -708,6 +747,20 @@ export function buildCallLLMStage(
           argumentFindings.length > 0 ? Date.now() : undefined,
         );
         fileIntegrityFindings(scope, argumentFindings, iteration);
+        // Each excusal is a per-attempt fact and rides the emit channel —
+        // deliberately NOT deduplicated the way findings are: a repeated call
+        // is a fresh choice, and each excusal names the assertion that stood
+        // between that choice and a finding.
+        for (const g of externalGroundings) {
+          typedEmit(scope, 'agentfootprint.integrity.external_ground_used', {
+            toolName: g.toolName,
+            toolCallId: g.toolCallId,
+            path: g.path,
+            value: g.value,
+            source: g.source,
+            iteration,
+          });
+        }
       } else {
         // No armed tool was called this turn — a response with nothing this
         // check could be about. Stated, never silence.

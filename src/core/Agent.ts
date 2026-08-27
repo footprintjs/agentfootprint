@@ -210,6 +210,7 @@ import type {
   AgentOutput,
   AgentRecordingsOptions,
   AgentState,
+  ExternalGroundsProvider,
   ObserverDeliveryOptions,
   RunConfig,
   RunConfigContext,
@@ -494,8 +495,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly integrityLedgerHolder: { current: DispositionLedger | undefined } = {
     current: undefined,
   };
-  /** Set at chart build: whether any registered tool declared `argumentsFrom`. */
+  /** Set at chart build: whether any tool in the FULL declared catalog
+   *  (static registry + skill-carried tools) declared `argumentsFrom`. */
   private integrityDanglingPresent = false;
+  /** See AgentOptions.externalGrounds (9.72.0). Absent = door closed,
+   *  byte-identical behavior. */
+  private readonly externalGrounds?: ExternalGroundsProvider;
   /** What a run does when a declared credential needs 3LO consent (8.6.0).
    *  Default `'pause'`. See AgentOptions.onAuthorizationRequired. */
   private readonly onAuthorizationRequired: AuthorizationRequiredMode;
@@ -900,6 +905,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         );
       }
       this.integrityPosture = opts.integrityPosture;
+    }
+    // The external-ground door (9.72.0) — refused at construction, never
+    // mid-run: a non-function here would otherwise fail on the first LLM call
+    // of the first armed run, far from the line that caused it.
+    if (opts.externalGrounds !== undefined) {
+      if (typeof opts.externalGrounds !== 'function') {
+        throw new Error(
+          `Agent: externalGrounds must be a function returning {value, source} entries, got ` +
+            `${typeof opts.externalGrounds}.`,
+        );
+      }
+      this.externalGrounds = opts.externalGrounds;
     }
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
@@ -3415,12 +3432,38 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .filter((r) => r.tool.owner !== undefined)
         .map((r) => [r.name, r.tool.owner!] as const),
     );
-    // The declared argument-ground edges (9.60.0) — same one-build harvest as
-    // the owner stamps; read by callLLM's dangling-reference check.
+    // The declared argument-ground edges (9.60.0; catalog-wide since 9.72.0)
+    // — read by callLLM's dangling-reference and unsupported-argument checks.
+    //
+    // Harvested from `registryByName` — the FULL declared catalog (static
+    // `.tool()` registrations PLUS every skill-carried tool, autoActivate/
+    // scoped ones included) — and not from the static registry alone, which
+    // was the field bug a consumer's MCP parity work surfaced: an app whose
+    // `argumentsFrom` tools all ride skills (delivered when a skill
+    // activates) never armed the choice-seam pair, and its disposition rows
+    // read {checked: 0, notApplicable: 1} forever while the app's own
+    // comments believed the checks ran.
+    //
+    // ARMING IS COMPUTABLE UP FRONT, and that is a build-time fact, not a
+    // hope: a skill tool's DECLARATION is known at chart build (defineSkill
+    // carries the Tool object into `buildToolRegistry`'s dispatch map) even
+    // though the tool reaches the model only after its skill activates — so
+    // this harvest, and the `dangling` flag `beginIntegrityRun` reads at run
+    // start, may see the whole catalog before any skill has fired. The
+    // runtime checks stay correctly scoped on their own: dangling-reference
+    // intersects this map with the tools THIS call actually served, and
+    // unsupported-argument with the calls the model actually made.
+    //
+    // CAVEAT, stated rather than papered over: ToolProvider-DELIVERED tools
+    // remain invisible here. `ToolProvider.list(ctx)` is opaque and
+    // per-iteration — there is no build-time list to harvest — so a provider
+    // tool declaring `argumentsFrom` arms nothing. (MCP tools are NOT in that
+    // hole: `mcpClient(...).tools()` registers them statically, and 9.71.0
+    // carries their declarations across the wire.)
     const toolGrounding = new Map(
-      registry
-        .filter((r) => r.tool.argumentsFrom !== undefined)
-        .map((r) => [r.name, r.tool.argumentsFrom!] as const),
+      [...registryByName.entries()]
+        .filter(([, tool]) => tool.argumentsFrom !== undefined)
+        .map(([name, tool]) => [name, tool.argumentsFrom!] as const),
     );
     this.integrityDanglingPresent = toolGrounding.size > 0;
     const toolsSubflow = buildToolsSlot({
@@ -3457,6 +3500,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The declared argument-ground edges (9.60.0) — value-conditional, so
       // an agent whose tools declare none runs the exact bytes it always did.
       ...(toolGrounding.size > 0 && { toolGrounding }),
+      // The external-ground door (9.72.0) — value-conditional for the same
+      // reason: no provider, no key, byte-identical corpus assembly.
+      ...(this.externalGrounds !== undefined && { externalGrounds: this.externalGrounds }),
       integrityLedger: this.integrityLedgerHolder,
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
       ...(this.outputSchemaParser !== undefined && {

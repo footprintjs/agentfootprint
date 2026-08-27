@@ -440,6 +440,14 @@ export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
 // (structurally derived from footprintjs's executor options — the engine owns
 // the vocabulary but does not export the alias).
 export type { WriteProvenanceMode } from './core/agent/types.js';
+// The external-ground door (9.72.0) — the provider type for
+// AgentOptions.externalGrounds plus the entry/excusal vocabulary, so an app
+// can type its provider and its `external_ground_used` listeners.
+export type { ExternalGroundsProvider } from './core/agent/types.js';
+export type {
+  ExternalGround,
+  ExternalGrounding,
+} from './integrity/unsupported-argument/check.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

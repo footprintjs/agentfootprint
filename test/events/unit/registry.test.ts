@@ -201,7 +201,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     because a findings stream alone cannot say whether the checkers
     //     RAN. `integrity.context_error` reports a defect; this reports the
     //     checkers' own health.)
-    expect(ALL_EVENT_TYPES.length).toBe(107);
+    expect(ALL_EVENT_TYPES.length).toBe(108);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

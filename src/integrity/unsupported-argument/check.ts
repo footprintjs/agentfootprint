@@ -45,6 +45,16 @@
  * - DECLARED VOCABULARY PASSES. A value the tool's own `inputSchema` lists in
  *   an `enum` was served BY THE SCHEMA — the model read it off the tool
  *   definition, not out of its own prose.
+ * - EXTERNAL GROUNDS PASS, and file the source that excused them (9.72.0).
+ *   An app may hand the corpus values the RUN never served but the APP
+ *   verified itself — the driving case: a person clicked a row in a data
+ *   panel, the app checked the clicked cells against the artifact the panel
+ *   renders, and an identifier the model takes from that verified selection
+ *   is not fabricated. HONESTY NOTE, because this is an assertion door: the
+ *   library records what the app asserts — verifying the assertion (against
+ *   the artifact, the click, whatever the app's ground truth is) is the
+ *   app's duty, and the `source` label travels with every excusal so a
+ *   reader can audit the chain instead of trusting it.
  * Two states remain, and they file DIFFERENT messages because they call for
  * different fixes: grounded only in the model's own prose (re-fetch the real
  * ground), and grounded nowhere in the window at all (nothing served it).
@@ -72,12 +82,54 @@ export interface ArgumentChoice {
   readonly declaredEnums?: ReadonlySet<string>;
 }
 
+/**
+ * One value the APP verified against ground the run itself never observed
+ * (9.72.0). `value` is the verified text; `source` is the app's short label
+ * for where it came from (e.g. `'viewer-selection'`) — the audit handle that
+ * travels onto the record whenever this entry excuses an argument.
+ */
+export interface ExternalGround {
+  readonly value: string;
+  readonly source: string;
+}
+
+/**
+ * One argument value an external ground excused — the audit trail of an app
+ * assertion. Filed alongside the findings so the record can say WHICH source
+ * grounded a value, not merely that no finding was raised.
+ */
+export interface ExternalGrounding {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  /** Dot-path of the argument leaf the ground excused. */
+  readonly path: string;
+  readonly value: string;
+  /** The app's label from the {@link ExternalGround} entry that matched. */
+  readonly source: string;
+}
+
 /** The frame the model chose from, split by whether it can GROUND anything. */
 export interface ChoiceCorpus {
   /** System prompt, user messages, tool results — everything the RUN served. */
   readonly grounded: readonly string[];
   /** The model's own earlier turns. Never ground: this is what the defect is made of. */
   readonly assistant: readonly string[];
+  /**
+   * App-asserted grounds the run did not serve (9.72.0). DECLARED, never
+   * ambient — the caller composes this from a provider the app registered;
+   * absent or empty, the check is byte-identical to what it always was. The
+   * library records what the app asserts here; verifying the assertion is
+   * the app's duty, and each entry's `source` label is kept on the excusal
+   * record so the chain stays auditable.
+   */
+  readonly external?: readonly ExternalGround[];
+}
+
+/** What the choice-seam check found — the findings AND the excusals. */
+export interface UnsupportedArguments {
+  readonly findings: readonly ContextError[];
+  /** Values an app-asserted external ground excused, with their sources. */
+  readonly externalGroundings: readonly ExternalGrounding[];
 }
 
 /** Below this, substring matching says nothing. */
@@ -150,11 +202,27 @@ export function unsupportedArgumentsOf(
   calls: readonly ArgumentChoice[],
   corpus: ChoiceCorpus,
   epoch: number,
-): readonly ContextError[] {
+): UnsupportedArguments {
   const findings: ContextError[] = [];
-  if (calls.length === 0) return findings;
+  const externalGroundings: ExternalGrounding[] = [];
+  if (calls.length === 0) return { findings, externalGroundings };
   const served = corpus.grounded.map((text) => text.toLowerCase());
   const written = corpus.assistant.map((text) => text.toLowerCase());
+  // The external entries, lowered once and kept only when both halves are
+  // usable: a non-empty value (nothing could match a blank) and a non-empty
+  // source (the audit handle this door exists to carry). Garbage never
+  // throws — an unusable entry simply grounds nothing.
+  const external = (Array.isArray(corpus.external) ? corpus.external : [])
+    .filter(
+      (e): e is ExternalGround =>
+        e !== null &&
+        typeof e === 'object' &&
+        typeof (e as { value?: unknown }).value === 'string' &&
+        (e as { value: string }).value.trim().length > 0 &&
+        typeof (e as { source?: unknown }).source === 'string' &&
+        (e as { source: string }).source.trim().length > 0,
+    )
+    .map((e) => ({ lowered: e.value.toLowerCase(), source: e.source }));
   const frame =
     `frame this call was assembled from: ${String(served.length)} served string(s) ` +
     `(system prompt, user messages, tool results) and ${String(written.length)} assistant turn(s)`;
@@ -174,6 +242,22 @@ export function unsupportedArgumentsOf(
       const needle = value.toLowerCase();
       if (declared.has(needle)) continue;
       if (served.some((text) => text.includes(needle))) continue;
+      // The external-ground fence (9.72.0), consulted only after the run's own
+      // corpus failed to ground the value — a value the run served needs no
+      // excuse, so an excusal on the record always means "the app's assertion
+      // is the ONLY thing standing between this value and a finding". Same
+      // substring leniency as the served fence, same direction of safety.
+      const excusedBy = external.find((e) => e.lowered.includes(needle));
+      if (excusedBy !== undefined) {
+        externalGroundings.push({
+          toolName: call.toolName,
+          toolCallId: call.toolCallId,
+          path: leaf.path,
+          value: leaf.value,
+          source: excusedBy.source,
+        });
+        continue;
+      }
       const selfReferenced = written.some((text) => text.includes(needle));
 
       const witnesses: Assertion[] = [
@@ -221,5 +305,5 @@ export function unsupportedArgumentsOf(
       });
     }
   }
-  return findings;
+  return { findings, externalGroundings };
 }

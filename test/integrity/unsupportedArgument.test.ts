@@ -68,7 +68,7 @@ describe('unit: unsupportedArgumentsOf — the rule', () => {
         ['The nightly job bkp-4417-ganymede-tier2 finished at 02:14.'],
       ),
       2,
-    );
+    ).findings;
     expect(found).toHaveLength(1);
     const f = found[0]!;
     expect(f.kind).toBe('unsupported-argument');
@@ -96,12 +96,12 @@ describe('unit: unsupportedArgumentsOf — the rule', () => {
       [chose({ machine: 'ganymede-99' })],
       corpus(['You are a fleet triage assistant.', 'Check that machine please.'], ['Checking.']),
       2,
-    )[0]!;
+    ).findings[0]!;
     const selfOnly = unsupportedArgumentsOf(
       [chose({ machine: 'ganymede-99' })],
       corpus(['You are a fleet triage assistant.'], ['I looked at ganymede-99 earlier.']),
       2,
-    )[0]!;
+    ).findings[0]!;
     expect(nowhere.kind).toBe('unsupported-argument');
     expect(selfOnly.kind).toBe('unsupported-argument');
     expect(nowhere.message).not.toBe(selfOnly.message);
@@ -117,7 +117,7 @@ describe('unit: unsupportedArgumentsOf — the rule', () => {
       [chose({ machine: 'ganymede-99', region: 'sector-77' })],
       corpus(['nothing useful here']),
       2,
-    );
+    ).findings;
     expect(found).toHaveLength(2);
     expect(found.map((f) => f.predicate).sort()).toEqual(['machine', 'region']);
   });
@@ -127,13 +127,13 @@ describe('unit: unsupportedArgumentsOf — the rule', () => {
       [chose({ filter: { hosts: ['ganymede-99'] } })],
       corpus(['nothing useful here']),
       2,
-    );
+    ).findings;
     expect(found).toHaveLength(1);
     expect(found[0]!.predicate).toBe('filter.hosts.0');
   });
 
   it('no armed calls means no work — an empty list is an empty answer', () => {
-    expect(unsupportedArgumentsOf([], corpus(['anything']), 2)).toEqual([]);
+    expect(unsupportedArgumentsOf([], corpus(['anything']), 2).findings).toEqual([]);
   });
 });
 
@@ -146,14 +146,14 @@ describe('unit: the fences', () => {
         [chose({ count: 4417, latest: true, note: null, missing: undefined })],
         corpus(['nothing useful here']),
         2,
-      ),
+      ).findings,
     ).toEqual([]);
   });
 
   it('FENCE — a value shorter than four characters is never checked', () => {
     // Below four characters substring matching is noise: 'ok', 'a1' and 'up'
     // land inside unrelated words in any corpus, in both directions.
-    expect(unsupportedArgumentsOf([chose({ mode: 'up', tier: 'a1 ' })], corpus(['x']), 2)).toEqual(
+    expect(unsupportedArgumentsOf([chose({ mode: 'up', tier: 'a1 ' })], corpus(['x']), 2).findings).toEqual(
       [],
     );
   });
@@ -164,7 +164,7 @@ describe('unit: the fences', () => {
         [chose({ machine: 'Ganymede-01' })],
         corpus(['status for ganymede-01 please']),
         2,
-      ),
+      ).findings,
     ).toEqual([]);
   });
 
@@ -174,7 +174,7 @@ describe('unit: the fences', () => {
         [chose({ machine: 'ganymede-01' })],
         corpus(['You are a triage assistant.', 'FLEET: ganymede-01, callisto-02']),
         2,
-      ),
+      ).findings,
     ).toEqual([]);
   });
 
@@ -188,7 +188,7 @@ describe('unit: the fences', () => {
         [chose({ window: 'nightly' }, { declaredEnums: declared })],
         corpus(['nothing useful here']),
         2,
-      ),
+      ).findings,
     ).toEqual([]);
   });
 
@@ -198,20 +198,20 @@ describe('unit: the fences', () => {
         [chose({ window: 'NIGHTLY' }, { declaredEnums: new Set(['nightly']) })],
         corpus(['nothing useful here']),
         2,
-      ),
+      ).findings,
     ).toEqual([]);
   });
 
   it('FENCE — an absent schema means no enum fence, never a crash', () => {
     expect(declaredEnumValuesOf(undefined).size).toBe(0);
     expect(
-      unsupportedArgumentsOf([chose({ window: 'nightly' })], corpus(['nothing here']), 2),
+      unsupportedArgumentsOf([chose({ window: 'nightly' })], corpus(['nothing here']), 2).findings,
     ).toHaveLength(1);
   });
 
   it('the quoted value is capped so one long argument cannot flood the message', () => {
     const long = `ganymede-${'x'.repeat(400)}`;
-    const found = unsupportedArgumentsOf([chose({ machine: long })], corpus(['nothing']), 2);
+    const found = unsupportedArgumentsOf([chose({ machine: long })], corpus(['nothing']), 2).findings;
     expect(found).toHaveLength(1);
     expect(found[0]!.message.length).toBeLessThan(600);
     expect(found[0]!.message).toContain('…');

@@ -2599,3 +2599,25 @@ export interface IntegrityDispositionPayload {
   readonly workExisted: boolean;
   readonly rows: readonly import('../integrity/disposition/types.js').CheckReport[];
 }
+
+/**
+ * One argument value excused by an APP-ASSERTED external ground (9.72.0) —
+ * the audit trail of the `externalGrounds` door. The choice-seam check found
+ * the value in none of what the run served; the app's provider vouched for
+ * it, so no finding was filed, and THIS event is the record of that excusal.
+ * `source` is the app's own label ('viewer-selection'): the library records
+ * what the app asserts — verifying the assertion was the app's duty at the
+ * moment it yielded the entry. Fired per excused value per call, deliberately
+ * NOT deduplicated the way findings are: a repeated call is a fresh choice.
+ */
+export interface IntegrityExternalGroundUsedPayload {
+  readonly toolName: string;
+  /** The provider's id for the call — what a reader joins to `tool_start`. */
+  readonly toolCallId: string;
+  /** Dot-path of the argument leaf the ground excused. */
+  readonly path: string;
+  readonly value: string;
+  /** The app's label for where the verified value came from. */
+  readonly source: string;
+  readonly iteration: number;
+}

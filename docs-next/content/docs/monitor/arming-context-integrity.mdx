@@ -85,6 +85,26 @@ Declared, never inferred — the library has no way to know that `screen_fire`'s
 
 Two limits, stated: a value the model **composed** from several grounds (`"host1,host2"`) matches no single served string and will file — a tool whose arguments are legitimately model-composed should not declare `argumentsFrom`. And a value inside ANY tool result passes, even an unrelated one: this catches fabrication and self-reference, not misattribution.
 
+**Skill-scoped tools arm too (9.72.0).** The declaration is harvested from the full declared catalog — `.tool()` registrations and every skill-carried tool (`defineSkill({ tools })`, `autoActivate` or not) — because a skill tool's declaration is known at chart build even though the tool reaches the model only after its skill activates. Before 9.72.0 the harvest read only the static registry, so an agent whose `argumentsFrom` tools all rode skills never armed either check and its disposition rows read `checked: 0, notApplicable: 1` forever. One hole remains, stated rather than papered over: tools delivered by a `ToolProvider` are invisible to the harvest — `list(ctx)` is opaque and per-iteration, so their declarations cannot be known at build. (MCP tools are not in that hole: `mcpClient(...).tools()` registers them statically.)
+
+### `externalGrounds` — ground the app verified, not the run
+
+Some ground the run never serves. The driving case: a person clicked a row in the app's data panel, the app **verified** the clicked cells against the artifact the panel renders, and the model was told to act on that selection. The identifier it passes to an armed tool came from a human's verified selection — not fabrication — but nothing in the window served it, so the check would file. `externalGrounds` on the agent options is how the app says so:
+
+```ts
+const agent = Agent.create({
+  provider, model,
+  externalGrounds: () => viewerSelection.cells.map((cell) => ({
+    value: cell.text,            // verified by the app against the artifact
+    source: 'viewer-selection',  // the audit label that travels
+  })),
+})
+```
+
+The option takes an `ExternalGroundsProvider` — a synchronous function yielding `ExternalGround` entries (`{ value, source }`), consulted once per LLM response that contains an armed call, so entries follow the person's selection between turns. A value found only in those entries files no finding; instead the excusal is put on the record as `agentfootprint.integrity.external_ground_used` (payload: the `ExternalGrounding` shape — toolName, toolCallId, the argument's dot-path, the value, and the `source` label of the entry that excused it). An excusal on the record always means the app's assertion was the *only* thing standing between that value and a finding — values the run itself served are never attributed to the door.
+
+Three laws, because this is an assertion door. Declared, never ambient: this option is the only way in; there is no global registry. Absent or empty is byte-identical: no provider, or a provider yielding `[]`, runs the exact check 9.71.0 ran. And the honesty note: the library records what the app **asserts** — verifying the assertion is the app's duty, done before the entry is yielded, and the `source` label travels precisely so a reader can audit that chain instead of trusting it. A provider that throws or returns garbage contributes nothing and never aborts a run.
+
 ## `unsupported-claim` — the answer says more than the run settled
 
 **The failure.** The evidence gate (`.namesAndNumbersFromEvidence()`) grounds every name and number in the final answer against a tool result — but it cannot catch a false claim **assembled from real values**. "fc1/3 is healthy" when the data says the port is down uses entirely grounded tokens: `fc1/3` is in the evidence, and "healthy" is just a word. Token grounding passes it without a murmur. So does an answer reporting `budget_start: 2` when the run's own ledger recorded 30.

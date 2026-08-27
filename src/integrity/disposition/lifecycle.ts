@@ -46,6 +46,11 @@ export interface IntegrityChecksPresent {
    * ground is still in reach while the tool is offered, the other whether the
    * value the model chose came from that ground when it was called. They are
    * not separated here because nothing can arm one without arming the other.
+   * "At least one tool" means the FULL declared catalog (9.72.0): a skill-
+   * carried tool's declaration counts even though the tool reaches the model
+   * only after its skill activates — the declaration is known at build, and
+   * the harvest in `Agent.buildChart` reads the whole catalog, not just the
+   * static registry.
    */
   readonly dangling: boolean;
   /** A `.claims()` contract is declared (9.61.0). */
@@ -161,7 +166,9 @@ export function beginIntegrityRun(
       { grounded: ['canary: this frame served no identifiers'], assistant: [] },
       -1,
     );
-    if (caught.length > 0) ledger.noteSynthetic('unsupported-argument', 'choice', 'caught');
+    if (caught.findings.length > 0) {
+      ledger.noteSynthetic('unsupported-argument', 'choice', 'caught');
+    }
   }
   {
     ledger.noteSynthetic('unsupported-claim', 'claim', 'minted');

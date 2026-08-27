@@ -35,6 +35,7 @@ import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 import type { FoldedSpan, WindowRecord } from './window/types.js';
+import type { ExternalGround } from '../../integrity/unsupported-argument/check.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
 import type { OutputAttempt } from './outputEnforcement.js';
@@ -60,6 +61,15 @@ export type ObserverDeliveryOptions = Omit<AttachRecorderOptions, 'delivery'>;
  * vocabulary; it does not export the alias), so the two can never drift.
  */
 export type WriteProvenanceMode = NonNullable<FlowChartExecutorOptions['writeProvenance']>;
+
+/**
+ * The app's external-ground door for the choice-seam integrity check
+ * (9.72.0) — see {@link AgentOptions.externalGrounds}. Yields the entries the
+ * app currently vouches for; consulted once per LLM response that contains an
+ * armed call. Must be synchronous: the values are things the app already
+ * verified and holds (a clicked selection), never something to go fetch.
+ */
+export type ExternalGroundsProvider = () => readonly ExternalGround[];
 
 /**
  * The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
@@ -488,6 +498,39 @@ export interface AgentOptions {
    * that way.
    */
   readonly integrityPosture?: 'observe' | 'dev';
+  /**
+   * App-verified ground for the choice-seam integrity check (9.72.0).
+   *
+   * The `unsupported-argument` check judges every armed tool call's
+   * identifier-like arguments against what the RUN served the model. Some
+   * ground the run never serves: a person clicked a row in the app's data
+   * panel, the app VERIFIED the clicked cells against the artifact the panel
+   * renders, and the model was told to act on that selection. An identifier
+   * the model takes from a verified selection is not fabricated — this door
+   * is how the app says so.
+   *
+   * Register a provider that yields the currently-verified entries, each a
+   * `{ value, source }` pair — `source` is a short label for where the value
+   * came from (e.g. `'viewer-selection'`). The provider is consulted once per
+   * LLM response that contains an armed call, so entries may change between
+   * turns as the person's selection does. Entries join the grounded corpus:
+   * a value they contain files no finding, and each excusal is put on the
+   * record as `agentfootprint.integrity.external_ground_used`, carrying the
+   * `source` label of the entry that excused it.
+   *
+   * DECLARED, NEVER AMBIENT — this option is the only door; there is no
+   * global registry to mutate. Absent, or a provider that yields nothing,
+   * is byte-identical to today. A provider that throws or returns garbage
+   * contributes nothing and never aborts the run.
+   *
+   * HONESTY NOTE, because this is an assertion door: the library records
+   * what the app asserts — verifying the assertion (against the artifact,
+   * the click, whatever the app's ground truth is) is the APP's duty, done
+   * before the entry is yielded. The `source` label travels with every
+   * excusal precisely so a reader can audit that chain instead of having to
+   * trust it.
+   */
+  readonly externalGrounds?: ExternalGroundsProvider;
   /**
    * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
    * Default **on**.
