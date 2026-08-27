@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.73.0] - 2026-08-27
+
+### Fixed
+
+- **Every local model was reporting zero tokens, and nothing said so.**
+  OpenAI and Azure only emit usage on a stream when asked, via
+  `stream_options: { include_usage: true }` — and this adapter deliberately
+  withheld that field when `baseURL` was set, because some OpenAI-compatible
+  servers reject an unknown field and a hard failure is worse than a missing
+  number. That caution was right; its cost was invisible. **Anyone streaming
+  through `openai({ baseURL })` — llama.cpp, Ollama, vLLM, LM Studio — read 0
+  tokens everywhere usage is consumed:** cost recorders, dashboards, and the
+  per-step cost on `agentThinkingTrace`. Nothing was broken, nothing errored,
+  and every number was wrong.
+
+  `openai({ streamUsage: true })` opts a custom endpoint back in. The default
+  is unchanged, because the servers that reject the field still exist; both
+  halves are pinned by tests. Found by wiring a real local model (llama.cpp
+  serving Qwen3-4B) behind a four-agent workflow and noticing every card read
+  `0 tok` while the server, asked directly, answered usage perfectly well.
+
 ## [9.72.0] - 2026-08-27
 
 ### Added

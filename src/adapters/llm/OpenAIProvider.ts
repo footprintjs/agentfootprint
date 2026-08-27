@@ -170,6 +170,26 @@ export interface OpenAIProviderOptions {
   /** Base URL — set for OpenAI-compatible APIs (Ollama, Together, vLLM). */
   readonly baseURL?: string;
   /**
+   * Ask a CUSTOM endpoint for token usage while streaming (9.73.0).
+   *
+   * ── The silence this breaks ──────────────────────────────────────────────
+   * OpenAI and Azure only report usage on a stream when asked, via
+   * `stream_options: { include_usage: true }`. This adapter sends that — but
+   * NOT when you set `baseURL`, because some OpenAI-compatible servers reject
+   * an unknown field outright, and a hard failure is worse than a missing
+   * number. The cost of that caution went unnoticed: **every local-model user
+   * streaming through `openai({ baseURL })` sees zero tokens**, everywhere
+   * usage is read — dashboards, cost recorders, the thinking trace's per-step
+   * cost. Nothing is broken and nothing says so.
+   *
+   * Most current local servers do support it (llama.cpp and Ollama both send a
+   * final usage chunk when asked). Set this to `true` and get the numbers
+   * back; leave it out and nothing changes.
+   *
+   * Ignored without `baseURL` — on OpenAI/Azure the field is already sent.
+   */
+  readonly streamUsage?: boolean;
+  /**
    * Default model used when `LLMRequest.model` is `'openai'` (the
    * shorthand). Full model ids pass through unchanged.
    */
@@ -222,7 +242,13 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
   // modern params. Reasoning detection is per-request (model id) OR the explicit flag.
   const legacyEndpoint = !!options.baseURL;
   const reasoning = options.reasoning ?? false;
-  const cfg = { defaultModel, defaultMaxTokens, legacyEndpoint, reasoning };
+  const cfg = {
+    defaultModel,
+    defaultMaxTokens,
+    legacyEndpoint,
+    reasoning,
+    streamUsage: options.streamUsage === true,
+  };
 
   const provider: LLMProvider = {
     name: 'openai',
@@ -695,6 +721,8 @@ interface BuildConfig {
   readonly stream: boolean;
   /** Custom OpenAI-compatible endpoint → keep legacy `max_tokens`, no `stream_options`. */
   readonly legacyEndpoint: boolean;
+  /** Consumer opted a custom endpoint back into `stream_options.include_usage`. */
+  readonly streamUsage: boolean;
   /** Consumer-declared reasoning model (combined with model-id auto-detection). */
   readonly reasoning: boolean;
 }
@@ -709,8 +737,12 @@ function buildParams(req: LLMRequest, cfg: BuildConfig): OpenAICreateParams {
   if (cfg.stream) {
     params.stream = true;
     // OpenAI/Azure only emit usage while streaming when asked; without this the
-    // synthesized response reports 0 tokens. Compatible endpoints may not support it.
-    if (!cfg.legacyEndpoint) params.stream_options = { include_usage: true };
+    // synthesized response reports 0 tokens. A custom endpoint is left out by
+    // default because some reject the field — and opts back in with
+    // `streamUsage`, which is how a local-model deployment stops reading zero.
+    if (!cfg.legacyEndpoint || cfg.streamUsage) {
+      params.stream_options = { include_usage: true };
+    }
   }
   if (req.tools && req.tools.length > 0) params.tools = req.tools.map(toOpenAITool);
   const maxTokens = req.maxTokens ?? cfg.defaultMaxTokens;
