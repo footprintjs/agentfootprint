@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "9.71.0",
+  "version": "9.72.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -91,7 +91,8 @@
     "bin/**/*",
     "canonical-notes.json",
     "CLAUDE.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    "CHANGELOG.md"
   ],
   "bin": {
     "agentfootprint-setup": "ai-instructions/setup.sh",

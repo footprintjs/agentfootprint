@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.72.0] - 2026-08-27
+
+### Added
+
+- **An app can vouch for ground the run never served — `externalGrounds`, the
+  external-ground door for the choice-seam check.** The `unsupported-argument`
+  check judges every armed call's identifier-like arguments against what the
+  RUN served the model. Some ground the run never serves: a person clicked a
+  row in the app's data panel, the app VERIFIED the clicked cells against the
+  artifact the panel renders, and the model was told to act on that selection.
+  An identifier taken from a human's verified selection is not fabricated —
+  and until now the check had no way to be told so.
+
+  ```ts
+  const agent = Agent.create({
+    provider, model,
+    // DECLARED, never ambient — this option is the only door.
+    externalGrounds: () => viewerSelection.cells.map((cell) => ({
+      value: cell.text,            // verified by the app against the artifact
+      source: 'viewer-selection',  // the audit label that travels
+    })),
+  })
+  ```
+
+  The provider is consulted once per LLM response that contains an armed call,
+  so entries follow the person's selection between turns. Its entries join the
+  grounded corpus (`ChoiceCorpus.external`, each entry `{ value, source }`),
+  and every excusal is put on the record as
+  `agentfootprint.integrity.external_ground_used` — toolName, toolCallId, the
+  argument's dot-path, the value, and the `source` label of the entry that
+  excused it. An excusal on the record always means the app's assertion was
+  the ONLY thing standing between that value and a finding: values the run
+  itself served are never attributed to the door.
+
+  The honesty note, stated where the option is declared: the library records
+  what the app ASSERTS — verifying the assertion (against the artifact, the
+  click, whatever the app's ground truth is) is the app's duty, done before
+  the entry is yielded, and the source label travels precisely so a reader can
+  audit that chain instead of trusting it.
+
+  Absent, or a provider yielding nothing, is byte-identical to 9.71.0. A
+  provider that throws or returns garbage contributes nothing and never aborts
+  a run — an accounting door must never change a run's outcome. New public
+  types: `ExternalGroundsProvider`, `ExternalGround`, `ExternalGrounding`, and
+  the event payload `IntegrityExternalGroundUsedPayload` (108 typed events
+  now).
+
+### Fixed
+
+- **The `toolGrounding` harvest sees skill-scoped tools — the choice-seam
+  checks arm for an app whose query tools all ride skills.** Found by a
+  consumer's MCP parity work: the harvest read only the STATIC `.tool()`
+  registry at chart build, so an agent whose `argumentsFrom` tools were all
+  skill-carried (delivered when a skill activates) never armed the
+  `dangling-reference` / `unsupported-argument` pair. Its disposition rows
+  read `{checked: 0, notApplicable: 1}` forever while the app's own comments
+  believed the checks ran — the exact green-that-checked-nothing shape the
+  disposition ledger exists to make impossible.
+
+  The harvest now reads the FULL declared catalog (`buildToolRegistry`'s
+  dispatch map: static registrations plus every skill-carried tool,
+  `autoActivate`/scoped ones included). Arming is computable up front because
+  a skill tool's DECLARATION is known at chart build even though the tool
+  reaches the model only after its skill activates; the runtime checks stay
+  correctly scoped on their own — dangling-reference intersects the map with
+  the tools each call actually serves, unsupported-argument with the calls
+  the model actually makes. `IntegrityChecksPresent.dangling` still means
+  exactly "at least one tool declared `argumentsFrom`" — only the blindness
+  changed. CAVEAT, stated rather than papered over: ToolProvider-DELIVERED
+  tools remain invisible to the harvest — `list(ctx)` is opaque and
+  per-iteration, so their declarations cannot be known at build. (MCP tools
+  are not in that hole: `mcpClient(...).tools()` registers them statically,
+  and 9.71.0 carries their declarations across the wire.)
+
+- **`CHANGELOG.md` ships in the tarball.** The `files` allowlist named
+  `CLAUDE.md` and `AGENTS.md` but never the changelog, so every tarball since
+  the allowlist existed — 9.70.0's packaging audit included — shipped without
+  it. One line in `files` closes it.
+
 ## [9.71.0] - 2026-08-26
 
 ### Added
