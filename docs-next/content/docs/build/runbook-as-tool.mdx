@@ -146,9 +146,11 @@ Discipline the dispatch holds for you:
 |---|---|
 | `verdicts` | the rowset (verdict projection only): an array of row bags, each with a string `verdict` |
 | `coverage` | chart-declared coverage entries: `{ checked?, not_checked?, cannot_cover? }` of `{what, why?}` items — the app's own counters translated into the ledger's vocabulary by the stage that knows them |
-| `report` | the app's own result fields, spread into `result` verbatim (spine keys win) |
+| `report` | the app's own result fields, spread into `result` verbatim **beside** the spine (spine keys win) |
 
 The reserved verdict word `declined` means "no classification was reached" — those rows are counted into the ledger as not-checked ground, never dressed up as findings.
+
+**Spine keys win, and a collision is spoken.** The envelope's own names — `af_coverage`, `af_provenance`, `rule_version`, `walk`, `report_note`, and the projection keys a verdict-shaped run assembled (`verdicts`, `rows_shown`, `rows_total`, `rows_complete`, `table`, `render_note`, `verdict_meanings`) — are reserved. A `report` field spelling one of them is **discarded**, and `result.report_note` names every field that was: a boundary a chart can overwrite is a boundary that reports whatever the chart says about itself. `report_note` is present only when something was actually refused, so the normal path never sees it.
 
 ## The walk, honestly
 

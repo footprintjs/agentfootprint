@@ -205,8 +205,15 @@ export interface RunbookEnvelope {
     /** branch → meaning, GENERATED from the decider's declared branches and
      *  the rule labels this run's evidence carried — never hand-restated. */
     readonly verdict_meanings?: Readonly<Record<string, string>>;
+    /** Present ONLY when the chart's `report` spelled one of the envelope's
+     *  own names: it names every discarded field and says the values under
+     *  those names are the bridge's. Absent on the clean path. */
+    readonly report_note?: string;
     /** Everything the chart put in its `report` state key — the app's own
-     *  result fields, spread here verbatim (spine keys win). */
+     *  result fields, spread here verbatim BESIDE the spine. Spine keys win:
+     *  a report field spelling `af_coverage`, `af_provenance`, `rule_version`,
+     *  `walk`, `report_note`, or a projection key this run assembled is
+     *  discarded and named in `report_note`. */
     readonly [appField: string]: unknown;
   };
 }

@@ -23,9 +23,15 @@ One file per job:
 - `verdicts.ts` — the rowset off the `verdicts` state key, the one-cap
   table, and meanings GENERATED from declared branches + observed rule
   labels.
+- `report.ts` — the precedence law: the chart's `report` is admitted BESIDE
+  the envelope's own names, never over them; a refused field is named in
+  `report_note` rather than dropped in silence.
 
 Reserved state keys the bridge reads: `verdicts`, `coverage`, `report`.
 Reserved verdict word: `declined` (counted into the ledger as not-checked).
+Reserved envelope names a `report` may not take: `af_coverage`,
+`af_provenance`, `rule_version`, `walk`, `report_note`, and the projection
+keys of a verdict-shaped run.
 
 Phase boundaries (honest): pause is not yet bridged (a paused chart throws
 with the checkpoint attached — `walk_segment` ships now so the wire will not

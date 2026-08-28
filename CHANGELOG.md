@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.76.1] - 2026-08-28
+
+### Fixed
+
+- **`runbookAsTool`: the honesty spine actually wins.** The envelope's
+  contract said "spine keys win" while the assembly spread the chart's
+  `report` bag AFTER `af_provenance` and `rule_version` — so a chart writing
+  either name into `report` silently replaced the two fields a reader checks
+  the answer's boundary with. A procedure could have arrived stamped with a
+  provenance it never had, or naming a rule version it never ran under, and
+  the envelope would have looked exactly as honest as a true one. Found by
+  the first consumer refit, before any chart did it.
+
+  The precedence is now EXPLICIT, not a consequence of spread order: the
+  spine and the projection this run assembled are built first, and the
+  chart's `report` is admitted against the names they took. Reserved names
+  are `af_coverage` (refused inside `result` too — a decoy ledger one level
+  under the real one is exactly where a decoy would want to sit),
+  `af_provenance`, `rule_version`, `walk`, `report_note`, and, for a
+  verdict-shaped run, the projection keys. The reserved set is READ from the
+  assembled objects, so a spine field added later is protected the day it
+  lands.
+
+  **A refused field is named, not silently dropped** — the same law the rest
+  of the envelope already follows (the walk declares its projection, the
+  rowset its completeness, declined rows land in the ledger). A collision
+  costs one `result.report_note` listing every discarded field and saying the
+  values under those names are the bridge's; it is absent whenever nothing
+  collided, so the clean path — every real runbook — pays nothing.
+
 ## [9.76.0] - 2026-08-28
 
 ### Added

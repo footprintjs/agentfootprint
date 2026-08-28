@@ -41,7 +41,9 @@
  *   - `coverage` — chart-declared coverage entries (`{checked?, not_checked?,
  *     cannot_cover?}`);
  *   - `report`  — the app's own result fields, spread into `result` verbatim
- *     (spine keys win).
+ *     BESIDE the spine, never over it: the envelope's own names (the spine
+ *     plus the projection this run assembled) are reserved, and a report
+ *     field spelling one of them is discarded and NAMED in `report_note`.
  *
  * Pause: NOT yet bridged. A paused inner chart throws with the checkpoint
  * attached, exactly like `flowchartAsTool` — the approval-gate integration
@@ -97,6 +99,7 @@ import {
   foldInnerCoverage,
 } from './coverage.js';
 import { absenceSignalOf, probeDispatch, recordingDispatch } from './dispatch.js';
+import { admitReport, REPORT_NOTE_KEY, shadowedFieldsNote } from './report.js';
 import type { RunbookAsToolOptions, RunbookEnvelope, VerdictRow } from './types.js';
 import {
   composeMeanings,
@@ -388,15 +391,21 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         toolCallId: ctx.toolCallId,
       };
 
-      const report = bagOf(state.report) ?? {};
-      const envelope: RunbookEnvelope = {
-        af_coverage: ledger,
-        result: {
-          af_provenance,
-          rule_version: opts.rules?.version ?? 'undeclared',
-          ...report,
-          ...(shown !== undefined &&
-            rows !== undefined && {
+      // ── The envelope ────────────────────────────────────────────────────
+      // The spine and the projection are assembled FIRST, and the chart's
+      // `report` is admitted against the names they took: spine keys win, as
+      // the contract says, by explicit precedence rather than by spread order
+      // (which had the report land on top of `af_provenance` and
+      // `rule_version`). A refused field is named in `report_note` — see
+      // report.ts for the law and why the refusal is spoken.
+      const spine = {
+        af_provenance,
+        rule_version: opts.rules?.version ?? 'undeclared',
+        walk,
+      };
+      const projection =
+        shown !== undefined && rows !== undefined
+          ? {
               verdicts: shown,
               rows_shown: shown.length,
               rows_total: rows.length,
@@ -404,8 +413,23 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
               table: renderVerdictTable(shown),
               render_note: VERDICT_RENDER_NOTE,
               ...(meanings !== undefined && { verdict_meanings: meanings }),
-            }),
-          walk,
+            }
+          : undefined;
+      const report = admitReport(bagOf(state.report) ?? {}, [
+        ...Object.keys(spine),
+        ...Object.keys(projection ?? {}),
+      ]);
+      const envelope: RunbookEnvelope = {
+        af_coverage: ledger,
+        result: {
+          af_provenance: spine.af_provenance,
+          rule_version: spine.rule_version,
+          ...report.fields,
+          ...(projection ?? {}),
+          ...(report.refused.length > 0 && {
+            [REPORT_NOTE_KEY]: shadowedFieldsNote(report.refused),
+          }),
+          walk: spine.walk,
         },
       };
       return envelope;
