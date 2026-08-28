@@ -158,7 +158,8 @@ OpenAI-compatible gateway — and not any single adapter's feature list.
 ## Providers
 
 - **[AWS & Bedrock AgentCore](doc:aws)** — the first worked provider: every service, its adapter, its door, its peer dependency, and its honest status.
-- **[Google Cloud & Gemini](doc:google-cloud)** — the third column: the native Gemini provider and Gemini embeddings ship, Cloud Trace is a recipe over standard OTLP, and every other boundary names the port that fills it and the reason it is not an adapter yet.
+- **[Google Cloud & Gemini](doc:google-cloud)** — Gemini models and embeddings, Cloud Storage artifacts, Agent Runtime and Firestore sessions, Memory Bank and ADC identity; Cloud Trace is a recipe over standard OTLP, and every other boundary names the port that fills it and the reason it is not an adapter yet.
+- **[Microsoft Foundry](doc:microsoft-foundry)** — both directions on one page: `foundry()` and `foundryLocal()` outbound, `foundryResponsesHost()` inbound, `entraIdentity()` for Azure tokens. The youngest column, and it says so — **nothing here has been run against live Azure**, and the status column names the rung each adapter actually reached instead.
 - **[On-premises & self-hosted](doc:on-premises)** — the column for a deployment that owns its own machines: local models, stores on your disk, NDJSON telemetry, your vault. There is no `onPremises()` adapter, because on-premises is the absence of a vendor rather than one more of them.
 
 More clouds plug in the same way — each is a set of adapters behind the same

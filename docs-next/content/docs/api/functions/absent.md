@@ -6,7 +6,7 @@ title: absent
 
 > **absent**(`decl`): [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/core/agent/coverage/absent.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L100)
+Defined in: [src/core/agent/coverage/absent.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/absent.ts#L103)
 
 Say "I looked, and there is nothing" in a way a model cannot read as a
 failure — and cannot productively retry.

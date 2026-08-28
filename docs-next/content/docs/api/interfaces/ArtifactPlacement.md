@@ -4,7 +4,7 @@ title: ArtifactPlacement
 
 # Interface: ArtifactPlacement
 
-Defined in: [src/artifacts/placement.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/placement.ts#L37)
+Defined in: [src/artifacts/placement.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/placement.ts#L38)
 
 The dial. One field today; a plain object so field number two (a
  per-kind override, say) can arrive additively.
@@ -15,7 +15,7 @@ The dial. One field today; a plain object so field number two (a
 
 > `readonly` **maxInlineChars**: `number`
 
-Defined in: [src/artifacts/placement.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/placement.ts#L53)
+Defined in: [src/artifacts/placement.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/placement.ts#L54)
 
 The threshold, in characters of the finalized result text. Over it, the
 result is checked into the store and the model reads the claim ticket.

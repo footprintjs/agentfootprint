@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:447](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L447)
+Defined in: [src/adapters/types.ts:470](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L470)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:447](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:498](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L498)
+Defined in: [src/adapters/types.ts:521](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L521)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -42,7 +42,7 @@ constrained if both constrain it.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:474](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L474)
+Defined in: [src/adapters/types.ts:497](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L497)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -74,7 +74,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L448)
+Defined in: [src/adapters/types.ts:471](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L471)
 
 ## Methods
 
@@ -82,7 +82,7 @@ Defined in: [src/adapters/types.ts:448](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:506](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L506)
+Defined in: [src/adapters/types.ts:529](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L529)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -110,7 +110,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L507)
+Defined in: [src/adapters/types.ts:530](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L530)
 
 #### Parameters
 

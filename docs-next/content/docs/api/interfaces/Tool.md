@@ -25,6 +25,23 @@ One executable tool the Agent can call.
 
 ## Properties
 
+### argumentsFrom?
+
+> `readonly` `optional` **argumentsFrom?**: readonly `string`[]
+
+Defined in: [src/core/tools.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L214)
+
+WHERE THIS TOOL'S ARGUMENTS COME FROM (9.60.0) — the names of tools
+whose RESULTS ground what a caller passes here (`screen_fire` fires at
+ids that `whats_here` listed). Declared by the author, never inferred:
+only the author knows the dependency. The dangling-reference check
+reads it at composition — when a declared ground's results have left
+the window (`WindowRecord.droppedObservations`) and were not
+re-established, offering this tool files a finding. Omitted → this
+tool is never that check's subject, byte-identical.
+
+***
+
 ### capabilities?
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/docs/api/type-aliases/ToolCapability)[]
@@ -112,6 +129,84 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 ***
 
+### owner?
+
+> `readonly` `optional` **owner?**: `ToolOwner`
+
+Defined in: [src/core/tools.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L203)
+
+WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
+moment the code demonstrably knows both ends: registration. Before
+this field, ownership was only DERIVABLE (from the per-pass
+InjectionRecord, or the maps kernel's MountedMap) — a checker asking
+"who owns get_zones" between registration and the first tools-slot
+pass had no answer, and a static `.tool()` registration's sourceId
+was just the tool's own name. The Context Integrity checks read this
+stamp and never infer identity; a tool without one is `unreachable`
+to subject-joined checks, which the disposition ledger counts.
+Omitted → exactly today's bytes (`source: 'registry'`).
+
+***
+
+### repeatedWhen?
+
+> `readonly` `optional` **repeatedWhen?**: `"arguments"`
+
+Defined in: [src/core/tools.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L263)
+
+FINGERPRINT THE REPEATED-CALL LEDGER ON ARGUMENTS ALONE (9.62.0) —
+`'arguments'` tells `core/agent/repeatedCall.ts` that this tool's own
+RESULT is not evidence of repetition and must not be folded into the
+match key.
+
+The repeated-call nudge exists to catch a model calling the same tool
+with the same arguments and getting nowhere. By default it proves "got
+nowhere" by also requiring the RESULT to match — a `check status` call
+returning a different status is progress, not a loop, and the default
+rule (correctly) says nothing about it. That default quietly breaks for
+a tool whose result is not a function of its arguments on purpose: a
+screen/UI tool that stamps a fresh version number, timestamp, or cursor
+into every answer so a human or a downstream cache can tell which
+render is current. Call a tool like that twice with byte-identical
+arguments and the default fingerprint never matches — the detector is
+silently inert for it, forever. This was found in a real recorded
+failure: an agent re-fired a completed navigation sequence and nothing
+noticed, because each fire's fresh stamp made it look like new
+information.
+
+Declared, never inferred — the `capabilities` / `resultClass` law. Only
+the tool's author knows whether its result is signal or a stamp;
+guessing from a name or a response shape would rest a detector on a
+heuristic the framework cannot verify. The note's wording changes to
+match when this fires (it stops claiming the result matched, because it
+did not) — see `repeatedCall.ts` for both sentences.
+
+**This never suppresses execution.** The ledger only ever appends a
+teaching sentence to a result the tool already returned, strictly AFTER
+`execute` ran — the same anti-guarantee `runCheckpoint.ts` and
+`Agent.ts` document for tool calls generally (durability replay,
+resumed runs, and every retry of this kind still execute the tool; there
+is no dedup here or anywhere else in this library).
+
+Omitted → byte-identical behavior: the ledger keeps folding the result
+into the key exactly as it always has, for every tool that does not
+declare this.
+
+#### Example
+
+```ts
+a screen tool whose result always carries a fresh version stamp
+  defineTool({
+    name: 'render_screen',
+    description: 'Render the named screen',
+    repeatedWhen: 'arguments',
+    inputSchema: { … },
+    execute: async ({ view }) => `rendered ${view} @v${Date.now()}`,
+  });
+```
+
+***
+
 ### resultCeiling?
 
 > `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/docs/api/interfaces/ToolResultCeiling)
@@ -141,6 +236,52 @@ and validated at definition against the closed set. The
 tool whose sample result declares no coverage fails the build by name.
 Omitted → no class rules; the semantic-envelope rules still apply to any
 result that carries the `af_semantics` marker.
+
+***
+
+### resultKind?
+
+> `readonly` `optional` **resultKind?**: `string`
+
+Defined in: [src/core/tools.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L190)
+
+THE ARTIFACT KIND A PLACED RESULT IS MINTED UNDER (9.70.0) — this tool's
+result in the CONSUMER's vocabulary (`'dataset/rows'`), not the
+framework's.
+
+Artifact PLACEMENT (`artifacts: { store, placement }`) checks an oversized
+result into the store and hands the model a claim ticket. Absent this
+field it mints under `tool-result/<toolName>` — honest, and unspendable:
+`wants` is exact-match on kind BY LAW (no wildcards, no hierarchy), so a
+downstream `wants: { dataset: 'dataset/rows' }` refuses the very ticket
+the framework just minted, as a kind mismatch. Field-verified: the
+consumer had to re-mint by hand at the seam, which is the framework
+declining to carry its own ref.
+
+The fix is DECLARED, never inferred (the `capabilities` / `resultClass`
+law) and never a loosening of the matcher: only the author knows what
+their tool actually produces, and `wants` staying exact is what makes a
+ticket a promise. Declaring `resultKind` makes the MINT speak the
+consumer's vocabulary instead.
+
+A non-empty string; an empty or blank one is refused at `defineTool`,
+because a kind is what a ticket is redeemed against and a blank kind
+redeems against nothing. Omitted → exactly today's bytes
+(`tool-result/<toolName>`, and no measurement at all without placement).
+
+#### Example
+
+```ts
+a tool whose placed result a `wants` consumer can spend
+  defineTool({
+    name: 'get_rows',
+    description: 'Fetch the rows of a dataset',
+    resultKind: 'dataset/rows',
+    inputSchema: { … },
+    execute: async () => …,
+  });
+  // elsewhere: defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' }, … })
+```
 
 ***
 
@@ -213,7 +354,7 @@ Omitted → byte-identical behavior (nothing resolved, nothing measured).
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L155)
+Defined in: [src/core/tools.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L264)
 
 #### Parameters
 

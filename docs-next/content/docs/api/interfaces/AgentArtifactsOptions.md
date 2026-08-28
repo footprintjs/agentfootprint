@@ -4,7 +4,7 @@ title: AgentArtifactsOptions
 
 # Interface: AgentArtifactsOptions
 
-Defined in: [src/core/agent/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L70)
+Defined in: [src/core/agent/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L80)
 
 The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
 operator dials. `placement` cannot be spelled without `store` — a
@@ -17,11 +17,12 @@ lies, and the shape refuses it before a runtime check has to.
 
 > `readonly` `optional` **placement?**: [`ArtifactPlacement`](/docs/api/interfaces/ArtifactPlacement)
 
-Defined in: [src/core/agent/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L82)
+Defined in: [src/core/agent/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L93)
 
 The placement threshold. A tool result whose finalized text exceeds
-`maxInlineChars` is checked into the store (kind
-`tool-result/<toolName>`) and the model reads the claim ticket instead.
+`maxInlineChars` is checked into the store (under the tool's declared
+`resultKind`, or `tool-result/<toolName>` when it declares none) and the
+model reads the claim ticket instead.
 Judged AFTER the tool's own `resultCeiling` (the author's refusal comes
 first) and BEFORE the agent-level `maxToolResultChars` truncation net
 (which then measures the ticket, so it should rarely fire). Omitted →
@@ -33,7 +34,7 @@ results are never measured and never placed, exactly as before.
 
 > `readonly` `optional` **recordings?**: `boolean` \| [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 
-Defined in: [src/core/agent/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L120)
+Defined in: [src/core/agent/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L131)
 
 Check each completed run's RECORDING into the store (9.26.0), so a screen
 can replay the turn later without the deployment inventing a place to keep
@@ -77,6 +78,6 @@ RESUMED run — which is what the recorder saw.
 
 > `readonly` **store**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L72)
+Defined in: [src/core/agent/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L82)
 
 The claim-check store — same seam as the bare `ArtifactStore` form.

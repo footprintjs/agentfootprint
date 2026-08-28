@@ -103,3 +103,24 @@ Cost dashboards reading `cost.tick` events should track this
 separately from `output` — pricing differs (Anthropic charges
 extended thinking at output rates; OpenAI o1/o3 reasoning tokens
 are billed as a separate line item).
+
+***
+
+### wireManifest?
+
+> `readonly` `optional` **wireManifest?**: [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
+
+Defined in: [src/adapters/types.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L301)
+
+9.60.0 — what this request ACTUALLY carried, read back from the
+serialized body after every transform (see adapters/llm/wireManifest.ts,
+which builds it; the SHAPE lives here because it is part of the provider
+port, and the skill-graph fence rightly refuses this file reaching
+anything past the port).
+
+The wire seam's evidence: the recorded defect was an adapter still
+serializing four tool schemas after the internal frame said they were
+removed — invisible to any check that reads only the pre-serialization
+IR. Absent when the adapter states no manifest, and the wire check then
+treats the request as INCOMPARABLE (never as "nothing crossed"); an
+empty `toolNames` is the opposite — a stated zero.

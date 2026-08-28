@@ -1,6 +1,6 @@
 ---
 title: Microsoft Foundry
-description: Both directions on one page. Outbound — foundry() calls a Foundry project over the api-version-free v1 route (deployment as the model, Entra credential or key, zero config inside a hosted container), and foundryLocal() calls an on-device model with no key at all. Inbound — foundryResponsesHost serves the Foundry Toolkit's hosted-agent contract on the AgentHost port, with responsesWire underneath as the Responses protocol with no vendor in it.
+description: Both directions on one page, plus the whole Microsoft service map. Outbound — foundry() calls a Foundry project over the api-version-free v1 route, and foundryLocal() calls an on-device model with no key at all. Inbound — foundryResponsesHost serves the Foundry Toolkit's hosted-agent contract on the AgentHost port. entraIdentity() vends Azure tokens to tools. And an honest status column — nothing here has been run against live Azure.
 ---
 
 Foundry turns up twice in an agent's life, and the two halves are independent:
@@ -12,7 +12,111 @@ Foundry turns up twice in an agent's life, and the two halves are independent:
   Foundry Toolkit's Agent Inspector contract on the same `AgentHost` port every
   other host uses.
 
-Take either, both, or neither. Nothing on one half constrains the other.
+Take either, both, or neither. Nothing on one half constrains the other. Beside
+them sits `entraIdentity()`, which vends Azure access tokens to your *tools* — a
+third thing again, and the [identity section](#identity--entraidentity) below says
+where its edge is.
+
+<Callout type="warn" title="Read the Status column before you read anything else">
+This is the youngest of the three provider columns, and the one honest sentence
+that governs the whole page is this: **no adapter here has ever been run against
+live Azure.** There is no Azure subscription behind this repository. The
+[AWS](doc:aws) and [Google Cloud](doc:google-cloud) pages carry rows marked
+*field-validated* because those adapters answered real requests from real
+services in live accounts; **that phrase appears nowhere on this page**, and it
+will not until somebody runs one. What these adapters *do* carry is written out
+row by row below, and it is worth having — it is just not that.
+</Callout>
+
+## Service → adapter map
+
+Every row: what Microsoft calls it, which adapter fills it, which door exports
+it, which peer dependency it lazily requires, what it covers — and what it does
+**not**.
+
+| Microsoft service | Adapter | Door | Peer dep | Ops covered | Status | Capability page |
+|---|---|---|---|---|---|---|
+| **Foundry project inference** | `foundry()` | `agentfootprint/providers` | `openai` — plus `@azure/identity`, loaded lazily and **only** on the zero-config path where you pass neither `credential` nor `apiKey` | Chat completions, `complete()` and `stream()`, on the v1 route derived from the project endpoint by simple suffixing (`+ /openai/v1`), with the **deployment name travelling as the wire's `model` field**. **Not** the classic deployment-scoped route and **not** an `api-version` query — that is the row below. **Not** multi-modal input, **not** JSON mode, **not** listing deployments or any other control-plane call | **Pinned by unit tests, and wire-verified against a LOCAL FAKE — never against live Azure.** `test/adapters/integration/foundry-wire.test.ts` drives the **real `openai` SDK** over a real socket into a fake of the `/openai/v1` route and records what actually left the process: the path under `/api/projects/…`, `Authorization: Bearer` and no `api-key` header, `max_completion_tokens` and never `max_tokens`, `stream_options.include_usage` on a stream, a rotated token reaching the second request, and the audience the credential was asked for. That proves **the request this library sends**. It proves nothing about how Azure answers — see [Verified how](#verified-how) | [below](#foundry--a-foundry-project) |
+| **Classic Azure OpenAI** (a resource endpoint) | `azureOpenai()` — keyless since 9.74.0 | `agentfootprint/providers` | `openai`. `@azure/identity` only because **you** construct the credential — this door never loads it | Deployment-scoped chat completions, `{endpoint}/openai/deployments/{d}/…`, where **`apiVersion` is required** (option or `AZURE_OPENAI_API_VERSION`). A static **key** *or* an Entra **credential**, never both — the pair is refused by name as the config bug it is. Its default audience is the classic `https://cognitiveservices.azure.com/.default`, because that is the audience *its* route documents | **Pinned by unit tests, and wire-verified against a LOCAL FAKE — never against live Azure.** `test/adapters/integration/azure-openai-wire.test.ts` drives the real `openai` SDK against a local fake: both endpoint spellings resolve to one identical URL, the keyed path sends the `api-key` header and never a Bearer, the keyless path sends `Authorization: Bearer` with no `api-key` header, an ambient `AZURE_OPENAI_API_KEY` does not collide with an explicit `credential`, and a streamed turn reports the usage the wire sent | [OpenAI](doc:openai) |
+| **Foundry Local** (on-device) | `foundryLocal()` | `agentfootprint/providers` | **none** — `fetch` only | `POST {endpoint}/v1/chat/completions`, complete and SSE stream, with `stream_options: { include_usage: true }` always sent so **streamed token counts are real numbers**. Alias → variant resolution through `GET {endpoint}/foundry/list`, first match wins, cached per provider hit or miss. **Not** forced tool choice (`carriesForcedToolChoice` is `false`), **not** multi-modal, **not** prompt caching, **not** a structured thinking field | **Pinned by unit tests against an injected fake `fetch`, so the suite runs offline — never run against a real Foundry Local install here.** Endpoint and catalog resolution, SSE streaming with usage on the final chunk, a mid-stream `error` frame raised rather than reported as a clean stop, and both typed refusals are covered | [below](#foundrylocal--a-model-on-this-machine) |
+| **Microsoft Entra ID** (identity for tools) | `entraIdentity()` | `agentfootprint/security` | `@azure/identity` — an optional peer, required the first time this provider vends | Machine tokens from the `DefaultAzureCredential` chain — environment service principal, workload identity, managed identity, VS Code, Azure CLI, Azure PowerShell, Azure Developer CLI. Scopes ride per call; `AZURE_AI_SCOPE` is the default. **`mode: 'user'` and a per-request `userToken` are REFUSED BY NAME** — there is no on-behalf-of surface yet, and a machine token in their place would be a silent downgrade | **9.74.0 — contract-shaped and injection-tested; awaiting field use.** The `_credential` and `_sdk` seams are how the suite runs with no package and no Azure account — which is also to say that no token has ever been minted here by real Entra | [Identity & credentials](doc:identity-and-credentials) |
+| **Foundry Toolkit hosted agent** (Agent Inspector) | `foundryResponsesHost()` + `responsesWire` | `agentfootprint/hosting` | **none** — plain HTTP | Port 8088; `POST /responses` takes a turn, a bare `HEAD` on the same path answers the capability probe with 204, `GET /readiness` answers `{"status":"healthy"}`. `stream: true` **in the body** selects the nine-event Responses lifecycle. **Not** the full Responses API — no retrieval or storage, no background mode, no tool-call continuation — and **not** the Workflow Visualizer | **9.65.0 — really verified, on the one thing here that could be.** Passes the same host conformance suite as `nodeHost` and `agentCoreRuntimeHost` over a real socket, plus a contract suite carrying shapes captured from a **real Toolkit 1.6.9 Agent Inspector session**, where connection, streaming and final-answer rendering were observed live. That is evidence about VS Code on a laptop — **not** about Azure. Cloud-hosted Inspector behaviour and Foundry Hosted Agent deployment are not covered and not claimed | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Azure Monitor / Application Insights** | — | `agentfootprint/observe` | — | — | 🔴 No adapter — **queued for a later train.** The App Insights sink was deliberately held out of 9.74.0 rather than shipped unverified | [Observability sinks](doc:observability-sinks) |
+| **Azure AI Search** | — | `agentfootprint/memory` | — | — | 🔴 No adapter — **queued for a later train.** Bring your own behind the `MemoryStore` port until then | [Memory & stores](doc:memory-and-stores) |
+| **Foundry Toolbox** (managed MCP) | — | `agentfootprint/providers` | — | — | 🔴 No adapter — **queued for a later train.** The port it would fill is `mcpClient`, which exists and is not Foundry-specific | [Tools & gateways](doc:tools-and-gateways) |
+| **Evaluations** | — | — | — | — | 🔴 No adapter — **queued for a later train.** This library ships the typed event stream and never a judge; the grader stays yours | [Observability sinks](doc:observability-sinks) |
+| **The A2A door** | — | `agentfootprint/hosting` | — | — | ⏸️ **Parked — preview, and unverifiable without a live account.** There is no Foundry A2A adapter. The vendor-neutral `a2aWire` does ship and composes with `httpHost` on paths of your own | [Hosting & runtime](doc:hosting-and-runtime) |
+| **Browser automation / computer use** | — | — | — | — | ⏸️ **Parked — preview-only, and there is no account here to verify it against.** Wrap what you already have as a `defineTool` or an MCP tool | [Tools](doc:tools) |
+| **Managed Memory** | — | `agentfootprint/memory` | — | — | ⏸️ **Parked — preview-only, unverifiable without a live account.** Every other `MemoryStore` adapter still fits behind the same port | [Memory & stores](doc:memory-and-stores) |
+| **Control plane** (creating resources, projects, deployments) | — | — | — | — | 🔴 Bridge it yourself — `azd`, the Azure SDK, Bicep, Terraform or the portal. agentfootprint is runtime-only, and the control plane is a **different token audience** besides | — |
+
+<Callout type="warn" title="The two rungs this page reaches, and the one it does not">
+**Pinned by unit tests** is the floor every row stands on: behaviour, refusals
+and option handling exercised through injected seams — `_client`, `_credential`,
+`_sdk`, a fake `fetch`. Nothing about a real service is proved by it.
+
+**Wire-verified against a local fake** is one rung up, and only `foundry()` and
+`azureOpenai()` reach it. The **real `openai` SDK** talks over a **real socket**
+to a local fake of the route, and the test asserts what left the process rather
+than what the code meant to send. It is a strong proof of its own kind — it is
+what pins the dialect trap, where a bare `baseURL` would have quietly sent
+`max_tokens` and withheld `stream_options` on a route that wants neither. It is
+**not** a proof about the response Azure returns, the role a resource needs, or
+whether a deployment name resolves.
+
+**Field-validated** — the rung the other two provider pages carry, where an
+adapter answered a real request from a real service in a live account — is
+**absent here on purpose**, because there is nothing to point at. An honest
+"not yet run against live Azure" is the whole value of this column; borrowing
+the other columns' credit would empty it.
+
+The single exception is the inbound half, and only because the thing it talks to
+runs on a laptop rather than in a subscription: `foundryResponsesHost` was
+observed live against a real Foundry Toolkit Agent Inspector.
+</Callout>
+
+## Before you start
+
+This column's adapters do not earn a ten-step setup page of their own, so the
+whole of it is here. Everything below is a documented Microsoft fact this library is built on,
+rather than something measured here — which is exactly the distinction the Status
+column above is keeping.
+
+**Keyless inference needs a role on the resource, and it is not the obvious one.**
+An Entra identity that can *sign in* is not an identity that can *infer*. The
+assignment is **`Cognitive Services OpenAI User`** (or `Contributor`) on the
+resource; the Foundry Models surface names **`Cognitive Services User`**. Without
+it the token mints perfectly and the inference call comes back 403.
+
+**Entra auth requires the resource's CUSTOM SUBDOMAIN.** A regional endpoint
+answers **401** for a bearer token no matter how correct that token is. Keys work
+on either; only the keyless doors care.
+
+**A role assignment takes up to about five minutes to propagate.** A 403 in the
+first minutes after assigning one is the expected shape of *"not yet"*, not a
+misconfiguration. Wait it out before you change anything, or you will spend the
+afternoon debugging a problem that was fixing itself.
+
+**Locally, `DefaultAzureCredential` resolves your `az login`.** In a hosted
+Foundry container the platform creates a **per-agent Entra identity** and injects
+**`FOUNDRY_PROJECT_ENDPOINT`**, so a deployed container needs neither — which is
+precisely what makes `foundry()` with no arguments a complete configuration
+there.
+
+**`@azure/identity` is an optional peer, and nothing loads it for you unless a
+keyless door needs it.** `entraIdentity()` requires it the first time it vends;
+`foundry()` requires it only on the zero-config path where you name neither
+`credential` nor `apiKey`. Build a credential yourself and you are installing the
+package for your own `new DefaultAzureCredential()`, not for this library. An api
+key needs it not at all.
+
+```bash
+npm install @azure/identity     # only for the keyless doors
+```
+
+**Foundry Local needs no key, and its port is DYNAMIC.** There is no account and
+nothing to authenticate; `foundry server status` prints the live URL, because
+every `foundry server start` may pick a new port.
 
 ## Outbound — calling a Foundry model
 
@@ -229,6 +333,49 @@ naming the one variable to set. Detection is **env-only**: no socket is opened t
 whether anything is up, so the answer is identical on a laptop and in CI, and a
 service that is down reports itself from the call, with the fix in the message.
 
+## Identity — `entraIdentity()`
+
+The doors above authenticate the **model call**. `entraIdentity()` is the other
+half: it vends an Entra access token to your **tools**, through the
+[`CredentialProvider`](doc:identity-and-credentials) port, so a tool that calls
+an Azure API uses the deployment's own identity without holding a secret.
+
+```ts
+import { entraIdentity } from 'agentfootprint/security';
+
+const agent = Agent.create({ provider, model, credentials: entraIdentity() }).build();
+```
+
+**What it vends:** a bearer token from the `DefaultAzureCredential` chain —
+environment service principal, workload identity, managed identity, VS Code,
+Azure CLI, Azure PowerShell, Azure Developer CLI, in that order. On a laptop that
+is your `az login`; on a deployed container it is the managed identity, with no
+configuration in between. It caches the *credential*, never a token, so MSAL's
+own refresh does the pacing.
+
+**The audience split, in one sentence:** a token is minted for exactly one
+audience, so `AZURE_AI_SCOPE` (`https://ai.azure.com/.default`, the inference
+data plane, and this provider's default) is a **401** on the ARM control plane
+and `AZURE_MANAGEMENT_SCOPE` (`https://management.azure.com/.default`) is a 401
+on inference — which is why both are exported by name instead of left as strings
+to remember.
+
+**What it refuses, by name:** `mode: 'user'` and a per-request `userToken`. Entra's
+on-behalf-of flow needs a confidential client app registration this adapter does
+not hold, and answering a delegated request with a machine token would succeed
+and be wrong — the call would run with the *agent's* access rather than the
+person's, with nothing downstream able to tell. OBO is a later train, and it will
+be its own provider rather than a flag here. A `services` allowlist is refused
+the same way when a request names something outside it.
+
+A **bring-your-own** `TokenCredential` for *inference* does not go through this
+provider at all: pass it straight to the door, as `foundry({ credential })` or
+`azureOpenai({ credential })`.
+
+The full treatment — the port, the three exported scope constants, the worked
+tool, and how this sits beside `agentCoreIdentity` and `googleIdentity` — is on
+**[Identity & credentials](doc:identity-and-credentials)**.
+
 ## Inbound — hosting your agent for Agent Inspector
 
 > **This half is a hosting adapter, not a model provider.** It is about the door
@@ -327,6 +474,53 @@ Two of its readers are exported for tests and for dialects built beside it:
 items — into the turn's text, refusing what it cannot carry, and
 `readResponsesSession` resolves a body's session aliases in precedence order.
 
+## What is NOT here
+
+Absences are facts, so here they are stated rather than discovered. Two reasons
+recur below, and both are positions rather than apologies: several Microsoft
+surfaces are **preview**, and this library does not ship against an API it cannot
+verify; the rest are simply **queued** behind the auth-and-inference tier this
+column started with.
+
+- **No live-Azure validation, of anything.** There is no Azure subscription
+  behind this repository, so no row above says *field-validated* and none will
+  until somebody runs one. What the doors are built on is Microsoft's own
+  documented wire, named on this page so you can check it against your resource
+  before you trust it.
+- **No Application Insights / Azure Monitor sink.** Queued for a later train, and
+  deliberately held out of 9.74.0 rather than shipped as an unverified recipe.
+- **No Azure AI Search store.** Queued. The `MemoryStore` port is what it will
+  fill, and it is open today.
+- **No Foundry Toolbox (managed MCP) transport.** Queued. `mcpClient` and
+  `gatewayTransport` are the vendor-neutral port underneath, and they are not
+  Foundry-specific.
+- **No Evaluations adapter.** Queued — and when it comes it will ship the
+  machinery, not a judge. Grading stays yours.
+- **No A2A door for Foundry, no browser automation or computer use, and no
+  managed Memory adapter.** All three are preview surfaces, and none of them can
+  be verified from here without a live account. Refusing to ship against an API
+  nobody in this repository can call is the position, not an oversight — the
+  vendor-neutral `a2aWire` ships regardless, because it is a protocol rather than
+  a product.
+- **No on-behalf-of, and no user-delegated Entra token.** `entraIdentity()`
+  refuses `mode: 'user'` and a per-request `userToken` **by name** rather than
+  quietly vending the deployment's own identity in their place.
+- **No control plane.** Creating a resource, a project or a deployment, and
+  listing what exists, are `azd` / Azure SDK / Bicep / Terraform work — on a
+  different token audience, which is its own reason the inference doors do not
+  reach for it.
+- **No multi-modal input and no JSON mode on `foundry()`.** It is `openai()`'s
+  machinery underneath, so it inherits that ceiling exactly.
+- **No forced tool choice, no prompt caching and no structured thinking on
+  `foundryLocal()`.** `tool_choice` is undocumented on that wire, so
+  `carriesForcedToolChoice` is `false` and a `'tool-forced'` output schema
+  refuses at run start naming this provider — rather than claiming an
+  undocumented field works.
+- **No Workflow Visualizer topology from the inbound half.** The Responses
+  protocol carries no channel for it, and inventing one would claim a
+  compatibility this has never demonstrated. Your agent's internal structure is
+  readable from agentfootprint's own recorders instead.
+
 ## Verified how
 
 The hosting adapter passes the same host conformance suite as `nodeHost` and
@@ -348,3 +542,32 @@ runs offline. Neither door is claimed as field-verified against a live Foundry
 account or a live Foundry Local install: the wire facts they are built on are
 Microsoft's own documented ones, named above so you can check them against your
 resource before you trust them.
+
+`azureOpenai()` is proven the same way `foundry()` is, against its own route: the
+real `openai` SDK over a real socket into a local fake, where both endpoint
+spellings resolve to one identical deployment-scoped URL, the keyed path sends
+the `api-key` header and never a Bearer, the keyless path sends
+`Authorization: Bearer` with no `api-key` header and asks its credential for the
+classic `https://cognitiveservices.azure.com/.default`, an ambient
+`AZURE_OPENAI_API_KEY` does not collide with an explicit `credential`, and a
+streamed turn reports the usage the wire sent.
+
+`entraIdentity()` is contract-shaped and injection-tested and nothing more: its
+`_credential` and `_sdk` seams are how the suite runs with no `@azure/identity`
+installed and no Azure account, which also means no token has ever been minted
+here by real Entra. Its refusals — `mode: 'user'`, a per-request `userToken`, a
+service outside the allowlist, a credential that resolves but vends no token —
+are each pinned by name.
+
+**So the ceiling on this page, said once more because it is the point:** what is
+proven is the request each door sends and the refusal each adapter raises. What
+is not proven — anywhere on this page — is how Azure answers.
+
+## Next steps
+
+- **[Identity & credentials](doc:identity-and-credentials)** — `entraIdentity()` in full, beside `agentCoreIdentity` and `googleIdentity` under one port.
+- **[OpenAI](doc:openai)** — `azureOpenai()`'s own page, and the `legacyEndpoint` dial that `foundry()` sets for you.
+- **[Hosting & runtime](doc:hosting-and-runtime)** — the `AgentHost` port `foundryResponsesHost` fills, the `SessionLifecycle` beside it, and the concurrency table.
+- **[Ollama](doc:ollama)** — the other on-device door, and the adapter `foundryLocal()` is modelled on.
+- **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.
+- **[AWS & Bedrock AgentCore](doc:aws)** · **[Google Cloud & Gemini](doc:google-cloud)** — the same map for the two older columns, including the rows this one cannot yet claim.

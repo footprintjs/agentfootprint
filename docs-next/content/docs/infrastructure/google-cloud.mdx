@@ -1,6 +1,6 @@
 ---
 title: Google Cloud & Gemini
-description: The third provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, Cloud Storage artifacts, Agent Runtime sessions, Firestore sessions, Memory Bank and ADC-based identity — plus every remaining boundary with the port that fills it and the honest reason it is not an adapter yet.
+description: A provider column. What agentfootprint adapts on Google Cloud today — the native Gemini provider, Gemini embeddings, Cloud Storage artifacts, Agent Runtime sessions, Firestore sessions, Memory Bank and ADC-based identity — plus every remaining boundary with the port that fills it and the honest reason it is not an adapter yet.
 ---
 
 Google's agent platform is mid-rename and mid-replacement, so this page says what
@@ -1782,10 +1782,13 @@ after.
 Google Cloud is one column, not the pattern. Every port on this page is filled by
 something else somewhere else and the agent code does not change between them:
 **[AWS & Bedrock AgentCore](doc:aws)** is the same map for AgentCore's managed
-primitives, and **[On-premises & self-hosted](doc:on-premises)** is the same map
-for a deployment that owns its own machines — a local model instead of Gemini,
-`sqliteVectorStore` instead of Vector Search, `fileObservability` instead of Cloud
-Trace.
+primitives, **[Microsoft Foundry](doc:microsoft-foundry)** is the same map for a
+Foundry project (`foundry()` instead of `gemini()`, `entraIdentity()` instead of
+`googleIdentity()`) — a younger column whose Status rows say plainly that
+nothing there has met live Azure yet — and **[On-premises &
+self-hosted](doc:on-premises)** is the same map for a deployment that owns its
+own machines: a local model instead of Gemini, `sqliteVectorStore` instead of
+Vector Search, `fileObservability` instead of Cloud Trace.
 
 The three adapters this column gained are the clearest illustration of what the
 ports buy you: `agentEngineSessions` ↔ `agentCoreSessions` ↔ `sqliteSessions`,
@@ -1800,3 +1803,4 @@ ports buy you: `agentEngineSessions` ↔ `agentCoreSessions` ↔ `sqliteSessions
 - **[Infrastructure: ports & adapters](doc:infrastructure)** — the pattern this page is one instance of.
 - **[Hosting & runtime](doc:hosting-and-runtime)** — the concurrency table and the `SessionLifecycle` port.
 - **[Observability sinks](doc:observability-sinks)** — the port the OTLP recipe feeds.
+- **[Microsoft Foundry](doc:microsoft-foundry)** — the youngest column, mapped the same way.
