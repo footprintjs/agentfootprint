@@ -526,11 +526,49 @@ export {
   type FlowchartResultMapper,
   type FlowchartToolSnapshot,
 } from './core/flowchartAsTool.js';
+// runbookAsTool (9.76.0) — the STANDARD bridge from a footprintjs procedure
+// to an Agent tool: every answer is the mandatory honesty spine (coverage
+// with inner-tool ledgers folded upward, provenance first, rule name+version,
+// the recorded walk as a `recording/chart-walk` artifact ticket) plus an
+// optional verdict/rowset projection selected by `resultKind: 'verdict/*'`.
+// `flowchartAsTool` stays for compatibility (its `resultMapper` users stay
+// put); new procedures start here.
+export {
+  absenceSignalOf,
+  DECLINED_VERDICT,
+  DEFAULT_MAX_ROWS,
+  DEFAULT_WALK_CAP,
+  probeDispatch,
+  projectWalk,
+  recordingDispatch,
+  renderVerdictTable,
+  runbookAsTool,
+  RunbookAbsenceSignal,
+  VERDICT_RENDER_NOTE,
+  verdictRowsOf,
+  type InnerCallRecord,
+  type ProjectedWalk,
+  type RecordedDispatch,
+  type RunbookAsToolOptions,
+  type RunbookEnvelope,
+  type RunbookProcedure,
+  type RunbookRules,
+  type RunbookVerdictsOptions,
+  type RunbookWalkOptions,
+  type VerdictRow,
+  type WalkDescriptor,
+  type WalkRow,
+} from './core/runbook/index.js';
 export type {
   Tool,
   ToolExecutionContext,
   ToolRegistryEntry,
   DefineToolOptions,
+  // The run's own tool dispatch (9.76.0) — delivered as `ctx.tools` on the
+  // agent's dispatch paths so a composed tool (runbookAsTool's procedures)
+  // calls its ingredient tools through the same map the model dispatches by.
+  ToolDispatch,
+  ToolDispatchCallOptions,
   // The refusing result ceiling (9.20.0) — a tool's own declared cap that
   // REFUSES teachingly instead of truncating (truncation reads as a complete
   // result and breeds fabrication; a refusal naming how to narrow produces a
@@ -547,6 +585,12 @@ export {
   // the vocabulary a `wants` argument names. Exported beside the other two
   // for consumers assembling `Tool` objects by hand.
   assertResultKind,
+  // The composition declarations (9.76.0) — `composedOf` (drift-checked at
+  // agent build, when the catalog is complete) and `gates` (whether the
+  // procedure can raise an approval gate). Exported beside the others for
+  // consumers assembling `Tool` objects by hand.
+  assertComposedOf,
+  assertGates,
   warnIfInvalidToolName,
 } from './core/tools.js';
 // Typed tool effects (9.19.0) — the result envelope a tool may return to
@@ -690,6 +734,11 @@ export {
   RECORDING_ARTIFACT_KIND,
   RECORDING_MEDIA_TYPE,
   recordingPutInput,
+  // The chart-walk kind (9.76.0) — a runbook's inner walk, one row per
+  // execution step with the decide() evidence in the `condition` rows,
+  // checked in under 'recording/chart-walk' beside 'recording/run'.
+  CHART_WALK_ARTIFACT_KIND,
+  chartWalkPutInput,
   UnserializableRecordingError,
   DEFAULT_IN_MEMORY_ARTIFACT_RETENTION,
   fileArtifacts,

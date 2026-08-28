@@ -3,6 +3,8 @@ title: Flowchart as tool
 description: Wrap a footprintjs FlowChart as one Agent tool. Compose existing multi-step procedures (decision evidence, branches, loops, pause/resume) into the LLM's tool surface — no flatten/restructure required.
 ---
 
+> **Deprecated for new procedures** — [`runbookAsTool`](doc:runbook-as-tool) is the standard bridge now: same chart-as-tool idea, but every answer carries the honesty envelope (coverage folded from inner tools, rule provenance, the recorded walk as an artifact ticket). `flowchartAsTool` stays supported for compatibility; `resultMapper` users stay put, and nothing here changes.
+
 > A team has a working footprintjs flowchart for refund processing — `validate → look-up-order → decide-eligibility → process-refund → notify`, with `decide()` evidence captured at the eligibility step. The agent that needs to expose this as a tool **shouldn't have to flatten it into 5 separate tools**. `flowchartAsTool` wraps the existing chart as ONE tool the LLM can call. The flowchart's recorders, narrative, and pause/resume continue to work exactly as outside the agent.
 
 ## What it does

@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`runbookAsTool` — turn a written procedure into a tool whose every answer
+  is evidence.** Triage is the most-used agent job in a business: run the
+  standing procedure, come back with a verdict somebody can act on. The first
+  production tool of that shape hand-rolled ~800 lines of envelope around a
+  footprintjs chart — a coverage ledger merging every inner source's own
+  ledger, a rule-version stamp on every sentence, capped verdict rows beside a
+  pre-rendered table, and the recorded walk that lets a reader CHECK the
+  verdict instead of trusting it. `runbookAsTool` is that envelope as one
+  declaration bag; the smallest legal call is `{ name, description,
+  procedure }` and it still yields the honest spine.
+
+  **The mandatory honesty spine**, on every answer whatever the runbook's
+  shape: `af_coverage` (three lists + a sentence naming the rule set and
+  version, with every inner tool's ledger folded upward), `af_provenance`
+  re-emitted FIRST (a seeded source's confession survives composition),
+  `rule_version` (or the honest `'undeclared'`), and the recorded walk as an
+  artifact ticket — new kind **`recording/chart-walk`** beside
+  `recording/run`, with `chartWalkPutInput` beside `recordingPutInput`. The
+  walk descriptor carries truthful counters, the declared projection (over
+  the cap, the CONTROL FLOW survives — stages, forks, and every `condition`
+  entry with its decide() evidence — never a head slice that keeps four
+  hundred writes and drops every decision), and a `walk_segment` discriminant
+  (`'full'` today; the wire is ready for resumed segments before gates land).
+  A failed mint costs the ticket, never the answer.
+
+  **The optional verdict projection**, selected by `resultKind: 'verdict/*'`:
+  rows off the chart's `verdicts` state key, ONE cap for the structured list
+  and the rendered table, truthful `rows_shown/rows_total/rows_complete`, and
+  `verdict_meanings` GENERATED from the decider's declared branches plus the
+  rule labels this run's evidence carried — never hand-restated, so a rule
+  change and its meaning change on the same day. Three outcomes, honestly: a
+  clean envelope; an inner absence passed through VERBATIM (the framework
+  still reads it as an absence); and `declined` rows counted into the ledger
+  as not-checked ground.
+
+  `flowchartAsTool` stays for compatibility (its `resultMapper` users stay
+  put, byte-identical); its stale pause message now names the runbook
+  program's gate phase instead of a version that shipped years ago.
+
+- **`ctx.tools` — a tool's body can call other registered tools through the
+  run's own dispatch.** The `procedure` factory is invoked per call with the
+  agent's dispatch (static + skill-carried tools; ToolProvider-delivered
+  tools are invisible — there is no build-time list, the stated 9.72.0
+  caveat), so stages compose registered sources instead of importing modules
+  and building a second query stack. Inner calls run with `hasArtifacts:
+  false` (one answer, one ticket — never competing chips), a derived
+  toolCallId naming the outer call, `needs` resolved on the fail-closed
+  non-interactive path, and `checkIn`/`wants` tools refused BY NAME (an inner
+  call cannot pause, and must never silently skip a consent gate).
+
+- **`composedOf` + `gates` on `defineTool`.** A composed tool names its
+  ingredient tools; the drift gate runs at AGENT BUILD — the one moment the
+  catalog is complete — so a renamed ingredient fails the build by name, not
+  the first 3 a.m. run. `gates` declares a procedure that can raise an
+  approval gate (read by composition-time checks that must keep a gating tool
+  out of a fan-out branch). Both pass the declaration bar (consumer-side
+  rails read them; nothing governs execution) and travel the MCP `_meta` bag
+  in both directions, judged on ingest by the same exported asserts
+  `defineTool` uses.
+
 ## [9.75.0] - 2026-08-28
 
 ### Added

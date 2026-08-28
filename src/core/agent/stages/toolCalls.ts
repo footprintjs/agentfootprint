@@ -94,6 +94,7 @@ import {
 } from '../../checkin.js';
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool, ToolExecutionContext } from '../../tools.js';
+import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { TeardownOptions, TeardownScope, ToolSessionTier } from '../../toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
@@ -1465,6 +1466,54 @@ export function buildToolCallsHandler(
   };
 
   /**
+   * `ctx.tools` for one dispatch (9.76.0) — the run's own tool dispatch, so a
+   * composed tool (runbookAsTool's procedure stages, or any tool that
+   * composes) calls its ingredient tools through the SAME map the model
+   * dispatches by, instead of importing modules and building a second query
+   * stack.
+   *
+   * The inner context is the OUTER call's own facts with two deliberate
+   * overrides: `hasArtifacts: false` with the fail-closed capability (an
+   * inner tool must not mint claim tickets competing with the composed
+   * answer's own — the one-chip-per-answer discipline), and a DERIVED
+   * `toolCallId` (`<outer>#inner-<n>`) so an inner tool's progress reports
+   * and kept records name the call they belong to without ever being
+   * mistaken for a call the model made. No `tool_start`/`tool_end` fires for
+   * an inner call — it is the outer call's work; `ctx.progress` is its
+   * visible channel and the composed envelope its record.
+   */
+  const toolDispatchCtx = (
+    scope: TypedScope<AgentState>,
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly iteration: number;
+    },
+    signal?: AbortSignal,
+  ): Pick<ToolExecutionContext, 'tools'> => ({
+    tools: agentToolDispatch({
+      lookup: (name) => registryByName.get(name),
+      innerContext: (name, seq) => {
+        const innerId = `${call.toolCallId}#inner-${seq}`;
+        return {
+          toolCallId: innerId,
+          iteration: call.iteration,
+          ...(signal && { signal }),
+          credentials: reportingCredentials(credentials, scope, name),
+          hasCredentials,
+          artifacts: unconfiguredArtifacts(),
+          hasArtifacts: false,
+          ...toolProgress(scope, {
+            toolName: name,
+            toolCallId: innerId,
+            iteration: call.iteration,
+          }),
+        };
+      },
+    }),
+  });
+
+  /**
    * The run's artifact scope — `scope.runIdentity`, detached to a plain
    * object so no store or resolver ever holds a live scope proxy. ONE
    * composition shared by the capability binding, `wants` resolution,
@@ -2012,6 +2061,7 @@ export function buildToolCallsHandler(
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...toolProgress(scope, { toolName, toolCallId, iteration }),
         ...sessionContext(scope, toolName, toolCallId),
+        ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
       });
       await endCall(toolCallId);
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
@@ -2808,6 +2858,11 @@ export function buildToolCallsHandler(
                 ...(wantedMeta !== undefined && { wanted: wantedMeta }),
                 ...toolProgress(scope, { toolName: tc.name, toolCallId: tc.id, iteration }),
                 ...sessionContext(scope, tc.name, tc.id),
+                ...toolDispatchCtx(
+                  scope,
+                  { toolName: tc.name, toolCallId: tc.id, iteration },
+                  env.signal,
+                ),
               });
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
               // this call. Taken and deleted here so the map cannot grow across

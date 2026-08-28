@@ -30,6 +30,7 @@
     "sequence-governance",
     "loop-moments",
     "middleware",
+    "runbook-as-tool",
     "flowchart-as-tool",
     "output-schema",
     "strict-output",

@@ -3319,6 +3319,39 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }
       }
     }
+    // The composedOf drift gate (9.76.0), judged HERE and not at defineTool —
+    // the one moment the catalog is complete. A tool that declares its
+    // ingredients (`composedOf`, the runbookAsTool law) whose ingredient was
+    // renamed or never registered fails the BUILD by name, instead of failing
+    // its first run inside a stage. Tools delivered by a ToolProvider are
+    // invisible to this check (no build-time list — the 9.72.0 caveat), so
+    // with a provider configured an unmatched name is a dev-mode heads-up
+    // rather than a refusal: the ingredient may genuinely arrive at dispatch.
+    for (const [composedName, registered] of registryByName) {
+      for (const ingredient of registered.composedOf ?? []) {
+        if (registryByName.has(ingredient)) continue;
+        if (this.externalToolProvider !== undefined) {
+          if (isDevMode()) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[agentfootprint] tool '${composedName}' declares composedOf ingredient ` +
+                `'${ingredient}', which is not in the static catalog. A ToolProvider is ` +
+                `configured, so it may arrive at dispatch — but provider-delivered tools ` +
+                `cannot be drift-checked at build. If '${ingredient}' is static, this is ` +
+                `the rename the check exists to catch.`,
+            );
+          }
+          continue;
+        }
+        throw new Error(
+          `Agent: tool '${composedName}' declares composedOf ingredient '${ingredient}', ` +
+            `but no tool of that name is registered on this agent. The declaration names ` +
+            `the tools its procedure calls through ctx.tools, and an ingredient that is ` +
+            `not in the dispatch map fails at its first inner call — refused at build ` +
+            `instead. Register '${ingredient}' (or fix the name in composedOf).`,
+        );
+      }
+    }
     // Late-bind toolSchemas into the seed stage's deps (the factory was
     // built earlier with a getter; this resolves the actual value).
     toolSchemasResolved = toolSchemas;

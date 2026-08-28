@@ -213,6 +213,41 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    */
   readonly argumentsFrom?: readonly string[];
   /**
+   * THE NAMED INGREDIENT TOOLS THIS TOOL IS COMPOSED OF (9.76.0) — the
+   * registered tools its body calls through the run's own dispatch
+   * (`ctx.tools`), declared by the author, never inferred.
+   *
+   * Consumer-side readers, which is what earns it a place here (the
+   * `resultKind` / `argumentsFrom` law — a declaration rails read, nothing
+   * that governs execution): the agent-build drift gate asserts every named
+   * ingredient is a registered tool, so a runbook whose inventory tool was
+   * renamed fails the BUILD by name instead of failing its first run; and it
+   * joins the MCP `_meta` declaration list so a composed tool served over the
+   * wire says what it is made of.
+   *
+   * Checked at AGENT BUILD, not at definition — the ingredients need not
+   * exist before this tool is defined, and the catalog is only complete once
+   * every `.tool()` registration has landed. Tools delivered by a
+   * `ToolProvider` are invisible to the check (there is no build-time list);
+   * with a provider configured the gate warns instead of refusing.
+   * Omitted → nothing is checked, byte-identical.
+   */
+  readonly composedOf?: readonly string[];
+  /**
+   * WHETHER THIS TOOL'S PROCEDURE CAN RAISE AN APPROVAL GATE (9.76.0) — a
+   * mid-run pause that asks a human before continuing. Declared, never
+   * inferred (the `capabilities` law): the framework cannot see through a
+   * tool boundary into an inner chart that gates.
+   *
+   * Consumer-side readers: composition-time checks that must refuse a gating
+   * tool where a pause cannot be resumed (a fan-out branch — the runbook
+   * grammar's compiler is the named reader). It does not govern execution;
+   * the runtime pause refusal remains the backstop for a tool that omits it.
+   * `false` is a declaration too ("this procedure never gates"), distinct
+   * from saying nothing. Omitted → byte-identical.
+   */
+  readonly gates?: boolean;
+  /**
    * FINGERPRINT THE REPEATED-CALL LEDGER ON ARGUMENTS ALONE (9.62.0) —
    * `'arguments'` tells `core/agent/repeatedCall.ts` that this tool's own
    * RESULT is not evidence of repetition and must not be folded into the
@@ -466,6 +501,108 @@ export function assertArgumentsFrom(
   }
 }
 
+/**
+ * Refuse a `composedOf` list that could never be drift-checked, at definition
+ * time — the {@link assertArgumentsFrom} law applied to composition: the
+ * agent-build gate joins on these names, and a blank one — or a tool composed
+ * of itself — would join the wrong subjects or none. The REGISTRATION check
+ * (is every named ingredient actually registered?) deliberately does NOT
+ * happen here: the ingredients need not exist before this tool is defined,
+ * and only the agent build sees the complete catalog.
+ */
+export function assertComposedOf(
+  toolName: string,
+  composedOf: readonly string[] | undefined,
+): void {
+  if (composedOf === undefined) return;
+  // Same reason as `assertArgumentsFrom`: this rule is also asked about
+  // untyped values from a foreign MCP server, and `for…of` over a bare string
+  // would walk its CHARACTERS.
+  if (!Array.isArray(composedOf) || composedOf.length === 0) {
+    throw new Error(
+      `defineTool('${toolName}'): \`composedOf\` must name at least one ingredient tool — ` +
+        `omitting the field is how "not composed" is said.`,
+    );
+  }
+  for (const ingredient of composedOf) {
+    if (typeof ingredient !== 'string' || ingredient.length === 0) {
+      throw new Error(
+        `defineTool('${toolName}'): \`composedOf\` entries must be non-empty tool names. ` +
+          `Got ${JSON.stringify(ingredient)}.`,
+      );
+    }
+    if (ingredient === toolName) {
+      throw new Error(
+        `defineTool('${toolName}'): \`composedOf\` names the tool itself — a tool cannot ` +
+          `be its own ingredient.`,
+      );
+    }
+  }
+}
+
+/**
+ * Refuse a `gates` declaration that is not a boolean, at definition time.
+ * Trivial for anyone the compiler vets; load-bearing at the MCP ingest
+ * boundary, where a foreign server can put anything under the key and a
+ * truthy string would silently declare a gate nobody wrote.
+ */
+export function assertGates(toolName: string, gates: boolean | undefined): void {
+  if (gates === undefined) return;
+  if (typeof gates !== 'boolean') {
+    throw new Error(
+      `defineTool('${toolName}'): \`gates\` must be a boolean — \`true\` (this tool's ` +
+        `procedure can raise an approval gate), \`false\` (declared gate-free), or omitted ` +
+        `(nothing declared). Got ${JSON.stringify(gates)}.`,
+    );
+  }
+}
+
+/** Options for one {@link ToolDispatch.call}. */
+export interface ToolDispatchCallOptions {
+  /** Abort signal for the inner call. Defaults to the outer call's own. */
+  readonly signal?: AbortSignal;
+  /**
+   * Declare an inner ABSENCE survivable (9.76.0). By default a dispatch
+   * consumer that composes answers (runbookAsTool) propagates an inner
+   * `absent()` as its own answer — "the inventory found nothing" IS the
+   * runbook's result, and pretending to a verdict over it would be the
+   * confident-partial-answer failure. Pass `true` when the caller can carry
+   * on without this source and will state the gap itself (usually as a
+   * coverage entry). The raw dispatch delivered on `ctx.tools` returns every
+   * result untouched either way — the propagation policy belongs to the
+   * consumer that wraps it.
+   */
+  readonly allowAbsent?: boolean;
+}
+
+/**
+ * The run's own tool dispatch, delivered at execute time as `ctx.tools`
+ * (9.76.0) — how one tool's body calls ANOTHER registered tool through the
+ * same map the model dispatches by, instead of importing its module and
+ * building a second query stack.
+ *
+ * What it sees: the agent's static catalog (`.tool()` registrations plus
+ * skill-carried tools) — the same dispatch map the tool-calls handler uses.
+ * Tools delivered by a `ToolProvider` are NOT visible (there is no build-time
+ * list), a stated caveat, not an accident.
+ *
+ * What an inner call gets: the outer call's own facts (credentials, signal,
+ * progress) with `hasArtifacts: false` — an inner tool must not mint claim
+ * tickets competing with the composed answer's own — and a derived
+ * `toolCallId` naming the outer call it belongs to. A declared `needs` is
+ * resolved before the inner execute (fail-closed: a service that requires
+ * interactive consent refuses by name — an inner call cannot pause).
+ */
+export interface ToolDispatch {
+  /** Is this name in the dispatch map? Provider-delivered tools answer false. */
+  has(name: string): boolean;
+  /**
+   * Execute a registered tool and return its result exactly as returned —
+   * a coverage envelope arrives as the envelope, an absence as the absence.
+   */
+  call(name: string, args: unknown, opts?: ToolDispatchCallOptions): Promise<unknown>;
+}
+
 /** Runtime context passed to tool.execute(). */
 export interface ToolExecutionContext {
   /** Unique id of THIS tool invocation (matches stream.tool_start.toolCallId). */
@@ -509,6 +646,15 @@ export interface ToolExecutionContext {
   /** The credential resolved for this tool's declared `needs` (declare-and-push).
    *  Present only when the tool declared a need and it resolved successfully. */
   readonly credential?: Credential;
+  /**
+   * The run's own tool dispatch (9.76.0) — see {@link ToolDispatch}. Present
+   * on the agent's dispatch paths; ABSENT at doors with no dispatch map
+   * (`mcpServe`, the offline trace context, a hand-built context in a test).
+   * Absent and empty are different facts: branch on the absence rather than
+   * optional-chaining past it, and prefer a fail-closed refusal (the
+   * `credentials` law) when your tool cannot work without it.
+   */
+  readonly tools?: ToolDispatch;
 
   // ── Progressive results (9.52.0) ──────────────────────────────────────────
 
@@ -708,6 +854,13 @@ export interface DefineToolOptions<TArgs, TResult> {
   readonly owner?: ToolOwner;
   /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
   readonly argumentsFrom?: readonly string[];
+  /** The named ingredient tools this tool calls through `ctx.tools` — see
+   *  {@link Tool.composedOf}. Drift-checked at agent build, when the catalog
+   *  is complete. Omitted → nothing checked, byte-identical. */
+  readonly composedOf?: readonly string[];
+  /** Whether this tool's procedure can raise an approval gate — see
+   *  {@link Tool.gates}. Omitted → nothing declared, byte-identical. */
+  readonly gates?: boolean;
   /** Fingerprint the repeated-call ledger on arguments alone, ignoring this
    *  tool's own result — see {@link Tool.repeatedWhen}. Omitted →
    *  byte-identical (the ledger keeps comparing results, as always). */
@@ -833,6 +986,11 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // dangling-reference check joins on these names, and a blank one — or a
   // tool grounded by itself — would join the wrong subjects or none.
   assertArgumentsFrom(options.name, options.argumentsFrom);
+  // Composition edges get the same shape discipline; the REGISTRATION check
+  // (does every ingredient exist?) waits for the agent build, where the
+  // catalog is complete.
+  assertComposedOf(options.name, options.composedOf);
+  assertGates(options.name, options.gates);
   return {
     schema: {
       name: options.name,
@@ -853,6 +1011,8 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.resultKind !== undefined && { resultKind: options.resultKind }),
     ...(options.owner !== undefined && { owner: options.owner }),
     ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
+    ...(options.composedOf !== undefined && { composedOf: options.composedOf }),
+    ...(options.gates !== undefined && { gates: options.gates }),
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
     execute: options.execute,
   };

@@ -1,0 +1,181 @@
+---
+title: Runbook as tool
+description: Turn a written operational procedure into one agent tool whose every answer is evidence — coverage, provenance, rule version, and the recorded walk — instead of a pile of logs.
+---
+
+> The most-used agent job in a business is triage: run the standing procedure, come back with a verdict somebody can act on. Teams that build this by hand end up rebuilding the same envelope every time — a coverage ledger, a rule-version stamp, capped verdict rows with a rendered table, and the recorded walk that lets a reader **check** the verdict instead of trusting it. `runbookAsTool` is that envelope as one declaration bag. The first production triage tool of this shape was ~800 hand-written lines; through the bridge, the next runbook is a page of declarations.
+
+## Why not just `flowchartAsTool`
+
+`flowchartAsTool` is a thin wrapper: it runs the chart and returns `JSON.stringify(values)` (or your `resultMapper`'s string). Nothing about the answer says what was checked, what was not, which rule version judged it, or where the walk is. `runbookAsTool` is the standard bridge — the answer **is** the evidence:
+
+- **The mandatory honesty spine**, on every answer whatever the runbook's shape:
+  - `af_coverage` — the three-list ledger ([the coverage primitive](doc:tools)), with every **inner tool's own ledger folded upward**, plus a sentence naming the rule set and version;
+  - `result.af_provenance` — re-emitted **first**, carrying any provenance stamp an inner source declared (a seeded source's confession survives composition) plus this call's own `{tool, toolCallId}`;
+  - `result.rule_version` — from your `rules` declaration, or the honest `'undeclared'`;
+  - `result.walk` — the recorded walk's descriptor. The walk itself ships as an **artifact ticket** (kind `recording/chart-walk`), never as bytes in the payload.
+- **An optional verdict projection**, selected by `resultKind: 'verdict/*'` — verdict rows, truthful counters, one cap for the structured list *and* the pre-rendered table, and `verdict_meanings` **generated** from the decider's declared branches and the rule labels this run's `decide()` evidence carried. Never hand-restated, so a rule change and its meaning change on the same day.
+- **Three outcomes, honestly**: a clean envelope; an inner *absence* passed through **verbatim** (the framework still reads it as an absence — a verdict over a source that answered "nothing here" would be a confident partial answer); and *declined* rows counted into the ledger as not-checked ground.
+
+`flowchartAsTool` stays for compatibility — `resultMapper` users stay put. New procedures start here.
+
+## The worked example
+
+One inner tool, one bounded fan-out, one decider per subject — the triage shape end to end:
+
+```ts
+import { decide, flowChart, type DecideRule } from 'footprintjs';
+import { Agent, coverage, defineTool, inMemoryArtifacts, runbookAsTool } from 'agentfootprint';
+
+// THE RULES — one home, versioned. Filter rules on purpose: the evidence
+// records {key, op, threshold, actual}; a function rule would leave no 7 behind.
+const STALE_AFTER_DAYS = 7;
+const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
+  { when: { age_known: { eq: false } }, then: 'declined',
+    label: 'the age signal is unreadable — no classification' },
+  { when: { age_days: { gt: STALE_AFTER_DAYS } }, then: 'unprotected',
+    label: `last backup older than the ${STALE_AFTER_DAYS}-day threshold` },
+];
+
+// An INNER tool — registered like any other; its coverage ledger folds upward.
+const inventory = defineTool({
+  name: 'backup_inventory',
+  description: 'List backup subjects with their last-backup age.',
+  execute: () => coverage(
+    { rows: fetchSubjects() },
+    { checked: ['the backup inventory, one row per job'],
+      cannotCover: [{ what: 'WHY a protection was paused',
+                      why: 'no change record is collected here' }] },
+  ),
+});
+
+const triage = runbookAsTool({
+  name: 'backup_triage',
+  description: 'Assess backup protection posture for every subject.',
+  resultKind: 'verdict/backup-posture',           // selects the verdict projection
+  rules: { name: 'health-signal', version: 'v1' }, // provenance → envelope + sentence
+  verdicts: { decider: 'Protection posture' },     // whose branches name the verdicts
+  composedOf: ['backup_inventory'],                // drift-checked at agent build
+
+  // The procedure: a factory invoked PER CALL with the run's own dispatch —
+  // fresh chart every run, stages close over `tools`.
+  procedure: (tools) =>
+    flowChart<Record<string, unknown>>('backup-protection-triage', async (scope) => {
+      const inner = await tools.call('backup_inventory', {}) as { result: { rows: Subject[] } };
+      scope.subjects = inner.result.rows;
+    }, 'inventory')
+      .addParallelForEach<Subject>('Assess each subject', 'per-subject', {
+        items: (scope) => scope.subjects ?? [],
+        branch: (item, i) => subjectChart(item, i),   // decider per subject, isolated branch
+        maxBranches: 50,
+        into: 'subject_results',
+      })
+      .addFunction('Collect', (scope) => {
+        scope.verdicts = rowsFrom(scope.subject_results);   // ← the rowset the bridge reads
+        scope.report = { stale_after_days: STALE_AFTER_DAYS }; // ← app fields, spread into result
+      }, 'collect')
+      .build(),
+});
+
+const agent = Agent.create({ provider, model, artifacts: inMemoryArtifacts() })
+  .tool(inventory)
+  .tool(triage)   // composedOf verified HERE — the catalog is complete
+  .build();
+```
+
+What one run returns (abridged — a real envelope, from a real run):
+
+```jsonc
+{
+  "af_coverage": {
+    "checked": [
+      { "what": "the backup inventory, one row per job" },
+      { "what": "the declared procedure 'backup-protection-triage' — 15 step(s) recorded under health-signal v1" }
+    ],
+    "not_checked": [
+      { "what": "1 row(s) that reached NO classification (verdict 'declined')", "why": "…" }
+    ],
+    "cannot_cover": [{ "what": "WHY a protection was paused", "why": "no change record is collected here" }],
+    "note": "This result covers only what `checked` lists. …",
+    "sentence": "Ran 'backup-protection-triage' under health-signal v1 — 15 step(s) recorded; 3 row(s) assessed, 1 declined (no classification reached); 1 not-checked item(s) declared."
+  },
+  "result": {
+    "af_provenance": { "tool": "backup_triage", "toolCallId": "c1" },
+    "rule_version": "v1",
+    "stale_after_days": 7,
+    "verdicts": [
+      { "subject": "cluster-a", "verdict": "protected",   "age": 2 },
+      { "subject": "cluster-b", "verdict": "unprotected", "age": 30 },
+      { "subject": "cluster-c", "verdict": "declined",    "age": null }
+    ],
+    "rows_shown": 3, "rows_total": 3, "rows_complete": true,
+    "table": "| subject | verdict | age |\n|---|---|---|\n| cluster-a | protected | 2 | …",
+    "render_note": "table is PRE-RENDERED over the same rows as `verdicts` — output it VERBATIM. …",
+    "verdict_meanings": {
+      "declined": "the age signal is unreadable — no classification",
+      "unprotected": "last backup older than the 7-day threshold"
+    },
+    "walk": {
+      "ref": "art_2tPdO5Qlnd502pwXDyPNwU",
+      "kind": "recording/chart-walk",
+      "rows": 46, "steps_executed": 15,
+      "projection": "full", "shown": 46, "total": 46, "complete": true,
+      "walk_segment": "full",
+      "note": "The chart's own walk, one row per execution step. The `condition` rows carry the rule that matched, the values it compared and the branch it chose — …"
+    }
+  }
+}
+```
+
+The runnable version of this example is [`examples/features/68-runbook-as-tool.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/68-runbook-as-tool.ts).
+
+## Stages call registered tools: `ctx.tools`
+
+The dispatch belongs to the **agent**, and it only exists at execute time — so the bridge invokes your `procedure` factory per call with the run's own dispatch, and stage functions close over it. `tools.call(name, args)` executes the registered tool (static registrations plus skill-carried tools; `ToolProvider`-delivered tools are not visible — there is no build-time list of them) and returns its result exactly as returned.
+
+Discipline the dispatch holds for you:
+
+- **Inner tools never mint competing tickets** — inner calls run with `hasArtifacts: false`, so one answer carries one walk ticket, not three chips for data nobody asked about.
+- **An inner absence short-circuits** — `absent()` from a source becomes the runbook's own answer, verbatim. A call site that can carry on without the source declares it: `tools.call(name, args, { allowAbsent: true })` — and owns stating the gap.
+- **A declared `needs` resolves on the non-interactive path** (fail-closed); a tool that requires a human — `checkIn`, or a credential needing consent — refuses **by name**, because an inner call cannot pause.
+- **`composedOf` names the ingredients** — verified at `agent.build()`, when the catalog is complete. A renamed ingredient fails the build, not the first 3 a.m. run.
+
+## What the chart declares back (reserved state keys)
+
+| State key | The bridge reads it as |
+|---|---|
+| `verdicts` | the rowset (verdict projection only): an array of row bags, each with a string `verdict` |
+| `coverage` | chart-declared coverage entries: `{ checked?, not_checked?, cannot_cover? }` of `{what, why?}` items — the app's own counters translated into the ledger's vocabulary by the stage that knows them |
+| `report` | the app's own result fields, spread into `result` verbatim (spine keys win) |
+
+The reserved verdict word `declined` means "no classification was reached" — those rows are counted into the ledger as not-checked ground, never dressed up as findings.
+
+## The walk, honestly
+
+- The walk is minted through the run's artifact store, kind `recording/chart-walk`; the envelope carries the descriptor (ref + truthful counters), never the bytes.
+- **When it does not fit the cap** (default 500, `walk: { cap }`): a head slice would keep four hundred writes and drop every decision — so the **control flow survives** (stages, forks, subflows, every `condition` entry with its evidence), and `projection: 'control-flow'` says which one you are holding.
+- **No store, or a failed mint**: the descriptor still ships with its counters, and its `note` names why there is no ticket. A failed mint costs the ticket, never the answer.
+- `walk_segment` is `'full'` today. When approval gates land, a resumed run's walk will honestly say `'post-resume'` — the discriminant ships now so the wire does not break then.
+
+## What is not here yet
+
+- **Pause**: a procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`). The approval-gate phase brings typed resume through the agent rail.
+- **Inner dispatch ceilings**: `checkIn` and `wants` tools refuse by name; composition depth stops at one (an inner tool does not get `ctx.tools`).
+
+## The API surface
+
+Everything ships from the main barrel:
+
+- **`runbookAsTool(options)`** — the bridge. `RunbookAsToolOptions` is the full options bag; `RunbookProcedure` is the factory type (`(tools: ToolDispatch) => FlowChart`); `RunbookRules` is the `{ name, version }` provenance stamp; `RunbookVerdictsOptions` (`{ decider, maxRows }`, default cap `DEFAULT_MAX_ROWS` = 50) and `RunbookWalkOptions` (`{ cap }`, default `DEFAULT_WALK_CAP` = 500) are the projection dials.
+- **`RunbookEnvelope`** — the returned envelope type (spine + optional projection); `VerdictRow` is one rowset row (anything with a string `verdict`); `WalkDescriptor` is the spine's walk entry; `VERDICT_RENDER_NOTE` is the render law stated beside every table; `DECLINED_VERDICT` (`'declined'`) is the reserved no-classification verdict word.
+- **The dispatch** — `ToolDispatch` (`has`/`call`) and `ToolDispatchCallOptions` (`{ signal, allowAbsent }`) are the `ctx.tools` contract every tool sees. The bridge's own wrapper is exported for direct callers and tests: `recordingDispatch(delivered, name)` returns a `RecordedDispatch` (`{ tools, records }`, each an `InnerCallRecord`); `probeDispatch(name)` is the definition-time probe; `RunbookAbsenceSignal` is the control signal an un-survivable inner absence throws, recognized by `absenceSignalOf(err)` anywhere down a `cause` chain.
+- **The walk** — `projectWalk(entries, cap)` is the pure cap law, returning a `ProjectedWalk` of `WalkRow`s; the artifact kind constant is `CHART_WALK_ARTIFACT_KIND` (`'recording/chart-walk'`) with `chartWalkPutInput(rows, facts)` beside `recordingPutInput`.
+- **The projection helpers** — `verdictRowsOf(state)` reads the rowset off a final state; `renderVerdictTable(rows)` renders the one-cap markdown table.
+- **The declarations** — `Tool.composedOf` and `Tool.gates` (see above), with `assertComposedOf` and `assertGates` exported beside the other definition-time asserts for consumers assembling `Tool` objects by hand.
+
+## Next steps
+
+- [Flowchart as tool](doc:flowchart-as-tool) — the thin wrapper this bridge supersedes for new procedures
+- [Tools guide](doc:tools) — `defineTool`, the coverage primitives (`coverage()` / `absent()`)
+- [Artifacts](doc:artifacts) — the claim-check store the walk ticket rides
+- [footprintjs](https://footprintjs.github.io/footPrint/) — the chart substrate: deciders, `decide()` evidence, fan-out

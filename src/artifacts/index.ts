@@ -91,7 +91,10 @@ export {
   recordingPutInput,
   RECORDING_ARTIFACT_KIND,
   RECORDING_MEDIA_TYPE,
+  CHART_WALK_ARTIFACT_KIND,
+  chartWalkPutInput,
   UnserializableRecordingError,
+  type ChartWalkMintFacts,
   type RecordingMintFacts,
 } from './recordingArtifact.js';
 // The battery a store must pass to CLAIM the port, exported beside the port

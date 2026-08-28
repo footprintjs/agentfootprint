@@ -38,6 +38,15 @@ import type { PutArtifactInput } from './types.js';
  *  match — the same rule every `wants` declaration is judged by. */
 export const RECORDING_ARTIFACT_KIND = 'recording/run';
 
+/**
+ * The consumer vocabulary a chart WALK is stored under (9.76.0) — one row per
+ * execution step of a runbook's inner chart, with the decider evidence
+ * sentences in the `condition` rows. Namespaced by what it IS (`recording/…`,
+ * beside `recording/run`), never by what produced it: a walk is a recording
+ * projection, not a dataset that happens to mention stages.
+ */
+export const CHART_WALK_ARTIFACT_KIND = 'recording/chart-walk';
+
 /** The media type a recording is minted with. */
 export const RECORDING_MEDIA_TYPE = 'application/json';
 
@@ -107,5 +116,59 @@ export function recordingPutInput(
     data: text,
     label: facts.label ?? (facts.runId !== undefined ? `run ${facts.runId}` : 'run recording'),
     ...(facts.runId !== undefined && { origin: { runId: facts.runId } }),
+  };
+}
+
+/** What a chart-walk mint needs to know beyond the rows themselves. */
+export interface ChartWalkMintFacts {
+  /** The tool whose inner chart walked — names the default label. */
+  readonly toolName?: string;
+  /** The outer tool call the walk belongs to — stamped on `origin.toolCallId`,
+   *  the join back to the call that produced it. */
+  readonly toolCallId?: string;
+  /** The outer run, when there is one — `origin.runId`. */
+  readonly runId?: string;
+  /** The operator's label, verbatim when present (the `recordingPutInput`
+   *  law: a name somebody chose is not the library's to decorate). */
+  readonly label?: string;
+}
+
+/**
+ * Turn one chart walk into the `put` input that stores it under
+ * {@link CHART_WALK_ARTIFACT_KIND}.
+ *
+ * Pure, and serialized to JSON TEXT at the mint for exactly the reasons the
+ * run recording is (see the file header): a walk row must never be a live
+ * view into engine memory, and a walk JSON cannot carry could not cross any
+ * wire either.
+ *
+ * @throws UnserializableRecordingError when the rows cannot be
+ *   JSON-serialized. Walk rows are projected to plain data upstream, so this
+ *   firing means the projection let a live value through — fail at the mint,
+ *   loudly.
+ */
+export function chartWalkPutInput(
+  rows: readonly unknown[],
+  facts: ChartWalkMintFacts = {},
+): PutArtifactInput {
+  let text: string;
+  try {
+    text = JSON.stringify(rows) ?? '';
+  } catch (err) {
+    throw new UnserializableRecordingError(err instanceof Error ? err.message : String(err));
+  }
+  if (text === '') {
+    throw new UnserializableRecordingError('it serializes to nothing');
+  }
+  const origin = {
+    ...(facts.runId !== undefined && { runId: facts.runId }),
+    ...(facts.toolCallId !== undefined && { toolCallId: facts.toolCallId }),
+  };
+  return {
+    kind: CHART_WALK_ARTIFACT_KIND,
+    mediaType: RECORDING_MEDIA_TYPE,
+    data: text,
+    label: facts.label ?? (facts.toolName !== undefined ? `${facts.toolName} walk` : 'chart walk'),
+    ...(Object.keys(origin).length > 0 && { origin }),
   };
 }

@@ -1,6 +1,12 @@
 /**
  * flowchartAsTool — wrap a footprintjs `FlowChart` as an Agent `Tool`.
  *
+ * NOTE (9.76.0): for NEW procedures prefer `runbookAsTool` (core/runbook/) —
+ * the standard bridge whose every answer carries the honesty envelope
+ * (coverage, provenance, rule version, the recorded walk). This thin wrapper
+ * stays for compatibility; `resultMapper` users stay put and nothing here
+ * changes.
+ *
  * The Block A7 piece. footprintjs is the substrate; agentfootprint is
  * the agent layer above it. When a multi-step procedure is already
  * expressed as a footprintjs flowchart (intake validation, refund
@@ -411,8 +417,9 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
       if (executor.isPaused()) {
         keepRecordOf('paused');
         const err = new Error(
-          `flowchartAsTool(${opts.name}): inner flowchart paused. ` +
-            `Agent-side pause integration lands in v2.6. The checkpoint is on err.checkpoint.`,
+          `flowchartAsTool(${opts.name}): inner flowchart paused. Agent-side pause ` +
+            `integration lands with the runbook program's approval-gate phase (see ` +
+            `runbookAsTool). The checkpoint is on err.checkpoint.`,
         );
         (err as Error & { checkpoint?: unknown }).checkpoint = executor.getCheckpoint();
         throw err;

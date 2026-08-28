@@ -52,6 +52,8 @@
 
 import {
   assertArgumentsFrom,
+  assertComposedOf,
+  assertGates,
   assertResultCeiling,
   assertResultClass,
   assertResultKind,
@@ -98,6 +100,14 @@ export interface McpToolExtras {
   /** The author's refusing ceiling on this tool's result — see
    *  {@link Tool.resultCeiling}. */
   readonly resultCeiling?: ToolResultCeiling;
+  /** The named ingredient tools this tool is composed of (9.76.0) — see
+   *  {@link Tool.composedOf}. Feeds the receiving agent's build-time drift
+   *  gate. */
+  readonly composedOf?: readonly string[];
+  /** Whether this tool's procedure can raise an approval gate (9.76.0) — see
+   *  {@link Tool.gates}. Read by composition-time checks that must keep a
+   *  gating tool out of a fan-out branch. */
+  readonly gates?: boolean;
 }
 
 /**
@@ -115,6 +125,8 @@ export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
     ...(tool.owner !== undefined && { owner: tool.owner }),
     ...(tool.resultClass !== undefined && { resultClass: tool.resultClass }),
     ...(tool.resultCeiling !== undefined && { resultCeiling: tool.resultCeiling }),
+    ...(tool.composedOf !== undefined && { composedOf: tool.composedOf }),
+    ...(tool.gates !== undefined && { gates: tool.gates }),
   };
   return Object.keys(extras).length > 0 ? extras : undefined;
 }
@@ -169,6 +181,10 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
   const resultCeiling = kept('resultCeiling', (v) =>
     assertResultCeiling(origin.tool, v as ToolResultCeiling),
   ) as ToolResultCeiling | undefined;
+  const composedOf = kept('composedOf', (v) =>
+    assertComposedOf(origin.tool, v as readonly string[]),
+  ) as readonly string[] | undefined;
+  const gates = kept('gates', (v) => assertGates(origin.tool, v as boolean)) as boolean | undefined;
 
   return {
     ...(argumentsFrom !== undefined && { argumentsFrom }),
@@ -176,6 +192,8 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     ...(owner !== undefined && { owner }),
     ...(resultClass !== undefined && { resultClass }),
     ...(resultCeiling !== undefined && { resultCeiling }),
+    ...(composedOf !== undefined && { composedOf }),
+    ...(gates !== undefined && { gates }),
   };
 }
 
