@@ -153,9 +153,9 @@ describe('unit: the fences', () => {
   it('FENCE — a value shorter than four characters is never checked', () => {
     // Below four characters substring matching is noise: 'ok', 'a1' and 'up'
     // land inside unrelated words in any corpus, in both directions.
-    expect(unsupportedArgumentsOf([chose({ mode: 'up', tier: 'a1 ' })], corpus(['x']), 2).findings).toEqual(
-      [],
-    );
+    expect(
+      unsupportedArgumentsOf([chose({ mode: 'up', tier: 'a1 ' })], corpus(['x']), 2).findings,
+    ).toEqual([]);
   });
 
   it('FENCE — a value served anywhere in the frame passes, case-insensitively', () => {
@@ -211,7 +211,11 @@ describe('unit: the fences', () => {
 
   it('the quoted value is capped so one long argument cannot flood the message', () => {
     const long = `ganymede-${'x'.repeat(400)}`;
-    const found = unsupportedArgumentsOf([chose({ machine: long })], corpus(['nothing']), 2).findings;
+    const found = unsupportedArgumentsOf(
+      [chose({ machine: long })],
+      corpus(['nothing']),
+      2,
+    ).findings;
     expect(found).toHaveLength(1);
     expect(found[0]!.message.length).toBeLessThan(600);
     expect(found[0]!.message).toContain('…');

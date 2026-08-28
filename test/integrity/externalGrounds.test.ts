@@ -46,10 +46,7 @@ const chose = (args: Record<string, unknown>): ArgumentChoice => ({
   argumentsFrom: ['fleet_report'],
 });
 
-const corpus = (
-  grounded: string[],
-  external?: readonly ExternalGround[],
-): ChoiceCorpus => ({
+const corpus = (grounded: string[], external?: readonly ExternalGround[]): ChoiceCorpus => ({
   grounded,
   assistant: [],
   ...(external !== undefined && { external }),
@@ -87,7 +84,10 @@ describe('unit: the external-ground fence', () => {
   it('matching is substring and case-insensitive — the served fence’s own leniency', () => {
     const { findings, externalGroundings } = unsupportedArgumentsOf(
       [chose({ machine: 'SRV-RENDER-4471' })],
-      corpus(['nothing'], [{ value: 'row: srv-render-4471 | eu-west', source: 'viewer-selection' }]),
+      corpus(
+        ['nothing'],
+        [{ value: 'row: srv-render-4471 | eu-west', source: 'viewer-selection' }],
+      ),
       2,
     );
     expect(findings).toEqual([]);

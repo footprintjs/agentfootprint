@@ -97,8 +97,7 @@ export const AZURE_MANAGEMENT_SCOPE = 'https://management.azure.com/.default';
  * one its sibling uses. (Azure Government spells this
  * `https://cognitiveservices.azure.us/.default`.)
  */
-export const AZURE_COGNITIVE_SERVICES_SCOPE =
-  'https://cognitiveservices.azure.com/.default';
+export const AZURE_COGNITIVE_SERVICES_SCOPE = 'https://cognitiveservices.azure.com/.default';
 
 /**
  * The `@azure/core-auth` `TokenCredential` duck type — the slice this adapter

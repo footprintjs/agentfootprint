@@ -444,10 +444,7 @@ export type { WriteProvenanceMode } from './core/agent/types.js';
 // AgentOptions.externalGrounds plus the entry/excusal vocabulary, so an app
 // can type its provider and its `external_ground_used` listeners.
 export type { ExternalGroundsProvider } from './core/agent/types.js';
-export type {
-  ExternalGround,
-  ExternalGrounding,
-} from './integrity/unsupported-argument/check.js';
+export type { ExternalGround, ExternalGrounding } from './integrity/unsupported-argument/check.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

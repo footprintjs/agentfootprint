@@ -81,10 +81,7 @@ export {
 // vendor's credential shape is identity's domain; this barrel only forwards
 // the names so `foundry({ credential })` can be typed without importing the
 // security door.
-export type {
-  TokenCredentialLike,
-  AccessTokenLike,
-} from './adapters/identity/azure.js';
+export type { TokenCredentialLike, AccessTokenLike } from './adapters/identity/azure.js';
 
 // Foundry Local: the on-device service. Fetch-only like `ollama()` — the
 // service's own OpenAI-compatible `/v1` is the wire, the typed refusal

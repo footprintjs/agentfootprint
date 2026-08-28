@@ -619,10 +619,7 @@ export class FoundryLocalProvider implements LLMProvider {
   readonly carriesForcedToolChoice = false;
   private readonly inner: LLMProvider;
 
-  constructor(
-    model?: string | FoundryLocalProviderOptions,
-    options?: FoundryLocalProviderOptions,
-  ) {
+  constructor(model?: string | FoundryLocalProviderOptions, options?: FoundryLocalProviderOptions) {
     this.inner =
       typeof model === 'string'
         ? foundryLocal(model, options)

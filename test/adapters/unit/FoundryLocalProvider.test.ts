@@ -162,9 +162,7 @@ const ALIAS = 'qwen2.5-0.5b';
 const okReply = {
   id: 'chatcmpl-foundry-1',
   object: 'chat.completion',
-  choices: [
-    { index: 0, message: { role: 'assistant', content: 'hello' }, finish_reason: 'stop' },
-  ],
+  choices: [{ index: 0, message: { role: 'assistant', content: 'hello' }, finish_reason: 'stop' }],
   usage: { prompt_tokens: 11, completion_tokens: 3 },
 };
 
@@ -525,7 +523,11 @@ describe('FoundryLocalProvider — unit: request body', () => {
       role: 'assistant',
       content: '',
       tool_calls: [
-        { id: 'call_1', type: 'function', function: { name: 'weather', arguments: '{"city":"Tokyo"}' } },
+        {
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'weather', arguments: '{"city":"Tokyo"}' },
+        },
       ],
     });
     expect(messages[2]).toEqual({ role: 'tool', content: '18C', tool_call_id: 'call_1' });
@@ -570,10 +572,16 @@ describe('FoundryLocalProvider — unit: response mapping', () => {
   });
 
   it('maps finish_reason "tool_calls" to tool_use and parses the argument string', async () => {
-    const p = foundryLocal(DIRECT_ID, { _fetch: fakeFetch(jsonResponse(toolCallsChoice('tool_calls'))) });
+    const p = foundryLocal(DIRECT_ID, {
+      _fetch: fakeFetch(jsonResponse(toolCallsChoice('tool_calls'))),
+    });
     const res = await p.complete(baseRequest);
     expect(res.stopReason).toBe('tool_use');
-    expect(res.toolCalls[0]).toMatchObject({ id: 'call_9', name: 'weather', args: { city: 'Tokyo' } });
+    expect(res.toolCalls[0]).toMatchObject({
+      id: 'call_9',
+      name: 'weather',
+      args: { city: 'Tokyo' },
+    });
   });
 
   it('reports tool_use even when the model said "stop" with tool calls attached', async () => {
@@ -750,7 +758,11 @@ describe('FoundryLocalProvider — scenario: streaming', () => {
           },
         ],
       },
-      { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'ty":"Oslo"}' } }] } }] },
+      {
+        choices: [
+          { delta: { tool_calls: [{ index: 0, function: { arguments: 'ty":"Oslo"}' } }] } },
+        ],
+      },
       { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
       { choices: [], usage: { prompt_tokens: 5, completion_tokens: 9 } },
     ];
@@ -1060,8 +1072,13 @@ describe('FoundryLocalProvider — integration: refusals name the fix', () => {
     // Headers arrive fast; the body then takes longer than timeoutMs. A long
     // local generation must not be killed by the liveness timer.
     const text =
-      `data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] })}\n\n` +
-      `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 11, completion_tokens: 3 } })}\n\n` +
+      `data: ${JSON.stringify({
+        choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }],
+      })}\n\n` +
+      `data: ${JSON.stringify({
+        choices: [],
+        usage: { prompt_tokens: 11, completion_tokens: 3 },
+      })}\n\n` +
       `data: [DONE]\n\n`;
     const bytes = new TextEncoder().encode(text);
     const slowBody = new ReadableStream<Uint8Array>({
@@ -1101,7 +1118,10 @@ describe('FoundryLocalProvider — integration: refusals name the fix', () => {
   it('404 → typed error naming `foundry model run` and what IS cached here', async () => {
     const p = foundryLocal(DIRECT_ID, {
       _fetch: fakeFetch(jsonResponse({ error: { message: 'model not found' } }, 404), {
-        models: jsonResponse(['phi-3.5-mini-instruct-generic-cpu', DIRECT_ID.replace('qwen', 'other')]),
+        models: jsonResponse([
+          'phi-3.5-mini-instruct-generic-cpu',
+          DIRECT_ID.replace('qwen', 'other'),
+        ]),
       }),
     });
     const err = await p.complete(baseRequest).catch((e: unknown) => e);
@@ -1129,7 +1149,9 @@ describe('FoundryLocalProvider — integration: refusals name the fix', () => {
 
   it('any other status becomes a labelled provider error carrying capped wire text', async () => {
     const p = foundryLocal(DIRECT_ID, {
-      _fetch: fakeFetch(jsonResponse({ error: { message: 'model requires more system memory' } }, 500)),
+      _fetch: fakeFetch(
+        jsonResponse({ error: { message: 'model requires more system memory' } }, 500),
+      ),
     });
     const err = await p.complete(baseRequest).catch((e: unknown) => e);
     expect((err as Error).name).toBe('FoundryLocalProviderError');
@@ -1207,7 +1229,11 @@ describe('FoundryLocalProvider — property: laws that hold for any input', () =
             delta: {
               content: 'Hello',
               tool_calls: [
-                { index: 0, id: 'call_1', function: { name: 'weather', arguments: '{"city":"Oslo"}' } },
+                {
+                  index: 0,
+                  id: 'call_1',
+                  function: { name: 'weather', arguments: '{"city":"Oslo"}' },
+                },
               ],
             },
           },
