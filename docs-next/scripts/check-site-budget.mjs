@@ -40,7 +40,24 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // API pages the generator already owed; raising it is the honest response,
 // reverting to a lying API reference is not. Headroom is deliberately thin
 // so the next unnoticed jump still trips it.
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 132_000_000 };
+// Raised for 9.74.0 — and the RATCHET WORKED, but nobody was watching it.
+// The 132 MB ceiling was first crossed on 2026-08-26 (132.68 MB), which means
+// the docs site stopped deploying two days and three releases before anyone
+// noticed: 9.72.0 and 9.73.0 both shipped to npm while the published site sat
+// stale, because this job fails independently of the publish job and its red
+// was nobody's notification. The measured history, from the CI logs:
+//   2026-08-26  132.68 MB  first crossing — site goes stale from here
+//   9.72.0      133.73 MB
+//   9.73.0      133.73 MB
+//   9.74.0      133.97 MB  (+0.24 MB — the Foundry/Azure doc pages)
+// So 1.73 MB of the overage predates this release and 0.24 MB is its own.
+// The growth is real prose on real pages, amplified the way this metric always
+// amplifies: every route's RSC payload re-embeds the shared nav/ToC tree, so a
+// few KB of new headings is multiplied across 627 sibling pairs.
+// Raising it is the honest response — a stale published site is a worse lie
+// than a bigger export — but a ceiling that goes red unwatched is only half a
+// ratchet, so the real follow-up is making this job's failure visible.
+const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 136_000_000 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
