@@ -89,6 +89,24 @@ export {
   type GoogleAuthClientLike,
 } from './adapters/identity/google.js';
 
+// Entra ID tokens from whatever credential the environment already has —
+// DefaultAzureCredential's chain (env service principal, workload identity,
+// managed identity, VS Code, az CLI), or any TokenCredential you built
+// (9.74.0). Same narrowness as googleIdentity: it vends the DEPLOYMENT's
+// identity; `mode: 'user'` and per-request user tokens are refused by name
+// until an OBO surface exists. AZURE_AI_SCOPE vs AZURE_MANAGEMENT_SCOPE
+// matters — a token for one audience does not work on the other, which is
+// why both constants are exported instead of one "azure scope".
+export {
+  entraIdentity,
+  AZURE_AI_SCOPE,
+  AZURE_MANAGEMENT_SCOPE,
+  type EntraIdentityOptions,
+  type TokenCredentialLike,
+  type AccessTokenLike,
+  type AzureIdentitySdkModule,
+} from './adapters/identity/azure.js';
+
 // Verifying WHO is calling (9.26.0) — the other half of identity. The rest of
 // this door vends credentials for calls the agent makes OUTWARD;
 // `jwksIdentity` checks the credential a caller presents INWARD, against an

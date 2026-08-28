@@ -1,12 +1,232 @@
 ---
-title: Microsoft Foundry — Agent Inspector hosting
-description: foundryResponsesHost serves the Foundry Toolkit's hosted-agent contract — HEAD/POST /responses and GET /readiness on port 8088, the Responses SSE lifecycle, and the contract's session aliases — as one inbound hosting adapter on the AgentHost port. Under it, responsesWire is the Responses protocol with no vendor in it.
+title: Microsoft Foundry
+description: Both directions on one page. Outbound — foundry() calls a Foundry project over the api-version-free v1 route (deployment as the model, Entra credential or key, zero config inside a hosted container), and foundryLocal() calls an on-device model with no key at all. Inbound — foundryResponsesHost serves the Foundry Toolkit's hosted-agent contract on the AgentHost port, with responsesWire underneath as the Responses protocol with no vendor in it.
 ---
 
-> **An inbound hosting adapter, not a model provider.** This page is about the
-> door requests arrive at. Which model your agent calls is a separate decision —
-> for a Foundry Local model it is the existing `openai({ baseURL })` provider,
-> and nothing on this page changes it.
+Foundry turns up twice in an agent's life, and the two halves are independent:
+
+- **Outbound — the model your agent calls.** `foundry()` for a Foundry *project*,
+  `foundryLocal()` for a model running on this machine. Both are ordinary
+  `LLMProvider`s, so the agent code above them does not change.
+- **Inbound — the door requests arrive at.** `foundryResponsesHost()` speaks the
+  Foundry Toolkit's Agent Inspector contract on the same `AgentHost` port every
+  other host uses.
+
+Take either, both, or neither. Nothing on one half constrains the other.
+
+## Outbound — calling a Foundry model
+
+### `foundry()` — a Foundry project
+
+Point at a Foundry **project**, name a **deployment**, say which identity signs.
+Inside a hosted Foundry container the first two are already there, so this is a
+complete configuration:
+
+```ts
+import { Agent } from 'agentfootprint';
+import { foundry } from 'agentfootprint/providers';
+
+const agent = Agent.create({
+  provider: foundry(),   // endpoint injected by the platform; managed identity signs
+  model: 'foundry',      // the shorthand for "the deployment this provider was configured with"
+}).build();
+```
+
+Two environment variables stand in for the two required options.
+**`FOUNDRY_PROJECT_ENDPOINT`** carries the project — hosted Foundry containers get
+it **auto-injected**, which is what makes the call above zero-config — and
+**`AZURE_AI_MODEL_DEPLOYMENT_NAME`** (the `azd` scaffolding convention, so a
+template-provisioned app needs no extra wiring), then **`MODEL_NAME`**, carries
+the deployment. Neither is guessed: a missing one is refused by name where you
+typed `foundry(...)`.
+
+Anywhere else — a laptop, CI, your own container — name them and hand over a
+credential:
+
+```ts
+import { DefaultAzureCredential } from '@azure/identity';
+import { foundry } from 'agentfootprint/providers';
+
+const provider = foundry({
+  projectEndpoint: 'https://my-acct.services.ai.azure.com/api/projects/my-proj',
+  deployment: 'gpt-4o-128k',
+  credential: new DefaultAzureCredential(),
+});
+```
+
+`FoundryProviderOptions` in full:
+
+| Option | What it does |
+|---|---|
+| `projectEndpoint` | The project endpoint, `https://{account}.services.ai.azure.com/api/projects/{project}`, copied from the portal's project Overview page. Env fallback `FOUNDRY_PROJECT_ENDPOINT`. Required (option or env) |
+| `deployment` | Foundry's "model" *is* the deployment name. Env fallbacks `AZURE_AI_MODEL_DEPLOYMENT_NAME`, then `MODEL_NAME`. Required (option or env) |
+| `credential` | Keyless Entra ID — any `@azure/identity` credential (`DefaultAzureCredential`, `ManagedIdentityCredential`, …). Duck-typed, so this file never imports that SDK. A token is minted before **every** request, so MSAL's cache does the pacing and an expired token is a fresh token rather than a 401 |
+| `apiKey` | A static key — the v1 route accepts a key as a Bearer too. A **function** here is re-read before every request |
+| `scope` | The token audience for the credential doors. Default `https://ai.azure.com/.default` |
+| `reasoning` | Declare an o-series deployment (o1 / o3 / o4-mini) |
+| `defaultMaxTokens` | Token cap when the request doesn't set one |
+
+**Three doors, and one refused ambiguity.** `credential` is keyless Entra ID;
+`apiKey` is a static key or a callback; **neither** constructs a
+`DefaultAzureCredential` from the optional `@azure/identity` peer, which is the
+platform's own blessed pattern inside a hosted container. Passing **both**
+`credential` and `apiKey` is refused by name — two credentials is a config bug,
+not extra security, and whichever one this factory silently preferred would be
+the one you did not think was in use.
+
+**The URL derivation, stated so it is not a mystery.** A project endpoint serves
+the v1 inference route by simple suffixing: `+ /openai/v1`. No `api-version`
+query, no deployment-scoped path — the wire's `model` field carries the
+deployment name instead. `foundryInferenceUrl(projectEndpoint)` is exported if
+you want the derived URL yourself; it trims trailing slashes, is idempotent (an
+endpoint already ending in `/openai/v1` comes back unchanged), and refuses
+anything that is not `https://` with `/api/projects/` in it — cleartext to
+loopback is the one carve-out, because that is how the wire tests drive a local
+fake. That refusal is worth having: a resource root or an ARM URL passed here
+would fail as a 404 or a 401 far away from the typo.
+
+**One audience, and it is not interchangeable.** The tokens minted here are for
+`https://ai.azure.com/.default` — the **data plane**, which is what every Foundry
+and Azure OpenAI inference call accepts. The ARM control plane
+(`https://management.azure.com/.default`) is a **different** audience, and Azure
+validates it on every call, so a management token against inference is a 401 that
+no retry fixes. Both names are exported from `agentfootprint/security` as
+`AZURE_AI_SCOPE` and `AZURE_MANAGEMENT_SCOPE`, so nobody has to remember which
+string is which — see [Identity & credentials](doc:identity-and-credentials).
+
+Three ceilings, named rather than worked around:
+
+- **Deployment names hide the model.** o-series auto-detection cannot work on an
+  arbitrary deployment name, so `reasoning: true` must be declared to omit
+  `temperature` and send the `developer` role.
+- **Inference only.** Listing deployments or creating resources is control-plane
+  work on a different audience, and this provider does not do it.
+- **Everything `openai()` does not do, this does not do either** — no multi-modal
+  input, no JSON mode. It is the same machinery underneath.
+
+### `foundryLocal()` — a model on this machine
+
+Foundry Local is Microsoft's on-device runtime: ONNX under the hood, models
+pulled with `foundry model run <alias>`, **no key and no account**. The adapter
+talks to it over `fetch` alone — no SDK, no peer dependency — the same way
+[`ollama()`](doc:ollama) does:
+
+```ts
+import { Agent } from 'agentfootprint';
+import { foundryLocal } from 'agentfootprint/providers';
+
+const agent = Agent.create({
+  provider: foundryLocal('qwen2.5-0.5b'),
+  model: 'qwen2.5-0.5b',
+}).build();
+```
+
+**The port is dynamic, and that is the first thing to know.** Every
+`foundry server start` may pick a new port. `http://localhost:5272` is the
+default here because it is the port in Microsoft's own REST walkthrough — it is
+an example, never a promise. `foundry server status` prints the live URL;
+`foundry server start --port <p>` pins one. When the service is somewhere else,
+say so:
+
+```ts
+foundryLocal('qwen2.5-0.5b', { endpoint: 'http://127.0.0.1:57127' });
+```
+
+| Option | What it does |
+|---|---|
+| `endpoint` | The service ROOT — this adapter appends `/v1/chat/completions` and its own lookup paths. A trailing `/v1` is trimmed and a bare `host:port` gets `http://`. Defaults to `FOUNDRY_LOCAL_ENDPOINT`, then `FOUNDRY_LOCAL_BASE_URL`, then `http://localhost:5272` |
+| `manager` | A `foundry-local-sdk` `FoundryLocalManager`, duck-typed — this package never imports that SDK. `manager.urls[0]` is the manager's discovered URL, so a consumer already using the SDK gets the real dynamic port for free. An explicit `endpoint` still wins |
+| `defaultModel` | Model used when the request model is the `'foundry-local'` shorthand. The positional form (`foundryLocal('qwen2.5-0.5b')`) sets this |
+| `defaultMaxTokens` | Token cap when the request doesn't set one (maps to `max_tokens`) |
+| `timeoutMs` | How long to wait for the service to **answer** — default 10 000 ms. It bounds the wait for response headers, not generation: a laptop model may take minutes to finish a long answer and that is fine |
+
+**Aliases and full model ids are different things.** The catalog speaks in
+aliases (`qwen2.5-0.5b`) that fan out to hardware variants
+(`qwen2.5-0.5b-instruct-generic-cpu:1`), and REST chat calls take the **full**
+variant id. So an alias is resolved through the service's own catalog — first
+matching variant wins, because the list's order *is* the service's priority order
+— and the answer is cached for the life of the provider. A name that already
+carries a variant's execution-provider suffix (`-cpu`, `-gpu`, `-npu`, optionally
+`:version`) is used as-is with no catalog round-trip. If the catalog is silent,
+the name you wrote is sent unchanged, so the chat call's own error still names the
+model you actually asked for.
+
+**No API key exists on this wire, so none is sent.** Microsoft's own samples pass
+placeholders; this adapter sends no `Authorization` header at all. There is
+nothing to put in one, and an invented value would only end up in somebody's
+proxy log.
+
+The factory's option bag is `FoundryLocalProviderOptions`, and the class form
+`FoundryLocalProvider` wraps the factory the way `OllamaProvider` does. The
+`credential` option on `foundry()` is typed by two small duck interfaces,
+`TokenCredentialLike` and `AccessTokenLike` — the `@azure/core-auth` shapes,
+declared in this library so no import of `@azure/identity` is ever required just
+to name a type.
+
+**The two failures it actually has get a type.** `FoundryLocalUnavailableError`
+carries `reason` (`'service-unreachable'` or `'model-not-available'`), the
+`endpoint` it tried, the `model`, and — when the service could tell us — the
+models this machine does have cached. The messages are the fix: an unreachable
+service teaches `foundry server start` **and** `foundry server status`, because
+with a dynamic port "nothing is answering" is usually a stale URL rather than a
+stopped service; a missing model teaches `foundry model run <model>`.
+
+Ceilings, stated rather than discovered in a demo:
+
+- **No forced tool choice.** `tool_choice` is undocumented on this wire, so
+  `carriesForcedToolChoice` is `false` and an agent using
+  `.outputSchema(parser, { strategy: 'tool-forced' })` refuses at run start,
+  naming this provider.
+- **Tool calling is model-dependent**, and this adapter does not preflight-refuse
+  on it — a wrong refusal is worse than a weak answer. Pick a tool-capable
+  variant.
+- **No multi-modal input, no prompt caching, no structured thinking.** A
+  reasoning model's `<think>` tags ride the answer text untouched.
+
+Streaming does report **real token counts**: `stream_options: { include_usage: true }`
+is always sent, because this is a documented Foundry Local surface rather than an
+arbitrary OpenAI-compatible server — so cost recorders and budgets read numbers
+instead of zeros.
+
+### Letting the environment choose
+
+`providerFromEnv()` reads the environment and returns the configured provider, so
+a deployment switches by `.env` rather than by code. Both Foundry doors sit in
+its order:
+
+| Position | If these are set | Resolves to |
+|---|---|---|
+| 1 | `OLLAMA_MODEL` | `ollama()` |
+| 2 | **`FOUNDRY_LOCAL_MODEL`** (+ optional `FOUNDRY_LOCAL_ENDPOINT` \| `FOUNDRY_LOCAL_BASE_URL`) | **`foundryLocal()`** |
+| 3 | **`FOUNDRY_PROJECT_ENDPOINT`** + (`AZURE_AI_MODEL_DEPLOYMENT_NAME` \| `MODEL_NAME`) | **`foundry()`** |
+| 4 | `AZURE_OPENAI_API_KEY` + an Azure endpoint + api-version + deployment | `azureOpenai()` |
+| 5 | `ANTHROPIC_API_KEY` | `anthropic()` |
+| 6 | `OPENAI_API_KEY` | `openai()` |
+
+Two placements are deliberate, and both are about what a variable *means*:
+
+- **A local model name outranks everything**, `FOUNDRY_PROJECT_ENDPOINT`
+  included. `FOUNDRY_LOCAL_MODEL` is a name somebody chose and typed for this
+  run; the project endpoint can be **injected** by the platform, and an injected
+  variable must never beat a hand-typed one. (An endpoint variable alone is not a
+  trigger either — people export those just to run the service.)
+- **The Foundry endpoint beats a leftover Azure key.** The credential arms
+  trigger on a *credential*, and credentials linger in a shell by accident;
+  `FOUNDRY_PROJECT_ENDPOINT` is a product-specific spelling nobody exports by
+  mistake, so where it is present Foundry is the declared destination.
+
+`FOUNDRY_PROJECT_ENDPOINT` with no deployment named is refused rather than
+guessed — Foundry routes by deployment and there is no default — and the refusal
+names the variable to set. Detection is **env-only**: no socket is opened to see
+whether anything is up, so the answer is identical on a laptop and in CI, and a
+service that is down reports itself from the call, with the fix in the message.
+
+## Inbound — hosting your agent for Agent Inspector
+
+> **This half is a hosting adapter, not a model provider.** It is about the door
+> requests arrive at. Which model the agent calls is the outbound decision above —
+> `foundry()` for a project, `foundryLocal()` for a model on this machine — and
+> nothing in this section changes it.
 
 The [Foundry Toolkit for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-windows-ai-studio.windows-ai-studio)
 talks to a locally hosted agent over the **Responses** protocol. `foundryResponsesHost`
@@ -27,7 +247,7 @@ process.on('SIGTERM', () => void handle.close());
 Point Agent Inspector at `http://localhost:8088` and chat. The runnable,
 self-testing version is `examples/deploy/foundry-responses.ts`.
 
-## What the contract is, exactly
+### What the contract is, exactly
 
 `foundryResponsesHost` is a *configuration* of `httpHost` — the shared HTTP
 machinery keeps its own promises (draining on close, aborting on disconnect,
@@ -56,7 +276,7 @@ only what is genuinely this runtime's:
   *chose* `reply.fail(error)` chose its words for the caller, and those travel
   unchanged.
 
-## What it refuses, by name
+### What it refuses, by name
 
 Image and file input parts, non-message items such as `function_call_output`,
 and non-user roles are each answered 400 **before your agent runs** — never
@@ -71,7 +291,7 @@ does **not** feed the Toolkit's Workflow Visualizer. The Inspector renders the
 conversation; your agent's internal topology is readable from agentfootprint's
 own recorders, not from this wire.
 
-## `responsesWire` — the protocol without the vendor
+### `responsesWire` — the protocol without the vendor
 
 Under the adapter sits `responsesWire`, the Responses protocol as a plain
 `HttpWire` with no vendor's spelling in it. A deployment that speaks Responses
@@ -101,9 +321,22 @@ items — into the turn's text, refusing what it cannot carry, and
 
 ## Verified how
 
-The adapter passes the same host conformance suite as `nodeHost` and
+The hosting adapter passes the same host conformance suite as `nodeHost` and
 `agentCoreRuntimeHost`, over a real socket, plus a contract suite carrying the
 request and lifecycle shapes captured from a real Toolkit 1.6.9 Agent Inspector
 session — connection, streaming and final-answer rendering were observed live.
 Cloud-hosted Inspector behavior and Foundry Hosted Agent deployment are not
 covered, and are not claimed.
+
+`foundry()` is proven against a **fake Foundry wire driven by the real `openai`
+SDK over a real socket**: the request lands on `/openai/v1/chat/completions`
+under the project path, auth arrives as `Authorization: Bearer`, the body carries
+`max_completion_tokens` and never `max_tokens`, a stream asks for
+`stream_options.include_usage`, and a token that rotates between calls reaches
+the second request. `foundryLocal()` is proven the same way its refusals promise
+— endpoint resolution, catalog resolution, SSE streaming with usage on the final
+chunk and both typed refusals — against an injected fake `fetch`, so the suite
+runs offline. Neither door is claimed as field-verified against a live Foundry
+account or a live Foundry Local install: the wire facts they are built on are
+Microsoft's own documented ones, named above so you can check them against your
+resource before you trust them.

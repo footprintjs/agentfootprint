@@ -41,6 +41,7 @@ const FORBIDDEN: readonly RegExp[] = [
   /\bfirebase\b/i,
   /\bfoundry\b/i,
   /\bmicrosoft\b/i,
+  /\bentra\b/i,
   // A borrowed route literal is vendor shape even when no vendor is named.
   /\/invocations\b/,
   // `/readiness` is one runtime's probe spelling, on the list for exactly the

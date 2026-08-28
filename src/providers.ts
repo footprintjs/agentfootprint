@@ -19,6 +19,8 @@
  *   • `openai` / `OpenAIProvider` — real provider (GPT)
  *   • `gemini` / `GeminiProvider` — Gemini on Vertex or the Gemini API
  *   • `bedrock`, `azureOpenai`, and the `browser*` variants
+ *   • `foundry` / `foundryLocal` — Microsoft Foundry: a project endpoint in
+ *     the cloud (Entra or key), and the on-device Foundry Local service
  *
  * The ladder these are FOR: `mock()` while you shape the logic →
  * `ollama('<model>')` for a real model that costs nothing and needs no
@@ -61,6 +63,38 @@ export {
   type OllamaProviderOptions,
   type ThinkLevel,
 } from './adapters/llm/OllamaProvider.js';
+
+// Microsoft Foundry, both doors (9.74.0). `foundry()` speaks a PROJECT
+// endpoint's `/openai/v1` route — deployment name as the model, Entra
+// credential or key as the auth; the hosted platform injects
+// FOUNDRY_PROJECT_ENDPOINT so a deployed container needs zero config.
+// `entraBearerToken` is deliberately NOT re-exported: it is the two Entra
+// doors' shared plumbing, not a promise; vend tokens through
+// `entraIdentity` (agentfootprint/security) instead.
+export {
+  foundry,
+  foundryInferenceUrl,
+  type FoundryProviderOptions,
+} from './adapters/llm/FoundryProvider.js';
+
+// The Azure credential duck-types live with the identity adapter — the
+// vendor's credential shape is identity's domain; this barrel only forwards
+// the names so `foundry({ credential })` can be typed without importing the
+// security door.
+export type {
+  TokenCredentialLike,
+  AccessTokenLike,
+} from './adapters/identity/azure.js';
+
+// Foundry Local: the on-device service. Fetch-only like `ollama()` — the
+// service's own OpenAI-compatible `/v1` is the wire, the typed refusal
+// carries the fix (`foundry server start` / `status`; the port is dynamic).
+export {
+  foundryLocal,
+  FoundryLocalProvider,
+  FoundryLocalUnavailableError,
+  type FoundryLocalProviderOptions,
+} from './adapters/llm/FoundryLocalProvider.js';
 
 export {
   bedrock,

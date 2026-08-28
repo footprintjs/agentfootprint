@@ -27,6 +27,8 @@ import { bedrock } from '../../src/adapters/llm/BedrockProvider.js';
 import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { openai, azureOpenai } from '../../src/adapters/llm/OpenAIProvider.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
+import { foundry } from '../../src/adapters/llm/FoundryProvider.js';
+import { foundryLocal } from '../../src/adapters/llm/FoundryLocalProvider.js';
 import { browserOpenai, browserAzureOpenai } from '../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
@@ -65,6 +67,18 @@ describe('the declared capability matches the wire', () => {
 
   it('Ollama carries all three — its native chat has no separate system field', () => {
     expect(ollama('llama3.2').carriesInMessages).toEqual(ALL);
+  });
+
+  it('the Foundry pair carries all three — both speak the chat-completions shape', () => {
+    expect(
+      foundry({
+        projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/p',
+        deployment: 'd',
+        apiKey: 'k',
+        _client: {} as never,
+      }).carriesInMessages,
+    ).toEqual(ALL);
+    expect(foundryLocal('qwen2.5-0.5b').carriesInMessages).toEqual(ALL);
   });
 
   it('the OpenAI family carries all three', () => {

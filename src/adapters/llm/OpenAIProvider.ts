@@ -32,6 +32,8 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { azureBaseUrl } from './azureUrl.js';
+import { AZURE_AI_SCOPE } from '../identity/azure.js';
+import type { AccessTokenLike, TokenCredentialLike } from '../identity/azure.js';
 
 // ─── OpenAI SDK shape (duck-typed) ─────────────────────────────────
 
@@ -170,6 +172,34 @@ export interface OpenAIProviderOptions {
   /** Base URL — set for OpenAI-compatible APIs (Ollama, Together, vLLM). */
   readonly baseURL?: string;
   /**
+   * Declare the endpoint's DIALECT instead of letting `baseURL` imply it (9.74.0).
+   *
+   * ── What "legacy" means here ─────────────────────────────────────────────
+   * An OpenAI-compatible server that predates two of OpenAI's own moves: it
+   * accepts only the deprecated `max_tokens` (never `max_completion_tokens`),
+   * and it may reject `stream_options` outright. Setting `baseURL` has always
+   * implied that dialect, because the compatible servers the option was built
+   * for (Ollama/vLLM/Together/Groq) are exactly the ones that break on the
+   * modern fields — and a hard failure is worse than a conservative request.
+   *
+   * That implication is a DEFAULT, not a law. `legacyEndpoint: false` declares
+   * "this baseURL speaks the CURRENT dialect": send `max_completion_tokens`,
+   * send `stream_options.include_usage` on streams, and declare forced tool
+   * choice. The worked example is Azure's v1 inference route
+   * (`https://….services.ai.azure.com/api/projects/{project}/openai/v1`) — a
+   * custom `baseURL` that IS current OpenAI wire; `foundry()` sets this for
+   * you. `legacyEndpoint: true` with no `baseURL` is legal and means what it
+   * says, though nothing today needs it.
+   *
+   * `streamUsage` interplay: a non-legacy endpoint already sends
+   * `stream_options`, exactly as before — `streamUsage` remains the opt-in
+   * for endpoints that stay legacy, and this flag does not change what either
+   * value of it does.
+   *
+   * Unset, nothing changes anywhere: the default is exactly `!!baseURL`.
+   */
+  readonly legacyEndpoint?: boolean;
+  /**
    * Ask a CUSTOM endpoint for token usage while streaming (9.73.0).
    *
    * ── The silence this breaks ──────────────────────────────────────────────
@@ -186,7 +216,17 @@ export interface OpenAIProviderOptions {
    * final usage chunk when asked). Set this to `true` and get the numbers
    * back; leave it out and nothing changes.
    *
-   * Ignored without `baseURL` — on OpenAI/Azure the field is already sent.
+   * ── When it is ignored ───────────────────────────────────────────────────
+   * Ignored whenever the endpoint is treated as MODERN, because there the
+   * field is already sent. "Modern" is `legacyEndpoint === false`, which is
+   * `!baseURL` by default — so with no `baseURL` and no `legacyEndpoint` this
+   * flag still changes nothing, exactly as it did before `legacyEndpoint`
+   * existed.
+   *
+   * But `legacyEndpoint` is now the thing that decides, not `baseURL`:
+   * `openai({ legacyEndpoint: true })` with NO `baseURL` is legal and means
+   * what it says, and there `stream_options` is withheld and this flag is what
+   * turns it back on. So read the pair, not `baseURL` alone.
    */
   readonly streamUsage?: boolean;
   /**
@@ -240,7 +280,10 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
   // which may only accept the legacy `max_tokens` and may not support `stream_options`.
   // Real OpenAI (no baseURL) and Azure (via injected _client, also no baseURL) get the
   // modern params. Reasoning detection is per-request (model id) OR the explicit flag.
-  const legacyEndpoint = !!options.baseURL;
+  // Since 9.74.0 the implication is a DEFAULT the consumer can override: an explicit
+  // `legacyEndpoint` wins, and `false` is how a modern-dialect baseURL (Azure's v1
+  // route, which foundry() rides) gets the current params. Unset keeps `!!baseURL`.
+  const legacyEndpoint = options.legacyEndpoint ?? !!options.baseURL;
   const reasoning = options.reasoning ?? false;
   const cfg = {
     defaultModel,
@@ -400,6 +443,38 @@ export interface AzureOpenAIProviderOptions {
   readonly endpoint?: string;
   /** API key. Env fallbacks: `AZURE_OPENAI_API_KEY`, then `OPENAI_API_KEY`. */
   readonly apiKey?: string;
+  /**
+   * Keyless (Microsoft Entra ID) auth — pass any `@azure/identity` credential
+   * (`DefaultAzureCredential`, `ManagedIdentityCredential`, …); the type is
+   * duck-typed so this file never imports that SDK. The token is minted (or
+   * served from MSAL's cache) on EVERY request by the underlying client, so a
+   * long-lived agent process never holds an expired token.
+   *
+   * Mutually exclusive with `apiKey`: two credentials is a config bug, not
+   * extra security, and is refused by name rather than silently ranked.
+   */
+  readonly credential?: TokenCredentialLike;
+  /**
+   * Token audience for `credential`. Default {@link AZURE_AI_SCOPE}
+   * (`https://ai.azure.com/.default`) — the ONE data-plane audience every
+   * Foundry / Azure OpenAI inference call accepts. The ARM control plane
+   * (`https://management.azure.com/.default`) is a DIFFERENT audience whose
+   * tokens do NOT work here: Azure validates the audience on every call, so a
+   * management token against inference is a 401 that no retry fixes. Ignored
+   * without `credential`.
+   *
+   * ── If a CLASSIC resource 401s on the audience ───────────────────────────
+   * This door builds the classic deployment-scoped data plane
+   * (`{endpoint}/openai/deployments/{d}/chat/completions?api-version=…`), and
+   * Microsoft's own keyless-connections guidance for that older route names
+   * `https://cognitiveservices.azure.com/.default` as its audience. The two
+   * are widely interchangeable on current resources, which is why the default
+   * here matches Foundry's; if an existing `*.openai.azure.com` resource
+   * answers `invalid audience` on every call, that string is the escape hatch
+   * — pass it here rather than reaching for a retry that cannot help. (Azure
+   * Government spells it `https://cognitiveservices.azure.us/.default`.)
+   */
+  readonly scope?: string;
   /** Azure API version, e.g. `2024-12-01-preview`. Env fallback:
    *  `AZURE_OPENAI_API_VERSION`. Required. */
   readonly apiVersion?: string;
@@ -512,23 +587,26 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
  * byte-identical either way — pinned by test/adapters/integration/azure-openai-wire.test.ts.
  */
 function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
+  // Two credentials is not "extra secure" — whichever one this factory
+  // silently preferred would be the one the consumer did not think was in
+  // use. Refused by NAME, and checked BEFORE the `_client` short-circuit so a
+  // test can pin the wording without the SDK installed.
+  if (options.credential && options.apiKey) {
+    throw new Error(
+      'azureOpenai: both `credential` and `apiKey` were given, and they are two answers to the ' +
+        'same question — which identity signs the request.\n' +
+        '  Fix:  pass exactly one — `credential` (keyless Entra ID) or `apiKey` (static key).',
+    );
+  }
   if (options._client) return options._client;
-  let AzureOpenAI: new (opts: {
-    baseURL: string;
-    apiKey?: string;
-    apiVersion: string;
-    deployment?: string;
-  }) => OpenAIClient;
+  let AzureOpenAI: new (opts: AzureClientCtorOptions) => OpenAIClient;
   try {
     const mod = lazyRequire<{ AzureOpenAI?: unknown; default?: { AzureOpenAI?: unknown } }>(
       'openai',
     );
-    AzureOpenAI = (mod.AzureOpenAI ?? mod.default?.AzureOpenAI) as new (opts: {
-      baseURL: string;
-      apiKey?: string;
-      apiVersion: string;
-      deployment?: string;
-    }) => OpenAIClient;
+    AzureOpenAI = (mod.AzureOpenAI ?? mod.default?.AzureOpenAI) as new (
+      opts: AzureClientCtorOptions,
+    ) => OpenAIClient;
   } catch {
     throw new Error(
       'azureOpenai requires the `openai` package.\n' +
@@ -556,6 +634,26 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
       'azureOpenai: `apiVersion` is required (or set AZURE_OPENAI_API_VERSION), e.g. 2024-12-01-preview.',
     );
   }
+  if (options.credential) {
+    const credential = options.credential;
+    const scope = options.scope ?? AZURE_AI_SCOPE;
+    return new AzureOpenAI({
+      // NOT `endpoint` — see the note on this function.
+      baseURL: azureBaseUrl(endpoint),
+      // The SDK insists on exactly ONE of `apiKey` / `azureADTokenProvider` —
+      // so no key is sent. `apiKey: ''` is deliberate, not decorative: the
+      // SDK's constructor defaults a MISSING `apiKey` from AZURE_OPENAI_API_KEY,
+      // and an ambient env key beside the token provider trips its "mutually
+      // exclusive" refusal. An explicit `credential` must beat the environment
+      // (the same stance this function already takes on `OPENAI_BASE_URL`),
+      // and an empty string is falsy to every SDK check while blocking the
+      // env read.
+      apiKey: '',
+      azureADTokenProvider: async () => entraBearerToken('azureOpenai', credential, scope),
+      apiVersion,
+      ...(deployment && { deployment }),
+    });
+  }
   return new AzureOpenAI({
     // NOT `endpoint` — see the note on this function. `baseURL` is passed
     // explicitly so the SDK's own `OPENAI_BASE_URL` default is overridden
@@ -565,6 +663,94 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
     apiVersion,
     ...(deployment && { deployment }),
   });
+}
+
+/** The slice of the SDK's `AzureOpenAI` constructor this file calls. */
+interface AzureClientCtorOptions {
+  baseURL: string;
+  apiKey?: string;
+  /** Per-request Entra token source — the SDK's keyless door. The SDK calls
+   *  it before every request and sends the answer as `Authorization: Bearer`. */
+  azureADTokenProvider?: () => Promise<string>;
+  apiVersion: string;
+  deployment?: string;
+}
+
+/**
+ * `TokenCredentialLike.getToken(scope)` → the bearer string an OpenAI-shaped
+ * client can send — shared by the two Entra doors (`azureOpenai()` here and
+ * `foundry()` in FoundryProvider.ts, which imports it; the dependency points
+ * THIS way because FoundryProvider already composes over `openai()`).
+ *
+ * What it enforces are the credential-surface laws, not conveniences:
+ *   • an ABSENT answer — `null`, the SDK's spelling of "no token available",
+ *     and `undefined`, which is what a hand-rolled or caching credential
+ *     hands back on a miss — is refused by NAME. Both are the same absence
+ *     and get the same refusal: passed onward, `null` becomes a bare 401 that
+ *     names nothing, and `undefined` becomes a raw `TypeError` thrown from
+ *     inside this library, which names less than the 401 does.
+ *   • an empty or blank `token` FIELD is refused by field name; the value
+ *     itself is a secret when it is right, so no message ever quotes it.
+ *   • a throwing credential is reported as operation + error NAME only (auth
+ *     SDKs echo request detail into 401/403 text), with no `cause` — a cause
+ *     travels into every serializer that walks own properties.
+ * The scope IS quoted: it is a public audience URI, never a secret, and it is
+ * the thing the consumer most likely got wrong.
+ */
+export async function entraBearerToken(
+  adapter: string,
+  credential: TokenCredentialLike,
+  scope: string,
+): Promise<string> {
+  // `| undefined` is deliberate and is NOT in the duck type: `getToken` is
+  // declared `Promise<AccessTokenLike | null>`, but this door is documented as
+  // duck-typed on both public factories, so it is reachable from plain JS AND
+  // from a strict-clean TypeScript wrapper — a token cache spelled
+  // `async (s) => cache.get(String(s))!` type-checks with zero errors and
+  // resolves to `undefined` on a miss. Widening the local (never the port)
+  // is what lets that case be refused by name instead of dereferenced.
+  let access: AccessTokenLike | null | undefined;
+  try {
+    access = await credential.getToken(scope);
+  } catch (err) {
+    const name = err instanceof Error && err.name ? err.name : typeof err;
+    throw new Error(
+      `${adapter}: credential.getToken failed (${name}) for scope ${scope}.\n` +
+        '  Fix:  sign in (az login), or pass a `credential` whose identity can mint tokens for ' +
+        'this audience — the inference audience is https://ai.azure.com/.default (the `scope` option).',
+    );
+  }
+  // `== null` on purpose: null AND undefined, one refusal. The shape is named
+  // in the message (it is a wiring fact, not a secret) so the reader knows
+  // whether they are looking at a chain that found no identity or at their own
+  // cache handing back a miss.
+  if (access == null) {
+    // The two absences read the same to a `TypeError` and completely
+    // differently to a person, so the SHAPE is named (a wiring fact, never a
+    // secret) and each gets its own diagnosis under one shared fix.
+    throw new Error(
+      `${adapter}: the credential returned no access token for scope ${scope} — ` +
+        (access === null
+          ? '`getToken` resolved to `null`, the SDK\'s spelling of "no token available": the ' +
+            'chain found no identity that can serve this audience.'
+          : '`getToken` resolved to `undefined`, which no `@azure/identity` credential does — a ' +
+            'hand-rolled or caching credential handed back a miss (an empty cache lookup, a ' +
+            'non-null assertion over a `Map`) instead of minting or reporting no token.') +
+        '\n  Fix:  sign in (az login), or pass a `credential` that holds an identity for this ' +
+        'audience (DefaultAzureCredential walks env service principal → workload identity → ' +
+        'managed identity → az login). A `credential` of your own must always RESOLVE to a token ' +
+        'object or to `null`.',
+    );
+  }
+  if (typeof access.token !== 'string' || access.token.trim().length === 0) {
+    // Field NAME only — the value is a secret when it is right, and an empty
+    // one is described, never quoted.
+    throw new Error(
+      `${adapter}: the credential returned an access token whose \`token\` field is empty.\n` +
+        '  Fix:  check the credential wiring — a real Entra token is never an empty string.',
+    );
+  }
+  return access.token;
 }
 
 // ─── Ollama ─────────────────────────────────────────────────────────

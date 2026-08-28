@@ -110,3 +110,46 @@ describe('azureOpenai()', () => {
     }
   });
 });
+
+// ─── Keyless (Entra) config laws — 9.74.0 ───────────────────────────
+
+describe('azureOpenai() — keyless (Entra) config laws', () => {
+  it('refuses `credential` AND `apiKey` together, by name, without echoing either secret', () => {
+    // Checked BEFORE the `_client` short-circuit, which is what lets this
+    // test pin the wording without the SDK installed.
+    const credential = {
+      getToken: async () => ({
+        token: 'sk-entra-DO-NOT-LEAK-7b2a',
+        expiresOnTimestamp: Date.now() + 3600_000,
+      }),
+    };
+    let thrown: Error | undefined;
+    try {
+      azureOpenai({
+        _client: fakeClient({ params: [] }),
+        deployment: 'gpt-4o-128k',
+        credential,
+        apiKey: 'sk-azure-DO-NOT-LEAK-9f4c',
+      });
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(thrown).toBeDefined();
+    expect(thrown!.message).toMatch(/^azureOpenai: /);
+    expect(thrown!.message).toContain('`credential`');
+    expect(thrown!.message).toContain('`apiKey`');
+    expect(thrown!.message).toContain('Fix:');
+    expect(thrown!.message).not.toContain('DO-NOT-LEAK');
+  });
+
+  it('a credential beside an injected _client still completes (the double replaces the wire)', async () => {
+    const rec = { params: [] as Array<{ model: string }> };
+    const credential = {
+      getToken: async () => ({ token: 'tok-1', expiresOnTimestamp: Date.now() + 3600_000 }),
+    };
+    const p = azureOpenai({ _client: fakeClient(rec), deployment: 'gpt-4o-128k', credential });
+    const res = await p.complete(req('azure'));
+    expect(rec.params[0]!.model).toBe('gpt-4o-128k');
+    expect(res.content).toBe('hi from azure');
+  });
+});

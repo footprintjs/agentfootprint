@@ -7,6 +7,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.74.0] - 2026-08-27
+
+### Added
+
+- **The Azure/Foundry column exists — keyless auth and both Microsoft inference
+  doors, cloud and on-device.** AWS and GCP each had a full adapter column;
+  Azure had a static api-key string and nothing else. This release fills the
+  auth + inference tier, and every piece is a vendor adapter over ports that
+  did not change — the same seams the AWS and GCP columns already use.
+
+  **`foundry()` — the project-endpoint provider** (`agentfootprint/providers`).
+  The JS answer to Microsoft's `FoundryChatClient(project_endpoint, model,
+  credential)`: point it at a Foundry project endpoint (or let the hosted
+  platform's auto-injected `FOUNDRY_PROJECT_ENDPOINT` supply it), name the
+  deployment (`AZURE_AI_MODEL_DEPLOYMENT_NAME ?? MODEL_NAME`), and auth is an
+  Entra `TokenCredential`, an api key, or — given neither — the platform's own
+  blessed default, `DefaultAzureCredential` from the optional `@azure/identity`
+  peer. Inference rides the GA api-version-free `/openai/v1` route derived from
+  the project endpoint; the deployment name travels as the `model` field; the
+  token scope is `https://ai.azure.com/.default` (the management audience is a
+  different token — the docs say so out loud). Rotating tokens reuse the
+  per-request key-callback seam `openai()` has had since 9.29.0: the client is
+  rebuilt only when the token string actually changes.
+
+  ```ts
+  import { foundry } from 'agentfootprint/providers';
+  // In a Foundry hosted container: zero config — endpoint injected, identity ambient.
+  const llm = foundry();
+  // Locally: az login, then name the project.
+  const local = foundry({
+    projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/my-project',
+    deployment: 'gpt-4.1-mini',
+  });
+  ```
+
+  **`foundryLocal()` — the on-device door.** Fetch-only, zero dependencies, the
+  `ollama()` discipline applied to Foundry Local's OpenAI-compatible `/v1`
+  wire: an alias like `qwen2.5-0.5b` resolves to a concrete variant through the
+  service's own catalog (`GET /foundry/list`, priority order, first wins;
+  cached per provider), a full variant id skips the catalog entirely, and the
+  typed `FoundryLocalUnavailableError` tells the truth a local runtime needs
+  telling — `foundry server start` to start it, `foundry server status` to find
+  the dynamic port, `foundry model run <alias>` when the model is the missing
+  piece, with the machine's actual model list attached when the service could
+  answer. No API key is sent because none exists. Streamed usage is read off
+  the final empty-choices frame — the exact bug class 9.73.0 fixed, pinned here
+  from day one.
+
+  **`entraIdentity()` — Azure credentials for tools**
+  (`agentfootprint/security`). The `googleIdentity` anatomy, law for law:
+  vends the deployment's identity as a bearer via any `TokenCredential`
+  (default: `DefaultAzureCredential`'s chain — env service principal, workload
+  identity, managed identity, VS Code, az CLI), scopes the request's way or
+  `AZURE_AI_SCOPE` by default, refuses `mode: 'user'` and per-request user
+  tokens BY NAME until an OBO surface exists, refuses services outside the
+  allowlist, and never lets an SDK's failure text — which echoes request
+  detail — reach a thrown message. `AZURE_AI_SCOPE` and
+  `AZURE_MANAGEMENT_SCOPE` are both exported because the audiences are not
+  interchangeable, and pretending there is one "azure scope" would be a lie
+  that 401s at runtime.
+
+  **`azureOpenai({ credential })` — the existing Azure door goes keyless.** An
+  Entra credential now rides the SDK's `azureADTokenProvider`; the static
+  api-key path is byte-identical to before; both given at once is refused by
+  name as the config bug it is. The docs' old caveat — "azureOpenai is the
+  wrong door for bearer auth" — is retired.
+
+  **`openai({ legacyEndpoint })` — the dialect dial goes public.** `baseURL`
+  has always implied the legacy dialect (`max_tokens`, no `stream_options`)
+  because most OpenAI-compatible servers are behind; `legacyEndpoint: false`
+  now declares "this baseURL speaks the current dialect" — which is exactly
+  what the Azure v1 route is. Default unchanged: `!!baseURL`.
+
+  **`providerFromEnv` learns both doors.** `FOUNDRY_LOCAL_MODEL` slots directly
+  after `OLLAMA_MODEL` (a model name you typed for a local runtime — the same
+  name-beats-leftover-credential law), and `FOUNDRY_PROJECT_ENDPOINT` sits
+  above the Azure key arm because a product-specific spelling nobody exports by
+  accident outranks the lingering-credential class. Every existing precedence
+  is pinned untouched; both wins have their own tests.
+
+  New from `agentfootprint/providers`: `foundry`, `foundryInferenceUrl`,
+  `FoundryProviderOptions`, `foundryLocal`, `FoundryLocalProvider`,
+  `FoundryLocalUnavailableError`, `FoundryLocalProviderOptions`,
+  `TokenCredentialLike`, `AccessTokenLike`. New from `agentfootprint/security`:
+  `entraIdentity`, `AZURE_AI_SCOPE`, `AZURE_MANAGEMENT_SCOPE`,
+  `EntraIdentityOptions`, `AzureIdentitySdkModule`. New optional peer:
+  `@azure/identity`. Pinned by 178 new tests across
+  `test/adapters/identity/entra-identity.test.ts`,
+  `test/adapters/unit/FoundryProvider.test.ts`,
+  `test/adapters/unit/FoundryLocalProvider.test.ts`,
+  `test/adapters/integration/foundry-wire.test.ts` (a real `openai` SDK against
+  a local fake of the `/openai/v1` wire — Bearer header, `max_completion_tokens`,
+  token rotation all asserted on the wire, not assumed), plus the extended
+  Azure env/wire suites. Deliberately NOT in this train: the App Insights sink,
+  Azure AI Search, the Toolbox MCP transport (next trains), and every
+  preview-only surface (A2A door, browser/computer-use, managed memory) —
+  refusing to ship against previews we cannot verify is a feature.
+
+
 ## [9.73.0] - 2026-08-27
 
 ### Fixed

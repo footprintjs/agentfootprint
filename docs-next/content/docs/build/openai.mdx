@@ -1,6 +1,6 @@
 ---
 title: OpenAI
-description: openai() — GPT provider via the openai SDK. Also covers OpenAI-compatible endpoints (Ollama, llama.cpp, vLLM, Together, Groq, LM Studio) via baseURL.
+description: openai() — GPT provider via the openai SDK. Also covers OpenAI-compatible endpoints (Ollama, llama.cpp, vLLM, Together, Groq, LM Studio) via baseURL, the legacyEndpoint dial that declares which dialect such a URL speaks, and azureOpenai() with either an API key or a keyless Entra credential.
 ---
 
 > The OpenAI SDK covers GPT-4, GPT-4o, and the wider ecosystem of OpenAI-compatible endpoints. agentfootprint's `openai()` factory wraps it as an `LLMProvider` — same shape as `anthropic()` and `mock()`.
@@ -61,13 +61,6 @@ const groq = openai({
 });
 ```
 
-Any `baseURL` also switches the adapter into **legacy-endpoint mode**: it sends
-the older `max_tokens` field instead of `max_completion_tokens`, and skips
-`stream_options` (fields real OpenAI/Azure accept but many local servers and
-compatible clouds don't) — see `OpenAIProviderOptions`/`legacyEndpoint` in
-[`OpenAIProvider.ts`](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/OpenAIProvider.ts).
-You don't configure this; it's automatic whenever `baseURL` is set.
-
 For Ollama specifically, the convenience factory (also from `agentfootprint/providers`). It defaults `baseURL` to `http://localhost:11434/v1` and names the provider `ollama`; set the model via `defaultModel` (or pass a custom `host`):
 
 ```ts twoslash
@@ -80,6 +73,109 @@ const provider = ollama({ defaultModel: 'llama3.1' });
 exploring. It's usually still the wrong choice for CI: slower, and small models
 are less reliable at tool-calling. Reach for [`mock()`](doc:testing) once
 you're past manual poking and writing tests.
+
+### `legacyEndpoint` — declaring the dialect instead of implying it
+
+Any `baseURL` puts the adapter in **legacy-endpoint mode** by default: it sends
+the older `max_tokens` field instead of `max_completion_tokens`, skips
+`stream_options`, and does not declare forced tool choice. That default exists
+because the compatible servers this option was built for (Ollama, vLLM, Together,
+Groq) are exactly the ones that break on the modern fields, and a hard failure is
+worse than a conservative request.
+
+It is a **default, not a law** — the dial lives on `OpenAIProviderOptions`, and
+the `OpenAIProvider` class form takes the same options as the factory. Some
+custom base URLs speak the *current* OpenAI dialect, and `legacyEndpoint: false`
+says so:
+
+```ts
+import { DefaultAzureCredential } from '@azure/identity';
+import { openai } from 'agentfootprint/providers';
+
+const credential = new DefaultAzureCredential();
+
+const provider = openai({
+  baseURL: 'https://my-acct.services.ai.azure.com/api/projects/my-proj/openai/v1',
+  legacyEndpoint: false,   // this URL is current OpenAI wire, not a legacy-compatible server
+  apiKey: async () => (await credential.getToken('https://ai.azure.com/.default'))!.token,
+});
+```
+
+Azure's v1 inference route is the worked example — and if that is where you are
+pointing, prefer [`foundry()`](doc:microsoft-foundry), which sets this flag, the
+URL and the auth for you. `legacyEndpoint: true` with no `baseURL` is legal and
+means what it says. Unset, nothing changes anywhere: the default is exactly
+`!!baseURL`.
+
+Interplay with `streamUsage`: a non-legacy endpoint already asks for
+`stream_options.include_usage` on streams, so `streamUsage` remains the opt-in
+for endpoints that stay legacy — this flag changes nothing about what either of
+its values does.
+
+## Azure OpenAI
+
+An Azure resource is not a drop-in OpenAI-compatible URL: it uses a
+deployment-scoped path, an `api-version` query parameter, and its own auth. That
+is what `azureOpenai()` is for — it wraps the SDK's `AzureOpenAI` client and
+reuses the identical completion, streaming and tool-call logic as `openai()`.
+
+```ts
+import { Agent } from 'agentfootprint';
+import { azureOpenai } from 'agentfootprint/providers';
+
+const agent = Agent.create({
+  provider: azureOpenai({
+    endpoint: process.env.AZURE_OPENAI_ENDPOINT,      // the resource ROOT, https://my-co.openai.azure.com
+    apiKey: process.env.AZURE_OPENAI_API_KEY,
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION, // e.g. 2024-12-01-preview
+    deployment: process.env.MODEL_NAME,               // e.g. gpt-4o-128k
+  }),
+  model: 'azure',   // the shorthand for the configured deployment
+}).build();
+```
+
+The request's `model` is the Azure **deployment** name; `'azure'` /
+`'azure-openai'` / `'openai'` resolve to the configured `deployment`, and a
+concrete deployment id passes through, so one provider can target several.
+`AZURE_OPENAI_ENDPOINT` and `OPENAI_BASE_URL` are two spellings of the same
+resource root and reach the identical URL. Deployment names are arbitrary and
+hide the underlying model, so a reasoning deployment needs `reasoning: true`
+declared — it cannot be detected.
+
+### Keyless: sign with Entra ID instead of a key
+
+A resource that has key auth turned off — or a deployment that would rather not
+hold a long-lived secret — passes a **credential** instead. Any `@azure/identity`
+credential works; the type is duck-typed, so this library never imports that SDK:
+
+```ts
+import { DefaultAzureCredential } from '@azure/identity';
+import { azureOpenai } from 'agentfootprint/providers';
+
+const provider = azureOpenai({
+  endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+  apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+  deployment: process.env.MODEL_NAME,
+  credential: new DefaultAzureCredential(),   // az login, managed identity, workload identity, …
+});
+```
+
+Underneath, the credential becomes the SDK's `azureADTokenProvider`, which is
+called **before every request**, so a long-lived agent process never holds an
+expired token — MSAL's own cache does the pacing. `scope` sets the audience and
+defaults to `https://ai.azure.com/.default`, the data plane every Azure OpenAI and
+Foundry inference call accepts; the ARM control plane is a different audience
+whose tokens are a 401 here. `@azure/identity` is an optional peer dependency —
+install it only if you use this door.
+
+Passing **both** `credential` and `apiKey` is refused by name at construction.
+They are two answers to one question — which identity signs the request — and
+whichever one this factory silently preferred would be the one you did not think
+was in use.
+
+For a Foundry **project** endpoint rather than a classic `*.openai.azure.com`
+resource, use [`foundry()`](doc:microsoft-foundry): same credential, no
+`api-version`, and the deployment carried in the request's `model` field.
 
 ## Tools (function calling)
 
@@ -103,3 +199,4 @@ OpenAI's Chat Completions API has native function calling. The provider translat
 - [Resilience](doc:resilience) — wrap with `withRetry` / `withFallback`
 - [Streaming](doc:streaming) — token-by-token UI rendering
 - [Ollama](doc:ollama) — local models via OpenAI-compatible endpoint
+- [Microsoft Foundry](doc:microsoft-foundry) — `foundry()` for a Foundry project, `foundryLocal()` for a model on this machine

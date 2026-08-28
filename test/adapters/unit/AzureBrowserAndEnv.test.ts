@@ -6,7 +6,8 @@
  *   model routes to the deployment — no SDK, no network.
  * - providerFromEnv: branches whose SDK is installed (`openai`) are asserted
  *   directly — kind, provider name, model. Branches whose SDK is NOT installed
- *   (`@anthropic-ai/sdk`) still announce themselves by the distinctive
+ *   (`@anthropic-ai/sdk`; `@azure/identity` for the foundry arm's keyless
+ *   zero-config door) still announce themselves by the distinctive
  *   peer-missing error, which proves WHICH branch was chosen; mock and the
  *   no-creds error are exact either way.
  *
@@ -15,11 +16,19 @@
  *   peer-missing throw proves the branch was ENTERED, never that its client can
  *   be built. The wire-level proof lives in
  *   test/adapters/integration/azure-openai-wire.test.ts.
+ *
+ *   The foundry-arm cases below assert BOTH shapes, so they hold in this
+ *   checkout (peer absent by design) and in a consumer's (peer installed):
+ *   direct kind/name/model when `foundry()` constructs, the foundry-named
+ *   peer refusal otherwise — either way the arm's precedence and its
+ *   deployment resolution are what is proven. The credential-signed wire
+ *   itself is pinned by test/adapters/integration/foundry-wire.test.ts.
  */
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { browserAzureOpenai } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
-import { providerFromEnv } from '../../../src/adapters/llm/createProvider.js';
+import { providerFromEnv, type ProviderFromEnv } from '../../../src/adapters/llm/createProvider.js';
+import { FoundryLocalUnavailableError } from '../../../src/adapters/llm/FoundryLocalProvider.js';
 import type { LLMRequest } from '../../../src/adapters/types.js';
 
 function recordingFetch(recorder: { url?: string; init?: RequestInit }): typeof fetch {
@@ -117,6 +126,11 @@ describe('providerFromEnv()', () => {
     'LLM_MODEL',
     'OLLAMA_MODEL',
     'OLLAMA_HOST',
+    'FOUNDRY_PROJECT_ENDPOINT',
+    'AZURE_AI_MODEL_DEPLOYMENT_NAME',
+    'FOUNDRY_LOCAL_MODEL',
+    'FOUNDRY_LOCAL_ENDPOINT',
+    'FOUNDRY_LOCAL_BASE_URL',
   ];
   let saved: Record<string, string | undefined>;
   beforeEach(() => {
@@ -169,6 +183,273 @@ describe('providerFromEnv()', () => {
     const started = Date.now();
     expect(providerFromEnv().kind).toBe('ollama');
     expect(Date.now() - started).toBeLessThan(100);
+  });
+
+  // ── Foundry Local — the second local-model arm ────────────────────
+
+  it('OLLAMA_MODEL wins over FOUNDRY_LOCAL_MODEL and a full foundry config', () => {
+    // Both are typed names, so precedence between them is seniority: the
+    // Ollama arm came first and its position is pinned, so a shell declaring
+    // both keeps doing what it always did.
+    process.env.OLLAMA_MODEL = 'qwen3';
+    process.env.FOUNDRY_LOCAL_MODEL = 'qwen2.5-0.5b';
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = 'gpt-4o-128k';
+    const r = providerFromEnv();
+    expect(r.kind).toBe('ollama');
+    expect(r.model).toBe('qwen3');
+  });
+
+  it('FOUNDRY_LOCAL_MODEL selects the local Foundry provider', () => {
+    // Dependency-free (fetch + SSE, like ollama), so the arm is asserted
+    // directly — no peer can be missing.
+    process.env.FOUNDRY_LOCAL_MODEL = 'qwen2.5-0.5b';
+    const r = providerFromEnv();
+    expect(r.kind).toBe('foundry-local');
+    expect(r.provider.name).toBe('foundry-local');
+    expect(r.model).toBe('qwen2.5-0.5b');
+  });
+
+  it('FOUNDRY_LOCAL_ENDPOINT is honored — the provider dials that address', async () => {
+    // The endpoint is not readable off the provider object, so observe it the
+    // only honest way: dial it. Nothing ever listens on 127.0.0.1:1, the
+    // connection refuses instantly, and the typed unavailable error carries
+    // the endpoint it tried. A variant-shaped model name (`-cpu` suffix)
+    // skips the catalog round-trip, so exactly one address is dialed.
+    process.env.FOUNDRY_LOCAL_MODEL = 'fake-model-generic-cpu:1';
+    process.env.FOUNDRY_LOCAL_ENDPOINT = 'http://127.0.0.1:1';
+    const { provider, model } = providerFromEnv();
+    let thrown: unknown;
+    try {
+      await provider.complete(req(model));
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(FoundryLocalUnavailableError);
+    expect((thrown as FoundryLocalUnavailableError).endpoint).toBe('http://127.0.0.1:1');
+  });
+
+  it('FOUNDRY_LOCAL_MODEL beats FOUNDRY_PROJECT_ENDPOINT — a typed name outranks an injected endpoint', () => {
+    // The hosted platform AUTO-INJECTS FOUNDRY_PROJECT_ENDPOINT; nobody
+    // injects FOUNDRY_LOCAL_MODEL. An injected variable must never beat a
+    // model name a person typed for THIS run.
+    process.env.FOUNDRY_LOCAL_MODEL = 'qwen2.5-0.5b';
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = 'gpt-4o-128k';
+    expect(providerFromEnv().kind).toBe('foundry-local');
+  });
+
+  // ── Foundry (project) — the arm between the names and the keys ────
+  //
+  // `foundry()`'s keyless zero-config door loads the optional `@azure/identity`
+  // peer at factory time, and this dev checkout deliberately leaves it
+  // uninstalled. So each case accepts either outcome and asserts it FULLY:
+  // with the peer present, the resolution directly (kind, provider name,
+  // model); without it, foundry's OWN peer-missing refusal — which still
+  // proves the arm was entered AND that a deployment was resolved, because
+  // the missing-deployment refusal this resolver authors would have fired
+  // BEFORE `foundry()` was called. The credential-signed path is pinned at
+  // the wire by test/adapters/integration/foundry-wire.test.ts.
+
+  function enterFoundryArm(): { resolved?: ProviderFromEnv; refusal?: string } {
+    try {
+      return { resolved: providerFromEnv() };
+    } catch (err) {
+      return { refusal: (err as Error).message };
+    }
+  }
+
+  function expectFoundryArm(
+    outcome: { resolved?: ProviderFromEnv; refusal?: string },
+    deployment: string,
+  ): void {
+    if (outcome.resolved) {
+      expect(outcome.resolved.kind).toBe('foundry');
+      expect(outcome.resolved.provider.name).toBe('foundry');
+      expect(outcome.resolved.model).toBe(deployment);
+    } else {
+      // The adapter's refusal, by its own name — not this resolver's
+      // missing-deployment refusal, not some other arm's error.
+      expect(outcome.refusal).toMatch(/^foundry: /);
+      expect(outcome.refusal).toContain('@azure/identity');
+      expect(outcome.refusal).not.toContain('no model deployment is named');
+    }
+  }
+
+  it('FOUNDRY_PROJECT_ENDPOINT + AZURE_AI_MODEL_DEPLOYMENT_NAME selects the foundry arm; model = the deployment', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = 'gpt-4o-128k';
+    expectFoundryArm(enterFoundryArm(), 'gpt-4o-128k');
+  });
+
+  it('MODEL_NAME is the deployment fallback on the foundry arm', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.MODEL_NAME = 'phi-4-mini';
+    expectFoundryArm(enterFoundryArm(), 'phi-4-mini');
+  });
+
+  it('FOUNDRY_PROJECT_ENDPOINT beats the full Azure-OpenAI env set — a product-specific spelling nobody exports by accident outranks lingering credentials', () => {
+    // The Azure config below is complete and BOOTABLE — the Azure arm would
+    // resolve it happily — so any outcome other than the foundry arm's would
+    // surface here as a resolved azure-openai kind.
+    process.env.AZURE_OPENAI_API_KEY = 'k';
+    process.env.AZURE_OPENAI_ENDPOINT = 'https://x.openai.azure.com';
+    process.env.AZURE_OPENAI_API_VERSION = '2024-12-01-preview';
+    process.env.AZURE_OPENAI_DEPLOYMENT = 'azure-armed-deployment';
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = 'gpt-4o-128k';
+    expectFoundryArm(enterFoundryArm(), 'gpt-4o-128k');
+  });
+
+  // ── The endpoint alone: the arm steps aside ───────────────────────
+  //
+  // The hosted Foundry platform AUTO-INJECTS FOUNDRY_PROJECT_ENDPOINT into
+  // every container it runs — including a container whose agent calls
+  // Anthropic/OpenAI/Azure and never asked for Foundry INFERENCE, which is a
+  // combination this project's own hosting adapter (foundryResponsesHost)
+  // ships for and its docs bless. An endpoint with no deployment therefore
+  // must not throw: it HOLDS its refusal, every arm below answers exactly as
+  // it did before this arm existed, and the held refusal is raised only when
+  // nothing else in the environment resolves. Otherwise a MINOR version bump
+  // converts a booting container into a startup crash.
+
+  it('an injected endpoint with no deployment does NOT break a bootable Azure config — either spelling of the resource root', () => {
+    // AZURE_OPENAI_DEPLOYMENT, not MODEL_NAME, on purpose: MODEL_NAME would
+    // feed the foundry arm's own deployment fallback, and then this would be
+    // testing the foundry arm rather than the fall-through. Spelled the Azure
+    // way, the foundry arm cannot see the deployment at all — so it steps
+    // aside and the Azure arm answers, exactly as it answered before 9.74.
+    for (const spelling of ['AZURE_OPENAI_ENDPOINT', 'OPENAI_BASE_URL'] as const) {
+      delete process.env.AZURE_OPENAI_ENDPOINT;
+      delete process.env.OPENAI_BASE_URL;
+      process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+      process.env[spelling] = 'https://my-co.openai.azure.com';
+      process.env.AZURE_OPENAI_API_KEY = 'k';
+      process.env.AZURE_OPENAI_API_VERSION = '2024-12-01-preview';
+      process.env.AZURE_OPENAI_DEPLOYMENT = 'gpt-4o-128k';
+      const r = providerFromEnv();
+      expect(r.kind).toBe('azure-openai');
+      expect(r.provider.name).toBe('azure-openai');
+      expect(r.model).toBe('gpt-4o-128k');
+    }
+  });
+
+  it('an injected endpoint with no deployment lets the Anthropic arm answer', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.ANTHROPIC_API_KEY = 'k';
+    let thrown: unknown;
+    try {
+      providerFromEnv();
+    } catch (err) {
+      thrown = err;
+    }
+    // `@anthropic-ai/sdk` is deliberately uninstalled here, so the anthropic
+    // arm announces itself by its own peer refusal — which is the proof this
+    // case needs: the arm was ENTERED. What must never appear is the foundry
+    // refusal, which would mean the endpoint pre-empted it.
+    expect((thrown as Error).message).toMatch(/@anthropic-ai\/sdk|anthropic/i);
+    expect((thrown as Error).message).not.toContain('no model deployment is named');
+  });
+
+  it('an injected endpoint with no deployment lets the OpenAI arm resolve outright', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.OPENAI_API_KEY = 'k';
+    const r = providerFromEnv();
+    expect(r.kind).toBe('openai');
+    expect(r.provider.name).toBe('openai');
+  });
+
+  it('{ fallbackToMock: true } still reaches the mock under an injected endpoint', () => {
+    // The documented escape hatch (docs/guides/adapters.md, examples/features/
+    // 16-providers.ts, and this function's own @example). A throw above the
+    // mock return would make the contract line "or returns the mock when
+    // { fallbackToMock: true }" false in a configuration the PLATFORM creates
+    // on its own — the worst kind of false, because nobody wrote it.
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    const r = providerFromEnv({ fallbackToMock: true });
+    expect(r.kind).toBe('mock');
+    expect(r.model).toBe('mock');
+  });
+
+  it('raises the HELD Foundry refusal — not the generic catalogue — when nothing else resolves', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    // A lone Azure KEY with no endpoint: enough to put a credential in the
+    // shell (so the no-echo law below is testable), never enough to satisfy
+    // the Azure arm, which needs the key AND a resource root. So no arm
+    // resolves and the held refusal is what surfaces.
+    process.env.AZURE_OPENAI_API_KEY = 'sk-foundry-DO-NOT-LEAK-4c1d';
+    let thrown: unknown;
+    try {
+      providerFromEnv();
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    // The exact refusal, unchanged in its first line ...
+    expect(message).toContain(
+      'providerFromEnv: a Foundry project endpoint is set, but no model deployment is named.',
+    );
+    // ... it teaches BOTH spellings of the fix ...
+    expect(message).toContain('AZURE_AI_MODEL_DEPLOYMENT_NAME');
+    expect(message).toContain('MODEL_NAME');
+    // ... it is the HELD one, not the six-provider catalogue: a person who
+    // exported a Foundry endpoint is told the one variable they are missing.
+    expect(message).not.toContain('no provider declared in the environment');
+    // ... and it never echoes the credential that was in the shell.
+    expect(message).not.toContain('sk-foundry-DO-NOT-LEAK-4c1d');
+  });
+
+  // ── Blank is unset, everywhere in these arms ──────────────────────
+
+  it('a blank AZURE_AI_MODEL_DEPLOYMENT_NAME does not mask a set MODEL_NAME', () => {
+    // `AZURE_AI_MODEL_DEPLOYMENT_NAME=` — a declared-but-empty line, the usual
+    // way to comment a variable out — is `''`, which `??` passes on as a real
+    // value. The deployment behind it was then never consulted and the refusal
+    // denied a deployment was named while one sat in the environment.
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = '';
+    process.env.MODEL_NAME = 'phi-4-mini';
+    expectFoundryArm(enterFoundryArm(), 'phi-4-mini');
+  });
+
+  it('a whitespace-only deployment name is not a deployment name — and a padded one is trimmed', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = '   ';
+    process.env.MODEL_NAME = '  phi-4-mini  ';
+    expectFoundryArm(enterFoundryArm(), 'phi-4-mini');
+  });
+
+  it('a whitespace-only FOUNDRY_PROJECT_ENDPOINT is unset — it neither enters the arm nor holds a refusal', () => {
+    process.env.FOUNDRY_PROJECT_ENDPOINT = '  ';
+    process.env.OPENAI_API_KEY = 'k';
+    expect(providerFromEnv().kind).toBe('openai');
+  });
+
+  it('a whitespace-only FOUNDRY_LOCAL_MODEL is unset — a blank name never selects the local runtime', () => {
+    process.env.FOUNDRY_LOCAL_MODEL = ' ';
+    process.env.OPENAI_API_KEY = 'k';
+    expect(providerFromEnv().kind).toBe('openai');
+  });
+
+  it('a blank FOUNDRY_LOCAL_ENDPOINT falls through to FOUNDRY_LOCAL_BASE_URL', async () => {
+    // With `??` the blank spelling won and, being falsy, was then dropped —
+    // so the provider silently dialed the DEFAULT port while the address the
+    // person actually set sat one variable away. Observed the only honest
+    // way: dial it (nothing listens on 127.0.0.1:1, and the typed unavailable
+    // error carries the endpoint it tried).
+    process.env.FOUNDRY_LOCAL_MODEL = 'fake-model-generic-cpu:1';
+    process.env.FOUNDRY_LOCAL_ENDPOINT = '';
+    process.env.FOUNDRY_LOCAL_BASE_URL = 'http://127.0.0.1:1';
+    const { provider, model } = providerFromEnv();
+    let thrown: unknown;
+    try {
+      await provider.complete(req(model));
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(FoundryLocalUnavailableError);
+    expect((thrown as FoundryLocalUnavailableError).endpoint).toBe('http://127.0.0.1:1');
   });
 
   it('detects Azure first among the credential arms (Azure env → the azure branch)', () => {

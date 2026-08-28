@@ -23,7 +23,9 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 |---|---|---|---|---|
 | Anthropic (Claude) | `anthropic()` | `agentfootprint/providers` | `@anthropic-ai/sdk` | `ANTHROPIC_API_KEY` |
 | OpenAI (GPT) | `openai()` | `agentfootprint/providers` | `openai` | `OPENAI_API_KEY` |
-| **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/providers` | `openai` | `api-key` (Azure) |
+| **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/providers` | `openai` (+ optional `@azure/identity`) | `api-key`, **or keyless Entra via `credential`** |
+| **Microsoft Foundry** (project endpoint) | **`foundry()`** | `agentfootprint/providers` | `openai` (+ optional `@azure/identity`) | Entra `Bearer` — a `credential`, an `apiKey` (string or callback), or `DefaultAzureCredential` when neither is given |
+| **Foundry Local** (on-device) | **`foundryLocal()`** | `agentfootprint/providers` | none — `fetch` only | none (no key exists on this wire) |
 | OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LM Studio, LiteLLM gateway, …) | `openai({ baseURL })` | `agentfootprint/providers` | `openai` | `Bearer` |
 | OpenAI-compatible behind a **short-lived token** (Vertex AI, Entra / managed identity, any OAuth gateway) | `openai({ baseURL, apiKey: async () => token })` | `agentfootprint/providers` | `openai` | `Bearer`, re-read per request |
 | Ollama (local) | `ollama()` | `agentfootprint/providers` | `openai` | none |
@@ -39,25 +41,30 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 > "many small companies show up with an API key" — they fill in `.env`, you ship
 > one code path.
 
-**Connecting a company endpoint** — three buckets:
+**Connecting a company endpoint** — five buckets:
 1. **OpenAI-compatible** (a base URL + key + `Bearer`): most gateways and "we expose
    an OpenAI-compatible API" setups → `openai({ baseURL, apiKey })`. No new code.
 2. **Azure OpenAI** (`*.openai.azure.com`, `api-key` header, `api-version`,
-   deployment-as-model, and a **string API key**): →
-   `azureOpenai({ endpoint, apiKey, apiVersion, deployment })`.
-3. **OpenAI-compatible, but the credential expires** (Vertex AI, Entra / managed
-   identity, any OAuth-fronted gateway): → `openai({ baseURL, apiKey: async () => token })`.
-   Pass a **function**, not a string — see [Rotating credentials](#rotating-credentials-a-token-that-expires)
-   below. This is the bucket an Entra-authenticated endpoint belongs in;
-   `azureOpenai()` cannot express it.
-4. **Anything else** → implement the `LLMProvider` interface (below) — ~30 lines.
+   deployment-as-model): → `azureOpenai({ endpoint, apiVersion, deployment })` with
+   either `apiKey` (a string) **or** `credential` (keyless Entra ID) — never both.
+3. **Microsoft Foundry project**
+   (`https://{account}.services.ai.azure.com/api/projects/{project}`): →
+   `foundry({ projectEndpoint, deployment, credential })`. No `api-version`, and
+   inside a hosted Foundry container `foundry()` with no arguments is the whole
+   configuration — see [foundry.md](foundry.md).
+4. **OpenAI-compatible, but the credential expires** (Vertex AI, any OAuth-fronted
+   gateway): → `openai({ baseURL, apiKey: async () => token })`. Pass a
+   **function**, not a string — see
+   [Rotating credentials](#rotating-credentials-a-token-that-expires) below.
+5. **Anything else** → implement the `LLMProvider` interface (below) — ~30 lines.
 
 ### Provider Factories
 
 Each provider has a lowercase factory that takes an options object:
 
 ```typescript
-import { anthropic, openai, azureOpenai, ollama, bedrock } from 'agentfootprint/providers';
+import { anthropic, openai, azureOpenai, foundry, foundryLocal, ollama, bedrock } from 'agentfootprint/providers';
+import { DefaultAzureCredential } from '@azure/identity';   // optional peer — only for the keyless doors
 
 // Anthropic Claude
 const claude = anthropic({ model: 'claude-sonnet-4-20250514', apiKey: process.env.ANTHROPIC_API_KEY });
@@ -72,13 +79,28 @@ const azure = azureOpenai({
   // names for it and reach the identical URL; a trailing slash, or a value that
   // already ends in `/openai`, is handled.
   endpoint: process.env.OPENAI_BASE_URL,            // https://my-co.openai.azure.com
-  // A STRING key. This factory has no credential callback — if the resource is
-  // fronted by Entra / managed identity, use `openai({ baseURL, apiKey: async fn })`.
+  // A STRING key — or drop this line and pass `credential: new DefaultAzureCredential()`
+  // for keyless Entra auth. Both together are refused by name.
   apiKey: process.env.AZURE_OPENAI_API_KEY,
   apiVersion: process.env.AZURE_OPENAI_API_VERSION, // e.g. 2024-12-01-preview
   deployment: process.env.MODEL_NAME,               // e.g. gpt-4o-128k
 });
 // Agent.create({ provider: azure, model: 'azure' })
+
+// Microsoft Foundry — a PROJECT endpoint over the api-version-free v1 route.
+// The request's `model` is the DEPLOYMENT; the shorthand 'foundry' resolves to it.
+// Inside a hosted Foundry container, `foundry()` with no arguments is complete:
+// the endpoint is injected and the managed identity signs. Everywhere else:
+const foundryProject = foundry({
+  projectEndpoint: process.env.FOUNDRY_PROJECT_ENDPOINT,   // https://…/api/projects/…
+  deployment: process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME,  // then MODEL_NAME
+  credential: new DefaultAzureCredential(),                // or `apiKey`, never both
+});
+// Agent.create({ provider: foundryProject, model: 'foundry' })
+
+// Foundry Local — on-device, free, no key. The port is DYNAMIC: `foundry server status`
+// prints the live URL, and `endpoint` (or FOUNDRY_LOCAL_ENDPOINT) is how you pass it.
+const local = foundryLocal('qwen2.5-0.5b');
 
 // OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LiteLLM gateway, …)
 const groq = openai({ baseURL: 'https://api.groq.com/openai/v1', apiKey: process.env.GROQ_API_KEY, defaultModel: 'llama-3.3-70b-versatile' });
@@ -96,23 +118,26 @@ const bedrockClaude = bedrock({ model: 'anthropic.claude-3-sonnet-20240229-v1:0'
 > `api-version` param. Use `azureOpenai(...)`, which wraps the SDK's `AzureOpenAI`
 > client and reuses the same completion/streaming/tool logic.
 >
-> This is about the **URL shape, not the vendor.** When an Azure or Foundry
-> resource also exposes an OpenAI-v1-compatible route and authenticates with an
-> Entra bearer token rather than a key, `azureOpenai()` is the wrong door — it
-> takes a string `apiKey` and has no credential callback. Point
-> `openai({ baseURL, apiKey: async () => token })` at the compatible route
-> instead. Verify which route your resource actually serves before choosing.
+> This is about the **URL shape, not the vendor** — and each shape now has its own
+> door. A classic `*.openai.azure.com` resource is `azureOpenai()`, with a key or
+> with `credential` for Entra. A **Foundry project endpoint** is `foundry()`, which
+> derives the `/openai/v1` route and signs with an Entra token. Only reach for
+> `openai({ baseURL, legacyEndpoint: false, apiKey: async () => token })` when the
+> route is OpenAI-compatible and neither factory owns its spelling. Verify which
+> route your resource actually serves before choosing.
 
 ### Rotating credentials: a token that expires
 
-`apiKey` accepts **a function as well as a string** on `openai()` (and on
-`googleGenAI()`). That is what makes this adapter usable in front of an endpoint
-whose credential is a short-lived OAuth or Entra token rather than a durable key
-— Vertex AI's OpenAI-compatible endpoint being the case that forced it in 9.29.0.
+`apiKey` accepts **a function as well as a string** on `openai()`, `gemini()` and
+`foundry()`. That is what makes an adapter usable in front of an endpoint whose
+credential is a short-lived OAuth or Entra token rather than a durable key —
+Vertex AI's OpenAI-compatible endpoint being the case that forced it in 9.29.0.
 
-**No other factory takes a callback.** `anthropic()`, `ollama()`, `azureOpenai()`,
-and the browser providers all declare `apiKey` as a plain `string`. An expiring
-credential has to reach the model through `openai()`.
+`anthropic()`, `ollama()`, `foundryLocal()` and the browser providers take a plain
+`string` (`foundryLocal()` takes no key at all — none exists on that wire). The
+two Azure-shaped factories have their own keyless door instead of a callback:
+`azureOpenai({ credential })` and `foundry({ credential })` take an
+`@azure/identity` credential and mint a token before **every** request.
 
 ```typescript
 import { openai } from 'agentfootprint/providers';
@@ -137,9 +162,11 @@ The boundary, stated so nobody has to guess:
 
 Worked example: [`examples/features/60-gemini-field-truths.ts`](../../examples/features/60-gemini-field-truths.ts).
 
-**`azureOpenai()` does not have this.** Its `apiKey` is a plain string. An Azure
-resource behind Entra or a managed identity has to go through `openai()` with a
-callback, against a route that speaks the OpenAI wire format.
+**For an Azure-shaped endpoint, prefer the credential door over a callback.**
+`azureOpenai({ credential })` and `foundry({ credential })` hand the token
+provider to the client itself, so the token is minted per request with MSAL's
+cache doing the pacing, and there is no callback of yours to keep correct. The
+`apiKey` callback stays the right answer for an endpoint neither factory owns.
 
 Each factory returns an `LLMProvider` directly — ready to pass to
 `Agent.create({ provider })` or `LLMCall.create({ provider })`.
@@ -154,7 +181,7 @@ field selects the adapter; the rest of the object is the provider's options:
 import { createProvider } from 'agentfootprint';
 
 const provider = createProvider({
-  kind: process.env.LLM_PROVIDER ?? 'mock',   // 'mock' | 'anthropic' | 'openai' | 'ollama' | 'bedrock' | 'browser-anthropic' | 'browser-openai'
+  kind: process.env.LLM_PROVIDER ?? 'mock',   // 'mock' | 'anthropic' | 'openai' | 'ollama' | 'foundry' | 'foundry-local' | 'bedrock' | 'gemini' | 'browser-anthropic' | 'browser-openai'
   apiKey: process.env.LLM_API_KEY,
   model: process.env.LLM_MODEL,
 });
@@ -183,14 +210,48 @@ Detection order (first match wins):
 | If these env vars are set | Resolves to | `model` returned |
 |---|---|---|
 | `OLLAMA_MODEL` (+ optional `OLLAMA_HOST`) | `ollama()` | `OLLAMA_MODEL` |
+| `FOUNDRY_LOCAL_MODEL` (+ optional `FOUNDRY_LOCAL_ENDPOINT` \| `FOUNDRY_LOCAL_BASE_URL`) | `foundryLocal()` | `FOUNDRY_LOCAL_MODEL` |
+| `FOUNDRY_PROJECT_ENDPOINT` + (`AZURE_AI_MODEL_DEPLOYMENT_NAME` \| `MODEL_NAME`) | `foundry()` | the deployment you named |
 | `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` \| `OPENAI_BASE_URL`) | `azureOpenai()` | the deployment (`AZURE_OPENAI_DEPLOYMENT` ?? `MODEL_NAME`) |
 | `ANTHROPIC_API_KEY` | `anthropic()` | `LLM_MODEL` ?? `'anthropic'` |
 | `OPENAI_API_KEY` | `openai()` | `LLM_MODEL` ?? `'openai'` |
 | *(none)* | throws — or the mock with `{ fallbackToMock: true }` | `'mock'` |
 
-The local model goes first on purpose: every other arm triggers on a credential,
-and credentials linger in a shell by accident. `OLLAMA_MODEL` is a name someone
-chose and typed.
+The env vars, one line each:
+
+| Variable | Read by | What it carries |
+|---|---|---|
+| `OLLAMA_MODEL` / `OLLAMA_HOST` | `ollama()` | The local model name; the host when the daemon isn't on localhost |
+| `FOUNDRY_LOCAL_MODEL` | `foundryLocal()` | The on-device model — an alias (`qwen2.5-0.5b`) or a full variant id |
+| `FOUNDRY_LOCAL_ENDPOINT` / `FOUNDRY_LOCAL_BASE_URL` | `foundryLocal()` | Where the service is listening. Two spellings of one thing, first present wins. The port is **dynamic** per `foundry server start`; `foundry server status` prints the live URL |
+| `FOUNDRY_PROJECT_ENDPOINT` | `foundry()` | The Foundry project endpoint. **Auto-injected** inside a hosted Foundry container |
+| `AZURE_AI_MODEL_DEPLOYMENT_NAME` ?? `MODEL_NAME` | `foundry()` | The deployment — Foundry's name for the model. The first spelling is the `azd` scaffolding convention |
+| `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` \| `OPENAI_BASE_URL`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT` ?? `MODEL_NAME` | `azureOpenai()` | Key, resource root, api-version, deployment |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` (+ optional `LLM_MODEL`) | `anthropic()` / `openai()` | The vendor key, and the model to name in the run |
+
+**The local models go first on purpose.** Every credential arm triggers on a
+credential, and credentials linger in a shell by accident — a key exported in
+`.zshrc` two months ago for something else. `OLLAMA_MODEL` and
+`FOUNDRY_LOCAL_MODEL` trigger on a **name you had to choose and type**, so their
+presence is a declaration rather than a leftover. (An endpoint variable alone is
+never a trigger: people export `OLLAMA_HOST` or `FOUNDRY_LOCAL_ENDPOINT` just to
+run the service, and it must not hijack an app that never asked for a local
+model.)
+
+**And the Foundry project endpoint sits between the names and the keys.**
+`FOUNDRY_PROJECT_ENDPOINT` is a product-specific spelling nobody exports by
+accident — and the one the hosted platform injects — so where it is present
+Foundry is the declared destination and it outranks a lingering Azure or vendor
+key. It still yields to the two local-model arms: *because* the platform can
+inject it, it must never beat a model name a person typed for this run. Naming
+the endpoint without naming a deployment is refused, not guessed — Foundry routes
+by deployment and has no default.
+
+**No probing, ever.** `providerFromEnv()` reads environment variables and nothing
+else; it never opens a socket to see whether a daemon is up. The answer is
+deterministic and identical on a laptop and in CI, and a service that is down
+reports itself from the call, with the fix (`ollama serve`,
+`foundry server start`) in the message.
 
 For Azure it also reads `AZURE_OPENAI_API_VERSION` and `AZURE_OPENAI_DEPLOYMENT`
 (or `MODEL_NAME` as the deployment). **`AZURE_OPENAI_ENDPOINT` and
@@ -206,11 +267,26 @@ AZURE_OPENAI_API_VERSION=2024-12-01-preview
 MODEL_NAME=gpt-4o-128k          # the Azure DEPLOYMENT name — and the `model` you get back
 ```
 
+A Foundry project instead — no key and no api-version, because the deployment's
+own identity signs:
+
+```bash
+FOUNDRY_PROJECT_ENDPOINT=https://your-acct.services.ai.azure.com/api/projects/your-proj
+AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-4o-128k   # or MODEL_NAME — and the `model` you get back
+```
+
+…or a model on this machine, which needs neither:
+
+```bash
+FOUNDRY_LOCAL_MODEL=qwen2.5-0.5b
+# FOUNDRY_LOCAL_ENDPOINT=http://127.0.0.1:57127   # only when `foundry server status` shows another port
+```
+
 `providerFromEnv()` is **Node-only** (it reads `process.env`); it lazy-loads only
 the SDK for the detected provider, so the others stay optional. In the browser,
 read `import.meta.env` yourself and call `browserAzureOpenai()` /
 `browserAnthropic()` directly. Returns `{ provider, model, kind }` where `kind` is
-`'azure-openai' | 'anthropic' | 'openai' | 'mock'`. See
+`'ollama' | 'foundry-local' | 'foundry' | 'azure-openai' | 'anthropic' | 'openai' | 'mock'`. See
 [examples/features/16-providers.ts](../../examples/features/16-providers.ts).
 
 ### Direct Class Construction
@@ -232,6 +308,7 @@ const provider = new AnthropicProvider({
 | `AnthropicProvider` | `anthropic()` | `@anthropic-ai/sdk` |
 | `OpenAIProvider` | `openai()` / `ollama()` / `azureOpenai()` | `openai` |
 | `BedrockProvider` | `bedrock()` | `@aws-sdk/client-bedrock-runtime` |
+| `FoundryLocalProvider` | `foundryLocal()` | none — `fetch` only |
 
 > **Browser providers:** `browserAnthropic()` / `browserOpenai()` /
 > `browserAzureOpenai()` (and their `BrowserAnthropicProvider` /

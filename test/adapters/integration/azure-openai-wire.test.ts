@@ -191,6 +191,11 @@ const VARS = [
   'LLM_MODEL',
   'OLLAMA_MODEL',
   'OLLAMA_HOST',
+  'FOUNDRY_PROJECT_ENDPOINT',
+  'AZURE_AI_MODEL_DEPLOYMENT_NAME',
+  'FOUNDRY_LOCAL_MODEL',
+  'FOUNDRY_LOCAL_ENDPOINT',
+  'FOUNDRY_LOCAL_BASE_URL',
 ] as const;
 
 const DEPLOYMENT = 'gpt-4o-128k';
@@ -398,6 +403,18 @@ describe('Azure door — the other arms are untouched', () => {
     expect(r.model).toBe('qwen3');
   });
 
+  it('FOUNDRY_LOCAL_MODEL also outranks this full, bootable Azure config — a typed model NAME is a declaration', () => {
+    // Same law as the Ollama case above, proven against an Azure config the
+    // fake server would genuinely serve: the local-model arms trigger on a
+    // NAME someone typed, and a name beats a credential every time.
+    setConsumerEnv('both');
+    process.env.FOUNDRY_LOCAL_MODEL = 'qwen2.5-0.5b';
+    const r = providerFromEnv();
+    expect(r.kind).toBe('foundry-local');
+    expect(r.provider.name).toBe('foundry-local');
+    expect(r.model).toBe('qwen2.5-0.5b');
+  });
+
   it('no creds at all still falls to the mock and still refuses by name', () => {
     expect(providerFromEnv({ fallbackToMock: true }).kind).toBe('mock');
     expect(() => providerFromEnv()).toThrow(/no provider declared/i);
@@ -421,5 +438,59 @@ describe('azureOpenai() built by hand takes either spelling', () => {
     expect(server.requests.at(-1)!.url).toBe(
       `/openai/deployments/${DEPLOYMENT}/chat/completions?api-version=${API_VERSION}`,
     );
+  });
+});
+
+// ─── Keyless: the Entra credential path (9.74.0) ────────────────────
+
+describe('Azure door — keyless: a credential authenticates as Authorization: Bearer', () => {
+  it('sends the token the credential minted, and no api-key header', async () => {
+    // The SDK's azureADTokenProvider door: with a `credential` (and NO apiKey)
+    // the real AzureOpenAI client asks the provider before the request and
+    // sends the answer as `Authorization: Bearer` — classic key auth's
+    // `api-key` header must NOT appear.
+    const provider = azureOpenai({
+      endpoint: server.endpoint,
+      credential: {
+        getToken: async () => ({
+          token: 'entra-tok-wire-1',
+          expiresOnTimestamp: Date.now() + 3600_000,
+        }),
+      },
+      apiVersion: API_VERSION,
+      deployment: DEPLOYMENT,
+    });
+    await provider.complete(ask('azure'));
+    const rec = server.requests.at(-1)!;
+    // Same deployment-scoped URL as the keyed path — auth changes, routing
+    // does not.
+    expect(rec.url).toBe(
+      `/openai/deployments/${DEPLOYMENT}/chat/completions?api-version=${API_VERSION}`,
+    );
+    expect(rec.authorizationHeader).toBe('Bearer entra-tok-wire-1');
+    expect(rec.apiKeyHeader).toBeUndefined();
+  });
+
+  it('an ambient AZURE_OPENAI_API_KEY does not collide with an explicit credential', async () => {
+    // The SDK defaults a MISSING `apiKey` from this env var and refuses a key
+    // beside a token provider ("mutually exclusive"). An explicit `credential`
+    // must beat the ambient read — the same stance BUG 1 settled for
+    // OPENAI_BASE_URL — and the env key must never reach the wire.
+    process.env.AZURE_OPENAI_API_KEY = 'sk-azure-DO-NOT-LEAK-9f4c';
+    const provider = azureOpenai({
+      endpoint: server.endpoint,
+      credential: {
+        getToken: async () => ({
+          token: 'entra-tok-wire-2',
+          expiresOnTimestamp: Date.now() + 3600_000,
+        }),
+      },
+      apiVersion: API_VERSION,
+      deployment: DEPLOYMENT,
+    });
+    await provider.complete(ask('azure'));
+    const rec = server.requests.at(-1)!;
+    expect(rec.authorizationHeader).toBe('Bearer entra-tok-wire-2');
+    expect(rec.apiKeyHeader).toBeUndefined();
   });
 });

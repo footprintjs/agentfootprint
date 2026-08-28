@@ -317,6 +317,7 @@
     "@aws-sdk/client-s3": "*",
     "@aws-sdk/client-s3vectors": "*",
     "@aws-sdk/client-xray": "*",
+    "@azure/identity": "*",
     "@google-cloud/firestore": "*",
     "@google-cloud/storage": "*",
     "@google/genai": "*",
@@ -357,6 +358,9 @@
       "optional": true
     },
     "@aws-sdk/client-xray": {
+      "optional": true
+    },
+    "@azure/identity": {
       "optional": true
     },
     "@google-cloud/firestore": {

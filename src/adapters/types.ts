@@ -449,8 +449,10 @@ export type ResilienceReport =
  * failure. What it produces is a decorated provider that goes DARK the
  * moment it is placed underneath: the reports still happen, and nothing
  * receives them. Every wrapper shipped in this library forwards (the three
- * `src/resilience/` decorators, and all eight class-form / Azure wrappers
- * in `src/adapters/llm/`), so the trap can only be sprung by a
+ * `src/resilience/` decorators, and EVERY class-form / Azure-shaped wrapper
+ * in `src/adapters/llm/` — `foundry()` and `foundryLocal()` included; the
+ * count is deliberately not written down, because a stale count reads as an
+ * unaudited wrapper), so the trap can only be sprung by a
  * consumer-authored wrapper — `myWrapper(withRetry(p))`. There is no way to
  * police it from here; the only defence is this note and the one in the
  * resilience guide's "honest limits".
