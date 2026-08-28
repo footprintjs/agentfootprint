@@ -130,11 +130,22 @@ interface OllamaChatResponse {
   done_reason?: string;
   prompt_eval_count?: number;
   eval_count?: number;
+  /**
+   * A 200 body can still BE a failure on this wire, and an already-200
+   * stream can turn into one mid-generation. Read by
+   * {@link fromOllamaResponse} and {@link frameFailureText}, which refuse
+   * rather than returning the empty answer a missing `message` produces.
+   */
+  error?: string | { message?: string };
 }
 
-/** `{"error": "..."}` — the uniform native error body. */
+/**
+ * `{"error": "..."}` — the uniform native error body. The object spelling
+ * (`{"error": {"message": "..."}}`) is tolerated in case a proxy in the
+ * middle reshaped it.
+ */
 interface OllamaErrorBody {
-  error?: string;
+  error?: string | { message?: string };
 }
 
 interface OllamaTagsResponse {
@@ -143,6 +154,9 @@ interface OllamaTagsResponse {
 
 /** How hard a thinking model should think. Ollama's own vocabulary. */
 export type ThinkLevel = 'low' | 'medium' | 'high' | 'max';
+
+/** Cap for any text the wire supplies before it becomes one of our messages. */
+const ERROR_TEXT_CAP = 200;
 
 // ─── Errors ─────────────────────────────────────────────────────────
 
@@ -360,13 +374,21 @@ export function ollama(
     carriesForcedToolChoice: false,
 
     async complete(req: LLMRequest): Promise<LLMResponse> {
+      // A signal that fired BEFORE the call stops it here, before any socket
+      // opens — the `/api/tags` enrichment included. An already-aborted signal
+      // never dispatches another 'abort' event, so a listener alone cannot
+      // see it.
+      throwIfAborted(req.signal);
       const body = buildBody(req, cfg, false);
       const response = await post(body, req);
-      const json = (await response.json()) as OllamaChatResponse;
+      // `fetch` resolves on HEADERS, so reading the body is the stretch where
+      // a caller abort would otherwise be inert — honor it for that too.
+      const json = (await untilAborted(response.json(), req.signal)) as OllamaChatResponse;
       return fromOllamaResponse(json, nextToolCallId);
     },
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const body = buildBody(req, cfg, true);
       const response = await post(body, req);
       if (!response.body) throw new Error('[ollama] response has no body');
@@ -379,8 +401,20 @@ export function ollama(
       let evalCount = 0;
       let tokenIndex = 0;
 
-      for await (const chunk of parseNdjson(response.body)) {
+      // The signal rides INTO the parser: it is what stops a generation the
+      // caller no longer wants, and what cancels the body when it does.
+      for await (const chunk of parseNdjson(response.body, req.signal)) {
         const frame = chunk as OllamaChatResponse;
+        // An already-200 stream can still FAIL mid-generation, and this wire
+        // says so IN BAND with an `{"error": "..."}` frame. Such a frame
+        // carries no `message` and no `done`, so the guards below would skip
+        // it and the terminal chunk would report a truncated answer as
+        // `stopReason: 'stop'` with nobody told. Raise instead: a failed
+        // generation is a failure, never a shorter answer.
+        const failure = frameFailureText(frame);
+        if (failure) {
+          throw providerError(`[ollama] the stream failed mid-generation — ${failure}`);
+        }
         // Counts ride the terminal frame, whose `message.content` is empty —
         // read them before any content guard, or the only token counts the
         // stream reports are thrown away (the failure that made streamed
@@ -585,10 +619,22 @@ function toOllamaTool(schema: LLMToolSchema): OllamaWireTool {
   };
 }
 
+/**
+ * Wire response → the port's shape.
+ *
+ * @throws an `OllamaProviderError` when the 200 body is really a failure
+ *   (`{"error": "..."}`). Reading it as a response would yield empty content
+ *   with `stopReason: 'stop'` and zero tokens — a failed call dressed as a
+ *   successful one.
+ */
 function fromOllamaResponse(
   response: OllamaChatResponse,
   nextToolCallId: () => string,
 ): LLMResponse {
+  if (response.error !== undefined && response.error !== null) {
+    const detail = extractErrorPayload(response.error) || 'the daemon named no reason';
+    throw providerError(`[ollama] the daemon answered 200 with an error — ${detail}`);
+  }
   const message = response.message;
   const wireToolCalls = message?.tool_calls ?? [];
   const toolCalls = wireToolCalls.map((tc) => toLLMToolCall(tc, nextToolCallId));
@@ -691,14 +737,27 @@ function normalizeStopReason(raw: string, hasToolCalls: boolean): string {
   }
 }
 
-/** Parse an NDJSON body — one JSON object per line. */
-async function* parseNdjson(body: ReadableStream<Uint8Array>): AsyncIterable<unknown> {
+/**
+ * Parse an NDJSON body — one JSON object per line.
+ *
+ * Two things here a plain line reader would not do, both because the other
+ * end is a model on THIS machine: the caller's `signal` interrupts the read
+ * (`fetch` resolved on headers, so this loop is the whole rest of the call),
+ * and the body is CANCELLED on the way out — a generation nobody is reading
+ * still occupies the machine.
+ */
+async function* parseNdjson(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncIterable<unknown> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      // The read is RACED against the caller's signal. A signal that only
+      // reached the headers would be a cancellation that cancels nothing.
+      const { value, done } = await untilAborted(reader.read(), signal);
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       let idx: number;
@@ -723,7 +782,21 @@ async function* parseNdjson(body: ReadableStream<Uint8Array>): AsyncIterable<unk
       }
     }
   } finally {
-    reader.releaseLock();
+    // CANCEL, not merely release the lock. The terminal `done` frame (the
+    // stream loop breaks on it), a consumer that breaks out, an error frame,
+    // a caller abort — every one of them leaves an open body, and an open
+    // body means the local model keeps generating for nobody and the socket
+    // stays up.
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed or errored — nothing left to close */
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* a lock the runtime already dropped */
+    }
   }
 }
 
@@ -741,7 +814,9 @@ async function* parseNdjson(body: ReadableStream<Uint8Array>): AsyncIterable<unk
  * to break on our behalf. So the timeout wins on its own.
  *
  * A caller's own `AbortSignal` is forwarded and, if IT is what fired, the
- * abort is re-thrown as an abort rather than blamed on the daemon.
+ * abort is re-thrown as an abort rather than blamed on the daemon —
+ * including a signal that was ALREADY aborted when the call was made, which
+ * never dispatches an event for a listener to hear.
  */
 async function fetchUntilHeaders(
   fetchImpl: typeof fetch,
@@ -749,6 +824,11 @@ async function fetchUntilHeaders(
   init: RequestInit,
   opts: { timeoutMs: number; baseUrl: string; signal?: AbortSignal },
 ): Promise<Response> {
+  // An already-aborted signal never dispatches another 'abort' event, so the
+  // bridge below could not fire and the request would go out on a turn the
+  // caller has cancelled. Refuse before the socket opens, and refuse with the
+  // caller's own reason: an abort is their call, never a daemon fault.
+  throwIfAborted(opts.signal);
   const controller = new AbortController();
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -811,11 +891,9 @@ async function describeFailure(
     });
   }
   const detail = extractErrorText(bodyText);
-  return Object.assign(
-    new Error(
-      `[ollama] ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`.trim(),
-    ),
-    { name: 'OllamaProviderError', status: response.status },
+  return providerError(
+    `[ollama] ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`.trim(),
+    response.status,
   );
 }
 
@@ -851,14 +929,108 @@ async function safeText(response: Response): Promise<string> {
   }
 }
 
-/** Native errors are `{"error": "..."}`; fall back to the raw text. */
+/**
+ * Native errors are `{"error": "..."}`; the object spelling and raw text are
+ * tolerated. Every path is capped — the wire's words help diagnose, but a
+ * daemon echoing something enormous (or poisoned) must not become the message.
+ */
 function extractErrorText(bodyText: string): string {
   if (!bodyText) return '';
   try {
     const parsed = JSON.parse(bodyText) as OllamaErrorBody;
-    if (typeof parsed.error === 'string' && parsed.error.length > 0) return parsed.error;
+    const detail = extractErrorPayload(parsed.error);
+    if (detail) return detail;
   } catch {
     /* not JSON — fall through */
   }
-  return bodyText.slice(0, 200);
+  return bodyText.slice(0, ERROR_TEXT_CAP);
+}
+
+/**
+ * The words out of an `error` payload — a bare string on this wire, the
+ * `{"message": "..."}` spelling tolerated — capped like every other piece of
+ * wire text this file repeats. Empty when there is nothing usable to say, so
+ * a caller can tell "no error" from "an error that named no reason".
+ */
+function extractErrorPayload(err: unknown): string {
+  if (typeof err === 'string') return err.slice(0, ERROR_TEXT_CAP);
+  if (typeof err === 'object' && err !== null) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      return message.slice(0, ERROR_TEXT_CAP);
+    }
+  }
+  return '';
+}
+
+/**
+ * What a mid-stream frame says went wrong — '' when nothing did.
+ *
+ * One spelling on this wire: an NDJSON frame carrying `error`. It means the
+ * generation failed, and it carries neither `message` nor `done`, which is
+ * exactly why an unchecked one looks like an ordinary skippable frame. An
+ * ordinary frame — the terminal `done` one included, whose content is empty
+ * by design — has no `error` key at all, so this guard stays narrow.
+ */
+function frameFailureText(frame: unknown): string {
+  const data =
+    typeof frame === 'object' && frame !== null ? (frame as { error?: unknown }) : undefined;
+  const err = data?.error;
+  if (err === undefined || err === null) return '';
+  return extractErrorPayload(err) || 'the daemon reported an error but named no reason';
+}
+
+/**
+ * The provider's own labelled error — one shape for every failure that is not
+ * the typed, actionable {@link OllamaUnavailableError}.
+ */
+function providerError(message: string, status?: number): Error {
+  return Object.assign(new Error(message), {
+    name: 'OllamaProviderError',
+    ...(status !== undefined && { status }),
+  });
+}
+
+/**
+ * An abort is the CALLER's word, so it must reach them AS an abort — never
+ * dressed up as a daemon failure. The signal's own `reason` is used when it
+ * is an Error (what every runtime supplies: a DOMException named
+ * 'AbortError'); anything else becomes one, keeping the reason as `cause`.
+ */
+function asAbortError(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+  return Object.assign(new Error('This operation was aborted'), {
+    name: 'AbortError',
+    ...(reason !== undefined && { cause: reason }),
+  });
+}
+
+/** Stop right here when the caller's signal has already fired. */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw asAbortError(signal.reason);
+}
+
+/**
+ * `promise`, except that a caller abort ends the wait immediately.
+ *
+ * `fetch` resolves on HEADERS. Everything after that — a streamed body, a
+ * large non-streaming JSON read — used to be deaf to the caller's signal, so
+ * a cancelled turn kept the local model generating to completion. This is
+ * what makes `LLMRequest.signal` honest for the whole call rather than only
+ * until the headers land. The CALLER's signal only: `timeoutMs` stays exactly
+ * what it always was, a bound on the wait for headers and never on generation.
+ */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    void promise.catch(() => undefined); // the abandoned work must not warn
+    return Promise.reject(asAbortError(signal.reason));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(asAbortError(signal.reason));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }

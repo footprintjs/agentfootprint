@@ -50,6 +50,38 @@ function ndjsonResponse(frames: readonly unknown[], opts: { chunkSize?: number }
 }
 
 /**
+ * An NDJSON response the test drives itself: the frames are queued but the
+ * body is never closed, and `cancelled()` reports whether anything ever
+ * closed it. The shape a real generation has while the model is still
+ * writing.
+ */
+function pushableNdjson(frames: readonly unknown[]): {
+  response: Response;
+  cancelled: () => boolean;
+} {
+  let cancelled = false;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const frame of frames) {
+        controller.enqueue(encoder.encode(`${JSON.stringify(frame)}\n`));
+      }
+      // deliberately NOT closed — the model is still generating
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'application/x-ndjson' },
+    }),
+    cancelled: () => cancelled,
+  };
+}
+
+/**
  * Fake fetch that answers /api/chat with `chat` and /api/tags with `tags`,
  * recording every call it saw.
  */
@@ -606,6 +638,210 @@ describe('OllamaProvider — scenario: streaming', () => {
     expect(res.toolCalls).toEqual([
       { id: 'ollama-call-1', name: 'weather', args: { city: 'Oslo' } },
     ]);
+  });
+
+  it('a consumer that BREAKS out cancels the body — the model does not keep generating', async () => {
+    const wire = pushableNdjson([
+      { message: { role: 'assistant', content: 'a' }, done: false },
+      { message: { role: 'assistant', content: 'b' }, done: false },
+      { message: { role: 'assistant', content: 'c' }, done: false },
+    ]);
+    const p = ollama('llama3.2', { _fetch: (() => Promise.resolve(wire.response)) as never });
+    const seen: string[] = [];
+    for await (const c of p.stream!(baseRequest)) {
+      if (!c.done) seen.push(c.content);
+      if (seen.length === 1) break;
+    }
+    expect(seen).toEqual(['a']);
+    // releaseLock() alone leaves the socket open and the generation running.
+    expect(wire.cancelled()).toBe(true);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// SCENARIO — a failed generation is never a clean stop
+// ════════════════════════════════════════════════════════════════════
+
+describe('OllamaProvider — scenario: an in-band failure on an already-200 stream', () => {
+  async function drain(p: ReturnType<typeof ollama>) {
+    const seen: Array<{ done: boolean; content: string }> = [];
+    let error: unknown;
+    try {
+      for await (const c of p.stream!(baseRequest)) seen.push({ done: c.done, content: c.content });
+    } catch (e) {
+      error = e;
+    }
+    return { seen, error };
+  }
+
+  it('RAISES an {"error": ...} frame instead of reporting a truncated answer as a clean stop', async () => {
+    const frames = [
+      { message: { role: 'assistant', content: 'par' }, done: false },
+      { error: 'model requires more system memory than is available' },
+    ];
+    const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse(frames)) });
+    const { seen, error } = await drain(p);
+
+    expect((error as Error).name).toBe('OllamaProviderError');
+    expect((error as Error).message).toMatch(/OllamaProviderError|\[ollama\]/);
+    expect((error as Error).message).toContain('more system memory');
+    // The decisive half: NO terminal chunk, so nothing downstream can read
+    // 'par' as a finished answer with stopReason 'stop' and zero tokens.
+    expect(seen.some((c) => c.done)).toBe(false);
+    expect(seen.map((c) => c.content)).toEqual(['par']);
+  });
+
+  it('the object spelling of an error frame is raised too', async () => {
+    const frames = [{ error: { message: 'CUDA out of memory' } }];
+    const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse(frames)) });
+    const { seen, error } = await drain(p);
+    expect((error as Error).name).toBe('OllamaProviderError');
+    expect((error as Error).message).toContain('CUDA out of memory');
+    expect(seen.some((c) => c.done)).toBe(false);
+  });
+
+  it('an error frame that names no reason still refuses rather than stopping cleanly', async () => {
+    const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse([{ error: '' }])) });
+    const { seen, error } = await drain(p);
+    expect((error as Error).name).toBe('OllamaProviderError');
+    expect(seen.some((c) => c.done)).toBe(false);
+  });
+
+  it('the reason is capped — a poisoned error frame never becomes the message', async () => {
+    const frames = [{ error: `${'x'.repeat(50_000)}sk-ollama-DO-NOT-LEAK-7b2a` }];
+    const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse(frames)) });
+    const { error } = await drain(p);
+    expect((error as Error).message.length).toBeLessThan(400);
+    expect((error as Error).message).not.toContain('sk-ollama-DO-NOT-LEAK-7b2a');
+  });
+
+  it('an ordinary done frame with empty content is still NOT an error — the guard is narrow', async () => {
+    const frames = [
+      { message: { role: 'assistant', content: 'ok' }, done: false },
+      {
+        message: { role: 'assistant', content: '' },
+        done: true,
+        done_reason: 'stop',
+        prompt_eval_count: 4,
+        eval_count: 1,
+      },
+    ];
+    const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse(frames)) });
+    const { seen, error } = await drain(p);
+    expect(error).toBeUndefined();
+    expect(seen.at(-1)!.done).toBe(true);
+  });
+
+  it('complete() refuses a 200 body that is really an error, instead of an empty answer', async () => {
+    const p = ollama('llama3.2', {
+      _fetch: fakeFetch(jsonResponse({ error: 'model requires more system memory' })),
+    });
+    const err = await p.complete(baseRequest).catch((e: unknown) => e);
+    expect((err as Error).name).toBe('OllamaProviderError');
+    expect((err as Error).message).toMatch(/OllamaProviderError|\[ollama\]/);
+    expect((err as Error).message).toContain('more system memory');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// SCENARIO — cancellation reaches the WHOLE call
+// ════════════════════════════════════════════════════════════════════
+
+describe('OllamaProvider — scenario: the caller can actually cancel', () => {
+  it('a signal already aborted at call time sends NOTHING — not even /api/tags', async () => {
+    const calls: WireCall[] = [];
+    const ac = new AbortController();
+    ac.abort();
+    const p = ollama('llama3.2', {
+      _fetch: fakeFetch(() => jsonResponse(okReply), {
+        calls,
+        tags: jsonResponse({ models: [{ name: 'llama3.2' }] }),
+      }),
+    });
+    const err = await p.complete({ ...baseRequest, signal: ac.signal }).catch((e: unknown) => e);
+
+    // An already-aborted signal never dispatches another 'abort' event, so a
+    // listener alone cannot hear it: the POST used to go out on a cancelled
+    // turn and the local model ran to completion for nobody.
+    expect(calls).toHaveLength(0);
+    expect((err as Error).name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(OllamaUnavailableError);
+  });
+
+  it('stream() refuses a pre-aborted signal the same way', async () => {
+    const calls: WireCall[] = [];
+    const ac = new AbortController();
+    ac.abort();
+    const p = ollama('llama3.2', {
+      _fetch: fakeFetch(
+        () => ndjsonResponse([{ message: { role: 'assistant', content: 'x' }, done: true }]),
+        { calls },
+      ),
+    });
+    let error: unknown;
+    try {
+      for await (const _c of p.stream!({ ...baseRequest, signal: ac.signal })) void _c;
+    } catch (e) {
+      error = e;
+    }
+    expect(calls).toHaveLength(0);
+    expect((error as Error).name).toBe('AbortError');
+  });
+
+  it('an abort DURING generation stops the stream and cancels the body', async () => {
+    const wire = pushableNdjson([
+      { message: { role: 'assistant', content: 'a' }, done: false },
+      { message: { role: 'assistant', content: 'b' }, done: false },
+      { message: { role: 'assistant', content: 'c' }, done: false },
+      { message: { role: 'assistant', content: 'd' }, done: false },
+    ]);
+    const ac = new AbortController();
+    const p = ollama('llama3.2', { _fetch: (() => Promise.resolve(wire.response)) as never });
+    const seen: string[] = [];
+    let error: unknown;
+    try {
+      for await (const c of p.stream!({ ...baseRequest, signal: ac.signal })) {
+        if (!c.done) seen.push(c.content);
+        if (seen.length === 2) ac.abort();
+      }
+    } catch (e) {
+      error = e;
+    }
+
+    // The bridge used to be removed the moment headers arrived, so an abort
+    // raised during generation reached nothing at all.
+    expect(seen).toEqual(['a', 'b']);
+    expect((error as Error).name).toBe('AbortError');
+    expect(wire.cancelled()).toBe(true);
+  });
+
+  it('an abort during the BODY READ is honored by complete(), not waited out', async () => {
+    const urls: string[] = [];
+    const ac = new AbortController();
+    const p = ollama('llama3.2', {
+      _fetch: ((url: RequestInfo | URL) => {
+        urls.push(String(url));
+        // Headers arrive; the body never does — a big answer still being read.
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => new Promise<never>(() => {}),
+        } as unknown as Response);
+      }) as unknown as typeof fetch,
+    });
+    const pending = p.complete({ ...baseRequest, signal: ac.signal });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    ac.abort();
+    const err = await pending.catch((e: unknown) => e);
+
+    expect(urls).toHaveLength(1); // we really did get past the headers
+    expect((err as Error).name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(OllamaUnavailableError);
+  });
+
+  it('a call with NO signal is unaffected — the whole guard is opt-in', async () => {
+    const p = ollama('llama3.2', { _fetch: fakeFetch(jsonResponse(okReply)) });
+    expect((await p.complete(baseRequest)).content).toBe('hello');
   });
 });
 
