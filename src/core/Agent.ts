@@ -161,6 +161,7 @@ import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
 import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
+import { toolWantsOf } from './agent/stagedRefs.js';
 import { wrapUpStage } from './agent/stages/wrapUp.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
@@ -3466,6 +3467,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .map(([name, tool]) => [name, tool.argumentsFrom!] as const),
     );
     this.integrityDanglingPresent = toolGrounding.size > 0;
+    // The staged-refs join's other half (grounded numbers): `Tool.wants` by
+    // tool name, harvested the same way and with the same ToolProvider caveat.
+    // Consumed only by the evidence gate (the callLLM nudge and the recheck
+    // correction), so an agent without the gate never reads it.
+    const toolWants = toolWantsOf(registryByName);
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(toolOwners.size > 0 && { toolOwners }),
@@ -3500,6 +3506,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The declared argument-ground edges (9.60.0) — value-conditional, so
       // an agent whose tools declare none runs the exact bytes it always did.
       ...(toolGrounding.size > 0 && { toolGrounding }),
+      // The staged-refs nudge (grounded numbers) — armed only when the dial
+      // is ON and a registered tool declares `wants`; otherwise the stage
+      // reads nothing new and every request keeps its exact bytes.
+      ...(this.evidenceGate?.nudge === true && toolWants.size > 0 && { toolWants }),
       // The external-ground door (9.72.0) — value-conditional for the same
       // reason: no provider, no key, byte-identical corpus assembly.
       ...(this.externalGrounds !== undefined && { externalGrounds: this.externalGrounds }),
@@ -3763,9 +3773,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.evidenceGate !== undefined && {
         hasEvidenceGate: true,
         ...(this.evidenceGate.posture !== 'assist' && {
-          evidenceRecheckStage: buildEvidenceRecheckStage(this.evidenceGate) as (
-            scope: never,
-          ) => void,
+          evidenceRecheckStage: buildEvidenceRecheckStage(
+            this.evidenceGate,
+            // The staged-refs join (grounded numbers) — the correction names
+            // the refs and the spender when the run declared both. Threaded
+            // whenever a `wants` tool exists (not gated on `nudge`: a
+            // revision that cannot say HOW to compute leaves the model to
+            // head-math again); absent for every agent without one, so the
+            // correction keeps its exact bytes.
+            toolWants.size > 0
+              ? {
+                  toolWants,
+                  staticToolNames: () => toolSchemasResolved.map((t) => t.name),
+                }
+              : undefined,
+          ) as (scope: never) => void,
         }),
       }),
       // Escalation (9.19.0): the grouped chart threads `skillEscalated`

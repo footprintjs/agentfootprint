@@ -1745,6 +1745,15 @@ export class AgentBuilder {
    * them. The terminal verdict is readable after the run with
    * `agent.unsupportedValues()`.
    *
+   * `nudge: true` adds the staged-refs nudge — the recency half of grounded
+   * numbers. When an iteration's context holds tool results staged by
+   * reference (`artifacts.placement` tickets) and a served tool declares
+   * `wants` over one of their kinds, ONE late line is appended to that
+   * request naming the refs and the spender: derived numbers come from the
+   * tool, not from mental arithmetic. Composed from declarations only,
+   * request-only (never history), recorded as
+   * `agentfootprint.agent.grounding_nudged`. Off by default.
+   *
    * @example
    *   const agent = Agent.create({ provider, model })
    *     .tool(showInterface)
@@ -1754,6 +1763,9 @@ export class AgentBuilder {
    *       // it your domain's shapes and they are checked by name.
    *       shapes: [{ name: 'wwn', match: /(?:[0-9a-f]{2}:){7}[0-9a-f]{2}/ }],
    *       exempt: ['v9.35.0'],
+   *       // Name staged dataset refs + the compute tool late in the context,
+   *       // where recency works FOR the instruction.
+   *       nudge: true,
    *     })
    *     .build();
    */

@@ -1908,6 +1908,40 @@ export interface AgentEvidenceCheckedPayload {
    *  tool result. The gate then records its verdict WITHOUT acting on it —
    *  a partial corpus can call a grounded value fabricated. */
   readonly evidenceTruncated?: boolean;
+  /**
+   * On `action: 'revision-asked'` only, and only when the turn held placed
+   * artifact tickets a served `wants` tool can spend: the refs the
+   * correction NAMED as the route to a grounded number. Absent otherwise —
+   * including for every agent without a `wants`-declaring tool.
+   */
+  readonly stagedRefs?: readonly { readonly ref: string; readonly kind: string }[];
+  /** The spender tools the correction named, beside {@link stagedRefs}. */
+  readonly spenderTools?: readonly string[];
+}
+
+/**
+ * The staged-refs nudge fired (`.namesAndNumbersFromEvidence({ nudge: true })`)
+ * — one per iteration whose request gained the late line naming staged
+ * artifact refs and the `wants` tool that spends them.
+ *
+ * The line itself is request-only (never history), so this event is the ONE
+ * record that it existed: which refs, which spenders, which iteration. A run
+ * where the nudge never armed emits none of these.
+ */
+export interface AgentGroundingNudgedPayload {
+  /** The ReAct iteration whose request carried the line. */
+  readonly iteration: number;
+  /** The staged refs the line named — `ref` verbatim, `kind` as minted
+   *  (`Tool.resultKind` / `tool-result/<toolName>`). Capped; see
+   *  {@link refsOmitted}. */
+  readonly refs: readonly { readonly ref: string; readonly kind: string }[];
+  /** Matched refs beyond the cap, stated rather than silently dropped.
+   *  Absent when every match was named. */
+  readonly refsOmitted?: number;
+  /** The spender tools named, by their registered names — the tools whose
+   *  declared `wants` matched a staged ref's kind, exact-string, never by
+   *  tool name. */
+  readonly tools: readonly string[];
 }
 
 /**

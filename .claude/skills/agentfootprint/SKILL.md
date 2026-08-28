@@ -252,7 +252,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**108 typed events across 24 domains.** Two subscription shapes and no third:
+**109 typed events across 24 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

@@ -23,18 +23,39 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { buildEvidenceCorrection, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from '../evidence/types.js';
+import { findStagedRefs } from '../stagedRefs.js';
 import type { AgentState } from '../types.js';
+
+/**
+ * The staged-refs join's build-time half, threaded only when at least one
+ * registered tool declares `wants` (the `toolGrounding` law: absent means the
+ * stage reads no new scope key and the correction keeps its exact bytes).
+ */
+export interface EvidenceStagedRefsDeps {
+  /** Harvested `Tool.wants` — tool name → the kinds it spends. */
+  readonly toolWants: ReadonlyMap<string, readonly string[]>;
+  /** The static tool-schema names, late-bound (the `toolSchemas` getter
+   *  pattern) — the fallback before the tools slot has written
+   *  `dynamicToolSchemas`. */
+  readonly staticToolNames: () => readonly string[];
+}
 
 /**
  * Build the recheck stage. The decider already found the values and wrote the
  * carrier immediately before routing here — this stage does the work of asking.
+ *
+ * `stagedRefs` (optional): when this turn holds placed artifact tickets a
+ * currently-served `wants` tool can spend, the correction names the refs and
+ * the spender tool — the route to a grounded number, not just the demand for
+ * one. The revision-asked event carries the same facts, additively.
  */
 export function buildEvidenceRecheckStage(
   gate: ResolvedEvidenceGate,
+  stagedRefs?: EvidenceStagedRefsDeps,
 ): (scope: TypedScope<AgentState>) => void {
   return (scope) => {
     const pending = scope.evidenceUnsupported;
@@ -49,7 +70,26 @@ export function buildEvidenceRecheckStage(
     const iteration = scope.iteration as number;
     const values = [...pending.values] as UnsupportedValue[];
     const flaggedAnswer = scope.llmLatestContent as string;
-    const [answerTurn, correctionTurn] = buildEvidenceCorrection(flaggedAnswer, values);
+
+    // The staged-refs join, computed against the tools the model can
+    // CURRENTLY call (the slot's per-iteration surface when it has run, the
+    // static catalog before it) — a spender the model cannot reach must not
+    // be named as the way out.
+    const match =
+      stagedRefs === undefined
+        ? undefined
+        : findStagedRefs(
+            (scope.history as readonly LLMMessage[] | undefined) ?? [],
+            stagedRefs.toolWants,
+            new Set(
+              (
+                (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined)?.map(
+                  (t) => t.name,
+                ) ?? stagedRefs.staticToolNames()
+              ).values(),
+            ),
+          );
+    const [answerTurn, correctionTurn] = buildEvidenceCorrection(flaggedAnswer, values, match);
 
     // The conversation, as it really went. A plain local array — a TypedScope
     // array read is a live proxy view, and both the commit and the event
@@ -75,6 +115,12 @@ export function buildEvidenceRecheckStage(
       unsupported: values.slice(0, MAX_REPORTED_VALUES),
       action: 'revision-asked',
       afterRevision: false,
+      // What the correction TAUGHT, additively (absent when the join found
+      // nothing): which staged refs and which spender tools it named.
+      ...(match !== undefined && {
+        stagedRefs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
+        spenderTools: [...match.tools],
+      }),
     });
 
     // Close this iteration's bracket before the loop turns — every recorder

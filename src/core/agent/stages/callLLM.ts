@@ -39,6 +39,7 @@ import {
   type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
+import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
@@ -166,6 +167,23 @@ export interface CallLLMStageDeps {
    * label. Absent → the corpus is exactly what it always was.
    */
   readonly externalGrounds?: () => readonly ExternalGround[];
+  /**
+   * The staged-refs nudge's harvest (`.namesAndNumbersFromEvidence({ nudge:
+   * true })`) — `Tool.wants` by tool name, present ONLY when the dial is on
+   * AND at least one registered tool declares `wants`; absent → this stage
+   * reads nothing new and every request keeps its exact bytes.
+   *
+   * When present, an iteration whose conversation holds placed artifact
+   * tickets a currently-served spender can consume gets ONE extra `role:
+   * 'user'` line appended at request assembly — never written to history —
+   * naming the refs and the spender: derived numbers come from the tool, not
+   * from mental arithmetic. Appended HERE for the wrap-up's reason (this is
+   * the one seam that decides what goes on the wire) and at the END for the
+   * measured reason: the failure this closes was recency — the app's own
+   * "use the compute tool" prose sat at the top of the context, the numbers
+   * at the bottom, and the model summed them in its head.
+   */
+  readonly toolWants?: ReadonlyMap<string, readonly string[]>;
   /**
    * The per-run disposition ledger, by REFERENCE (9.60.0) — plumbing shared
    * through the build closure like ProviderToolCache, never scope state.
@@ -352,6 +370,30 @@ export function buildCallLLMStage(
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
 
+    // THE STAGED-REFS NUDGE (`nudge: true` on the evidence gate). Judged on
+    // `registeredToolSchemas` — the tools REALLY served this call, so the
+    // wrap-up's withheld surface arms nothing and a synthetic schema tool is
+    // never named a spender. The line is request-only: `scope.history` is
+    // untouched, so it never enters the exempt corpus and never persists —
+    // recomposed each iteration, present exactly while both conditions hold.
+    let wireMessages = messages;
+    if (deps.toolWants !== undefined) {
+      const match = findStagedRefs(
+        messages,
+        deps.toolWants,
+        new Set(registeredToolSchemas.map((t) => t.name)),
+      );
+      if (match !== undefined) {
+        wireMessages = [...messages, { role: 'user', content: stagedRefsNudgeLine(match) }];
+        typedEmit(scope, 'agentfootprint.agent.grounding_nudged', {
+          iteration,
+          refs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
+          ...(match.refsOmitted > 0 && { refsOmitted: match.refsOmitted }),
+          tools: [...match.tools],
+        });
+      }
+    }
+
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
       provider: provider.name,
@@ -360,7 +402,7 @@ export function buildCallLLMStage(
       // Opt-in (9.50.0): the assembled prompt VERBATIM, exactly the string
       // handed to the provider below — never re-joined by a consumer.
       ...(deps.recordSystemPrompt === true && { systemPromptText: systemPrompt }),
-      messagesCount: messages.length,
+      messagesCount: wireMessages.length,
       toolsCount: activeToolSchemas.length,
       // WHICH BRAIN answered (9.19.0) — stamped ONLY when a brain rung won,
       // so configured/default runs keep byte-identical events.
@@ -382,7 +424,7 @@ export function buildCallLLMStage(
     const startMs = Date.now();
     const baseRequest = {
       ...(systemPrompt.length > 0 && { systemPrompt }),
-      messages,
+      messages: wireMessages,
       ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
       model,
       ...(deps.temperature !== undefined && { temperature: deps.temperature }),

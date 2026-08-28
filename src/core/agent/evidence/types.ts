@@ -76,6 +76,27 @@ export interface NamesAndNumbersOptions {
    * positives that follow.
    */
   readonly minDigits?: number;
+  /**
+   * The staged-refs nudge. Default `false` — off, byte-identical.
+   *
+   * When an iteration's context carries tool results staged by reference
+   * (`artifacts.placement` tickets) AND a tool the model can currently call
+   * declares `wants` over one of their kinds, the library appends ONE short
+   * line at the END of that request naming the refs and the spender tool:
+   * derived numbers come from the tool, not from mental arithmetic. Composed
+   * entirely from declarations (`Tool.resultKind` / `Tool.wants`) — no app
+   * prose — and placed late because the measured failure was recency: the
+   * app's own "use the compute tool" instruction sat at the top of the
+   * context while the numbers sat at the bottom, and the model summed them
+   * in its head. The line is request-only (never history) and recomposed per
+   * iteration, so it exists exactly while both conditions hold. Each firing
+   * lands as `agentfootprint.agent.grounding_nudged`.
+   *
+   * Advisory — the postures above stay the guarantee. An agent with no
+   * artifact placement or no `wants`-declaring tool arms nothing and keeps
+   * byte-identical requests.
+   */
+  readonly nudge?: boolean;
 }
 
 /** One value in the answer that no tool result carried. */
@@ -104,6 +125,8 @@ export interface ResolvedEvidenceGate {
   readonly exemptValues: ReadonlySet<string>;
   readonly exemptPatterns: readonly RegExp[];
   readonly minDigits: number;
+  /** The staged-refs nudge dial. `false` is today's bytes. */
+  readonly nudge: boolean;
 }
 
 /** The gate's verdict on one answer. */

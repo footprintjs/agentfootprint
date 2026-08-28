@@ -46,6 +46,7 @@ import type {
   AgentOutputContractUnmetPayload,
   AgentOutputSchemaRetryPayload,
   AgentEvidenceCheckedPayload,
+  AgentGroundingNudgedPayload,
   AgentRunConfiguredPayload,
   AgentThinkingParseFailedPayload,
   StreamThinkingDeltaPayload,
@@ -153,6 +154,7 @@ export const EVENT_NAMES = {
     outputSchemaRetry: 'agentfootprint.agent.output_schema_retry',
     outputContractUnmet: 'agentfootprint.agent.output_contract_unmet',
     evidenceChecked: 'agentfootprint.agent.evidence_checked',
+    groundingNudged: 'agentfootprint.agent.grounding_nudged',
     runConfigured: 'agentfootprint.agent.run_configured',
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
     budgetExhausted: 'agentfootprint.agent.budget_exhausted',
@@ -367,6 +369,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.evidence_checked': AgentfootprintEventEnvelope<
     'agentfootprint.agent.evidence_checked',
     AgentEvidenceCheckedPayload
+  >;
+  'agentfootprint.agent.grounding_nudged': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.grounding_nudged',
+    AgentGroundingNudgedPayload
   >;
   'agentfootprint.agent.run_configured': AgentfootprintEventEnvelope<
     'agentfootprint.agent.run_configured',
@@ -778,6 +784,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.output_schema_retry',
   'agentfootprint.agent.output_contract_unmet',
   'agentfootprint.agent.evidence_checked',
+  'agentfootprint.agent.grounding_nudged',
   'agentfootprint.agent.run_configured',
   'agentfootprint.agent.thinking_parse_failed',
   'agentfootprint.agent.budget_exhausted',

@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.75.0] - 2026-08-28
+
+### Added
+
+- **Grounded numbers: the staged-refs nudge, and a revise correction that
+  names the route.** The field failure this closes, from a consumer's recorded
+  run: four tool results carried real numbers, a compute tool that could sum
+  them was registered — with `wants` declared over the staged dataset kind —
+  and the app's prompt said to use it. The model summed the numbers in its
+  head anyway and stated the total; the evidence gate recorded *"appears in no
+  tool result"* and the answer shipped, because the posture only observed. The
+  app patched it with more prose. The library-shaped fix is two mechanisms it
+  already owns, on the one dial it already has:
+
+  **`nudge: true` on `.namesAndNumbersFromEvidence()`** — when an iteration's
+  context holds a tool result staged by reference (an `artifacts.placement`
+  ticket) AND a tool the model can currently call declares `wants` over that
+  ticket's kind, ONE short line is appended at the very END of that request,
+  naming the refs and the spender tool by its registered name: derived numbers
+  come from the tool, not from mental arithmetic. Composed entirely from
+  declarations (`Tool.resultKind`, `Tool.wants`, matched by the exact-string
+  law dispatch uses — never by tool name); no prose surface for apps. The
+  placement is the point: the measured failure was recency — the app's own
+  instruction sat at the top of a long context and the numbers at the bottom,
+  so this one sits beside the data. Request-only (never history, so it never
+  enters the gate's exempt corpus), recomposed per iteration so it exists
+  exactly while both conditions hold, judged against the tools REALLY served
+  this call (the wrap-up's withheld surface arms nothing). Each firing lands
+  as `agentfootprint.agent.grounding_nudged` (event 109) with refs and tools
+  as data — the line's one record, since the line itself is not conversation.
+
+  ```ts
+  const agent = Agent.create({ provider, model, artifacts: { store, placement } })
+    .tool(exportRows) // resultKind: 'dataset/rows' — staged over the threshold
+    .tool(compute) //    wants: { dataset: 'dataset/rows' } — the declared spender
+    .namesAndNumbersFromEvidence({ posture: 'guard', nudge: true })
+    .build();
+  ```
+
+  **The guarantee stays the postures the gate has had since 9.35.0** — the
+  existing value extraction is THE detector, unchanged: `'assist'` records,
+  `'guard'` allows the one bounded revision then delivers with both attempts
+  on the record, `'rails'` refuses with `UnsupportedValuesError`. What the
+  revision gains: when the flagged turn holds staged refs a served `wants`
+  tool can spend, the correction now names them — *"pass 'art_…'
+  (dataset/rows) to `compute` — compute the number there and answer with what
+  it returns"* — inside the authored frame, so the quoted values still come
+  last and the exempt-corpus fence is untouched. The `revision-asked`
+  `evidence_checked` event carries the same facts additively (`stagedRefs`,
+  `spenderTools`). Absent everything — no gate, `nudge` unset, or no
+  `wants`-declaring tool — every request, record and correction keeps its
+  exact bytes, pinned by test.
+
+### Changed
+
+- **A `guard`/`rails` agent that also registers a `wants`-declaring tool will
+  see its evidence correction gain the refs clause above when staged refs are
+  in context.** That is the fix, not a side effect: a correction that says
+  "call the tool that provides it" without naming WHICH tool over WHICH ref
+  leaves the model to head-math again. Agents without a `wants` tool — or
+  without staged refs in the flagged turn — keep the exact 9.35.0 sentence.
+
 ## [9.74.0] - 2026-08-27
 
 ### Added

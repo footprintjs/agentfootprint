@@ -130,7 +130,50 @@ replacing them, and `exempt` removes what you know is safe.
 
 A `NamesAndNumbersOptions` bag: `posture` (`EvidencePosture`), `shapes`
 (`EvidenceShape[]` — each a `name` plus a `match` pattern, anchored to a whole
-token), `exempt`, and `minDigits`.
+token), `exempt`, `minDigits`, and `nudge`.
+
+## The staged-refs nudge
+
+A recorded failure, and the reason this dial has a second half: four tool
+results carried real numbers, a compute tool that could sum them was
+registered, and the app's own prompt said to use it — yet the model summed the
+numbers in its head and stated the total. The gate recorded *"appears in no
+tool result"* and the answer shipped, because the posture only observed. The
+instruction sat at the **top** of a long context; the numbers sat at the
+**bottom**. Recency won.
+
+`nudge: true` puts the instruction where recency works *for* it. When an
+iteration's context holds a tool result staged by reference (an
+[`artifacts.placement`](doc:artifacts) ticket) **and** a tool the model can
+currently call declares [`wants`](doc:artifacts) over that ticket's kind, the
+library appends **one** short line at the very end of that request:
+
+```text
+[staged data — this turn's tool results include data staged by reference:
+'art_h7Kq…' (dataset/rows). Any derived number — a total, a sum, a difference,
+an average — must come from a tool result, not from your own arithmetic. To
+compute over the staged data, pass the ref string to `compute` and report what
+it returns.]
+```
+
+Everything in it is composed from **declarations** — the ref and kind from the
+placement mint (`Tool.resultKind`), the spender from `Tool.wants`, matched by
+the same exact-string law dispatch uses, never by tool name. There is no prose
+surface to write. The line is request-only (it never enters the conversation
+history) and recomposed per iteration, so it exists exactly while both
+conditions hold; each firing lands as `agentfootprint.agent.grounding_nudged`
+with the refs and tools as data.
+
+```ts
+.namesAndNumbersFromEvidence({ posture: 'guard', nudge: true })
+```
+
+The nudge is advisory — the postures stay the guarantee. And under `guard` /
+`rails` the two meet: when the flagged turn holds staged refs a served spender
+can consume, the correction itself names them (*"pass 'art_h7Kq…'
+(dataset/rows) to `compute` — compute the number there and answer with what it
+returns"*), so the revision is handed the route, not just the demand. That
+clause appears whenever a `wants` tool exists, with or without `nudge`.
 
 ## Reading the record
 
