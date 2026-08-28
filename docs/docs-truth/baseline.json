@@ -5,14 +5,14 @@
   "recordedAt": "2026-08-28",
   "surface": {
     "subpaths": 15,
-    "declaredSymbols": 2016,
+    "declaredSymbols": 2017,
     "declaredEvents": 108,
     "eventSource": "src/events/registry.ts:762"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1052,
+      "documented-never-exercised": 1053,
       "exercised-undocumented": 34,
       "undocumented-unexercised": 600,
       "site-code-sample-only": 12,

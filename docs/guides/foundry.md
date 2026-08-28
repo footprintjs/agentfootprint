@@ -143,8 +143,12 @@ by the platform — an injected variable must never beat a hand-typed one. And t
 project endpoint **outranks the credential arms below it**, because those trigger
 on a credential and credentials linger in a shell by accident, while
 `FOUNDRY_PROJECT_ENDPOINT` is a product-specific spelling nobody exports by
-mistake. An endpoint with no deployment named is refused, not guessed — Foundry
-routes by deployment and has no default. See [adapters.md](adapters.md) for the
+mistake — though the generic `MODEL_NAME` alone does not carry it past a
+bootable Azure config. An endpoint with no deployment named HOLDS its refusal
+rather than throwing (the hosted platform injects that variable into every
+container, Foundry-bound or not): the arms below answer as they always did, and
+the refusal is raised only when nothing else resolves — Foundry routes by
+deployment and has no default. See [adapters.md](adapters.md) for the
 full table.
 
 ---

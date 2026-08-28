@@ -163,10 +163,15 @@ const provider = azureOpenai({
 Underneath, the credential becomes the SDK's `azureADTokenProvider`, which is
 called **before every request**, so a long-lived agent process never holds an
 expired token — MSAL's own cache does the pacing. `scope` sets the audience and
-defaults to `https://ai.azure.com/.default`, the data plane every Azure OpenAI and
-Foundry inference call accepts; the ARM control plane is a different audience
-whose tokens are a 401 here. `@azure/identity` is an optional peer dependency —
-install it only if you use this door.
+defaults to `AZURE_COGNITIVE_SERVICES_SCOPE`
+(`https://cognitiveservices.azure.com/.default`) — the audience Microsoft's own
+keyless guidance names for the classic deployment-scoped route this door builds.
+Each keyless door defaults to the audience *its* route documents: `foundry()`'s
+v1/project route uses `AZURE_AI_SCOPE` (`https://ai.azure.com/.default`)
+instead, and current resources widely accept both — but an older
+`*.openai.azure.com` resource may only accept the classic one. The ARM control
+plane is a third audience whose tokens are a 401 here. `@azure/identity` is an
+optional peer dependency — install it only if you use this door.
 
 Passing **both** `credential` and `apiKey` is refused by name at construction.
 They are two answers to one question — which identity signs the request — and

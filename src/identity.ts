@@ -101,6 +101,7 @@ export {
   entraIdentity,
   AZURE_AI_SCOPE,
   AZURE_MANAGEMENT_SCOPE,
+  AZURE_COGNITIVE_SERVICES_SCOPE,
   type EntraIdentityOptions,
   type TokenCredentialLike,
   type AccessTokenLike,

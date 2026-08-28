@@ -72,7 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Entra credential now rides the SDK's `azureADTokenProvider`; the static
   api-key path is byte-identical to before; both given at once is refused by
   name as the config bug it is. The docs' old caveat — "azureOpenai is the
-  wrong door for bearer auth" — is retired.
+  wrong door for bearer auth" — is retired. Each keyless door defaults to the
+  audience ITS route documents: this one asks for
+  `https://cognitiveservices.azure.com/.default` (the classic deployment-scoped
+  route's own documented audience, `AZURE_COGNITIVE_SERVICES_SCOPE`), while
+  `foundry()` asks for `https://ai.azure.com/.default` (`AZURE_AI_SCOPE`, the
+  v1/project route's) — both overridable via `scope`, both pinned on the wire
+  by tests that record what the credential was actually asked for.
 
   **`openai({ legacyEndpoint })` — the dialect dial goes public.** `baseURL`
   has always implied the legacy dialect (`max_tokens`, no `stream_options`)
@@ -80,30 +86,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now declares "this baseURL speaks the current dialect" — which is exactly
   what the Azure v1 route is. Default unchanged: `!!baseURL`.
 
-  **`providerFromEnv` learns both doors.** `FOUNDRY_LOCAL_MODEL` slots directly
-  after `OLLAMA_MODEL` (a model name you typed for a local runtime — the same
-  name-beats-leftover-credential law), and `FOUNDRY_PROJECT_ENDPOINT` sits
-  above the Azure key arm because a product-specific spelling nobody exports by
-  accident outranks the lingering-credential class. Every existing precedence
-  is pinned untouched; both wins have their own tests.
+  **`providerFromEnv` learns both doors — upgrade-safely.** `FOUNDRY_LOCAL_MODEL`
+  slots directly after `OLLAMA_MODEL` (a model name you typed for a local
+  runtime — the same name-beats-leftover-credential law), and
+  `FOUNDRY_PROJECT_ENDPOINT` + `AZURE_AI_MODEL_DEPLOYMENT_NAME` — a pair of
+  product-specific spellings nobody exports by accident — outranks the
+  lingering-credential arms. Two guards keep an upgrade from breaking a
+  working environment, because the hosted platform auto-injects the endpoint
+  into every container, Foundry-bound or not: an endpoint with **no**
+  deployment named HOLDS its refusal (every arm below answers exactly as it
+  did before this arm existed, and the held refusal is raised only when
+  nothing else resolves), and the generic `MODEL_NAME` alone never carries the
+  endpoint past a bootable Azure config — choosing Foundry over working Azure
+  takes the deliberate spelling. Every existing precedence is pinned
+  untouched; each guard has its own test.
 
   New from `agentfootprint/providers`: `foundry`, `foundryInferenceUrl`,
   `FoundryProviderOptions`, `foundryLocal`, `FoundryLocalProvider`,
   `FoundryLocalUnavailableError`, `FoundryLocalProviderOptions`,
   `TokenCredentialLike`, `AccessTokenLike`. New from `agentfootprint/security`:
   `entraIdentity`, `AZURE_AI_SCOPE`, `AZURE_MANAGEMENT_SCOPE`,
-  `EntraIdentityOptions`, `AzureIdentitySdkModule`. New optional peer:
-  `@azure/identity`. Pinned by 178 new tests across
+  `AZURE_COGNITIVE_SERVICES_SCOPE`, `EntraIdentityOptions`,
+  `TokenCredentialLike`, `AccessTokenLike`, `AzureIdentitySdkModule`. New
+  optional peer: `@azure/identity`. Pinned by 178 new test cases (counted in
+  the diff, not the runner) across
   `test/adapters/identity/entra-identity.test.ts`,
   `test/adapters/unit/FoundryProvider.test.ts`,
   `test/adapters/unit/FoundryLocalProvider.test.ts`,
   `test/adapters/integration/foundry-wire.test.ts` (a real `openai` SDK against
   a local fake of the `/openai/v1` wire — Bearer header, `max_completion_tokens`,
-  token rotation all asserted on the wire, not assumed), plus the extended
-  Azure env/wire suites. Deliberately NOT in this train: the App Insights sink,
+  token rotation, and the audience each door asks its credential for, all
+  asserted on the wire, not assumed), the extended Azure env/wire suites, and
+  the fix pins from the adversarial review below. Deliberately NOT in this train: the App Insights sink,
   Azure AI Search, the Toolbox MCP transport (next trains), and every
   preview-only surface (A2A door, browser/computer-use, managed memory) —
   refusing to ship against previews we cannot verify is a feature.
+
+  The whole train was adversarially reviewed before release (five lenses, every
+  serious finding independently re-verified with a reproduction): 1 blocker and
+  9 should-fix findings were confirmed and every one is fixed and pinned in
+  this release — including a mid-stream failure frame that `foundryLocal()`
+  would have reported as a clean stop, an abort signal that never reached a
+  streaming body, and an env-detection arm that would have broken working
+  deployments on upgrade.
+
+### Fixed
+
+- **`ollama()` inherited four stream/abort defects — found by reviewing the new
+  Foundry Local adapter, fixed at the root.** The adversarial review of
+  `foundryLocal()` proved its four streaming defects were byte-twin shapes
+  copied from `OllamaProvider`, which had shipped them for months: a caller's
+  already-aborted `AbortSignal` still sent the request; an abort after headers
+  never reached the streaming body (generation ran on, un-stoppable); an early
+  `break` leaked the response body (the reader was never cancelled); and a
+  mid-stream `{"error": …}` frame was silently dropped, reporting a failed
+  generation as a clean stop. All four now match the fixed Foundry Local
+  shapes — same helper names, Ollama's NDJSON wire. 10 of the 12 new pinning
+  tests fail against the previous source (proven by restoring it); no public
+  API change; `OllamaUnavailableError` is byte-identical.
 
 
 ## [9.73.0] - 2026-08-27

@@ -449,18 +449,26 @@ describe('Azure door — keyless: a credential authenticates as Authorization: B
     // the real AzureOpenAI client asks the provider before the request and
     // sends the answer as `Authorization: Bearer` — classic key auth's
     // `api-key` header must NOT appear.
+    const seenScopes: Array<string | readonly string[]> = [];
     const provider = azureOpenai({
       endpoint: server.endpoint,
       credential: {
-        getToken: async () => ({
-          token: 'entra-tok-wire-1',
-          expiresOnTimestamp: Date.now() + 3600_000,
-        }),
+        getToken: async (scopes: string | readonly string[]) => {
+          seenScopes.push(scopes);
+          return {
+            token: 'entra-tok-wire-1',
+            expiresOnTimestamp: Date.now() + 3600_000,
+          };
+        },
       },
       apiVersion: API_VERSION,
       deployment: DEPLOYMENT,
     });
     await provider.complete(ask('azure'));
+    // The audience asked of the credential is the CLASSIC route's own
+    // documented one — this door builds the deployment-scoped path, so it
+    // defaults to cognitiveservices, not the Foundry v1 audience.
+    expect(seenScopes.at(-1)).toBe('https://cognitiveservices.azure.com/.default');
     const rec = server.requests.at(-1)!;
     // Same deployment-scoped URL as the keyed path — auth changes, routing
     // does not.

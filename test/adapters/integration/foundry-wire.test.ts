@@ -27,6 +27,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { foundry } from '../../../src/adapters/llm/FoundryProvider.js';
+import { AZURE_AI_SCOPE } from '../../../src/adapters/identity/azure.js';
 import type { AccessTokenLike, TokenCredentialLike } from '../../../src/adapters/identity/azure.js';
 import type { LLMRequest } from '../../../src/adapters/types.js';
 
@@ -200,12 +201,18 @@ afterEach(() => {
 });
 
 /** A credential that mints `tok-1`, `tok-2`, … — one per getToken call. */
-function rotatingCredential(): TokenCredentialLike & { calls: () => number } {
+function rotatingCredential(): TokenCredentialLike & {
+  calls: () => number;
+  lastScopes: () => string | readonly string[] | undefined;
+} {
   let calls = 0;
+  let last: string | readonly string[] | undefined;
   return {
     calls: () => calls,
-    getToken: async (): Promise<AccessTokenLike> => {
+    lastScopes: () => last,
+    getToken: async (scopes: string | readonly string[]): Promise<AccessTokenLike> => {
       calls += 1;
+      last = scopes;
       return { token: `tok-${calls}`, expiresOnTimestamp: Date.now() + 3600_000 };
     },
   };
@@ -220,14 +227,19 @@ const ask = (model: string): LLMRequest => ({
 
 describe('foundry() — the v1 route, driven by the real SDK', () => {
   it('lands on /openai/v1/chat/completions under the project path, Bearer-authed, model = deployment', async () => {
+    const credential = rotatingCredential();
     const provider = foundry({
       projectEndpoint: server.projectEndpoint,
       deployment: DEPLOYMENT,
-      credential: rotatingCredential(),
+      credential,
       defaultMaxTokens: 64,
     });
     const res = await provider.complete(ask('foundry'));
     expect(res.content).toBe(STREAM_TEXT);
+    // The audience asked of the credential is the v1/project route's own
+    // documented one — the sibling azureOpenai() door defaults to the classic
+    // cognitiveservices audience instead; each door speaks for its route.
+    expect(credential.lastScopes()).toBe(AZURE_AI_SCOPE);
     const rec = server.requests.at(-1)!;
     // The doc-verified derivation: project path + /openai/v1, nothing else —
     // no deployment segment, no api-version query.

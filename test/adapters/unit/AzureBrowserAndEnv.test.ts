@@ -288,6 +288,24 @@ describe('providerFromEnv()', () => {
     expectFoundryArm(enterFoundryArm(), 'phi-4-mini');
   });
 
+  it('MODEL_NAME does NOT carry the foundry arm past a bootable Azure config — the generic spelling stays with the arm that always read it', () => {
+    // Case C of the upgrade-safety review: this exact env resolved to
+    // azure-openai on 9.73.0 (MODEL_NAME is the Azure arm's own deployment
+    // fallback), and the hosted platform then injects FOUNDRY_PROJECT_ENDPOINT
+    // beside it. Retargeting the run to the project endpoint on that injection
+    // would silently swap provider, auth mode and deployment in one go.
+    // Choosing Foundry over a working Azure config takes the deliberate
+    // spelling, AZURE_AI_MODEL_DEPLOYMENT_NAME — pinned by the test below.
+    process.env.AZURE_OPENAI_API_KEY = 'k';
+    process.env.AZURE_OPENAI_ENDPOINT = 'https://x.openai.azure.com';
+    process.env.AZURE_OPENAI_API_VERSION = '2024-12-01-preview';
+    process.env.MODEL_NAME = 'gpt-4o-128k';
+    process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://acct.services.ai.azure.com/api/projects/proj';
+    const out = providerFromEnv();
+    expect(out.kind).toBe('azure-openai');
+    expect(out.model).toBe('gpt-4o-128k');
+  });
+
   it('FOUNDRY_PROJECT_ENDPOINT beats the full Azure-OpenAI env set — a product-specific spelling nobody exports by accident outranks lingering credentials', () => {
     // The Azure config below is complete and BOOTABLE — the Azure arm would
     // resolve it happily — so any outcome other than the foundry arm's would

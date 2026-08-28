@@ -210,14 +210,22 @@ Two placements are deliberate, and both are about what a variable *means*:
   run; the project endpoint can be **injected** by the platform, and an injected
   variable must never beat a hand-typed one. (An endpoint variable alone is not a
   trigger either — people export those just to run the service.)
-- **The Foundry endpoint beats a leftover Azure key.** The credential arms
-  trigger on a *credential*, and credentials linger in a shell by accident;
-  `FOUNDRY_PROJECT_ENDPOINT` is a product-specific spelling nobody exports by
-  mistake, so where it is present Foundry is the declared destination.
+- **The Foundry endpoint beats a leftover Azure key — when a deployment is
+  named.** The credential arms trigger on a *credential*, and credentials
+  linger in a shell by accident; `FOUNDRY_PROJECT_ENDPOINT` +
+  `AZURE_AI_MODEL_DEPLOYMENT_NAME` is a pair of product-specific spellings
+  nobody exports by mistake, so together they make Foundry the declared
+  destination. The generic `MODEL_NAME` alone does **not** carry the endpoint
+  past a bootable Azure config — an env that resolved to `azureOpenai()`
+  yesterday keeps resolving to it when the hosted platform injects the
+  endpoint today.
 
-`FOUNDRY_PROJECT_ENDPOINT` with no deployment named is refused rather than
-guessed — Foundry routes by deployment and there is no default — and the refusal
-names the variable to set. Detection is **env-only**: no socket is opened to see
+`FOUNDRY_PROJECT_ENDPOINT` with no deployment named **holds** its refusal
+rather than throwing: the hosted platform injects that variable into every
+container it runs, including containers whose agent never asked for Foundry
+inference, so every arm below still answers exactly as it always did — and
+only if nothing else in the environment resolves is the held refusal raised,
+naming the one variable to set. Detection is **env-only**: no socket is opened to see
 whether anything is up, so the answer is identical on a laptop and in CI, and a
 service that is down reports itself from the call, with the fix in the message.
 

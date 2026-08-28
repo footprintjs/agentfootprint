@@ -32,7 +32,7 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { azureBaseUrl } from './azureUrl.js';
-import { AZURE_AI_SCOPE } from '../identity/azure.js';
+import { AZURE_AI_SCOPE, AZURE_COGNITIVE_SERVICES_SCOPE } from '../identity/azure.js';
 import type { AccessTokenLike, TokenCredentialLike } from '../identity/azure.js';
 
 // ─── OpenAI SDK shape (duck-typed) ─────────────────────────────────
@@ -455,24 +455,22 @@ export interface AzureOpenAIProviderOptions {
    */
   readonly credential?: TokenCredentialLike;
   /**
-   * Token audience for `credential`. Default {@link AZURE_AI_SCOPE}
-   * (`https://ai.azure.com/.default`) — the ONE data-plane audience every
-   * Foundry / Azure OpenAI inference call accepts. The ARM control plane
-   * (`https://management.azure.com/.default`) is a DIFFERENT audience whose
-   * tokens do NOT work here: Azure validates the audience on every call, so a
-   * management token against inference is a 401 that no retry fixes. Ignored
-   * without `credential`.
-   *
-   * ── If a CLASSIC resource 401s on the audience ───────────────────────────
-   * This door builds the classic deployment-scoped data plane
-   * (`{endpoint}/openai/deployments/{d}/chat/completions?api-version=…`), and
-   * Microsoft's own keyless-connections guidance for that older route names
-   * `https://cognitiveservices.azure.com/.default` as its audience. The two
-   * are widely interchangeable on current resources, which is why the default
-   * here matches Foundry's; if an existing `*.openai.azure.com` resource
-   * answers `invalid audience` on every call, that string is the escape hatch
-   * — pass it here rather than reaching for a retry that cannot help. (Azure
-   * Government spells it `https://cognitiveservices.azure.us/.default`.)
+   * Token audience for `credential`. Default
+   * {@link AZURE_COGNITIVE_SERVICES_SCOPE}
+   * (`https://cognitiveservices.azure.com/.default`) — the audience
+   * Microsoft's own keyless guidance names for the CLASSIC deployment-scoped
+   * route this door builds
+   * (`{endpoint}/openai/deployments/{d}/chat/completions?api-version=…`).
+   * Each door defaults to the audience ITS route documents: `foundry()`'s
+   * v1/project route is documented against {@link AZURE_AI_SCOPE}
+   * (`https://ai.azure.com/.default`), and current resources widely accept
+   * both — but an older `*.openai.azure.com` resource may only accept this
+   * one, and a default that 401s on the oldest resources it exists to serve
+   * would be the wrong default. The ARM control plane
+   * (`https://management.azure.com/.default`) is a THIRD audience whose
+   * tokens never work here. Azure Government spells this audience
+   * `https://cognitiveservices.azure.us/.default`. Ignored without
+   * `credential`.
    */
   readonly scope?: string;
   /** Azure API version, e.g. `2024-12-01-preview`. Env fallback:
@@ -636,7 +634,7 @@ function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
   }
   if (options.credential) {
     const credential = options.credential;
-    const scope = options.scope ?? AZURE_AI_SCOPE;
+    const scope = options.scope ?? AZURE_COGNITIVE_SERVICES_SCOPE;
     return new AzureOpenAI({
       // NOT `endpoint` — see the note on this function.
       baseURL: azureBaseUrl(endpoint),
@@ -717,7 +715,9 @@ export async function entraBearerToken(
     throw new Error(
       `${adapter}: credential.getToken failed (${name}) for scope ${scope}.\n` +
         '  Fix:  sign in (az login), or pass a `credential` whose identity can mint tokens for ' +
-        'this audience — the inference audience is https://ai.azure.com/.default (the `scope` option).',
+        'this audience — the audience is the `scope` option (classic Azure OpenAI documents ' +
+        'https://cognitiveservices.azure.com/.default; the Foundry v1 route documents ' +
+        'https://ai.azure.com/.default).',
     );
   }
   // `== null` on purpose: null AND undefined, one refusal. The shape is named

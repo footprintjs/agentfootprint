@@ -87,6 +87,20 @@ export const AZURE_AI_SCOPE = 'https://ai.azure.com/.default';
 export const AZURE_MANAGEMENT_SCOPE = 'https://management.azure.com/.default';
 
 /**
+ * The CLASSIC Azure OpenAI data-plane scope
+ * (`https://cognitiveservices.azure.com/.default`) — the audience Microsoft's
+ * own keyless guidance names for the older deployment-scoped route
+ * (`{endpoint}/openai/deployments/{d}/…`), which is the route `azureOpenai()`
+ * builds and therefore its default. Current resources widely accept
+ * {@link AZURE_AI_SCOPE} too, but an older `*.openai.azure.com` resource may
+ * not — and a door should default to the audience ITS route documents, not the
+ * one its sibling uses. (Azure Government spells this
+ * `https://cognitiveservices.azure.us/.default`.)
+ */
+export const AZURE_COGNITIVE_SERVICES_SCOPE =
+  'https://cognitiveservices.azure.com/.default';
+
+/**
  * The `@azure/core-auth` `TokenCredential` duck type — the slice this adapter
  * calls. Anything `@azure/identity` exports (DefaultAzureCredential,
  * ManagedIdentityCredential, ClientSecretCredential, …) satisfies it.
