@@ -84,3 +84,46 @@ Phase boundaries (honest): pause is not yet bridged (a paused chart throws
 with the checkpoint attached — `walk_segment` ships now so the wire will not
 break when resumed segments arrive); inner dispatch refuses `checkIn` /
 `wants` tools by name and resolves `needs` on the non-interactive path only.
+
+## Why there is no runbook AUTHORING API — and what would reopen it
+
+Everything here wraps a chart somebody else wrote. There is deliberately no
+runbook GRAMMAR — no `defineRunbook({ subjects, rules, verdicts })` compiling
+down to the fan-out, the decider and the reserved keys. One consumer has written
+that chart by hand, and one estate is not a shape. What the hand-written version
+really taught was six ENGINE behaviours rather than six missing API calls, and
+those are published instead of hidden (`docs/build/runbooks-inside-a-fan-out`):
+an authoring API would have concealed them, not fixed one of them.
+
+"Wait" is the option nothing forces you to revisit, so the trigger is written
+down here rather than left to be re-derived.
+
+**The strong trigger — a second consumer that is NOT a triage.** No `verdict/*`
+result kind, no rowset, no fan-out, and it raises an approval gate. That
+consumer exercises the half of this module that has never run, and the repo is
+visibly waiting for it: `WalkDescriptor.walk_segment` (`types.ts`) already ships
+`'pre-pause'`/`'post-resume'` purely so the wire will not break when resumed
+segments arrive, and `Tool.gates` (9.76.0, `core/tools.ts`) already lets a
+procedure declare that it pauses — naming "the runbook grammar's compiler" as
+the reader that would keep a gating tool out of a fan-out branch. Neither has a
+reader in this repo today. A consumer needing both is the evidence that the
+spine generalises past triage, and the moment to design the grammar.
+
+**The weak trigger, and it is not the first one — a second consumer that IS
+another triage.** Two triages do not prove a general shape. What a second one
+would settle is narrower and still worth having: four choices on which there is
+currently exactly one data point each.
+
+1. Subject identity belongs in the stage NAME — because a decider inside a
+   generated branch reports itself prefixed by name, never by id.
+2. Run parameters must ride INSIDE the work item — because a branch is seeded
+   with `{ item, index }` only, and `ExecutionEnv` is a closed type.
+3. The two counts must be allowed to disagree — subjects fanned out over versus
+   subjects that reached a verdict — with the gap named in `coverage` rather
+   than filtered away.
+4. Absence is thrown mid-fetch as the WHOLE answer, rather than folded into a
+   partial rowset.
+
+If a second estate independently makes the same four choices, that is real
+evidence for a shape worth compiling. If it differs on any one of them, that key
+is app-specific and must stay a callback, not grammar.

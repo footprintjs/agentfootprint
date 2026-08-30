@@ -64,6 +64,7 @@ export const meta: ExampleMeta = {
 
 // ── The rules: one home, versioned, filter rules so the evidence carries
 //    {key, op, threshold, actual} — a function rule would leave no 7 behind.
+// #region rules
 const STALE_AFTER_DAYS = 7;
 const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
   {
@@ -77,6 +78,7 @@ const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
     label: `last backup older than the ${STALE_AFTER_DAYS}-day threshold`,
   },
 ];
+// #endregion rules
 
 interface Subject {
   readonly subject: string;
@@ -108,6 +110,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   });
 
   // ONE subject's chart: seed the facts, decide, land the verdict row.
+  // #region subject-chart
   const subjectChart = (subject: Subject, index: number) => {
     const land = (verdict: string) => (s: Record<string, unknown>) => {
       s.row = { subject: subject.subject, verdict, age: subject.lastBackupDays };
@@ -132,6 +135,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       .end()
       .build();
   };
+  // #endregion subject-chart
 
   // The runbook: inventory → bounded fan-out (one decider pass per subject,
   // each an isolated branch) → collect rows + declare the chart's own limits.
@@ -159,24 +163,50 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
         },
         'inventory',
       )
+        // #region fan-out
         .addParallelForEach<Subject>('Assess each subject', 'per-subject', {
           items: (scope: Record<string, unknown>) => (scope.subjects as Subject[]) ?? [],
           branch: (item, index) => subjectChart(item, index),
           maxBranches: 50,
           into: 'subject_results',
         })
+        // #endregion fan-out
+        // #region collect
         .addFunction(
           'Collect',
           (scope: Record<string, unknown>) => {
-            const results = (scope.subject_results as { row?: unknown }[]) ?? [];
-            scope.verdicts = results.map((r) => r?.row).filter((row) => row !== undefined);
+            // A branch that FAILED keeps its slot with an `undefined` value, so
+            // this array's length is always the branch count. Dropping the
+            // blanks is fine; losing the COUNT is not — the two numbers are
+            // kept and allowed to disagree.
+            const slots = (scope.subject_results as ({ row?: unknown } | undefined)[]) ?? [];
+            const rows = slots.map((slot) => slot?.row).filter((row) => row !== undefined);
+            const subjectsTotal = (scope.subjects as Subject[]).length;
+            scope.verdicts = rows;
+            if (rows.length < subjectsTotal) {
+              // RESERVED key — the chart's own limits, folded into the answer's
+              // ledger by the bridge. A gap nobody reported is a confident
+              // partial answer, which is the one thing this envelope refuses.
+              scope.coverage = {
+                not_checked: [
+                  {
+                    what: `${
+                      subjectsTotal - rows.length
+                    } of ${subjectsTotal} subject(s), which reached no verdict`,
+                    why: 'their branch failed, and a failed branch keeps its slot rather than its answer',
+                  },
+                ],
+              };
+            }
             scope.report = {
               stale_after_days: STALE_AFTER_DAYS,
-              subjects_total: (scope.subjects as Subject[]).length,
+              subjects_total: subjectsTotal,
+              subjects_assessed: rows.length,
             };
           },
           'collect',
         )
+        // #endregion collect
         .build(),
   } as const;
 

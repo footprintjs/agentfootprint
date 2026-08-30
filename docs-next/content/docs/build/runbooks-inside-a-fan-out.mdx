@@ -1,0 +1,384 @@
+---
+title: Runbooks inside a fan-out
+description: Six engine behaviours a decision chart meets the first time it runs one branch per subject. A branch is seeded with only item and index, a decider reports itself path-prefixed by name, and four of the six fail without an error — the run finishes, the rowset looks complete, and the answer is wrong.
+---
+
+A runbook that judges *one* thing is a chart. A runbook that judges *every* thing
+in an estate is a chart inside `addParallelForEach` — one isolated branch per
+subject, each with its own memory, its own commit log and its own decider pass.
+That is the shape [`runbookAsTool`](doc:runbook-as-tool) was built for, and it is
+the shape that costs the first author a day.
+
+Six engine behaviours meet you there. Two announce themselves by throwing.
+**Four do not**: the run completes, the rowset has rows in it, the counters
+agree with each other, and the answer is confidently wrong. Those four are why
+this page exists.
+
+| # | The behaviour | How it tells you |
+|---|---|---|
+| 1 | A branch is seeded with only `item` and `index` | Silent — the branch judges against a value nothing recorded |
+| 2 | A decider reports itself prefixed by NAME | Silent — `verdict_meanings` comes back `undefined` |
+| 3 | Declared branch descriptions never reach a generated branch | Silent — meanings are missing, not wrong |
+| 4 | A failed branch keeps its slot with `undefined` | Silent — the rowset just gets shorter |
+| 5 | `decide()` filter rules read the scope flat, by name | Silent — every subject lands on the default |
+| 6 | Input keys are read-only for the whole run | Throws, mid-stage |
+
+The worked example is
+[`examples/features/68-runbook-as-tool.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/68-runbook-as-tool.ts) —
+an inventory tool, a bounded fan-out, one decider per subject, and the rows
+collected back. Every fragment below is lifted from it. Run it with
+`npx tsx examples/features/68-runbook-as-tool.ts`.
+
+## 1. A branch is seeded with only `item` and `index`
+
+**What happens.** `addParallelForEach` mounts each branch as a subflow whose
+input mapper returns exactly two keys:
+
+```ts
+// footprintjs — src/lib/engine/handlers/ParallelForEachHandler.ts:224
+inputMapper: () => ({ item, index }),
+```
+
+Nothing else crosses. A subflow's initial scope is *only* what its input mapper
+returned (`SubflowInputMapper.getInitialScopeValues` — "Always isolated"), and
+the branch runs on a fresh, isolated runtime. The parent's state is not visible,
+not copied, and not reachable.
+
+The other channel that does cross a subflow boundary — `ExecutionEnv` — cannot
+carry a business value either. It is a deliberately closed type with three
+infrastructure fields (`signal`, `timeoutMs`, `traceId`), sealed so a parent and
+a child chart cannot couple through it.
+
+**Why it is that way.** The comment on that line answers it: *provenance beats a
+hidden closure.* The item is not merely passed to the branch factory — it is
+written into the branch's own scope, which means it is in the branch's own
+commit log.
+
+**The wrong shape.** Let the branch factory close over the run's parameters,
+so each branch judges against a value that only exists in a closure:
+
+```ts
+const now = Date.now();                       // captured by the closure
+const branch = (item) => chartFor(item, now); // judged against it, invisibly
+```
+
+The chart runs. The verdicts are correct *today*. But the branch's commit log
+records only the facts, never the clock or the threshold they were compared
+with, so a replay six weeks later is read under whatever the constant says
+*then* — and nothing in the record contradicts it.
+
+**The right shape.** Put the run's parameters *inside* the work item, and the
+constraint turns into the guarantee:
+
+```ts
+// the fan-out's items carry the run's parameters, one copy per branch
+scope.work = subjects.map((subject) => ({
+  subject,
+  now_epoch: now,
+  stale_after_days: STALE_AFTER_DAYS,
+}));
+```
+
+Now every branch's commit log contains the exact threshold and the exact clock
+that branch judged against. A replay cannot be misread under today's constant,
+because the branch recorded its own.
+
+<Callout type="info">
+  `maxBranches` is required, not optional. An unbounded fan-out driven by
+  whatever an estate happens to return is a resource attack with no default to
+  forget. Cap the item list yourself as well, so the engine's truncation is
+  never what bounds a run — and report the counts rather than trimming quietly.
+</Callout>
+
+## 2. Name the decider — never its id
+
+**What happens.** `verdicts: { decider }` on a runbook names the decider whose
+`decide()` evidence the bridge harvests. Inside a generated branch, that name
+arrives path-prefixed:
+
+```text
+per-subject~0/Protection posture
+```
+
+Three facts produce that string, and each is worth knowing on its own:
+
+- A generated branch's subflow path segment is `<stageId>~<index>` —
+  `per-subject~0` (`branchSegment.ts`, and `~` is reserved from 9.14.0 so a
+  hand-authored id can never collide with one).
+- When a chart is mounted under a path segment, the prefixer rewrites the
+  node's **name** as well as its id — `FlowchartTraverser.prefixNodeTree` sets
+  `clone.name` to `<prefix>/<name>`, not just `clone.id`.
+- The decision event — a `FlowDecisionEvent` — reports `node.name`, not
+  `node.id` (`DeciderHandler` → `FlowRecorderDispatcher`, which builds
+  `{ decider: deciderName, … }`).
+
+The bridge therefore matches on the **last `/`-segment** — the same
+last-delimiter reading every upstream path parser uses, which is exactly what
+keeps the generated-branch marker opaque to all of them:
+
+```ts
+// agentfootprint — src/core/runbook/verdicts.ts:180-184
+const lastSegment = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
+// …
+onDecision(event: FlowDecisionEvent): void {
+  if (!identity.spellings.has(lastSegment(event.decider))) return;
+```
+
+**The wrong shape.** `addDeciderFunction` takes the display name first and the
+stage id third, so the id is the value nearest to hand:
+
+```ts
+.addDeciderFunction('Protection posture', decider, 'posture', description)
+// …
+verdicts: { decider: 'posture' },   // ← the ID. Matches nothing.
+```
+
+Nothing throws. The recorder simply never fires its body, `verdict_meanings`
+comes back `undefined`, and the answer ships without the sentences that explain
+its own verdicts.
+
+**The right shape.** Use the stage NAME, and pin it in one place so the chart
+and the declaration cannot drift:
+
+```ts
+export const TRIAGE_DECIDER = 'Protection posture';
+// in the chart:      .addDeciderFunction(TRIAGE_DECIDER, decider, 'posture', description)
+// in the runbook:    verdicts: { decider: TRIAGE_DECIDER }
+```
+
+Nesting deeper costs nothing. A fan-out inside a fan-out reports
+`per-cluster~0/per-subject~1/Protection posture`, and the last segment is still
+the name.
+
+## 3. Branch descriptions are invisible; rule labels are the meanings
+
+**What happens.** `verdict_meanings` has two sources. The first is a static walk
+of the chart's own structure, reading each declared branch's description:
+
+```ts
+// agentfootprint — src/core/runbook/verdicts.ts:133-157 (resolveDecider)
+walk(chart.root as NodeView);
+for (const subflow of Object.values(chart.subflows ?? {})) {
+  walk(subflow.root as NodeView);
+}
+```
+
+That walk runs on the chart the `procedure` factory returned, **before the run
+starts**. A generated branch's chart does not exist yet: `branch(item, index)`
+is called during traversal, once per item. So for a decider inside a fan-out,
+the static half finds nothing — by construction, not by oversight.
+
+The second source is the harvest: rule labels observed as `decide()` fires,
+collected during the traversal. It covers every rule the evidence lists,
+**matched or not** — a rule that was evaluated has spoken its label, whichever
+branch won. That is the half that works inside a generated branch, and for a
+fan-out runbook it is the only half.
+
+**The wrong shape.** Put the meaning where a reader would naturally put it —
+on the branch:
+
+```ts
+.addFunctionBranch('unprotected', 'Unprotected — stale backup', land('unprotected'))
+// …and leave the rule bare:
+{ when: { age_days: { gt: 7 } }, then: 'unprotected' }
+```
+
+The description is good documentation and reaches nobody. `verdict_meanings`
+comes back missing that row.
+
+**The right shape.** The meaning belongs on the rule, so a rule change and its
+meaning change on the same day:
+
+<CodeFile path="examples/features/68-runbook-as-tool.ts" region="rules" title="examples/features/68-runbook-as-tool.ts (region: rules)" />
+
+Keep the branch descriptions too — they are what a person reading the chart
+sees, and they are what the static walk reads for a decider that *is* statically
+declared. They are simply not the mechanism here.
+
+<Callout type="warn">
+  **The default branch is the one verdict no label names.** `decide()` picks the
+  default when no rule matched, so there is no `rules[].label` to describe it —
+  and inside a generated branch there is no declared description either. You can
+  watch this: the example declares two rules and the default `'protected'`, and
+  its `verdict_meanings` comes back with `declined` and `unprotected` in it and
+  nothing for `protected`. If the default must be named, give the clean case a
+  rule of its own with a label and keep `defaultBranch` for the case that should
+  be genuinely unreachable — or carry the sentence in the row. Naming a default
+  without writing a rule for it is a real gap, and the place it belongs is
+  upstream in `decide()`, where the default is declared.
+</Callout>
+
+Never write an empty filter as a catch-all. `{}` deliberately **never** matches:
+a rule that asserts nothing must not win a branch on vacuous truth, because
+routing on it would fabricate decision evidence. Catch-alls are `defaultBranch`.
+
+## 4. A failed branch keeps its slot
+
+**What happens.** Branch results are assembled in ITEMS order, never completion
+order — and a branch that failed still occupies its position:
+
+```ts
+// footprintjs — src/lib/engine/handlers/ParallelForEachHandler.ts:249-254
+if (entry === undefined || entry.isError) {
+  // Best-effort mode: a failed branch keeps its SLOT (order is items
+  // order) with an undefined value. failFast mode never reaches here —
+  // the error already rejected the whole stage.
+  ordered.push(undefined);
+  continue;
+}
+```
+
+So the array written to `into` always has exactly one entry per branch. Some of
+them may be `undefined`, and that `undefined` is the only record that a branch
+died. In `failFast: true` mode the question does not arise — the error rejects
+the whole stage. In the default best-effort mode, it is the whole question.
+
+**Why it is that way.** Position is identity. Slot *i* is item *i*, so a result
+can always be joined back to the input that produced it. Compacting the array on
+the way out would make that join silently wrong for every element after the
+first failure.
+
+**The wrong shape.** The natural line, and the one that erases the failure:
+
+```ts
+scope.verdicts = results.map((r) => r?.row).filter(Boolean);   // ← the fact is gone
+```
+
+Nothing throws. The rowset is simply shorter — and *a shorter rowset is
+indistinguishable from a smaller estate*. The tool answers confidently about an
+estate it only partly reached, and the reader has no way to tell.
+
+**The right shape.** Filtering the blanks out of the *rowset* is fine — a blank
+row is not a verdict. What may not vanish is the **count**. Keep the two numbers,
+let them disagree, and when they do, say so in the chart's reserved `coverage`
+key, which the bridge folds into the answer's ledger:
+
+<CodeFile path="examples/features/68-runbook-as-tool.ts" region="collect" title="examples/features/68-runbook-as-tool.ts (region: collect)" />
+
+The two counts disagreeing is not a bug to hide; it is the finding. A gap nobody
+reported is a confident partial answer, and that is the one thing an evidence
+envelope exists to refuse.
+
+## 5. `decide()` reads facts flat, by name
+
+**What happens.** A filter rule's `when` is a `WhereFilter`, and the comment
+above the type is the whole law:
+
+```ts
+// footprintjs — src/lib/decide/types.ts:31-35
+// -- WhereFilter (flat keys only, no nested v1) ------------------------------
+
+export type WhereFilter<T extends object = Record<string, unknown>> = {
+  [K in keyof T]?: FilterOps<T[K]>;
+};
+```
+
+Each key is read off the scope by that exact name — `getValueFn` binds
+`$getValue`/`getValue`, and the evaluator does `const actual = getValueFn(key)`.
+There is no path syntax. `'facts.paused'` is not a path; it is a key that does
+not exist.
+
+**The wrong shape.** Write the derived facts as one nested bag, because that is
+how the function that derives them returns:
+
+```ts
+scope.facts = postureFacts(subject, now);              // one nested object
+// …
+{ when: { paused: { eq: true } }, then: 'paused-while-failing' }
+```
+
+`getValueFn('paused')` returns `undefined`. Every operator on `undefined`
+evaluates false. The rule does not match. The next rule does not match. Every
+subject falls through to `defaultBranch`, the run completes, the rowset is full,
+`rows_total` equals `rows_shown`, and the whole estate reports as healthy.
+
+**This is the worst failure in this list**, and it is worth saying why: the
+other five either throw or leave something visibly missing. This one produces a
+*complete, well-formed, internally consistent answer that is uniformly wrong*.
+Nothing throws, nothing warns, no counter disagrees with another counter, and
+the verdicts are plausible — "everything is healthy" usually is.
+
+**The tell.** Read the decision evidence. A filter rule records the key, the
+operator, the threshold and the actual value for every condition it evaluated —
+so a rule that should have matched shows its `actualSummary` as `undefined`, which reads
+as "there was nothing there", not "it did not qualify". (This is also the reason
+to prefer filter rules over function rules: a function rule records only which
+keys it read, so `age_days > 7` leaves no trace of the 7.)
+
+**The right shape.** Derive the facts in one place and flatten them onto the
+branch scope, one key per fact:
+
+<CodeFile path="examples/features/68-runbook-as-tool.ts" region="subject-chart" title="examples/features/68-runbook-as-tool.ts (region: subject-chart)" />
+
+## 6. Input keys are read-only for the whole run
+
+**What happens.** Any write to a key that is an own property of the run's input
+throws:
+
+```ts
+// footprintjs — src/lib/scope/protection/readonlyInput.ts:17-27
+export function assertNotReadonly(readOnlyValues: unknown, key: string, operation: 'write' | 'delete'): void {
+  if (readOnlyValues && typeof readOnlyValues === 'object' &&
+      Object.prototype.hasOwnProperty.call(readOnlyValues, key)) {
+    if (operation === 'delete') {
+      throw new Error(`Cannot delete readonly input key "${key}" — input values are immutable`);
+    }
+    throw new Error(`Cannot write to readonly input key "${key}" — use getArgs() to read input values`);
+  }
+}
+```
+
+`ScopeFacade` calls it on every set, every object write and every delete. For a
+runbook, the input is the **tool's own arguments** — `runbookAsTool` runs the
+chart as `executor.run({ input: args, env })`. So every property of your tool's
+argument schema is a name your chart may not write for the life of the run.
+
+**Why it is that way.** What was handed in and what the chart decided are two
+different facts, and a record in which the second has overwritten the first
+cannot answer "what was actually asked for?". Freezing the input is what makes
+`$getArgs()` trustworthy at any point in the run.
+
+**The wrong shape.** One name for both:
+
+```ts
+// args declare: { include?: 'flagged' | 'all', now_epoch?: number }
+scope.include = args?.include === 'all' ? 'all' : 'flagged';  // ← throws
+```
+
+This is the one behaviour on this page that announces itself. It throws
+mid-stage — but note that a stage's writes still commit before the error
+propagates, so the record shows a stage that half-ran.
+
+**The right shape.** Two names, because they are two things — what was handed
+in, and what the chart recorded itself using:
+
+```ts
+interface TriageState {
+  /** `include` is an INPUT key, so a state key of that name is a refused
+   *  write. Read the input with `$getArgs()`; record the resolution here. */
+  include_mode: 'flagged' | 'all';
+  /** Same reason `now_epoch` is not reused: the clock handed in and the
+   *  clock this run judged against are two facts, not one. */
+  run_epoch: number;
+}
+```
+
+The `report` your chart writes can still call it `include` — that is the
+reader's vocabulary, and it has never been the engine's.
+
+<Callout type="warn">
+  **Inside a generated branch, the input is `{ item, index }`.** A subflow's
+  mapped input becomes its readonly context as well as its seed state
+  (`SubflowExecutor` sets `readOnlyContext: mappedInput` and seeds the store
+  from the same object). So in a fan-out branch, `item` and `index` are readable
+  as state *and* locked as input: a branch stage may read `scope.item` freely,
+  and may never write `item` or `index`. Give the branch's own working keys
+  different names.
+</Callout>
+
+## Where to look next
+
+- [Runbook as tool](doc:runbook-as-tool) — the envelope this page's chart plugs into: coverage, provenance, `rule_version`, the recorded walk
+- [Chart as tool](doc:flowchart-as-tool) — the older, plainer wrapper, when you do not want the evidence spine
+- [Tools](doc:tools) — `defineTool`, `ctx.tools`, and the `composedOf` drift gate that proves your procedure's ingredients exist
+- [Semantic tool results](doc:semantic-results) — the caveats that travel with numbers, one layer below a verdict
