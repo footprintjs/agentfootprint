@@ -15,11 +15,23 @@ export {
   GatewayAuthorizationRequiredError,
   type GatewayTransportOptions,
 } from './gatewayTransport.js';
-export type { RetryOnThrottle, ThrottleRetryInfo, ThrottleRetryOptions } from './throttleRetry.js';
+// The 429 handling `mcpClient({ transport })` applies for you — public since
+// 9.81.0 so the `connection` arm, which builds no transport of its own, can
+// apply the SAME implementation instead of silently going without it.
+export { retryingFetch } from './throttleRetry.js';
+export type {
+  RetryOnThrottle,
+  ThrottleFetch,
+  ThrottleRetryInfo,
+  ThrottleRetryOptions,
+} from './throttleRetry.js';
 export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  McpConnection,
+  McpConnectionOptions,
+  McpSdk,
   McpGatewayTransport,
   McpHttpTransport,
   McpStdioTransport,

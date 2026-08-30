@@ -214,6 +214,94 @@ through the same reader, so a rail armed by a remote declaration — and the
 unhappy path where a declaration is malformed — can both be tested before the
 real server exists.
 
+## MCP from a browser
+
+The barrier was never the protocol and never the SDK — the SDK's client and
+Streamable HTTP modules bundle for a browser with no Node dependency at all. It
+was one line of ours: `mcpClient` loads the SDK through a Node `require` loader,
+and that loader does not exist in a browser bundle. So the fix is to let you
+supply what the library would otherwise have loaded.
+
+**Give it the modules.** Import the two SDK modules yourself — statically, so
+your bundler resolves them — and hand them over as `sdk`. The library still
+builds the transport, so everything it carries keeps working: `headers`, your
+own `fetch`, gateway vending, throttle retry, `_meta` ingestion. `McpSdk` is the
+type of that pair.
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { mcpClient } from 'agentfootprint/providers';
+
+const sidecar = await mcpClient({
+  name: 'sidecar',
+  sdk: { Client, StreamableHTTPClientTransport },
+  transport: { transport: 'http', url: '/py/mcp' },
+});
+
+const tools = await sidecar.tools();   // the same readonly Tool[], _meta and all
+```
+
+The two subpaths are not interchangeable with a root import: the SDK's `"."`
+export does not resolve, and `client/stdio.js` is the one client module that
+imports Node — importing it is what would drag Node back onto your graph.
+
+**A relative `url` now resolves** against the page it was loaded from, which is
+also how you avoid a CORS preflight entirely: `/py/mcp` on the same origin. In
+Node — no document, no base — a relative url is refused by name, with the
+absolute form to pass instead. An absolute url takes the branch it always took.
+
+**Or give it the whole connection.** Connect the client yourself and pass it as
+`connection`, typed `McpConnection` — three methods over JSON-RPC, no vendor
+named. The library calls `listTools`, `callTool` and `close` on it and nothing
+else; it never calls `connect()`, because you already did. `McpConnectionOptions`
+is that arm's option shape.
+
+```ts
+const connection = new Client({ name: 'browser', version: '1.0.0' }, { capabilities: {} });
+await connection.connect(new StreamableHTTPClientTransport(new URL('/py/mcp', location.href), {
+  // reachable ONLY here: the SDK's own validator hook, for a page whose CSP
+  // refuses ajv's code generation
+  jsonSchemaValidator: myValidator,
+}));
+
+const sidecar = await mcpClient({ name: 'sidecar', connection });
+```
+
+Reach for `connection` when the library must not construct anything — a strict
+CSP, or a transport this library has never heard of. Reach for `sdk` otherwise:
+it forfeits nothing.
+
+**What the `connection` arm costs you, said out loud.** The library builds no
+transport there, so options that live inside a transport are **refused at
+construction** rather than accepted and ignored — `retryOnThrottle`,
+`clientInfo`, `transport`, `sdk`, `_client` — each with a message naming where
+the behaviour went. The sharp one is throttle retry, which is ON by default
+everywhere else: wrap your own fetch with `retryingFetch` (a `ThrottleFetch` in,
+one out) and you get the same 429 handling, honouring `Retry-After`, applied
+where you build the transport.
+
+```ts
+import { retryingFetch } from 'agentfootprint/providers';
+
+new StreamableHTTPClientTransport(new URL('/py/mcp', location.href), {
+  fetch: retryingFetch(undefined, { maxAttempts: 5 }),
+});
+```
+
+`signal` is honoured on both arms — it rides the SDK's request options, not the
+transport.
+
+**Three things this does not do.** `stdio` spawns a subprocess and is refused in
+words rather than made to work. Your server must send CORS headers, and every
+MCP request preflights (`Mcp-Session-Id` needs to be in
+`Access-Control-Expose-Headers`) — `mcpServe` sends none, so it cannot stand in
+for a browser-facing server. And the SDK's client path costs your bundle roughly
+260 KB minified, about half of it ajv, whose `new Function` needs `unsafe-eval`
+the first time a tool with an `outputSchema` is validated — escapable only
+through the SDK's `jsonSchemaValidator`, which is why the `connection` arm
+exists beside `sdk`.
+
 ## What the package exports
 
 From `agentfootprint/providers`:
@@ -223,9 +311,14 @@ From `agentfootprint/providers`:
 | `mcpClient(opts)` | Connect. Returns an `McpClient` — `.tools()`, `.refresh()`, `.close()`. |
 | `mockMcpClient({ tools })` | The same shape, in memory. |
 | `gatewayTransport({ url, credentials, service })` | A transport whose auth header is vended per request. |
+| `retryingFetch(fetch, options)` | The 429 retry `mcpClient({ transport })` applies for you, so a `connection` caller can apply it too. |
 | `McpHttpTransport` | `{ transport: 'http', url, headers?, fetch? }`. |
 | `McpCallToolResult` | The `tools/call` union: today's `content` arm, or the legacy `toolResult` arm. |
-| `McpSdkClient` | The minimal SDK surface this client speaks — what `_client` takes in tests. |
+| `McpSdk` | The two SDK modules you can supply instead of the Node loader: `Client` and `StreamableHTTPClientTransport`. |
+| `McpConnection` | A connected client: `listTools`, `callTool`, `close`. Deliberately no `connect`. |
+| `McpConnectionOptions` | The options for `mcpClient({ connection })` — `name`, `connection`, `signal`. |
+| `McpSdkClient` | `McpConnection` plus `connect` — the surface the library uses when IT builds the client, and what `_client` takes in tests. |
+| `ThrottleFetch` | The fetch shape `retryingFetch` takes and returns. |
 | `MCP_TOOL_EXTRAS_KEY` | The `_meta` key declarations travel under — `'agentfootprint'`. |
 | `McpToolExtras` | The shape inside that key: `argumentsFrom`, `resultKind`, `owner`, `resultClass`, `resultCeiling`, all optional. |
 

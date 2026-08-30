@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.81.0] - 2026-08-30
+
+### Added
+
+- **MCP from a browser — because the barrier was never the protocol, it was one
+  line of ours.** `mcpClient` loads `@modelcontextprotocol/sdk` through a Node
+  `require` loader, and that loader does not exist in a browser bundle. The SDK
+  itself is fine: its `client/index.js` and `client/streamableHttp.js` bundle at
+  `platform: 'browser'` with **zero** `node:` edges and never pull in
+  `client/stdio.js`. So the fix is not to reimplement anything — it is to let the
+  caller supply what the library would otherwise have loaded.
+
+  **`sdk?: McpSdk`** — hand over the two SDK modules, imported statically by your
+  own bundler, and the library **still builds the transport**. Everything the
+  transport carries keeps working: `headers`, your own `fetch`, gateway
+  vending, `retryOnThrottle`, `_meta` ingestion.
+
+  ```ts
+  import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+  import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+  import { mcpClient } from 'agentfootprint/providers';
+
+  const sidecar = await mcpClient({
+    name: 'sidecar',
+    sdk: { Client, StreamableHTTPClientTransport },
+    transport: { transport: 'http', url: '/py/mcp' },
+  });
+  const tools = await sidecar.tools();   // the same readonly Tool[], _meta and all
+  ```
+
+  **`connection?: McpConnection`** — the full escape hatch: you connect the
+  client, the library only adapts its tools. Three methods over JSON-RPC and no
+  vendor named, so an SDK `Client`, a fake, or a future fetch-only transport all
+  satisfy it. `connect()` is deliberately **absent** from the type: you already
+  connected it, and the library never calls it. Reach for this when the library
+  must not construct anything — a strict CSP, where the SDK's own
+  `jsonSchemaValidator` (reachable only here) is what keeps ajv's `new Function`
+  off the page.
+
+  **The refusals are the design.** On the `connection` arm the library builds no
+  transport, so every option consumed INSIDE one is refused at construction,
+  naming where the behaviour went — `retryOnThrottle`, `clientInfo`, `transport`,
+  `sdk`, `_client`. Accepting a knob that names a behaviour which no longer
+  happens is the defect class this release exists to close, not a convenience.
+  `signal` IS honoured on both arms: it rides the SDK's request options.
+
+- **`retryingFetch` is public** (`agentfootprint/providers`), with
+  `ThrottleFetch`. It was `@internal`, and on the `connection` arm — the one a
+  browser takes — a caller would otherwise have silently lost the HTTP 429
+  handling every Node consumer gets ON by default. Same implementation, applied
+  where you build the transport: `fetch: retryingFetch(yourFetch, { maxAttempts: 5 })`.
+
+### Fixed
+
+- **A relative `transport.url` resolves against the page.** `new URL('/py/mcp')`
+  throws `TypeError: Invalid URL` — correct in Node, wrong in a browser, where a
+  same-origin path is the ordinary way to reach a sidecar (and the way to avoid a
+  CORS preflight entirely). It now resolves against `globalThis.location.href`
+  when there is one, and in Node refuses **by name**, saying which world it is in
+  and to pass an absolute URL. An absolute url takes the identical first branch,
+  so Node behaviour has not moved.
+
+- **The SDK-load errors stop lying.** Every load sat behind a bare `catch`, which
+  cannot tell "the package is absent" from "the LOADER is absent" — so a browser
+  that had the SDK installed all along was told to `npm install` it, and nothing
+  changed when it did. The failure is now classified at all seven sites (three in
+  `mcpClient`, four in `mcpServe`): a resolution failure produces the
+  **byte-identical** message every release before this one produced, and anything
+  else names the underlying error and the seam that gets past it. `mcpServe` says
+  the honest thing instead — it listens on stdio or a Node socket, so that
+  direction cannot run in a browser at all.
+
+### Unchanged, deliberately
+
+- **Zero packaging change.** No new subpath, no `browser` export condition (a
+  compiler is blind to it), no `typesVersions` row, no `postbuild-esm.mjs` edit.
+  `@modelcontextprotocol/sdk` stays an OPTIONAL peer, and there is no literal
+  dynamic `import()` of it anywhere — one would be statically resolved by a
+  bundler and would hard-fail the build for every consumer who does not have it.
+
+- **Every existing Node consumer.** A call with neither `sdk` nor `connection`
+  reaches the same `lazyRequire` on the same specifiers and builds the same
+  transport; the difference is a `??` on an `undefined` parameter. `stdio` keeps
+  the loader permanently — it spawns a subprocess, so it can never be portable,
+  and keeping it there is what keeps the SDK's one Node-importing client module
+  off every browser graph.
+
+### Proof, and its limits
+
+`test/lib/mcp/browserGraph.test.ts` bundles the SHIPPED `dist/` the way a browser
+build does and asserts: `agentfootprint/providers` still bundles with the MCP SDK
+**blocked at resolve time** (the optional-peer property, stated as a build); its
+`node:` edges are EXACTLY the two known ones; the builtins hidden behind
+`lazyRequire` — which no module graph can see — are exactly the four known ones;
+the path a browser walks reaches `node:module` and nothing else and never pulls
+in `client/stdio.js`; and everything on that path except the loader bundles with
+NO externals and zero node edges. `mcpConnection.real.test.ts` drives both new
+arms through a real socket against the real SDK.
+
+**What none of that proves: a browser.** This repo has no browser test
+environment, so nobody has yet driven initialize/listTools/callTool from an
+actual page. The honest status is *proven in Node, fenced at the graph, not gated
+in a browser.* Three costs land on the app, not here: your server must send CORS
+headers (every MCP request preflights, and `Mcp-Session-Id` must be in
+`Access-Control-Expose-Headers`) — `mcpServe` sends none; SSE through a dev or
+production proxy is unproven; and the SDK's client path adds roughly 260 KB
+minified, about half of it ajv, whose `new Function` needs `unsafe-eval` the
+first time a tool with an `outputSchema` is validated.
+
 ## [9.80.0] - 2026-08-30
 
 ### Added

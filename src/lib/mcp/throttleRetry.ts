@@ -135,9 +135,28 @@ function resolveConfig(config: RetryOnThrottle | undefined): ResolvedThrottleCon
  * so a transport that passed no custom fetch keeps passing none and its
  * behaviour is byte-identical to before this existed.
  *
+ * ── Why this is public ───────────────────────────────────────────────────────
+ * `mcpClient({ transport })` applies it for you, ON by default. `mcpClient({
+ * connection })` cannot: the library builds no transport on that arm, so there
+ * is no `fetch` of its own to wrap — and a browser consumer, who is the main
+ * reason that arm exists, would silently lose the 429 handling Node gets for
+ * free. That asymmetry is invisible from the outside, which is why the answer
+ * is to hand over the same implementation rather than to document the gap:
+ *
+ * ```ts
+ * import { retryingFetch } from 'agentfootprint/providers';
+ * import { StreamableHTTPClientTransport }
+ *   from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+ *
+ * const transport = new StreamableHTTPClientTransport(new URL('/mcp', location.href), {
+ *   fetch: retryingFetch(undefined, { maxAttempts: 5 }),
+ * });
+ * ```
+ *
  * @param inner the fetch to wrap. `undefined` means the global `fetch`,
  *   resolved at CALL time so a later polyfill still wins.
- * @internal
+ * @param config `true` / `undefined` for the defaults, `false` to get `inner`
+ *   back unchanged, or an object to tune the ceilings.
  */
 export function retryingFetch(
   inner: ThrottleFetch | undefined,

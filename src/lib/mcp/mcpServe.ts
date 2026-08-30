@@ -79,6 +79,7 @@ import type {
   McpServeTransport,
 } from './types.js';
 import { lazyRequire } from '../lazyRequire.js';
+import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
 import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
 
@@ -469,15 +470,34 @@ function toolError(message: string): {
 
 // ─── SDK construction (lazy require) ───────────────────────────────
 
+/**
+ * What to say when the LOADER, not the package, is the thing that is missing.
+ *
+ * `mcpServe` has no browser-shaped answer to offer: it listens on stdio or on a
+ * Node HTTP socket, and neither exists in a browser. So the honest sentence
+ * names the runtime instead of inventing a seam — the point of the classifier
+ * is to stop telling people to install a package they already have, not to
+ * promise this direction is portable.
+ */
+const SERVE_IS_A_NODE_ROLE =
+  'mcpServe listens on stdio or on a Node HTTP socket, so this direction of MCP ' +
+  'cannot run in a browser at all.';
+
 async function resolveServer(name: string, version: string): Promise<McpSdkServer> {
   let mod: McpServerExports;
   try {
     mod = lazyRequire<McpServerExports>('@modelcontextprotocol/sdk/server/index.js');
-  } catch {
+  } catch (err) {
     throw new Error(
-      'mcpServe requires @modelcontextprotocol/sdk.\n' +
-        '  Install:  npm install @modelcontextprotocol/sdk\n' +
-        '  Or pass `_server` for test injection.',
+      sdkLoadFailure(err, {
+        notInstalled:
+          'mcpServe requires @modelcontextprotocol/sdk.\n' +
+          '  Install:  npm install @modelcontextprotocol/sdk\n' +
+          '  Or pass `_server` for test injection.',
+        caller: 'mcpServe',
+        specifier: '@modelcontextprotocol/sdk/server/index.js',
+        instead: `${SERVE_IS_A_NODE_ROLE} Pass \`_server\` to serve a server you built yourself.`,
+      }),
     );
   }
   return new mod.Server({ name, version }, { capabilities: { tools: {} } });
@@ -497,10 +517,16 @@ async function resolveRequestSchemas(
   let types: McpTypesExports;
   try {
     types = lazyRequire<McpTypesExports>('@modelcontextprotocol/sdk/types.js');
-  } catch {
+  } catch (err) {
     throw new Error(
-      'mcpServe requires @modelcontextprotocol/sdk/types.js — check that ' +
-        '@modelcontextprotocol/sdk is installed at the latest version.',
+      sdkLoadFailure(err, {
+        notInstalled:
+          'mcpServe requires @modelcontextprotocol/sdk/types.js — check that ' +
+          '@modelcontextprotocol/sdk is installed at the latest version.',
+        caller: 'mcpServe',
+        specifier: '@modelcontextprotocol/sdk/types.js',
+        instead: SERVE_IS_A_NODE_ROLE,
+      }),
     );
   }
   return { listSchema: types.ListToolsRequestSchema, callSchema: types.CallToolRequestSchema };
@@ -552,10 +578,16 @@ async function connectTransport(
     let stdioMod: McpStdioServerExports;
     try {
       stdioMod = lazyRequire<McpStdioServerExports>('@modelcontextprotocol/sdk/server/stdio.js');
-    } catch {
+    } catch (err) {
       throw new Error(
-        'mcpServe(stdio) requires @modelcontextprotocol/sdk/server/stdio.js — ' +
-          'check that @modelcontextprotocol/sdk is installed at the latest version.',
+        sdkLoadFailure(err, {
+          notInstalled:
+            'mcpServe(stdio) requires @modelcontextprotocol/sdk/server/stdio.js — ' +
+            'check that @modelcontextprotocol/sdk is installed at the latest version.',
+          caller: 'mcpServe(stdio)',
+          specifier: '@modelcontextprotocol/sdk/server/stdio.js',
+          instead: SERVE_IS_A_NODE_ROLE,
+        }),
       );
     }
     await sdk.connect(new stdioMod.StdioServerTransport());
@@ -592,10 +624,16 @@ async function connectHttp(
     httpMod = lazyRequire<McpHttpServerExports>(
       '@modelcontextprotocol/sdk/server/streamableHttp.js',
     );
-  } catch {
+  } catch (err) {
     throw new Error(
-      'mcpServe(http) requires @modelcontextprotocol/sdk/server/streamableHttp.js — ' +
-        'check that @modelcontextprotocol/sdk is installed at the latest version.',
+      sdkLoadFailure(err, {
+        notInstalled:
+          'mcpServe(http) requires @modelcontextprotocol/sdk/server/streamableHttp.js — ' +
+          'check that @modelcontextprotocol/sdk is installed at the latest version.',
+        caller: 'mcpServe(http)',
+        specifier: '@modelcontextprotocol/sdk/server/streamableHttp.js',
+        instead: SERVE_IS_A_NODE_ROLE,
+      }),
     );
   }
   const { createServer } = await import('node:http');

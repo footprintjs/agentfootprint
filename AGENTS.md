@@ -112,6 +112,26 @@ Transports: `stdio` (local subprocess), `http` (Streamable HTTP). The
 `@modelcontextprotocol/sdk` peer-dep is lazy-required — zero runtime
 cost when MCP isn't used. Friendly install hint if missing.
 
+**In a BROWSER** the Node `require` loader does not exist, so supply what it
+would have found. Give the two SDK modules as `sdk` (the library still builds
+the transport, so headers / your own `fetch` / gateway vending / throttle retry
+all keep working), or a client you connected yourself as `connection`:
+
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+
+const sidecar = await mcpClient({
+  name: 'sidecar',
+  sdk: { Client, StreamableHTTPClientTransport },
+  transport: { transport: 'http', url: '/py/mcp' },   // relative resolves against the page
+});
+```
+
+`stdio` spawns a subprocess and is refused in words there. On the `connection`
+arm the library builds no transport, so `retryOnThrottle` / `clientInfo` are
+REFUSED rather than ignored — wrap your own fetch with `retryingFetch` instead.
+
 `agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`.
 Pair with `await client.tools()` to register everything an MCP server
 exposes in one builder call. Tool-name uniqueness is still validated

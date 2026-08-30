@@ -45,13 +45,19 @@ import type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  McpConnection,
+  McpConnectionOptions,
   McpListedTool,
+  McpSdk,
   McpSdkClient,
   McpTransport,
 } from './types.js';
 import { readToolExtras } from './toolExtras.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
+import { refuseConflictingOptions } from './connectionRefusals.js';
+import { sdkLoadFailure } from './sdkLoadFailure.js';
+import { transportUrl } from './transportUrl.js';
 import { lazyRequire } from '../lazyRequire.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
@@ -67,15 +73,29 @@ const DEFAULT_CLIENT_INFO = {
  * server's tools as agentfootprint `Tool[]` and a `close()` to tear
  * down the transport.
  *
- * @throws when `@modelcontextprotocol/sdk` is not installed (see
- *   error message for `npm install` hint), or when the transport
- *   fails to connect.
+ * Three ways to get a connection, and they are three because a browser can
+ * only take the last two:
+ *
+ *   - `{ transport }` — the library loads the SDK through its Node loader and
+ *     builds everything. The default, and what every Node consumer already
+ *     does.
+ *   - `{ transport, sdk }` — you supply the two SDK modules with static
+ *     imports; the library still builds the transport, so gateway vending,
+ *     `retryOnThrottle`, `headers` and your own `fetch` all keep working.
+ *   - `{ connection }` — you built and connected the client yourself; the
+ *     library only adapts its tools.
+ *
+ * @throws when the two arms are mixed, when a `connection` is not one, or when
+ *   `@modelcontextprotocol/sdk` cannot be loaded (the message says which of
+ *   "not installed" and "no Node loader here" actually happened), or when the
+ *   transport fails to connect.
  */
-export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
+export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): Promise<McpClient> {
   const name = opts.name ?? 'mcp';
-  const sdk =
-    opts._client ??
-    (await resolveClient(opts.transport, opts.clientInfo, opts.signal, opts.retryOnThrottle));
+  // Before anything connects: an option that names a behaviour which cannot
+  // happen on the chosen arm is a defect, not a preference.
+  refuseConflictingOptions(opts, name);
+  const connection = await openConnection(opts);
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
@@ -94,9 +114,9 @@ export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
     // `signal` rides in the SDK's THIRD argument (RequestOptions), not in
     // the request params — see `wrapMcpTool`.
     const listed = opts.signal
-      ? await sdk.listTools(undefined, { signal: opts.signal })
-      : await sdk.listTools();
-    return listed.tools.map((t) => wrapMcpTool(name, sdk, t, opts.signal));
+      ? await connection.listTools(undefined, { signal: opts.signal })
+      : await connection.listTools();
+    return listed.tools.map((t) => wrapMcpTool(name, connection, t, opts.signal));
   };
 
   return {
@@ -115,53 +135,99 @@ export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
       if (closed) return;
       closed = true;
       cache = null;
-      await sdk.close();
+      await connection.close();
     },
   };
 }
 
-// ─── SDK construction (lazy require) ───────────────────────────────
+// ─── Getting a connection ──────────────────────────────────────────
+
+/**
+ * The one funnel every arm passes through, in precedence order: a connection
+ * you handed over, the internal test seam, then the library building one.
+ *
+ * A call with neither `connection` nor `sdk` reaches `resolveClient` with two
+ * `undefined` arguments and takes the identical path it always took.
+ */
+async function openConnection(
+  opts: McpClientOptions | McpConnectionOptions,
+): Promise<McpConnection> {
+  if (opts.connection !== undefined) return opts.connection;
+  if (opts._client !== undefined) return opts._client;
+  // `refuseConflictingOptions` has already refused the case where this is
+  // absent, so the assertion documents that guarantee rather than assuming it.
+  const transport = opts.transport as McpTransport;
+  return resolveClient(transport, opts.clientInfo, opts.signal, opts.retryOnThrottle, opts.sdk);
+}
+
+// ─── SDK construction (lazy require, unless the caller supplied it) ─
 
 async function resolveClient(
   transport: McpTransport,
   clientInfo?: { name: string; version: string },
   signal?: AbortSignal,
   retryOnThrottle?: RetryOnThrottle,
+  sdk?: McpSdk,
 ): Promise<McpSdkClient> {
-  let mod: McpSdkExports;
-  try {
-    mod = lazyRequire<McpSdkExports>('@modelcontextprotocol/sdk/client/index.js');
-  } catch {
-    throw new Error(
-      'mcpClient requires @modelcontextprotocol/sdk.\n' +
-        '  Install:  npm install @modelcontextprotocol/sdk\n' +
-        '  Or pass `_client` for test injection.',
-    );
-  }
+  const mod: McpSdkExports = sdk ?? loadClientModule();
 
   const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, {
     capabilities: {},
   });
 
-  const transportImpl = await buildTransport(transport, retryOnThrottle);
+  const transportImpl = await buildTransport(transport, retryOnThrottle, sdk);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(transportImpl, { signal });
   else await client.connect(transportImpl);
   return client;
 }
 
+/** The Node loader path, unchanged — reached only when no `sdk` was supplied. */
+function loadClientModule(): McpSdkExports {
+  try {
+    return lazyRequire<McpSdkExports>('@modelcontextprotocol/sdk/client/index.js');
+  } catch (err) {
+    throw new Error(
+      sdkLoadFailure(err, {
+        notInstalled:
+          'mcpClient requires @modelcontextprotocol/sdk.\n' +
+          '  Install:  npm install @modelcontextprotocol/sdk\n' +
+          '  Or pass `_client` for test injection.',
+        caller: 'mcpClient',
+        specifier: '@modelcontextprotocol/sdk/client/index.js',
+        instead:
+          'Pass `sdk` (the two SDK modules, imported statically) or `connection` ' +
+          '(a client you connected yourself).',
+      }),
+    );
+  }
+}
+
 async function buildTransport(
   t: McpTransport,
   retryOnThrottle?: RetryOnThrottle,
+  sdk?: McpSdk,
 ): Promise<unknown> {
   if (t.transport === 'stdio') {
+    // Deliberately NOT served by `sdk`: stdio spawns a subprocess, so it can
+    // never run in a browser, and `client/stdio.js` is the SDK's one client
+    // module that imports `node:process`/`node:stream`. Keeping it behind the
+    // loader is what keeps it off every browser module graph.
     let stdioMod: McpStdioExports;
     try {
       stdioMod = lazyRequire<McpStdioExports>('@modelcontextprotocol/sdk/client/stdio.js');
-    } catch {
+    } catch (err) {
       throw new Error(
-        'mcpClient(stdio) requires @modelcontextprotocol/sdk/client/stdio.js — ' +
-          'check that @modelcontextprotocol/sdk is installed at the latest version.',
+        sdkLoadFailure(err, {
+          notInstalled:
+            'mcpClient(stdio) requires @modelcontextprotocol/sdk/client/stdio.js — ' +
+            'check that @modelcontextprotocol/sdk is installed at the latest version.',
+          caller: 'mcpClient(stdio)',
+          specifier: '@modelcontextprotocol/sdk/client/stdio.js',
+          instead:
+            'stdio spawns a subprocess, so it cannot run in a browser at all — ' +
+            "reach the server over `transport: { transport: 'http', url }` instead.",
+        }),
       );
     }
     return new stdioMod.StdioClientTransport({
@@ -175,15 +241,7 @@ async function buildTransport(
   // http + gateway transports both ride Streamable HTTP. They differ only in
   // WHEN the auth headers are decided: `http` fixes them at construction,
   // `gateway` vends them inside every request (see gatewayTransport.ts).
-  let httpMod: McpHttpExports;
-  try {
-    httpMod = lazyRequire<McpHttpExports>('@modelcontextprotocol/sdk/client/streamableHttp.js');
-  } catch {
-    throw new Error(
-      `mcpClient(${t.transport}) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ` +
-        'check that @modelcontextprotocol/sdk is installed at the latest version.',
-    );
-  }
+  const httpMod: McpHttpExports = sdk ?? loadHttpModule(t.transport);
   // Throttle retry wraps the OUTERMOST fetch, so every attempt is re-signed
   // and re-vended: signatures expire, and a token that would have died during
   // the wait is simply never the one reused. `retryingFetch` returns its input
@@ -198,7 +256,7 @@ async function buildTransport(
     // credential is still vended per request. Passing `undefined` is the
     // default global `fetch`, which is byte-identical to every release before
     // the seam existed.
-    return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
+    return new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
       fetch: retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle),
     });
   }
@@ -207,17 +265,37 @@ async function buildTransport(
   // hands the custom fetch, so a signer sees the static headers and has the
   // final word over the bytes — see `McpHttpTransport.fetch`.
   const httpFetch = retryingFetch(t.fetch, retryOnThrottle);
-  return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
+  return new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
     ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
     ...(httpFetch && { fetch: httpFetch }),
   });
+}
+
+/** The Node loader path for Streamable HTTP — reached only with no `sdk`. */
+function loadHttpModule(transport: 'http' | 'gateway'): McpHttpExports {
+  try {
+    return lazyRequire<McpHttpExports>('@modelcontextprotocol/sdk/client/streamableHttp.js');
+  } catch (err) {
+    throw new Error(
+      sdkLoadFailure(err, {
+        notInstalled:
+          `mcpClient(${transport}) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ` +
+          'check that @modelcontextprotocol/sdk is installed at the latest version.',
+        caller: `mcpClient(${transport})`,
+        specifier: '@modelcontextprotocol/sdk/client/streamableHttp.js',
+        instead:
+          'Pass `sdk` (the two SDK modules, imported statically) or `connection` ' +
+          '(a client you connected yourself).',
+      }),
+    );
+  }
 }
 
 // ─── Tool wrapping ─────────────────────────────────────────────────
 
 function wrapMcpTool(
   serverName: string,
-  sdk: McpSdkClient,
+  connection: McpConnection,
   mcp: McpListedTool,
   signal?: AbortSignal,
 ): Tool {
@@ -253,8 +331,8 @@ function wrapMcpTool(
       // `resultSchema` (2nd arg) is left to the SDK's own default.
       const params = { name: mcp.name, arguments: argsObj };
       const result = signal
-        ? await sdk.callTool(params, undefined, { signal })
-        : await sdk.callTool(params);
+        ? await connection.callTool(params, undefined, { signal })
+        : await connection.callTool(params);
       return readToolResult(result, mcp.name, serverName);
     },
   };
@@ -361,13 +439,21 @@ function describeShape(value: unknown): string {
 
 // ─── Module shim types (for the lazy-required SDK) ─────────────────
 
-interface McpSdkExports {
-  readonly Client: new (
-    info: { name: string; version: string },
-    options: { capabilities: Record<string, unknown> },
-  ) => McpSdkClient;
-}
+/**
+ * The two portable module shapes are now PUBLIC as `McpSdk` (types.ts) — a
+ * caller who supplies them has to be able to name them. These aliases keep the
+ * lazy-require sites reading the way they always did, and are what makes
+ * `sdk ?? loadClientModule()` typecheck as one thing.
+ */
+type McpSdkExports = Pick<McpSdk, 'Client'>;
+type McpHttpExports = Pick<McpSdk, 'StreamableHTTPClientTransport'>;
 
+/**
+ * Deliberately NOT part of `McpSdk`: stdio spawns a subprocess. It cannot run
+ * in a browser, so there is nothing for a caller to portably supply, and
+ * keeping it private is what keeps `client/stdio.js` — the SDK's only
+ * Node-importing client module — out of the public contract.
+ */
 interface McpStdioExports {
   readonly StdioClientTransport: new (params: {
     command: string;
@@ -375,20 +461,4 @@ interface McpStdioExports {
     env?: Record<string, string>;
     cwd?: string;
   }) => unknown;
-}
-
-interface McpHttpExports {
-  readonly StreamableHTTPClientTransport: new (
-    url: URL,
-    options?: {
-      requestInit?: { headers: Record<string, string> };
-      /**
-       * The SDK's hook for a custom fetch — how per-request vending AND
-       * caller-supplied signing both get in. Typed exactly as the SDK types it
-       * (`(url: string | URL, init?) => Promise<Response>`), so a function this
-       * shim accepts is a function the real transport accepts.
-       */
-      fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
-    },
-  ) => unknown;
 }

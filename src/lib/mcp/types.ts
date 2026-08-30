@@ -212,6 +212,27 @@ export interface McpClientOptions {
   readonly retryOnThrottle?: RetryOnThrottle;
 
   /**
+   * Pre-resolved SDK modules. Give these and the library never touches its Node
+   * `require` loader — which is the whole reason a browser bundle can now speak
+   * MCP over `http`.
+   *
+   * Everything else keeps working, because the library still builds the
+   * transport: gateway vending, `retryOnThrottle`, `headers`, your own `fetch`,
+   * `_meta` ingestion. Omit it and the loader runs exactly as it always has.
+   *
+   * Ignored for `transport: 'stdio'`, which spawns a subprocess and therefore
+   * cannot run in a browser at all — that branch keeps loading
+   * `client/stdio.js` through the Node loader, which is also what keeps the
+   * SDK's only Node-bound client module off a browser's module graph.
+   *
+   * @see McpSdk for the two static imports that produce it.
+   */
+  readonly sdk?: McpSdk;
+
+  /** @see McpConnectionOptions — never set on this arm. */
+  readonly connection?: undefined;
+
+  /**
    * @internal Pre-built SDK client for tests. Skips SDK import +
    * transport construction. Same convention as `AnthropicProvider._client`.
    *
@@ -221,6 +242,49 @@ export interface McpClientOptions {
    * tests run against a real socket.
    */
   readonly _client?: McpSdkClient;
+}
+
+/**
+ * The other arm of `mcpClient`: you connected the client, the library adapts it.
+ *
+ * Reach for this when the library must not construct anything at all — a
+ * browser bundle behind a strict CSP, where you need the SDK's own
+ * `jsonSchemaValidator` to keep ajv's code generation off the page; or any
+ * transport this library has never heard of.
+ *
+ * The cost is stated rather than hidden: the library builds no transport here,
+ * so every option that is consumed INSIDE a transport is refused rather than
+ * accepted and ignored. `retryOnThrottle` becomes `retryingFetch` around
+ * your own `fetch`; `clientInfo` and `headers` are yours to set when you
+ * construct the client. `signal` IS honoured — it rides the SDK's trailing
+ * request-options argument, not the transport.
+ */
+export interface McpConnectionOptions {
+  /**
+   * Logical name for observability + tool-call routing, exactly as on
+   * {@link McpClientOptions}. Defaults to `'mcp'`.
+   */
+  readonly name?: string;
+
+  /**
+   * A connection you already opened. The library never calls `connect()` on it;
+   * `close()` on the returned client closes it exactly once.
+   */
+  readonly connection: McpConnection;
+
+  /** Abort the list / call paths. Rides the SDK's request options. */
+  readonly signal?: AbortSignal;
+
+  /** @see McpClientOptions — never set on this arm. */
+  readonly transport?: undefined;
+  /** @see McpClientOptions — never set on this arm. */
+  readonly sdk?: undefined;
+  /** @see McpClientOptions — never set on this arm. */
+  readonly clientInfo?: undefined;
+  /** @see McpClientOptions — never set on this arm. */
+  readonly retryOnThrottle?: undefined;
+  /** @internal @see McpClientOptions — never set on this arm. */
+  readonly _client?: undefined;
 }
 
 // ─── Public client surface ─────────────────────────────────────────
@@ -256,23 +320,30 @@ export interface McpClient {
 // ─── SDK shim — minimal surface we need from @modelcontextprotocol/sdk ──
 
 /**
- * Minimal structural type capturing the parts of the MCP SDK client
- * we touch. Defined locally so we can:
- *   1. Inject a mock for tests (`McpClientOptions._client`)
- *   2. Avoid a hard import on `@modelcontextprotocol/sdk` (which is
- *      a lazy peer-dep)
+ * A live MCP connection you opened and connected yourself.
  *
- * The real SDK exports a richer surface; we narrow to what's needed.
+ * This is the whole contract this library needs from an MCP client: three
+ * methods over JSON-RPC. Nothing in it names a vendor, so an SDK `Client`, a
+ * hand-written fake, or a future fetch-only transport all satisfy it.
+ *
+ * Pass one as `mcpClient({ connection })` when the library must not load the
+ * SDK itself — a browser bundle, where the Node `require` loader does not
+ * exist. You own construction, so you also own the transport's `fetch`, its
+ * headers, its auth, and (SDK-specific) its `jsonSchemaValidator`, which is the
+ * one way to keep ajv's `new Function` off a page with a strict CSP.
+ *
+ * What you give up by owning it: this library builds no transport on that arm,
+ * so `retryOnThrottle` has nothing to wrap. Wrap your own fetch with
+ * `retryingFetch` and the 429 handling comes back.
  *
  * Argument POSITION matters here and is easy to get wrong: the SDK keeps
- * per-request options (`signal`, `timeout`) in a SEPARATE trailing
- * argument, never inside the JSON-RPC params. A `signal` smuggled into
- * the params object is serialized onto the wire as `{}` and silently
- * fails to cancel anything, so these signatures mirror the SDK's own
- * shape rather than a flattened convenience version of it.
+ * per-request options (`signal`, `timeout`) in a SEPARATE trailing argument,
+ * never inside the JSON-RPC params. A `signal` smuggled into the params object
+ * is serialized onto the wire as `{}` and silently fails to cancel anything, so
+ * these signatures mirror the SDK's own shape rather than a flattened
+ * convenience version of it.
  */
-export interface McpSdkClient {
-  connect(transport: unknown, options?: McpRequestOptions): Promise<void>;
+export interface McpConnection {
   listTools(
     params?: undefined,
     options?: McpRequestOptions,
@@ -287,6 +358,72 @@ export interface McpSdkClient {
     options?: McpRequestOptions,
   ): Promise<McpCallToolResult>;
   close(): Promise<void>;
+}
+
+/**
+ * Minimal structural type capturing the parts of the MCP SDK client
+ * we touch. Defined locally so we can:
+ *   1. Inject a mock for tests (`McpClientOptions._client`)
+ *   2. Avoid a hard import on `@modelcontextprotocol/sdk` (which is
+ *      a lazy peer-dep)
+ *
+ * The real SDK exports a richer surface; we narrow to what's needed.
+ *
+ * Member set unchanged since it was introduced: {@link McpConnection} plus the
+ * one method the library calls when it opens the connection ITSELF. The split
+ * is what lets a caller hand over a client that is already connected without
+ * also promising a `connect` this library must never call on it.
+ */
+export interface McpSdkClient extends McpConnection {
+  connect(transport: unknown, options?: McpRequestOptions): Promise<void>;
+}
+
+/**
+ * The two `@modelcontextprotocol/sdk` module exports the Streamable HTTP path
+ * needs, typed STRUCTURALLY so this declaration never references the optional
+ * peer — a consumer without the SDK installed still typechecks.
+ *
+ * Hand these to `mcpClient({ sdk })` and the library never touches its Node
+ * `require` loader, which is what lets a browser bundle speak MCP over `http`.
+ * Everything else keeps working, because the library still builds the
+ * transport: gateway vending, `retryOnThrottle`, `headers`, your own `fetch`,
+ * `_meta` ingestion.
+ *
+ * Load them yourself with two static imports. The subpaths matter: the SDK's
+ * root export `"."` does not resolve (it declares no `dist/esm/index.js`), and
+ * `client/stdio.js` is the one client module that imports `node:process` and
+ * `node:stream` — importing it is what would drag Node into a browser graph.
+ *
+ * ```ts
+ * import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+ * import { StreamableHTTPClientTransport }
+ *   from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+ *
+ * const client = await mcpClient({
+ *   name: 'sidecar',
+ *   sdk: { Client, StreamableHTTPClientTransport },
+ *   transport: { transport: 'http', url: '/py/mcp' },
+ * });
+ * ```
+ */
+export interface McpSdk {
+  readonly Client: new (
+    info: { name: string; version: string },
+    options: { capabilities: Record<string, unknown> },
+  ) => McpSdkClient;
+  readonly StreamableHTTPClientTransport: new (
+    url: URL,
+    options?: {
+      requestInit?: { headers: Record<string, string> };
+      /**
+       * The SDK's hook for a custom fetch — how per-request vending AND
+       * caller-supplied signing both get in. Typed exactly as the SDK types it,
+       * so a function this shim accepts is a function the real transport
+       * accepts.
+       */
+      fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
+    },
+  ) => unknown;
 }
 
 /**

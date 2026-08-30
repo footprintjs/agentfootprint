@@ -72,6 +72,11 @@ export {
   // directions (9.71.0). Public so a server this library did not write can
   // speak it, and so a client can read a bag it received.
   MCP_TOOL_EXTRAS_KEY,
+  // The 429 retry `mcpClient({ transport })` applies for you (9.81.0). Public
+  // so `mcpClient({ connection })` — the arm a browser takes, where the library
+  // builds no transport — can wrap its own `fetch` with the same code rather
+  // than quietly doing without it.
+  retryingFetch,
 } from '../lib/mcp/index.js';
 // Reaching an AWS Bedrock AgentCore Gateway (9.66.0). A configuration of
 // `gatewayTransport` plus the four facts that are AgentCore's alone — kept in
@@ -95,7 +100,14 @@ export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  // The browser seams (9.81.0): a connection you opened yourself, the options
+  // that carry it, and the two SDK modules you can hand over instead of letting
+  // the Node loader find them.
+  McpConnection,
+  McpConnectionOptions,
+  McpSdk,
   McpSdkClient,
+  ThrottleFetch,
   McpTransport,
   McpStdioTransport,
   McpHttpTransport,
