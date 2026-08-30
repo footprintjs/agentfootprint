@@ -91,7 +91,43 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // the 261.85 MB of exact-duplicate content this export contains (35.1% of it,
 // 110.40 MB of which is that one 165 KB layout segment, repeated 669 times) is
 // where any trim starts.
-const OUTPUT_LIMITS = { bytes: 765_000_000, files: 7_250, duplicateRscBytes: 153_000_000 };
+//
+// LOWERED for 9.81.0 — the first entry in this block that goes DOWN, because the
+// trim the paragraph above was waiting for happened. It started where that
+// paragraph said to start: with the duplicates. Next writes a
+// `__next._full.txt` beside every route's `index.txt`, byte-identical to it —
+// the whole-page RSC payload under the segment-cache name `/_full` — and in a
+// STATIC EXPORT nothing ever fetches it. docs-next/scripts/prune-export.mjs
+// deletes it as the build's `postbuild` step, so every path that builds this
+// export (docs.yml, ci.yml, publish.yml, a laptop) ships and measures the same
+// pruned tree. That script carries the three independent lines of evidence, the
+// risk of a future Next changing its mind, and the symptom that would show it
+// had. Read it before changing anything here.
+//
+// Measured on this commit, same build, immediately before and after that step:
+//                       before        after
+//   export bytes        756.31 MB     604.44 MB   (-151.87 MB, -20.1%)
+//   export files        7,174         6,498       (-676)
+//   duplicateRscBytes   151.87 MB     0 B         (676 pairs -> 0)
+//   demo async gzip     408.9 KB      408.9 KB    (unchanged, and see below)
+//
+// The ceilings come down with it, because headroom the prune buys is not
+// headroom to spend. Leaving 765 MB standing over a 604 MB export would have
+// bought 160 MB of silence — three 9.76.0-sized releases — and this file's whole
+// history is about growth that nobody was watching. The new numbers keep the
+// same deliberately thin ~2% the raises used, which at today's per-route cost
+// (~0.85 MB and 8 files, down from ~1.07 MB and 9) is about fourteen new docs
+// routes before somebody has to look again.
+//
+// duplicateRscBytes STAYS a live check, at a measured zero, on purpose. A metric
+// that reaches zero and is then deleted cannot tell you when it comes back. Two
+// things make it non-zero again and both deserve a stop: the prune stopped
+// running (a dropped `postbuild`, or someone building with `npx next build`
+// instead of `npm run build`), or Next changed what it writes and the pruner's
+// byte-identity test no longer matches it. First case, run
+// `npm run prune:export`; second case, re-read the evidence at the top of
+// prune-export.mjs before assuming anything is still safe to delete.
+const OUTPUT_LIMITS = { bytes: 617_000_000, files: 6_620, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
@@ -123,6 +159,12 @@ const OUTPUT_LIMITS = { bytes: 765_000_000, files: 7_250, duplicateRscBytes: 153
 // gate now wired in .github/workflows/publish.yml. The fix named in 9.61.0
 // (reach the checks only through a dynamic import) is still the fix if this
 // keeps climbing.
+//
+// NOT lowered for 9.81.0, unlike the three above it. The export prune deletes
+// whole .txt payloads and touches no chunk, so this measured 408.9 KB before it
+// and 408.9 KB after — same 16 async assets, same bytes. The ceiling is already
+// ~1% over that, which is as tight as the others now are; moving it would be
+// pretending the prune bought headroom here that it did not.
 const DEMO_ASYNC_GZIP_LIMIT = 413_000;
 
 function formatBytes(bytes) {
