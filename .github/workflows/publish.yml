@@ -41,6 +41,10 @@ jobs:
       # build` the check requires.
       - run: npm run docs:truth
 
+      # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
+      - run: npx publint
+      - run: npx @arethetypeswrong/cli --pack
+
       # Site-budget RATCHET — the SAME check the Deploy Docs workflow runs
       # (docs.yml, step "Enforce site performance budgets"). It lives here for
       # exactly the reason docs-truth does: Deploy Docs is wired to a different
@@ -70,8 +74,13 @@ jobs:
       # measures THIS commit: a budget that goes red from a docs-only commit
       # landing after the release is a CI red, not a publish block.
       #
-      # Cost: this is the docs static export (~4-6 min), which is why it runs on
-      # the release path rather than in every matrix leg of the test job.
+      # Cost, measured on CI run 33298113906 (ci.yml's docs job, same steps on
+      # the same runner image): docs-next install 11s + static export 1m27s +
+      # the check itself 1.5s ≈ 1m40s. It runs AFTER publint/attw so the gates
+      # that cost seconds get to fail first, and BEFORE `npm pack` so a red
+      # budget stops the job while nothing has been staged. `files` in
+      # package.json is an allowlist that does not name docs-next, so the
+      # 749 MB export cannot leak into the tarball.
       - name: Install docs-next deps (site-budget gate)
         working-directory: docs-next
         run: npm install
@@ -84,10 +93,6 @@ jobs:
       - name: Enforce site performance budgets
         working-directory: docs-next
         run: npm run check:site-budget
-
-      # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
-      - run: npx publint
-      - run: npx @arethetypeswrong/cli --pack
 
       # Stage the EXACT publishable package, files-agnostically: npm computes the tarball
       # (honoring the complex `files` globs/negations), then we extract it. The staged dir
