@@ -9,10 +9,11 @@ subject, each with its own memory, its own commit log and its own decider pass.
 That is the shape [`runbookAsTool`](doc:runbook-as-tool) was built for, and it is
 the shape that costs the first author a day.
 
-Six engine behaviours meet you there. Two announce themselves by throwing.
-**Four do not**: the run completes, the rowset has rows in it, the counters
-agree with each other, and the answer is confidently wrong. Those four are why
-this page exists.
+Six engine behaviours meet you there. **Exactly one announces itself** — writing
+to a read-only input key throws. The other five are quiet, and four of those
+five are quiet about a *wrong answer* rather than a thin record: the run
+completes, the rowset has rows in it, the counters agree with each other, and
+nothing anywhere signals a problem. Those four are why this page exists.
 
 | # | The behaviour | How it tells you |
 |---|---|---|
