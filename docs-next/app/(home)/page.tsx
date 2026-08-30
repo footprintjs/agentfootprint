@@ -15,7 +15,7 @@ import './home.css';
 
 const HOME_TITLE = 'agentfootprint — Find the context that made your agent answer wrong';
 const HOME_DESC =
-  'The explainable agent framework. Every run records its own causal trace, so when the answer is wrong you backtrack to the exact context that caused it — confirmed by re-running without it. Why is a query, not a guess.';
+  'The explainable agent framework. When an agent takes a decision a person used to make, the reasoning stops surviving — so every run records its own causal trace, states what it could not check, and lets you confirm a cause by re-running without it. Why is a query, not a guess.';
 
 export const metadata: Metadata = {
   // `absolute` bypasses the layout's "%s · agentfootprint" template — the home title
@@ -81,14 +81,14 @@ export default function HomePage() {
             </span>
             <h1>
               <HomeViewText
-                product={<>Find the context that made your agent <em>answer wrong.</em></>}
+                product={<>Your agent decides what a person used to. <em>Only one of them leaves a reason.</em></>}
                 technical={<>Context provenance for every <em>agent decision.</em></>}
               />
             </h1>
             <p className="lede">
               <HomeViewText
-                product={<>Debug why your AI agent gave the wrong answer — and prove the fix by re-running without the cause.</>}
-                technical={<>Record context injections, model calls, tool decisions, state, and cost as typed evidence you can slice, ablate, and replay.</>}
+                product={<>When a human held that seat, the reason came with the decision. Now it doesn&apos;t. agentfootprint records why the agent decided what it did, states what it could not check, and proves a fix by re-running without the cause.</>}
+                technical={<>Record context injections, model calls, tool decisions, state, and cost as typed evidence you can slice, ablate, and replay — beside a coverage ledger that states what was never checked, and refusals where the answer would have been a guess.</>}
               />
             </p>
             <p className="tagline">
