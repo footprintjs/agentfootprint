@@ -20,11 +20,18 @@ disposition accounting below is the first unit built, not the last.
 | folder         | one job                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `disposition/` | per-check accounting — checked-pass / checked-fail / not-applicable / unreachable — so "zero findings" and "zero checks ran" are different observable states, with the dev-posture canary and `assertAlive()` |
+| `assertion/` | the substrate — one typed claim per `(subject, predicate, epoch)`, the strata rule, and the single-valued comparison every check runs over |
+| `finding/` | the ONE visible `ContextError` shape and its identity-keyed dedup |
+| `invariant-violation/` | two channels asserting things that cannot both be true — at the write that created it, and at the wire the request actually crossed |
+| `dangling-reference/` | an action still offered after the evidence its arguments come from left the window |
+| `unsupported-argument/` | the value the model chose for an armed call, against everything the run served it |
+| `unsupported-claim/` | the answer, against the typed facts the run's own tools settled |
+| `empty-lookup/` | the run itself produced the identifier, and the lookup keyed on it came back empty — an ADVISORY, because an empty answer can be perfectly true |
+| `argumentLeaves.ts` | the shared leaf: what "a string argument" means, so the two checks that read a call's arguments cannot drift apart about it |
 
-**Planned next** (see the decomposition in the program ledger): the assertion substrate, the one
-visible `ContextError` finding type (kinds: `invariant-violation`, `unsupported-argument`,
-`dangling-reference`, `duplicate-execution`, `unsupported-claim`), and the five checks at their
-seams (write / compose / wire / choice / claim).
+**Still unclaimed:** `duplicate-execution` (did settled work again) is named by the finding type and
+has no check in this build. That is stated everywhere it matters rather than hidden —
+`find_context_errors` refuses to answer about it instead of returning a clean-sounding negative.
 
 **Runnable example.**
 

@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.77.0] - 2026-08-29
+
+### Added
+
+- **`noticeEmptyLookups` — the run produced the identifier, and the lookup for
+  it came back empty.** A triage agent's reverse-lookup tool filtered a column
+  before a pivot, so the column did not exist yet and EVERY reverse lookup
+  returned an empty result — for every identifier, always. The tool then
+  answered *successfully* with an empty list, and the agent reported in a
+  table, with confidence, that the device was not logged in to any port on any
+  collected switch, advising a check of the physical cabling. It was logged in
+  the whole time. Every rail passed, and passed honestly: nothing errored,
+  nothing was ungrounded, no coverage was overstated. **An empty result from a
+  broken filter is byte-identical to an empty result from a genuine absence**,
+  and nothing in the framework was responsible for noticing the difference.
+
+  The library was already holding both halves of the answer, separately: that
+  the identifier was GROUNDED (it came out of an earlier tool result in this
+  run, from a tool the consumer's own author named in `Tool.argumentsFrom` —
+  the same declaration that arms `dangling-reference` and
+  `unsupported-argument`), and that the lookup keyed on it came back EMPTY.
+  Joining them is the whole check: new `ContextErrorKind` **`empty-lookup`** at
+  the **write seam**, filed at the tool-dispatch boundary — the one moment a
+  lookup's answer becomes a fact in the conversation.
+
+  **THE CEILING, and it is why this can never be an accusation.** An empty
+  answer can be perfectly true; the device may exist and simply have no logins
+  right now. Nothing here can tell those apart and nothing here pretends to, so
+  every finding is an **`advisory: true`** and the IDENTICAL advisory is filed
+  for the broken filter and for the honest absence. The bound ships as one
+  exported string, `EMPTY_LOOKUP_CEILING`, quoted verbatim into every message
+  so it cannot drift out of one doc and leave a reader thinking the library
+  knows more than it does: *"An empty result can be perfectly true — the thing
+  may exist and simply have nothing to show right now — so this is a place to
+  look, never a verdict that anything is wrong."*
+
+  Deliberately NOT `dangling-reference`, whose meaning is the opposite: there
+  the ground has left reach; here the ground IS in reach and the lookup found
+  nothing.
+
+  **What counts as empty is COUNTED, never interpreted** (`readLookupResult`):
+  an array with zero elements is a rowset with zero rows, and an `absent(…)`
+  envelope is an author saying the search ran and matched nothing. Every other
+  shape — a sentence, a `null`, a bespoke `{ rows: [] }` wrapper, a placement
+  claim ticket — is unreadable, and files an explicit **`not-applicable` row
+  with no finding**. That row is the point: a check that silently skipped what
+  it could not read would be the decoration the disposition ledger exists to
+  make impossible.
+
+  **Armed by two halves**, and the second one is why: `noticeEmptyLookups:
+  true` on `Agent.create` **and** at least one tool declaring `argumentsFrom`.
+  The declaration alone is not enough — it already arms two other checks, and
+  an advisory that armed itself off a declaration made for something else
+  would not be opt-in at all. **Default off is byte-identical**: no finding, no
+  event, nothing on the wire, in the history or in the answer changes. The one
+  visible difference is the registered `empty-lookup` row in the disposition
+  report, filed `not-applicable` — the family's law rather than an exception to
+  it, since silence is exactly what let two shipped checks decay into
+  decoration. Posture is the family's own (`integrityPosture`), with a dev
+  canary like every sibling; the evidence gate's `assist`/`guard`/`rails` trio
+  is deliberately absent, because those grade how hard a rail pushes back and
+  this check never pushes back on anything.
+
+### Changed
+
+- **One rail for integrity findings, one spelling for an argument leaf.** The
+  seen-list dedup that turns "detected many times" into one
+  `integrity.context_error` per run moved out of `callLLM` into
+  `core/agent/integrityFindings.ts` — the write seam files from a second STAGE,
+  and its old header already warned that a second copy of that loop would
+  eventually disagree with the first about what "already filed" means.
+  Likewise the argument walk, the four-character fence and the quoting length
+  moved to `src/integrity/argumentLeaves.ts`, shared by the choice seam and the
+  write seam: the second check's whole job is to notice something about a value
+  the first one already excused, so the two must agree to the character about
+  which leaves are candidates and what their dot-paths are. No behaviour change
+  on either move.
+
 ## [9.76.1] - 2026-08-28
 
 ### Fixed

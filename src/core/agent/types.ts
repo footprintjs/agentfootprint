@@ -532,6 +532,55 @@ export interface AgentOptions {
    */
   readonly externalGrounds?: ExternalGroundsProvider;
   /**
+   * Notice when a lookup for a value THIS RUN PRODUCED comes back empty
+   * (9.77.0) — the write seam's `empty-lookup` advisory. **Default off.**
+   *
+   * The recorded failure: a triage agent's reverse-lookup tool filtered a
+   * column before a pivot, so the column did not exist yet and every reverse
+   * lookup returned an empty result — for every identifier, always. The tool
+   * answered successfully with an empty list, and the agent reported in a
+   * table, with confidence, that the device was logged in to no port on any
+   * collected switch, advising a check of the physical cabling. The device was
+   * logged in the whole time. Nothing noticed, because an empty result from a
+   * broken filter is byte-identical to an empty result from a genuine absence.
+   *
+   * What the library CAN see is the pair: the identifier came out of an
+   * earlier tool result in this run — from a tool named in the consumer's
+   * `Tool.argumentsFrom` — and the lookup keyed on it came back with nothing.
+   * Turn this on and each such pair files one `advisory` finding on
+   * `agentfootprint.integrity.context_error`, naming the value, the producing
+   * tool, the consuming tool and the call id.
+   *
+   * THE CEILING, and it is why this never accuses: an empty result can be
+   * perfectly true — the thing may exist and simply have nothing to show
+   * right now — so this is a place to look, never a verdict that anything is
+   * wrong. The SAME advisory is filed for a true absence and for a lookup that
+   * could never have matched, because nothing in this library can tell them
+   * apart. Every finding carries the ceiling sentence in its own message.
+   *
+   * WHAT IT JUDGES, and what it refuses to. A result is read only when the
+   * library can COUNT it: an array (zero rows is zero rows) or the `absent()`
+   * envelope. A prose sentence, a bespoke `{ rows: [] }` wrapper, a `null`, a
+   * placement claim ticket — nothing in there is countable, so the encounter
+   * files a `not-applicable` row and NO finding. That row is the point: a
+   * check that silently skipped what it could not read would be the
+   * decoration the disposition ledger exists to make impossible.
+   *
+   * TWO HALVES ARM IT: this dial AND at least one tool declaring
+   * `argumentsFrom`. The declaration alone is deliberately not enough — it
+   * already arms `dangling-reference` and `unsupported-argument`, and an
+   * advisory that armed itself off a declaration made for something else would
+   * not be opt-in. Absent, the run is byte-identical: no finding, no event,
+   * nothing on the wire changes. The one visible difference is the registered
+   * `empty-lookup` row in the disposition report, filed `not-applicable` —
+   * which is the family's law, not an exception to it: registered-but-unarmed
+   * is a ROW, never silence.
+   *
+   * Nothing is ever blocked, retried or rewritten; the model reads exactly the
+   * result the tool returned.
+   */
+  readonly noticeEmptyLookups?: boolean;
+  /**
    * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
    * Default **on**.
    *

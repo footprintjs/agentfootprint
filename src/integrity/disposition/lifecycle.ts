@@ -10,7 +10,11 @@
  *          compose-invariant: a mount kernel is configured; dangling: at
  *          least one tool declared `argumentsFrom`, which arms BOTH the
  *          compose-seam dangling-reference check and the choice-seam
- *          unsupported-argument check off the same declaration).
+ *          unsupported-argument check off the same declaration;
+ *          empty-lookup: that same declaration AND the operator's
+ *          `noticeEmptyLookups` dial — two halves, because an advisory that
+ *          armed itself off a declaration made for something else would not
+ *          be opt-in at all).
  *          Registration is what makes silence auditable — an unregistered
  *          check is honest
  *          absence, a registered one that never notes is the wiring rot
@@ -32,6 +36,7 @@ import { wireViolationsOf } from '../invariant-violation/wire.js';
 import { danglingReferencesOf } from '../dangling-reference/check.js';
 import { unsupportedArgumentsOf } from '../unsupported-argument/check.js';
 import { unsupportedClaimsOf } from '../unsupported-claim/check.js';
+import { emptyLookupOf, readLookupResult } from '../empty-lookup/check.js';
 
 export type IntegrityPosture = 'observe' | 'dev';
 
@@ -55,6 +60,17 @@ export interface IntegrityChecksPresent {
   readonly dangling: boolean;
   /** A `.claims()` contract is declared (9.61.0). */
   readonly claim?: boolean;
+  /**
+   * The write seam's `empty-lookup` notice (9.77.0) — armed only when BOTH
+   * halves are true: the operator turned `noticeEmptyLookups` on AND at least
+   * one tool declared `argumentsFrom`. Deliberately NOT armed by the
+   * declaration alone, unlike its two siblings: this check would otherwise
+   * start filing advisories in every app that already declares
+   * `argumentsFrom` for the other two, and an absent dial must leave a run
+   * byte-identical. Absent → a registered `not-applicable` ROW, never
+   * silence.
+   */
+  readonly emptyLookup?: boolean;
 }
 
 /**
@@ -102,6 +118,7 @@ export function beginIntegrityRun(
   armed('dangling-reference', 'compose', present.dangling === true);
   armed('unsupported-argument', 'choice', present.dangling === true);
   armed('unsupported-claim', 'claim', present.claim === true);
+  armed('empty-lookup', 'write', present.emptyLookup === true);
 
   if (posture !== 'dev') return ledger;
 
@@ -188,6 +205,27 @@ export function beginIntegrityRun(
       -1,
     );
     if (caught.findings.length > 0) ledger.noteSynthetic('unsupported-claim', 'claim', 'caught');
+  }
+  {
+    // The write-seam canary (9.77.0): a lookup whose argument the fixture's
+    // PRODUCER really did serve, answering with a zero-row rowset. Both
+    // halves of the join are deliberately load-bearing — remove the ground
+    // and the value is not the run's own; make the rowset non-empty and
+    // there is nothing to notice — so a check that finds nothing here has
+    // lost one of the two facts it exists to pair.
+    ledger.noteSynthetic('empty-lookup', 'write', 'minted');
+    const caught = emptyLookupOf(
+      {
+        toolName: 'canary_tool',
+        toolCallId: 'canary',
+        args: { id: 'canary-grounded-id' },
+        argumentsFrom: ['canary_ground'],
+        reading: readLookupResult([], false),
+      },
+      [{ toolName: 'canary_ground', text: 'canary: served canary-grounded-id' }],
+      -1,
+    );
+    if (caught.findings.length > 0) ledger.noteSynthetic('empty-lookup', 'write', 'caught');
   }
   return ledger;
 }

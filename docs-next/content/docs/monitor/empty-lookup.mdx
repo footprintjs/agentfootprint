@@ -1,0 +1,128 @@
+---
+title: Empty Lookups
+description: The run produced the identifier and the lookup for it came back empty. An advisory that notices the pair — and never claims to know which kind of empty it found.
+---
+
+A triage agent's reverse-lookup tool filtered a column before a pivot. The column did not exist yet, so **every** reverse lookup returned an empty result — for every identifier, always. The tool answered *successfully* with an empty list. The agent read that list, and reported in a table, with confidence, that the device was "not currently logged in to any port on the collected switches", advising a check of the physical cabling.
+
+The device was logged in the whole time.
+
+Every rail this library ships passed, and passed honestly. Nothing errored. Nothing was ungrounded — the empty list really was what the tool returned. No coverage was overstated. The failure had no defect to point at, because **an empty result from a broken filter is byte-identical to an empty result from a genuine absence**, and nothing in the framework was responsible for noticing the difference.
+
+## What the library already knew
+
+Two facts, held separately, that had never been put next to each other:
+
+1. **the identifier was grounded** — it came out of an earlier tool result *in this run*, from a tool the consuming tool's own author had named in `argumentsFrom`;
+2. **the lookup keyed on it came back empty.**
+
+Joining them is the entire check. When the run itself produced the identifier and the lookup for it finds nothing, that is worth filing. Turn it on with one option:
+
+```ts
+const agent = Agent.create({ provider, model, noticeEmptyLookups: true }) // ← default off
+  .tool(fabricInventory)
+  .tool(portForDevice) // declares argumentsFrom: ['fabric_inventory']
+  .build();
+```
+
+## The ceiling — stated first, because it bounds everything below
+
+**An empty result can be perfectly true — the thing may exist and simply have nothing to show right now — so this is a place to look, never a verdict that anything is wrong.**
+
+That sentence ships as a string (`EMPTY_LOOKUP_CEILING`) and is quoted verbatim into every finding's own message, so the bound cannot drift out of the docs and leave a reader thinking the library knows more than it does. Nothing here can tell a broken filter from an honest absence, and nothing here pretends to: **the identical advisory is filed for both.** Findings carry `advisory: true` and are counted apart from real defects everywhere the family reports.
+
+This is deliberately *not* [`dangling-reference`](doc:context-integrity), whose meaning is the opposite. There the ground has left reach — the evidence was evicted and the tool is still offered. Here the ground **is** in reach, the run really did serve it, and the lookup came back with nothing.
+
+## The worked example
+
+Two tools. One lists the devices a fabric knows about; one says which port a device is logged in to, and declares where its arguments come from.
+
+```ts
+import { Agent, defineTool } from 'agentfootprint';
+
+const fabricInventory = defineTool({
+  name: 'fabric_inventory',
+  description: 'List the devices this fabric knows about, by their real ids.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: async () => 'devices: 20:00:00:25:b5:aa:00:1f (host-a), 20:00:00:25:b5:aa:00:2c (host-b)',
+});
+
+const portForDevice = defineTool({
+  name: 'port_for_device',
+  description: 'Which port a device is logged in to.',
+  inputSchema: { type: 'object', properties: { wwpn: { type: 'string' } }, required: ['wwpn'] },
+  argumentsFrom: ['fabric_inventory'], // ← the declaration. It already arms two other checks.
+  // The field bug, in one line: a filter applied before the pivot, so the
+  // column is not there yet and the match can never succeed.
+  execute: async () => [],
+});
+
+const agent = Agent.create({ provider, model, noticeEmptyLookups: true })
+  .tool(fabricInventory)
+  .tool(portForDevice)
+  .build();
+
+agent.on('agentfootprint.integrity.context_error', (e) => {
+  if (e.payload.kind === 'empty-lookup') console.log(e.payload.message);
+});
+
+await agent.run('which port is host-a on?');
+```
+
+The model calls `fabric_inventory`, takes `20:00:00:25:b5:aa:00:1f` out of its result, calls `port_for_device` with it, and gets an empty list. One advisory fires:
+
+> `'port_for_device'` was called with wwpn = "20:00:00:25:b5:aa:00:1f" — a value this run itself produced, in a result from `'fabric_inventory'`, which `'port_for_device'` declares as where its arguments come from — and the lookup came back with a rowset with zero rows. That pairing is what makes it worth a look: the run had the identifier, so an empty answer is either a true absence or a lookup that could never have matched, and those two are byte-identical from here. **An empty result can be perfectly true — the thing may exist and simply have nothing to show right now — so this is a place to look, never a verdict that anything is wrong.** Call id call-2. Nothing here blocked the call, changed the result, or retried anything.
+
+The finding names both tools in `subjects` (the consumer first, then the producer that grounded the value), carries the argument's dot-path as its `predicate`, and rides `seam: 'write'` — the seam where a fact is written into the run's context, which is exactly what an empty answer about to be read as truth is.
+
+Swap that `execute` for a tool that is working perfectly and genuinely finds nothing, and **you get the same advisory**. That is the design, not a gap: the check reports the pair, the ceiling says out loud that it cannot grade it, and a person decides.
+
+## What counts as empty — and what the library refuses to judge
+
+A result is read only when it can be **counted**, never interpreted.
+
+| The tool returned | Verdict |
+| --- | --- |
+| an array with zero elements | **empty** — a rowset with zero rows |
+| an array with any elements | not empty — a clean `checked-pass` |
+| an [`absent(...)`](doc:tools) envelope | **empty** — its author said the search ran and matched nothing |
+| a sentence, a `null`, a bespoke `{ rows: [] }` wrapper, any other object, a placement claim ticket | **not judged** — the library cannot see rows in it |
+
+What the library managed to see is the exported `LookupResultReading` — `{ shape: 'rowset' | 'absence', empty, rows? }`, or nothing at all when the shape is bespoke. The last row of that table is the point, not an omission. A bespoke shape files an explicit `not-applicable` row in the [disposition ledger](doc:context-integrity) and **no finding**. A check that silently skipped what it could not read would be the decoration this whole family exists to make impossible: "nothing was wrong" and "I could not look" have to stay different observable states. If your lookup tools return a wrapper, returning the rows directly — or declaring an `absent(...)` when there are none — is what makes them visible to this check, and the absence envelope buys you a routable status besides.
+
+The same fences the [choice seam](doc:context-integrity) uses apply here, read from the same file so the two can never disagree about which value they are talking about: non-strings are never checked, values under four characters are never checked, and grounding is case-insensitive substring — against the **declared producers' results only**, because `argumentsFrom` is the author saying where the value was supposed to come from.
+
+## Arming, and the two halves
+
+| | |
+| --- | --- |
+| **Dial** | `AgentOptions.noticeEmptyLookups` — `true` \| `false` (**default `false`**) |
+| **Declaration** | at least one tool with `argumentsFrom` |
+| **Posture** | the family's own: `integrityPosture: 'observe'` (default) files rows; `'dev'` adds the canary and the liveness throw |
+| **Kind / seam** | `empty-lookup` at `'write'` |
+| **Finding flag** | `advisory: true`, always |
+
+Both halves are required. The declaration alone is deliberately not enough — it already arms `dangling-reference` and `unsupported-argument`, and an advisory that armed itself off a declaration made for something else would not be opt-in at all.
+
+There is no `assist` / `guard` / `rails` trio here, and that is a decision rather than an omission: those postures grade **how hard a rail pushes back**, and this check never pushes back on anything. It has nothing to grade. The only posture question it has is the family's own — observe the rows, or additionally prove in `'dev'` that the checker can still catch its own synthetic defect.
+
+## Default off means byte-identical — with one deliberate exception
+
+Without the dial, no finding is filed, no event fires, and nothing on the wire, in the history, or in the answer changes. The one visible difference is a **registered `empty-lookup` row in the disposition report, filed `not-applicable`** — which is the family's law rather than an exception to it. A check that was never armed has to be a ROW, never a silent absence: silence is exactly what let two shipped checks in this codebase decay into decoration while a green report sat next to them.
+
+```ts
+agent.on('agentfootprint.integrity.disposition', (e) => {
+  const row = e.payload.rows.find((r) => r.check === 'empty-lookup');
+  // dial off → { seam: 'write', checked: 0, findings: 0, notApplicable: 1 }
+  // dial on, nothing empty → { checked: 3, findings: 0 }
+  // dial on, the field case → { checked: 1, findings: 1, lastFiredAt: … }
+});
+```
+
+`unreachable` on this row has a specific meaning worth watching: the consuming tool's declared producer served nothing at all in this run, so there was no corpus to join against. A row dominated by `unreachable` says applications are calling consumers before their declared producers — and that this check is watching a seam that is not where their identifiers actually come from.
+
+## See also
+
+- [Context Integrity](doc:context-integrity) — the family: seams, the finding event, the disposition vocabulary.
+- [Arming Context Integrity](doc:arming-context-integrity) — the cheapest declaration that arms each check.
+- [Tools](doc:tools) — `absent(...)`, the other half of "I looked and there is nothing".

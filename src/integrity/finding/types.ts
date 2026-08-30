@@ -22,7 +22,7 @@ import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { IntegritySeam } from '../disposition/types.js';
 
 /**
- * The five defect classes, by their plain names:
+ * The six defect classes, by their plain names:
  *
  * | kind | means | mechanism |
  * |---|---|---|
@@ -31,13 +31,23 @@ import type { IntegritySeam } from '../disposition/types.js';
  * | `dangling-reference`   | offered an action whose inputs are no longer available | closure   |
  * | `duplicate-execution`  | did settled work again                                 | once      |
  * | `unsupported-claim`    | stated something the record does not support           | grounding |
+ * | `empty-lookup`         | the run produced this value, and the lookup for it found nothing | join |
+ *
+ * `empty-lookup` is the one class that is ADVISORY BY CONSTRUCTION (9.77.0) —
+ * every finding it files carries `advisory: true`, because an empty result
+ * can be perfectly true and nothing in the library can tell a true absence
+ * from a lookup that could never have matched. It is a place to look, not a
+ * defect that was proven. It is deliberately NOT `dangling-reference`, whose
+ * meaning is the opposite: there the ground has left reach, here the ground
+ * is in reach and the lookup came back with nothing.
  */
 export type ContextErrorKind =
   | 'invariant-violation'
   | 'unsupported-argument'
   | 'dangling-reference'
   | 'duplicate-execution'
-  | 'unsupported-claim';
+  | 'unsupported-claim'
+  | 'empty-lookup';
 
 /** One detected context error — a labelled instance, automatically. */
 export interface ContextError {

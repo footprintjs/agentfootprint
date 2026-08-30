@@ -499,6 +499,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** Set at chart build: whether any tool in the FULL declared catalog
    *  (static registry + skill-carried tools) declared `argumentsFrom`. */
   private integrityDanglingPresent = false;
+  /** See AgentOptions.noticeEmptyLookups (9.77.0). Default false — absent is
+   *  byte-identical, save for the registered not-applicable ledger row. */
+  private readonly noticeEmptyLookups: boolean = false;
   /** See AgentOptions.externalGrounds (9.72.0). Absent = door closed,
    *  byte-identical behavior. */
   private readonly externalGrounds?: ExternalGroundsProvider;
@@ -918,6 +921,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         );
       }
       this.externalGrounds = opts.externalGrounds;
+    }
+    // The write-seam advisory's dial (9.77.0) — refused at construction for
+    // the same reason as the posture above: a truthy non-boolean here (a
+    // string, a number) would silently arm a check the author only half
+    // asked for, and the arming is what decides whether a run is
+    // byte-identical to the one before it.
+    if (opts.noticeEmptyLookups !== undefined) {
+      if (typeof opts.noticeEmptyLookups !== 'boolean') {
+        throw new Error(
+          `Agent: noticeEmptyLookups must be a boolean, got ` +
+            `${JSON.stringify(opts.noticeEmptyLookups)}. It arms the write-seam 'empty-lookup' ` +
+            `advisory — a lookup for a value this run itself produced coming back empty. ` +
+            `Omit it (or pass false) and no such advisory is ever filed.`,
+        );
+      }
+      this.noticeEmptyLookups = opts.noticeEmptyLookups;
     }
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
@@ -2714,6 +2733,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         composeInvariant: this.mapsPlan !== undefined,
         dangling: this.integrityDanglingPresent,
         claim: this.claimContract !== undefined,
+        // TWO HALVES (9.77.0): the operator's dial AND a declaration to arm
+        // on. Either alone leaves a registered `not-applicable` row.
+        emptyLookup: this.noticeEmptyLookups && this.integrityDanglingPresent,
       },
       this.integrityPosture,
     );
@@ -3546,6 +3568,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The external-ground door (9.72.0) — value-conditional for the same
       // reason: no provider, no key, byte-identical corpus assembly.
       ...(this.externalGrounds !== undefined && { externalGrounds: this.externalGrounds }),
+      // The write-seam advisory's arming (9.77.0) — this stage owns only the
+      // "no armed call this response" not-applicable note; the check itself
+      // runs where the result is. Value-conditional on BOTH halves, so an
+      // agent that never asked for it reads no new key.
+      ...(this.noticeEmptyLookups && toolGrounding.size > 0 && { noticeEmptyLookups: true }),
       integrityLedger: this.integrityLedgerHolder,
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
       ...(this.outputSchemaParser !== undefined && {
@@ -3652,6 +3679,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // contract to read it (9.61.0) — value-conditional, so every other
       // agent commits exactly what it always did.
       ...(this.claimContract !== undefined && { collectClaimFacts: true }),
+      // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
+      // map callLLM reads at the choice seam, so the two stages agree by
+      // construction about which calls are armed. Value-conditional on both
+      // halves — the operator's dial and at least one `argumentsFrom`
+      // declaration — so an agent that asked for neither hands the handler
+      // exactly the deps object it always did.
+      ...(this.noticeEmptyLookups &&
+        toolGrounding.size > 0 && {
+          emptyLookupGrounding: toolGrounding,
+          integrityLedger: this.integrityLedgerHolder,
+        }),
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),

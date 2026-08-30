@@ -445,6 +445,13 @@ export type { WriteProvenanceMode } from './core/agent/types.js';
 // can type its provider and its `external_ground_used` listeners.
 export type { ExternalGroundsProvider } from './core/agent/types.js';
 export type { ExternalGround, ExternalGrounding } from './integrity/unsupported-argument/check.js';
+// The write-seam advisory (9.77.0) — `AgentOptions.noticeEmptyLookups`. The
+// CEILING is exported as a string because it is quoted verbatim into every
+// finding this check files: a consumer rendering findings can recognize the
+// bound instead of re-wording it, and the docs, the code and the tests all
+// read one owner. `LookupResultReading` is what the library could see of a
+// result — the vocabulary behind a `not-applicable` row.
+export { EMPTY_LOOKUP_CEILING, type LookupResultReading } from './integrity/empty-lookup/check.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

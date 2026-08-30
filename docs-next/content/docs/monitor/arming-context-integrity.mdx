@@ -3,7 +3,7 @@ title: Arming Context Integrity
 description: Each Context Integrity check only runs once the application declares its precondition. This is the smallest declaration that arms each one — and what an unarmed check used to hide.
 ---
 
-[Context Integrity](doc:context-integrity) ships four checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` and `unsupported-argument` both need a tool that says where its arguments come from (one declaration, two seams), `unsupported-claim` needs a claim contract — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
+[Context Integrity](doc:context-integrity) ships five checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` and `unsupported-argument` both need a tool that says where its arguments come from (one declaration, two seams), `unsupported-claim` needs a claim contract, `empty-lookup` needs that same `argumentsFrom` field AND an operator's dial — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
 
 That is not hypothetical. This library's own reference agent shipped for weeks with every optional check unarmed, and a second, independent integration reported reaching the exact same state without knowing about the first. Nobody had declared the preconditions, nothing said so, and the report stayed green throughout. A consumer running this in production put it plainly: a page listing the cheapest way to arm each check would move more people to actually arm them than a fourth check ever would. This is that page.
 
@@ -18,8 +18,9 @@ That is not hypothetical. This library's own reference agent shipped for weeks w
 | `dangling-reference` | `compose` | `argumentsFrom: ['groundingTool']` on the dependent tool | nothing else |
 | `unsupported-argument` | `choice` | the SAME `argumentsFrom` field — nothing more to declare | nothing else |
 | `unsupported-claim` | `claim` | `.claims({ field: { entity, field } })` | `.outputSchema()` and a tool returning `semantic({ facts: [...] })` |
+| `empty-lookup` | `write` | `noticeEmptyLookups: true` **plus** the same `argumentsFrom` field | nothing else — see [Empty lookups](doc:empty-lookup) |
 
-Three of these are one field, and one of those three fields buys two checks at two different seams. The remaining one (`invariant-violation` at `compose`) is one call — `.maps()` with no arguments — but only once a skill map already exists; if nothing is mounted yet, `.maps()` refuses at `build()` rather than mounting a kernel over an empty set, because there would be nothing for it to park.
+Three of these are one field, and one of those three fields buys THREE checks at three different seams — `dangling-reference`, `unsupported-argument` and (once you also set the dial) `empty-lookup` all read the same `argumentsFrom` declaration. The remaining one (`invariant-violation` at `compose`) is one call — `.maps()` with no arguments — but only once a skill map already exists; if nothing is mounted yet, `.maps()` refuses at `build()` rather than mounting a kernel over an empty set, because there would be nothing for it to park.
 
 ## `invariant-violation` — two channels disagreeing about the same fact
 
@@ -195,17 +196,18 @@ Default posture is `'observe'`: rows only, no canary, no throw — the right cho
 
 ## What this doesn't cover — and says so
 
-The finding type names five defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`. **Four ship as checks.** `duplicate-execution` (did settled work again) has no implementation in this build — no code anywhere is looking for it.
+The finding type names six defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`, `empty-lookup`. **Five ship as checks.** `duplicate-execution` (did settled work again) has no implementation in this build — no code anywhere is looking for it.
 
 That absence is stated, not hidden. `find_context_errors` — the tool a debugging agent calls to read findings back from a recording — never offers that kind in its schema, and if something calls it with it anyway, it answers with an explicit refusal rather than a clean-sounding negative:
 
-> `find_context_errors: ⚠ UNANSWERABLE — 'duplicate-execution' is a defect class the finding type names, and no check in this build can file it. Nothing ever looked for one, so silence about it is not evidence of its absence. Classes this build can file: invariant-violation, unsupported-argument, dangling-reference, unsupported-claim — call again with one of those, or with no 'kind' at all.`
+> `find_context_errors: ⚠ UNANSWERABLE — 'duplicate-execution' is a defect class the finding type names, and no check in this build can file it. Nothing ever looked for one, so silence about it is not evidence of its absence. Classes this build can file: invariant-violation, unsupported-argument, dangling-reference, unsupported-claim, empty-lookup — call again with one of those, or with no 'kind' at all.`
 
-The alternative — silently returning "no duplicate-execution findings" — would be a false negative wearing the same green as a check that actually looked and found nothing. A doc page (or a tool response) that implies coverage that doesn't exist is exactly the disease this whole family exists to cure, so it refuses instead. If your agent's real risk is settled work being repeated, arming the four shipped checks buys you nothing there yet — that gap is open, named, and unclaimed by any declaration in this doc.
+The alternative — silently returning "no duplicate-execution findings" — would be a false negative wearing the same green as a check that actually looked and found nothing. A doc page (or a tool response) that implies coverage that doesn't exist is exactly the disease this whole family exists to cure, so it refuses instead. If your agent's real risk is settled work being repeated, arming the five shipped checks buys you nothing there yet — that gap is open, named, and unclaimed by any declaration in this doc.
 
 ## See also
 
 - [Context Integrity](doc:context-integrity) — the mechanism: seams, the finding event shape, the full disposition vocabulary.
 - [Mounted maps](doc:mounted-maps) — what `.maps()` and engagement parking actually do.
 - [Names and numbers from evidence](doc:evidence-gate) — the token-grounding check `unsupported-claim` exists to complete.
+- [Empty lookups](doc:empty-lookup) — the write-seam advisory in full, with the field failure it came from.
 - [Self-explain](doc:self-explain) — wiring `find_context_errors` into a debugging session over a recorded run.

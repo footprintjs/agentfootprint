@@ -62,6 +62,7 @@
  * Detection only. Nothing here blocks, rewrites or delays a call.
  */
 
+import { MIN_CHECKED_LENGTH, clipValue, stringLeaves } from '../argumentLeaves.js';
 import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { ContextError } from '../finding/types.js';
 
@@ -132,37 +133,17 @@ export interface UnsupportedArguments {
   readonly externalGroundings: readonly ExternalGrounding[];
 }
 
-/** Below this, substring matching says nothing. */
-const MIN_CHECKED_LENGTH = 4;
-
-/** Longest a single value is quoted at inside a message. */
-const MAX_QUOTED_CHARS = 80;
+/**
+ * The value fence, the quoting length and the argument walk moved to
+ * `../argumentLeaves.ts` when the write seam's `empty-lookup` check landed
+ * (9.77.0). Two checks now read one call's arguments and must agree, to the
+ * character, about which leaves are candidates and what their dot-paths are —
+ * the second check's whole job is to notice something about a value this one
+ * already excused.
+ */
 
 /** Deepest a schema is walked for `enum` declarations. */
 const MAX_SCHEMA_DEPTH = 8;
-
-function clip(value: string): string {
-  return value.length <= MAX_QUOTED_CHARS ? value : `${value.slice(0, MAX_QUOTED_CHARS - 1)}…`;
-}
-
-/** Every string leaf of an arguments object, with its dot-path. */
-function* stringLeaves(node: unknown, path: string): Generator<{ path: string; value: string }> {
-  if (typeof node === 'string') {
-    yield { path, value: node };
-    return;
-  }
-  if (Array.isArray(node)) {
-    for (let i = 0; i < node.length; i++) {
-      yield* stringLeaves(node[i], path === '' ? String(i) : `${path}.${String(i)}`);
-    }
-    return;
-  }
-  if (node !== null && typeof node === 'object') {
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      yield* stringLeaves(value, path === '' ? key : `${path}.${key}`);
-    }
-  }
-}
 
 /**
  * Best-effort: every string an `enum` array declares anywhere in a tool's
@@ -292,12 +273,16 @@ export function unsupportedArgumentsOf(
         witnesses,
         epoch,
         message: selfReferenced
-          ? `'${call.toolName}' was called with ${leaf.path} = "${clip(value)}", and the only ` +
+          ? `'${call.toolName}' was called with ${leaf.path} = "${clipValue(
+              value,
+            )}", and the only ` +
             `place that value appears in the frame the model chose from is the model’s own ` +
             `earlier answer. Rendered text is not evidence — a value re-read out of prose can ` +
             `be a fragment of something else entirely. To ground it, ${refetch}. Nothing here ` +
             `blocked the call.`
-          : `'${call.toolName}' was called with ${leaf.path} = "${clip(value)}", and that value ` +
+          : `'${call.toolName}' was called with ${leaf.path} = "${clipValue(
+              value,
+            )}", and that value ` +
             `appears nowhere in the frame the model chose from — not in the instructions, not ` +
             `in any message from the user, not in any tool result. Nothing served it, so ` +
             `nothing in this run can say what it refers to. To ground it, ${refetch}. Nothing ` +

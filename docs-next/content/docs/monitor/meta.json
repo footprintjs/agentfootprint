@@ -6,6 +6,7 @@
     "observability",
     "context-integrity",
     "arming-context-integrity",
+    "empty-lookup",
     "recordings",
     "exporters",
     "context-engineering-recorder",

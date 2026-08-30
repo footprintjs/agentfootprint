@@ -40,7 +40,7 @@ import {
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
-import { contextErrorIdentity, type ContextError } from '../../../integrity/finding/types.js';
+import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
@@ -65,34 +65,6 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
-
-/**
- * File integrity findings on the shared seen-list rail (9.60.0): identity
- * dedup across passes — freshest copy first, since the tools slot may have
- * extended the list earlier THIS pass — so one defect emits ONE
- * `integrity.context_error` per run, however many calls re-detect it.
- * Every seam in this stage files through here; a second copy of this loop
- * would eventually disagree with the first about what "already filed" means.
- */
-function fileIntegrityFindings(
-  scope: TypedScope<AgentState>,
-  findings: readonly ContextError[],
-  iteration: number,
-): void {
-  if (findings.length === 0) return;
-  const seenIds =
-    (scope.$getValue('integrityFindingIds') as readonly string[] | undefined) ??
-    (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
-    [];
-  const newIds: string[] = [...seenIds];
-  for (const f of findings) {
-    const id = contextErrorIdentity({ ...f, epoch: undefined });
-    if (newIds.includes(id)) continue;
-    newIds.push(id);
-    typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
-  }
-  if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
-}
 
 /**
  * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
@@ -167,6 +139,20 @@ export interface CallLLMStageDeps {
    * label. Absent → the corpus is exactly what it always was.
    */
   readonly externalGrounds?: () => readonly ExternalGround[];
+  /**
+   * The write seam's `empty-lookup` notice is armed (9.77.0) — present ONLY
+   * when the operator turned `AgentOptions.noticeEmptyLookups` on AND at least
+   * one tool declares `argumentsFrom`, the same two halves the ledger arms on.
+   *
+   * The CHECK itself lives at the tool-dispatch boundary, where a result
+   * exists. This stage owns exactly one thing for it: the honest
+   * `not-applicable` when a response made NO armed call. That has to be said
+   * from a stage every iteration passes through — the tool-calls handler only
+   * runs when the model asked for a tool, so a run that never calls one would
+   * otherwise leave an armed row untouched, and `assertAlive` would read that
+   * as the wiring rot it is not.
+   */
+  readonly noticeEmptyLookups?: boolean;
   /**
    * The staged-refs nudge's harvest (`.namesAndNumbersFromEvidence({ nudge:
    * true })`) — `Tool.wants` by tool name, present ONLY when the dial is on
@@ -807,6 +793,16 @@ export function buildCallLLMStage(
         // No armed tool was called this turn — a response with nothing this
         // check could be about. Stated, never silence.
         deps.integrityLedger?.current?.note('unsupported-argument', 'choice', 'not-applicable');
+      }
+      // THE WRITE SEAM'S other half (9.77.0). `empty-lookup` is judged where
+      // the RESULT is — the tool-dispatch boundary — but a response that
+      // asked for no armed tool can never produce an armed result, and that
+      // is decidable here, at the one stage every iteration passes through.
+      // Saying it out loud is what keeps an armed row from sitting untouched
+      // through a run that simply never called a declaring tool: a
+      // not-applicable row is an answer, and an untouched one reads as rot.
+      if (deps.noticeEmptyLookups === true && armedCalls.length === 0) {
+        deps.integrityLedger?.current?.note('empty-lookup', 'write', 'not-applicable');
       }
     }
 

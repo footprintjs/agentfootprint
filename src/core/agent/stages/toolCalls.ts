@@ -133,7 +133,11 @@ import {
 import type { ToolSemantics } from '../../../lib/semantics/types.js';
 import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
 import type { ClaimLedgerRow } from '../../../integrity/unsupported-claim/check.js';
+import { emptyLookupOf, readLookupResult } from '../../../integrity/empty-lookup/check.js';
+import type { ProducedResult } from '../../../integrity/empty-lookup/check.js';
+import { fileIntegrityFindings } from '../integrityFindings.js';
 import {
+  readAbsence,
   readCoverageResult,
   type CoverageFacts,
   type DeclaredCoverage,
@@ -164,6 +168,29 @@ export interface ToolCallsHandlerDeps {
    * checkpoint — bought for nobody.
    */
   readonly collectClaimFacts?: boolean;
+  /**
+   * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
+   * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator
+   * turned `AgentOptions.noticeEmptyLookups` on AND at least one tool declares
+   * one. Absent — the default — and not one line of the check runs.
+   *
+   * The same harvested map `callLLM` reads for the choice seam, and passed
+   * rather than re-derived from `registryByName` on purpose: the two stages
+   * must agree, by construction, about which calls are armed. Deriving it here
+   * would arm `ToolProvider`-delivered tools that the choice seam structurally
+   * cannot see, and the two seams' ledger rows would then disagree about the
+   * same run.
+   */
+  readonly emptyLookupGrounding?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The per-run disposition ledger, by REFERENCE (9.60.0) — the same holder
+   * `callLLM` and the tools slot are handed, shared through the build closure
+   * and never scope state. Read by the write-seam check only; a handler built
+   * without it simply files no rows.
+   */
+  readonly integrityLedger?: {
+    current: import('../../../integrity/disposition/ledger.js').DispositionLedger | undefined;
+  };
   /** Optional external `.toolProvider()` for per-iteration dynamic
    *  tools (skill-scoped, multi-tenant, etc.). Consulted only when
    *  the static registry doesn't have the tool. */
@@ -793,6 +820,87 @@ export function buildToolCallsHandler(
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
     return reading.status;
+  };
+
+  /**
+   * THE WRITE SEAM (9.77.0) — `empty-lookup`, at the one moment a lookup's
+   * answer becomes a fact in the conversation.
+   *
+   * The recorded failure this exists for: a reverse-lookup tool filtered a
+   * column before a pivot, so EVERY lookup returned an empty result, for
+   * every identifier, always — and the agent reported, with confidence and in
+   * a table, that the device was logged in nowhere. It was logged in the
+   * whole time. An empty result from a broken filter is byte-identical to an
+   * empty result from a genuine absence, so nothing anywhere could notice.
+   *
+   * What CAN be noticed is the pair: the run itself produced this identifier
+   * (it came out of a result from a tool this one's author named in
+   * `argumentsFrom`), and the lookup keyed on it came back empty. The finding
+   * is an ADVISORY and says so — an empty answer can be perfectly true, and
+   * this cannot tell which one it is looking at.
+   *
+   * Judged on the TOOL'S OWN answer, before the after-tool chain rewrites it
+   * for the model: whether the lookup found anything is a fact about the
+   * tool, not about what a governance rule then did with it. A refused,
+   * placed or capped result reads as bespoke anyway — a claim ticket has no
+   * rows to count.
+   */
+  const noticeEmptyLookup = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    args: Readonly<Record<string, unknown>>,
+    result: unknown,
+    history: readonly LLMMessage[],
+    /** The call produced a real result to read (ran, no error, nothing refused it). */
+    answered: boolean,
+  ): void => {
+    const grounding = deps.emptyLookupGrounding;
+    if (grounding === undefined) return;
+    const argumentsFrom = grounding.get(call.toolName);
+    if (argumentsFrom === undefined) return;
+    const ledger = deps.integrityLedger?.current;
+    // A call that never ran, was denied, errored or had its payload refused
+    // produced no lookup result to read. Not a pass, not a fail — the check
+    // met its subject and the subject is out of scope BY RULE, which is what
+    // `not-applicable` is for. Stated, never silence.
+    if (!answered) {
+      ledger?.note('empty-lookup', 'write', 'not-applicable');
+      return;
+    }
+    // The producer corpus: every earlier `role: 'tool'` message from a tool
+    // THIS tool declares as one of its grounds. `history` here excludes the
+    // call being judged (it is pushed after), and a producer called earlier
+    // in the same batch is already in it — which is right: the model can only
+    // have taken a value from a result it had already been served.
+    const produced: ProducedResult[] = [];
+    for (const message of history) {
+      if (message.role !== 'tool') continue;
+      const name = message.toolName;
+      if (typeof name !== 'string' || !argumentsFrom.includes(name)) continue;
+      produced.push({ toolName: name, text: message.content });
+    }
+    const { findings, disposition } = emptyLookupOf(
+      {
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        args,
+        argumentsFrom,
+        // `readAbsence` is the ONE owner of the `af_absent` marker; the pure
+        // check is handed its verdict rather than re-deriving it, so
+        // `src/integrity/` stays a leaf and the reserved word keeps one
+        // spelling.
+        reading: readLookupResult(result, readAbsence(result) !== undefined),
+      },
+      produced,
+      call.iteration,
+    );
+    ledger?.note(
+      'empty-lookup',
+      'write',
+      disposition,
+      disposition === 'checked-fail' ? Date.now() : undefined,
+    );
+    fileIntegrityFindings(scope, findings, call.iteration);
   };
 
   /**
@@ -3154,6 +3262,19 @@ export function buildToolCallsHandler(
           scope,
           { toolName: tc.name, toolCallId: tc.id, iteration },
           { result, modelResult: rawModelResult },
+          executed && !error && !denied && !ceilingRefused,
+        );
+        // The write seam (9.77.0) — judged on `result`, the tool's own answer,
+        // and on `newHistory`, which at this point holds every earlier tool
+        // result and not yet this one. Same guard the placement decision uses:
+        // a call that did not run, errored, was denied or had its payload
+        // refused has no lookup answer to read.
+        noticeEmptyLookup(
+          scope,
+          { toolName: tc.name, toolCallId: tc.id, iteration },
+          callArgs,
+          result,
+          newHistory,
           executed && !error && !denied && !ceilingRefused,
         );
         // The ceiling, last — after the tool, after the chain. A rule that

@@ -560,7 +560,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
 // ── find_context_errors ────────────────────────────────────────────────────
 
 /**
- * The five ContextErrorKinds — each mapped to the check that can FILE it in
+ * The six ContextErrorKinds — each mapped to the check that can FILE it in
  * this build, or `false` when no check ships for that class.
  *
  * Two jobs in one table:
@@ -569,8 +569,8 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
  *     a kind added to the finding type without joining this list fails to
  *     compile HERE, rather than becoming a value the tool's enum silently
  *     rejects at run time.
- *   - the honesty gate. `ContextErrorKind` names five defect classes;
- *     `src/integrity/` ships four checks. Offering the fifth in the
+ *   - the honesty gate. `ContextErrorKind` names six defect classes;
+ *     `src/integrity/` ships five checks. Offering the sixth in the
  *     schema enum invites a query whose only possible answer is a negative
  *     verdict about a class nothing in the library could have filed — the
  *     tool telling a model "no duplicate-execution errors" when nothing on
@@ -584,6 +584,7 @@ const CONTEXT_ERROR_KIND_CHECKS: Record<ContextErrorKind, string | false> = {
   'dangling-reference': 'src/integrity/dangling-reference (compose)',
   'duplicate-execution': false,
   'unsupported-claim': 'src/integrity/unsupported-claim (claim)',
+  'empty-lookup': 'src/integrity/empty-lookup (write)',
 };
 const ALL_CONTEXT_ERROR_KINDS = Object.keys(CONTEXT_ERROR_KIND_CHECKS) as ContextErrorKind[];
 /** The kinds the tool OFFERS — the ones a shipped check can actually file. */
@@ -935,7 +936,8 @@ function buildFindContextErrors(
     description:
       'What did this run CONTRADICT ITSELF about? Lists the Context Integrity findings the ' +
       'library already caught — an invariant violated, an offered action whose inputs left ' +
-      'scope, an argument nothing served, a claim the record does not support — each with the ' +
+      'scope, an argument nothing served, a claim the record does not support, a lookup for a ' +
+      'value this run produced that came back empty — each with the ' +
       'step it was filed at and the ' +
       'exact drill that opens the state behind it. Call it EARLY when an answer looks wrong: a ' +
       'contradiction the library already caught beats re-deriving one. Reads only; nothing is ' +
