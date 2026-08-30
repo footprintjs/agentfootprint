@@ -83,9 +83,36 @@ jobs:
         working-directory: docs-next
         run: npm install
 
-      - name: Build docs-next (twoslash-gates every code block)
+      # Built as the STATIC EXPORT, with the same EXPORT/basePath env docs.yml
+      # deploys with, so this job measures the artifact that actually ships
+      # instead of a near-miss of it. Same page render, same twoslash gate.
+      - name: Build docs-next static export (twoslash-gates every code block)
         working-directory: docs-next
+        env:
+          EXPORT: 'true'
+          NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
         run: npm run build
+
+      # Site-budget RATCHET, on every push and PR — the visible half of the gate.
+      # The same check runs in docs.yml (after merge, in a workflow nobody
+      # watches) and in publish.yml (on the release path, where it blocks). It
+      # runs here because the export is already built two steps up, so the
+      # marginal cost is one second of stat()ing files.
+      #
+      # WHAT THIS NOW GUARANTEES: the commit that pushes the export over a
+      # ceiling is red at the moment it is proposed, in the check people already
+      # read, with the measured bytes in the log — rather than four days and
+      # three releases later when someone thinks to open Deploy Docs.
+      #
+      # WHAT IT CANNOT DO: stop a release by itself. CI runs on `push` and the
+      # publish on `release: published`; release.sh fires both within seconds of
+      # each other, so npm never waits on this verdict (the same wiring that let
+      # a red docs-truth ratchet reach the registry in 9.58.0). The BLOCKING copy
+      # of this gate is the one in publish.yml; this one is how anybody finds out
+      # before it gets that far.
+      - name: Enforce site performance budgets
+        working-directory: docs-next
+        run: npm run check:site-budget
 
   # Doc-links gate — every internal cross-reference in docs-next must resolve.
   # Hand-written guides link by stable id (doc:<id>, resolved at build by

@@ -57,7 +57,41 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // Raising it is the honest response — a stale published site is a worse lie
 // than a bigger export — but a ceiling that goes red unwatched is only half a
 // ratchet, so the real follow-up is making this job's failure visible.
-const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 136_000_000 };
+// Raised for 9.78.0 — the SAME failure, a second time, exactly as the block
+// above predicted. That follow-up ("making this job's failure visible") was
+// never built, so nothing watched the ratchet again: on 9.76.0 all FOUR
+// ceilings in this file crossed at once, and the published site then sat stale
+// through 9.76.1, 9.77.0 and 9.78.0 while every npm publish went green, because
+// Deploy Docs fails independently of Publish to npm. Measured, from the CI logs
+// of the Deploy Docs runs themselves:
+//   9.75.0   2026-08-28 14:47   672.11 MB   6,684 files   134.02 MB dup   403.7 KB demo   GREEN
+//   9.76.0   2026-08-28 16:32   724.51 MB   6,994 files   144.99 MB dup   405.1 KB demo   <- all four cross
+//   9.76.1   2026-08-28 17:38   724.52 MB   6,994 files   145.00 MB dup   405.1 KB demo
+//   9.77.0   2026-08-30 04:47   730.04 MB   7,024 files   146.20 MB dup   406.0 KB demo
+//   9.78.0   2026-08-30 06:29   749.05 MB   7,134 files   150.29 MB dup   408.9 KB demo
+// 9.76.0 is +52.40 MB and +310 files by itself. A docs route is 9 files, so
+// that is ~34 new routes — the runbook-as-tool family: one hand-written page
+// plus the API-reference pages the generator derives from the new exports in
+// dist/ at build time. And a docs route costs ~1.07 MB of export on its own:
+// index.html (avg 427 KB) + index.txt + __next._full.txt (223 KB each, and
+// byte-identical to each other) + the /docs layout segment, which is a
+// byte-identical 165 KB copy of the shared nav tree written into EVERY route
+// directory. That is the amplification this metric always shows: a new page
+// pays ~1 MB for itself, and again a little inside every other page's embedded
+// nav. The remaining three releases are the ordinary version of the same thing.
+// Raising is the honest response — a stale published site is a worse lie than a
+// bigger export — and the headroom stays deliberately thin (~2%, roughly one
+// release of growth at the rate above), so the next unnoticed jump still trips
+// it. What is different this time is that the jump can no longer go unnoticed:
+// .github/workflows/publish.yml runs this exact check inside the job the npm
+// publish `needs:`, so a red budget now blocks a release, and ci.yml's docs job
+// runs it on every push and PR so the red lands in the check people already
+// read. Those two workflow comments state precisely what that does and does not
+// guarantee. Whether to keep raising or to shrink the export is still open —
+// the 261.85 MB of exact-duplicate content this export contains (35.1% of it,
+// 110.40 MB of which is that one 165 KB layout segment, repeated 669 times) is
+// where any trim starts.
+const OUTPUT_LIMITS = { bytes: 765_000_000, files: 7_250, duplicateRscBytes: 153_000_000 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
@@ -74,7 +108,22 @@ const OUTPUT_LIMITS = { bytes: 700_000_000, files: 6_700, duplicateRscBytes: 136
 //
 // Headroom stays deliberately thin (the ratchet's whole point), so the next
 // unnoticed jump still trips it.
-const DEMO_ASYNC_GZIP_LIMIT = 405_000;
+//
+// Raised for 9.78.0: 403.7 KB → 408.9 KB measured, still across the same 16
+// async assets, so this is the 9.61.0 story repeating rather than a chunking
+// change — three more families landed in the main entry's transitive graph
+// (9.76.0 runbookAsTool, 9.77.0 and 9.78.0 the integrity rows) and the demo
+// imports `defineTool` from 'agentfootprint', so it carries them:
+//   9.75.0  403.7 KB  GREEN      9.76.0  405.1 KB  <- crosses, by 0.1 KB
+//   9.76.1  405.1 KB             9.77.0  406.0 KB
+//   9.78.0  408.9 KB
+// Crossing by 0.1 KB blocked the deploy for four days just as thoroughly as
+// crossing by 50 MB would have — a gate nobody watches fails the same whether
+// it misses by a hair or a mile, which is the argument for the publish-path
+// gate now wired in .github/workflows/publish.yml. The fix named in 9.61.0
+// (reach the checks only through a dynamic import) is still the fix if this
+// keeps climbing.
+const DEMO_ASYNC_GZIP_LIMIT = 413_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

@@ -41,6 +41,50 @@ jobs:
       # build` the check requires.
       - run: npm run docs:truth
 
+      # Site-budget RATCHET — the SAME check the Deploy Docs workflow runs
+      # (docs.yml, step "Enforce site performance budgets"). It lives here for
+      # exactly the reason docs-truth does: Deploy Docs is wired to a different
+      # trigger and gates nothing, so its red has never been able to stop
+      # anything. Twice now it hasn't. 9.72.0 and 9.73.0 shipped to npm over a
+      # red ceiling on 2026-08-26; then 9.76.0 crossed all four ceilings at once
+      # and 9.76.1, 9.77.0 and 9.78.0 shipped over them too, while the published
+      # documentation site sat four days and three releases stale. Every one of
+      # those publishes was green. The measured history is in the comment above
+      # OUTPUT_LIMITS in docs-next/scripts/check-site-budget.mjs.
+      #
+      # WHAT THIS NOW GUARANTEES: no version reaches npm while the docs site is
+      # over budget. This is the job `publish` needs:, so its failure withholds
+      # the registry push, whatever created the release — release.sh, the web
+      # UI, another machine, a re-run. The release stops with the measured bytes
+      # in the log, and the fix is a commit (raise the ceiling with the history,
+      # or trim the export) plus a re-run of this workflow.
+      #
+      # WHAT IT STILL CANNOT DO. (1) It cannot un-cut the tag: the git tag and
+      # the GitHub release exist before this workflow starts, so a red budget
+      # blocks the PUBLISH, not the tagging — recovery is fix + re-run, and the
+      # version number is already spent. (2) It cannot catch a budget that goes
+      # red between releases; ci.yml's docs job runs the same check on every
+      # push and PR for that. (3) It does not deploy the site — Deploy Docs
+      # still owns that and still has to go green on its own; this only makes it
+      # impossible to ship a release while that job is doomed to fail. (4) It
+      # measures THIS commit: a budget that goes red from a docs-only commit
+      # landing after the release is a CI red, not a publish block.
+      #
+      # Cost: this is the docs static export (~4-6 min), which is why it runs on
+      # the release path rather than in every matrix leg of the test job.
+      - name: Install docs-next deps (site-budget gate)
+        working-directory: docs-next
+        run: npm install
+      - name: Build docs static export
+        working-directory: docs-next
+        env:
+          EXPORT: 'true'
+          NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
+        run: npm run build
+      - name: Enforce site performance budgets
+        working-directory: docs-next
+        run: npm run check:site-budget
+
       # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
