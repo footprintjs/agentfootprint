@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.80.0] - 2026-08-30
+
+### Added
+
+- **`presentation` on `runbookAsTool` — a rowset's surface is a fact about the
+  CLIENT, and the caller is the only one who knows it.** Seen in production: a
+  triage answer opened with a wall of pipe-delimited rows — the entire verdict
+  table retyped into the prose — while those same rows were already on screen
+  beside it, ticketed as a dataset with a table view and a chart view. The host
+  had a standing rule against exactly that. The library was overruling it.
+
+  The instruction was ours. Every verdict projection shipped `table`
+  pre-rendered with `VERDICT_RENDER_NOTE`: *"table is PRE-RENDERED over the
+  same rows as `verdicts` — output it VERBATIM."* That note is RIGHT wherever
+  the model's words are the rows' only surface — a chat client, a log line, an
+  email — because the alternative there is retyping, and a retyped identifier
+  that looks right and matches nothing is the failure the note exists to stop.
+  It is WRONG in a client that draws the rowset itself: the retype buys
+  nothing, runs the same transcription risk, and lands a second, subtly
+  different copy of the table beside the real one.
+
+  Nothing in a chart, a `resultKind` or a rule set says whether a human will
+  read these rows in prose or in a grid — the bridge cannot know which client
+  it is in. So the caller says, in one word:
+
+  ```ts
+  runbookAsTool({ /* … */ presentation: 'panel' });   // default: 'prose'
+  ```
+
+  - **`'prose'` (the default)** — today's envelope, key for key: `table`
+    pre-rendered over the shown rows, `render_note` = `VERDICT_RENDER_NOTE`.
+    Every existing consumer is byte-identical, pinned by a test that asserts
+    the whole `result` key list in order.
+  - **`'panel'`** — the host renders the rowset, so the envelope omits `table`
+    ENTIRELY (the key, not an empty string), and `render_note` becomes the new
+    exported `PANEL_RENDER_NOTE`, which states the opposite law: the rows are
+    already on the reader's screen; do not reproduce them in prose in any form
+    — not as a table, not as bullets, not as one sentence per row; when a
+    finding names a row, quote the evidence sentence that row carries VERBATIM,
+    and cite only the values the finding rests on, copied byte-for-byte.
+
+  `verdicts`, `rows_shown`, `rows_total`, `rows_complete` and
+  `verdict_meanings` are identical across both modes for the same run — the
+  dial names who RENDERS the rows, never which rows there are. `table` stays
+  RESERVED in both modes, so a chart's `report` cannot put a table back into a
+  panel answer: the mode's promise outranks the freed name. An unknown value
+  THROWS at definition instead of falling back to `'prose'` — a mis-spelled
+  dial that silently keeps working is a dial you cannot trust to have been set.
+
+  **The ceiling, stated:** this changes what the envelope SHIPS, never what the
+  model does with it. A note is an instruction, not an enforcement —
+  `presentation: 'panel'` takes away the table the model was told to output; it
+  cannot stop a model that decides to retype rows anyway. And it is silent
+  about every other part of the answer: coverage, provenance, rule version and
+  the walk are untouched in both modes.
+
+  New exports beside `VERDICT_RENDER_NOTE`: **`PANEL_RENDER_NOTE`** and the
+  **`RunbookPresentation`** (`'prose' | 'panel'`) type. Worked example:
+  `examples/features/68-runbook-as-tool.ts` now registers the same procedure
+  twice, one dial apart, and prints both surfaces. Docs: "Who renders the
+  rowset" in `docs-next/content/docs/build/runbook-as-tool.mdx`.
+
 ## [9.79.0] - 2026-08-30
 
 ### Added

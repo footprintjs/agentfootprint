@@ -15,6 +15,7 @@ export {
 export {
   DECLINED_VERDICT,
   DEFAULT_MAX_ROWS,
+  PANEL_RENDER_NOTE,
   renderVerdictTable,
   VERDICT_RENDER_NOTE,
   verdictRowsOf,
@@ -24,6 +25,7 @@ export { DEFAULT_RECORDING_MAX_BYTES } from './recording.js';
 export type {
   RunbookAsToolOptions,
   RunbookEnvelope,
+  RunbookPresentation,
   RunbookProcedure,
   RunbookRecordingOptions,
   RunbookRules,

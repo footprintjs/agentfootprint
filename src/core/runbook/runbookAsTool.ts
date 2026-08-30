@@ -31,6 +31,13 @@
  *     `verdict_meanings` GENERATED from the decider's declared branches +
  *     the rule labels this run's decide() evidence carried.
  *
+ *   WHO RENDERS THE ROWSET (`presentation`, default `'prose'`): the bridge
+ *     cannot see which client it is in, so the caller says. Under `'prose'`
+ *     the model's words are the rowset's only surface — the table ships
+ *     pre-rendered and is output verbatim. Under `'panel'` the host draws
+ *     the rowset itself — no table ships, and the note says not to
+ *     reproduce rows the reader is already looking at.
+ *
  *   THREE OUTCOMES, honestly: a clean envelope; an inner ABSENCE passed
  *   through verbatim (the framework still reads it as an absence); and
  *   DECLINED rows counted into the ledger as not-checked ground.
@@ -105,12 +112,18 @@ import {
 import { absenceSignalOf, probeDispatch, recordingDispatch } from './dispatch.js';
 import { chartRecordingOf, mintChartRecording, resolveRecordingPolicy } from './recording.js';
 import { admitReport, REPORT_NOTE_KEY, shadowedFieldsNote } from './report.js';
-import type { RunbookAsToolOptions, RunbookEnvelope, VerdictRow } from './types.js';
+import type {
+  RunbookAsToolOptions,
+  RunbookEnvelope,
+  RunbookPresentation,
+  VerdictRow,
+} from './types.js';
 import {
   composeMeanings,
   DECLINED_VERDICT,
   DEFAULT_MAX_ROWS,
   meaningsRecorder,
+  PANEL_RENDER_NOTE,
   renderVerdictTable,
   resolveDecider,
   VERDICT_RENDER_NOTE,
@@ -122,6 +135,19 @@ import { DEFAULT_WALK_CAP, mintWalk, projectWalk, type NarrativeEntryView } from
  *  the rowset projection; every other kind ships the spine plus the chart's
  *  own `report`. */
 const VERDICT_KIND_PREFIX = 'verdict/';
+
+/** The presentations, as the dial spells them. */
+const PRESENTATIONS: readonly RunbookPresentation[] = ['prose', 'panel'];
+
+/**
+ * The projection's RESERVED VOCABULARY: the keys this run assembled, plus
+ * `table` — which `presentation: 'panel'` deliberately omits so that no table
+ * reaches the model at all. A `report` field spelling the freed name would put
+ * one straight back, so the mode's promise outranks the vacancy.
+ */
+function reservedProjectionNames(projection: Record<string, unknown> | undefined): string[] {
+  return projection === undefined ? [] : [...Object.keys(projection), 'table'];
+}
 
 function bagOf(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -196,6 +222,14 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       );
     }
   }
+  if (opts.presentation !== undefined && !PRESENTATIONS.includes(opts.presentation)) {
+    throw new Error(
+      `${label}: \`presentation\` names WHO renders the rowset — 'prose' (the default: the ` +
+        `model's prose is the rowset's only surface, so the pre-rendered table ships and is ` +
+        `output verbatim) or 'panel' (the host draws the rowset, so no table ships). Got ` +
+        `${JSON.stringify(opts.presentation)}.`,
+    );
+  }
   const cap = opts.walk?.cap;
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 1)) {
     throw new Error(
@@ -263,6 +297,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
 
   const inputSchema = opts.inputSchema ?? liftInputSchema(probeChart);
   const isVerdictKind = opts.resultKind?.startsWith(VERDICT_KIND_PREFIX) === true;
+  const rendersItsOwnRows = opts.presentation === 'panel';
   const maxRows = opts.verdicts?.maxRows ?? DEFAULT_MAX_ROWS;
   const walkCap = opts.walk?.cap ?? DEFAULT_WALK_CAP;
   // Resolved ONCE at definition. `undefined` is the whole off-switch: every
@@ -458,6 +493,11 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         rule_version: opts.rules?.version ?? 'undeclared',
         walk,
       };
+      // The rowset half is the same in both presentations — the dial names who
+      // RENDERS the rows, never which rows there are. Only the surface differs:
+      // prose gets the pre-rendered table plus "output it verbatim"; a panel
+      // host gets no table and the opposite law, because the rows it would
+      // retype are already on the reader's screen.
       const projection =
         shown !== undefined && rows !== undefined
           ? {
@@ -465,14 +505,15 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
               rows_shown: shown.length,
               rows_total: rows.length,
               rows_complete: shown.length === rows.length,
-              table: renderVerdictTable(shown),
-              render_note: VERDICT_RENDER_NOTE,
+              ...(rendersItsOwnRows
+                ? { render_note: PANEL_RENDER_NOTE }
+                : { table: renderVerdictTable(shown), render_note: VERDICT_RENDER_NOTE }),
               ...(meanings !== undefined && { verdict_meanings: meanings }),
             }
           : undefined;
       const report = admitReport(bagOf(state.report) ?? {}, [
         ...Object.keys(spine),
-        ...Object.keys(projection ?? {}),
+        ...reservedProjectionNames(projection),
       ]);
       const envelope: RunbookEnvelope = {
         af_coverage: ledger,

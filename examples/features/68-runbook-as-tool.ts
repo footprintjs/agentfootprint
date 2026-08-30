@@ -25,7 +25,12 @@
  *   - the OPTIONAL verdict projection — selected by `resultKind:
  *     'verdict/*'`: rows off the chart's `verdicts` state key, truthful
  *     counters, ONE cap for the list and the table, and `verdict_meanings`
- *     GENERATED from the decider's declared branches + rule labels.
+ *     GENERATED from the decider's declared branches + rule labels;
+ *   - `presentation` — WHO renders those rows. The same procedure is
+ *     registered twice here, one dial apart: 'prose' (default) ships the
+ *     pre-rendered table because the model's words are the rows' only
+ *     surface; 'panel' ships NO table, because the host already drew them
+ *     and retyping is pure transcription risk.
  *
  * Run:  npx tsx examples/features/68-runbook-as-tool.ts
  */
@@ -130,8 +135,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 
   // The runbook: inventory → bounded fan-out (one decider pass per subject,
   // each an isolated branch) → collect rows + declare the chart's own limits.
-  const triage = runbookAsTool({
-    name: 'backup_triage',
+  const declaration = {
     description: 'Assess backup protection posture for every subject in the estate.',
     resultKind: 'verdict/backup-posture',
     rules: { name: 'health-signal', version: 'v1' },
@@ -174,9 +178,23 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
           'collect',
         )
         .build(),
+  } as const;
+
+  // THE SAME PROCEDURE, ONE DIAL APART. `presentation` names who renders the
+  // rowset — the one thing about its client a runbook cannot work out for
+  // itself. Default 'prose': the model's words are the rows' only surface, so
+  // the table ships pre-rendered and is output verbatim. 'panel': the host
+  // draws the rowset beside the answer, so NO table ships and the note says
+  // not to retype rows the reader is already looking at.
+  const triage = runbookAsTool({ name: 'backup_triage', ...declaration });
+  const triageForPanel = runbookAsTool({
+    name: 'backup_triage_panel',
+    ...declaration,
+    presentation: 'panel',
   });
 
-  // Scripted: turn 1 calls the runbook; turn 2 answers from its envelope.
+  // Scripted: turn 1 runs the procedure for a chat client, turn 2 for a
+  // panel client, turn 3 answers from the envelopes.
   let turn = 0;
   const scripted =
     provider ??
@@ -187,6 +205,13 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
           return {
             content: 'Running the triage procedure.',
             toolCalls: [{ id: 'c1', name: 'backup_triage', args: {} }],
+            stopReason: 'tool_use',
+          };
+        }
+        if (turn === 2) {
+          return {
+            content: 'Running it again for the panel client.',
+            toolCalls: [{ id: 'c2', name: 'backup_triage_panel', args: {} }],
             stopReason: 'tool_use',
           };
         }
@@ -203,12 +228,17 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     .system('You run standing procedures and answer with their evidence.')
     .tool(inventory)
     .tool(triage) // composedOf drift-checked HERE — the catalog is complete
+    .tool(triageForPanel)
     .build();
 
   let envelope: RunbookEnvelope | undefined;
+  let panelEnvelope: RunbookEnvelope | undefined;
   agent.on('agentfootprint.stream.tool_end', (event) => {
     if (event.payload.toolCallId === 'c1') {
       envelope = event.payload.result as unknown as RunbookEnvelope;
+    }
+    if (event.payload.toolCallId === 'c2') {
+      panelEnvelope = event.payload.result as unknown as RunbookEnvelope;
     }
   });
 
@@ -221,6 +251,18 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     verdicts: envelope?.result.verdicts,
     verdict_meanings: envelope?.result.verdict_meanings,
     walk: envelope?.result.walk,
+    // The dial's whole visible effect: same rows, different surface.
+    prose_surface: {
+      ships_table: envelope !== undefined && 'table' in envelope.result,
+      render_note: envelope?.result.render_note,
+    },
+    panel_surface: {
+      ships_table: panelEnvelope !== undefined && 'table' in panelEnvelope.result,
+      render_note: panelEnvelope?.result.render_note,
+      rows_are_the_same:
+        JSON.stringify(panelEnvelope?.result.verdicts) ===
+        JSON.stringify(envelope?.result.verdicts),
+    },
   };
 }
 

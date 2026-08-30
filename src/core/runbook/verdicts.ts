@@ -13,6 +13,13 @@
  * structured list is an invitation that gets accepted — rows come back
  * retyped with subtly wrong identifiers.
  *
+ * TWO SURFACES, TWO LAWS: a rowset does not always reach its reader through
+ * the model's prose. Where it does, the table ships pre-rendered and the model
+ * is told to output it verbatim (`VERDICT_RENDER_NOTE`); where the HOST draws
+ * the rowset itself, no table ships and the model is told the opposite
+ * (`PANEL_RENDER_NOTE`). The bridge cannot tell which client it is in, so the
+ * caller says — `presentation` on the options bag.
+ *
  * GENERATED MEANINGS, never hand-restated: `verdict_meanings` is composed
  * from (a) the named decider's declared branches in the chart's own structure
  * (branch description, falling back to branch name), overlaid by (b) the rule
@@ -29,11 +36,28 @@ import type { VerdictRow } from './types.js';
 /** Default cap on `verdicts` rows and the rendered table. */
 export const DEFAULT_MAX_ROWS = 50;
 
-/** The render law, stated to the model beside every table. */
+/** The render law when PROSE is the rowset's only surface (`presentation:
+ *  'prose'`, the default) — stated to the model beside the table. */
 export const VERDICT_RENDER_NOTE =
   'table is PRE-RENDERED over the same rows as `verdicts` — output it VERBATIM. Never ' +
   'retype an identifier from `verdicts`; a transcribed name that looks right and matches ' +
   'nothing is the failure this note exists to stop.';
+
+/**
+ * The render law when the HOST renders the rowset (`presentation: 'panel'`) —
+ * stated to the model INSTEAD of a table, because there is none to ship.
+ *
+ * Same failure, opposite instruction. A rowset the reader can already see does
+ * not need retyping into prose; retyping it is how an identifier arrives
+ * subtly wrong beside a correct one on screen.
+ */
+export const PANEL_RENDER_NOTE =
+  "the rows in `verdicts` are ALREADY on the reader's screen — this host renders the " +
+  'rowset itself, so no table is shipped here. Do NOT reproduce those rows in prose in ' +
+  'any form: not as a table, not as bullets, not as one sentence per row. When a finding ' +
+  'names a row, quote the evidence sentence that row carries VERBATIM, and cite only the ' +
+  'values the finding rests on, copied byte-for-byte. A retyped identifier that looks ' +
+  'right and matches nothing is the failure this note exists to stop.';
 
 /** The reserved verdict word for "no classification was reached" — rows
  *  carrying it are counted into the coverage ledger as not-checked ground

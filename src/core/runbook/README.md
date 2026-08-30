@@ -31,11 +31,48 @@ One file per job:
   size, unserializable, a store that threw — is SPOKEN in
   `walk.recording_note` rather than left as a missing field.
 - `verdicts.ts` — the rowset off the `verdicts` state key, the one-cap
-  table, and meanings GENERATED from declared branches + observed rule
-  labels.
+  table, the two render laws (`VERDICT_RENDER_NOTE` / `PANEL_RENDER_NOTE`),
+  and meanings GENERATED from declared branches + observed rule labels.
 - `report.ts` — the precedence law: the chart's `report` is admitted BESIDE
   the envelope's own names, never over them; a refused field is named in
   `report_note` rather than dropped in silence.
+
+## Who renders the rowset — `presentation`
+
+A rowset can have a surface other than the model's prose. In a chat client it
+cannot: the words are the only place the rows can appear, so the table ships
+pre-rendered and the model is told to output it verbatim — retyping is the
+alternative, and a retyped identifier that looks right and matches nothing is
+the failure the note exists to stop. In a client that draws the rowset itself —
+a data panel, a grid, a report page — the reader is *already looking at the
+rows*, and asking for them again in prose runs the same transcription risk for
+no gain.
+
+The bridge cannot see which client it is in. The caller says:
+
+```ts
+// DEFAULT — prose is the rowset's only surface.
+runbookAsTool({ name: 'backup_triage', description, procedure, resultKind: 'verdict/backup-posture' });
+// result: { verdicts, rows_shown, rows_total, rows_complete,
+//           table: '| subject | verdict | …', render_note: VERDICT_RENDER_NOTE, … }
+
+// PANEL — the host tickets and draws this rowset itself.
+runbookAsTool({ …, presentation: 'panel' });
+// result: { verdicts, rows_shown, rows_total, rows_complete,
+//           render_note: PANEL_RENDER_NOTE, … }     ← no `table` key at all
+```
+
+`verdicts`, `rows_shown`, `rows_total`, `rows_complete` and `verdict_meanings`
+are byte-identical across the two: the dial names who *renders* the rows, never
+which rows there are. `table` is the only key that moves — and its name stays
+RESERVED in both modes, so a chart's `report` cannot put a table back into a
+panel answer. An unknown value is refused at definition rather than read as the
+default: a mis-spelled dial that silently keeps working cannot be trusted to
+have been set.
+
+It says nothing about the WALK's surface. A host that draws the rows usually
+wants to draw the walk too — that is `walk: { recording }` (`recording.ts`), and
+the two dials are independent: either can be on without the other.
 
 Reserved state keys the bridge reads: `verdicts`, `coverage`, `report`.
 Reserved verdict word: `declined` (counted into the ledger as not-checked).

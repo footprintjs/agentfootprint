@@ -573,6 +573,7 @@ export {
   // reason stated on `walk.recording_note`.
   DEFAULT_RECORDING_MAX_BYTES,
   DEFAULT_WALK_CAP,
+  PANEL_RENDER_NOTE,
   probeDispatch,
   projectWalk,
   recordingDispatch,
@@ -586,6 +587,7 @@ export {
   type RecordedDispatch,
   type RunbookAsToolOptions,
   type RunbookEnvelope,
+  type RunbookPresentation,
   type RunbookProcedure,
   type RunbookRecordingOptions,
   type RunbookRules,

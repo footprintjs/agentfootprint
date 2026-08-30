@@ -140,6 +140,41 @@ Discipline the dispatch holds for you:
 - **A declared `needs` resolves on the non-interactive path** (fail-closed); a tool that requires a human — `checkIn`, or a credential needing consent — refuses **by name**, because an inner call cannot pause.
 - **`composedOf` names the ingredients** — verified at `agent.build()`, when the catalog is complete. A renamed ingredient fails the build, not the first 3 a.m. run.
 
+## Who renders the rowset: `presentation`
+
+A rowset can have a surface other than the model's prose — and which one it has is the single thing about its client a runbook cannot work out for itself.
+
+In a **chat client** it cannot: the model's words are the only place the rows can appear. So the envelope ships `table` pre-rendered and tells the model to output it verbatim, because the alternative is retyping, and a retyped identifier that looks right and matches nothing is the failure that note exists to stop.
+
+In a client that **draws the rowset itself** — a data panel, a grid, a report page — the reader is already looking at the rows. Asking the model to reproduce them in prose runs exactly the same transcription risk, for no gain, and puts a second, subtly-different copy of the table beside the real one.
+
+So the caller declares it:
+
+```ts
+// DEFAULT — 'prose'. The model's words are the rowset's only surface.
+const triage = runbookAsTool({ /* … */ resultKind: 'verdict/backup-posture' });
+// result: { verdicts, rows_shown, rows_total, rows_complete,
+//           table: "| subject | verdict | age |\n…",
+//           render_note: "table is PRE-RENDERED … output it VERBATIM …", … }
+
+// 'panel' — this host tickets the rowset and draws it beside the answer.
+const triage = runbookAsTool({ /* … */ resultKind: 'verdict/backup-posture',
+                               presentation: 'panel' });
+// result: { verdicts, rows_shown, rows_total, rows_complete,
+//           render_note: "the rows in `verdicts` are ALREADY on the reader's screen …
+//                         Do NOT reproduce those rows in prose in any form …", … }
+//         ↑ no `table` key at all
+```
+
+- `verdicts`, `rows_shown`, `rows_total`, `rows_complete` and `verdict_meanings` are **identical** across the two modes for the same run — the dial names who *renders* the rows, never which rows there are.
+- `render_note` is present in both, because a rowset always ships with a rule about its surface. It is `VERDICT_RENDER_NOTE` under `'prose'` and `PANEL_RENDER_NOTE` under `'panel'`; both are exported, so a consumer or a test asserts on the constant rather than on a string literal.
+- `table` is the only key that moves, and it is **absent** under `'panel'` — the key itself, not an empty string. Its name stays reserved in both modes, so a chart's `report` cannot put a table back into a panel answer.
+- An unknown value **throws at definition**, never falls back to `'prose'`: a mis-spelled dial that silently keeps working is a dial you cannot trust to have been set.
+
+`PANEL_RENDER_NOTE` states four things: the rows are already on the reader's screen; do not reproduce them in prose in any form (table, bullets, or one sentence per row); quote the evidence sentence a row carries **verbatim** when the answer names that row; cite only the values the finding rests on, copied byte-for-byte.
+
+`presentation` is about the **rowset's** surface only. A host that draws the rows usually wants to draw the *walk* too — that is a different dial, `walk: { recording }` (see "Drawing the walk" below), and the two are independent: either can be on without the other.
+
 ## What the chart declares back (reserved state keys)
 
 | State key | The bridge reads it as |
@@ -221,9 +256,10 @@ The consumer redeems it with the artifact op it already has — `{ op: 'artifact
 
 Everything ships from the main barrel:
 
-- **`runbookAsTool(options)`** — the bridge. `RunbookAsToolOptions` is the full options bag; `RunbookProcedure` is the factory type (`(tools: ToolDispatch) => FlowChart`); `RunbookRules` is the `{ name, version }` provenance stamp; `RunbookVerdictsOptions` (`{ decider, maxRows }`, default cap `DEFAULT_MAX_ROWS` = 50) and `RunbookWalkOptions` (`{ cap, recording }`, default `DEFAULT_WALK_CAP` = 500) are the projection dials.
+- **`runbookAsTool(options)`** — the bridge. `RunbookAsToolOptions` is the full options bag; `RunbookProcedure` is the factory type (`(tools: ToolDispatch) => FlowChart`); `RunbookRules` is the `{ name, version }` provenance stamp; `RunbookVerdictsOptions` (`{ decider, maxRows }`, default cap `DEFAULT_MAX_ROWS` = 50), `presentation` (`'prose' | 'panel'`, default `'prose'`) and `RunbookWalkOptions` (`{ cap, recording }`, default `DEFAULT_WALK_CAP` = 500) are the projection dials.
 - **The chart recording** — `RunbookRecordingOptions` is the object form of `walk: { recording }` (`{ label, maxBytes }`), with `DEFAULT_RECORDING_MAX_BYTES` (5,000,000) as the ceiling a bundle is refused over. It files under the existing `RECORDING_ARTIFACT_KIND` (`'recording/run'`) via `recordingPutInput`, which now also accepts `toolCallId` so a tool-minted recording carries the same `origin` join key as the walk beside it.
-- **`RunbookEnvelope`** — the returned envelope type (spine + optional projection); `VerdictRow` is one rowset row (anything with a string `verdict`); `WalkDescriptor` is the spine's walk entry; `VERDICT_RENDER_NOTE` is the render law stated beside every table; `DECLINED_VERDICT` (`'declined'`) is the reserved no-classification verdict word.
+- **`RunbookEnvelope`** — the returned envelope type (spine + optional projection); `VerdictRow` is one rowset row (anything with a string `verdict`); `WalkDescriptor` is the spine's walk entry; `DECLINED_VERDICT` (`'declined'`) is the reserved no-classification verdict word.
+- **The two render laws** — `RunbookPresentation` (`'prose' | 'panel'`) is the `presentation` dial's type; `VERDICT_RENDER_NOTE` is the law stated beside a pre-rendered table under `'prose'`, and `PANEL_RENDER_NOTE` is the one stated instead of a table under `'panel'`.
 - **The dispatch** — `ToolDispatch` (`has`/`call`) and `ToolDispatchCallOptions` (`{ signal, allowAbsent }`) are the `ctx.tools` contract every tool sees. The bridge's own wrapper is exported for direct callers and tests: `recordingDispatch(delivered, name)` returns a `RecordedDispatch` (`{ tools, records }`, each an `InnerCallRecord`); `probeDispatch(name)` is the definition-time probe; `RunbookAbsenceSignal` is the control signal an un-survivable inner absence throws, recognized by `absenceSignalOf(err)` anywhere down a `cause` chain.
 - **The walk** — `projectWalk(entries, cap)` is the pure cap law, returning a `ProjectedWalk` of `WalkRow`s; the artifact kind constant is `CHART_WALK_ARTIFACT_KIND` (`'recording/chart-walk'`) with `chartWalkPutInput(rows, facts)` beside `recordingPutInput`.
 - **The projection helpers** — `verdictRowsOf(state)` reads the rowset off a final state; `renderVerdictTable(rows)` renders the one-cap markdown table.

@@ -69,6 +69,21 @@ export interface RunbookVerdictsOptions {
   readonly maxRows?: number;
 }
 
+/**
+ * WHO RENDERS THE ROWSET — the one thing about its client a runbook cannot
+ * work out for itself.
+ *
+ * `'prose'` — the model's prose is the rowset's only surface (a chat client,
+ * a log line, an email). The envelope ships the pre-rendered `table` and tells
+ * the model to output it verbatim, because retyping is the only alternative.
+ *
+ * `'panel'` — the host draws the rowset itself (a data panel, a grid, a
+ * report page). The envelope ships NO `table`, and says so: reproducing rows
+ * the reader is already looking at is the same transcription risk, run for no
+ * gain.
+ */
+export type RunbookPresentation = 'prose' | 'panel';
+
 /** The walk policy. */
 export interface RunbookWalkOptions {
   /** Row cap on the minted walk (default 500). When the full walk does not
@@ -174,6 +189,11 @@ export interface RunbookAsToolOptions {
   readonly rules?: RunbookRules;
   /** The verdict projection's dials — see {@link RunbookVerdictsOptions}. */
   readonly verdicts?: RunbookVerdictsOptions;
+  /** Who renders the rowset — see {@link RunbookPresentation}. Default
+   *  `'prose'`; an unknown value is refused at definition, never read as the
+   *  default (a mis-spelled dial that silently keeps working is a dial that
+   *  cannot be trusted to have been set). */
+  readonly presentation?: RunbookPresentation;
   /** The walk policy — see {@link RunbookWalkOptions}. */
   readonly walk?: RunbookWalkOptions;
 
@@ -292,9 +312,19 @@ export interface RunbookEnvelope {
     readonly rows_shown?: number;
     readonly rows_total?: number;
     readonly rows_complete?: boolean;
-    /** Pre-rendered markdown table over the SAME rows as `verdicts`. */
+    /** Pre-rendered markdown table over the SAME rows as `verdicts`. Present
+     *  under `presentation: 'prose'` (the default), where the model's prose is
+     *  the rowset's only surface. ABSENT — the key itself, not an empty
+     *  string — under `'panel'`, where the host draws the rowset and a second
+     *  copy in prose would be a retype of what the reader can already see. The
+     *  name stays RESERVED in both modes, so a chart's `report` cannot put a
+     *  table back into a panel answer. */
     readonly table?: string;
-    /** The render law, stated to the model. Present with `table`. */
+    /** The render law, stated to the model — present with the projection in
+     *  BOTH modes, because a rowset always ships with a rule about its
+     *  surface. `VERDICT_RENDER_NOTE` under `'prose'` (output the table
+     *  verbatim); `PANEL_RENDER_NOTE` under `'panel'` (the rows are already on
+     *  screen — quote the evidence, never reproduce them). */
     readonly render_note?: string;
     /** branch → meaning, GENERATED from the decider's declared branches and
      *  the rule labels this run's evidence carried — never hand-restated. */

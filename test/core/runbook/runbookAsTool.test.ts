@@ -11,6 +11,9 @@
  *     provenance sentence
  *   - Absence pass-through: an inner absent() returns VERBATIM
  *   - Projection selection: non-verdict resultKind ships NO rowset keys
+ *   - PRESENTATION: omitting the dial ships the pre-9.80.0 envelope key for
+ *     key; 'panel' ships NO `table` key at all and the opposite render law;
+ *     the rowset half is identical across modes; an unknown value throws
  *   - Walk cap law: control flow survives, counters truthful
  *   - No store → descriptor present without ref, note names why
  *   - RECORDING MINT (9.79.0): opt-in files the inner chart's own
@@ -44,10 +47,13 @@ import {
   DEFAULT_RECORDING_MAX_BYTES,
   defineTool,
   inMemoryArtifacts,
+  PANEL_RENDER_NOTE,
   projectWalk,
   RECORDING_ARTIFACT_KIND,
   recordingPutInput,
+  renderVerdictTable,
   runbookAsTool,
+  VERDICT_RENDER_NOTE,
   type ArtifactRef,
   type RunbookEnvelope,
   type Tool,
@@ -540,6 +546,115 @@ describe('runbookAsTool — scenario: the triage-shaped procedure', () => {
     expect(envelope.result.subjects_total).toBe(3);
     // The clean path pays nothing: no refusal note when nothing collided.
     expect(envelope.result.report_note).toBeUndefined();
+  });
+});
+
+// ─── 2b. SCENARIO — presentation: who renders the rowset ──────────
+
+/** Run the triage tool with extra declarations, against a real store. */
+async function runTriageWith(overrides: Record<string, unknown>): Promise<RunbookEnvelope> {
+  const { ctx } = ctxWithStore({
+    tools: dispatchOver({ backup_inventory: inventoryTool }),
+  } as Partial<ToolExecutionContext>);
+  return (await triageTool(overrides).execute({}, ctx)) as RunbookEnvelope;
+}
+
+/** The walk's ref is minted fresh per run — everything else is the wire. */
+function withoutWalkRef(envelope: RunbookEnvelope): unknown {
+  return JSON.parse(
+    JSON.stringify(envelope, (key, value) => (key === 'ref' ? '<minted>' : value)),
+  ) as unknown;
+}
+
+/** The `result` key list the pre-9.80.0 wire shipped, in order. */
+const PROSE_RESULT_KEYS = [
+  'af_provenance',
+  'rule_version',
+  'stale_after_days',
+  'subjects_total',
+  'verdicts',
+  'rows_shown',
+  'rows_total',
+  'rows_complete',
+  'table',
+  'render_note',
+  'verdict_meanings',
+  'walk',
+];
+
+describe('runbookAsTool — scenario: presentation names who renders the rowset', () => {
+  it('DEFAULT: omitting `presentation` ships the pre-9.80.0 envelope, key for key', async () => {
+    const envelope = await runTriageWith({});
+    // NEUTRALIZE-PROOF (default preservation): the wire's own key list, in
+    // order — a projection key added, dropped or reordered turns this red.
+    expect(Object.keys(envelope.result)).toEqual(PROSE_RESULT_KEYS);
+    expect(envelope.result.render_note).toBe(VERDICT_RENDER_NOTE);
+    expect(envelope.result.table).toBe(renderVerdictTable(envelope.result.verdicts ?? []));
+    // And the default IS 'prose' — not a third, unnamed behaviour.
+    const explicit = await runTriageWith({ presentation: 'prose' });
+    expect(withoutWalkRef(explicit)).toEqual(withoutWalkRef(envelope));
+  });
+
+  it('PANEL: no `table` KEY at all, and render_note states the opposite law', async () => {
+    const envelope = await runTriageWith({ presentation: 'panel' });
+    // Absent, not empty: a `table: ''` would still be a table field the model
+    // can be told to output.
+    expect('table' in envelope.result).toBe(false);
+    expect(Object.keys(envelope.result)).not.toContain('table');
+    expect(envelope.result.render_note).toBe(PANEL_RENDER_NOTE);
+    expect(PANEL_RENDER_NOTE).not.toBe(VERDICT_RENDER_NOTE);
+  });
+
+  it('PANEL: the rowset half is identical to prose for the same run', async () => {
+    const prose = await runTriageWith({});
+    const panel = await runTriageWith({ presentation: 'panel' });
+    // The dial says who RENDERS the rows, never which rows there are.
+    expect(panel.result.verdicts).toEqual(prose.result.verdicts);
+    expect(panel.result.rows_shown).toBe(prose.result.rows_shown);
+    expect(panel.result.rows_total).toBe(prose.result.rows_total);
+    expect(panel.result.rows_complete).toBe(prose.result.rows_complete);
+    expect(panel.result.verdict_meanings).toEqual(prose.result.verdict_meanings);
+    expect(panel.af_coverage.sentence).toBe(prose.af_coverage.sentence);
+  });
+
+  it('PANEL: `table` stays RESERVED, so a report field cannot put one back', async () => {
+    // The mode's promise (no table reaches the model) outranks the freed name.
+    const tool = runbookAsTool({
+      name: 'panel_report_collision',
+      description: 'd',
+      resultKind: 'verdict/backup-posture',
+      presentation: 'panel',
+      procedure: () =>
+        flowChart<TriageState>(
+          'collide',
+          (scope) => {
+            scope.verdicts = [{ subject: 'cluster-a', verdict: 'protected', age: 1 }];
+            scope.report = { table: '| all | good |' };
+          },
+          'act',
+        ).build(),
+    });
+    const { ctx } = ctxWithStore();
+    const out = (await tool.execute({}, ctx)) as RunbookEnvelope;
+    expect('table' in out.result).toBe(false);
+    expect(out.result.report_note).toContain('`table`');
+  });
+
+  it('an unknown presentation is REFUSED at definition, never read as prose', () => {
+    expect(() => triageTool({ presentation: 'table' })).toThrow(/`presentation`/);
+    expect(() => triageTool({ presentation: 'panel ' })).toThrow(/`presentation`/);
+    expect(() => triageTool({ presentation: null })).toThrow(/`presentation`/);
+  });
+
+  it('PANEL_RENDER_NOTE states the four commitments a panel host needs', () => {
+    // The note is the only thing the model reads about the rowset's surface,
+    // so its content is the contract — asserted here, not on a literal.
+    expect(PANEL_RENDER_NOTE).toMatch(/already/i);
+    expect(PANEL_RENDER_NOTE).toMatch(/table/i);
+    expect(PANEL_RENDER_NOTE).toMatch(/bullet/i);
+    expect(PANEL_RENDER_NOTE).toMatch(/one sentence per row/i);
+    expect(PANEL_RENDER_NOTE).toMatch(/VERBATIM/);
+    expect(PANEL_RENDER_NOTE).toMatch(/byte-for-byte/i);
   });
 });
 
