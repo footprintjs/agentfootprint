@@ -42,7 +42,7 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:621](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L621)
+Defined in: [src/core/agent/types.ts:733](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L733)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -55,7 +55,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:614](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L614)
+Defined in: [src/core/agent/types.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L726)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -65,6 +65,75 @@ enabled (auto-resolved per provider via the strategy registry).
 Use `'off'` for low-frequency agents (cron jobs running once per
 hour) where the cache TTL guarantees zero cache hits and the
 cache-write penalty isn't worth paying.
+
+***
+
+### checkColumnTypes?
+
+> `readonly` `optional` **checkColumnTypes?**: `"warn"` \| `"enforce"` \| `"off"`
+
+Defined in: [src/core/agent/types.ts:645](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L645)
+
+Check a tool's rows against the columns it declared (9.78.0) — the write
+seam's COLUMN-TYPE CONTRACT. **Default `'off'`.**
+
+THE RECORDED FAILURES, three of them, all one shape — a number became
+something else and nothing noticed at the seam. A mapping report wrote
+`str(m.get("logical_unit_number") or "")`, so LUN 0 — falsy — was stored
+as an EMPTY STRING on 2,094 mappings, and a host group missing the LUN an
+initiator probes first was indistinguishable from one that had it. A
+capacity view rendered an 8 MiB disk as `0.0 GB`, which reads as NO DISK
+during a live incident. And a whole family of tools returned their
+numbers as quoted strings (`"1240"`), which silently blanked every chart,
+because nothing downstream could tell a measure from a label.
+
+The library already lets a tool declare what its result IS
+(`Tool.resultKind`). This dial reads the sibling declaration —
+`Tool.resultColumns`, what the result CONTAINS — and checks the rows
+against it at the moment the tool answers.
+
+THE THREE WORDS, and they are `toolArgsValidation`'s own:
+
+  • `'off'` (default) — nothing measured. Byte-identical to every release
+    before this existed.
+  • `'warn'` — findings are filed on
+    `agentfootprint.integrity.context_error` and the model reads the rows
+    EXACTLY as the tool returned them. Nothing is blocked, changed or
+    retried.
+  • `'enforce'` — the rows are REFUSED and the model reads a teaching
+    sentence naming the column, what it declared, what arrived and how
+    many rows — the `resultCeiling` idiom, not a thrown stack trace. The
+    refusal is the whole payload, on every channel.
+
+The words are borrowed rather than invented deliberately: this is the
+MIRROR of `toolArgsValidation` — that boundary validates the arguments
+going IN against the tool's declared `inputSchema`, this one validates
+the rows coming OUT against the tool's declared `resultColumns`. Two
+validators at one seam that graded themselves in different vocabularies
+would be a worse defect than either could catch.
+
+TWO FINDINGS, because the field bug turned on the difference:
+`column-type-mismatch` (the column is there and holds the wrong thing)
+and `missing-column` (the declared column is in none of the rows). They
+send a person to two different files.
+
+THE CEILING: this judges TYPE, never MEANING. It sees that a column
+declared `number` holds a string; it can never see that the string should
+have been `0`, or that `0.0` should have been `0.0078` — so the `0.0 GB`
+failure above passes it cleanly. The bound ships as `COLUMN_TYPE_CEILING`
+and is quoted verbatim into every finding.
+
+WHAT IT REFUSES TO JUDGE: a result is read only when it is an ARRAY OF
+PLAIN OBJECTS with at least one row. Prose, a `null`, a bespoke
+`{ rows: [...] }` wrapper, a claim ticket — and the ZERO-ROW result,
+which has no columns to be wrong about and belongs to `empty-lookup`
+next door — all file an explicit `not-applicable` row and NO finding.
+
+TWO HALVES ARM IT: this dial AND at least one tool declaring
+`resultColumns`. Absent, the run is byte-identical; the one visible
+difference is the registered `column-type-mismatch` / `missing-column`
+rows in the disposition report, filed `not-applicable` — the family's
+law, not an exception to it.
 
 ***
 
@@ -221,7 +290,7 @@ trust it.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:648](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L648)
+Defined in: [src/core/agent/types.ts:760](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L760)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -394,11 +463,66 @@ Human-friendly name shown in events/metrics. Default: 'Agent'.
 
 ***
 
+### noticeEmptyLookups?
+
+> `readonly` `optional` **noticeEmptyLookups?**: `boolean`
+
+Defined in: [src/core/agent/types.ts:582](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L582)
+
+Notice when a lookup for a value THIS RUN PRODUCED comes back empty
+(9.77.0) — the write seam's `empty-lookup` advisory. **Default off.**
+
+The recorded failure: a triage agent's reverse-lookup tool filtered a
+column before a pivot, so the column did not exist yet and every reverse
+lookup returned an empty result — for every identifier, always. The tool
+answered successfully with an empty list, and the agent reported in a
+table, with confidence, that the device was logged in to no port on any
+collected switch, advising a check of the physical cabling. The device was
+logged in the whole time. Nothing noticed, because an empty result from a
+broken filter is byte-identical to an empty result from a genuine absence.
+
+What the library CAN see is the pair: the identifier came out of an
+earlier tool result in this run — from a tool named in the consumer's
+`Tool.argumentsFrom` — and the lookup keyed on it came back with nothing.
+Turn this on and each such pair files one `advisory` finding on
+`agentfootprint.integrity.context_error`, naming the value, the producing
+tool, the consuming tool and the call id.
+
+THE CEILING, and it is why this never accuses: an empty result can be
+perfectly true — the thing may exist and simply have nothing to show
+right now — so this is a place to look, never a verdict that anything is
+wrong. The SAME advisory is filed for a true absence and for a lookup that
+could never have matched, because nothing in this library can tell them
+apart. Every finding carries the ceiling sentence in its own message.
+
+WHAT IT JUDGES, and what it refuses to. A result is read only when the
+library can COUNT it: an array (zero rows is zero rows) or the `absent()`
+envelope. A prose sentence, a bespoke `{ rows: [] }` wrapper, a `null`, a
+placement claim ticket — nothing in there is countable, so the encounter
+files a `not-applicable` row and NO finding. That row is the point: a
+check that silently skipped what it could not read would be the
+decoration the disposition ledger exists to make impossible.
+
+TWO HALVES ARM IT: this dial AND at least one tool declaring
+`argumentsFrom`. The declaration alone is deliberately not enough — it
+already arms `dangling-reference` and `unsupported-argument`, and an
+advisory that armed itself off a declaration made for something else would
+not be opt-in. Absent, the run is byte-identical: no finding, no event,
+nothing on the wire changes. The one visible difference is the registered
+`empty-lookup` row in the disposition report, filed `not-applicable` —
+which is the family's law, not an exception to it: registered-but-unarmed
+is a ROW, never silence.
+
+Nothing is ever blocked, retried or rewritten; the model reads exactly the
+result the tool returned.
+
+***
+
 ### observerDelivery?
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:709](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L709)
+Defined in: [src/core/agent/types.ts:821](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L821)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -434,7 +558,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:715](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L715)
+Defined in: [src/core/agent/types.ts:827](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L827)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -446,7 +570,7 @@ Queue dials for `observerDelivery: 'deferred'` — see
 
 > `readonly` `optional` **onAuthorizationRequired?**: `AuthorizationRequiredMode`
 
-Defined in: [src/core/agent/types.ts:603](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L603)
+Defined in: [src/core/agent/types.ts:715](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L715)
 
 What the run does when a tool's DECLARED credential (`needs: { credential }`)
 comes back `authorization-required` — a person has to click a consent link
@@ -509,7 +633,7 @@ Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:679](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L679)
+Defined in: [src/core/agent/types.ts:791](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L791)
 
 How the ReAct loop behaves — a single setting with three honest choices.
 Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
@@ -647,7 +771,7 @@ and the note would be noise rather than news.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:638](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L638)
+Defined in: [src/core/agent/types.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L750)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -725,7 +849,7 @@ latency-critical shutdown where an abandoned session is the cheaper loss.
 
 > `readonly` `optional` **wrapUpAtMaxIterations?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:581](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L581)
+Defined in: [src/core/agent/types.ts:693](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L693)
 
 What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
 Default **on**.
