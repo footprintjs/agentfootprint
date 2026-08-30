@@ -112,16 +112,21 @@ describe('recording envelope — unit', () => {
     ).version;
     expect(envelope.producer.agentfootprintVersion).toBe(rootVersion);
 
-    // KNOWN DEFECT, pinned deliberately rather than papered over: footprintjs's
-    // package.json `exports` map lists no './package.json', so
-    // require('footprintjs/package.json') throws ERR_PACKAGE_PATH_NOT_EXPORTED
-    // and engineVersion() answers 'unknown' — in a plain CJS Node process just
-    // as here, which means every bug-report bundle's `environment.footprintjs`
-    // has been 'unknown' too. The envelope does not LIE ('unknown' is
-    // libraryVersion.ts's documented "cannot tell"), but the stamp is not
-    // useful. Pinned so that repairing engineVersion() trips this test and
-    // whoever does it finds this note, instead of the fix landing unnoticed.
-    expect(envelope.producer.footprintjsVersion).toBe('unknown');
+    // THE DEFECT THIS ONCE PINNED IS FIXED. footprintjs's `exports` map had no
+    // './package.json' entry, so require('footprintjs/package.json') threw
+    // ERR_PACKAGE_PATH_NOT_EXPORTED and engineVersion() answered 'unknown' — an
+    // honest "cannot tell" that made every archive's engine stamp useless.
+    // footprintjs 9.15.1 added the entry; the note said whoever repaired it
+    // would find this test red, and they did. Now pinned the other way: the
+    // stamp is the version actually installed, and 'unknown' here means the
+    // resolution regressed.
+    const engineVersionInstalled = (
+      JSON.parse(
+        readFileSync(join(__dirname, '../../../node_modules/footprintjs/package.json'), 'utf8'),
+      ) as { version: string }
+    ).version;
+    expect(envelope.producer.footprintjsVersion).toBe(engineVersionInstalled);
+    expect(envelope.producer.footprintjsVersion).not.toBe('unknown');
 
     // The recording rides unmodified — all three fields, same object.
     expect(envelope.recording.events.length).toBeGreaterThan(0);

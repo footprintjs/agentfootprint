@@ -67,6 +67,7 @@ import {
   resolveRecordingPolicy,
 } from '../../../src/core/runbook/recording.js';
 import { admitReport } from '../../../src/core/runbook/report.js';
+import { composeMeanings, meaningsRecorder } from '../../../src/core/runbook/verdicts.js';
 import { mock } from '../../../src/llm-providers.js';
 import { unconfiguredCredentialProvider } from '../../../src/identity.js';
 import { readToolExtras, toolExtrasOf } from '../../../src/lib/mcp/toolExtras.js';
@@ -161,9 +162,20 @@ const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
   },
 ];
 
+/** The DEFAULT branch — chosen by no rule, so no rule label names it. Declared
+ *  beside the rules, its meaning rides the same decide() evidence. */
+const POSTURE_DEFAULT = {
+  branch: 'protected',
+  label: 'no rule fired — last backup within the 7-day threshold',
+} as const;
+
 /** The chart for ONE subject — the decider whose branches speak the verdict
- *  vocabulary, with filter-rule evidence per decision (the NEO shape). */
-function subjectChart(subject: Subject, index: number) {
+ *  vocabulary, with filter-rule evidence per decision (the NEO shape).
+ *
+ *  `labelledDefault: false` reproduces the pre-9.82.0 call shape (a bare
+ *  string default), which is how the "unnamed default" test proves the
+ *  meaning comes from the run's evidence and is never invented here. */
+function subjectChart(subject: Subject, index: number, labelledDefault = true) {
   const land = (verdict: string) => (s: Record<string, unknown>) => {
     s.verdict = verdict;
     s.row = { subject: subject.subject, verdict, age: subject.lastBackupDays };
@@ -178,7 +190,8 @@ function subjectChart(subject: Subject, index: number) {
   )
     .addDeciderFunction(
       'Protection posture',
-      (s: Record<string, unknown>) => decide(s, POSTURE_RULES, 'protected'),
+      (s: Record<string, unknown>) =>
+        decide(s, POSTURE_RULES, labelledDefault ? POSTURE_DEFAULT : 'protected'),
       'posture',
       'Three declared outcomes, first match wins.',
     )
@@ -192,7 +205,7 @@ function subjectChart(subject: Subject, index: number) {
 /** The triage-shaped procedure: inner tool call → bounded fan-out with one
  *  decider pass per subject (isolated branch subflows, the NEO shape) →
  *  rowset + coverage + report collected on the root state. */
-function triageProcedure(tools: ToolDispatch) {
+function triageProcedure(tools: ToolDispatch, labelledDefault = true) {
   return flowChart<TriageState>(
     'backup-protection-triage',
     async (scope) => {
@@ -205,7 +218,7 @@ function triageProcedure(tools: ToolDispatch) {
   )
     .addParallelForEach<Subject>('Assess each subject', 'per-subject', {
       items: (scope: TriageState) => scope.subjects ?? [],
-      branch: (item, index) => subjectChart(item, index),
+      branch: (item, index) => subjectChart(item, index, labelledDefault),
       maxBranches: 50,
       into: 'subject_results',
     })
@@ -463,6 +476,98 @@ describe('runbookAsTool — unit', () => {
   });
 });
 
+// ─── 1b. UNIT — the meanings harvest ──────────────────────────────
+
+describe('runbook meanings — the harvest reads only what the evidence said', () => {
+  const identity = { spellings: new Set(['posture']), declared: new Map<string, string>() };
+  const fire = (evidence: unknown, decider = 'posture'): ReadonlyMap<string, string> => {
+    const harvest = meaningsRecorder(identity);
+    (harvest.recorder as { onDecision: (e: unknown) => void }).onDecision({ decider, evidence });
+    return harvest.observed;
+  };
+
+  it('harvests the DEFAULT branch label — the branch no rule names', () => {
+    const observed = fire({
+      rules: [{ branch: 'stale', label: 'older than the threshold' }],
+      chosen: 'fresh',
+      default: 'fresh',
+      defaultLabel: 'no rule fired — inside the threshold',
+    });
+    expect(observed.get('stale')).toBe('older than the threshold');
+    expect(observed.get('fresh')).toBe('no rule fired — inside the threshold');
+  });
+
+  it('harvests it on a run where a RULE won, not only on the fallthrough', () => {
+    const observed = fire({
+      rules: [{ branch: 'stale', label: 'older than the threshold' }],
+      chosen: 'stale',
+      default: 'fresh',
+      defaultLabel: 'no rule fired — inside the threshold',
+    });
+    expect(observed.get('fresh')).toBe('no rule fired — inside the threshold');
+  });
+
+  it('says nothing about a default with no declared label', () => {
+    const observed = fire({
+      rules: [{ branch: 'stale', label: 'older than the threshold' }],
+      chosen: 'fresh',
+      default: 'fresh',
+    });
+    expect(observed.has('fresh')).toBe(false);
+  });
+
+  it('a blank label is not a meaning — for a rule or for the default', () => {
+    const observed = fire({
+      rules: [{ branch: 'stale', label: '' }],
+      chosen: 'fresh',
+      default: 'fresh',
+      defaultLabel: '',
+    });
+    expect(observed.size).toBe(0);
+  });
+
+  it('where a rule also routes to the default branch, the rule speaks last', () => {
+    const observed = fire({
+      rules: [{ branch: 'fresh', label: 'explicitly fresh by rule' }],
+      chosen: 'fresh',
+      default: 'fresh',
+      defaultLabel: 'no rule fired — inside the threshold',
+    });
+    expect(observed.get('fresh')).toBe('explicitly fresh by rule');
+  });
+
+  it('ignores decisions from a DIFFERENT decider, default label included', () => {
+    const observed = fire(
+      { rules: [], chosen: 'x', default: 'x', defaultLabel: 'not ours' },
+      'some-other-decider',
+    );
+    expect(observed.size).toBe(0);
+  });
+
+  it('matches a path-prefixed decider from a generated fan-out branch', () => {
+    const observed = fire(
+      { rules: [], chosen: 'fresh', default: 'fresh', defaultLabel: 'no rule fired' },
+      'per-subject~0/posture',
+    );
+    expect(observed.get('fresh')).toBe('no rule fired');
+  });
+
+  it('composeMeanings lets the run-observed labels win over declared branches', () => {
+    const declared = new Map([
+      ['fresh', 'Fresh — inside threshold'],
+      ['stale', 'Stale — past threshold'],
+    ]);
+    const meanings = composeMeanings(
+      { spellings: new Set(['posture']), declared },
+      new Map([['fresh', 'no rule fired — inside the threshold']]),
+    );
+    expect(meanings).toEqual({
+      fresh: 'no rule fired — inside the threshold',
+      stale: 'Stale — past threshold',
+    });
+  });
+});
+
 // ─── 2. SCENARIO — the triage shape end to end (the acceptance run) ─
 
 describe('runbookAsTool — scenario: the triage-shaped procedure', () => {
@@ -525,10 +630,43 @@ describe('runbookAsTool — scenario: the triage-shaped procedure', () => {
     expect(envelope.result.rows_complete).toBe(true);
     expect(envelope.result.table).toContain('cluster-a');
     expect(envelope.result.render_note).toContain('VERBATIM');
-    // Meanings GENERATED from evidence rule labels + declared branches.
+    // Meanings GENERATED from evidence rule labels + declared branches + the
+    // DEFAULT branch's own label. The decider lives inside a GENERATED fan-out
+    // branch, so build-time structure sees no branches at all: every meaning
+    // here came out of this run's decide() evidence.
     const meanings = envelope.result.verdict_meanings ?? {};
     expect(meanings.unprotected).toContain('7-day threshold');
     expect(meanings.declined).toContain('no classification');
+    // The one the rowset showed and the map could not name before 9.82.0.
+    expect(meanings.protected).toContain('no rule fired');
+    // THE SELF-CONSISTENCY LAW: the map names every verdict the rows carry.
+    // A rowset showing a verdict the meanings cannot explain is the defect
+    // this assertion exists to keep fixed.
+    const shownVerdicts = new Set(verdicts.map((row) => row.verdict));
+    for (const verdict of shownVerdicts) expect(Object.keys(meanings)).toContain(verdict);
+  });
+
+  it('PROJECTION: an UNLABELLED default stays unnamed — the meaning is harvested, never invented', async () => {
+    // The same procedure with the pre-9.82.0 call shape: `decide(s, rules,
+    // 'protected')`. The default is chosen by no rule, so nothing in the run
+    // speaks for it — and the bridge does NOT fill the gap with a branch id
+    // dressed as a sentence. The rows still show `protected`; the map is
+    // honestly silent about it, which is what makes the labelled case above
+    // evidence rather than decoration.
+    const { ctx } = ctxWithStore({
+      tools: dispatchOver({ backup_inventory: inventoryTool }),
+    } as Partial<ToolExecutionContext>);
+    const tool = triageTool({
+      procedure: (tools: ToolDispatch) => triageProcedure(tools, false),
+    });
+    const envelope = (await tool.execute({}, ctx)) as RunbookEnvelope;
+
+    const meanings = envelope.result.verdict_meanings ?? {};
+    expect(meanings.unprotected).toContain('7-day threshold');
+    expect(meanings.declined).toContain('no classification');
+    expect(Object.keys(meanings)).not.toContain('protected');
+    // …and the rowset still reports the verdict it reached.
+    expect((envelope.result.verdicts ?? []).map((row) => row.verdict)).toContain('protected');
   });
 
   it('THREE OUTCOMES: declined rows land in the ledger as not-checked ground', async () => {

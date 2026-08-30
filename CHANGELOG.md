@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.82.0] - 2026-08-30
+
+### Added
+
+- **A runbook can finally name the verdict no rule chose.** `verdict_meanings`
+  is generated from what the run itself said: the branch descriptions the chart
+  declared, and the rule labels this run's `decide()` evidence carried. For one
+  branch, both sources are silent by construction — the DEFAULT. It is the
+  branch chosen by *no rule* (it fires exactly when every rule failed, so no
+  `label` describes it), and when the decider lives inside a dynamically
+  generated fan-out branch the branch chart does not exist at build time either,
+  so there is no declared description to fall back on.
+
+  The library shipped visible proof of the gap: this repo's own worked example
+  and the published docs page showed a `"verdict": "protected"` row beside a
+  `verdict_meanings` map with no `protected` key.
+
+  The meaning is now declared where the rules are declared — one line at the
+  `decide()` call, on `footprintjs` ≥ 9.16.0:
+
+  ```ts
+  // before
+  decide(scope, POSTURE_RULES, 'protected');
+  // after
+  decide(scope, POSTURE_RULES, {
+    branch: 'protected',
+    label: 'no rule fired — last backup within the 7-day threshold',
+  });
+  ```
+
+  It rides `DecisionEvidence.defaultLabel` and is harvested exactly like a rule
+  label — on every decision, including runs where a rule won, so a published
+  meanings map does not gain and lose a key with the day's data.
+
+  What deliberately did NOT change: there is **no caller-supplied meanings map**
+  at the tool boundary. A map a caller can hand in is a map that can describe
+  rules that never ran, and it would be indistinguishable in the answer from
+  meanings the run produced. Declare nothing and `verdict_meanings` stays
+  honestly silent about that branch — the bridge never invents a sentence from a
+  branch id. A blank label (`''`) is recorded as no meaning at all, for a rule or
+  for the default.
+
+  Example: `examples/features/68-runbook-as-tool.ts` — its `verdict_meanings`
+  now explains every verdict its own rowset shows.
+
+### Changed
+
+- **`footprintjs` peer dependency: `^9.15.0` → `^9.16.1`** — 9.16.0 carries
+  `DefaultBranch` / `DecisionEvidence.defaultLabel`; 9.16.1 is the floor because
+  9.16.0 threw on a `decide()` call that omits its default (this repo's own
+  suite caught it).
+- **The engine version stamp on a recording envelope is real again.** footprintjs
+  9.15.1 added `'./package.json'` to its `exports` map, so `engineVersion()` can
+  resolve the manifest it always tried to read: `producer.footprintjsVersion` and
+  a bug report's `environment.footprintjs` now carry the installed version
+  instead of the honest-but-useless `'unknown'`. The test that pinned the defect
+  (and asked to be tripped when it was fixed) now pins the version instead.
+
 ## [9.81.0] - 2026-08-30
 
 ### Added

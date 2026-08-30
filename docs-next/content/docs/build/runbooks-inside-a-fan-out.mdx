@@ -151,7 +151,7 @@ Nesting deeper costs nothing. A fan-out inside a fan-out reports
 `per-cluster~0/per-subject~1/Protection posture`, and the last segment is still
 the name.
 
-## 3. Branch descriptions are invisible; rule labels are the meanings
+## 3. Branch descriptions are invisible; the `decide()` labels are the meanings
 
 **What happens.** `verdict_meanings` has two sources. The first is a static walk
 of the chart's own structure, reading each declared branch's description:
@@ -169,10 +169,11 @@ starts**. A generated branch's chart does not exist yet: `branch(item, index)`
 is called during traversal, once per item. So for a decider inside a fan-out,
 the static half finds nothing — by construction, not by oversight.
 
-The second source is the harvest: rule labels observed as `decide()` fires,
-collected during the traversal. It covers every rule the evidence lists,
-**matched or not** — a rule that was evaluated has spoken its label, whichever
-branch won. That is the half that works inside a generated branch, and for a
+The second source is the harvest: the labels observed on the decision evidence
+as `decide()` fires, collected during the traversal. It covers every rule the
+evidence lists, **matched or not** — a rule that was evaluated has spoken its
+label, whichever branch won — plus the default branch's own label when the call
+declared one. That is the half that works inside a generated branch, and for a
 fan-out runbook it is the only half.
 
 **The wrong shape.** Put the meaning where a reader would naturally put it —
@@ -196,17 +197,32 @@ Keep the branch descriptions too — they are what a person reading the chart
 sees, and they are what the static walk reads for a decider that *is* statically
 declared. They are simply not the mechanism here.
 
-<Callout type="warn">
-  **The default branch is the one verdict no label names.** `decide()` picks the
-  default when no rule matched, so there is no `rules[].label` to describe it —
-  and inside a generated branch there is no declared description either. You can
-  watch this: the example declares two rules and the default `'protected'`, and
-  its `verdict_meanings` comes back with `declined` and `unprotected` in it and
-  nothing for `protected`. If the default must be named, give the clean case a
-  rule of its own with a label and keep `defaultBranch` for the case that should
-  be genuinely unreachable — or carry the sentence in the row. Naming a default
-  without writing a rule for it is a real gap, and the place it belongs is
-  upstream in `decide()`, where the default is declared.
+<Callout type="info">
+  **The default branch needs a label of its own.** `decide()` picks the default
+  when no rule matched, so no `rules[].label` describes it — and inside a
+  generated branch there is no declared description either. It was the one
+  verdict the rowset could show and `verdict_meanings` could not explain, which
+  this page used to teach as a gap to work around. It is now declared where the
+  default itself is declared (footprintjs ≥ 9.16.1, agentfootprint ≥ 9.82.0):
+
+```ts
+// before — the default is a branch id and nothing else
+decide(scope, POSTURE_RULES, 'protected');
+
+// after — the branch id, plus what falling back to it MEANS
+decide(scope, POSTURE_RULES, {
+  branch: 'protected',
+  label: `no rule fired — last backup within the ${STALE_AFTER_DAYS}-day threshold`,
+});
+```
+
+  The label rides `DecisionEvidence.defaultLabel` and is harvested exactly like a
+  rule label — on **every** decision, including the runs where a rule won, so a
+  published meanings map does not gain and lose a key with the day's data. The
+  bare string still works: declare nothing and `verdict_meanings` is simply
+  silent about that branch, because the bridge never invents a sentence from a
+  branch id. The old workarounds — giving the clean case a rule of its own so it
+  has a label, or carrying the sentence in the row — are no longer the answer.
 </Callout>
 
 Never write an empty filter as a catch-all. `{}` deliberately **never** matches:

@@ -23,10 +23,21 @@
  * GENERATED MEANINGS, never hand-restated: `verdict_meanings` is composed
  * from (a) the named decider's declared branches in the chart's own structure
  * (branch description, falling back to branch name), overlaid by (b) the rule
- * LABELS this run's decide() evidence carried — the rule speaking for itself.
+ * LABELS this run's decide() evidence carried — the rule speaking for itself —
+ * and (c) the DEFAULT branch's declared label, carried by the same evidence.
  * A decider inside a dynamically generated fan-out branch is invisible to (a)
  * by construction (the branch chart does not exist at build time); (b) still
  * covers every verdict an executed rule produced.
+ *
+ * (c) exists because the default branch is chosen by NO rule — it fires
+ * exactly when every rule failed, so it appears in no `rules[]` entry and (b)
+ * can never name it. In a generated fan-out branch, where (a) is blind too, it
+ * was the one verdict the rowset could show and the meanings map could not
+ * explain. `decide(scope, rules, { branch, label })` (footprintjs ≥ 9.16.1) puts
+ * that label on the decision evidence, so it arrives here the way every other
+ * label does: harvested from the run, never declared at this boundary. There is
+ * deliberately no caller-supplied meanings map — a map a caller can write is a
+ * map that can describe rules that never ran.
  */
 
 import type { CombinedRecorder, FlowDecisionEvent } from 'footprintjs';
@@ -163,11 +174,18 @@ export interface MeaningsHarvest {
   readonly observed: ReadonlyMap<string, string>;
 }
 
+/** A label is a meaning only when it says something — a blank one is recorded
+ *  as no meaning at all, never as a verdict that means the empty string. */
+function meaningful(label: unknown): label is string {
+  return typeof label === 'string' && label.length > 0;
+}
+
 /**
  * A tiny flow recorder capturing the named decider's decide() evidence as it
  * fires — collected DURING the traversal, never reconstructed after. Rule
  * labels are harvested for every rule the evidence lists (matched or not):
- * a rule that was evaluated has spoken its label, whichever branch won.
+ * a rule that was evaluated has spoken its label, whichever branch won. The
+ * DEFAULT branch's label rides the same evidence and is harvested with them.
  *
  * A decider inside a subflow (including a generated fan-out branch) reports
  * itself PATH-PREFIXED (`per-subject~0/Protection posture`), so the match is
@@ -183,10 +201,20 @@ export function meaningsRecorder(identity: DeciderIdentity): MeaningsHarvest {
     onDecision(event: FlowDecisionEvent): void {
       if (!identity.spellings.has(lastSegment(event.decider))) return;
       const evidence = event.evidence as
-        | { rules?: readonly { branch?: string; label?: string }[] }
+        | {
+            rules?: readonly { branch?: string; label?: string }[];
+            default?: string;
+            defaultLabel?: string;
+          }
         | undefined;
+      // The default first, the rules over it. The default is the branch NO
+      // rule chose, so it is normally the only speaker for its own name; where
+      // a rule also routes to it, the rule is the sharper sentence and wins.
+      if (typeof evidence?.default === 'string' && meaningful(evidence.defaultLabel)) {
+        observed.set(evidence.default, evidence.defaultLabel);
+      }
       for (const rule of evidence?.rules ?? []) {
-        if (typeof rule.branch === 'string' && typeof rule.label === 'string') {
+        if (typeof rule.branch === 'string' && meaningful(rule.label)) {
           observed.set(rule.branch, rule.label);
         }
       }
@@ -195,9 +223,10 @@ export function meaningsRecorder(identity: DeciderIdentity): MeaningsHarvest {
   return { recorder, observed };
 }
 
-/** Compose the final meanings: declared branches first, observed rule labels
- *  winning where both speak (the rule is the sharper sentence). Undefined
- *  when neither source produced anything — absent, never `{}`. */
+/** Compose the final meanings: declared branches first, the labels this run
+ *  observed (rule labels, and the default branch's own) winning where both
+ *  speak — the declaration made beside the rules is the sharper sentence.
+ *  Undefined when neither source produced anything — absent, never `{}`. */
 export function composeMeanings(
   identity: DeciderIdentity,
   observed: ReadonlyMap<string, string>,

@@ -14,7 +14,7 @@ description: Turn a written operational procedure into one agent tool whose ever
   - `result.af_provenance` — re-emitted **first**, carrying any provenance stamp an inner source declared (a seeded source's confession survives composition) plus this call's own `{tool, toolCallId}`;
   - `result.rule_version` — from your `rules` declaration, or the honest `'undeclared'`;
   - `result.walk` — the recorded walk's descriptor. The walk itself ships as an **artifact ticket** (kind `recording/chart-walk`), never as bytes in the payload.
-- **An optional verdict projection**, selected by `resultKind: 'verdict/*'` — verdict rows, truthful counters, one cap for the structured list *and* the pre-rendered table, and `verdict_meanings` **generated** from the decider's declared branches and the rule labels this run's `decide()` evidence carried. Never hand-restated, so a rule change and its meaning change on the same day.
+- **An optional verdict projection**, selected by `resultKind: 'verdict/*'` — verdict rows, truthful counters, one cap for the structured list *and* the pre-rendered table, and `verdict_meanings` **generated** from the decider's declared branches, the rule labels this run's `decide()` evidence carried, and the default branch's own label ([why the default is special](#naming-the-default-branch)). Never hand-restated, so a rule change and its meaning change on the same day.
 - **Three outcomes, honestly**: a clean envelope; an inner *absence* passed through **verbatim** (the framework still reads it as an absence — a verdict over a source that answered "nothing here" would be a confident partial answer); and *declined* rows counted into the ledger as not-checked ground.
 
 `flowchartAsTool` stays for compatibility — `resultMapper` users stay put. New procedures start here.
@@ -36,6 +36,14 @@ const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
   { when: { age_days: { gt: STALE_AFTER_DAYS } }, then: 'unprotected',
     label: `last backup older than the ${STALE_AFTER_DAYS}-day threshold` },
 ];
+
+// THE DEFAULT — chosen by NO rule, so no rule label can name it. Declared
+// beside the rules, its meaning rides the same decide() evidence.
+// Each subject's chart decides with: decide(scope, POSTURE_RULES, POSTURE_DEFAULT)
+const POSTURE_DEFAULT = {
+  branch: 'protected',
+  label: `no rule fired — last backup within the ${STALE_AFTER_DAYS}-day threshold`,
+};
 
 // An INNER tool — registered like any other; its coverage ledger folds upward.
 const inventory = defineTool({
@@ -112,6 +120,7 @@ What one run returns (abridged — a real envelope, from a real run):
     "table": "| subject | verdict | age |\n|---|---|---|\n| cluster-a | protected | 2 | …",
     "render_note": "table is PRE-RENDERED over the same rows as `verdicts` — output it VERBATIM. …",
     "verdict_meanings": {
+      "protected": "no rule fired — last backup within the 7-day threshold",
       "declined": "the age signal is unreadable — no classification",
       "unprotected": "last backup older than the 7-day threshold"
     },
@@ -128,6 +137,32 @@ What one run returns (abridged — a real envelope, from a real run):
 ```
 
 The runnable version of this example is [`examples/features/68-runbook-as-tool.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/68-runbook-as-tool.ts).
+
+## Naming the default branch
+
+`verdict_meanings` is **generated**, never restated by the caller: each meaning comes from something the run itself said. There are two speakers, and for one branch both are silent.
+
+Every branch a rule can reach is named by that rule's `label`, which travels out on the run's `decide()` evidence. Branches declared statically in the chart are also named by their own descriptions. **The default branch has neither.** It is the branch chosen by *no rule* — it fires exactly when every rule failed, so no `label` describes it; and when the decider lives inside a dynamically generated fan-out branch (one decider pass per subject, as above), the branch chart does not exist at build time either, so there is no declared description to fall back on. It was the one verdict the rowset could show and the meanings map could not explain — visible in a `"verdict": "protected"` row sitting beside a map with no `protected` key.
+
+Name it where the rules are named — one line at the `decide()` call:
+
+```ts
+// before — the default is a branch id and nothing else
+decide(scope, POSTURE_RULES, 'protected');
+
+// after — the branch id, plus what falling back to it MEANS
+decide(scope, POSTURE_RULES, {
+  branch: 'protected',
+  label: 'no rule fired — last backup within the 7-day threshold',
+});
+```
+
+The label lands on the decision evidence (`DecisionEvidence.defaultLabel`, footprintjs ≥ 9.16.1) and is harvested here exactly like a rule label. Consequences worth knowing:
+
+- **It is recorded on every decision**, not only the runs that fell through. A default's meaning belongs to the decider, not to the day's data — otherwise a published meanings map would gain and lose a key depending on which way the rows went.
+- **Declare nothing and the map stays honestly silent.** The bare-string default still works unchanged; `verdict_meanings` simply has no entry for that branch. The bridge never invents a sentence from a branch id — an unexplained verdict is better than an explanation nobody wrote.
+- **There is deliberately no meanings map at the tool boundary.** A map a caller can hand in is a map that can describe rules that never ran, and would be indistinguishable in the answer from meanings the run actually produced. The label is declared beside the rules it competes with, so a rule change and its meaning change in the same edit.
+- **A blank label is not a meaning** — `label: ''` is recorded as no entry, for a rule or for the default.
 
 ## Stages call registered tools: `ctx.tools`
 

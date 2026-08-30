@@ -25,7 +25,10 @@
  *   - the OPTIONAL verdict projection — selected by `resultKind:
  *     'verdict/*'`: rows off the chart's `verdicts` state key, truthful
  *     counters, ONE cap for the list and the table, and `verdict_meanings`
- *     GENERATED from the decider's declared branches + rule labels;
+ *     GENERATED from the decider's declared branches + rule labels + the
+ *     DEFAULT branch's own label — the branch no rule chooses, and therefore
+ *     the one meaning that must be declared beside the rules, as
+ *     `decide(s, rules, { branch, label })`;
  *   - `presentation` — WHO renders those rows. The same procedure is
  *     registered twice here, one dial apart: 'prose' (default) ships the
  *     pre-rendered table because the model's words are the rows' only
@@ -66,6 +69,16 @@ export const meta: ExampleMeta = {
 //    {key, op, threshold, actual} — a function rule would leave no 7 behind.
 // #region rules
 const STALE_AFTER_DAYS = 7;
+// The DEFAULT branch is chosen by NO rule — it fires exactly when every rule
+// failed — so no rule label can name it, and here the decider lives inside a
+// GENERATED fan-out branch, where build-time structure cannot see the branch
+// descriptions either. Declared as `{ branch, label }`, the default's meaning
+// rides the same decide() evidence as the rule labels, and `verdict_meanings`
+// can finally explain every verdict the rowset shows.
+const POSTURE_DEFAULT = {
+  branch: 'protected',
+  label: `no rule fired — last backup within the ${STALE_AFTER_DAYS}-day threshold`,
+} as const;
 const POSTURE_RULES: DecideRule<Record<string, unknown>>[] = [
   {
     when: { age_known: { eq: false } },
@@ -125,7 +138,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     )
       .addDeciderFunction(
         'Protection posture',
-        (s: Record<string, unknown>) => decide(s, POSTURE_RULES, 'protected'),
+        (s: Record<string, unknown>) => decide(s, POSTURE_RULES, POSTURE_DEFAULT),
         'posture',
         'Three declared outcomes, first match wins; anything unmatched is protected.',
       )

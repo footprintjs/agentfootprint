@@ -61,6 +61,14 @@ export interface RunbookVerdictsOptions {
    * in this run's decide() evidence refine them (and are the only source
    * when the decider lives inside a dynamically generated fan-out branch,
    * where build-time structure cannot see it).
+   *
+   * The DEFAULT branch is chosen by no rule, so no rule label describes it.
+   * Name it where the rules are named — `decide(scope, rules, { branch,
+   * label })` — and the label arrives here on the same evidence:
+   *
+   * ```ts
+   * decide(scope, rules, { branch: 'protected', label: 'No rule fired — asset stays protected' });
+   * ```
    */
   readonly decider: string;
   /** Cap on `verdicts` rows AND the rendered table — ONE number for both

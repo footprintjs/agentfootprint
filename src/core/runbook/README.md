@@ -32,7 +32,16 @@ One file per job:
   `walk.recording_note` rather than left as a missing field.
 - `verdicts.ts` — the rowset off the `verdicts` state key, the one-cap
   table, the two render laws (`VERDICT_RENDER_NOTE` / `PANEL_RENDER_NOTE`),
-  and meanings GENERATED from declared branches + observed rule labels.
+  and meanings GENERATED from declared branches + observed rule labels + the
+  DEFAULT branch's label. The default is chosen by NO rule, so no rule label
+  names it and (inside a generated fan-out branch) no declared description
+  does either — it was the one verdict a rowset could show and the map could
+  not explain. Declared at the call, `decide(scope, rules, { branch, label })`
+  (footprintjs ≥ 9.16.1), it arrives on the same evidence as every other
+  label. Declare nothing and the map stays silent about that branch: a
+  meaning is harvested from the run, never invented here, and there is
+  deliberately no caller-supplied meanings map — one could describe rules
+  that never ran.
 - `report.ts` — the precedence law: the chart's `report` is admitted BESIDE
   the envelope's own names, never over them; a refused field is named in
   `report_note` rather than dropped in silence.
