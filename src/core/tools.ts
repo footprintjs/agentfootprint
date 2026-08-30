@@ -16,6 +16,13 @@ import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { RESULT_CLASSES, type ToolResultClass } from '../lib/semantics/types.js';
+import {
+  assertResultColumns,
+  COLUMN_TYPES,
+  type ColumnDeclaration,
+  type ColumnType,
+  type ToolResultColumns,
+} from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
@@ -188,6 +195,53 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *   // elsewhere: defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' }, … })
    */
   readonly resultKind?: string;
+  /**
+   * WHAT THIS TOOL'S ROWS CONTAIN (9.78.0) — column name to type, the
+   * sibling of {@link Tool.resultKind}. `resultKind` says what the result IS;
+   * this says what it CONTAINS.
+   *
+   * THE MEASURED FAILURES, all three the same shape — a number became
+   * something else, and nothing noticed at the seam:
+   *
+   *   1. `str(m.get("logical_unit_number") or "")` — LUN 0 is falsy, so LUN 0
+   *      was stored as an EMPTY STRING on 2,094 mappings, and a host group
+   *      missing the LUN an initiator probes first became indistinguishable
+   *      from one that had it.
+   *   2. `round(mib / 1024, 1)` rendered an 8 MiB disk as `0.0 GB`, which
+   *      reads as NO DISK during a live incident.
+   *   3. A family of tools returned their numbers as quoted strings
+   *      (`"1240"`), which silently blanked every chart, because nothing
+   *      downstream could tell a measure from a label.
+   *
+   * Declaring the columns gives the library something to check the rows
+   * against. It catches 1 and 3. It cannot catch 2, and says so: the check
+   * judges TYPE, never MEANING (see `COLUMN_TYPE_CEILING`, quoted verbatim
+   * into every finding).
+   *
+   * A promise about what it NAMES, never a closed schema — an unlisted column
+   * is allowed and never judged. Two spellings: a bare type, or the object
+   * form when a column may legitimately hold nothing.
+   *
+   * ARMED BY TWO HALVES, like every write-seam check: this declaration AND
+   * the operator's `checkColumnTypes` dial (default `'off'`). Omitted, or
+   * with the dial off → exactly today's bytes; nothing is measured, no
+   * finding is filed, and the model reads the rows the tool returned.
+   *
+   * @example the LUN report that lost its zeroes
+   *   defineTool({
+   *     name: 'host_group_mappings',
+   *     description: 'The LUN mappings of a host group',
+   *     resultKind: 'dataset/rows',
+   *     resultColumns: {
+   *       logical_unit_number: 'number',
+   *       host_group: 'string',
+   *       comment: { type: 'string', nullable: true },
+   *     },
+   *     inputSchema: { … },
+   *     execute: async () => [{ logical_unit_number: 0, host_group: 'vdi-a' }],
+   *   });
+   */
+  readonly resultColumns?: ToolResultColumns;
   /**
    * WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
    * moment the code demonstrably knows both ends: registration. Before
@@ -398,6 +452,24 @@ export function assertResultClass(
     );
   }
 }
+
+/**
+ * The COLUMN-TYPE CONTRACT's rule and vocabulary, re-exported HERE.
+ *
+ * They are DEFINED in `src/integrity/column-types/types.ts`, because
+ * `src/integrity/` is a strict leaf that imports nothing outside itself and
+ * the check has to be able to read the words. They are re-exported here
+ * because `defineTool` and the MCP ingest both reach for their rules through
+ * `core/tools.ts` — one door for every declaration's rule, and no second copy
+ * of any of them anywhere.
+ */
+export {
+  assertResultColumns,
+  COLUMN_TYPES,
+  type ColumnDeclaration,
+  type ColumnType,
+  type ToolResultColumns,
+};
 
 /**
  * Refuse a `resultKind` that could never be redeemed, at definition time —
@@ -850,6 +922,10 @@ export interface DefineToolOptions<TArgs, TResult> {
    *  vocabulary (see {@link Tool.resultKind}). Omitted →
    *  `tool-result/<name>`, byte-identical. */
   readonly resultKind?: string;
+  /** What this tool's ROWS contain — column name to type (see
+   *  {@link Tool.resultColumns}). Needs the `checkColumnTypes` dial too.
+   *  Omitted → nothing measured, byte-identical. */
+  readonly resultColumns?: ToolResultColumns;
   /** The stamped identity edge — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
   /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
@@ -954,6 +1030,10 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // A placed-result kind nothing could want fails HERE too — not at the first
   // oversized result of the first run with placement configured.
   assertResultKind(options.name, options.resultKind);
+  // A column type this library has no rule for fails HERE too — not at the
+  // first rowset of the first armed run, where the symptom would be a check
+  // that quietly judges nothing.
+  assertResultColumns(options.name, options.resultColumns);
   // A decision component for a gate that never fires is configuration that
   // lies — configured-and-inert looks exactly like configured-and-working
   // (the `.checkIn({ scorer })`-with-minimal-evidence precedent). And a
@@ -1009,6 +1089,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.resultCeiling !== undefined && { resultCeiling: options.resultCeiling }),
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
     ...(options.resultKind !== undefined && { resultKind: options.resultKind }),
+    ...(options.resultColumns !== undefined && { resultColumns: options.resultColumns }),
     ...(options.owner !== undefined && { owner: options.owner }),
     ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
     ...(options.composedOf !== undefined && { composedOf: options.composedOf }),

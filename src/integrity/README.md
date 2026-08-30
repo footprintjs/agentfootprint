@@ -27,6 +27,7 @@ disposition accounting below is the first unit built, not the last.
 | `unsupported-argument/` | the value the model chose for an armed call, against everything the run served it |
 | `unsupported-claim/` | the answer, against the typed facts the run's own tools settled |
 | `empty-lookup/` | the run itself produced the identifier, and the lookup keyed on it came back empty — an ADVISORY, because an empty answer can be perfectly true |
+| `column-types/` | the tool declared what its rows contain (`Tool.resultColumns`) and the rows say otherwise — `column-type-mismatch` (wrong type) and `missing-column` (declared, never delivered), bounded by a ceiling that judges TYPE and never MEANING |
 | `argumentLeaves.ts` | the shared leaf: what "a string argument" means, so the two checks that read a call's arguments cannot drift apart about it |
 
 **Still unclaimed:** `duplicate-execution` (did settled work again) is named by the finding type and

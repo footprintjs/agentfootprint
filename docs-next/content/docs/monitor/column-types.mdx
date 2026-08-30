@@ -1,0 +1,212 @@
+---
+title: Column Types
+description: A tool can declare what its rows contain, and the library checks the rows against that declaration at the boundary. It judges type, never meaning — and says so in every finding.
+---
+
+Someone wrote this line in a mapping report:
+
+```python
+str(m.get("logical_unit_number") or "")
+```
+
+**LUN 0 is falsy.** So LUN 0 was stored as an empty string — on 2,094 mappings — and a host group missing the LUN an initiator probes first became indistinguishable from one that had it. Nothing errored. Nothing was ungrounded. The tool answered successfully, the agent read the rows, and every rail this library ships passed honestly, because a numeric column holding `''` looks exactly like a numeric column holding a value, to everything that never asked what the column was supposed to hold.
+
+Two more from the same application, and they are the same shape:
+
+- A capacity view rendered `round(mib / 1024, 1)`, so an 8 MiB disk came out as `0.0 GB` — which reads as **no disk**, a provisioning failure, during a live incident.
+- A whole family of tools returned their numbers as quoted strings (`"1240"`). Every chart silently went blank, because nothing downstream could tell a measure from a label.
+
+All three are *a number became something else, and nothing noticed at the seam*.
+
+## What was missing
+
+The library already lets a tool declare what its result **is** — [`Tool.resultKind`](doc:artifacts), the artifact kind a placed result is minted under. It did not let a tool declare what its result **contains**. So a rowset had nothing to be wrong against, and every consumer downstream was left *sniffing* types out of the data: one stray `''` demotes a numeric column to text, silently, and the chart that needed a measure quietly stops offering one.
+
+`resultColumns` is the sibling declaration.
+
+```ts
+const hostGroupMappings = defineTool({
+  name: 'host_group_mappings',
+  description: 'The LUN mappings of a host group.',
+  resultKind: 'dataset/rows', // what the result IS
+  resultColumns: {
+    // what the result CONTAINS
+    logical_unit_number: 'number',
+    host_group: 'string',
+    comment: { type: 'string', nullable: true },
+  },
+  inputSchema: {
+    type: 'object',
+    properties: { host_group: { type: 'string' } },
+    required: ['host_group'],
+  },
+  execute: async ({ host_group }) => fetchMappings(host_group),
+});
+
+const agent = Agent.create({ provider, model, checkColumnTypes: 'warn' }) // ← default 'off'
+  .tool(hostGroupMappings)
+  .build();
+```
+
+## The ceiling — stated first, because it bounds everything below
+
+**This judges TYPE, never MEANING — it can see that a column declared `number` holds a string, and it can never see that the string should have been 0, or that a 0.0 should have been an 8; a column whose every value has its declared type passes here and can still be wrong.**
+
+That sentence ships as the exported string `COLUMN_TYPE_CEILING` and is quoted **verbatim** into every finding this check files, so the bound cannot drift out of the docs and leave a reader believing the library knows more than it does.
+
+Read it against the three failures above. The LUN report is caught: `''` is not a number. The quoted-strings family is caught: `"1240"` is not a number. **The `0.0 GB` disk is not caught, and never will be** — `0.0` is a perfectly good number, the defect is in what it *means*, and a check that claimed to see that would be inventing the certainty the incident was made of.
+
+## The worked example
+
+Two runs of the same tool, one healthy and one carrying the field bug.
+
+```ts
+import { Agent, defineTool } from 'agentfootprint';
+
+const mappings = (rows: unknown) =>
+  defineTool({
+    name: 'host_group_mappings',
+    description: 'The LUN mappings of a host group.',
+    resultColumns: { logical_unit_number: 'number', host_group: 'string' },
+    inputSchema: { type: 'object', properties: {} },
+    execute: async () => rows,
+  });
+
+const agent = Agent.create({ provider, model, checkColumnTypes: 'warn' })
+  .tool(
+    mappings([
+      // the report as it shipped: LUN 0 became ''
+      { logical_unit_number: '', host_group: 'vdi-a' },
+      { logical_unit_number: 3, host_group: 'vdi-a' },
+    ]),
+  )
+  .build();
+
+agent.on('agentfootprint.integrity.context_error', (e) => {
+  if (e.payload.kind === 'column-type-mismatch') console.log(e.payload.message);
+});
+
+await agent.run('what are the vdi-a mappings?');
+```
+
+One finding fires:
+
+> `'host_group_mappings'` declares column 'logical_unit_number' as number, and 1 of 2 rows hold something else — the first is `""` (string). **This judges TYPE, never MEANING — it can see that a column declared `number` holds a string, and it can never see that the string should have been 0, or that a 0.0 should have been an 8; a column whose every value has its declared type passes here and can still be wrong.** Call id call-1. Nothing here blocked the call, changed the result, or retried anything — the model reads the rows exactly as the tool returned them.
+
+The column, the offending value quoted, the row count affected, the tool. Swap the rows for `{ logical_unit_number: 0 }` and nothing fires at all — **0 is a number**, which is the entire point.
+
+## Two findings, because the field bug turned on the difference
+
+| kind | means | mechanism |
+| --- | --- | --- |
+| `column-type-mismatch` | the column is **there** and holds something other than its declared type | type |
+| `missing-column` | the declared column is in **none** of the rows | presence |
+
+They are deliberately not one kind. *"The value is not what it should be"* sends a person to the mapping code; *"the column was never delivered"* sends them to the query. A checker that said only "something is off with logical_unit_number" would have helped with neither — and the LUN incident is exactly a case where a missing column and a wrong value were indistinguishable to everyone looking.
+
+The difference is visible everywhere in the record: two `kind`s on `agentfootprint.integrity.context_error`, two rows in the [disposition ledger](doc:context-integrity), and two different sentences. A result can file both at once, about different columns.
+
+## The vocabulary
+
+`ColumnType` is `'number' | 'string' | 'boolean' | 'date'`, and the closed set also ships as the array `COLUMN_TYPES`.
+
+| word | a value must be |
+| --- | --- |
+| `number` | a **finite** number — `NaN` and the infinities are a number that means "no number", and an axis handed one draws nothing |
+| `string` | a string, **including the empty one** — emptiness is meaning, and meaning is above the ceiling |
+| `boolean` | `true` or `false` — never `'true'`, never `0` or `1` |
+| `date` | a valid `Date`, or a string `Date.parse` accepts. An **epoch number** is a `number`; say so, and the axis picker stops guessing |
+
+These words are **not invented**. They are the column-type vocabulary this ecosystem's rowset consumers already sniff their way to. The one member deliberately left behind is `unknown`: a sniffer needs that word ("I looked at the values and could not tell"), a declaration has no use for it — a column whose type you do not know is a column to leave undeclared. The whole declaration is typed as `ToolResultColumns`, and the map's value may be a bare type or the object form `ColumnDeclaration` (`{ type, nullable? }`), normalized once so nothing downstream learns there were two spellings.
+
+### Nullable, and what "no value" means
+
+`null`, `undefined` and a key simply not set on a row are **one idea with three spellings**, and by default all three are violations. `nullable: true` says a row may legitimately carry nothing, and every finding about an absence names that one-word fix in its own message.
+
+The strict default is deliberate. The failure this exists for was a value that went missing and left a placeholder behind; had the same code left a `null`, the defect would have been identical, and a lenient default would have waved it through. One word turns it off; a silent default would cost the bug.
+
+`nullable` is a promise about **values**, not about the column's existence. A declared column that appears in no row at all is a `missing-column` finding whether or not it is nullable — the valve for *"this column may or may not be there"* is to not declare it.
+
+### Open, never closed
+
+A declaration is a promise about **what it names**. An **unlisted column is allowed and never judged**, for two reasons that are the same reason:
+
+- A closed schema punishes the wrong party. The day the backend adds a column, every declaring tool starts filing findings about a change that broke nothing — and a check that cries about correct behaviour is a check people switch off, which is how the failure it exists to catch gets back in.
+- It is the rule the neighbouring boundary already keeps: [tool-argument validation](doc:tools) is permissive on keywords it does not know and enforces `additionalProperties: false` only when an author explicitly asks. Two validators at one seam disagreeing about whether silence means "allowed" would be a worse defect than either could catch.
+
+A declaration this library cannot honour is refused at `defineTool` — the same law as `resultCeiling` and `resultClass` — naming the tool, the column and the fix. The rule ships as `assertResultColumns` for consumers assembling `Tool` objects by hand, and the MCP ingest calls the very same function on a bag from a foreign server.
+
+## The dial, and why these three words
+
+|  |  |
+| --- | --- |
+| **Dial** | `AgentOptions.checkColumnTypes` — `'off'` \| `'warn'` \| `'enforce'` (**default `'off'`**), typed as `ColumnCheckMode` where the check reads it |
+| **Declaration** | at least one tool with `resultColumns` |
+| **Posture** | the family's own: `integrityPosture: 'observe'` (default) files rows; `'dev'` adds the canary and the liveness throw |
+| **Kinds / seam** | `column-type-mismatch` and `missing-column`, both at `'write'` |
+
+- **`'off'`** — nothing measured. Byte-identical to every release before this existed.
+- **`'warn'`** — findings are filed and **the model reads the rows exactly as the tool returned them**. Nothing is blocked, changed or retried.
+- **`'enforce'`** — the rows are **refused**, and the model reads a teaching sentence instead.
+
+The three words are borrowed, not minted. This boundary is the **mirror** of tool-argument validation: that one validates the arguments going *in* against the tool's declared `inputSchema`, this one validates the rows coming *out* against the tool's declared `resultColumns`. Two validators at one seam that graded themselves in different vocabularies would be a worse defect than either could catch — so there is deliberately no new `assist` / `guard` / `rails` trio here, and no new `observe` / `warn` / `refuse` one either.
+
+### What `enforce` actually does
+
+It refuses in the library's own refusal idiom — the [`resultCeiling`](doc:tools) sentence shape, not a thrown stack trace:
+
+> Result rejected: host_group_mappings returned rows that disagree with the columns it declares — 'logical_unit_number' is declared number and 2 of 2 rows hold string (first: `""`). Fix the tool so the column holds what it declares, or change the declaration. **No data was returned.**
+
+That sentence is the whole payload, on every channel — history, `stream.tool_end`, every recorder. The rows never enter context. The delivered status becomes `'invalid'`, so `onToolStatus` edges can route it, and the refusal is on the record as the finding's own message. *"No data was returned"* is load-bearing: a model handed a partial or truncated answer cannot tell the data ends where the cut happened, and fabricates from the part it saw.
+
+A **missing column** is refused too. The promise was broken one level up, and a rowset that cannot answer the question it was declared able to answer is not a smaller version of the right answer.
+
+## What the library refuses to judge
+
+A result is read only when it is an **array of plain objects with at least one row** — that reading is the exported `readRowset`, which answers with a `RowsetReading` or with nothing at all.
+
+| The tool returned | Verdict |
+| --- | --- |
+| an array of objects, one or more rows | **judged** |
+| an array with **zero** rows | **not judged** — no columns to be wrong about; this is [`empty-lookup`](doc:empty-lookup)'s subject, next door |
+| an array of strings, numbers or arrays | **not judged** — a list of scalars has no columns |
+| a sentence, a `null`, a bespoke `{ rows: [...] }` wrapper, a placement claim ticket | **not judged** |
+
+Every "not judged" row files an explicit `not-applicable` row in the disposition ledger and **no finding**. That row is the point, not an omission: a check that silently skipped what it could not read would be the decoration this family exists to make impossible. "Nothing was wrong" and "I could not look" have to stay different observable states.
+
+The zero-row case is the seam split worth knowing: filing `missing-column` for every declared column of an empty result would turn one honest emptiness into a pile of false accusations. An empty answer is the neighbouring check's business.
+
+## Default off means byte-identical
+
+Without the dial, no finding is filed, no event fires, and nothing in the history, the wire or the answer changes — a tool that declares `resultColumns` with the dial off runs byte-for-byte the run it ran before the declaration existed. The one visible difference is the two **registered rows in the disposition report, filed `not-applicable`**, which is the family's law rather than an exception to it: a check that was never armed has to be a row, never a silent absence.
+
+```ts
+agent.on('agentfootprint.integrity.disposition', (e) => {
+  const row = e.payload.rows.find((r) => r.check === 'column-type-mismatch');
+  // dial off, or no tool declaring → { seam: 'write', checked: 0, findings: 0, notApplicable: 1 }
+  // dial on, clean rows          → { checked: 1, findings: 0 }
+  // dial on, the field case      → { checked: 1, findings: 1, lastFiredAt: … }
+});
+```
+
+Both halves are required — the dial **and** a declaration. A declaration alone is deliberately not enough: `resultColumns` is a fact a consumer may already be reading for its own purposes, and a boundary that armed itself off it would make an absent dial change a run's bytes.
+
+## It travels over MCP
+
+`resultColumns` rides the `_meta` bag like the library's other tool declarations, in both directions, so a rowset tool served from a remote catalogue arms this check exactly as a locally defined one does. That is the field case for carrying declarations at all: a remote catalogue is precisely where a numeric column arriving as text goes unnoticed, because the consumer holding the chart has no way to know what the producer meant. A malformed declaration from a server this process does not control is warned about once and dropped — the tool still registers, without that one declaration.
+
+## What this feeds — declarations a downstream consumer can be told instead of guessing
+
+The check is the first use of the declaration, not the only one. Three consumers in this ecosystem infer today what they could be told, and each inference is a known failure mode:
+
+- **Chart axis pickers sniff.** A rowset-to-chart layer walks every value of every column and classifies it quantitative / temporal / nominal by unanimity — so **one stray `'n/a'` demotes a whole numeric column to a label**, and the chart quietly stops offering a measure. It could read the declared type.
+- **A panel decides table-vs-chart by inference.** When the sniffer finds no numeric column, the chart view is disabled and a refusal is printed — a *view decision* made by type inference over data, and exactly the thing that broke when the numbers arrived as strings.
+- **`compute` stages rows blind.** The code-runner stages a declared artifact into the sandbox by its declared kind and media type — never sniffed — and then hands over the payload with no column information at all. The file-level vocabulary is already declaration-based; the column level was the gap.
+
+None of those integrations are built here. They are named so the next person building one knows the declaration exists and does not add an eighth sniffer. A `ColumnViolation` — the column, the declared type, the offending sample, the count of rows affected and the total — is the shape a consumer would read to explain *why* it refused an axis, rather than silently offering a worse chart.
+
+## See also
+
+- [Context Integrity](doc:context-integrity) — the family: seams, the finding event, the disposition vocabulary.
+- [Empty Lookups](doc:empty-lookup) — the neighbouring write-seam check: the run produced the identifier, and the lookup came back empty.
+- [Arming Context Integrity](doc:arming-context-integrity) — the cheapest declaration that arms each check.

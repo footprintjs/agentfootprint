@@ -452,6 +452,29 @@ export type { ExternalGround, ExternalGrounding } from './integrity/unsupported-
 // read one owner. `LookupResultReading` is what the library could see of a
 // result — the vocabulary behind a `not-applicable` row.
 export { EMPTY_LOOKUP_CEILING, type LookupResultReading } from './integrity/empty-lookup/check.js';
+// The COLUMN-TYPE CONTRACT (9.78.0) — `Tool.resultColumns` +
+// `AgentOptions.checkColumnTypes`. The CEILING is exported for the same
+// reason `EMPTY_LOOKUP_CEILING` is: it is quoted verbatim into every finding,
+// so a consumer rendering findings recognizes the bound instead of re-wording
+// it, and the docs, the code and the tests read one owner. `RowsetReading` is
+// what the library could see of a result — the vocabulary behind a
+// `not-applicable` row.
+export {
+  COLUMN_TYPE_CEILING,
+  readRowset,
+  type ColumnCheckMode,
+  type ColumnViolation,
+  type RowsetReading,
+} from './integrity/column-types/check.js';
+// The declaration's own vocabulary, so an app assembling `Tool` objects by
+// hand (or typing a config) can name the words the library judges by.
+export {
+  COLUMN_TYPES,
+  assertResultColumns,
+  type ColumnDeclaration,
+  type ColumnType,
+  type ToolResultColumns,
+} from './integrity/column-types/types.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

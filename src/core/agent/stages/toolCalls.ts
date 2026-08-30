@@ -135,6 +135,9 @@ import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
 import type { ClaimLedgerRow } from '../../../integrity/unsupported-claim/check.js';
 import { emptyLookupOf, readLookupResult } from '../../../integrity/empty-lookup/check.js';
 import type { ProducedResult } from '../../../integrity/empty-lookup/check.js';
+import { columnTypesOf, readRowset } from '../../../integrity/column-types/check.js';
+import type { ColumnCheckMode } from '../../../integrity/column-types/check.js';
+import type { ToolResultColumns } from '../../../integrity/column-types/types.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import {
   readAbsence,
@@ -182,6 +185,24 @@ export interface ToolCallsHandlerDeps {
    * same run.
    */
   readonly emptyLookupGrounding?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * THE WRITE SEAM'S other check (9.78.0, the COLUMN-TYPE CONTRACT) — each
+   * declaring tool's `Tool.resultColumns` by tool name, present ONLY when the
+   * operator's `checkColumnTypes` dial is off `'off'` AND at least one tool
+   * declares columns. Absent — the default — and not one line of the check
+   * runs.
+   *
+   * Harvested in `Agent.buildChart` from the same catalog the other seams
+   * read, and passed rather than re-derived here for the `emptyLookupGrounding`
+   * reason: the stage that files the "nothing to judge this response"
+   * not-applicable row and the stage that judges must agree, by construction,
+   * about which tools are armed.
+   */
+  readonly columnDeclarations?: ReadonlyMap<string, ToolResultColumns>;
+  /** What the boundary does with a column finding — `'warn'` files and changes
+   *  nothing, `'enforce'` refuses the rows. Present with
+   *  {@link ToolCallsDeps.columnDeclarations} or not at all. */
+  readonly columnCheckMode?: ColumnCheckMode;
   /**
    * The per-run disposition ledger, by REFERENCE (9.60.0) — the same holder
    * `callLLM` and the tools slot are handed, shared through the build closure
@@ -746,6 +767,80 @@ export function buildToolCallsHandler(
       ...(declaredStatus !== undefined && { declaredStatus }),
     });
     return verdict.refusal;
+  };
+
+  /**
+   * THE COLUMN-TYPE CONTRACT (9.78.0) — the tool declared what its rows
+   * contain, and this is where the rows are.
+   *
+   * Placed at the SAME execute boundaries as `refuseOverCeiling` and for the
+   * same reason: `resultColumns` is the TOOL AUTHOR's contract on the tool's
+   * OWN return, so it is judged the moment the handler's value lands, before
+   * governance, before placement, before the cap — and a resumed call is
+   * judged exactly as an inline one.
+   *
+   * AFTER the ceiling, deliberately. A payload the model will never read has
+   * no columns worth arguing about, and judging one that was already refused
+   * would file findings about rows nobody was ever served.
+   *
+   * `undefined` = nothing declared, nothing to refuse, or `'warn'` — the
+   * caller keeps today's path byte for byte. A string is the teaching
+   * refusal, which under `'enforce'` replaces the payload on every channel,
+   * exactly as the ceiling's does.
+   *
+   * The three field failures this exists for: LUN 0 stored as an empty string
+   * on 2,094 mappings; an 8 MiB disk rendered `0.0 GB`; a whole tool family
+   * returning its numbers as quoted strings. This catches the first and the
+   * third. It cannot catch the second — that is MEANING, and the ceiling
+   * sentence in every finding says so.
+   */
+  const judgeColumns = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    value: unknown,
+  ): string | undefined => {
+    const declarations = deps.columnDeclarations;
+    if (declarations === undefined) return undefined;
+    const columns = declarations.get(call.toolName);
+    if (columns === undefined) return undefined;
+    const { findings, disposition, refusal } = columnTypesOf(
+      {
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        columns,
+        reading: readRowset(value),
+        mode: deps.columnCheckMode ?? 'warn',
+      },
+      call.iteration,
+    );
+    // ONE encounter, TWO rows. The declaration arms both checks and a call
+    // meets both at once, so both must answer for it — a shape that is not a
+    // rowset is `not-applicable` to each, and a clean rowset is a
+    // `checked-pass` for each. Filing one row would leave the other check
+    // looking untouched, which is the rot signal, not the truth.
+    const ledger = deps.integrityLedger?.current;
+    for (const kind of ['column-type-mismatch', 'missing-column'] as const) {
+      const kindFired = findings.some((f) => f.kind === kind);
+      // A rowset this check could read, where THIS kind found nothing, is a
+      // pass for THIS kind even when its sibling failed: the columns really
+      // were all present, or really did all hold their declared type.
+      const row =
+        disposition === 'not-applicable'
+          ? 'not-applicable'
+          : kindFired
+          ? 'checked-fail'
+          : 'checked-pass';
+      ledger?.note(kind, 'write', row, kindFired ? Date.now() : undefined);
+    }
+    // The findings ARE the record of a refusal: each one names what was
+    // refused, which column, how many rows, and — through `outcomeClause` —
+    // that the model read a sentence instead of the rows. Deliberately NOT
+    // `tools.result_refused`: that event's whole vocabulary is a SIZE
+    // (`sizeChars`, `maxChars`), and reusing it here would put a fabricated
+    // ceiling on the record to describe a refusal that had nothing to do
+    // with size.
+    fileIntegrityFindings(scope, findings, call.iteration);
+    return refusal;
   };
 
   /**
@@ -2221,6 +2316,22 @@ export function buildToolCallsHandler(
             envelope: { ...envelope, content: refusal, status: 'invalid' },
           };
         }
+        // The column-type contract (9.78.0), at the same door and one step
+        // after the ceiling. `'warn'` files and returns undefined — this
+        // path keeps every byte it had.
+        const columnRefusal = judgeColumns(scope, { toolName, toolCallId, iteration }, content);
+        if (columnRefusal !== undefined) {
+          return {
+            result: columnRefusal,
+            executed: true,
+            // The ceiling's flag, reused for the ceiling's reason: a refused
+            // payload must not advance the step pointer on any path, and
+            // there is exactly one fact here — the model did not get the
+            // result — not two spellings of it.
+            ceilingRefused: true,
+            envelope: { ...envelope, content: columnRefusal, status: 'invalid' },
+          };
+        }
         return {
           result: content,
           executed: true,
@@ -2256,6 +2367,17 @@ export function buildToolCallsHandler(
           executed: true,
           ceilingRefused: true,
           envelope: { content: refusal, effects: [], status: 'invalid', malformed: [] },
+        };
+      }
+      // The column-type contract on this path's own execute boundary — a
+      // resumed call's rows are judged exactly as an inline one's.
+      const columnRefusal = judgeColumns(scope, { toolName, toolCallId, iteration }, result);
+      if (columnRefusal !== undefined) {
+        return {
+          result: columnRefusal,
+          executed: true,
+          ceilingRefused: true,
+          envelope: { content: columnRefusal, effects: [], status: 'invalid', malformed: [] },
         };
       }
       // A status-only shape missing its `effects: []` marker is DATA (bytes
@@ -3050,6 +3172,21 @@ export function buildToolCallsHandler(
                 ceilingRefused = true;
                 result = overflowRefusal;
                 toolStatus = 'invalid';
+              } else {
+                // The column-type contract (9.78.0) — the main batch-loop
+                // door, one step after the ceiling. Only when the payload
+                // survived it: rows nobody will read have no columns worth
+                // arguing about.
+                const columnRefusal = judgeColumns(
+                  scope,
+                  { toolName: tc.name, toolCallId: tc.id, iteration },
+                  result,
+                );
+                if (columnRefusal !== undefined) {
+                  ceilingRefused = true;
+                  result = columnRefusal;
+                  toolStatus = 'invalid';
+                }
               }
               await endCall(tc.id);
             } catch (err) {

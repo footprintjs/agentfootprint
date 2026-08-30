@@ -581,6 +581,69 @@ export interface AgentOptions {
    */
   readonly noticeEmptyLookups?: boolean;
   /**
+   * Check a tool's rows against the columns it declared (9.78.0) — the write
+   * seam's COLUMN-TYPE CONTRACT. **Default `'off'`.**
+   *
+   * THE RECORDED FAILURES, three of them, all one shape — a number became
+   * something else and nothing noticed at the seam. A mapping report wrote
+   * `str(m.get("logical_unit_number") or "")`, so LUN 0 — falsy — was stored
+   * as an EMPTY STRING on 2,094 mappings, and a host group missing the LUN an
+   * initiator probes first was indistinguishable from one that had it. A
+   * capacity view rendered an 8 MiB disk as `0.0 GB`, which reads as NO DISK
+   * during a live incident. And a whole family of tools returned their
+   * numbers as quoted strings (`"1240"`), which silently blanked every chart,
+   * because nothing downstream could tell a measure from a label.
+   *
+   * The library already lets a tool declare what its result IS
+   * (`Tool.resultKind`). This dial reads the sibling declaration —
+   * `Tool.resultColumns`, what the result CONTAINS — and checks the rows
+   * against it at the moment the tool answers.
+   *
+   * THE THREE WORDS, and they are `toolArgsValidation`'s own:
+   *
+   *   • `'off'` (default) — nothing measured. Byte-identical to every release
+   *     before this existed.
+   *   • `'warn'` — findings are filed on
+   *     `agentfootprint.integrity.context_error` and the model reads the rows
+   *     EXACTLY as the tool returned them. Nothing is blocked, changed or
+   *     retried.
+   *   • `'enforce'` — the rows are REFUSED and the model reads a teaching
+   *     sentence naming the column, what it declared, what arrived and how
+   *     many rows — the `resultCeiling` idiom, not a thrown stack trace. The
+   *     refusal is the whole payload, on every channel.
+   *
+   * The words are borrowed rather than invented deliberately: this is the
+   * MIRROR of `toolArgsValidation` — that boundary validates the arguments
+   * going IN against the tool's declared `inputSchema`, this one validates
+   * the rows coming OUT against the tool's declared `resultColumns`. Two
+   * validators at one seam that graded themselves in different vocabularies
+   * would be a worse defect than either could catch.
+   *
+   * TWO FINDINGS, because the field bug turned on the difference:
+   * `column-type-mismatch` (the column is there and holds the wrong thing)
+   * and `missing-column` (the declared column is in none of the rows). They
+   * send a person to two different files.
+   *
+   * THE CEILING: this judges TYPE, never MEANING. It sees that a column
+   * declared `number` holds a string; it can never see that the string should
+   * have been `0`, or that `0.0` should have been `0.0078` — so the `0.0 GB`
+   * failure above passes it cleanly. The bound ships as `COLUMN_TYPE_CEILING`
+   * and is quoted verbatim into every finding.
+   *
+   * WHAT IT REFUSES TO JUDGE: a result is read only when it is an ARRAY OF
+   * PLAIN OBJECTS with at least one row. Prose, a `null`, a bespoke
+   * `{ rows: [...] }` wrapper, a claim ticket — and the ZERO-ROW result,
+   * which has no columns to be wrong about and belongs to `empty-lookup`
+   * next door — all file an explicit `not-applicable` row and NO finding.
+   *
+   * TWO HALVES ARM IT: this dial AND at least one tool declaring
+   * `resultColumns`. Absent, the run is byte-identical; the one visible
+   * difference is the registered `column-type-mismatch` / `missing-column`
+   * rows in the disposition report, filed `not-applicable` — the family's
+   * law, not an exception to it.
+   */
+  readonly checkColumnTypes?: 'off' | 'warn' | 'enforce';
+  /**
    * What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
    * Default **on**.
    *

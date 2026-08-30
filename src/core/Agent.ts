@@ -502,6 +502,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** See AgentOptions.noticeEmptyLookups (9.77.0). Default false — absent is
    *  byte-identical, save for the registered not-applicable ledger row. */
   private readonly noticeEmptyLookups: boolean = false;
+  /** Set at chart build: whether any tool in the FULL declared catalog
+   *  declared `resultColumns` (9.78.0) — the other half of the column-type
+   *  contract's arming. */
+  private integrityColumnsPresent = false;
+  /** See AgentOptions.checkColumnTypes (9.78.0). Default 'off' — absent is
+   *  byte-identical, save for the registered not-applicable ledger rows. */
+  private readonly checkColumnTypes: 'off' | 'warn' | 'enforce' = 'off';
   /** See AgentOptions.externalGrounds (9.72.0). Absent = door closed,
    *  byte-identical behavior. */
   private readonly externalGrounds?: ExternalGroundsProvider;
@@ -937,6 +944,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         );
       }
       this.noticeEmptyLookups = opts.noticeEmptyLookups;
+    }
+    // The column-type contract's dial (9.78.0) — refused at construction for
+    // the same reason as the postures above, and with one more: `'enforce'`
+    // REFUSES tool results, so a misspelling silently downgraded to off would
+    // leave an operator believing a boundary is held that nothing is holding.
+    if (opts.checkColumnTypes !== undefined) {
+      if (
+        opts.checkColumnTypes !== 'off' &&
+        opts.checkColumnTypes !== 'warn' &&
+        opts.checkColumnTypes !== 'enforce'
+      ) {
+        throw new Error(
+          `Agent: checkColumnTypes must be 'off', 'warn' or 'enforce', got ` +
+            `${JSON.stringify(opts.checkColumnTypes)}. It reads each tool's declared ` +
+            `\`resultColumns\` and judges the rows it returns: 'warn' files findings and ` +
+            `changes nothing the model reads; 'enforce' refuses the rows and hands the model a ` +
+            `teaching sentence instead. Omit it (or pass 'off') and nothing is ever measured.`,
+        );
+      }
+      this.checkColumnTypes = opts.checkColumnTypes;
     }
     // The claim-check seam (9.21.0). One store per agent, attached at
     // construction — idempotent by shape: there is no second door to attach a
@@ -2736,6 +2763,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // TWO HALVES (9.77.0): the operator's dial AND a declaration to arm
         // on. Either alone leaves a registered `not-applicable` row.
         emptyLookup: this.noticeEmptyLookups && this.integrityDanglingPresent,
+        // TWO HALVES (9.78.0), the same law: the operator's dial off `'off'`
+        // AND a tool declaring `resultColumns`. Either alone leaves two
+        // registered `not-applicable` rows.
+        columnTypes: this.checkColumnTypes !== 'off' && this.integrityColumnsPresent,
       },
       this.integrityPosture,
     );
@@ -3522,6 +3553,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .map(([name, tool]) => [name, tool.argumentsFrom!] as const),
     );
     this.integrityDanglingPresent = toolGrounding.size > 0;
+    // The column-type contract's declared half (9.78.0) — harvested from the
+    // SAME catalog and with the same ToolProvider caveat, so an MCP-carried
+    // `resultColumns` (which rides `_meta`) arms the check exactly as a
+    // locally-defined one does.
+    // `flatMap` rather than filter-then-assert: the narrowing is real here,
+    // so the twin harvest above's non-null assertion is not inherited.
+    const toolColumns = new Map(
+      [...registryByName.entries()].flatMap(([name, tool]) =>
+        tool.resultColumns === undefined ? [] : [[name, tool.resultColumns] as const],
+      ),
+    );
+    this.integrityColumnsPresent = toolColumns.size > 0;
     // The staged-refs join's other half (grounded numbers): `Tool.wants` by
     // tool name, harvested the same way and with the same ToolProvider caveat.
     // Consumed only by the evidence gate (the callLLM nudge and the recheck
@@ -3573,6 +3616,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // runs where the result is. Value-conditional on BOTH halves, so an
       // agent that never asked for it reads no new key.
       ...(this.noticeEmptyLookups && toolGrounding.size > 0 && { noticeEmptyLookups: true }),
+      // The column-type contract's arming (9.78.0), same job and same
+      // value-conditional law: this stage owns only the "no declaring tool
+      // was called this response" not-applicable notes.
+      ...(this.checkColumnTypes !== 'off' &&
+        toolColumns.size > 0 && { columnDeclaringTools: new Set(toolColumns.keys()) }),
       integrityLedger: this.integrityLedgerHolder,
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
       ...(this.outputSchemaParser !== undefined && {
@@ -3688,6 +3736,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.noticeEmptyLookups &&
         toolGrounding.size > 0 && {
           emptyLookupGrounding: toolGrounding,
+          integrityLedger: this.integrityLedgerHolder,
+        }),
+      // THE WRITE SEAM'S other check (9.78.0) — the column-type contract.
+      // Value-conditional on both halves for the same reason, so an agent
+      // that asked for neither hands the handler exactly the deps object it
+      // always did.
+      ...(this.checkColumnTypes !== 'off' &&
+        toolColumns.size > 0 && {
+          columnDeclarations: toolColumns,
+          columnCheckMode: this.checkColumnTypes,
           integrityLedger: this.integrityLedgerHolder,
         }),
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),

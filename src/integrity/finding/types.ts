@@ -22,7 +22,7 @@ import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { IntegritySeam } from '../disposition/types.js';
 
 /**
- * The six defect classes, by their plain names:
+ * The eight defect classes, by their plain names:
  *
  * | kind | means | mechanism |
  * |---|---|---|
@@ -32,6 +32,8 @@ import type { IntegritySeam } from '../disposition/types.js';
  * | `duplicate-execution`  | did settled work again                                 | once      |
  * | `unsupported-claim`    | stated something the record does not support           | grounding |
  * | `empty-lookup`         | the run produced this value, and the lookup for it found nothing | join |
+ * | `column-type-mismatch` | a column holds something other than the type its tool declared | type |
+ * | `missing-column`       | a column the tool declared is in none of its rows      | presence  |
  *
  * `empty-lookup` is the one class that is ADVISORY BY CONSTRUCTION (9.77.0) —
  * every finding it files carries `advisory: true`, because an empty result
@@ -40,6 +42,16 @@ import type { IntegritySeam } from '../disposition/types.js';
  * defect that was proven. It is deliberately NOT `dangling-reference`, whose
  * meaning is the opposite: there the ground has left reach, here the ground
  * is in reach and the lookup came back with nothing.
+ *
+ * `column-type-mismatch` and `missing-column` (9.78.0) are two classes rather
+ * than one ON PURPOSE, and the field failure they come from is the argument:
+ * a LUN of 0 stored as `''` and a LUN column that was never delivered send a
+ * person to two different files, and a checker that said only "something is
+ * off with logical_unit_number" would have helped with neither. Unlike
+ * `empty-lookup`, neither is advisory: a column declared `number` that holds
+ * a string is not a place to look, it is a broken promise — though what the
+ * check can see about it is bounded, and the bound ships as
+ * `COLUMN_TYPE_CEILING` in every message.
  */
 export type ContextErrorKind =
   | 'invariant-violation'
@@ -47,7 +59,9 @@ export type ContextErrorKind =
   | 'dangling-reference'
   | 'duplicate-execution'
   | 'unsupported-claim'
-  | 'empty-lookup';
+  | 'empty-lookup'
+  | 'column-type-mismatch'
+  | 'missing-column';
 
 /** One detected context error — a labelled instance, automatically. */
 export interface ContextError {

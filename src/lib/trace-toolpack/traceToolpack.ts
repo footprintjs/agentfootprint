@@ -585,6 +585,8 @@ const CONTEXT_ERROR_KIND_CHECKS: Record<ContextErrorKind, string | false> = {
   'duplicate-execution': false,
   'unsupported-claim': 'src/integrity/unsupported-claim (claim)',
   'empty-lookup': 'src/integrity/empty-lookup (write)',
+  'column-type-mismatch': 'src/integrity/column-types (write)',
+  'missing-column': 'src/integrity/column-types (write)',
 };
 const ALL_CONTEXT_ERROR_KINDS = Object.keys(CONTEXT_ERROR_KIND_CHECKS) as ContextErrorKind[];
 /** The kinds the tool OFFERS — the ones a shipped check can actually file. */

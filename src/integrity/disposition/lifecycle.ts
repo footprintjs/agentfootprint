@@ -14,7 +14,10 @@
  *          empty-lookup: that same declaration AND the operator's
  *          `noticeEmptyLookups` dial — two halves, because an advisory that
  *          armed itself off a declaration made for something else would not
- *          be opt-in at all).
+ *          be opt-in at all; column-types: `Tool.resultColumns` AND the
+ *          operator's `checkColumnTypes` dial off `'off'` — the same two
+ *          halves, arming BOTH `column-type-mismatch` and `missing-column`
+ *          off the one declaration).
  *          Registration is what makes silence auditable — an unregistered
  *          check is honest
  *          absence, a registered one that never notes is the wiring rot
@@ -37,6 +40,7 @@ import { danglingReferencesOf } from '../dangling-reference/check.js';
 import { unsupportedArgumentsOf } from '../unsupported-argument/check.js';
 import { unsupportedClaimsOf } from '../unsupported-claim/check.js';
 import { emptyLookupOf, readLookupResult } from '../empty-lookup/check.js';
+import { columnTypesOf, readRowset } from '../column-types/check.js';
 
 export type IntegrityPosture = 'observe' | 'dev';
 
@@ -71,6 +75,18 @@ export interface IntegrityChecksPresent {
    * silence.
    */
   readonly emptyLookup?: boolean;
+  /**
+   * The write seam's COLUMN-TYPE CONTRACT (9.78.0) — armed only when BOTH
+   * halves are true: the operator set `checkColumnTypes` to something other
+   * than `'off'` AND at least one tool declared `resultColumns`. The same
+   * two-halves law as `empty-lookup`, for the same reason: a declaration is
+   * a promise a consumer may already be reading for its own purposes, and
+   * arming a boundary check off it alone would make an absent dial change a
+   * run's bytes. ONE FLAG, TWO CHECKS — `column-type-mismatch` and
+   * `missing-column` are the same declaration read two ways, and nothing can
+   * arm one without arming the other.
+   */
+  readonly columnTypes?: boolean;
 }
 
 /**
@@ -119,6 +135,8 @@ export function beginIntegrityRun(
   armed('unsupported-argument', 'choice', present.dangling === true);
   armed('unsupported-claim', 'claim', present.claim === true);
   armed('empty-lookup', 'write', present.emptyLookup === true);
+  armed('column-type-mismatch', 'write', present.columnTypes === true);
+  armed('missing-column', 'write', present.columnTypes === true);
 
   if (posture !== 'dev') return ledger;
 
@@ -226,6 +244,32 @@ export function beginIntegrityRun(
       -1,
     );
     if (caught.findings.length > 0) ledger.noteSynthetic('empty-lookup', 'write', 'caught');
+  }
+  {
+    // The column-type canaries (9.78.0). ONE fixture, deliberately, because
+    // one rowset carries both defects at once and that is the honest shape of
+    // the field failure: a numeric column arriving as text AND a declared
+    // column nobody delivered, in the same result. Each check reads its own
+    // findings out of the shared verdict, so a canary that catches one and
+    // not the other names exactly which half died.
+    ledger.noteSynthetic('column-type-mismatch', 'write', 'minted');
+    ledger.noteSynthetic('missing-column', 'write', 'minted');
+    const caught = columnTypesOf(
+      {
+        toolName: 'canary_tool',
+        toolCallId: 'canary',
+        columns: { canary_measure: 'number', canary_absent: 'string' },
+        reading: readRowset([{ canary_measure: '1240' }]),
+        mode: 'warn',
+      },
+      -1,
+    );
+    if (caught.findings.some((f) => f.kind === 'column-type-mismatch')) {
+      ledger.noteSynthetic('column-type-mismatch', 'write', 'caught');
+    }
+    if (caught.findings.some((f) => f.kind === 'missing-column')) {
+      ledger.noteSynthetic('missing-column', 'write', 'caught');
+    }
   }
   return ledger;
 }

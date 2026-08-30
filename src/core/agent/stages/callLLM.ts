@@ -154,6 +154,17 @@ export interface CallLLMStageDeps {
    */
   readonly noticeEmptyLookups?: boolean;
   /**
+   * The names of tools declaring `Tool.resultColumns` (9.78.0), present ONLY
+   * when the operator's `checkColumnTypes` dial is off `'off'` AND at least
+   * one tool declares columns — the same two halves the ledger arms on.
+   *
+   * This stage owns exactly one thing for the column-type contract, and it is
+   * the `noticeEmptyLookups` job above verbatim: the honest `not-applicable`
+   * when a response asked for NO declaring tool. The judging happens where
+   * the rows are.
+   */
+  readonly columnDeclaringTools?: ReadonlySet<string>;
+  /**
    * The staged-refs nudge's harvest (`.namesAndNumbersFromEvidence({ nudge:
    * true })`) — `Tool.wants` by tool name, present ONLY when the dial is on
    * AND at least one registered tool declares `wants`; absent → this stage
@@ -803,6 +814,20 @@ export function buildCallLLMStage(
       // not-applicable row is an answer, and an untouched one reads as rot.
       if (deps.noticeEmptyLookups === true && armedCalls.length === 0) {
         deps.integrityLedger?.current?.note('empty-lookup', 'write', 'not-applicable');
+      }
+    }
+    // THE COLUMN-TYPE CONTRACT's aliveness half (9.78.0), and it needs its
+    // OWN block rather than a clause in the one above: this check is armed by
+    // `resultColumns`, not by `argumentsFrom`, and an agent that declares one
+    // and not the other is the ordinary case. Same law, same reason — the
+    // rows are judged where a RESULT exists, so a response that asked for no
+    // declaring tool would otherwise leave two armed rows untouched through a
+    // whole run, and an untouched row reads as rot.
+    if (deps.columnDeclaringTools !== undefined) {
+      const declaring = deps.columnDeclaringTools;
+      if (!response.toolCalls.some((c) => declaring.has(c.name))) {
+        deps.integrityLedger?.current?.note('column-type-mismatch', 'write', 'not-applicable');
+        deps.integrityLedger?.current?.note('missing-column', 'write', 'not-applicable');
       }
     }
 

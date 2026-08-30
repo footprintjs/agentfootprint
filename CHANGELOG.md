@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.78.0] - 2026-08-30
+
+### Added
+
+- **`Tool.resultColumns` + `checkColumnTypes` — the column-type contract: a
+  tool declares what its rows contain, and the library checks the rows against
+  it at the boundary.** Three recorded failures, and they are one shape — *a
+  number became something else, and nothing noticed at the seam*:
+
+  1. A mapping report wrote `str(m.get("logical_unit_number") or "")`. **LUN 0
+     is falsy**, so LUN 0 was stored as an EMPTY STRING on 2,094 mappings, and
+     a host group missing the LUN an initiator probes first became
+     indistinguishable from one that had it.
+  2. A capacity view rendered `round(mib / 1024, 1)`, so an 8 MiB disk came out
+     as `0.0 GB` — which reads as NO DISK, a provisioning failure, during a
+     live incident.
+  3. A whole family of tools returned their numbers as quoted strings
+     (`"1240"`), which silently blanked every chart, because nothing downstream
+     could tell a measure from a label.
+
+  Every rail passed, honestly, in all three: nothing errored, nothing was
+  ungrounded. The library already lets a tool declare what its result IS
+  (`resultKind`, 9.70.0); it did not let a tool declare what its result
+  CONTAINS, so a rowset had nothing to be wrong against — and every consumer
+  downstream was left SNIFFING types out of the data, where one stray `''`
+  demotes a numeric column to text in silence.
+
+  `resultColumns` is the sibling declaration: a column-name → type map, on
+  `Tool` beside `resultKind`. Types are `number` / `string` / `boolean` /
+  `date` — **the vocabulary this ecosystem's rowset consumers already sniff
+  their way to**, not a new one. The one word deliberately left behind is
+  `'unknown'`: a sniffer needs it ("I could not tell"), a declaration has no
+  use for it. A column maps to a bare word or to `{ type, nullable }` (the
+  `CostBudget` two-spellings pattern, normalized once).
+
+  **THE CEILING**, exported as `COLUMN_TYPE_CEILING` and quoted verbatim into
+  every finding, the `EMPTY_LOOKUP_CEILING` law: *"This judges TYPE, never
+  MEANING — it can see that a column declared `number` holds a string, and it
+  can never see that the string should have been 0, or that a 0.0 should have
+  been an 8; a column whose every value has its declared type passes here and
+  can still be wrong."* Failures 1 and 3 are caught. **Failure 2 is not, and
+  never will be** — `0.0` is a perfectly good number — and the check says so
+  out loud rather than letting a green row imply otherwise.
+
+  **TWO finding kinds, because the field bug turned on the difference.** New
+  `ContextErrorKind`s at the **write seam**: **`column-type-mismatch`** (the
+  column is THERE and holds the wrong thing) and **`missing-column`** (the
+  declared column is in NONE of the rows). *"The value is not what it should
+  be"* sends a person to the mapping code; *"the column was never delivered"*
+  sends them to the query. A checker that said only "something is off with
+  logical_unit_number" would have helped with neither. Each finding names the
+  column, the offending value quoted, the rows affected of the rows read, and
+  the tool.
+
+  **OPEN, never closed.** A declaration is a promise about what it NAMES — an
+  unlisted column is allowed and never judged. A closed schema would punish the
+  wrong party the day a backend adds a column, and it is the rule the
+  neighbouring boundary (`toolArgsValidation`) already keeps.
+
+  **`nullable`, and what "no value" means.** `null`, `undefined` and a key not
+  set on a row are one idea with three spellings, and by default all three are
+  violations; `nullable: true` legitimizes them and every finding about an
+  absence names that one-word fix in its own message. `nullable` is a promise
+  about VALUES, not about the column's existence: a declared column in no row
+  at all is `missing-column` regardless.
+
+  **The dial: `AgentOptions.checkColumnTypes`, default `'off'`** —
+  `'off'` | `'warn'` | `'enforce'`. **The three words are borrowed, not
+  minted:** this boundary is the MIRROR of `toolArgsValidation` (arguments in,
+  against `inputSchema`; rows out, against `resultColumns`), and two validators
+  at one seam grading themselves in different vocabularies would be a worse
+  defect than either could catch — so there is no new `assist`/`guard`/`rails`
+  trio here and no new `observe`/`warn`/`refuse` one either. `'warn'` files
+  findings and the model reads the rows **exactly** as the tool returned them.
+  `'enforce'` REFUSES in the library's own refusal idiom — the `resultCeiling`
+  teaching sentence ("…Fix the tool so the column holds what it declares, or
+  change the declaration. No data was returned."), the whole payload on every
+  channel, delivered status `'invalid'`, never a thrown stack trace.
+
+  **What it refuses to judge** (`readRowset`): a result is read only when it is
+  an ARRAY OF PLAIN OBJECTS with at least one row. Prose, a `null`, a bespoke
+  `{ rows: [...] }` wrapper, a claim ticket — and the **zero-row** result,
+  which has no columns to be wrong about and is `empty-lookup`'s subject next
+  door — all file an explicit `not-applicable` ROW and no finding. Filing
+  `missing-column` for every declared column of an empty answer would turn one
+  honest emptiness into a pile of false accusations.
+
+  **Armed by two halves**: the dial off `'off'` **and** at least one tool
+  declaring `resultColumns`. Absent either, the run is byte-identical — no
+  finding, no event, nothing on the wire, and a declaring tool with the dial
+  off runs byte-for-byte the run it ran before the declaration existed. The one
+  visible difference is the two registered rows in the disposition report,
+  filed `not-applicable`: registered-but-unarmed is a ROW, never silence.
+
+  **Travels MCP `_meta`** like the library's other tool declarations, both
+  directions — a remote catalogue is exactly where a numeric column arriving as
+  text goes unnoticed, and leaving the declaration behind would arm the check
+  for local tools while leaving every MCP tool a second-class citizen of it. A
+  malformed declaration from a foreign server is warned about once and dropped;
+  the tool still registers.
+
+  Exports: `COLUMN_TYPE_CEILING`, `COLUMN_TYPES`, `readRowset`,
+  `assertResultColumns`, and the types `ColumnType`, `ColumnDeclaration`,
+  `ToolResultColumns`, `ColumnCheckMode`, `ColumnViolation`, `RowsetReading`.
+  Docs: `docs-next` → Monitor → Column Types, which also names the three
+  existing consumers this declaration feeds (chart axis pickers that sniff, the
+  panel deciding table-vs-chart by inference, and `compute` staging rows blind)
+  — none of those integrations are built here, they are named so the next
+  person does not add an eighth sniffer.
+
 ## [9.77.0] - 2026-08-29
 
 ### Added

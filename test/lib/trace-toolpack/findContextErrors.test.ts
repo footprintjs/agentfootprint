@@ -555,13 +555,15 @@ describe('find_context_errors — the kind vocabulary it can answer for', () => 
   };
 
   it('offers only the classes a check in this build can actually file', () => {
-    // `ContextErrorKind` names six classes; `src/integrity/` ships five
-    // checks. Offering the sixth invites a query whose only possible answer
+    // `ContextErrorKind` names eight classes; `src/integrity/` ships seven
+    // checks. Offering the eighth invites a query whose only possible answer
     // is a negative verdict about a class nothing could have filed.
     expect([...kindEnum()].sort()).toEqual([
+      'column-type-mismatch',
       'dangling-reference',
       'empty-lookup',
       'invariant-violation',
+      'missing-column',
       'unsupported-argument',
       'unsupported-claim',
     ]);

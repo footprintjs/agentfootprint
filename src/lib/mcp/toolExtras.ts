@@ -28,7 +28,7 @@
  *
  * ── What may travel, and the bar ────────────────────────────────────────
  * **A declaration a consumer-side check or rail reads; nothing that governs
- * execution.** The five fields below pass it. `needs` (credentials), `checkIn`
+ * execution.** Every field below passes it. `needs` (credentials), `checkIn`
  * (human consent) and the session hooks do NOT and never will: they govern how
  * a tool RUNS, and the tool runs on the server. Sending them would tell a
  * client to hold a gate that the only executor of the tool has already held,
@@ -56,11 +56,13 @@ import {
   assertGates,
   assertResultCeiling,
   assertResultClass,
+  assertResultColumns,
   assertResultKind,
   assertToolOwner,
   type Tool,
   type ToolOwner,
   type ToolResultCeiling,
+  type ToolResultColumns,
 } from '../../core/tools.js';
 import type { ToolResultClass } from '../semantics/types.js';
 
@@ -93,6 +95,21 @@ export interface McpToolExtras {
   /** The artifact kind a PLACED result is minted under — see
    *  {@link Tool.resultKind}. What makes a placed result spendable by `wants`. */
   readonly resultKind?: string;
+  /**
+   * What this tool's ROWS contain (9.78.0) — see {@link Tool.resultColumns}.
+   * Arms the write seam's `column-type-mismatch` and `missing-column` checks.
+   *
+   * It clears the bar this file states, and by the widest margin of the eight.
+   * It is a flat, inert fact about the RESULT that a consumer-side check
+   * reads; it governs nothing about how the tool runs, and the tool runs on
+   * the server. It is also the field case for carrying declarations at all: a
+   * remote catalogue of rowset tools is exactly where a numeric column
+   * arriving as text goes unnoticed, because the consumer holding the chart
+   * has no way to know what the producer meant. Leaving it behind would arm
+   * the check for local tools and leave every MCP tool a second-class citizen
+   * of it — the whole defect `toolExtras` was built to end.
+   */
+  readonly resultColumns?: ToolResultColumns;
   /** The identity edge integrity checks join on — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
   /** The declared class of this tool's results — see {@link Tool.resultClass}. */
@@ -122,6 +139,7 @@ export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
   const extras: McpToolExtras = {
     ...(tool.argumentsFrom !== undefined && { argumentsFrom: tool.argumentsFrom }),
     ...(tool.resultKind !== undefined && { resultKind: tool.resultKind }),
+    ...(tool.resultColumns !== undefined && { resultColumns: tool.resultColumns }),
     ...(tool.owner !== undefined && { owner: tool.owner }),
     ...(tool.resultClass !== undefined && { resultClass: tool.resultClass }),
     ...(tool.resultCeiling !== undefined && { resultCeiling: tool.resultCeiling }),
@@ -172,6 +190,9 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
   const resultKind = kept('resultKind', (v) => assertResultKind(origin.tool, v as string)) as
     | string
     | undefined;
+  const resultColumns = kept('resultColumns', (v) => assertResultColumns(origin.tool, v)) as
+    | ToolResultColumns
+    | undefined;
   const owner = kept('owner', (v) => assertToolOwner(origin.tool, v as ToolOwner)) as
     | ToolOwner
     | undefined;
@@ -189,6 +210,7 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
   return {
     ...(argumentsFrom !== undefined && { argumentsFrom }),
     ...(resultKind !== undefined && { resultKind }),
+    ...(resultColumns !== undefined && { resultColumns }),
     ...(owner !== undefined && { owner }),
     ...(resultClass !== undefined && { resultClass }),
     ...(resultCeiling !== undefined && { resultCeiling }),
