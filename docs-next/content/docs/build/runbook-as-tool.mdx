@@ -159,6 +159,59 @@ The reserved verdict word `declined` means "no classification was reached" — t
 - **No store, or a failed mint**: the descriptor still ships with its counters, and its `note` names why there is no ticket. A failed mint costs the ticket, never the answer.
 - `walk_segment` is `'full'` today. When approval gates land, a resumed run's walk will honestly say `'post-resume'` — the discriminant ships now so the wire does not break then.
 
+## Drawing the walk: `walk: { recording }`
+
+The walk is a **row projection** — eight declared columns per execution step, values off by construction. That is the right thing to hand a model and the wrong thing to hand a renderer: **a step graph cannot be inferred from sentences about steps**, and a consumer handed 129 rows can only correctly refuse to guess at the edges. The one piece that makes a walk drawable is `structure`, the chart's build-time graph — which a finished run does not leave behind and no snapshot carries.
+
+So opt in, and the bridge files the inner chart's **own recording** beside the walk — `{ snapshot, events, structure }`, the same shape [`recordRun`](doc:recordings) produces and every flow viewer mounts — under kind `recording/run`, with its ref on the same descriptor:
+
+```ts
+const triage = runbookAsTool({
+  name: 'backup_triage',
+  description: 'Assess backup protection posture for every subject.',
+  resultKind: 'verdict/backup-posture',
+  rules: { name: 'health-signal', version: 'v1' },
+  redact: { keys: ['apiKey'] },   // ← scrubs the walk AND the recording, one policy
+
+  // `true` for the defaults, or the bag to set them yourself.
+  walk: { cap: 500, recording: { label: 'nightly posture sweep', maxBytes: 5_000_000 } },
+
+  procedure: (tools) => /* … as above … */,
+});
+```
+
+…and the spine's walk descriptor grows four fields:
+
+```jsonc
+"walk": {
+  "ref": "art_2tPdO5Qlnd502pwXDyPNwU",
+  "kind": "recording/chart-walk",
+  "rows": 46, "steps_executed": 15,
+  "projection": "full", "shown": 46, "total": 46, "complete": true,
+  "walk_segment": "full",
+  "note": "The chart's own walk, one row per execution step. …",
+
+  "recording_ref": "art_GOlowossXqVvjvEveeCXWh",
+  "recording_kind": "recording/run",
+  "recording_bytes": 35371,
+  "recording_note": "The inner chart's own recording — `{ snapshot, events, structure }`, the shape a viewer mounts — so this walk can be drawn as the flowchart it actually ran. …"
+}
+```
+
+The consumer redeems it with the artifact op it already has — `{ op: 'artifact-get', ref: walk.recording_ref }` — parses the JSON, and hands the three keys straight to the viewer. No new operation, no new adapter.
+
+**Why it is off by default.** A walk carries *sentences about* what happened and no payload from it. A recording is the run: the chart's shared state, its whole commit log, and every attached recorder's data — **whatever the chart wrote**. That is a materially bigger promise, so it is a thing you declare, never a thing the library starts doing to you. Unset, nothing extra runs: no second snapshot, no bytes measured, no store call, and the envelope is byte-identical to before the option existed.
+
+**Redaction means the same for both.** The recording's snapshot is read from the *redacted mirror*, not raw working memory — so the `redact` policy that scrubs the walk scrubs the recording by the same rule at the same moment. A redacted key is still *present* in the recording, carrying `REDACTED`: a reader sees that a value existed and was scrubbed, rather than that nothing was written.
+
+**Size has a declared failure mode.** A recording over `walk.recording.maxBytes` (default `DEFAULT_RECORDING_MAX_BYTES` = 5,000,000) is **refused, not truncated**, and `recording_note` names what it measured, the ceiling it broke, and the option that raises it. The asymmetry with the walk's cap is deliberate: walk rows are independently meaningful, so a projection of them is still true — but `{ snapshot, events, structure }` is one bundle, and half a commit log under a whole chart draws a picture nobody can check.
+
+**The absence is always stated.** No store, an over-size refusal, an unserializable snapshot, a store that threw — each costs the *ref* and lands a reason in `recording_note`. A missing ref with no sentence would leave a reader guessing, which is the one thing the spine exists to prevent. And with the option unset the descriptor says **nothing at all** about a recording — a reader who never asked for one should not have to read a sentence explaining its absence.
+
+**`events` is empty, on purpose.** It is the typed *agentfootprint* stream, fired by an agent turn; what ran here is a footprintjs chart on its own executor, which fires none. All three keys are present (that is what a viewer reads), the empty array is the honest count, and `recording_note` says so out loud so nobody reads it as a dropped stream. The walk's own story rides `snapshot`, where the narrative recorder's data already lives.
+
+**`origin.toolCallId` is the outer call** on both parcels — the walk and the recording are two views of one tool call, so they carry the same join key and a consumer can pair them (and join either back to the call the model made).
+
 ## What is not here yet
 
 - **Pause**: a procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`). The approval-gate phase brings typed resume through the agent rail.
@@ -168,7 +221,8 @@ The reserved verdict word `declined` means "no classification was reached" — t
 
 Everything ships from the main barrel:
 
-- **`runbookAsTool(options)`** — the bridge. `RunbookAsToolOptions` is the full options bag; `RunbookProcedure` is the factory type (`(tools: ToolDispatch) => FlowChart`); `RunbookRules` is the `{ name, version }` provenance stamp; `RunbookVerdictsOptions` (`{ decider, maxRows }`, default cap `DEFAULT_MAX_ROWS` = 50) and `RunbookWalkOptions` (`{ cap }`, default `DEFAULT_WALK_CAP` = 500) are the projection dials.
+- **`runbookAsTool(options)`** — the bridge. `RunbookAsToolOptions` is the full options bag; `RunbookProcedure` is the factory type (`(tools: ToolDispatch) => FlowChart`); `RunbookRules` is the `{ name, version }` provenance stamp; `RunbookVerdictsOptions` (`{ decider, maxRows }`, default cap `DEFAULT_MAX_ROWS` = 50) and `RunbookWalkOptions` (`{ cap, recording }`, default `DEFAULT_WALK_CAP` = 500) are the projection dials.
+- **The chart recording** — `RunbookRecordingOptions` is the object form of `walk: { recording }` (`{ label, maxBytes }`), with `DEFAULT_RECORDING_MAX_BYTES` (5,000,000) as the ceiling a bundle is refused over. It files under the existing `RECORDING_ARTIFACT_KIND` (`'recording/run'`) via `recordingPutInput`, which now also accepts `toolCallId` so a tool-minted recording carries the same `origin` join key as the walk beside it.
 - **`RunbookEnvelope`** — the returned envelope type (spine + optional projection); `VerdictRow` is one rowset row (anything with a string `verdict`); `WalkDescriptor` is the spine's walk entry; `VERDICT_RENDER_NOTE` is the render law stated beside every table; `DECLINED_VERDICT` (`'declined'`) is the reserved no-classification verdict word.
 - **The dispatch** — `ToolDispatch` (`has`/`call`) and `ToolDispatchCallOptions` (`{ signal, allowAbsent }`) are the `ctx.tools` contract every tool sees. The bridge's own wrapper is exported for direct callers and tests: `recordingDispatch(delivered, name)` returns a `RecordedDispatch` (`{ tools, records }`, each an `InnerCallRecord`); `probeDispatch(name)` is the definition-time probe; `RunbookAbsenceSignal` is the control signal an un-survivable inner absence throws, recognized by `absenceSignalOf(err)` anywhere down a `cause` chain.
 - **The walk** — `projectWalk(entries, cap)` is the pure cap law, returning a `ProjectedWalk` of `WalkRow`s; the artifact kind constant is `CHART_WALK_ARTIFACT_KIND` (`'recording/chart-walk'`) with `chartWalkPutInput(rows, facts)` beside `recordingPutInput`.

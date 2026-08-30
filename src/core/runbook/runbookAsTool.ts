@@ -19,7 +19,11 @@
  *     - `result.walk` — the recorded walk's descriptor. The walk itself
  *       ships as an artifact ticket (kind `recording/chart-walk`), never as
  *       bytes; when it does not fit, the CONTROL FLOW survives and the
- *       projection is declared.
+ *       projection is declared. Opt into `walk: { recording: true }` and the
+ *       inner chart's own `{ snapshot, events, structure }` is filed beside
+ *       it (kind `recording/run`) and its ref rides the SAME descriptor as
+ *       `walk.recording_ref` — the row projection cannot be drawn, and this
+ *       is what makes the walk mountable as the flowchart it ran.
  *
  *   THE OPTIONAL PROJECTION (selected by `resultKind: 'verdict/*'`):
  *     verdict rows off the chart's `verdicts` state key, capped with
@@ -99,6 +103,7 @@ import {
   foldInnerCoverage,
 } from './coverage.js';
 import { absenceSignalOf, probeDispatch, recordingDispatch } from './dispatch.js';
+import { chartRecordingOf, mintChartRecording, resolveRecordingPolicy } from './recording.js';
 import { admitReport, REPORT_NOTE_KEY, shadowedFieldsNote } from './report.js';
 import type { RunbookAsToolOptions, RunbookEnvelope, VerdictRow } from './types.js';
 import {
@@ -197,6 +202,28 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       `${label}: \`walk.cap\` must be a whole number of rows, at least 1 — got ${String(cap)}.`,
     );
   }
+  const recordingOpt = opts.walk?.recording;
+  if (
+    recordingOpt !== undefined &&
+    typeof recordingOpt !== 'boolean' &&
+    (recordingOpt === null || typeof recordingOpt !== 'object' || Array.isArray(recordingOpt))
+  ) {
+    throw new Error(
+      `${label}: \`walk.recording\` must be \`true\` (file the inner chart's recording with ` +
+        `the defaults), \`false\`/absent (do not file one), or an options bag ` +
+        `\`{ label?, maxBytes? }\` — got ${JSON.stringify(recordingOpt)}.`,
+    );
+  }
+  if (typeof recordingOpt === 'object' && recordingOpt !== null) {
+    const maxBytes = recordingOpt.maxBytes;
+    if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 1)) {
+      throw new Error(
+        `${label}: \`walk.recording.maxBytes\` must be a whole number of bytes, at least 1 — ` +
+          `got ${String(maxBytes)}. It is the declared ceiling a recording is REFUSED over, ` +
+          `never truncated to.`,
+      );
+    }
+  }
   if (opts.keepRecordLimit !== undefined) {
     if (opts.keepRecord !== true) {
       throw new Error(
@@ -238,6 +265,11 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
   const isVerdictKind = opts.resultKind?.startsWith(VERDICT_KIND_PREFIX) === true;
   const maxRows = opts.verdicts?.maxRows ?? DEFAULT_MAX_ROWS;
   const walkCap = opts.walk?.cap ?? DEFAULT_WALK_CAP;
+  // Resolved ONCE at definition. `undefined` is the whole off-switch: every
+  // line the recording feature adds sits behind this being defined, so an
+  // undeclared runbook takes no second snapshot, measures no bytes, and makes
+  // no store call — its envelope is byte-identical to 9.78.0.
+  const recordingPolicy = resolveRecordingPolicy(recordingOpt);
 
   const store: InnerRunStore | undefined =
     opts.keepRecord === true
@@ -349,12 +381,35 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       // ── The walk ────────────────────────────────────────────────────────
       const entries = walkRecorder.getEntries() as unknown as NarrativeEntryView[];
       const projected = projectWalk(entries, walkCap);
-      const walk = await mintWalk(ctx, projected, {
+      const walkOnly = await mintWalk(ctx, projected, {
         toolName: opts.name,
         toolCallId: ctx.toolCallId,
         ...(ctx.runId !== undefined && { runId: ctx.runId }),
         stepsExecuted: walkRecorder.stepCount,
       });
+
+      // ── The recording, beside the walk (opt-in) ─────────────────────────
+      // The row projection cannot be drawn — `structure` is the only route to
+      // a drawable graph and no snapshot carries it. The snapshot here is the
+      // REDACTED mirror, not `raw`: the same `redact` policy that scrubs the
+      // walk must scrub this by the same rule, and `raw` is the live working
+      // memory. With no policy configured the flag is a documented no-op.
+      const walk =
+        recordingPolicy === undefined
+          ? walkOnly
+          : {
+              ...walkOnly,
+              ...(await mintChartRecording(
+                ctx,
+                chartRecordingOf(executor.getSnapshot({ redact: true }), chart.buildTimeStructure),
+                {
+                  toolName: opts.name,
+                  toolCallId: ctx.toolCallId,
+                  ...(ctx.runId !== undefined && { runId: ctx.runId }),
+                  policy: recordingPolicy,
+                },
+              )),
+            };
 
       // ── The projection (verdict kinds only) ─────────────────────────────
       let rows: VerdictRow[] | undefined;

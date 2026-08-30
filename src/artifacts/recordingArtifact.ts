@@ -56,6 +56,15 @@ export interface RecordingMintFacts {
    *  join back to the trace. */
   readonly runId?: string;
   /**
+   * The tool call this recording is OF, when a TOOL minted it (9.79.0) —
+   * stamped on `origin.toolCallId`, the join back to the call that produced
+   * it. Absent for an agent's own run recording, which is a whole turn and
+   * belongs to no single call. The `chartWalkPutInput` law, verbatim: a walk
+   * and the recording it projects are two views of ONE call, so they carry
+   * the same join key or a consumer cannot pair them.
+   */
+  readonly toolCallId?: string;
+  /**
    * The operator's label, when they set one.
    *
    * Used VERBATIM when present: an operator who named their recordings meant
@@ -110,12 +119,16 @@ export function recordingPutInput(
   if (text === '') {
     throw new UnserializableRecordingError('it serializes to nothing');
   }
+  const origin = {
+    ...(facts.runId !== undefined && { runId: facts.runId }),
+    ...(facts.toolCallId !== undefined && { toolCallId: facts.toolCallId }),
+  };
   return {
     kind: RECORDING_ARTIFACT_KIND,
     mediaType: RECORDING_MEDIA_TYPE,
     data: text,
     label: facts.label ?? (facts.runId !== undefined ? `run ${facts.runId}` : 'run recording'),
-    ...(facts.runId !== undefined && { origin: { runId: facts.runId } }),
+    ...(Object.keys(origin).length > 0 && { origin }),
   };
 }
 

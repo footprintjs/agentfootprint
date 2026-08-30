@@ -74,6 +74,71 @@ export interface RunbookWalkOptions {
   /** Row cap on the minted walk (default 500). When the full walk does not
    *  fit, the CONTROL FLOW survives — see `walk.ts` for the projection law. */
   readonly cap?: number;
+  /**
+   * ALSO file the inner chart's own RECORDING (9.79.0) — `{ snapshot, events,
+   * structure }`, the shape `observeRecording()` mounts — under kind
+   * `'recording/run'`, and put its ref on the spine as
+   * `result.walk.recording_ref`.
+   *
+   * `true` for the defaults, or `{ label, maxBytes }` to set them yourself.
+   *
+   * ── Off by default, and why that is not timidity ─────────────────────────
+   * The walk is a PROJECTION: eight declared columns per row, values off by
+   * construction (`narrative({ includeValues: false })`), so a walk carries
+   * sentences about what happened and no payload from it. A recording is the
+   * run: the chart's shared state, its whole commit log, and every attached
+   * recorder's data. Filing one is a materially bigger promise — it carries
+   * whatever the chart WROTE — so it is a thing an operator declares, never a
+   * thing a library starts doing to them. Unset, not one extra line runs: no
+   * second snapshot is taken, no bytes are measured, no store call is made,
+   * and the envelope is byte-identical to 9.78.0.
+   *
+   * ── What it buys ────────────────────────────────────────────────────────
+   * The row projection cannot be drawn. `structure` — the chart's build-time
+   * graph — is the only route to a drawable flowchart, and no snapshot carries
+   * it; a consumer handed 129 rows can only correctly REFUSE to infer the step
+   * graph from them. With the recording filed, the lens/explainable-UI flow
+   * components mount the runbook's walk as the flowchart it actually ran.
+   *
+   * ── Redaction, once, for both ───────────────────────────────────────────
+   * The recording's snapshot is read from the REDACTED MIRROR
+   * (`getSnapshot({ redact: true })`), so the `redact` policy that scrubs the
+   * walk scrubs the recording by the same rule at the same moment. One policy,
+   * one meaning, both artifacts.
+   *
+   * ── Best-effort, and the absence is STATED ──────────────────────────────
+   * `mintWalk`'s own law: no store, an over-size refusal, or a failed mint
+   * costs the REF, never the answer — and `walk.recording_note` says which,
+   * so a reader never has to guess why a ref is missing. With this option
+   * unset, the descriptor says nothing about a recording at all.
+   */
+  readonly recording?: boolean | RunbookRecordingOptions;
+}
+
+/** The object form of {@link RunbookWalkOptions.recording}. */
+export interface RunbookRecordingOptions {
+  /**
+   * The label the minted recording carries, verbatim.
+   *
+   * Absent, it is `<toolName> recording`. A static label repeats across calls
+   * on purpose — what distinguishes two recordings is the ref and
+   * `origin.toolCallId`, and a library that decorated the name you chose to
+   * make it unique would be overruling you (the `recordingPutInput` law).
+   */
+  readonly label?: string;
+  /**
+   * The size ceiling, in bytes of the serialized recording. Default
+   * `DEFAULT_RECORDING_MAX_BYTES` (5,000,000).
+   *
+   * Over it, the recording is NOT filed and `recording_note` says so with both
+   * numbers and this option's name. It is a refusal rather than a truncation
+   * on purpose: the walk can be projected because rows are independently
+   * meaningful, but `{ snapshot, events, structure }` is not row-shaped —
+   * half a commit log under a whole chart is a recording that draws a picture
+   * nobody can check, which is worse than a stated absence. A fleet sweep that
+   * genuinely needs the whole thing raises this number, deliberately.
+   */
+  readonly maxBytes?: number;
 }
 
 /** Everything `runbookAsTool` accepts. Smallest legal call:
@@ -159,6 +224,35 @@ export interface WalkDescriptor {
   /** The human sentence: what the walk is, and (when projected) what the
    *  control-flow projection kept and dropped, or why there is no ticket. */
   readonly note: string;
+
+  // ── The recording, when `walk: { recording }` asked for one (9.79.0) ────
+  // All four are ABSENT unless the option was declared: an opt-out run's
+  // descriptor says nothing about a recording, because a reader who never
+  // asked for one should not have to read a sentence explaining its absence.
+  /**
+   * The claim-ticket ref of the inner chart's own `{ snapshot, events,
+   * structure }` recording — what the lens/explainable-UI flow components
+   * mount to draw this walk as the flowchart it ran. Absent when the mint was
+   * refused or failed; `recording_note` says which, and never stays silent.
+   */
+  readonly recording_ref?: string;
+  /** The recording's artifact kind (`'recording/run'`). Present with
+   *  `recording_ref`. */
+  readonly recording_kind?: string;
+  /**
+   * The recording's size in bytes. Present on the SUCCESS path (the store's
+   * own measurement) AND on the over-size refusal (what it measured, beside
+   * the ceiling it broke) — the one number that makes a size decision
+   * checkable instead of mysterious.
+   */
+  readonly recording_bytes?: number;
+  /**
+   * The human sentence about the recording: what a filed one CONTAINS beyond
+   * the walk's row projection, or the named reason there is no
+   * `recording_ref`. Present whenever a recording was asked for — silence is
+   * not an allowed answer to "why is the ref missing".
+   */
+  readonly recording_note?: string;
 }
 
 /** One verdict row, as the chart wrote it. The bridge reads rows from the

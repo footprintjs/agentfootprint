@@ -20,10 +20,12 @@ export {
   verdictRowsOf,
 } from './verdicts.js';
 export { DEFAULT_WALK_CAP, projectWalk, type ProjectedWalk, type WalkRow } from './walk.js';
+export { DEFAULT_RECORDING_MAX_BYTES } from './recording.js';
 export type {
   RunbookAsToolOptions,
   RunbookEnvelope,
   RunbookProcedure,
+  RunbookRecordingOptions,
   RunbookRules,
   RunbookVerdictsOptions,
   RunbookWalkOptions,

@@ -13,6 +13,12 @@
  *   - Projection selection: non-verdict resultKind ships NO rowset keys
  *   - Walk cap law: control flow survives, counters truthful
  *   - No store → descriptor present without ref, note names why
+ *   - RECORDING MINT (9.79.0): opt-in files the inner chart's own
+ *     `{snapshot, events, structure}` beside the walk and the spine carries
+ *     `recording_ref`; opt-out says NOTHING about a recording; a refusing
+ *     store costs the ref and states the absence; the byte ceiling refuses at
+ *     its exact boundary; `redact` means the same for both artifacts;
+ *     `origin.toolCallId` is the OUTER call on both
  *   - Declarations (GAP-8) forward verbatim into the Tool
  *   - composedOf drift gate at agent build; defineTool composedOf/gates
  *     asserts; MCP extras round trip
@@ -21,9 +27,10 @@
  *     projection key; every refused field is named in `report_note`
  *   - flowchartAsTool untouched (its own test file pins it byte-identically)
  *
- * Neutralize-proofs: dropping the coverage carry, the walk mint, or the
- * projection selection turns a named test here red — each is asserted
- * directly on the envelope, not via a proxy.
+ * Neutralize-proofs: dropping the coverage carry, the walk mint, the
+ * projection selection, the spine's `recording_ref`, or the recording's
+ * absence sentence turns a named test here red — each is asserted directly on
+ * the envelope, not via a proxy.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -34,15 +41,25 @@ import {
   bindArtifacts,
   CHART_WALK_ARTIFACT_KIND,
   coverage,
+  DEFAULT_RECORDING_MAX_BYTES,
   defineTool,
   inMemoryArtifacts,
   projectWalk,
+  RECORDING_ARTIFACT_KIND,
+  recordingPutInput,
   runbookAsTool,
+  type ArtifactRef,
   type RunbookEnvelope,
   type Tool,
   type ToolDispatch,
   type ToolExecutionContext,
 } from '../../../src/index.js';
+import { measureArtifactBytes } from '../../../src/artifacts/payload.js';
+import {
+  chartRecordingOf,
+  mintChartRecording,
+  resolveRecordingPolicy,
+} from '../../../src/core/runbook/recording.js';
 import { admitReport } from '../../../src/core/runbook/report.js';
 import { mock } from '../../../src/llm-providers.js';
 import { unconfiguredCredentialProvider } from '../../../src/identity.js';
@@ -285,6 +302,44 @@ describe('runbookAsTool — unit', () => {
     expect(() =>
       runbookAsTool({ name: 'r', description: 'd', procedure, keepRecordLimit: 5 }),
     ).toThrow(/keepRecord/);
+    expect(() =>
+      runbookAsTool({
+        name: 'r',
+        description: 'd',
+        procedure,
+        walk: { recording: 'yes' as never },
+      }),
+    ).toThrow(/`walk.recording`/);
+    // An array and `null` are both `typeof 'object'` — refused BY NAME rather
+    // than silently resolving to the defaults.
+    for (const bad of [[] as never, null as never]) {
+      expect(() =>
+        runbookAsTool({ name: 'r', description: 'd', procedure, walk: { recording: bad } }),
+      ).toThrow(/`walk.recording`/);
+    }
+    expect(() =>
+      runbookAsTool({
+        name: 'r',
+        description: 'd',
+        procedure,
+        walk: { recording: { maxBytes: 0 } },
+      }),
+    ).toThrow(/`walk.recording.maxBytes`/);
+  });
+
+  it('recording policy: `undefined`/`false` are OFF; `true` takes the declared ceiling', () => {
+    // The off-switch is the whole zero-cost claim — everything the feature
+    // does sits behind this returning `undefined`.
+    expect(resolveRecordingPolicy(undefined)).toBeUndefined();
+    expect(resolveRecordingPolicy(false)).toBeUndefined();
+    expect(resolveRecordingPolicy(true)).toEqual({ maxBytes: DEFAULT_RECORDING_MAX_BYTES });
+    expect(resolveRecordingPolicy({})).toEqual({ maxBytes: DEFAULT_RECORDING_MAX_BYTES });
+    expect(resolveRecordingPolicy({ maxBytes: 10, label: 'nightly' })).toEqual({
+      maxBytes: 10,
+      label: 'nightly',
+    });
+    // A declared number, not a magic one.
+    expect(DEFAULT_RECORDING_MAX_BYTES).toBe(5_000_000);
   });
 
   it('report admission is a PARTITION with spread semantics, not assignment', () => {
@@ -643,6 +698,254 @@ describe('runbookAsTool — scenario: outcomes and projections', () => {
   });
 });
 
+// ─── 3b. SCENARIO — the recording mint, opt-in (9.79.0) ────────────
+
+/** A two-stage procedure with a real decider, so the filed `structure`
+ *  carries a graph worth drawing rather than one node. */
+function recordedProcedure() {
+  return flowChart<Record<string, unknown>>(
+    'recorded-procedure',
+    (s) => {
+      s.age_days = 30;
+      s.apiKey = 'secret-bytes';
+    },
+    'read',
+  )
+    .addDeciderFunction(
+      'Posture',
+      (s: Record<string, unknown>) =>
+        decide(
+          s,
+          [{ when: { age_days: { gt: 7 } }, then: 'stale', label: 'over 7 days' }],
+          'fresh',
+        ),
+      'posture',
+    )
+    .addFunctionBranch('stale', 'Stale', (s) => void (s.report = { verdict: 'stale' }))
+    .addFunctionBranch('fresh', 'Fresh', (s) => void (s.report = { verdict: 'fresh' }))
+    .end()
+    .build();
+}
+
+function recordedTool(overrides: Record<string, unknown> = {}) {
+  return runbookAsTool({
+    name: 'recorded_runbook',
+    description: 'A runbook that files its own chart recording.',
+    procedure: recordedProcedure,
+    ...overrides,
+  });
+}
+
+describe('runbookAsTool — scenario: the chart recording beside the walk', () => {
+  it('OPT-IN: both artifacts minted; the spine ref redeems a real {snapshot, events, structure}', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool({ walk: { recording: true } }).execute(
+      {},
+      ctx,
+    )) as RunbookEnvelope;
+    const walk = out.result.walk;
+
+    // NEUTRALIZE-PROOF (the spine carries the ref): drop `recording_ref` from
+    // the descriptor in recording.ts and every assertion below dies at the
+    // first line — the ref is the ONLY route a consumer has to the parcel.
+    expect(walk.recording_ref).toBeDefined();
+    expect(walk.recording_kind).toBe(RECORDING_ARTIFACT_KIND);
+    // BOTH artifacts, and they are not the same one.
+    expect(walk.ref).toBeDefined();
+    expect(walk.kind).toBe(CHART_WALK_ARTIFACT_KIND);
+    expect(walk.recording_ref).not.toBe(walk.ref);
+
+    // The parcel is REDEEMABLE and carries the three keys a viewer mounts.
+    const record = await artifacts.get(walk.recording_ref as ArtifactRef);
+    expect(record).not.toBeNull();
+    expect(record?.meta.kind).toBe(RECORDING_ARTIFACT_KIND);
+    const parcel = JSON.parse(String(record?.data)) as {
+      snapshot?: unknown;
+      events?: unknown;
+      structure?: unknown;
+    };
+    expect(Object.keys(parcel).sort()).toEqual(['events', 'snapshot', 'structure']);
+    expect(parcel.snapshot).toBeDefined();
+    expect(parcel.structure).toBeDefined();
+    // `structure` is the piece the ROW PROJECTION cannot carry and the only
+    // route to a drawable graph — so it must be the chart, with its nodes.
+    expect((parcel.structure as { name?: string }).name).toBe('recorded-procedure');
+    expect(JSON.stringify(parcel.structure)).toContain('posture');
+    // `events` is empty BY CONSTRUCTION: a chart run is not an agent turn.
+    expect(parcel.events).toEqual([]);
+    // The size is stated, so a consumer can decide before redeeming.
+    expect(walk.recording_bytes).toBe(record?.meta.bytes);
+    expect(walk.recording_note).toContain('structure');
+    // The answer itself is untouched by any of this.
+    expect(out.result.verdict).toBe('stale');
+  });
+
+  it('OPT-OUT: only the walk is minted, and the descriptor says NOTHING about a recording', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool().execute({}, ctx)) as RunbookEnvelope;
+    const walk = out.result.walk;
+    expect(walk.ref).toBeDefined();
+    // Absent = byte-identical to before the feature: not a note explaining an
+    // absence nobody asked about, not an empty string — nothing at all.
+    expect(walk.recording_ref).toBeUndefined();
+    expect(walk.recording_kind).toBeUndefined();
+    expect(walk.recording_bytes).toBeUndefined();
+    expect(walk.recording_note).toBeUndefined();
+    expect(Object.keys(walk).some((key) => key.startsWith('recording_'))).toBe(false);
+    // And no `recording/run` parcel was filed — the walk is the only artifact.
+    const listed = await artifacts.list();
+    expect(listed.artifacts.map((item) => item.kind)).toEqual([CHART_WALK_ARTIFACT_KIND]);
+
+    // `recording: false` is the same off-switch as absent.
+    const off = (await recordedTool({ walk: { recording: false } }).execute(
+      {},
+      ctxWithStore().ctx,
+    )) as RunbookEnvelope;
+    expect(Object.keys(off.result.walk).some((key) => key.startsWith('recording_'))).toBe(false);
+  });
+
+  it('REFUSING STORE: the answer is intact, the walk still mints, the absence is STATED', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const guarded = {
+      ...artifacts,
+      put: async (input: Parameters<typeof artifacts.put>[0]) => {
+        if (input.kind === RECORDING_ARTIFACT_KIND) throw new Error('the store is full');
+        return artifacts.put(input);
+      },
+    };
+    const out = (await recordedTool({ walk: { recording: true } }).execute({}, {
+      ...ctx,
+      artifacts: guarded,
+    } as ToolExecutionContext)) as RunbookEnvelope;
+    const walk = out.result.walk;
+
+    // The answer and the walk are untouched — a failed mint costs the REF.
+    expect(out.result.verdict).toBe('stale');
+    expect(walk.ref).toBeDefined();
+    expect(walk.steps_executed).toBeGreaterThan(0);
+    expect(walk.recording_ref).toBeUndefined();
+    // NEUTRALIZE-PROOF (the absence is stated): make the failed mint silent —
+    // return `{}` from the catch in mintChartRecording — and these two lines
+    // go red. A missing ref with no sentence is a reader guessing.
+    expect(walk.recording_note).toBeDefined();
+    expect(walk.recording_note).toContain('the store is full');
+    expect(walk.recording_note).toContain('never the answer');
+  });
+
+  it('NO STORE: the recording absence names the missing store, and the answer survives', async () => {
+    const out = (await recordedTool({ walk: { recording: true } }).execute(
+      {},
+      baseToolCtx,
+    )) as RunbookEnvelope;
+    const walk = out.result.walk;
+    expect(walk.ref).toBeUndefined();
+    expect(walk.recording_ref).toBeUndefined();
+    expect(walk.recording_note).toContain('No artifact store');
+    expect(out.result.verdict).toBe('stale');
+  });
+
+  it('SIZE CEILING: refused at its exact boundary, never truncated, both numbers named', async () => {
+    const { ctx } = ctxWithStore();
+    const recording = chartRecordingOf({ sharedState: { a: 1 }, commitLog: [] }, { name: 'c' });
+    // The bytes the mint will measure: `data` is JSON.stringify(recording),
+    // and nothing about the label changes it.
+    const bytes = measureArtifactBytes(
+      recordingPutInput(recording, { toolCallId: 'tc-1' }).data as string,
+    );
+    const facts = { toolName: 'sized', toolCallId: 'tc-1' } as const;
+
+    // EQUAL fits — the ceiling is a maximum, not an exclusive bound.
+    const atBoundary = await mintChartRecording(ctx, recording, {
+      ...facts,
+      policy: { maxBytes: bytes },
+    });
+    expect(atBoundary.recording_ref).toBeDefined();
+    expect(atBoundary.recording_bytes).toBe(bytes);
+
+    // ONE BYTE over is refused — and says what it measured, what the ceiling
+    // was, and which option raises it.
+    const overBoundary = await mintChartRecording(ctx, recording, {
+      ...facts,
+      policy: { maxBytes: bytes - 1 },
+    });
+    expect(overBoundary.recording_ref).toBeUndefined();
+    expect(overBoundary.recording_bytes).toBe(bytes);
+    expect(overBoundary.recording_note).toContain(String(bytes));
+    expect(overBoundary.recording_note).toContain(String(bytes - 1));
+    expect(overBoundary.recording_note).toContain('walk.recording.maxBytes');
+    // Refused, NOT truncated: nothing was filed under a name that would make
+    // a partial bundle look like a whole one.
+    expect(overBoundary.recording_kind).toBeUndefined();
+  });
+
+  it('SIZE CEILING end to end: an unmeetable ceiling costs the ref, never the answer', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool({ walk: { recording: { maxBytes: 1 } } }).execute(
+      {},
+      ctx,
+    )) as RunbookEnvelope;
+    const walk = out.result.walk;
+    expect(out.result.verdict).toBe('stale');
+    expect(walk.ref).toBeDefined();
+    expect(walk.recording_ref).toBeUndefined();
+    expect(walk.recording_bytes).toBeGreaterThan(1);
+    expect(walk.recording_note).toContain('NOT filed');
+    // Nothing of kind recording/run reached the store.
+    const listed = await artifacts.list();
+    expect(listed.artifacts.some((item) => item.kind === RECORDING_ARTIFACT_KIND)).toBe(false);
+  });
+
+  it('REDACTION: one policy, the same meaning for the walk AND the recording', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool({
+      redact: { keys: ['apiKey'] },
+      walk: { recording: true },
+    }).execute({}, ctx)) as RunbookEnvelope;
+    const walk = out.result.walk;
+
+    // NEUTRALIZE-PROOF (the redacted mirror): swap
+    // `executor.getSnapshot({ redact: true })` for the raw `getSnapshot()` in
+    // runbookAsTool and this test goes red — the raw snapshot IS the live
+    // working memory and carries the secret verbatim.
+    const recordingRecord = await artifacts.get(walk.recording_ref as ArtifactRef);
+    const recordingText = String(recordingRecord?.data);
+    expect(recordingText).not.toContain('secret-bytes');
+    // Scrubbed, not stripped: the key is still there, so a reader sees that a
+    // value existed and was redacted rather than that nothing was written.
+    expect(recordingText).toContain('REDACTED');
+    // The walk parcel is clean by the same policy, and so is the envelope.
+    const walkRecord = await artifacts.get(walk.ref as ArtifactRef);
+    expect(String(walkRecord?.data)).not.toContain('secret-bytes');
+    expect(JSON.stringify(out)).not.toContain('secret-bytes');
+  });
+
+  it('ORIGIN: both parcels stamp the OUTER tool call, so a consumer can join them', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool({ walk: { recording: true } }).execute(
+      {},
+      ctx,
+    )) as RunbookEnvelope;
+    const walk = out.result.walk;
+    const recordingMeta = await artifacts.head(walk.recording_ref as ArtifactRef);
+    const walkMeta = await artifacts.head(walk.ref as ArtifactRef);
+    // 'tc-1' is baseToolCtx.toolCallId — the OUTER call, the id the envelope's
+    // own provenance carries.
+    expect(recordingMeta?.origin?.toolCallId).toBe('tc-1');
+    expect(walkMeta?.origin?.toolCallId).toBe('tc-1');
+    expect(recordingMeta?.origin?.toolCallId).toBe(out.result.af_provenance.toolCallId);
+    expect(recordingMeta?.label).toBe('recorded_runbook recording');
+  });
+
+  it('LABEL: an operator label is used verbatim, never decorated', async () => {
+    const { ctx, artifacts } = ctxWithStore();
+    const out = (await recordedTool({
+      walk: { recording: { label: 'nightly posture sweep' } },
+    }).execute({}, ctx)) as RunbookEnvelope;
+    const meta = await artifacts.head(out.result.walk.recording_ref as ArtifactRef);
+    expect(meta?.label).toBe('nightly posture sweep');
+  });
+});
+
 // ─── 4. INTEGRATION — the real agent dispatch path ────────────────
 
 describe('runbookAsTool — integration: Agent delivers ctx.tools', () => {
@@ -708,6 +1011,39 @@ describe('runbookAsTool — integration: Agent delivers ctx.tools', () => {
     // The envelope's af_coverage was recognized at the dispatch boundary —
     // the runbook's honesty rides the same rails as any coverage() tool.
     expect(coverageEvents.length).toBeGreaterThan(0);
+  });
+
+  it('the recording is minted on the REAL agent path, stamped with the outer tool call', async () => {
+    const store = inMemoryArtifacts();
+    const runbook = recordedTool({ walk: { recording: true } });
+    let calls = 0;
+    const provider = mock({
+      respond: () => {
+        calls += 1;
+        return calls === 1
+          ? { content: '', toolCalls: [{ id: 'tc-outer', name: 'recorded_runbook', args: {} }] }
+          : { content: 'Done.', toolCalls: [] };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 5, artifacts: store })
+      .tool(runbook)
+      .build();
+
+    const minted: { ref: string; kind: string; origin?: { toolCallId?: string } }[] = [];
+    agent.on('agentfootprint.artifacts.minted', (event) =>
+      minted.push(event.payload as unknown as (typeof minted)[number]),
+    );
+    expect(await agent.run({ message: 'run the procedure' })).toBe('Done.');
+
+    // On the real path the FRAMEWORK stamps origin (it discards whatever a
+    // caller put there), and it stamps the outer call — the same id either
+    // way, which is the point: a consumer joins the parcel to the tool call.
+    const recording = minted.find((m) => m.kind === RECORDING_ARTIFACT_KIND);
+    const walk = minted.find((m) => m.kind === CHART_WALK_ARTIFACT_KIND);
+    expect(recording).toBeDefined();
+    expect(walk).toBeDefined();
+    expect(recording?.origin?.toolCallId).toBe('tc-outer');
+    expect(walk?.origin?.toolCallId).toBe('tc-outer');
   });
 
   it('composedOf drift gate: unknown ingredient refuses the BUILD by name', () => {

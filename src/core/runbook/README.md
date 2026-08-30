@@ -20,6 +20,16 @@ One file per job:
 - `walk.ts` — the projection law (control flow survives the cap), truthful
   counters, the guarded mint (a failed mint costs the ticket, never the
   answer).
+- `recording.ts` — the OPT-IN chart recording (`walk: { recording }`): the
+  inner chart's own `{ snapshot, events, structure }` filed under
+  `recording/run` beside the walk, so the row projection can actually be
+  DRAWN (`structure` is the only route to a graph, and no snapshot carries
+  it). Three laws: the snapshot comes from the REDACTED mirror, so one
+  `redact` policy means the same for both artifacts; a bundle over the byte
+  ceiling is REFUSED, never truncated (a walk's rows are independently
+  meaningful, a recording is one bundle); and every absence — no store, over
+  size, unserializable, a store that threw — is SPOKEN in
+  `walk.recording_note` rather than left as a missing field.
 - `verdicts.ts` — the rowset off the `verdicts` state key, the one-cap
   table, and meanings GENERATED from declared branches + observed rule
   labels.

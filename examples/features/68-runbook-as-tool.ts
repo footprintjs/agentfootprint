@@ -15,6 +15,13 @@
  *   - the MANDATORY SPINE — coverage + sentence, provenance re-emitted
  *     first, `rule_version`, and the walk descriptor (the walk itself is an
  *     artifact ticket, kind `recording/chart-walk`);
+ *   - `walk: { recording: true }` — ALSO file the inner chart's own
+ *     `{ snapshot, events, structure }` under `recording/run`, so a viewer
+ *     can draw the walk as the flowchart it ran. Opt-in: the walk is a row
+ *     projection carrying sentences, a recording carries whatever the chart
+ *     WROTE. The ref rides the same descriptor as `walk.recording_ref`, and
+ *     every absence (no store, over `maxBytes`, a failed mint) is STATED in
+ *     `walk.recording_note` rather than left as a missing field;
  *   - the OPTIONAL verdict projection — selected by `resultKind:
  *     'verdict/*'`: rows off the chart's `verdicts` state key, truthful
  *     counters, ONE cap for the list and the table, and `verdict_meanings`
@@ -130,6 +137,13 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     rules: { name: 'health-signal', version: 'v1' },
     verdicts: { decider: 'Protection posture' },
     composedOf: ['backup_inventory'],
+    // OPT-IN (9.79.0): also file the inner chart's own recording, so this
+    // walk can be DRAWN. The walk artifact is a ROW projection — a step
+    // graph cannot be inferred from sentences about steps — and `structure`
+    // is the only route to a drawable graph. Off by default because a
+    // recording carries whatever the chart WROTE; declared here, its ref
+    // rides the same descriptor as `walk.recording_ref`.
+    walk: { recording: true },
     procedure: (tools: ToolDispatch) =>
       flowChart<Record<string, unknown>>(
         'backup-protection-triage',

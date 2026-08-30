@@ -567,6 +567,11 @@ export {
   absenceSignalOf,
   DECLINED_VERDICT,
   DEFAULT_MAX_ROWS,
+  // The chart-recording ceiling (9.79.0) — `walk: { recording: true }` files
+  // the inner chart's own `{ snapshot, events, structure }` beside the walk,
+  // and a bundle over this many bytes is REFUSED (never truncated) with the
+  // reason stated on `walk.recording_note`.
+  DEFAULT_RECORDING_MAX_BYTES,
   DEFAULT_WALK_CAP,
   probeDispatch,
   projectWalk,
@@ -582,6 +587,7 @@ export {
   type RunbookAsToolOptions,
   type RunbookEnvelope,
   type RunbookProcedure,
+  type RunbookRecordingOptions,
   type RunbookRules,
   type RunbookVerdictsOptions,
   type RunbookWalkOptions,

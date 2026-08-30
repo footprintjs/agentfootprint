@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.79.0] - 2026-08-30
+
+### Added
+
+- **`walk: { recording }` — file the runbook's inner chart as a recording, so
+  the walk can actually be DRAWN.** A consumer wired the flow components of
+  the lens family to a runbook's answer and could not mount anything, and they
+  were right not to try. `runbookAsTool` files its walk as
+  `recording/chart-walk`, whose payload is a **row projection** — 129 rows of
+  `{step, type, depth, stage, stage_id, runtime_stage_id, subflow, text}`. A
+  step graph cannot be inferred from sentences about steps; a consumer handed
+  those rows can only correctly REFUSE to guess at the edges. The one piece
+  that makes a walk drawable is `structure`, the chart's build-time graph —
+  which a finished run does not leave behind and no snapshot carries.
+
+  Everything needed was already in the file, a few lines apart: the bridge
+  builds a fresh inner executor and ATTACHES RECORDERS (the run was recorded,
+  it simply was not filed), `recordingPutInput` was already the mint for the
+  agent's own run, `mintWalk` was already the guarded side effect that files
+  and never fails the answer, and `WalkDescriptor` was already where the spine
+  states what it filed. This connects them.
+
+  Declare `walk: { recording: true }` (or `{ label, maxBytes }`) and the inner
+  chart's own **`{ snapshot, events, structure }`** — the `recordRun` contract
+  exactly, the shape `observeRecording()` mounts — is filed under the existing
+  kind `recording/run`, and its ref rides the SAME spine descriptor as
+  `result.walk.recording_ref` beside `recording_kind`, `recording_bytes` and
+  `recording_note`. The wire ops that already redeem the walk redeem this with
+  **zero new operations**.
+
+  **OPT-IN, and that is the honest default.** A walk carries *sentences about*
+  what happened and no payload from it — values are off by construction
+  (`narrative({ includeValues: false })`). A recording is the run: shared
+  state, the whole commit log, every attached recorder's data — **whatever the
+  chart wrote**. Filing one is a materially bigger promise, so it is declared,
+  never begun on an operator's behalf. Unset, nothing extra runs — no second
+  snapshot, no bytes measured, no store call — and the envelope is
+  byte-identical to 9.78.0, pinned by a test that asserts no `recording_*` key
+  exists at all. A reader who never asked for a recording does not even get a
+  sentence explaining its absence.
+
+  **Redaction means the same for both artifacts.** The recording's snapshot is
+  read from the REDACTED MIRROR (`getSnapshot({ redact: true })`), never the
+  raw working memory — so the `redact` policy that scrubs the walk scrubs the
+  recording by the same rule at the same moment, and a redacted key travels as
+  `REDACTED` rather than vanishing (a reader sees that a value existed and was
+  scrubbed). With no policy configured the flag is a documented no-op.
+
+  **Size has a declared failure mode, and it is a refusal.** Over
+  `walk.recording.maxBytes` (default `DEFAULT_RECORDING_MAX_BYTES` =
+  5,000,000 — a walk is tens of KB, this package's own measured `recordRun`
+  bundle was 2.76 MB, a fleet sweep is unbounded) the recording is **not filed
+  and not truncated**, and `recording_note` names what it measured, the
+  ceiling it broke, and the option that raises it. The asymmetry with the
+  walk's row cap is the point: walk rows are independently meaningful so a
+  projection of them is still true, but `{ snapshot, events, structure }` is
+  one bundle — half a commit log under a whole chart draws a picture nobody
+  can check.
+
+  **The absence is always SPOKEN.** No store, an over-size refusal, an
+  unserializable snapshot, a store that threw — each costs the REF and lands a
+  named reason in `recording_note`, following `mintWalk`'s own law. A missing
+  ref with no sentence would leave a reader guessing, which is the one thing
+  the spine exists to prevent.
+
+  **`events` is empty by construction, and says so.** It is the typed
+  *agentfootprint* stream, fired by an agent turn; what ran here is a
+  footprintjs chart on its own executor, which fires none. All three keys are
+  present (that is what a viewer reads), the empty array is the honest count,
+  and the note states it so nobody reads it as a dropped stream — the walk's
+  own story rides `snapshot`, where the narrative recorder's data already
+  lives.
+
+- **`recordingPutInput` accepts `toolCallId`** — stamped on `origin.toolCallId`
+  the way `chartWalkPutInput` already did. A walk and the recording it projects
+  are two views of ONE tool call, so they carry the same join key, and either
+  joins back to the call the model made. Absent for an agent's own run
+  recording, which is a whole turn and belongs to no single call.
+
 ## [9.78.0] - 2026-08-30
 
 ### Added
