@@ -1,0 +1,1691 @@
+.scene {
+  --scene-mono: var(--fd-font-mono, ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace);
+  --scene-red: #b84d4d;
+  --scene-green: #327653;
+  position: relative;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
+  background: radial-gradient(
+      circle at 50% -20%,
+      color-mix(in oklab, var(--yellow) 16%, transparent),
+      transparent 42%
+    ),
+    var(--bg-elev);
+  color: var(--fg);
+  box-shadow: 0 28px 70px -58px rgb(0 0 0 / 0.58);
+}
+
+:global(.dark) .scene {
+  --scene-red: #ef8585;
+  --scene-green: #77d39c;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sceneTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: 650 9px/1.2 var(--scene-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Reference flow: a visible fork separates the data lane from the model lane. */
+.referenceScene {
+  view-timeline-name: --reference-scene;
+  view-timeline-axis: block;
+}
+
+.flowMap {
+  display: grid;
+  grid-template-columns:
+    minmax(94px, 0.7fr) 28px minmax(265px, 1.9fr) 28px
+    minmax(100px, 0.78fr);
+  align-items: center;
+  min-height: 360px;
+  padding: clamp(24px, 3vw, 38px);
+}
+
+.flowSource,
+.flowUi,
+.flowStore,
+.flowModel {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+}
+
+.flowSource,
+.flowUi {
+  min-height: 116px;
+  padding: 13px;
+  border-radius: 15px;
+}
+
+.flowSource > span,
+.flowUi > span {
+  color: var(--fg-muted);
+  font: 700 7.5px/1.2 var(--scene-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flowSource > strong,
+.flowUi > strong {
+  margin-top: 9px;
+  font-size: clamp(13px, 1.35vw, 17px);
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.flowSource > small,
+.flowUi > small,
+.flowStore > small,
+.flowModel > small {
+  margin-top: 5px;
+  color: var(--fg-muted);
+  font-size: 9px;
+}
+
+.flowUi {
+  border-color: color-mix(in oklab, var(--yellow-dark) 60%, var(--border));
+  background: color-mix(in oklab, var(--yellow) 9%, var(--bg-elev));
+}
+
+.flowFork,
+.flowMerge {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 170px;
+  color: var(--border-strong);
+}
+
+.flowFork {
+  border-right: 1px solid currentColor;
+}
+
+.flowMerge {
+  border-left: 1px solid currentColor;
+}
+
+.flowFork::before,
+.flowMerge::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+}
+
+.flowFork::before {
+  right: 0;
+}
+
+.flowMerge::before {
+  left: 0;
+}
+
+.flowBranches {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+
+.flowBranch {
+  min-width: 0;
+}
+
+.flowBranch > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 16px;
+  margin-bottom: 8px;
+  font: 700 7.5px/1.2 var(--scene-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.flowBranch > header span {
+  color: var(--fg-muted);
+}
+
+.payloadBranch > header strong {
+  color: var(--fg);
+}
+
+.refBranch > header strong {
+  color: var(--yellow-ink);
+}
+
+.branchTrack {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(74px, 0.8fr) minmax(98px, 1fr) minmax(58px, 0.7fr);
+  align-items: center;
+  min-height: 68px;
+}
+
+.branchTrack::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--fg-muted);
+  transform-origin: left center;
+}
+
+.refBranch .branchTrack::before {
+  background: var(--yellow-dark);
+}
+
+.payloadPacket,
+.refPacket,
+.renderPacket {
+  position: relative;
+  z-index: 2;
+  justify-self: start;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  padding: 6px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font: 700 7px/1 var(--scene-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refPacket,
+.renderPacket {
+  border-color: color-mix(in oklab, var(--yellow-dark) 55%, var(--border));
+  color: var(--yellow-ink);
+}
+
+.renderPacket {
+  justify-self: end;
+}
+
+.flowStore,
+.flowModel {
+  grid-column: 2;
+  justify-self: stretch;
+  min-height: 58px;
+  padding: 10px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.flowStore > strong,
+.flowModel > strong {
+  font-size: 10px;
+}
+
+.flowModel {
+  border-color: var(--yellow-dark);
+  background: color-mix(in oklab, var(--yellow) 11%, var(--bg-elev));
+}
+
+.flowVerdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 9.5px;
+}
+
+.flowVerdict strong {
+  color: var(--fg);
+}
+
+.flowVerdict span {
+  color: var(--fg-muted);
+}
+
+/* Rerun proof */
+.rerunCaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  font: 650 9px/1.2 var(--scene-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.rerunCaption span {
+  color: var(--fg-muted);
+}
+
+.rerunCaption strong {
+  color: var(--yellow-ink);
+}
+
+.rerunGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(76px, 0.3fr) minmax(180px, 1fr);
+  align-items: center;
+  gap: clamp(12px, 2vw, 20px);
+  padding: clamp(24px, 3vw, 38px);
+}
+
+.runPanel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 17px;
+  background: var(--bg-elev);
+}
+
+.runPanel header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: 650 8px/1.2 var(--scene-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.runPanel header b {
+  color: var(--fg);
+}
+
+.traceList {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 13px;
+  list-style: none;
+}
+
+.traceList li,
+.removedSource,
+.decision {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 39px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--fg-muted);
+  font-size: 9px;
+}
+
+.traceList li > span,
+.removedSource > span,
+.decision > span {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.traceList code,
+.removedSource del {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--scene-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceList small,
+.removedSource small,
+.decision small {
+  grid-column: 2;
+  font: 650 7.5px/1 var(--scene-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.suspectTrace {
+  border-color: color-mix(in oklab, var(--yellow-dark) 44%, var(--border)) !important;
+  background: color-mix(in oklab, var(--yellow) 9%, var(--bg-elev));
+}
+
+.suspectTrace small {
+  color: var(--yellow-ink);
+}
+
+.decision {
+  margin: 0 13px 13px;
+  border-color: var(--border);
+  background: var(--bg-alt);
+}
+
+.decision strong,
+.decision ins {
+  color: var(--fg);
+  font: 800 15px/1 var(--scene-mono);
+  text-decoration: none;
+}
+
+.wrongDecision small {
+  color: var(--scene-red);
+}
+
+.rerunControl {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font: 650 8px/1.2 var(--scene-mono);
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.rerunControl del {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in oklab, var(--yellow-dark) 48%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--yellow) 10%, var(--bg-elev));
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rerunControl i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: #18181b;
+  font-size: 17px;
+  font-style: normal;
+  animation: rerunArrow 1.8s ease-in-out infinite;
+}
+
+.replayPanel {
+  border-color: color-mix(in oklab, var(--scene-green) 48%, var(--border));
+}
+
+.removedSource {
+  margin: 13px;
+  border-color: var(--border);
+  background: var(--bg-alt);
+}
+
+.removedSource del {
+  color: var(--fg-muted);
+}
+
+.removedSource small {
+  color: var(--yellow-ink);
+}
+
+.correctDecision {
+  border-color: color-mix(in oklab, var(--scene-green) 45%, var(--border));
+  background: color-mix(in oklab, var(--scene-green) 8%, var(--bg-elev));
+}
+
+.correctDecision ins,
+.correctDecision small {
+  color: var(--scene-green);
+}
+
+.confirmed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 15px 15px;
+  color: var(--scene-green);
+  font-size: 10px;
+}
+
+.confirmed span {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--scene-green) 13%, var(--bg-elev));
+}
+
+.rerunLimit {
+  margin: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 9.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+@keyframes rerunArrow {
+  0%,
+  100% {
+    transform: translateX(-3px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes flowNodeEnter {
+  from {
+    transform: translateX(-14px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes flowRailDraw {
+  from {
+    clip-path: inset(50% 0 50% 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes flowTrackDraw {
+  from {
+    transform: scaleX(0.04);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes flowPacketEnter {
+  from {
+    transform: translateX(-18px) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes flowUiResolve {
+  from {
+    border-color: var(--border);
+    background: var(--bg-elev);
+    transform: translateX(-10px) scale(0.97);
+  }
+  to {
+    border-color: color-mix(in oklab, var(--yellow-dark) 60%, var(--border));
+    background: color-mix(in oklab, var(--yellow) 9%, var(--bg-elev));
+    transform: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .flowSource,
+    .flowFork,
+    .payloadBranch .branchTrack::before,
+    .payloadPacket,
+    .flowStore,
+    .refBranch .branchTrack::before,
+    .refPacket,
+    .flowModel,
+    .renderPacket,
+    .flowMerge,
+    .flowUi {
+      animation-timeline: --reference-scene;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+    }
+
+    .flowSource {
+      animation-name: flowNodeEnter;
+      animation-range: entry 5% cover 16%;
+    }
+
+    .flowFork {
+      animation-name: flowRailDraw;
+      animation-range: entry 12% cover 25%;
+    }
+
+    .payloadBranch .branchTrack::before {
+      animation-name: flowTrackDraw;
+      animation-range: entry 20% cover 34%;
+    }
+
+    .payloadPacket {
+      animation-name: flowPacketEnter;
+      animation-range: entry 24% cover 37%;
+    }
+
+    .flowStore {
+      animation-name: flowNodeEnter;
+      animation-range: entry 31% cover 43%;
+    }
+
+    .refBranch .branchTrack::before {
+      animation-name: flowTrackDraw;
+      animation-range: entry 38% cover 52%;
+    }
+
+    .refPacket {
+      animation-name: flowPacketEnter;
+      animation-range: entry 42% cover 54%;
+    }
+
+    .flowModel {
+      animation-name: flowNodeEnter;
+      animation-range: entry 49% cover 61%;
+    }
+
+    .renderPacket {
+      animation-name: flowPacketEnter;
+      animation-range: entry 57% cover 68%;
+    }
+
+    .flowMerge {
+      animation-name: flowRailDraw;
+      animation-range: entry 64% cover 75%;
+    }
+
+    .flowUi {
+      animation-name: flowUiResolve;
+      animation-range: entry 71% cover 83%;
+    }
+  }
+}
+
+@media (max-width: 780px) {
+  .scene {
+    border-radius: 18px;
+  }
+
+  .sceneTopline > span:last-child {
+    display: none;
+  }
+
+  .flowMap {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+    padding: 24px 18px;
+  }
+
+  .flowSource,
+  .flowUi {
+    width: min(100%, 230px);
+    min-height: 88px;
+    justify-self: center;
+    text-align: center;
+  }
+
+  .flowFork,
+  .flowMerge {
+    width: 1px;
+    height: 22px;
+    justify-self: center;
+    border: 0;
+    border-left: 1px solid var(--border-strong);
+  }
+
+  .flowFork::before,
+  .flowMerge::before {
+    display: none;
+  }
+
+  .flowBranches {
+    width: 100%;
+    gap: 22px;
+  }
+
+  .branchTrack {
+    grid-template-columns: minmax(62px, 0.75fr) minmax(100px, 1fr) minmax(50px, 0.65fr);
+  }
+
+  .flowVerdict {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rerunCaption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .rerunGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 13px;
+    padding: 24px 18px;
+  }
+
+  .rerunControl i {
+    transform: rotate(90deg);
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rerunControl i,
+  .flowSource,
+  .flowFork,
+  .branchTrack::before,
+  .payloadPacket,
+  .flowStore,
+  .refPacket,
+  .flowModel,
+  .renderPacket,
+  .flowMerge,
+  .flowUi {
+    animation: none;
+    clip-path: none;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .scene,
+  .flowSource,
+  .flowUi,
+  .flowStore,
+  .flowModel,
+  .runPanel {
+    border-color: CanvasText;
+  }
+
+  .rerunControl i {
+    background: Highlight;
+    color: HighlightText;
+  }
+}
+
+/* End-to-end hero: the application and execution runtime remain visibly separate. */
+.runtimeSystemHero {
+  --system-cycle: 4.4s;
+  container-type: inline-size;
+  min-height: 458px;
+  background: radial-gradient(
+      circle at 48% 42%,
+      color-mix(in oklab, var(--yellow) 11%, transparent),
+      transparent 39%
+    ),
+    var(--bg-elev);
+}
+
+.runtimeSystemTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 42px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: 700 9.5px/1.2 var(--scene-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.runtimeLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+}
+
+.runtimeLive i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--scene-green);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--scene-green) 13%, transparent);
+}
+
+.runtimeSystemBody {
+  display: grid;
+  grid-template-columns:
+    minmax(138px, 0.9fr) minmax(46px, 0.28fr) minmax(162px, 1fr) minmax(17px, 0.1fr)
+    minmax(98px, 0.62fr);
+  align-items: stretch;
+  gap: 7px;
+  min-height: 348px;
+  padding: 16px;
+}
+
+.saasLayer,
+.agentRuntimeLayer,
+.systemTrace {
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 15px;
+  background: color-mix(in oklab, var(--bg-elev) 92%, transparent);
+}
+
+.saasLayer,
+.agentRuntimeLayer {
+  padding: 10px;
+}
+
+.systemLayerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
+}
+
+.systemLayerHeader strong {
+  color: var(--fg);
+  font: 800 10.5px/1.15 var(--scene-mono);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.systemLayerHeader span {
+  max-width: 92px;
+  color: var(--fg-muted);
+  font: 650 10px/1.15 var(--scene-mono);
+  letter-spacing: 0.035em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.saasInterface {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.saasInterface p {
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.saasInterface p > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--fg-muted);
+  font: 650 9.5px/1 var(--scene-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.saasInterface .systemAnswer {
+  border-color: color-mix(in oklab, var(--scene-green) 35%, var(--border));
+}
+
+.systemAnswer b {
+  color: var(--scene-green);
+}
+
+.saasInterface .systemWhy {
+  width: fit-content;
+  border-color: color-mix(in oklab, var(--yellow-dark) 48%, var(--border));
+  background: color-mix(in oklab, var(--yellow) 8%, var(--bg-elev));
+}
+
+.systemSkillGraph,
+.artifactContract,
+.systemGraphEngine,
+.systemLoopEngine {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-elev);
+}
+
+.systemSkillGraph {
+  border-color: color-mix(in oklab, var(--yellow-dark) 48%, var(--border));
+  background: color-mix(in oklab, var(--yellow) 7%, var(--bg-elev));
+}
+
+.systemSkillGraph header,
+.artifactContract header,
+.systemGraphEngine header,
+.systemLoopEngine header,
+.systemTrace > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.systemSkillGraph header strong,
+.artifactContract header strong,
+.systemGraphEngine header strong,
+.systemLoopEngine header strong,
+.systemTrace > header strong {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.systemSkillGraph header small,
+.artifactContract header small,
+.systemGraphEngine header small,
+.systemLoopEngine header small,
+.systemTrace > header span {
+  color: var(--fg-muted);
+  font: 650 10px/1.15 var(--scene-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.systemSkillGraph > p {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0 0;
+}
+
+.systemSkillGraph > p span {
+  color: var(--yellow-ink);
+  font: 700 9.5px/1 var(--scene-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.systemSkillGraph > p code {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.systemSkillGraph dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin: 7px 0 0;
+}
+
+.systemSkillGraph dl > div {
+  min-width: 0;
+  padding: 5px 2px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-elev);
+}
+
+.systemSkillGraph dt {
+  color: var(--fg-muted);
+  font: 650 10px/1 var(--scene-mono);
+  text-transform: uppercase;
+}
+
+.systemSkillGraph dd {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: var(--fg);
+  font: 650 9.5px/1.15 var(--scene-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifactContract p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font: 650 9.5px/1.15 var(--scene-mono);
+  text-transform: uppercase;
+}
+
+.artifactContract p b {
+  color: var(--fg);
+  font-size: 9.5px;
+}
+
+.artifactContract p i {
+  color: var(--fg-muted);
+  font-style: normal;
+}
+
+.systemBridge {
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-block: 52px 33px;
+}
+
+.systemBridge p {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-muted);
+  font: 700 10px/1 var(--scene-mono);
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.systemBridge p i {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: currentColor;
+  transform-origin: left center;
+}
+
+.systemBridge p:not(.renderLane) i::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.systemBridge .renderLane i::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.contextLane,
+.referenceLane {
+  color: var(--yellow-ink) !important;
+}
+
+.referenceLane code {
+  overflow: hidden;
+  color: inherit;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentRuntimeLayer {
+  background: color-mix(in oklab, var(--fg) 2.5%, var(--bg-elev));
+}
+
+.systemGraphEngine ol,
+.systemLoopEngine ol,
+.systemTrace ol,
+.systemTrace ul,
+.systemPorts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.systemGraphEngine ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.systemGraphEngine li {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 5px 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font: 650 10px/1.1 var(--scene-mono);
+  text-align: center;
+}
+
+.systemGraphEngine li + li::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 5px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.systemGraphEngine li span {
+  font-size: 8px;
+}
+
+.systemGraphEngine .systemGraphActive {
+  border-color: var(--yellow-dark);
+  background: color-mix(in oklab, var(--yellow) 14%, var(--bg-elev));
+  color: var(--fg);
+}
+
+.engineConnector {
+  position: relative;
+  display: block;
+  width: 2px;
+  height: 13px;
+  margin: 0 auto -8px;
+  background: var(--yellow-dark);
+}
+
+.engineConnector::after {
+  content: '';
+  position: absolute;
+  right: 50%;
+  bottom: -1px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--yellow-dark);
+  border-bottom: 2px solid var(--yellow-dark);
+  transform: translateX(50%) rotate(45deg);
+}
+
+.systemLoopEngine {
+  position: relative;
+}
+
+.systemLoopEngine ol {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 9px;
+}
+
+.systemLoopEngine li {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 2px;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--fg-muted);
+  font: 650 9.5px/1 var(--scene-mono);
+  text-align: center;
+}
+
+.systemLoopEngine > span {
+  position: absolute;
+  right: 7px;
+  bottom: -7px;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--yellow-dark);
+  border-radius: 50%;
+  background: var(--yellow);
+  color: #18181b;
+  font-size: 9.5px;
+}
+
+.runtimeReceipt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 9px 0 0;
+  color: var(--scene-green);
+  font: 750 9.5px/1.1 var(--scene-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.runtimeReceipt span {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--scene-green) 12%, var(--bg-elev));
+}
+
+.inlineTraceBridge {
+  position: relative;
+  align-self: center;
+  width: 100%;
+  height: 2px;
+  background: var(--yellow-dark);
+  transform-origin: left center;
+}
+
+.inlineTraceBridge::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--yellow-dark);
+  border-right: 2px solid var(--yellow-dark);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.systemTrace {
+  display: flex;
+  flex-direction: column;
+  padding: 9px;
+  background: #18181b;
+  color: #f4f2eb;
+}
+
+.systemTrace > header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #343438;
+}
+
+.systemTrace > header span {
+  color: #aaa7a0;
+}
+
+.systemTrace ol {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.systemTrace ol li {
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid #343438;
+  border-radius: 6px;
+  background: #202024;
+}
+
+.systemTrace ol span {
+  color: #aaa7a0;
+  font: 650 9.5px/1 var(--scene-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.systemTrace ol strong {
+  overflow: hidden;
+  color: #f4f2eb;
+  font: 650 10px/1.15 var(--scene-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.systemTrace ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 9px;
+}
+
+.systemTrace ul li {
+  padding: 6px 3px;
+  border: 1px solid #4d4427;
+  border-radius: 6px;
+  background: #292617;
+  color: var(--yellow);
+  font: 700 9.5px/1.15 var(--scene-mono);
+  text-align: center;
+}
+
+.systemPorts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 15px;
+  border-top: 1px solid var(--border);
+}
+
+.systemPorts > span {
+  max-width: 190px;
+  color: var(--fg-muted);
+  font: 700 10px/1.25 var(--scene-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.systemPorts ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.systemPorts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font: 650 9.5px/1 var(--scene-mono);
+}
+
+.systemPorts li i {
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--yellow-dark);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--yellow) 20%, var(--bg-elev));
+}
+
+@keyframes systemRequestIn {
+  0%,
+  3% {
+    opacity: 1;
+    transform: translateX(-10px);
+  }
+  10%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemSkillSelect {
+  0%,
+  11% {
+    opacity: 1;
+    transform: translateY(7px) scale(0.98);
+  }
+  23%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemContractDraw {
+  0%,
+  17% {
+    opacity: 1;
+    transform: scaleX(0);
+  }
+  29%,
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes systemVerticalDraw {
+  0%,
+  22% {
+    opacity: 1;
+    transform: scaleY(0);
+  }
+  34%,
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes systemGraphRun {
+  0%,
+  20% {
+    opacity: 1;
+    transform: translateY(7px) scale(0.98);
+  }
+  34%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemLoopRun {
+  0%,
+  30% {
+    opacity: 1;
+    transform: translateY(7px) scale(0.98);
+  }
+  43%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemArtifactResolve {
+  0%,
+  37% {
+    opacity: 1;
+    transform: translateY(7px) scale(0.98);
+  }
+  53%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemTraceOne {
+  0%,
+  23% {
+    opacity: 1;
+    transform: translateX(-8px) scale(0.98);
+  }
+  31%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemResultResolve {
+  0%,
+  57% {
+    opacity: 1;
+    transform: translateY(7px);
+  }
+  71%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemExplainResolve {
+  0%,
+  68% {
+    opacity: 1;
+    transform: translateY(7px);
+  }
+  84%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes systemPortsResolve {
+  0%,
+  82% {
+    opacity: 1;
+    transform: translateY(5px);
+  }
+  92%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (min-width: 781px) and (prefers-reduced-motion: no-preference) {
+  .systemRequest,
+  .systemSkillGraph,
+  .contextLane,
+  .systemGraphEngine,
+  .engineConnector,
+  .systemLoopEngine,
+  .artifactContract,
+  .referenceLane,
+  .systemTrace,
+  .systemAnswer,
+  .systemWhy,
+  .systemPorts {
+    animation-duration: var(--system-cycle);
+    animation-timing-function: cubic-bezier(0.22, 0.75, 0.2, 1);
+    animation-fill-mode: both;
+  }
+
+  .systemRequest {
+    animation-name: systemRequestIn;
+  }
+
+  .systemSkillGraph {
+    animation-name: systemSkillSelect;
+  }
+
+  .contextLane {
+    animation-name: systemContractDraw;
+  }
+
+  .engineConnector {
+    animation-name: systemVerticalDraw;
+  }
+
+  .systemGraphEngine {
+    animation-name: systemGraphRun;
+  }
+
+  .systemLoopEngine {
+    animation-name: systemLoopRun;
+  }
+
+  .artifactContract,
+  .referenceLane {
+    animation-name: systemArtifactResolve;
+  }
+
+  .systemTrace {
+    animation-name: systemTraceOne;
+  }
+
+  .systemAnswer {
+    animation-name: systemResultResolve;
+  }
+
+  .systemWhy {
+    animation-name: systemExplainResolve;
+  }
+
+  .systemPorts {
+    animation-name: systemPortsResolve;
+  }
+}
+
+@container (max-width: 540px) {
+  .runtimeSystemTopline > span:last-child {
+    display: none;
+  }
+
+  .runtimeSystemBody {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .saasLayer {
+    grid-row: 1;
+  }
+
+  .systemBridge {
+    grid-row: 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+    gap: 8px;
+    padding: 0 18px;
+  }
+
+  .systemBridge p {
+    justify-items: center;
+    gap: 3px;
+  }
+
+  .systemBridge p i {
+    width: 2px;
+    height: 22px;
+    transform-origin: center top;
+  }
+
+  .systemBridge p:not(.renderLane) i::after {
+    top: auto;
+    right: 50%;
+    bottom: 0;
+    transform: translateX(50%) rotate(135deg);
+  }
+
+  .systemBridge .renderLane i::before {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) rotate(135deg);
+  }
+
+  .agentRuntimeLayer {
+    grid-row: 3;
+  }
+
+  .inlineTraceBridge {
+    grid-row: 4;
+    justify-self: center;
+    width: 2px;
+    height: 22px;
+    transform-origin: center top;
+  }
+
+  .inlineTraceBridge::after {
+    top: auto;
+    right: 50%;
+    bottom: 0;
+    transform: translateX(50%) rotate(135deg);
+  }
+
+  .systemTrace {
+    grid-row: 5;
+  }
+
+  .systemTrace ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .systemTrace ul {
+    margin-top: 9px;
+  }
+
+  .systemPorts {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .systemPorts > span {
+    max-width: none;
+  }
+
+  .systemPorts ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .systemPorts li {
+    justify-content: center;
+  }
+
+  .systemRequest,
+  .systemSkillGraph,
+  .contextLane,
+  .systemGraphEngine,
+  .engineConnector,
+  .systemLoopEngine,
+  .artifactContract,
+  .referenceLane,
+  .renderLane,
+  .inlineTraceBridge,
+  .systemTrace,
+  .systemAnswer,
+  .runtimeReceipt,
+  .systemWhy,
+  .systemTrace ul,
+  .systemPorts {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtimeSystemHero *,
+  .runtimeSystemHero *::before,
+  .runtimeSystemHero *::after {
+    animation: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .saasLayer,
+  .agentRuntimeLayer,
+  .systemTrace,
+  .systemSkillGraph,
+  .artifactContract,
+  .systemGraphEngine,
+  .systemLoopEngine,
+  .saasInterface p,
+  .systemPorts li {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .systemGraphActive,
+  .systemLoopEngine > span,
+  .systemTrace ul li {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .contextLane,
+  .referenceLane {
+    color: LinkText !important;
+  }
+
+  .contextLane i,
+  .referenceLane i,
+  .inlineTraceBridge,
+  .engineConnector {
+    color: LinkText !important;
+    background: LinkText;
+  }
+}

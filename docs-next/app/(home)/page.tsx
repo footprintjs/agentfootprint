@@ -1,25 +1,70 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Chapters } from '@/components/home/Chapters';
-import { ChapterRail } from '@/components/home/ChapterRail';
-import { HeroTrace } from '@/components/home/HeroTrace';
-import {
-  HomeViewProvider,
-  HomeViewSwitcher,
-  HomeViewText,
-} from '@/components/home/HomeView';
+import { ReferenceFlow, RerunProof } from '@/components/home/v2/ProductScenes';
+import { EvolutionStory } from '@/components/home/v2/EvolutionStory';
+import { SkillGraphScene } from '@/components/home/v2/SkillGraphScene';
+import { PhaseRail } from '@/components/home/v2/PhaseRail';
+import { LensBand } from '@/components/home/v2/LensBand';
+import { AnswerFaces } from '@/components/home/v2/AnswerFaces';
+import { PortsScene } from '@/components/home/v2/PortsScene';
 import { SiteFooter } from '@/components/SiteFooter';
 import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
-import './home.css';
+import './v2.css';
 
-const HOME_TITLE = 'agentfootprint — Find the context that made your agent answer wrong';
+const HOME_TITLE = 'agentfootprint — Your agent decides what a person used to';
 const HOME_DESC =
-  'The explainable agent framework. When an agent takes a decision a person used to make, the reasoning stops surviving — so every run records its own causal trace, states what it could not check, and lets you confirm a cause by re-running without it. Why is a query, not a guess.';
+  'Open-source TypeScript runtime for SkillGraph applications. When an agent takes a decision a person used to make, the reasoning stops surviving — so every run records why it decided what it did, states what it could not check, and lets you confirm a cause by re-running without it.';
+
+/** The three phases. Ids must match the section headings they open. */
+const PHASES = [
+  { id: 'build', step: '01', name: 'Build', what: 'Define the work as a skill graph. Route data by reference.' },
+  { id: 'iterate', step: '02', name: 'Iterate', what: 'Open the recorded run. Fix the context, not the model.' },
+  { id: 'production', step: '03', name: 'Run in production', what: 'Your models, your storage, your telemetry. Typed ports, no lock-in.' },
+  { id: 'monitor', step: '04', name: 'Monitor', what: 'Query a month of runs without rebuilding the story first.' },
+] as const;
+
+/** Everything the runtime needs to actually run somewhere, as PORTS with the
+ *  adapters that exist today. Ports are ours; adapters are theirs — so a new
+ *  vendor is a new file, never a change to the agent you wrote. */
+const INFRASTRUCTURE_ADAPTERS = [
+  {
+    port: 'Models',
+    adapters: 'OpenAI · Anthropic · Bedrock · Gemini · Azure OpenAI · Foundry · Ollama',
+  },
+  {
+    port: 'Memory + data',
+    adapters: 'Redis · PostgreSQL · SQLite · S3 · Cloud Storage',
+  },
+  {
+    port: 'Tools',
+    adapters: 'your functions · MCP servers, local or remote',
+  },
+  {
+    port: 'Identity + secrets',
+    adapters: 'JWKS · Vault · Entra ID · declare-and-push credentials',
+  },
+  {
+    port: 'Runtime + sessions',
+    adapters: 'AgentCore · Vertex sessions · your own process',
+  },
+  {
+    port: 'Observe',
+    adapters: 'OpenTelemetry · CloudWatch · X-Ray · audit bundles',
+  },
+] as const;
+
+/** Where the same agent runs, with the adapters you would actually use there.
+ *  Verified against src/adapters before being written — an adapter appears here
+ *  after it lands, never before. */
+const CLOUDS = [
+  { where: 'AWS', how: 'Bedrock models · AgentCore runtime · S3 · CloudWatch · X-Ray' },
+  { where: 'Google Cloud', how: 'Gemini and Vertex models · Vertex sessions · Cloud Storage' },
+  { where: 'Microsoft Foundry', how: 'Foundry hosting and models · Azure OpenAI · Entra ID' },
+  { where: 'Your own hardware', how: 'Ollama · PostgreSQL · SQLite · your process · OpenTelemetry' },
+] as const;
 
 export const metadata: Metadata = {
-  // `absolute` bypasses the layout's "%s · agentfootprint" template — the home title
-  // already leads with the brand, so we don't want it appended twice.
   title: { absolute: HOME_TITLE },
   description: HOME_DESC,
   alternates: { canonical: `${SITE.url}/` },
@@ -41,250 +86,320 @@ export const metadata: Metadata = {
   },
 };
 
-// Structured data lives in lib/jsonld.ts (siteJsonLd) so the SAME author/org/software graph
-// renders on the home page AND every docs page — one source of truth.
-
-function GitHubMark() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-      <path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.92 1.24 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.28 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z" />
-    </svg>
-  );
-}
-
 export default function HomePage() {
   return (
-    <HomeViewProvider>
-      <main className="af-home">
-        {/* eslint-disable-next-line react/no-danger */}
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }} />
-        <HomeViewSwitcher />
-      {/* hero — mascot centered on top, then two columns: the claim (left) + live trace (right) */}
-      <section className="af-hero">
+    <div className="v2-home">
+      {/* eslint-disable-next-line react/no-danger */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }}
+      />
+
+      <section className="v21-hero" id="overview">
+          <p className="v2-kicker">
+            <span /> Open-source TypeScript agent framework
+          </p>
+          <h1>
+            Your agent decides what a person used to. <em>Only one of them leaves a reason.</em>
+          </h1>
+          {/* Developer proof, not logos. Every figure here is real and checkable:
+              downloads from the npm registry API, the licence from the repo, the
+              telemetry claim verified against the source (no analytics endpoint
+              and no URL the library chooses for itself). Star count is
+              deliberately absent — omitting a number is honest, inflating one is
+              not, and a low count next to "Star on GitHub" argues against us. */}
+          <ul className="v21-proof">
+            <li>
+              <strong>21,800+</strong>
+              <small>npm installs a month</small>
+            </li>
+            <li>
+              <strong>MIT</strong>
+              <small>open source, no seat fees</small>
+            </li>
+            <li>
+              <strong>No telemetry</strong>
+              <small>it never phones home</small>
+            </li>
+            <li>
+              <strong>9,800+</strong>
+              <small>tests on every release</small>
+            </li>
+          </ul>
+
+        <div className="v21-hero-row">
+          <div className="v21-hero-say">
+          <p className="v21-lede">
+            It builds and runs agents the way you expect — skills, tools, a loop.
+            Then it keeps the evidence, says what it could not check, and refuses instead of
+            guessing.
+          </p>
+          <div className="v2-actions">
+            <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
+              Build your SkillGraph <span aria-hidden="true">→</span>
+            </Link>
+            <Link className="v2-button v2-button-quiet" href="#rerun">
+              Inspect a recorded run <span aria-hidden="true">↓</span>
+            </Link>
+          </div>
+          </div>
+          <AnswerFaces />
+        </div>
+      </section>
+
+      <PhaseRail phases={PHASES} />
+
+      <EvolutionStory />
+
+      <header className="v21-phase-head" id="build">
+        <p className="v2-kicker">01 · Build</p>
+        <h2>Define the work. The agent runs it.</h2>
+      </header>
+
+      <section className="v21-scene" id="skillgraph" aria-labelledby="v21-skillgraph-title">
+        <header className="v21-scene-copy">
+          <p className="v2-kicker">Scope</p>
+          <h2 id="v21-skillgraph-title">One state. One reachable skill.</h2>
+          <p>Only its procedure, tools, and model enter the step.</p>
+          <Link href="/docs/build/skill-graph-quickstart">Build the graph →</Link>
+        </header>
+        <SkillGraphScene />
+      </section>
+
+      <section
+        className="v21-scene v21-scene-reverse"
+        id="references"
+        aria-labelledby="v21-reference-title"
+      >
+        <header className="v21-scene-copy">
+          <p className="v2-kicker">Route</p>
+          <h2 id="v21-reference-title">Keep the payload out of the prompt.</h2>
+          <p>For stored results, the model gets a ticket. Your product redeems the real data.</p>
+          <Link href="/docs/build/artifacts">Follow the two lanes →</Link>
+        </header>
+        <ReferenceFlow />
+      </section>
+
+      <header className="v21-phase-head" id="iterate">
+        <p className="v2-kicker">02 · Iterate</p>
+        <h2>The run already recorded why. Go and read it.</h2>
+      </header>
+
+      <section className="v21-scene" id="rerun" aria-labelledby="v21-rerun-title">
+        <header className="v21-scene-copy">
+          <p className="v2-kicker">Prove</p>
+          <h2 id="v21-rerun-title">Remove the source. Rerun the case.</h2>
+          <p>Changed output confirms dependence in this recorded run—not hidden reasoning.</p>
+          <Link href="/docs/debug/rerun-without-sources">Test a source →</Link>
+        </header>
+        <RerunProof />
+      </section>
+
+      <section className="v21-production" id="lenses" aria-labelledby="v21-iterate-title">
+        <header className="v21-production-head">
+          <p className="v2-kicker">The lenses</p>
+          <h2 id="v21-iterate-title">Open the run the way you open devtools.</h2>
+        </header>
+
+        <LensBand />
+
+        <nav className="v21-paths" aria-label="Iterate on a recorded run">
+          <Link href="/how-it-works">
+            <span>See one failed run</span>
+            <strong>Five layers of evidence</strong>
+            <i aria-hidden="true">→</i>
+          </Link>
+          <Link href="/docs/debug/rerun-without-sources">
+            <span>Confirm the cause</span>
+            <strong>Re-run without it</strong>
+            <i aria-hidden="true">→</i>
+          </Link>
+        </nav>
+      </section>
+
+      <header className="v21-phase-head" id="production">
+        <p className="v2-kicker">03 · Run in production</p>
+        <h2>Change the cloud. Keep the agent.</h2>
+      </header>
+
+      <section className="v21-scene" id="ports" aria-labelledby="v21-ports-title">
+        <header className="v21-scene-copy">
+          <p className="v2-kicker">Bind</p>
+          <h2 id="v21-ports-title">One graph. Your stack.</h2>
+          <p>
+            Every backend is a typed port; every vendor is an adapter behind it. Pick the ground and
+            the adapters resolve — the agent you wrote does not move.
+          </p>
+          <Link href="/docs">Wire your first port →</Link>
+        </header>
+        <PortsScene />
+      </section>
+
+      <section className="v21-production" aria-labelledby="v21-production-title">
+        <h2 id="v21-production-title" className="v21-visually-hidden">
+          Infrastructure detail
+        </h2>
+
+        <div className="v21-production-grid">
+          <figure className="v21-runtime" aria-label="AgentFootprint connects to replaceable ports">
+            <span className="v21-port is-provider">Models</span>
+            <span className="v21-port is-memory">Memory</span>
+            <strong>AF<small>runtime</small></strong>
+            <span className="v21-port is-storage">Storage</span>
+            <span className="v21-port is-telemetry">Telemetry</span>
+            <figcaption>Keep the graph. Swap the edges.</figcaption>
+          </figure>
+
+          <article className="v21-field-result">
+            <p className="v2-kicker">One customer implementation</p>
+            <div className="v21-result-line">
+              <span>~40 tools</span>
+              <i aria-hidden="true">→</i>
+              <strong>focused surface</strong>
+            </div>
+            <p>Better evaluated responses with a lower-cost model.</p>
+            <small>Field result, not a benchmark. Reproduce it on your workload.</small>
+            <Link href="/docs/debug/compare-strategies">See the comparison method →</Link>
+          </article>
+        </div>
+
+        <section className="v21-adapters" aria-labelledby="v21-adapters-title">
+          <header>
+            <strong id="v21-adapters-title">
+              Bring your infrastructure — AWS, Google Cloud, Microsoft Foundry, or your own
+              hardware
+            </strong>
+            <span>
+              The runtime is the whole ecosystem: models, memory, tools, identity, sessions and
+              telemetry. Provision with your CDK or SDK and connect through typed ports — detach
+              telemetry when export must not gate the run. Nothing about the agent you wrote
+              changes when the cloud does.
+            </span>
+          </header>
+          <ul>
+            {INFRASTRUCTURE_ADAPTERS.map((group) => (
+              <li key={group.port}>
+                <strong>{group.port}</strong>
+                <small>{group.adapters}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="v21-adapters v21-clouds" aria-labelledby="v21-clouds-title">
+          <header>
+            <strong id="v21-clouds-title">The same agent, on four grounds</strong>
+            <span>
+              agentfootprint provisions nothing and wants none of your credentials — it connects to
+              what you already run. Changing ground changes which adapters you construct at the
+              edge, which is the only place a vendor name should appear in your codebase.
+            </span>
+          </header>
+          <ul>
+            {CLOUDS.map((entry) => (
+              <li key={entry.where}>
+                <strong>{entry.where}</strong>
+                <small>{entry.how}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <nav className="v21-paths" aria-label="Choose your AgentFootprint path">
+          <Link href="/features">
+            <span>For product teams</span>
+            <strong>See the impact</strong>
+            <i aria-hidden="true">→</i>
+          </Link>
+          <Link href="/docs/build/skill-graph-quickstart">
+            <span>For developers</span>
+            <strong>Build in five minutes</strong>
+            <i aria-hidden="true">→</i>
+          </Link>
+        </nav>
+      </section>
+
+      <section className="v21-production" id="monitor" aria-labelledby="v21-monitor-title">
+        <header className="v21-production-head">
+          <p className="v2-kicker">04 · Monitor · in progress</p>
+          <h2 id="v21-monitor-title">Most of what you pay to understand agents is reassembly.</h2>
+        </header>
+
+        <section className="v21-adapters" aria-labelledby="v21-monitor-why">
+          <header>
+            <strong id="v21-monitor-why">Nothing to stitch back together</strong>
+            <span>
+              Everywhere else, runs are stored as fragments and the story is rebuilt later —
+              correlate the ids, infer the causality, decide which line belonged to which
+              decision. You pay for that twice: once for the pipeline that does it, and again in
+              the confidence it never quite gives you, because a plausible reconstruction looks
+              exactly like a correct one. A footprint run arrives already joined: the key tying a
+              tool call to the evidence under it is written when the call happens, not derived
+              afterwards.
+            </span>
+          </header>
+          <ul>
+            <li>
+              <strong>The question no one else can ask</strong>
+              <small>
+                Every run states what it could NOT check. Aggregate that across a month and you
+                are looking at where your data coverage actually fails — a pattern nobody can
+                compute from logs, because nobody else writes it down.
+              </small>
+            </li>
+            <li>
+              <strong>Cost, from the other direction</strong>
+              <small>
+                No reassembly pipeline to run, and context scoped per step rather than a flat
+                tool surface — the same reason one team reached better evaluated answers on a
+                cheaper model.
+              </small>
+            </li>
+            <li>
+              <strong>What is true today</strong>
+              <small>
+                The recording contract this reads is shipping now, and every run already carries
+                it. The library that queries across sessions is under construction — so this
+                section describes where it is going, not what you can install this afternoon.
+              </small>
+            </li>
+          </ul>
+        </section>
+      </section>
+
+      {/* The closing invitation. One analogy, not four — a reader carries exactly
+          one comparison out of a page, and DevTools is the one that is universally
+          understood AND loved rather than merely tolerated. */}
+      <section className="v21-try" aria-labelledby="v21-try-title">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={asset('/mascot-400.webp')}
           srcSet={`${asset('/mascot-200.webp')} 200w, ${asset('/mascot-400.webp')} 400w`}
-          sizes="(max-width: 600px) 160px, 200px"
+          sizes="140px"
           width={400}
           height={400}
-          alt="agentfootprint mascot — it pulls scattered context in and hands back clean, traceable slots"
-          className="af-hero-mascot"
-          loading="eager"
-          fetchPriority="high"
+          alt=""
+          className="v21-try-mascot"
+          loading="lazy"
           decoding="async"
         />
-        <div className="af-hero-grid">
-          <div className="af-hero-text">
-            <span className="af-pill">
-              <span className="af-pill-dot" /> open source · MIT · mock-first
-            </span>
-            <h1>
-              <HomeViewText
-                product={<>Your agent decides what a person used to. <em>Only one of them leaves a reason.</em></>}
-                technical={<>Context provenance for every <em>agent decision.</em></>}
-              />
-            </h1>
-            <p className="lede">
-              <HomeViewText
-                product={<>When a human held that seat, the reason came with the decision. Now it doesn&apos;t. agentfootprint records why the agent decided what it did, states what it could not check, and proves a fix by re-running without the cause.</>}
-                technical={<>Record context injections, model calls, tool decisions, state, and cost as typed evidence you can slice, ablate, and replay — beside a coverage ledger that states what was never checked, and refusals where the answer would have been a guess.</>}
-              />
-            </p>
-            <p className="tagline">
-              <HomeViewText
-                product={<><em>Why</em> is a query, not a guess.</>}
-                technical={<>Inline recording is truth. <em>Post-processing is reconstruction.</em></>}
-              />
-            </p>
-            <div className="af-hero-cta">
-              <Link className="af-cta" href="/docs" prefetch={false}>
-                Get started →
-              </Link>
-              <Link className="af-cta-ghost" href="https://github.com/footprintjs/agentfootprint">
-                <GitHubMark /> Star on GitHub
-              </Link>
-            </div>
-          </div>
-          <div className="af-hero-visual">
-            <HeroTrace />
-            <div className="af-codepeek" aria-hidden="true">
-              <div className="af-codepeek-install">
-                <span className="pr">$</span> npm i agentfootprint
-              </div>
-              <div className="af-codepeek-code">
-                <div className="af-cp-line"><span className="k">const</span> agent = Agent.<span className="m">create</span>(<span className="s2">{'{ provider, model }'}</span>)</div>
-                <div className="af-cp-line af-cp-i">.<span className="m">system</span>(<span className="s">{`'You are a refunds agent.'`}</span>)</div>
-                <div className="af-cp-line af-cp-i">.<span className="m">skill</span>(billing)</div>
-                <div className="af-cp-line af-cp-i">.<span className="m">build</span>();</div>
-              </div>
-            </div>
-          </div>
+        <h2 id="v21-try-title">Try agentfootprint</h2>
+        <p>
+          A front-end developer would never debug blind — <em>they open DevTools.</em> Your agents
+          deserve the same.
+        </p>
+        <div className="v21-try-actions">
+          <code>npm i agentfootprint</code>
+          <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
+            Build your first skill graph <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="v2-button v2-button-quiet" href="https://github.com/footprintjs/agentfootprint">
+            Star on GitHub
+          </Link>
         </div>
       </section>
 
-      {/* value band — the outcome props, full-width below the hero */}
-      <section className="af-valueband">
-        <p className="af-value-tag">
-          <HomeViewText
-            product={<>Inject less. <em>Trace more.</em></>}
-            technical={<>Record inline. <em>Debug causally.</em></>}
-          />
-        </p>
-        <div className="af-valuestrip">
-          <div className="af-vs">
-            <HomeViewText
-              product={<><b>Faster debugging</b><span>trace any answer to its exact cause</span></>}
-              technical={<><b>Typed provenance</b><span>keep each context source attached to the call it shaped</span></>}
-            />
-          </div>
-          <div className="af-vs">
-            <HomeViewText
-              product={<><b>Provable cause</b><span>proven by replay, not guessed</span></>}
-              technical={<><b>Backward slicing</b><span>trace an output through decisions to influencing context</span></>}
-            />
-          </div>
-          <div className="af-vs">
-            <HomeViewText
-              product={<><b>Lower token cost</b><span>context shrinks to what the step needs</span></>}
-              technical={<><b>Counterfactual replay</b><span>remove a source, rerun, and measure what changed</span></>}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* the business case — the one band on this page that is deliberately audience-neutral.
-          Product and Technical are two ways of describing the same machinery; this is the
-          argument that pays for it, and it reads the same to either reader, so it uses no
-          HomeViewText. Copy derives from docs/design/product-narrative.md (canon) and follows
-          its honesty rule: the case study is named as customer-reported and the general claim
-          is left open until the 2×2 comparison is actually run. */}
-      <section className="af-buscase" id="af-business-case" aria-labelledby="af-buscase-h">
-        <span className="af-pill">
-          <span className="af-pill-dot" /> the business case
-        </span>
-        <h2 id="af-buscase-h" className="af-bc-head">
-          Structure, where a <em>bigger model</em> used to be.
-        </h2>
-        <p className="af-bc-statement">
-          agentfootprint helps AI-product teams achieve equal or better response quality with
-          lower-cost models by dynamically loading the right procedures and tools — and provides
-          the infrastructure to deploy, debug, and scale that behavior.
-        </p>
-
-        <table className="af-bc-chain">
-          <caption className="af-bc-caption">The value chain</caption>
-          <thead>
-            <tr>
-              <th scope="col">Layer</th>
-              <th scope="col">The customer&apos;s situation</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">End-customer benefit</th>
-              <td>Higher-quality responses</td>
-            </tr>
-            <tr>
-              <th scope="row">Business outcome</th>
-              <td>Equal or better quality using a lower-cost model</td>
-            </tr>
-            <tr>
-              <th scope="row">Mechanism</th>
-              <td>
-                The skill graph selects the operating procedure and exposes only the relevant
-                tools, instead of showing the model dozens of tools at once
-              </td>
-            </tr>
-            <tr>
-              <th scope="row">Supporting activity</th>
-              <td>
-                Infrastructure to integrate, deploy, debug, and scale that behavior — roughly 20
-                lines of declarations instead of hundreds of lines of hand-written orchestration
-              </td>
-            </tr>
-            <tr>
-              <th scope="row">Economic benefit</th>
-              <td>Lower model spend, less engineering time, lower cognitive load</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* the reconfiguration, side by side. Two stacked lists rather than one ASCII block:
-            the same four steps, but they reflow on a phone instead of scrolling sideways. */}
-        <div className="af-bc-diagram">
-          <figure className="af-bc-side">
-            <figcaption>Before</figcaption>
-            <ol>
-              <li>flat ~40-tool surface</li>
-              <li>frontier model</li>
-              <li>substantial orchestration code</li>
-              <li>high inference + engineering cost</li>
-            </ol>
-          </figure>
-          <span className="af-bc-turn" aria-hidden="true">
-            →
-          </span>
-          <figure className="af-bc-side af-bc-after">
-            <figcaption>After</figcaption>
-            <ol>
-              <li>task → relevant skill-graph node</li>
-              <li>relevant procedure + small tool surface</li>
-              <li>lower-cost model</li>
-              <li>better observed response</li>
-            </ol>
-          </figure>
-        </div>
-        <p className="af-bc-note">
-          The line count is the demonstration, not the point. The runtime takes the activity
-          over: you describe the graph and its rules, it performs the per-iteration
-          orchestration — and records why every handoff happened.
-        </p>
-
-        <blockquote className="af-bc-evidence">
-          <p>
-            In one customer implementation, replacing a flat ~40-tool agent that required a
-            frontier model with the dynamic skill graph enabled a lower-cost model to produce
-            better evaluated responses at lower operating cost.
-          </p>
-          <footer>
-            That is a <b>customer-reported case study</b>, not a controlled benchmark. The general
-            claim needs the 2×2 — flat tool surface vs. skill graph × small model vs. frontier
-            model, scored on cost per successful task, never token cost alone. Until that
-            comparison is run, this page says nothing stronger.
-          </footer>
-        </blockquote>
-
-        <p className="af-bc-more">
-          Every library in the family makes the same trade.{' '}
-          <a href="https://footprintjs.github.io/?view=business">
-            The ecosystem through the business lens →
-          </a>
-        </p>
-      </section>
-
-      <div className="af-scrollcue-wrap">
-        <p className="af-bridge-line">
-          <HomeViewText
-            product={<>Don&apos;t take the claim on faith. Scroll the story — a wrong answer <b>traced to its cause</b>, <b>the context</b> that built it, and <b>the engine</b> that recorded it all.</>}
-            technical={<>Follow the full provenance path: <b>backward slice</b> a wrong output, inspect the <b>slot × trigger × cache</b> model, then see how the <b>runtime records evidence inline</b>.</>}
-          />
-        </p>
-        <div className="af-scrollcue" aria-hidden="true">
-          scroll the story
-          <svg className="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-      </div>
-
-      {/* home-only sticky jump-nav, then the storyboard — 01 problem · 02 solution · 03 benefits · 04 how · 05 payoff */}
-      <ChapterRail />
-      <Chapters />
-
-      {/* attribution footer — shared with docs (components/SiteFooter); recap + CTA live in ch05 */}
       <SiteFooter />
-      </main>
-    </HomeViewProvider>
+    </div>
   );
 }

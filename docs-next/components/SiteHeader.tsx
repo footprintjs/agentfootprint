@@ -54,9 +54,10 @@ export function SiteHeader() {
   const pathname = usePathname();
   const onDocs = pathname?.startsWith('/docs') ?? false;
   const onFeatures = pathname?.startsWith('/features') ?? false;
+  const onHowItWorks = pathname?.startsWith('/how-it-works') ?? false;
   // "Home" is the current page only when we are on neither of the other two — otherwise /features
   // would light up Home as well (the whole site outside /docs used to be "home").
-  const onHome = !onDocs && !onFeatures;
+  const onHome = !onDocs && !onFeatures && !onHowItWorks;
 
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
@@ -99,6 +100,14 @@ export function SiteHeader() {
             aria-current={onHome ? 'page' : undefined}
           >
             Home
+          </Link>
+          <Link
+            href="/how-it-works"
+            prefetch={false}
+            className={`af-sh-link${onHowItWorks ? ' on' : ''}`}
+            aria-current={onHowItWorks ? 'page' : undefined}
+          >
+            How it works
           </Link>
           <Link
             href="/features"

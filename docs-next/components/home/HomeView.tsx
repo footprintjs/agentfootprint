@@ -65,11 +65,11 @@ export function HomeViewText({ product, technical }: { product: ReactNode; techn
   return view === 'technical' ? technical : product;
 }
 
-export function HomeViewSwitcher() {
+export function HomeViewSwitcher({ label = 'Choose homepage view' }: { label?: string }) {
   const { view, setView } = useHomeView();
 
   return (
-    <div className="af-view-switcher" role="group" aria-label="Choose homepage view">
+    <div className="af-view-switcher" role="group" aria-label={label}>
       <span className="af-view-label">View</span>
       {(['product', 'technical'] as const).map((option) => (
         <button
