@@ -121,7 +121,7 @@ This is the step that makes "the test run and the production run are the same co
 
 `ollama()` talks Ollama's native API directly, so there's nothing to install on this side, streamed calls report real token counts (so `.compaction()` and cost budgets work), and when it can't work it says why in words that contain the fix — `ollama serve` when nothing is listening, `ollama pull <model>` when the model isn't there, never a raw connection error and never a hang.
 
-For llama.cpp's `llama-server`, vLLM, Together or Groq, use `openai({ baseURL: 'http://localhost:8080/v1', apiKey: 'not-needed', defaultModel: '…' })` — any server speaking the OpenAI Chat Completions API, same `Agent` code either way. Full recipes: [Ollama guide](https://footprintjs.github.io/agentfootprint/docs/build/ollama/) · [OpenAI-compatible endpoints](https://footprintjs.github.io/agentfootprint/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
+For llama.cpp's `llama-server`, vLLM, Together or Groq, use `openai({ baseURL: 'http://localhost:8080/v1', apiKey: 'not-needed', defaultModel: '…' })` — any server speaking the OpenAI Chat Completions API, same `Agent` code either way. Full recipes: [Ollama guide](https://agentfootprint.dev/docs/build/ollama/) · [OpenAI-compatible endpoints](https://agentfootprint.dev/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
 
 ### Then add context
 
@@ -591,7 +591,7 @@ const reflexion = Loop.create()
 | 2 | 12 tools shown | **5 tools** (skill activated) |
 | 3 | 12 tools shown | 5 tools |
 
-> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/docs/build/dynamic-react/) · [Key concepts](https://footprintjs.github.io/agentfootprint/docs/getting-started/key-concepts/)
+> 📖 [Dynamic ReAct guide](https://agentfootprint.dev/docs/build/dynamic-react/) · [Key concepts](https://agentfootprint.dev/docs/getting-started/key-concepts/)
 
 ### Multi-agent — compose with the alphabet
 
@@ -635,7 +635,7 @@ The patterns the field knows reduce to the same alphabet:
 
 Same trick as the injection model: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
 
-> 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/docs/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/)
+> 📖 Compare: [hand-rolled vs declarative](https://agentfootprint.dev/docs/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://agentfootprint.dev/docs/getting-started/vs/)
 
 ### Check in with the receipts — human-in-the-loop consent for consequential actions
 
@@ -663,7 +663,7 @@ Run the flagship demo — an AI coworker that drafts a weekly status doc and che
 npm run example examples/features/34-checkin-coworker.ts -- --decline
 ```
 
-See the [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
+See the [Check-in guide](https://agentfootprint.dev/docs/monitor/checkin/).
 
 ### Act — everything your agent does about its own loop, in one block
 
@@ -697,7 +697,7 @@ It is pure sugar over the five individual doors, pinned byte-equivalent per key 
 npm run example examples/features/38-act.ts
 ```
 
-See [The moments of the loop](https://footprintjs.github.io/agentfootprint/docs/build/loop-moments/).
+See [The moments of the loop](https://agentfootprint.dev/docs/build/loop-moments/).
 
 ### Watch — who is looking while it does
 
@@ -774,7 +774,7 @@ answers at the cheap model's price inside the expensive conversation.
 [`08`](examples/observability/08-self-explain.ts) · the doors walk the
 [**same evidence the board visualizes ▶**](https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html).
 
-> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/docs/debug/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
+> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://agentfootprint.dev/docs/debug/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
 
 **One recording. Two lenses. Three consumers. Zero extra instrumentation.**
 
@@ -898,7 +898,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 | `anthropic` | Claude (Sonnet, Opus, Haiku) via `@anthropic-ai/sdk` |
 | `openai` | GPT-4o, GPT-4-turbo via `openai` SDK |
 | `bedrock` | Claude / Titan / Mistral via AWS Bedrock runtime |
-| `gemini` | Gemini via `@google/genai` — two doors, **Vertex** (project + ADC) or the Gemini API (one key). Not every door/model pair works: read the [door/model matrix](https://footprintjs.github.io/agentfootprint/docs/infrastructure/google-cloud/#the-doormodel-matrix) first |
+| `gemini` | Gemini via `@google/genai` — two doors, **Vertex** (project + ADC) or the Gemini API (one key). Not every door/model pair works: read the [door/model matrix](https://agentfootprint.dev/docs/infrastructure/google-cloud/#the-doormodel-matrix) first |
 | `ollama` | Local models, over Ollama's native API — no SDK, no key, real token counts, refusals that name `ollama serve` / `ollama pull` · `openai({ baseURL })` reaches llama.cpp, vLLM, and any other OpenAI-compatible endpoint |
 | `browserAnthropic` | Browser-side Claude calls (no proxy server) |
 | `browserOpenai` | Browser-side OpenAI calls (no proxy server) |
@@ -916,7 +916,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - Skill artifact vocabularies — a skill or a step declares `produces` / `consumes` (artifact kinds), and `graph.checkup()` warns `artifact-kind-unsatisfied` when nothing on the agent claims to make what a consumer needs. Honest by construction: a warning, never an error, because it reads declarations only and artifacts outlive the turn that made them
 - Human-in-the-loop pause / resume — a tool calls `pauseHere(...)` (or `askHuman(...)`); `isPaused(result)` hands you a JSON-serializable checkpoint, and `agent.resume(checkpoint, input)` continues hours later on a different server
 - Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
-- Context Integrity — deterministic checks at the seams where a run contradicts ITSELF: a tool parked but still on the wire, a tool offered after the results grounding it were evicted, an answer field that disagrees with the fact it claims to report (`.claims()`, requires `.outputSchema()`). Nothing is blocked or rewritten — each defect is one typed finding, and every run files a disposition ledger so "no findings" and "no check ran" stay different states. `integrityPosture: 'dev'` adds the liveness proofs (a start-of-run canary; `CheckerDeadError` instead of a green report from a checker that never ran). Read it back with `find_context_errors` over a recording — [Context Integrity](https://footprintjs.github.io/agentfootprint/docs/monitor/context-integrity/)
+- Context Integrity — deterministic checks at the seams where a run contradicts ITSELF: a tool parked but still on the wire, a tool offered after the results grounding it were evicted, an answer field that disagrees with the fact it claims to report (`.claims()`, requires `.outputSchema()`). Nothing is blocked or rewritten — each defect is one typed finding, and every run files a disposition ledger so "no findings" and "no check ran" stay different states. `integrityPosture: 'dev'` adds the liveness proofs (a start-of-run canary; `CheckerDeadError` instead of a green report from a checker that never ran). Read it back with `find_context_errors` over a recording — [Context Integrity](https://agentfootprint.dev/docs/monitor/context-integrity/)
 - 60+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
 
 **Debugging & compliance** (`agentfootprint/observe`)
@@ -934,7 +934,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 </details>
 
-> 📖 [Agent API reference](https://footprintjs.github.io/agentfootprint/docs/api/classes/Agent/) · [CHANGELOG](./CHANGELOG.md)
+> 📖 [Agent API reference](https://agentfootprint.dev/docs/api/classes/Agent/) · [CHANGELOG](./CHANGELOG.md)
 
 ---
 
@@ -942,12 +942,12 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 | If you are... | Go here |
 |---|---|
-| New to agents | [5-minute quick start](https://footprintjs.github.io/agentfootprint/docs/getting-started/quick-start/) |
-| Coming from LangChain / CrewAI / LangGraph | [Migration guide](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/) |
-| Architecting an enterprise rollout | [Production guide](https://footprintjs.github.io/agentfootprint/docs/monitor/deployment/) |
-| Doing due diligence | [Architecture overview](https://footprintjs.github.io/agentfootprint/docs/reference/dependency-graph/) |
-| Researcher / academic background | [Citations & prior art](https://footprintjs.github.io/agentfootprint/docs/reference/citations/) |
-| Curious about design | [Inspiration docs](https://footprintjs.github.io/agentfootprint/docs/reference/inspiration/) |
+| New to agents | [5-minute quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) |
+| Coming from LangChain / CrewAI / LangGraph | [Migration guide](https://agentfootprint.dev/docs/getting-started/vs/) |
+| Architecting an enterprise rollout | [Production guide](https://agentfootprint.dev/docs/monitor/deployment/) |
+| Doing due diligence | [Architecture overview](https://agentfootprint.dev/docs/reference/dependency-graph/) |
+| Researcher / academic background | [Citations & prior art](https://agentfootprint.dev/docs/reference/citations/) |
+| Curious about design | [Inspiration docs](https://agentfootprint.dev/docs/reference/inspiration/) |
 
 Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprint/tree/main/examples) — every example is also an end-to-end CI test.
 

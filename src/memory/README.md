@@ -36,7 +36,7 @@ await agent.run('My name is Alice', {
 });
 ```
 
-See the [Memory pipeline guide](https://footprintjs.github.io/agentfootprint/docs/build/memory)
+See the [Memory pipeline guide](https://agentfootprint.dev/docs/build/memory)
 for full documentation.
 
 ## Orthogonal concerns

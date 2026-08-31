@@ -91,15 +91,14 @@ for (const file of sources) {
 
 // ---------------------------------------------------------------------------
 // README front-door gate. The repo-root README links into the LIVE docs site by
-// ABSOLUTE URL (https://footprintjs.github.io/agentfootprint/<route>) — outside
+// ABSOLUTE URL (https://agentfootprint.dev/<route>) — outside
 // the doc:<id> resolver, so a taxonomy move silently 404s the project's front
 // page (exactly the Starlight→Fumadocs regression this guards against). Re-derive
 // the same route set and fail on any doc-site URL whose path is not a real page.
-// Only the agentfootprint DOC SITE is checked; sibling github.io sites (footPrint,
-// agentThinkingUI, the org root) and `agentfootprint-lens` are other repos — the
-// mandatory `/agentfootprint/` boundary in the regex skips them.
+// Only the agentfootprint DOC SITE is checked; sibling sites (footPrint,
+// agentThinkingUI, the org root) and `agentfootprint-lens` are other repos.
 const README = resolve(HERE, '..', 'README.md');
-const README_LINK_RE = /https:\/\/footprintjs\.github\.io\/agentfootprint\/([^\s)"'<>]*)/g;
+const README_LINK_RE = /https:\/\/agentfootprint\.dev\/([^\s)"'<>]*)/g;
 let readmeLinks = 0;
 try {
   const readmeLines = readFileSync(README, 'utf8').split('\n');

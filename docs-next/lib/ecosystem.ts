@@ -15,7 +15,7 @@ export const ECOSYSTEM_PROJECTS = [
     aliases: ['agentfootprint'],
     description:
       'Context provenance and causal debugging for AI agents, including influence ranking, ablation, and counterfactual replay.',
-    url: 'https://footprintjs.github.io/agentfootprint/',
+    url: 'https://agentfootprint.dev/',
     repo: 'https://github.com/footprintjs/agentfootprint',
     npm: 'https://www.npmjs.com/package/agentfootprint',
   },
@@ -76,7 +76,6 @@ export const CREATOR_ID = 'https://sanjay1909.github.io/#person';
 
 export function projectSoftwareId(project: (typeof ECOSYSTEM_PROJECTS)[number]) {
   return project.id === 'agentfootprint'
-    ? 'https://footprintjs.github.io/agentfootprint/#software'
+    ? 'https://agentfootprint.dev/#software'
     : `${project.url}#software`;
 }
-

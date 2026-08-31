@@ -2,7 +2,7 @@
 
 A Next.js 16 + [Fumadocs](https://fumadocs.dev) (React-native, AI-native) documentation
 site for **agentfootprint** — the published docs at
-https://footprintjs.github.io/agentfootprint/. (Migrated from a former Astro/Starlight
+https://agentfootprint.dev/. (Migrated from a former Astro/Starlight
 site, now removed.)
 
 ## Why Fumadocs (vs the Starlight site)

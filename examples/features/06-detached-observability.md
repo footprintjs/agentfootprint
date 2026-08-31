@@ -1,7 +1,7 @@
 ---
 name: Detached observability
 group: Features
-guide: https://footprintjs.github.io/agentfootprint/features/observability/#detach
+guide: https://agentfootprint.dev/docs/monitor/observability/#detach-modes
 ---
 
 # Detached observability — non-blocking telemetry export

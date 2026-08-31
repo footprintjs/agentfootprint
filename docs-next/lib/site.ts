@@ -4,12 +4,12 @@ import { ECOSYSTEM_PROJECTS } from './ecosystem';
  * Single source of truth for site-wide SEO constants — consumed by the root metadata,
  * sitemap, robots, OG image, JSON-LD, and per-page canonical tags.
  *
- * `url` is the FULL deployed origin INCLUDING the GitHub-Pages project base path, so
- * absolute links built as `SITE.url + path` are correct regardless of Next's basePath
- * handling. Keep this in sync with next.config `basePath` at deploy.
+ * `url` is the canonical custom-domain origin. Absolute links built as
+ * `SITE.url + path` must never point back to the legacy github.io project URL.
+ * Keep this in sync with the GitHub Pages custom-domain setting.
  */
 export const SITE = {
-  url: 'https://footprintjs.github.io/agentfootprint',
+  url: 'https://agentfootprint.dev',
   name: 'agentfootprint',
   title: 'agentfootprint — the explainable AI-agent framework',
   tagline: 'Inject less. Trace more.',

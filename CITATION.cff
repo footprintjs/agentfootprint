@@ -7,7 +7,7 @@ authors:
     given-names: "Sanjay Krishna"
 license: MIT
 repository-code: "https://github.com/footprintjs/agentfootprint"
-url: "https://footprintjs.github.io/agentfootprint/"
+url: "https://agentfootprint.dev/"
 keywords:
   - "explainable AI agents"
   - "context engineering"
