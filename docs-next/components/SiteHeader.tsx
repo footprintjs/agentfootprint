@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSearchContext } from 'fumadocs-ui/contexts/search';
@@ -55,6 +56,24 @@ export function SiteHeader() {
   const onDocs = pathname?.startsWith('/docs') ?? false;
   const onFeatures = pathname?.startsWith('/features') ?? false;
   const onHowItWorks = pathname?.startsWith('/how-it-works') ?? false;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // A drawer that survives navigation is a drawer covering the page you just
+  // asked for, so it closes on every route change. Escape closes it too — a
+  // panel you can open with one tap and cannot dismiss with the keyboard is not
+  // finished.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   // "Home" is the current page only when we are on neither of the other two — otherwise /features
   // would light up Home as well (the whole site outside /docs used to be "home").
   const onHome = !onDocs && !onFeatures && !onHowItWorks;
@@ -90,6 +109,21 @@ export function SiteHeader() {
           </span>
         </button>
 
+        <button
+          type="button"
+          className="af-sh-burger"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          aria-controls="af-sh-drawer"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className={`af-sh-burger-bars${menuOpen ? ' is-open' : ''}`} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
+
         <nav className="af-sh-nav" aria-label="Primary">
           {/* af-sh-home marks the one link the phone header can afford to drop: the wordmark to
               its left is already the home link, so nothing becomes unreachable. */}
@@ -112,7 +146,7 @@ export function SiteHeader() {
           <Link
             href="/features"
             prefetch={false}
-            className={`af-sh-link${onFeatures ? ' on' : ''}`}
+            className={`af-sh-link af-sh-features${onFeatures ? ' on' : ''}`}
             aria-current={onFeatures ? 'page' : undefined}
           >
             Features
@@ -145,6 +179,33 @@ export function SiteHeader() {
             <MenuIcon />
           </SidebarTrigger>
         )}
+      </div>
+
+      {/* The drawer holds every primary link, so nothing has to be dropped at
+          small widths any more — hiding nav items was the workaround this
+          replaces. */}
+      <div
+        id="af-sh-drawer"
+        className={`af-sh-drawer${menuOpen ? ' is-open' : ''}`}
+        hidden={!menuOpen}
+      >
+        <nav aria-label="Primary, mobile">
+          <Link href="/" prefetch={false} aria-current={onHome ? 'page' : undefined}>
+            Home
+          </Link>
+          <Link href="/how-it-works" prefetch={false} aria-current={onHowItWorks ? 'page' : undefined}>
+            How it works
+          </Link>
+          <Link href="/features" prefetch={false} aria-current={onFeatures ? 'page' : undefined}>
+            Features
+          </Link>
+          <Link href="/docs" prefetch={false} aria-current={onDocs ? 'page' : undefined}>
+            Docs
+          </Link>
+          <a href="https://github.com/footprintjs/agentfootprint" target="_blank" rel="noreferrer">
+            GitHub ↗
+          </a>
+        </nav>
       </div>
     </header>
   );

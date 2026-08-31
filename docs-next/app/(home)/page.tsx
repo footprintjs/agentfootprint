@@ -129,14 +129,23 @@ export default function HomePage() {
 
         <div className="v21-hero-row">
           <div className="v21-hero-say">
-          <p className="v21-lede">
-            It builds and runs agents the way you expect — skills, tools, a loop.
-            Then it keeps the evidence, says what it could not check, and refuses instead of
-            guessing.
-          </p>
+          <ul className="v21-lede-points">
+            <li>
+              <strong>Builds and runs agents</strong> the way you expect — skills, tools, a loop.
+            </li>
+            <li>
+              <strong>Keeps the evidence</strong> — every decision, and what it rests on.
+            </li>
+            <li>
+              <strong>Says what it could not check</strong> — the boundary travels with the answer.
+            </li>
+            <li>
+              <strong>Refuses instead of guessing</strong> — when the evidence is not there.
+            </li>
+          </ul>
           <div className="v2-actions">
             <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
-              Build your SkillGraph <span aria-hidden="true">→</span>
+              Build your agent with a skill graph <span aria-hidden="true">→</span>
             </Link>
             <Link className="v2-button v2-button-quiet" href="#rerun">
               Inspect a recorded run <span aria-hidden="true">↓</span>
@@ -391,7 +400,7 @@ export default function HomePage() {
         <div className="v21-try-actions">
           <code>npm i agentfootprint</code>
           <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
-            Build your first skill graph <span aria-hidden="true">→</span>
+            Build your first agent <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="https://github.com/footprintjs/agentfootprint">
             Star on GitHub

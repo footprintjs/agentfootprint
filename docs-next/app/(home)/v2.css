@@ -2102,3 +2102,88 @@ html {
     justify-content: center;
   }
 }
+
+
+/* ── The phase rail on small screens ───────────────────────────────────────
+   It was sticky AND stacked, so four full-width cards pinned themselves over
+   the page and the blur showed the content sliding underneath. On a phone it
+   becomes a single scrollable row of compact chips and stops being sticky
+   altogether — a position indicator is not worth a third of the viewport. */
+@media (max-width: 900px) {
+  .v21-phases {
+    position: static;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-block: 4px;
+    backdrop-filter: none;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .v21-phases::-webkit-scrollbar {
+    display: none;
+  }
+  .v21-phases a {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 999px;
+  }
+  .v21-phases a:not(.is-active) {
+    opacity: 0.72;
+    background: transparent;
+  }
+  .v21-phases small {
+    display: none;
+  }
+  .v21-phases strong {
+    font-size: 15px;
+  }
+}
+
+
+/* Ordering matters here: the two-column rule for .v21-hero-row is written later
+   in this file than the first mobile override, so it won. Restated after it. */
+@media (max-width: 980px) {
+  .v21-hero-row {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .v21-hero .v21-faces svg {
+    max-width: 420px;
+  }
+}
+
+
+/* The lede reads as four claims, not one paragraph. Each opens with the verb in
+   bold so the four promises can be taken in at a glance, and the qualifier
+   after the dash is there for the reader who slows down. */
+.v21-lede-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+  max-width: 48ch;
+  text-align: left;
+}
+.v21-lede-points li {
+  position: relative;
+  color: var(--fg-muted);
+  font-size: clamp(15.5px, 1.4vw, 17.5px);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.v21-lede-points strong {
+  color: var(--fg);
+  font-weight: 740;
+}
+
+@media (max-width: 980px) {
+  .v21-lede-points {
+    margin-inline: auto;
+  }
+}

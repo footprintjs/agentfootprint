@@ -157,7 +157,13 @@ html {
   align-items: center;
   gap: 18px;
 }
+.af-sh-nav .af-sh-link {
+  white-space: nowrap;
+}
 .af-sh-link {
+  /* Never wrap a nav label. "How it works" broke onto three lines on a phone
+     and tore the header apart. */
+  white-space: nowrap;
   font-size: 14px;
   text-decoration: none;
   color: color-mix(in oklab, var(--fg) 65%, transparent);
@@ -216,6 +222,14 @@ html {
   }
   .af-sh-home {
     display: none;
+  }
+  /* Every primary link moves into the drawer at this width; the inline nav is
+     hidden rather than thinned, so nothing is unreachable and nothing wraps. */
+  .af-sh-nav {
+    display: none;
+  }
+  .af-sh-burger {
+    display: inline-flex;
   }
   .af-sh-theme {
     flex: none;
@@ -317,5 +331,116 @@ html {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+
+/* At the very narrow end the header row was 10px wider than the viewport — the
+   theme toggle hung past the right edge and gave the whole page a horizontal
+   scroll. Tighten the row's own spacing rather than clipping the document,
+   which would hide the next overflow instead of showing it. */
+@media (max-width: 420px) {
+  /* .af-sh-inner is the padded row, not .af-sh — the toggle is its last child
+     and was hanging 18px past the viewport, giving the whole page a sideways
+     scroll. */
+  .af-sh-inner {
+    padding-inline: 10px;
+    gap: 8px;
+  }
+  .af-sh-nav {
+    gap: 10px;
+  }
+  .af-sh-search {
+    min-width: 0;
+  }
+}
+
+
+/* ── The mobile drawer ─────────────────────────────────────────────────────
+   Standard practice, and it replaces the earlier workaround of dropping nav
+   links at small widths — a link you cannot reach is worse than a tap to open
+   a panel. */
+.af-sh-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.af-sh-burger-bars {
+  display: grid;
+  gap: 4px;
+  width: 17px;
+}
+.af-sh-burger-bars i {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.af-sh-burger-bars.is-open i:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.af-sh-burger-bars.is-open i:nth-child(2) {
+  opacity: 0;
+}
+.af-sh-burger-bars.is-open i:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.af-sh-drawer {
+  border-top: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  background: var(--bg-elev, #fff);
+}
+.af-sh-drawer nav {
+  display: grid;
+  padding: 8px 14px 14px;
+}
+.af-sh-drawer a {
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.07));
+  color: inherit;
+  font-size: 16px;
+  font-weight: 620;
+  text-decoration: none;
+}
+.af-sh-drawer a:last-child {
+  border-bottom: 0;
+}
+.af-sh-drawer a[aria-current='page'] {
+  color: var(--yellow-dark, #b58900);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af-sh-burger-bars i {
+    transition: none;
+  }
+}
+
+/* If a phone-sized viewport opens the drawer and is then widened, the toggle
+   disappears. Keep its panel from being stranded open on the desktop layout. */
+@media (min-width: 641px) {
+  .af-sh-drawer {
+    display: none;
+  }
+}
+
+
+/* Appended LAST on purpose. The base `.af-sh-burger { display: none }` is
+   defined below the 640px block, so a show-rule written up there loses to it.
+   Cascade order, not specificity — this is the third time that has bitten in
+   this file, so it is stated rather than left to be rediscovered. */
+@media (max-width: 640px) {
+  .af-sh-burger {
+    display: inline-flex;
+  }
+  .af-sh-nav {
+    display: none;
   }
 }
