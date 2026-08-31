@@ -14,14 +14,39 @@ import './v2.css';
 
 const HOME_TITLE = 'agentfootprint — Your agent decides what a person used to';
 const HOME_DESC =
-  'Open-source TypeScript runtime for SkillGraph applications. When an agent takes a decision a person used to make, the reasoning stops surviving — so every run records why it decided what it did, states what it could not check, and lets you confirm a cause by re-running without it.';
+  'Open-source TypeScript runtime for SkillGraph applications. Turn procedures into executable graphs, keep evidence and decisions joined to each run, record what could not be checked, and rerun without a source to test its effect.';
 
-/** The three phases. Ids must match the section headings they open. */
+/** The four phases. Ids must match the section headings they open. */
 const PHASES = [
-  { id: 'build', step: '01', name: 'Build', what: 'Define the work as a skill graph. Route data by reference.' },
-  { id: 'iterate', step: '02', name: 'Iterate', what: 'Open the recorded run. Fix the context, not the model.' },
-  { id: 'production', step: '03', name: 'Run in production', what: 'Your models, your storage, your telemetry. Typed ports, no lock-in.' },
-  { id: 'monitor', step: '04', name: 'Monitor', what: 'Query a month of runs without rebuilding the story first.' },
+  {
+    id: 'build',
+    step: '01',
+    name: 'Build',
+    what: 'declare → attach → build',
+    apis: ['defineTool()', 'defineSkill()', 'defineSkillMap()', '.skillGraph()'],
+  },
+  {
+    id: 'debug',
+    step: '02',
+    name: 'Debug',
+    what: 'view → localize → rerun',
+    apis: ['traceDebugAgent()', 'localizeContextBug()', 'rerunWithoutSources()'],
+    betaApis: ['localizeContextBug()', 'rerunWithoutSources()'],
+  },
+  {
+    id: 'production',
+    step: '03',
+    name: 'Run in production',
+    what: 'serve → persist → survive → govern',
+    apis: ['standingAgent()', 'sqliteSessions()', 'withRetry()', 'PermissionPolicy.fromRoles()'],
+  },
+  {
+    id: 'monitor',
+    step: '04',
+    name: 'Monitor',
+    what: 'watch → export → archive → learn',
+    apis: ['.on()', '.enable.observability()', 'persistRecording()', 'contextLedger()'],
+  },
 ] as const;
 
 /** Everything the runtime needs to actually run somewhere, as PORTS with the
@@ -131,23 +156,26 @@ export default function HomePage() {
           <div className="v21-hero-say">
           <ul className="v21-lede-points">
             <li>
-              <strong>Builds and runs agents</strong> the way you expect — skills, tools, a loop.
+              <strong>Begin at the current step.</strong> The graph defines the instructions and
+              working context available there.
             </li>
             <li>
-              <strong>Keeps the evidence</strong> — every decision, and what it rests on.
+              <strong>Act, then observe.</strong> Models and tools return evidence to the run.
             </li>
             <li>
-              <strong>Says what it could not check</strong> — the boundary travels with the answer.
+              <strong>Advance through the graph.</strong> The next transition can be linear,
+              rule-based, or model-selected.
             </li>
             <li>
-              <strong>Refuses instead of guessing</strong> — when the evidence is not there.
+              <strong>Keep the path as it runs.</strong> Context → decision → action → outcome stay
+              connected.
             </li>
           </ul>
           <div className="v2-actions">
             <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
               Build your agent with a skill graph <span aria-hidden="true">→</span>
             </Link>
-            <Link className="v2-button v2-button-quiet" href="#rerun">
+            <Link className="v2-button v2-button-quiet" href="#lenses">
               Inspect a recorded run <span aria-hidden="true">↓</span>
             </Link>
           </div>
@@ -156,13 +184,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PhaseRail phases={PHASES} />
-
       <EvolutionStory />
+
+      <header className="v21-lifecycle-bridge">
+        <p className="v2-kicker">A developer&rsquo;s operating model</p>
+        <h2>Four stages. The API you need at each one.</h2>
+      </header>
+
+      <PhaseRail phases={PHASES} />
 
       <header className="v21-phase-head" id="build">
         <p className="v2-kicker">01 · Build</p>
-        <h2>Define the work. The agent runs it.</h2>
+        <h2>Turn the runbook into a path the agent can walk.</h2>
       </header>
 
       <section className="v21-scene" id="skillgraph" aria-labelledby="v21-skillgraph-title">
@@ -189,46 +222,49 @@ export default function HomePage() {
         <ReferenceFlow />
       </section>
 
-      <header className="v21-phase-head" id="iterate">
-        <p className="v2-kicker">02 · Iterate</p>
-        <h2>The run already recorded why. Go and read it.</h2>
+      <header className="v21-phase-head" id="debug">
+        <p className="v2-kicker">02 · Debug</p>
+        <h2>Open the run before you change the agent.</h2>
       </header>
 
-      <section className="v21-scene" id="rerun" aria-labelledby="v21-rerun-title">
-        <header className="v21-scene-copy">
-          <p className="v2-kicker">Prove</p>
-          <h2 id="v21-rerun-title">Remove the source. Rerun the case.</h2>
-          <p>Changed output confirms dependence in this recorded run—not hidden reasoning.</p>
-          <Link href="/docs/debug/rerun-without-sources">Test a source →</Link>
-        </header>
-        <RerunProof />
-      </section>
-
-      <section className="v21-production" id="lenses" aria-labelledby="v21-iterate-title">
+      <section className="v21-production" id="lenses" aria-labelledby="v21-debug-title">
         <header className="v21-production-head">
-          <p className="v2-kicker">The lenses</p>
-          <h2 id="v21-iterate-title">Open the run the way you open devtools.</h2>
+          <p className="v2-kicker">View · five lenses</p>
+          <h2 id="v21-debug-title">One recorded run. Five ways to inspect it.</h2>
         </header>
 
         <LensBand />
 
-        <nav className="v21-paths" aria-label="Iterate on a recorded run">
+        <nav className="v21-paths" aria-label="Debug a recorded run">
           <Link href="/how-it-works">
             <span>See one failed run</span>
             <strong>Five layers of evidence</strong>
             <i aria-hidden="true">→</i>
           </Link>
           <Link href="/docs/debug/rerun-without-sources">
-            <span>Confirm the cause</span>
-            <strong>Re-run without it</strong>
+            <span>Test dependence</span>
+            <strong>Rerun without a source</strong>
             <i aria-hidden="true">→</i>
           </Link>
         </nav>
       </section>
 
+      <section className="v21-scene" id="rerun" aria-labelledby="v21-rerun-title">
+        <header className="v21-scene-copy">
+          <p className="v2-kicker">Test</p>
+          <h2 id="v21-rerun-title">Remove one source. Rerun the case.</h2>
+          <p>
+            If the output changes under the same baseline, you have evidence of dependence in this
+            case—not hidden reasoning.
+          </p>
+          <Link href="/docs/debug/rerun-without-sources">Test a source →</Link>
+        </header>
+        <RerunProof />
+      </section>
+
       <header className="v21-phase-head" id="production">
         <p className="v2-kicker">03 · Run in production</p>
-        <h2>Change the cloud. Keep the agent.</h2>
+        <h2>Serve on your stack. Keep the graph.</h2>
       </header>
 
       <section className="v21-scene" id="ports" aria-labelledby="v21-ports-title">
@@ -330,46 +366,41 @@ export default function HomePage() {
 
       <section className="v21-production" id="monitor" aria-labelledby="v21-monitor-title">
         <header className="v21-production-head">
-          <p className="v2-kicker">04 · Monitor · in progress</p>
-          <h2 id="v21-monitor-title">Most of what you pay to understand agents is reassembly.</h2>
+          <p className="v2-kicker">04 · Monitor</p>
+          <h2 id="v21-monitor-title">Watch, export, archive, and learn from the same event stream.</h2>
         </header>
 
         <section className="v21-adapters" aria-labelledby="v21-monitor-why">
           <header>
-            <strong id="v21-monitor-why">Nothing to stitch back together</strong>
+            <strong id="v21-monitor-why">The monitoring foundation ships today</strong>
             <span>
-              Everywhere else, runs are stored as fragments and the story is rebuilt later —
-              correlate the ids, infer the causality, decide which line belonged to which
-              decision. You pay for that twice: once for the pipeline that does it, and again in
-              the confidence it never quite gives you, because a plausible reconstruction looks
-              exactly like a correct one. A footprint run arrives already joined: the key tying a
-              tool call to the evidence under it is written when the call happens, not derived
-              afterwards.
+              Subscribe to typed events while the agent runs, send them to your existing backend,
+              or persist the complete recording. The joins are written during traversal, so each
+              downstream tool starts from the same connected run.
             </span>
           </header>
           <ul>
             <li>
-              <strong>The question no one else can ask</strong>
+              <strong>Watch and export</strong>
               <small>
-                Every run states what it could NOT check. Aggregate that across a month and you
-                are looking at where your data coverage actually fails — a pattern nobody can
-                compute from logs, because nobody else writes it down.
+                Use <code>.on()</code> for typed decisions, tools, cost, errors, and coverage; mount
+                {' '}<code>.enable.observability()</code> to send the same stream to OTel,
+                CloudWatch, NDJSON, or an audit bundle.
               </small>
             </li>
             <li>
-              <strong>Cost, from the other direction</strong>
+              <strong>Archive the joined run</strong>
               <small>
-                No reassembly pipeline to run, and context scoped per step rather than a flat
-                tool surface — the same reason one team reached better evaluated answers on a
-                cheaper model.
+                <code>recordRun()</code> captures state, events, and structure together;
+                {' '}<code>persistRecording()</code> writes the versioned envelope to your sink.
               </small>
             </li>
             <li>
-              <strong>What is true today</strong>
+              <strong>Learn across runs</strong>
               <small>
-                The recording contract this reads is shipping now, and every run already carries
-                it. The library that queries across sessions is under construction — so this
-                section describes where it is going, not what you can install this afternoon.
+                <code>contextLedger()</code> already aggregates which skills, tools, and injections
+                earned their context. Dedicated cross-session coverage-gap queries are in progress;
+                today, aggregate the typed absence and coverage events in your sink.
               </small>
             </li>
           </ul>

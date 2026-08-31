@@ -156,7 +156,7 @@
 .v2-button-quiet:hover {
   border-color: var(--yellow-dark);
 }
-/* Two histories: two yellow rails converge into the runtime. */
+/* The context handoff becomes an executable, recorded progression. */
 .v2-evolution {
   position: relative;
   min-height: 190vh;
@@ -346,6 +346,20 @@
 }
 .v2-convergence strong {
   font-size: 12px;
+}
+
+.v21-lifecycle-bridge {
+  width: min(100%, 880px);
+  margin-inline: auto;
+  padding: clamp(72px, 10vh, 112px) var(--v2-pad) 34px;
+  text-align: center;
+}
+.v21-lifecycle-bridge h2 {
+  margin: 12px auto 0;
+  font-size: clamp(32px, 4vw, 52px);
+  letter-spacing: -0.05em;
+  line-height: 1;
+  text-wrap: balance;
 }
 
 /* Each product scene keeps the same visual object: a yellow trace enters and exits. */
@@ -1082,6 +1096,10 @@
     background: var(--yellow);
     color: #18181b;
   }
+  .v21-lifecycle-bridge {
+    padding-top: 56px;
+    text-align: left;
+  }
   .v21-scene,
   .v21-scene-reverse {
     grid-template-columns: 1fr;
@@ -1298,12 +1316,9 @@
   }
 }
 
-/* ── The three phases ──────────────────────────────────────────────────────
-   Build / Iterate / Run were all ON the page and none of them were VISIBLE:
-   a reader met numbered scenes and had to infer the shape. This names the
-   shape once, directly under the hero, and links into it. The scenes below
-   carry words instead of numbers so the reader is never counting two
-   sequences at the same time. */
+/* ── The developer's four-stage API map ────────────────────────────────────
+   The rail is both navigation and a compact operating model: each stage names
+   the developer action sequence and the real public APIs that implement it. */
 .v21-phases {
   position: sticky;
   /* Sits directly under the docs nav; the spy reads this element's own bottom
@@ -1320,9 +1335,9 @@
 }
 .v21-phases a {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr;
   gap: 6px;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--bg-elev);
@@ -1349,9 +1364,38 @@
 }
 .v21-phases small {
   color: var(--fg-muted);
-  font-size: 14px;
-  line-height: 1.5;
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  line-height: 1.4;
   text-wrap: pretty;
+}
+.v21-phase-apis {
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.v21-phase-apis code {
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg) 74%, transparent);
+  color: var(--fg);
+  font-family: var(--v2-mono);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.v21-phase-apis sup {
+  margin-left: 3px;
+  color: var(--yellow-ink);
+  font-size: 8px;
+  font-weight: 900;
 }
 
 /* The phase heading that opens each group, so the strip above has somewhere
@@ -1439,11 +1483,11 @@
 /* An anchor jump must clear the docs nav AND the sticky rail, or the heading
    lands underneath both. */
 html {
-  scroll-padding-top: calc(var(--fd-nav-height, 56px) + 132px);
+  scroll-padding-top: calc(var(--fd-nav-height, 56px) + 178px);
 }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   html {
-    scroll-padding-top: calc(var(--fd-nav-height, 56px) + 88px);
+    scroll-padding-top: calc(var(--fd-nav-height, 56px) + 24px);
   }
 }
 
@@ -2105,42 +2149,52 @@ html {
 
 
 /* ── The phase rail on small screens ───────────────────────────────────────
-   It was sticky AND stacked, so four full-width cards pinned themselves over
-   the page and the blur showed the content sliding underneath. On a phone it
-   becomes a single scrollable row of compact chips and stops being sticky
-   altogether — a position indicator is not worth a third of the viewport. */
-@media (max-width: 900px) {
+   The full API cards remain visible, but stop sticking so they never consume
+   the reading viewport. Two columns become one on a phone. */
+@media (max-width: 1100px) {
   .v21-phases {
     position: static;
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     padding-block: 4px;
     backdrop-filter: none;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .v21-phases::-webkit-scrollbar {
-    display: none;
   }
   .v21-phases a {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 999px;
+    padding: 14px;
   }
   .v21-phases a:not(.is-active) {
     opacity: 0.72;
     background: transparent;
   }
-  .v21-phases small {
+  .v21-phases strong {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .v21-phases {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 821px) {
+  .v2-evolution {
+    min-height: auto;
+    padding-block: 80px;
+  }
+  .v2-evolution-sticky {
+    position: static;
+    min-height: 0;
+    padding-block: 0;
+  }
+  .v2-evolution-head > p {
     display: none;
   }
-  .v21-phases strong {
-    font-size: 15px;
+  .v2-dual-rail {
+    margin-top: 24px;
+  }
+  .v2-rail-stages li {
+    min-height: 54px;
   }
 }
 

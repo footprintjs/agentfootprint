@@ -1,7 +1,7 @@
 import { asset } from '@/lib/site';
 
 /**
- * Six faces of an answer you can trust.
+ * Six facets of an inspectable agent run.
  *
  * The hero's own device, carried over from HexaVisage — the same author's
  * earlier statement of this idea, where six labelled hexagons sat under the
@@ -12,20 +12,19 @@ import { asset } from '@/lib/site';
  *
  * The six here are not the original six. Those describe a self-explaining
  * SYSTEM (structure, connection, topology, traversal, replay, explanation);
- * these describe a trustworthy ANSWER, which is what this page sells, and they
- * map one-to-one onto the hero sentence: it keeps the evidence, says what it
- * could not check, and refuses instead of guessing.
+ * these describe an inspectable RUN: the decision and its declared basis, the
+ * boundary around what was available, and the rerun used to test dependence.
  *
  * Pure SVG, no dependency, no animation — the one moving thing in this hero is
  * the live dot in the eyebrow, and a second would compete with it.
  */
 const FACES = [
-  { label: 'Evidence', hint: 'what it saw' },
+  { label: 'Evidence', hint: 'what was available' },
   { label: 'Decision', hint: 'what it chose' },
-  { label: 'Reason', hint: 'why it chose it' },
-  { label: 'Coverage', hint: 'what it could not check' },
-  { label: 'Refusal', hint: 'when it will not guess' },
-  { label: 'Replay', hint: 'prove the cause' },
+  { label: 'Reason', hint: 'its declared basis' },
+  { label: 'Coverage', hint: 'what was missing' },
+  { label: 'Refusal', hint: 'where it stopped' },
+  { label: 'Replay', hint: 'test dependence' },
 ] as const;
 
 /** Flat-top hexagon path of a given radius, centred on the origin. */
@@ -45,8 +44,8 @@ export function AnswerFaces() {
     <figure className="v21-faces">
       <svg viewBox="-210 -196 420 424" role="img" aria-labelledby="faces-title">
         <title id="faces-title">
-          Six faces of an answer you can trust: evidence, decision, reason, coverage, refusal and
-          replay, arranged around one recorded run.
+          Six inspectable facets of an agent run: evidence, decision, reason, coverage, refusal and
+          replay.
         </title>
 
         {/* Edges between neighbours — the ring that makes six points read as one
@@ -111,7 +110,7 @@ export function AnswerFaces() {
           preserveAspectRatio="xMidYMid meet"
         />
       </svg>
-      <figcaption>Six faces of an answer you can trust.</figcaption>
+      <figcaption>Six facets of an inspectable agent run.</figcaption>
     </figure>
   );
 }

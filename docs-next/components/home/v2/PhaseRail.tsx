@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * The three phases as a STICKY rail that knows where you are.
+ * The four phases as a STICKY rail that knows where you are.
  *
- * Build / Iterate / Run were all on the page and none of them were visible as a
+ * Build / Debug / Run / Monitor were all on the page and none of them were visible as a
  * shape — a reader met numbered scenes and had to infer the structure. The rail
  * names the shape once, keeps it on screen while you read, and lights the phase
  * you are actually standing in.
@@ -29,7 +29,12 @@ export interface Phase {
   /** The step number, shown small. Decorative — the name carries the meaning. */
   readonly step: string;
   readonly name: string;
+  /** The developer action sequence for this stage. */
   readonly what: string;
+  /** Real public APIs that implement the sequence. */
+  readonly apis: readonly string[];
+  /** APIs that ship but still carry a beta stability marker. */
+  readonly betaApis?: readonly string[];
 }
 
 export function PhaseRail({ phases }: { phases: readonly Phase[] }) {
@@ -96,7 +101,7 @@ export function PhaseRail({ phases }: { phases: readonly Phase[] }) {
     <nav
       ref={railRef}
       className="v21-phases"
-      aria-label="How agentfootprint fits your work"
+      aria-label="AgentFootprint developer stages and public APIs"
     >
       {phases.map((phase) => {
         const isActive = phase.id === active;
@@ -110,6 +115,14 @@ export function PhaseRail({ phases }: { phases: readonly Phase[] }) {
             <span aria-hidden="true">{phase.step}</span>
             <strong>{phase.name}</strong>
             <small>{phase.what}</small>
+            <div className="v21-phase-apis" aria-label={`Core APIs: ${phase.apis.join(', ')}`}>
+              {phase.apis.map((api) => (
+                <code key={api}>
+                  {api}
+                  {phase.betaApis?.includes(api) ? <sup title="Beta">β</sup> : null}
+                </code>
+              ))}
+            </div>
           </a>
         );
       })}

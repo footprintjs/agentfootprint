@@ -4,10 +4,11 @@ import { useRef, type CSSProperties } from 'react';
 import { useScrollProgress } from '@/lib/home/useScrollProgress';
 
 const STAGES = [
-  { model: 'Text', application: 'Prompt' },
-  { model: 'Tools', application: 'Loop' },
-  { model: 'Skills', application: 'Graph' },
-  { model: 'Feedback', application: 'Replay' },
+  { model: 'Human', application: 'carries context between systems' },
+  { model: 'Agent', application: 'inherits the same responsibility' },
+  { model: 'Whole runbook', application: 'loads every instruction at once' },
+  { model: 'Current step', application: 'reveals what is needed now' },
+  { model: 'Traversal', application: 'advances and records together' },
 ] as const;
 
 export function EvolutionStory() {
@@ -25,15 +26,15 @@ export function EvolutionStory() {
     >
       <div className="v2-evolution-sticky">
         <header className="v2-evolution-head">
-          <span className="v2-kicker">From prompt to production</span>
-          <h2 id="v2-evolution-title">Prompts became systems. Systems need a runtime.</h2>
-          <p>Scroll the two histories into one.</p>
+          <span className="v2-kicker">The handoff</span>
+          <h2 id="v2-evolution-title">An agent inherits the context a person used to carry.</h2>
+          <p>Then the runbook has to become executable.</p>
         </header>
 
         <div className="v2-dual-rail">
           <div className="v2-rail-labels">
-            <span>Model interface</span>
-            <span>Application control</span>
+            <span>The progression</span>
+            <span>What changes</span>
           </div>
           <ol className="v2-rail-stages">
             {STAGES.map((stage, index) => (
@@ -57,7 +58,7 @@ export function EvolutionStory() {
           </div>
           <p className="v2-convergence">
             <span aria-hidden="true">AF</span>
-            <strong>One graph for procedure, context, and evidence.</strong>
+            <strong>The path is already a footprint as it runs.</strong>
           </p>
         </div>
       </div>
