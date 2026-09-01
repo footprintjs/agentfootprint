@@ -88,7 +88,6 @@ jobs:
         working-directory: docs-next
         env:
           EXPORT: 'true'
-          NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
         run: npm run build
       - name: Enforce site performance budgets
         working-directory: docs-next

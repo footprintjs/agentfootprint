@@ -16,8 +16,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const docs: MetadataRoute.Sitemap = source.getPages().map((page) => {
     const isApi = page.url.startsWith('/docs/api');
+    const canonicalPath = page.url.endsWith('/') ? page.url : `${page.url}/`;
     return {
-      url: `${SITE.url}${page.url}`,
+      url: `${SITE.url}${canonicalPath}`,
       changeFrequency: isApi ? 'monthly' : 'weekly',
       // hand-written guides rank above the auto-generated API reference
       priority: page.url === '/docs' ? 0.9 : isApi ? 0.3 : 0.6,

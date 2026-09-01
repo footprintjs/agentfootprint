@@ -83,14 +83,13 @@ jobs:
         working-directory: docs-next
         run: npm install
 
-      # Built as the STATIC EXPORT, with the same EXPORT/basePath env docs.yml
+      # Built as the STATIC EXPORT, with the same root-path env docs.yml
       # deploys with, so this job measures the artifact that actually ships
       # instead of a near-miss of it. Same page render, same twoslash gate.
       - name: Build docs-next static export (twoslash-gates every code block)
         working-directory: docs-next
         env:
           EXPORT: 'true'
-          NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
         run: npm run build
 
       # Site-budget RATCHET, on every push and PR — the visible half of the gate.
