@@ -309,7 +309,7 @@ if (!report.ok) throw new Error(formatCheckup(report));
 The full architecture of the skill graph — the three surfaces, the authority rule, the
 nine cursor causes, the three-way `read_skill`, and a worked refusal taken from a real
 run — is published as **Skill graph architecture**:
-<https://footprintjs.github.io/agentfootprint/docs/build/skill-graph-architecture/>.
+<https://agentfootprint.dev/docs/build/skill-graph-architecture/>.
 Every capability claim there carries a status — `shipped` / `opt-in` /
 `application-provided` / `planned` — and every code block is type-checked against the
 shipped types at build. Read it rather than this file when the question is "how does
