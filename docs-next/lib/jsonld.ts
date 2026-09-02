@@ -47,6 +47,7 @@ export function siteJsonLd() {
         '@id': `${SITE.url}/#website`,
         url: `${SITE.url}/`,
         name: SITE.name,
+        alternateName: ['AgentFootprint', 'Agent Footprint', 'agentfootprint.dev'],
         description: SITE.description,
         inLanguage: 'en',
         publisher: { '@id': ORGANIZATION_ID },

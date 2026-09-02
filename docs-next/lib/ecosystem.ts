@@ -12,7 +12,7 @@ export const ECOSYSTEM_PROJECTS = [
   {
     id: 'agentfootprint',
     name: 'AgentFootprint',
-    aliases: ['agentfootprint'],
+    aliases: ['agentfootprint', 'Agent Footprint'],
     description:
       'Context provenance and causal debugging for AI agents, including influence ranking, ablation, and counterfactual replay.',
     url: 'https://agentfootprint.dev/',

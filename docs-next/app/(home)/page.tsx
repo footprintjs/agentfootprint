@@ -12,9 +12,9 @@ import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
 import './v2.css';
 
-const HOME_TITLE = 'agentfootprint — Your agent decides what a person used to';
+const HOME_TITLE = 'agentfootprint — Explainable AI agent framework for TypeScript';
 const HOME_DESC =
-  'Open-source TypeScript runtime for SkillGraph applications. Turn procedures into executable graphs, keep evidence and decisions joined to each run, record what could not be checked, and rerun without a source to test its effect.';
+  'agentfootprint is an open-source TypeScript framework for explainable AI agents. Trace context, decisions, and tools, then replay runs to prove what caused each result.';
 
 /** The four phases. Ids must match the section headings they open. */
 const PHASES = [
@@ -125,7 +125,8 @@ export default function HomePage() {
             <span /> Open-source TypeScript agent framework
           </p>
           <h1>
-            Your agent decides what a person used to. <em>Only one of them leaves a reason.</em>
+            agentfootprint: Your agent decides what a person used to.{' '}
+            <em>Only one of them leaves a reason.</em>
           </h1>
           {/* Developer proof, not logos. Every figure here is real and checkable:
               downloads from the npm registry API, the licence from the repo, the
