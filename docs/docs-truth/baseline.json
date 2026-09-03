@@ -2,26 +2,26 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-28",
+  "recordedAt": "2026-09-03",
   "surface": {
     "subpaths": 15,
-    "declaredSymbols": 2017,
-    "declaredEvents": 108,
-    "eventSource": "src/events/registry.ts:762"
+    "declaredSymbols": 2075,
+    "declaredEvents": 109,
+    "eventSource": "src/events/registry.ts:768"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 1053,
+      "documented-never-exercised": 1112,
       "exercised-undocumented": 34,
-      "undocumented-unexercised": 600,
+      "undocumented-unexercised": 599,
       "site-code-sample-only": 12,
       "written-but-not-published": 113,
       "ok": 205
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 15,
+      "documented-never-exercised": 16,
       "exercised-undocumented": 10,
       "undocumented-unexercised": 13,
       "site-code-sample-only": 5,
@@ -277,7 +277,6 @@
     "Finder",
     "FinderMeta",
     "FlowBreakEvent",
-    "FlowDecisionEvent",
     "FlowErrorEvent",
     "FlowForkEvent",
     "FlowLoopEvent",

@@ -20,6 +20,7 @@
 import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
 import type { ToolResultStatus } from './toolOutcome.js';
+import { isSaidByPerson } from '../saidByPerson.js';
 import { renderTemplate } from './promptTemplate.js';
 
 // ─── Trigger — WHEN does this Injection activate? ──────────────────
@@ -143,11 +144,40 @@ export interface InjectionContext {
   /**
    * Conversation history up to (but not including) the current
    * iteration's LLM call. Includes prior iterations within the same turn.
+   *
+   * **Not everything with `role: 'user'` here was said by a person.** This
+   * library writes five kinds of user-role message itself — a compaction
+   * frame, a drop notice (whose text NAMES TOOLS), a schema-check correction,
+   * an evidence-check correction (which QUOTES the model's own values), and a
+   * message an Injection delivered — and all five sit in this list beside the
+   * real ones. Read the person's messages with {@link saidByPerson}; a
+   * predicate that scans raw `history` for a phrase will sooner or later match
+   * our own bookkeeping.
    */
   readonly history: ReadonlyArray<{
     readonly role: ContextRole;
     readonly content: string;
     readonly toolName?: string;
+    /**
+     * WHO let this message in, when it was not the conversation (9.84.0).
+     *
+     * Present exactly when an Injection's `messages` slot delivered it — the
+     * same marker `LLMMessage.injectedBy` carries, narrowed to the two fields
+     * a routing decision has any business reading. It was on the object all
+     * along; until 9.84.0 this type hid it, so a rule could hand-match the
+     * four authored frames by their opening text and still not see this, the
+     * fifth library-written class.
+     *
+     * Absent on every message that came from the conversation itself, which
+     * is what makes `injectedBy === undefined` half of the rule
+     * {@link saidByPerson} applies.
+     */
+    readonly injectedBy?: {
+      /** The `Injection.id` that produced this message. */
+      readonly injectionId: string;
+      /** The injection's flavor — the `source` the slot records. */
+      readonly flavor: ContextSource;
+    };
   }>;
   /**
    * The most recent tool result, if the previous iteration ended in a
@@ -325,6 +355,34 @@ export function toolResultsOf(ctx: InjectionContext): ReadonlyArray<{
   readonly status?: ToolResultStatus;
 }> {
   return ctx.toolResults ?? (ctx.lastToolResult ? [ctx.lastToolResult] : []);
+}
+
+/**
+ * The messages in `ctx.history` a PERSON actually wrote, in order (9.84.0).
+ * THE one reader for a predicate that judges what was said.
+ *
+ * Five kinds of `role: 'user'` message in that list came from this library,
+ * not from anybody: a compaction frame, a drop notice, the two in-loop
+ * corrections, and a message an Injection delivered. They are ours, they are
+ * in the person's voice, one of them names tools and two quote text the model
+ * or a validator produced — so a rule written as
+ *
+ * ```ts
+ * activeWhen: (ctx) => ctx.history.some((m) => m.content.includes('refund'))
+ * ```
+ *
+ * fires on a summary of a refund conversation and on a notice saying the
+ * refund tool's result was dropped. Written as
+ * `saidByPerson(ctx).some(...)`, it fires only when somebody said it.
+ *
+ * The test itself is `isSaidByPerson` in `lib/saidByPerson.ts` — the same
+ * function the window's refusal engine uses to decide which message it may
+ * never drop, imported rather than restated so the two answers cannot differ.
+ *
+ * @param ctx the iteration context a trigger or entry rule was handed
+ */
+export function saidByPerson(ctx: InjectionContext): InjectionContext['history'] {
+  return ctx.history.filter(isSaidByPerson);
 }
 
 // ─── The primitive ─────────────────────────────────────────────────

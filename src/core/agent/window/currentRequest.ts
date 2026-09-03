@@ -44,28 +44,23 @@
  *      is stated rather than hidden: earlier turns of a multi-turn
  *      conversation stay droppable exactly as they were.
  *
- * "The person said it" is deliberately narrow. Three kinds of `role: 'user'`
+ * "The person said it" is deliberately narrow. Five kinds of `role: 'user'`
  * message are written by this LIBRARY, not by anybody: a drop notice, a
- * compaction frame, and a message an {@link Injection} delivered (which
- * carries `injectedBy`). None of them may become the anchor — otherwise the
+ * compaction frame, the two in-loop corrections (schema check, evidence
+ * check), and a message an {@link Injection} delivered (which carries
+ * `injectedBy`). None of them may become the anchor — otherwise the
  * window would protect its own bookkeeping and drop the request underneath
  * it, and a tool able to influence an injection could pin its own text in
  * context permanently.
+ *
+ * That rule is no longer written here. Since 9.84.0 it is `isSaidByPerson` in
+ * `lib/saidByPerson.ts`, a leaf the injection engine can import too — a rule
+ * author reading `InjectionContext.history` has to be able to apply the same
+ * test this file applies, and two copies of it would drift.
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
-import { isDropNotice } from './notice.js';
-import { isCompactedSummary } from './summarize.js';
-
-/** True when this message is something a PERSON said, not something we wrote. */
-function isSomethingTheySaid(msg: LLMMessage): boolean {
-  return (
-    msg.role === 'user' &&
-    msg.injectedBy === undefined &&
-    !isDropNotice(msg) &&
-    !isCompactedSummary(msg)
-  );
-}
+import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 
 /**
  * Index in `history` of the current request — the message no window strategy
@@ -85,7 +80,7 @@ export function currentRequestIndexOf(history: readonly LLMMessage[], said?: str
   let latest = -1;
   for (let i = history.length - 1; i >= 0; i--) {
     const msg = history[i]!;
-    if (!isSomethingTheySaid(msg)) continue;
+    if (!isSaidByPerson(msg)) continue;
     if (said !== undefined && msg.content === said) return i;
     if (latest === -1) latest = i;
   }

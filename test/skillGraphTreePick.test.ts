@@ -170,16 +170,26 @@ describe('tree pick — flat graphs are unchanged', () => {
     expect(active.some((ids) => ids.includes('beta'))).toBe(true);
   });
 
-  it('a flat graph at a dead end keeps the ORIGINAL refusal, not the tree one', async () => {
+  it('a flat graph at a dead end never gets the TREE message — it gets the self-call one', async () => {
     const a = leaf('alpha');
     const g = skillGraph({ skills: [a], start: 'alpha', check: 'off' });
     const { toolResults } = await jump((x) => x.system('s').skillGraph(g), 'alpha');
-    // Cold start reaches only `alpha`, and picking the CURRENT skill is excluded
-    // deliberately (a "stay" is the no-tool-call stop), so this dead-ends.
     const text = toolResults.join('\n');
-    if (text.includes('not reachable from here')) {
-      expect(text).not.toContain('cannot move a decision tree');
-    }
+    // This pick is a SELF-CALL (cursor alpha, picks alpha), which is why the
+    // original assertion had to be guarded by `if (text.includes(...))` — and why
+    // that guard turned the test vacuous the moment the self-call stopped being
+    // reported as unreachable. Assert the branch it actually takes.
+    expect(text).not.toContain('cannot move a decision tree'); // the point of the test
+    expect(text).not.toContain('is not reachable from here');
+    expect(text).toContain('named the skill you were already standing in');
+    // A one-node graph has nowhere else to go — and neither does any other, as
+    // far as this message is concerned. The notice names no destination at all
+    // now (see `selfCallNotice`): a tool result is re-read on every later call
+    // of the turn, so an id named as reachable is a prediction the budget, the
+    // posture arm or a cursor move can falsify after the sentence is written.
+    // The `read_skill` description owns that list, and is recomposed per call.
+    expect(text).not.toContain('reachable from here');
+    expect(text).not.toContain('MOVES you');
   });
 });
 

@@ -2416,6 +2416,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       return buildReadSkillTool(skills, {
         ...(grantable !== undefined && { grantable }),
         ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
+        // WHERE THE MODEL STANDS (9.84.0) — unconditional, unlike the menu below.
+        // The description names it, and stops listing it as unreachable.
+        ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
         // The turn-start menu (SG-C) — the tools slot passes it only while the
         // verdict is outstanding; describeOffer leads with it.
         ...(args.menu !== undefined && { menu: args.menu }),
@@ -3539,6 +3542,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // so concurrent runs don't share state.
     const providerToolCache: ProviderToolCache = { current: [] };
     const readSkillFor = this.readSkillOfferFor();
+    // Per-role skill visibility. Resolved by the tools slot, for the DESCRIPTION
+    // and nothing else. An earlier draft of 9.84.0 cached the resolved ids here
+    // so the read_skill gate could filter the self-call notice's move offer
+    // through them; the notice no longer names a destination at all (see
+    // `selfCallNotice`), so there is nothing left to filter and the cache is
+    // gone with the clause that needed it. One resolver call per iteration, on
+    // the one surface that speaks in the present tense.
     const hiddenSkillIds = this.hiddenSkillIdsNow();
     // Registration-time owner stamps (9.60.0) — the identity edges the
     // integrity checks read. Built once per chart from the registry.

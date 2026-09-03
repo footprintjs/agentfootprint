@@ -173,6 +173,52 @@ describe('integration: the keyword trap parks after renewalGrace idle passes', (
     expect(reengaged?.payload).toMatchObject({ by: 'explicit', iteration: 5 });
   });
 
+  it('a SELF-CALL at a parked cursor re-engages — it does not get the self-call notice', async () => {
+    // 9.84.0 ordering. The self-call arm sits between re-engagement and
+    // reachability on purpose: the cursor never left `zone-audit`, so picking it
+    // back IS the re-engagement door, and re-engaging beats telling the model
+    // about tools the park has just taken off the wire.
+    const toolResults: string[] = [];
+    const caps = capture();
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          call('c1', 'screen_open'),
+          call('c2', 'screen_open'),
+          call('c3', 'screen_open'),
+          call('c4', 'read_skill', { id: 'zone-audit' }),
+          final,
+        ] as never,
+      }),
+      model: 'mock',
+      maxIterations: 8,
+    })
+      .system('s')
+      .tool(screenTool)
+      .skillGraph(trapGraph())
+      .maps({ renewalGrace: 3 })
+      .watch({
+        id: 'results',
+        onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+          if (e.name === 'agentfootprint.stream.tool_end')
+            toolResults.push(String(e.payload?.result ?? ''));
+        },
+      })
+      .watch(caps.recorder)
+      .build();
+    await agent.run(TRAP_MESSAGE);
+
+    const reengaged = caps.mapEvents.find(
+      (e) => e.name === 'agentfootprint.map.engaged' && e.payload.reengaged === true,
+    );
+    expect(reengaged?.payload).toMatchObject({ by: 'explicit' });
+    // The pick was ADMITTED, so neither refusal sentence was ever composed.
+    // (Guard against a vacuous pass: the read_skill result really was captured.)
+    expect(toolResults.join('\n')).toContain("Skill 'zone-audit' activated");
+    expect(toolResults.join('\n')).not.toContain('You are already in');
+    expect(toolResults.join('\n')).not.toContain('is not reachable from here');
+  });
+
   it("calling the map's own tool renews the lease — no park, ever", async () => {
     const { agent, evaluated, mapEvents } = buildTrapAgent({
       replies: [

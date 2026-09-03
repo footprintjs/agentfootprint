@@ -37,6 +37,7 @@
 import type { LLMMessage, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
 import { fnv1a } from '../slots/helpers.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../outputSchema.js';
+import { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 
 // ─── The ledger ──────────────────────────────────────────────────────
 
@@ -141,8 +142,9 @@ export function describeFailure(err: unknown): OutputFailure {
 
 // ─── The corrective turn ─────────────────────────────────────────────
 
-/** Opening of the authored frame. Stable — tests and readers match on it. */
-export const SCHEMA_CHECK_FRAME_PREFIX = '[schema check';
+// The marker lives in the authorship registry both this file and a rule author
+// can import (9.84.0) — see `lib/saidByPerson.ts`. The frame below is ours.
+export { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 
 /**
  * The two messages a failed attempt adds to the conversation: the answer

@@ -33,6 +33,13 @@ export { projectActiveInjection } from './types.js';
 // a parallel batch, not only the last (`ctx.toolResults ?? [ctx.lastToolResult]`).
 export { toolResultsOf } from './types.js';
 
+// The messages a PERSON wrote (9.84.0) — the one reader for a predicate that
+// judges what was said. `ctx.history` also holds the five user-role messages
+// this library writes itself (compaction frame, drop notice, schema-check
+// correction, evidence-check correction, delivered message), and a rule
+// scanning it raw matches our own bookkeeping.
+export { saidByPerson } from './types.js';
+
 // Engine
 export { evaluateInjections } from './evaluator.js';
 export {

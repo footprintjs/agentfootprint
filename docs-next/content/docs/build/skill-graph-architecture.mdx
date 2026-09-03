@@ -22,12 +22,12 @@ aspiration and a shipped behaviour read identically, and four load-bearing
 statements turned out to be wrong. A status column cannot fix a wrong sentence,
 but it makes an aspiration unable to wear the same clothes as a fact.
 
-| Status | Means |
-|---|---|
-| **shipped** | Present in 9.36.0 and on by default. Calling it is enough. |
-| **opt-in** | Present in 9.36.0 and **off** until you ask for it by name. The default behaviour is the older one. |
-| **application-provided** | The library gives you the seam and the vocabulary. The behaviour is code you write. |
-| **planned** | Designed and **not built**. Do not call it; it does not exist. |
+| Status                   | Means                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| **shipped**              | Present in 9.36.0 and on by default. Calling it is enough.                                          |
+| **opt-in**               | Present in 9.36.0 and **off** until you ask for it by name. The default behaviour is the older one. |
+| **application-provided** | The library gives you the seam and the vocabulary. The behaviour is code you write.                 |
+| **planned**              | Designed and **not built**. Do not call it; it does not exist.                                      |
 
 ---
 
@@ -48,24 +48,24 @@ gating, few-shot examples — is content placed into one of those three, under
 some condition. agentfootprint has one primitive for that (`Injection`) and
 named factories on top of it.
 
-| Surface | What a skill puts there | Rebuilt each iteration? | Status |
-|---|---|---|---|
-| system prompt | the active skill's `body` (its standing instructions) | yes, under the default `reactMode: 'dynamic'` | **shipped** |
-| tools | the active skill's `tools` (its capabilities) | yes, under the default `reactMode: 'dynamic'` | **shipped** |
-| messages | tool results, and `slot: 'messages'` injections the Deliver stage appends | **no** — a message is written once, at the position where it happened | **shipped** |
+| Surface       | What a skill puts there                                                   | Rebuilt each iteration?                                               | Status      |
+| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------- |
+| system prompt | the active skill's `body` (its standing instructions)                     | yes, under the default `reactMode: 'dynamic'`                         | **shipped** |
+| tools         | the active skill's `tools` (its capabilities)                             | yes, under the default `reactMode: 'dynamic'`                         | **shipped** |
+| messages      | tool results, and `slot: 'messages'` injections the Deliver stage appends | **no** — a message is written once, at the position where it happened | **shipped** |
 
 The middle column is the whole of this chapter. Two of those surfaces are
-*recomposed*; one *accumulates*.
+_recomposed_; one _accumulates_.
 
 ## Action tools and navigation tools
 
 A skill graph puts two different kinds of tool on the wire, and confusing them
 is the most common way to misread a run.
 
-| Kind | Examples | What the call does | Status |
-|---|---|---|---|
-| **action tool** | `lookup_order`, `issue_refund` — tools you wrote | does something in the world and returns the answer. The *result* is the point. | **shipped** (you supply the tools) |
-| **navigation tool** | `read_skill`, `list_skills`, `skip_step` — auto-attached by the library | changes what the model will be **told next turn**. The result is a receipt; the effect lands on the next iteration's surfaces. | **shipped** |
+| Kind                | Examples                                                                | What the call does                                                                                                             | Status                             |
+| ------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| **action tool**     | `lookup_order`, `issue_refund` — tools you wrote                        | does something in the world and returns the answer. The _result_ is the point.                                                 | **shipped** (you supply the tools) |
+| **navigation tool** | `read_skill`, `list_skills`, `skip_step` — auto-attached by the library | changes what the model will be **told next turn**. The result is a receipt; the effect lands on the next iteration's surfaces. | **shipped**                        |
 
 `read_skill` is the load-bearing navigation tool, and its `execute` is
 deliberately almost empty — it returns a confirmation string (or, under
@@ -183,15 +183,15 @@ still navigate is not broken. **shipped**
 
 Nothing about a skill graph asks a model to decide something you already know.
 
-| Mechanism | Decided by | Status |
-|---|---|---|
-| `match: /refund\|money back/i` on a start rule | a regular expression | **shipped** |
-| `match: { keywords: ['charge', 'invoice'] }` | whole-word, case-insensitive, any-of | **shipped** |
-| `match: { all: [...] }` | a conjunction — every listed member must match | **shipped** |
-| `when: (ctx) => …` on an entry or route | your predicate, given the whole `InjectionContext` | **application-provided** |
-| `onToolReturn: 'get_invoice'` on a route edge | a named tool returning at all | **shipped** |
-| `onToolStatus: 'denied'` on a route edge | a tool result's *declared* outcome, from a six-value vocabulary | **shipped** |
-| `match: { intent, examples }` + `classify` | a scorer you name — keyword, embedding, or a model | **opt-in** |
+| Mechanism                                      | Decided by                                                      | Status                   |
+| ---------------------------------------------- | --------------------------------------------------------------- | ------------------------ |
+| `match: /refund\|money back/i` on a start rule | a regular expression                                            | **shipped**              |
+| `match: { keywords: ['charge', 'invoice'] }`   | whole-word, case-insensitive, any-of                            | **shipped**              |
+| `match: { all: [...] }`                        | a conjunction — every listed member must match                  | **shipped**              |
+| `when: (ctx) => …` on an entry or route        | your predicate, given the whole `InjectionContext`              | **application-provided** |
+| `onToolReturn: 'get_invoice'` on a route edge  | a named tool returning at all                                   | **shipped**              |
+| `onToolStatus: 'denied'` on a route edge       | a tool result's _declared_ outcome, from a six-value vocabulary | **shipped**              |
+| `match: { intent, examples }` + `classify`     | a scorer you name — keyword, embedding, or a model              | **opt-in**               |
 
 The first six put no model in the routing loop. Only the last one does, and it
 is off unless you configure `classify`. A rule declared as **data** also draws
@@ -201,7 +201,7 @@ routing review is a picture review.
 ## The honest version of "extracted, not invented"
 
 There is a strong claim in circulation about skill graphs: that an agentic
-application is *extracted* from a workflow you already have, not invented. The
+application is _extracted_ from a workflow you already have, not invented. The
 code does not support the strong version, and this page will not make it.
 
 **The graph is provenance-agnostic.** `skillGraph()` compiles a graph you
@@ -217,8 +217,8 @@ edge to fire without naming the tool return that justifies it. You cannot pass
 workflow becomes reviewable — which is the real benefit, and it is available
 whether or not the workflow pre-existed.
 
-**Where the code IS opinionated is the tools.** A `SKILL.md` file may *name*
-tools; it may never *define* one. `tools:` in frontmatter is a list of strings,
+**Where the code IS opinionated is the tools.** A `SKILL.md` file may _name_
+tools; it may never _define_ one. `tools:` in frontmatter is a list of strings,
 matched against `tool.schema.name` in a registry you constructed in your own
 source from your own imports. A name the registry does not carry is refused at
 load, by name. So the set of things a directory of skill files can do is a
@@ -277,15 +277,15 @@ const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
 
 Two statuses on that snippet, and they matter:
 
-| Claim | Status |
-|---|---|
-| `skillsFromDir` loads prose bodies from `SKILL.md` files | **shipped** |
-| the same files carry `tools:`, `steps:` and `onSkip:` | **shipped** (9.36.0 — before that, prose only) |
-| the same files carry `routes:`, read by `runbookFromDir` into `{ skills, steps }` | **shipped** (9.43.0). `skillsFromDir` refuses a file that declares routing rather than dropping it |
-| a `routes:` guard can be a `when` predicate | **not supported, by design** — a predicate is code, nothing in a `SKILL.md` is evaluated; the file picks `on <tool>` / `status=<outcome>`, and any other conditional stays in `skillGraph({ steps })` |
-| `.toolsFromActiveSkill()` scopes every skill's tools to that skill's activation | **opt-in** (default flips in 10.0.0) |
-| a loaded skill can set its own `autoActivate` from frontmatter | **not supported, by design** — a directory does not decide the agent's tool posture |
-| `skillsFromDir` reads a URL | **refused by name** — authorship is a security property, so local paths only |
+| Claim                                                                             | Status                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skillsFromDir` loads prose bodies from `SKILL.md` files                          | **shipped**                                                                                                                                                                                           |
+| the same files carry `tools:`, `steps:` and `onSkip:`                             | **shipped** (9.36.0 — before that, prose only)                                                                                                                                                        |
+| the same files carry `routes:`, read by `runbookFromDir` into `{ skills, steps }` | **shipped** (9.43.0). `skillsFromDir` refuses a file that declares routing rather than dropping it                                                                                                    |
+| a `routes:` guard can be a `when` predicate                                       | **not supported, by design** — a predicate is code, nothing in a `SKILL.md` is evaluated; the file picks `on <tool>` / `status=<outcome>`, and any other conditional stays in `skillGraph({ steps })` |
+| `.toolsFromActiveSkill()` scopes every skill's tools to that skill's activation   | **opt-in** (default flips in 10.0.0)                                                                                                                                                                  |
+| a loaded skill can set its own `autoActivate` from frontmatter                    | **not supported, by design** — a directory does not decide the agent's tool posture                                                                                                                   |
+| `skillsFromDir` reads a URL                                                       | **refused by name** — authorship is a security property, so local paths only                                                                                                                          |
 
 `.toolsFromActiveSkill()` governs the **offer**, not dispatch: a tool stays
 resolvable by name so an active skill's call lands. If you need execution itself
@@ -326,17 +326,17 @@ pick the gate refused.
 Anyone who has read a three-tier description of skill-graph routing has read
 about three of these. The interesting ones are the other six.
 
-| `cursorMove.by` | The cursor moved because… | Status |
-|---|---|---|
-| `'entry'` | cold start: the first entry whose rule passed. On a cascade graph, a tier-1 start rule won the turn. | **shipped** |
-| `'route'` | a declared, `from`-gated edge fired — a tool returned, or returned with a declared status. | **shipped** |
+| `cursorMove.by`   | The cursor moved because…                                                                                                                                         | Status                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `'entry'`         | cold start: the first entry whose rule passed. On a cascade graph, a tier-1 start rule won the turn.                                                              | **shipped**                                                 |
+| `'route'`         | a declared, `from`-gated edge fired — a tool returned, or returned with a declared status.                                                                        | **shipped**                                                 |
 | `'tool-proposal'` | a **tool result** proposed a transition and the graph accepted it. Deterministic tool code, ranked below the author's declared edges and above the model's guess. | **opt-in** (a tool must emit a `propose-transition` effect) |
-| `'model-pick'` | no declared edge fired, so the model's gate-accepted `read_skill` pick moved it. | **shipped** |
-| `'intent'` | the turn-start cascade's tier-2 scorer decisively routed the turn. | **opt-in** (needs `classify`) |
-| `'continuity'` | the cursor **inherited from the previous turn** held the start of this one. | **opt-in** (needs `continuity: 'conversation'`) |
-| `'decider'` | a configured out-of-band decider resolved an outstanding menu before the loop started. | **opt-in** (needs `decider`) |
-| `'stay'` | nothing fired. The cursor is sticky and stayed exactly where it was. | **shipped** |
-| `'none'` | there is no cursor at all — a cold start with nothing to enter, or a decision `tree()`, which routes by predicate and has no cursor to move. | **shipped** |
+| `'model-pick'`    | no declared edge fired, so the model's gate-accepted `read_skill` pick moved it.                                                                                  | **shipped**                                                 |
+| `'intent'`        | the turn-start cascade's tier-2 scorer decisively routed the turn.                                                                                                | **opt-in** (needs `classify`)                               |
+| `'continuity'`    | the cursor **inherited from the previous turn** held the start of this one.                                                                                       | **opt-in** (needs `continuity: 'conversation'`)             |
+| `'decider'`       | a configured out-of-band decider resolved an outstanding menu before the loop started.                                                                            | **opt-in** (needs `decider`)                                |
+| `'stay'`          | nothing fired. The cursor is sticky and stayed exactly where it was.                                                                                              | **shipped**                                                 |
+| `'none'`          | there is no cursor at all — a cold start with nothing to enter, or a decision `tree()`, which routes by predicate and has no cursor to move.                      | **shipped**                                                 |
 
 Three of those are what make it a program counter rather than a classifier:
 
@@ -347,7 +347,7 @@ Three of those are what make it a program counter rather than a classifier:
   absence of one. A run that stayed in `triage` for six iterations has six
   recorded `'stay'` decisions, which is what lets you tell "it decided to stay"
   from "nothing was evaluated".
-- **`'tool-proposal'`** — a tool *result* can move the cursor. That is evidence
+- **`'tool-proposal'`** — a tool _result_ can move the cursor. That is evidence
   arriving mid-run and changing what happens next, which no turn-start
   classifier can express.
 
@@ -364,7 +364,7 @@ The author's declared route always wins — a model guess never overrides
 determinism you pinned, and deterministic tool code outranks a guess. **Nothing
 is silently dropped:** a suppressed pick emits
 `agentfootprint.skill.reroute_superseded` with what was picked and what won, and
-two results of one parallel batch matching edges to *different* targets emit
+two results of one parallel batch matching edges to _different_ targets emit
 `agentfootprint.skill.route_conflict` with the winner and the suppressed losers.
 **shipped**
 
@@ -396,7 +396,10 @@ const graph = skillGraph({
     rules: [
       {
         use: 'billing',
-        match: { intent: 'customer wants a refund', examples: ['refund my order', 'charged twice'] },
+        match: {
+          intent: 'customer wants a refund',
+          examples: ['refund my order', 'charged twice'],
+        },
       },
       {
         use: 'shipping',
@@ -420,16 +423,16 @@ const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
 The turn-start cascade has three tiers, and the classifier is **not** at tier 3.
 The code labels its own tiers:
 
-| Tier | What decides | Status |
-|---|---|---|
-| **tier 1** | declared start rules — regex, keywords, `when` — in declaration order. Binary and decisive. | **shipped** |
-| **tier 2** | the **configured scorer**: either the intent classifier over declared intents, or the entry scorer over descriptions. Judged by a floor plus a top-two pairwise margin; **near-ties fall through rather than argmax**. | **opt-in** |
-| **tier 3** | a **menu** the model resolves in-band, through `read_skill`'s own description, with STAY first-class mid-conversation. | **opt-in** (fires only when tier 2 declines) |
+| Tier       | What decides                                                                                                                                                                                                           | Status                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **tier 1** | declared start rules — regex, keywords, `when` — in declaration order. Binary and decisive.                                                                                                                            | **shipped**                                  |
+| **tier 2** | the **configured scorer**: either the intent classifier over declared intents, or the entry scorer over descriptions. Judged by a floor plus a top-two pairwise margin; **near-ties fall through rather than argmax**. | **opt-in**                                   |
+| **tier 3** | a **menu** the model resolves in-band, through `read_skill`'s own description, with STAY first-class mid-conversation.                                                                                                 | **opt-in** (fires only when tier 2 declines) |
 
 The LLM classifier (`llmClassifier`) is a **tier-2 strategy** — one of three
 interchangeable scorers, beside `keywordScorer()` and `embeddingScorer()`. It is
 not a separate tier, and putting it at tier 3 inverts the design: tier 3 exists
-precisely for the case where *no* scorer was decisive.
+precisely for the case where _no_ scorer was decisive.
 
 The cascade is also zero-cost when unused. A graph with no `classify` and no
 `continuity: 'conversation'` mounts no stage, writes no key, and emits no new
@@ -453,12 +456,12 @@ const answer = await agent.run({ message: 'where is my parcel?' });
 
 `agent.run(input, options?)` is the door.
 
-| Symbol | Shape | Status |
-|---|---|---|
-| `AgentInput` | `{ message: string; identity?: MemoryIdentity; continueFrom?: AgentRunCheckpoint }` | **shipped** |
-| `AgentOutput` | `string` | **shipped** |
+| Symbol                   | Shape                                                                                                                                         | Status      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `AgentInput`             | `{ message: string; identity?: MemoryIdentity; continueFrom?: AgentRunCheckpoint }`                                                           | **shipped** |
+| `AgentOutput`            | `string`                                                                                                                                      | **shipped** |
 | `agent.run(...)` returns | `AgentOutput \| RunnerPauseOutcome` — a run that paused for a human returns a checkpoint, not a string. Discriminate with `isPaused(result)`. | **shipped** |
-| `options` | `AgentRunOptions` — `sessionId`, `correlationId`, `traceId`, `identity`, … | **shipped** |
+| `options`                | `AgentRunOptions` — `sessionId`, `correlationId`, `traceId`, `identity`, …                                                                    | **shipped** |
 
 `run()` is **one turn**. Without `continueFrom` it seeds history from this call's
 message alone, so a second `run()` starts a new conversation and the model will
@@ -467,22 +470,22 @@ same thing for the common case.
 
 ## The concept-to-symbol map
 
-| Concept in this page | Real symbol | Import from | Status |
-|---|---|---|---|
-| define a chapter | `defineSkill({ id, description, body, tools?, surfaceMode? })` | `agentfootprint/context` | **shipped** |
-| load chapters from files | `skillsFromDir(dir, { tools?, surfaceMode? })` | `agentfootprint/context` | **shipped** |
-| load the whole runbook — chapters AND their edges | `runbookFromDir(dir, opts?)` → `DirRunbook` | `agentfootprint/context` | **shipped** (9.43.0) |
-| pin that a phrase routes NOWHERE | `neverRoutes: [...]` / `.neverRoutes(...)` | `agentfootprint/context` | **shipped** (9.43.0) |
-| declare the book | `skillGraph()` (fluent) / `skillGraph({ skills, start?, steps? })` (object) | `agentfootprint/context` | **shipped** |
-| wire it to an agent | `.skillGraph(graph, { continuity?, strictness?, … })` | `agentfootprint` | **shipped** |
-| draw it | `graph.toMermaid()` | — | **shipped** |
-| lint it | `graph.checkup()`, `formatCheckup(result)` | `agentfootprint/context` | **shipped** |
-| ask where the cursor goes | `graph.nextSkill(ctx)` / `graph.explainNextSkill(ctx)` | — | **shipped** |
-| ask what is reachable | `graph.reachableSkills(currentSkillId?)` | — | **shipped** |
-| scope tools to the active skill | `.toolsFromActiveSkill()` | `agentfootprint` | **opt-in** |
-| require evidence for names and numbers | `.namesAndNumbersFromEvidence({ posture })` | `agentfootprint` | **opt-in** |
-| record the path the run took | `routeRecorder()` | `agentfootprint/observe` | **shipped** |
-| run the graph from a non-agentfootprint host | `agentfootprint/skill-graph` subpath | `agentfootprint/skill-graph` | **shipped** (import-graph proven; ergonomics unproven) |
+| Concept in this page                              | Real symbol                                                                 | Import from                  | Status                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------ |
+| define a chapter                                  | `defineSkill({ id, description, body, tools?, surfaceMode? })`              | `agentfootprint/context`     | **shipped**                                            |
+| load chapters from files                          | `skillsFromDir(dir, { tools?, surfaceMode? })`                              | `agentfootprint/context`     | **shipped**                                            |
+| load the whole runbook — chapters AND their edges | `runbookFromDir(dir, opts?)` → `DirRunbook`                                 | `agentfootprint/context`     | **shipped** (9.43.0)                                   |
+| pin that a phrase routes NOWHERE                  | `neverRoutes: [...]` / `.neverRoutes(...)`                                  | `agentfootprint/context`     | **shipped** (9.43.0)                                   |
+| declare the book                                  | `skillGraph()` (fluent) / `skillGraph({ skills, start?, steps? })` (object) | `agentfootprint/context`     | **shipped**                                            |
+| wire it to an agent                               | `.skillGraph(graph, { continuity?, strictness?, … })`                       | `agentfootprint`             | **shipped**                                            |
+| draw it                                           | `graph.toMermaid()`                                                         | —                            | **shipped**                                            |
+| lint it                                           | `graph.checkup()`, `formatCheckup(result)`                                  | `agentfootprint/context`     | **shipped**                                            |
+| ask where the cursor goes                         | `graph.nextSkill(ctx)` / `graph.explainNextSkill(ctx)`                      | —                            | **shipped**                                            |
+| ask what is reachable                             | `graph.reachableSkills(currentSkillId?)`                                    | —                            | **shipped**                                            |
+| scope tools to the active skill                   | `.toolsFromActiveSkill()`                                                   | `agentfootprint`             | **opt-in**                                             |
+| require evidence for names and numbers            | `.namesAndNumbersFromEvidence({ posture })`                                 | `agentfootprint`             | **opt-in**                                             |
+| record the path the run took                      | `routeRecorder()`                                                           | `agentfootprint/observe`     | **shipped**                                            |
+| run the graph from a non-agentfootprint host      | `agentfootprint/skill-graph` subpath                                        | `agentfootprint/skill-graph` | **shipped** (import-graph proven; ergonomics unproven) |
 
 ## `read_skill` has a three-way design
 
@@ -492,18 +495,18 @@ usually described as one list. It is three.
 For any given iteration, a registered skill is in exactly one of three states
 from the model's point of view:
 
-| State | In the tool **description**? | In the tool **enum**? | Why |
-|---|---|---|---|
-| **reachable** | yes — under `Reachable from here:` | yes | it is what the gate will grant from this cursor |
-| **refusable** | yes — under `Not reachable from here (read_skill for these will be refused):` | yes | a graph refusal is about **where the cursor is**. The skill exists for this caller; it is simply not reachable from *here*. Naming it lets the model route to it in one step instead of guessing. |
-| **hidden** | **no — not named at all** | yes | a hidden skill is about **who is asking**. No cursor move makes it available, and naming it would tell a role about a capability it will never be allowed to use — leaking the shape of somebody else's permissions into this model's prompt. |
+| State         | In the tool **description**?                                                  | In the tool **enum**? | Why                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **reachable** | yes — under `Reachable from here:`                                            | yes                   | it is what the gate will grant from this cursor                                                                                                                                                                                               |
+| **refusable** | yes — under `Not reachable from here (read_skill for these will be refused):` | yes                   | a graph refusal is about **where the cursor is**. The skill exists for this caller; it is simply not reachable from _here_. Naming it lets the model route to it in one step instead of guessing.                                             |
+| **hidden**    | **no — not named at all**                                                     | yes                   | a hidden skill is about **who is asking**. No cursor move makes it available, and naming it would tell a role about a capability it will never be allowed to use — leaking the shape of somebody else's permissions into this model's prompt. |
 
 The two treatments are opposite on purpose, and the reason is that they answer
 different questions. "Not reachable from here" is navigable information. "You may
 never see this" is not information the model should have.
 
 **The enum keeps the full catalog in every case**, including the hidden skills,
-and that is not an oversight. Tool-argument validation runs *before* the
+and that is not an oversight. Tool-argument validation runs _before_ the
 skill-graph gate. Narrowing the enum would turn a policy refusal into a generic
 schema error that the model never reads — retiring the gate's teaching refusal,
 the `agentfootprint.skill.rejected` event, `routeRecorder()`'s rejection hops and
@@ -511,14 +514,14 @@ the rejected-cap governor's only input, all four traded for one. The **offer** i
 narrowed in the description instead, which is what the model actually reads to
 choose.
 
-| Behaviour | Status |
-|---|---|
-| the description is rebuilt each iteration from the same reachability the gate enforces | **shipped** |
-| refusable skills are named rather than hidden | **shipped** |
-| hidden skills are removed from the description entirely | **opt-in** — requires a `PermissionChecker` that governs the `skill_read` capability; without one, nothing is hidden |
-| the hidden set is resolved **per iteration**, and fails closed if the checker throws | **shipped** |
-| the enum is the full catalog either way | **shipped** |
-| under `reactMode: 'classic'` the menu is built at turn 1 and cached, so it lists everything | **shipped limitation** — dev mode warns; use the default `'dynamic'` |
+| Behaviour                                                                                   | Status                                                                                                               |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| the description is rebuilt each iteration from the same reachability the gate enforces      | **shipped**                                                                                                          |
+| refusable skills are named rather than hidden                                               | **shipped**                                                                                                          |
+| hidden skills are removed from the description entirely                                     | **opt-in** — requires a `PermissionChecker` that governs the `skill_read` capability; without one, nothing is hidden |
+| the hidden set is resolved **per iteration**, and fails closed if the checker throws        | **shipped**                                                                                                          |
+| the enum is the full catalog either way                                                     | **shipped**                                                                                                          |
+| under `reactMode: 'classic'` the menu is built at turn 1 and cached, so it lists everything | **shipped limitation** — dev mode warns; use the default `'dynamic'`                                                 |
 
 ## What a host owes the graph
 
@@ -527,13 +530,13 @@ enforce its own gate. What a host must do is written down as a type,
 `SkillGraphHost`, with five obligations. It is documentation that type-checks —
 nothing constructs one and nothing consumes one.
 
-| Obligation | What it says | Status |
-|---|---|---|
-| 1 — one advance per iteration | build the iteration's context **once**, ask the graph where the cursor goes with that exact object, and evaluate every trigger with that exact object. The keystone. | **shipped** as a type; agentfootprint's own loop is the reference implementation |
-| 2 — enforce reachability at pick time | check `read_skill`'s id against `reachableSkills(cursor)` **before** treating the pick as real, and refuse teachingly. A host that skips this turns every declared edge into a suggestion. | **shipped** |
-| 3 — publish only an accepted pick | set `pendingSkillPick` only after obligation 2 said yes, and clear it every iteration. | **shipped** |
-| 4 — carry the cursor forward | this iteration's answer is the next iteration's `currentSkillId`. | **shipped** |
-| 5 — say what happened | emit activation, deactivation, refusal, and batch conflicts. A refusal the operator cannot see is the one this contract cares about. | **shipped** |
+| Obligation                            | What it says                                                                                                                                                                               | Status                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 1 — one advance per iteration         | build the iteration's context **once**, ask the graph where the cursor goes with that exact object, and evaluate every trigger with that exact object. The keystone.                       | **shipped** as a type; agentfootprint's own loop is the reference implementation |
+| 2 — enforce reachability at pick time | check `read_skill`'s id against `reachableSkills(cursor)` **before** treating the pick as real, and refuse teachingly. A host that skips this turns every declared edge into a suggestion. | **shipped**                                                                      |
+| 3 — publish only an accepted pick     | set `pendingSkillPick` only after obligation 2 said yes, and clear it every iteration.                                                                                                     | **shipped**                                                                      |
+| 4 — carry the cursor forward          | this iteration's answer is the next iteration's `currentSkillId`.                                                                                                                          | **shipped**                                                                      |
+| 5 — say what happened                 | emit activation, deactivation, refusal, and batch conflicts. A refusal the operator cannot see is the one this contract cares about.                                                       | **shipped**                                                                      |
 
 Two honest costs of the `agentfootprint/skill-graph` subpath, stated where the
 claim is made. `footprintjs` remains a required peer dependency — this door never
@@ -707,23 +710,95 @@ over `RouteOutcome` needs those nine cases.
 
 ---
 
+# Reading history in a rule
+
+An entry rule's `when` receives the whole `InjectionContext`, `history` included.
+That is the asymmetric case on purpose — a route edge's `when` sees only
+`{ toolName, result, status }` — and it is what makes history-reading rules the
+natural tool for a follow-up like _"and the hosts?"_, which names no product a
+regex could match.
+
+The trap is that **five classes of `role: 'user'` message in that history were
+written by this library, not by a person**:
+
+| The frame               | Written by                          | Why it bites                                                                           |
+| ----------------------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| `[compacted history …]` | a window strategy folding old turns | it is a paragraph of prose about the whole conversation                                |
+| `[dropped history …]`   | the drop notice                     | **its text names tools** — `Tool results are among them (powerstore_get_inventory, …)` |
+| `[schema check …]`      | output enforcement                  | it quotes the schema the model missed                                                  |
+| `[evidence check …]`    | the evidence gate                   | it quotes the values it could not ground                                               |
+| any delivered injection | `deliver`, marked `injectedBy`      | it is content you asked to be injected, arriving as a user turn                        |
+
+A rule that matches on `content` matches all of them. On a session long enough
+to fold, the newest message that is not the current one can be a summary
+paragraph — or a drop notice naming a tool from the topic you have just left —
+and the rule pins a skill off our own bookkeeping. That is a routing bug whose
+cause is invisible in the transcript, because the transcript is where the cause
+came from.
+
+`saidByPerson(ctx)` returns the history with all five removed:
+
+```ts
+import { skillGraph } from 'agentfootprint/skill-graph';
+import { saidByPerson } from 'agentfootprint/context';
+
+skillGraph({
+  skills: [esxiInventory, powerstoreTriage],
+  start: {
+    rules: [
+      {
+        use: 'esxi-inventory',
+        // "and the hosts?" names no product. Look at what the person said
+        // BEFORE it — and only at what the person said, so a drop notice
+        // that happens to mention an ESXi tool cannot answer for them.
+        when: (ctx) => {
+          const said = saidByPerson(ctx);
+          const previous = said[said.length - 2]?.content ?? '';
+          return /\b(esxi|vm|datastore)\b/i.test(previous);
+        },
+      },
+    ],
+  },
+});
+```
+
+The same rule for a single message is `isSaidByPerson(msg)`, and
+`isLibraryAuthoredFrame(msg)` is its complement — true for the four prefixed
+frames, false for a delivered injection, which is marked rather than prefixed.
+`LIBRARY_AUTHORED_PREFIXES` is the prefix list itself, exported so a consumer
+reading a stored transcript can apply the same test outside a run.
+`AuthoredMessage` is the minimum shape all three accept —
+`{ role, content, injectedBy? }` — so they work on `ctx.history` and on a saved
+transcript alike.
+
+There is one implementation, and the window's own refusal engine calls it too,
+so routing and compaction cannot come to different conclusions about who said
+what.
+
+**What this does not give you.** `saidByPerson` filters; it does not carry the
+topic forward. If you want the previous turn's skill to hold when no rule
+matches, that is `continuity: 'conversation'` on the mount — and note what it
+costs: with no tier 2 configured, an unmatched follow-up returns
+`{ by: 'continuity', to: inherited }` and **pins** the cursor where it was,
+where the default cold walk would at least have re-run your rules.
+
 # Four things that do not exist
 
 These are not hypothetical mistakes. A capable author working from a correct
 mental model of this system got all four wrong in one document, which makes them
 measured evidence about what a reader — human or model — will invent here.
 
-| The invention | The reality |
-|---|---|
-| `startRun(...)` | **There is no `startRun`.** The door is `agent.run(input, options?)` with `AgentInput = { message, identity?, continueFrom? }`. |
-| `RunStep` is the skill history | **`RunStep` is real and it is something else entirely** — the footprintjs flowchart **topology** slider. Its `kind` is `'sequential' \| 'fork' \| 'merge' \| 'decide' \| 'iteration' \| 'iteration-exit' \| 'react'`. Nothing in it is about skills. It is dangerous precisely because importing it succeeds. For skill history, use `routeRecorder()`. |
-| the LLM classifier is tier 3 | **It is a tier-2 strategy**, interchangeable with `keywordScorer()` and `embeddingScorer()`. Tier 3 is the menu the model resolves in-band through `read_skill`, and it exists for the case where tier 2 was *not* decisive. |
+| The invention                                         | The reality                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `startRun(...)`                                       | **There is no `startRun`.** The door is `agent.run(input, options?)` with `AgentInput = { message, identity?, continueFrom? }`.                                                                                                                                                                                                                                                                                                      |
+| `RunStep` is the skill history                        | **`RunStep` is real and it is something else entirely** — the footprintjs flowchart **topology** slider. Its `kind` is `'sequential' \| 'fork' \| 'merge' \| 'decide' \| 'iteration' \| 'iteration-exit' \| 'react'`. Nothing in it is about skills. It is dangerous precisely because importing it succeeds. For skill history, use `routeRecorder()`.                                                                              |
+| the LLM classifier is tier 3                          | **It is a tier-2 strategy**, interchangeable with `keywordScorer()` and `embeddingScorer()`. Tier 3 is the menu the model resolves in-band through `read_skill`, and it exists for the case where tier 2 was _not_ decisive.                                                                                                                                                                                                         |
 | a skill's tools are gated to that skill automatically | **They are not, by default.** `defineSkill({ tools })` puts them in the agent's static tool list at build time, visible from iteration 1 whether the skill is ever activated or not. Ask for the gate: `.toolsFromActiveSkill()` on the agent, `skillGraph({ scopeTools: true })` on the graph, or `autoActivate: 'currentSkill'` per skill. `.tree()` leaves are the one shape that scopes by default. The default flips in 10.0.0. |
 
 Two more absences worth naming while you are here:
 
 - **There is no runtime force-stop governor.** `routeRecorder().getTrips()`
-  *labels* a spinning run — oscillation, a run of refusals — and the iteration
+  _labels_ a spinning run — oscillation, a run of refusals — and the iteration
   cap is the only hard stop. **planned.**
 - **There is no automatic re-delivery of an ageing skill body.** See the
   authority rule above. **planned.**

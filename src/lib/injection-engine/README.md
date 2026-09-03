@@ -211,11 +211,38 @@ defineSkill({
 └────┬────┘
      │
      ▼
-┌─────────────────────┐
-│  InjectionEngine    │  ← evaluates every Injection's trigger,
-│  (this subflow)     │     writes activeInjections[] to scope,
-│                     │     emits agentfootprint.context.evaluated
-└────┬────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  Injection Engine (this subflow) — FOUR linear stages          │
+│                                                                │
+│  Gather    snapshot what this turn is being judged against     │
+│    │       → injectionContextSummary (observability only)      │
+│    ▼                                                           │
+│  Evaluate  build ONE InjectionContext, then — off that same    │
+│    │       object — advance the skill-graph cursor             │
+│    │       (nextSkillCursor), re-key the step pointer          │
+│    │       (nextStepPointer), sweep the instruction leases     │
+│    │       (nextInstructionLeases), advance map engagement     │
+│    │       (nextMapEngagement + parkedToolNames), and run      │
+│    │       every trigger → activeInjections[]                  │
+│    │       → emits agentfootprint.context.evaluated HERE       │
+│    ▼                                                           │
+│  Route     partition activeInjections by the slot(s) each      │
+│    │       contributes to                                      │
+│    │       → activeByslot { systemPrompt, messages, tools }    │
+│    ▼                                                           │
+│  Delta     this turn's buckets vs last turn's                  │
+│            (priorActiveByslot, carried in by the mount)        │
+│            → slotDelta: added / removed / kept, per slot       │
+└────┬───────────────────────────────────────────────────────────┘
+     │  the mount's outputMapper carries activeInjections +
+     │  activeByslot (and the advanced cursor / pointer / leases /
+     │  engagement) back onto the parent's keys
+     ▼
+   ──────────── the PARENT chart owns everything below ──────────
+┌────────────────────────────────────────────────────────────────┐
+│ Context — addSelectorFunction(…, { failFast: true })           │
+│ three subflow BRANCHES, selected together, run in PARALLEL     │
+└────┬───────────────────────────────────────────────────────────┘
      │
      ▼
 ┌────────────────┬─────────────────────┬─────────────────┐
@@ -248,7 +275,7 @@ defineSkill({
      │ — next iteration —
      │
      ▼
-   loop ↑    InjectionEngine runs AGAIN with updated state
+   loop ↑    the engine runs AGAIN with updated state
             (new toolResults batch, new activatedInjectionIds, new history)
             → activeInjections[] is DIFFERENT now → slots recompose
 ```
@@ -257,17 +284,38 @@ defineSkill({
 LLM sees a different prompt + different tools each pass because the
 state has evolved. That's "Dynamic ReAct."
 
+Three things the picture is easy to read backwards. **The fan-out is not
+the engine's** — the selector and its three branches are mounted in the
+agent chart (`buildAgentChart.ts`), one stage AFTER the engine subflow
+returns; the engine itself has no fork in it. **`failFast: true` is
+load-bearing** on that selector: without it footprintjs's default
+`allSettled` would swallow a throwing slot and call the LLM with a
+half-built request. And **which branches get selected is the whole
+classic-vs-dynamic difference** — `dynamic` picks all three every turn,
+`classic` picks all three on turn 1 and only Messages after that (the
+static slots' turn-1 outputs persist in scope, and that IS the cache).
+
+The loop's head is the engine only when no window strategy is mounted;
+with `.window()` / `.compaction()` the Compact stage sits immediately
+before it and becomes the loop target, so the window changes once per
+iteration boundary *before* the engine re-evaluates anything.
+
 ---
 
 ## Events emitted
 
 | Event | When | Payload |
 |---|---|---|
-| `agentfootprint.context.evaluated` | Engine subflow exit, once per iteration | `{ activeCount, skippedCount, evaluatedTotal, activeIds, skippedDetails, triggerKindCounts }` |
-| `agentfootprint.context.injected` | Per slot subflow, per InjectionRecord placed | full InjectionRecord with `slot`, `source` (= flavor), `reason`, `sourceId`, … |
-| `agentfootprint.context.slot_composed` | Per slot subflow exit | `{ slot, iteration, injections, dropped, budgetSpent }` |
+| `agentfootprint.context.evaluated` | Inside the engine's **Evaluate** stage — stage 2 of 4, not subflow exit — once per iteration | always `{ iteration, activeCount, skippedCount, evaluatedTotal, activeIds, skippedDetails, triggerKindCounts, skillCatalog }`; plus `routing` (build-time provenance, skill-graph injections only), `cursorMove` (this iteration's hop, skill-graph agents only) and `supersededIds` (entries the cursor law kept off the wire) each spread in only when there is something to say |
+| `agentfootprint.context.injected` | Per slot subflow, per record placed | `ContextInjectedPayload` — `slot`, `source` (= flavor), `sourceId`, `reason`, `contentSummary`, `contentHash`, … |
+| `agentfootprint.context.slot_composed` | Per slot subflow exit | `{ slot, iteration, budget: { cap, used, headroomChars }, sourceBreakdown, droppedCount, droppedSummaries, orderingStrategy? }` |
 
 Adding a flavor adds NO new events — just new `flavor`/`source` values.
+
+The Evaluate placement is not an accident to be tidied up later: the payload
+reports the evaluation that stage just performed, and emitting it there means
+the record carries the cursor move and the active set from the one moment both
+are in scope. Route and Delta run afterwards and add no facts to it.
 
 ---
 
@@ -421,8 +469,8 @@ not survive three minor releases. A fence does.
 
 | zone | files | may import |
 |---|---|---|
-| PURE CORE | the 18 files in the module map above, plus `types.ts` / `evaluator.ts` / `softmax.ts` | each other, and three verified zero-import leaves: `events/types.ts` (`ContextRole`/`ContextSource`), `memory/embedding/types.ts` (`Embedder`), `memory/embedding/cosine.ts` |
-| PROVIDER LAYER | `constrainedEnumPick.ts`, `llmClassifier.ts` | the above **plus** `adapters/types.ts` |
+| PURE CORE | the 24 files the fence test lists — every row of the module map above except the two provider-layer ones and `factories/defineMenuHint.ts`, plus `types.ts` / `evaluator.ts` / `promptTemplate.ts` / `skillEntryEvidence.ts` / `skillGuard.ts` / `skillSteps.ts` / `skillVocabulary.ts` / `softmax.ts` | each other, and five verified zero-import leaves: `events/types.ts` (`ContextRole`/`ContextSource`), `memory/embedding/types.ts` (`Embedder`), `memory/embedding/cosine.ts`, `lib/iterationBudget.ts` (`iterationsRemainingOf` — the one arithmetic the engine, the cache decision and the request assembly must not drift by one about), `lib/saidByPerson.ts` (`isSaidByPerson` — which `role: 'user'` message a PERSON wrote, the same rule the window's refusal engine applies, so routing and the window cannot answer it differently) |
+| PROVIDER LAYER | `constrainedEnumPick.ts`, `llmClassifier.ts` | the above **plus** `adapters/types.ts` and the closed type-only cluster it points at (`thinking/types.ts`, `cache/types.ts`, `lib/claim/claim.ts`) |
 
 The provider layer is deliberately outside the pure boundary, and
 deliberately **not** on the door. Both files make a MODEL CALL — a
@@ -666,7 +714,11 @@ const agent = Agent.create({ provider, model: 'mock' })
   .build();
 ```
 
-Future flavors planned: `defineRAG`, `defineMemory`, `defineGuardrail`. Same
-pattern. No engine change.
+`defineRAG` and `defineMemory` ship too, from `agentfootprint/memory` (and the
+top-level barrel for RAG). They are the same two intents in the table above,
+but they are NOT sugar over `Injection`: each returns a `MemoryDefinition`, and
+the agent mounts a retrieval subflow that feeds the engine an injection per
+turn. `defineGuardrail` is the one still hypothetical — and it is the shape
+this section describes. Same pattern. No engine change.
 
 **This is the architecture. One primitive. Many recipes.**

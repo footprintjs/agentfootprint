@@ -414,6 +414,19 @@ export {
   type WindowStrategyInput,
   type WindowStrategyResult,
 } from './core/agent/window/index.js';
+// Which `role: 'user'` message a PERSON wrote (9.84.0), and the registry of
+// openings it is decided against. Five messages in a window carry that role
+// without anybody having said them — a compaction frame, a drop notice, the two
+// in-loop corrections, and a message an Injection delivered. This is the one
+// test that tells them apart; the window's refusal engine and
+// `saidByPerson(ctx)` on `agentfootprint/context` both call it, so no reader
+// can hold a different rule.
+export {
+  isLibraryAuthoredFrame,
+  isSaidByPerson,
+  LIBRARY_AUTHORED_PREFIXES,
+  type AuthoredMessage,
+} from './lib/saidByPerson.js';
 // `.selfExplain()` — the in-conversation door over the agent's own trace.
 // The options type lives with the other builder-method option types; the
 // machinery (traceDebugAgent, toolpack) is on `agentfootprint/observe`.

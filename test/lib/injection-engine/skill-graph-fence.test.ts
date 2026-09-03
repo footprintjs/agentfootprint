@@ -21,9 +21,9 @@
  * TWO ZONES, because one of them honestly cannot be pure:
  *
  *   • PURE CORE — the graph, its scorers, its context type, the boundary
- *     contract. Reaches nothing outside itself except three verified
- *     zero-import leaves. This is exactly what `agentfootprint/skill-graph`
- *     exports.
+ *     contract. Reaches nothing outside itself except the verified
+ *     zero-import leaves listed below. This is exactly what
+ *     `agentfootprint/skill-graph` exports.
  *   • PROVIDER LAYER — `constrainedEnumPick` + `llmClassifier`. These make a
  *     MODEL CALL, so they need an `LLMProvider`; a port that pretends
  *     otherwise is a fake abstraction. They may import `adapters/types.js`
@@ -85,8 +85,8 @@ const PURE_CORE = [
 
 /**
  * The ONLY files outside `injection-engine/` the pure core may reach — and
- * WHY each one is here. All three are checked below to be genuine leaves
- * (zero imports of their own), because an allow-listed file that imports the
+ * WHY each one is here. Every entry is checked below to be a genuine leaf
+ * (zero imports of its own), because an allow-listed file that imports the
  * loop would hand the loop to the graph through the back door.
  */
 const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
@@ -110,6 +110,18 @@ const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
     'src/memory/embedding/cosine.ts',
     '`cosineSimilarity` — twelve lines of arithmetic over two number arrays. Nothing in ' +
       'it knows what an agent is.',
+  ],
+  [
+    'src/lib/saidByPerson.ts',
+    '`isSaidByPerson` — which user-role message a person actually wrote, as opposed to the ' +
+      "FIVE this library writes in a person's voice (compaction frame, drop notice, " +
+      'schema-check correction, evidence-check correction, delivered message). ' +
+      '`saidByPerson(ctx)` is the routing layer applying the SAME rule the ' +
+      "window's refusal engine applies, which is why it is a leaf: the list had lived split " +
+      'across `core/agent/window/` and `core/agent/evidence/`, where the graph cannot reach ' +
+      'either, so an entry rule could filter some of the classes and not the rest. Four ' +
+      'authored prefixes, the delivery marker and a role check — no imports, nothing in it ' +
+      'that knows what an agent or a provider is.',
   ],
 ];
 

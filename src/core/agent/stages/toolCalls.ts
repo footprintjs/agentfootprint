@@ -57,6 +57,10 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
+import { skillActivationConfirmation } from '../../../lib/injection-engine/skillToolDescriptors.js';
+import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
+import type { LLMToolSchema } from '../../../adapters/types.js';
+import { selfCallNotice, selfSkillTools } from '../selfCallNotice.js';
 import { parkedMemberIds } from '../../../maps/engagement/types.js';
 import type { MapEngagement } from '../../../maps/engagement/types.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
@@ -349,6 +353,12 @@ export interface ToolCallsHandlerDeps {
    *   • `'rails'` — routing picks are refused outright: rules/scorer resolve
    *     turn starts, declared routes handle transitions.
    * Same graph, same trace: postures change refusal behavior only.
+   *
+   * Read only by the `read_skill` gate below, and that is the whole scope:
+   * `applyToolEffects` never consults it, because a `propose-transition`
+   * comes from a tool — the author's own code — and is admitted under every
+   * posture against reachability alone. See `SkillGraphOptions.strictness`
+   * (AgentBuilder.ts), which states the exemption for authors.
    */
   readonly skillStrictness?: 'guard' | 'rails';
   /**
@@ -1196,8 +1206,14 @@ export function buildToolCallsHandler(
   };
 
   // ── Escalate-on-evidence (9.19.0) — the refusal budget ─────────────────
-  // Called beside BOTH `skill.rejected` emit sites (reachability + posture):
-  // real recorded refusals are the only evidence that counts. At the
+  // Called beside ALL THREE `skill.rejected` emit sites — self-call,
+  // reachability and posture: real recorded refusals are the only evidence that
+  // counts. The self-call site is deliberate and worth stating, because the
+  // sentence it composes is NOT a refusal to the model (see `selfCallNotice`):
+  // what the budget measures is not how a message reads, it is a model that
+  // keeps asking the graph where it is instead of working — the stuck run this
+  // budget exists to escalate. Both facts hold at once, and neither comment
+  // gets to imply the other away. At the
   // declared threshold the flip is committed (`skillEscalated` — the fact
   // callLLM's brainFor reads) and `skill.escalated` fires ONCE; the counter
   // keeps counting so the record shows the whole loop. Gated on the policy
@@ -3296,6 +3312,84 @@ export function buildToolCallsHandler(
             if (reengaging) {
               // Admitted. Nothing to refuse and no posture to apply: this is
               // not a hop, and a posture governs routing, not engagement.
+            } else if (currentSkillId !== undefined && reqId === currentSkillId) {
+              // ── The SELF-CALL arm (9.84.0) — BEFORE reachability ─────────
+              // The cursor is in neither half of `allowed`, by construction:
+              // `makeReachableSkills` filters it out of its own successor set
+              // and `openSkillIds()` excludes every graph-wired skill. So a
+              // pick of the skill the model is ALREADY IN fell through to the
+              // reachability arm and came back "not reachable from here" —
+              // about the one skill whose body was in the prompt and whose
+              // tools were in that same call's tool list. Models read that as
+              // "unavailable" and stop, which is exactly what happened in the
+              // field, three times in one day.
+              //
+              // It stays a REJECTION mechanically — no activation to append
+              // (the cursor already activates it), no hop (`skillHop` is false
+              // for the cursor anyway), and the refusal cap still counts it,
+              // because a self-call LOOP is precisely the stuck model that
+              // budget exists to escalate. What changes is the sentence: an
+              // acknowledgement of where the model stands, and — named from
+              // this call's own wire list, never from the declaration — what
+              // it can call right now. `reason` on the event is what lets a
+              // consumer tell the two apart without comparing ids.
+              //
+              // Ordered after re-engagement on purpose: a parked map member
+              // picked at its own cursor is a genuine re-engagement request,
+              // and re-engaging it beats telling the model about tools that
+              // the park has just taken off the wire.
+              skillRejected = true;
+              // The wire the model was ACTUALLY handed on THIS call — the one
+              // the notice speaks about and the only one it may speak about.
+              // Read unconditionally: a `scope.wrapUpAsked` guard here could
+              // never fire. This stage runs only on the Route decider's
+              // `'tool-calls'` branch, which it takes only while
+              // `iteration < maxIterations`; `wrapUpStage` raises the latch one
+              // iteration PAST that, so every self-call is composed with the
+              // latch still down.
+              const wire = scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined;
+              // No routing map is passed, and that is the fix rather than an
+              // omission. A tool result is re-read on every later call of the
+              // turn, so any id named here as somewhere `read_skill` could go
+              // is a PREDICTION — and three separate mechanisms falsify it
+              // after this line has run: the budget (a hop is a tool call, and
+              // the wrap-up dispatches none), the POSTURE arm forty lines below
+              // (`rails` refuses every model hop; `guard` refuses every hop off
+              // an outstanding menu, which is the default state of a decisively
+              // routed turn), and the cursor itself (a sibling tool in this
+              // very batch can fire a step edge). Passing `hops` through the
+              // hidden-id filter fixed only the third-party leak and left all
+              // three staleness paths open; the notice contradicting the
+              // posture arm's own refusal — and costing a refusal from the
+              // escalation budget to find out — was the live bug. The routing
+              // map belongs to the `read_skill` DESCRIPTION, which is
+              // recomposed on every call and is therefore never stale.
+              result = selfCallNotice({
+                skillId: reqId,
+                tools: selfSkillTools(
+                  reqId,
+                  scope.activeInjections as readonly ActiveInjection[] | undefined,
+                  wire,
+                ),
+                // A body only exists under `surfaceMode: 'both'` (`'tool-only'`
+                // is refused at build for anything a graph routes, and only a
+                // graph-wired skill can be the cursor); every other mode
+                // returns the activation confirmation, which would promise an
+                // activation that is not pending. `ceilingRefused` is the third
+                // shape `result` can hold — a `resultCeiling`/`resultColumns`
+                // refusal composed above — and it is nobody's instructions.
+                ...(typeof result === 'string' &&
+                  !ceilingRefused &&
+                  result !== skillActivationConfirmation(reqId) && { body: result }),
+              });
+              typedEmit(scope, 'agentfootprint.skill.rejected', {
+                requestedId: reqId,
+                currentSkillId,
+                allowed,
+                iteration,
+                reason: 'self-call',
+              });
+              noteSkillRefusal(scope, iteration);
             } else if (!allowed.includes(reqId)) {
               skillRejected = true;
               result = skillRefusal(reqId, allowed, deps.skillGraphIsTree === true);
@@ -3304,6 +3398,7 @@ export function buildToolCallsHandler(
                 ...(currentSkillId !== undefined && { currentSkillId }),
                 allowed,
                 iteration,
+                reason: 'unreachable',
               });
               noteSkillRefusal(scope, iteration);
             } else if (deps.skillStrictness !== undefined && skillHop) {
@@ -3333,6 +3428,7 @@ export function buildToolCallsHandler(
                   allowed,
                   iteration,
                   posture: deps.skillStrictness,
+                  reason: 'posture',
                 });
                 noteSkillRefusal(scope, iteration);
               }

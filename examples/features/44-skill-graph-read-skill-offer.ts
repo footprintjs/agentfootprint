@@ -158,8 +158,10 @@ export async function run(message: string) {
     // Three things move independently, and the menu shows all three honestly:
     //   • the cursor's successors come and go as the graph advances;
     //   • `triage` is an ENTRY, so it is always reachable (you may restart a turn)
-    //     — except from triage itself, because picking the skill you are already in
-    //     is a no-op the gate excludes deliberately;
+    //     — except from triage itself, where it appears in NEITHER column: a move
+    //     to where you already are is not a move, and since 9.84.0 the current
+    //     skill is named ("You are in 'triage'.") instead of being listed as
+    //     unreachable, which is what the model was reading as "unavailable";
     //   • `escalation` is OPEN (no declared edge points at it), so it is reachable
     //     from everywhere — it activates by read_skill and never moves the cursor.
     menusPerIteration: menus,

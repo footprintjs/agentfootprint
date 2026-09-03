@@ -112,7 +112,11 @@ export type {
   InjectionEvaluation,
   InjectionTrigger,
 } from '../lib/injection-engine/types.js';
-export { projectActiveInjection, toolResultsOf } from '../lib/injection-engine/types.js';
+export {
+  projectActiveInjection,
+  saidByPerson,
+  toolResultsOf,
+} from '../lib/injection-engine/types.js';
 export { evaluateInjections } from '../lib/injection-engine/evaluator.js';
 
 // ─── The boundary contract ─────────────────────────────────────────────

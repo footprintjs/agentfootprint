@@ -127,6 +127,21 @@ export interface SkillGraphOptions {
    *     honest cost of rails without a resolver. OPEN skills
    *     (`.selfExplain()`, `.skill()` beside the graph) stay admitted from
    *     anywhere under every posture.
+   *
+   * WHAT A POSTURE GOVERNS, EXACTLY: the MODEL's routing door — a `read_skill`
+   * hop — and nothing else. It is NOT a lock on the cursor. Two other doors
+   * stay open under all three postures, deliberately:
+   *   • OPEN skills, above — the debugging door.
+   *   • A `propose-transition` tool effect. A proposal comes from a TOOL —
+   *     deterministic code you shipped, not the model's guess — so it is
+   *     framework-tier evidence: admitted under `assist`, `guard` AND
+   *     `rails`, checked only against the graph's own reachability law, and
+   *     recorded as `cursorMove.by: 'tool-proposal'` (the resolver ranks it
+   *     BETWEEN a declared edge and a model pick, for that reason).
+   * So `'rails'` means "the MODEL never routes", never "nothing but my
+   * declared edges routes": a tool of yours that proposes IS a route you
+   * declared, in code instead of in the graph. To close that door, don't
+   * ship the effect — the posture will not second-guess your own code.
    */
   readonly strictness?: 'assist' | 'guard' | 'rails';
   /**

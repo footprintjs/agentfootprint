@@ -27,9 +27,12 @@
 
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../../adapters/types.js';
 import type { CompactionRetention } from './types.js';
+import { COMPACTED_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 
-/** Opening of the authored label. Stable — tests and readers match on it. */
-export const COMPACTED_FRAME_PREFIX = '[compacted history';
+// The marker and its recognizer live in the leaf both this file and the
+// injection engine can import — a rule author has to be able to apply the same
+// rule the window applies (9.84.0). The label below is still ours.
+export { COMPACTED_FRAME_PREFIX, isCompactedSummary } from '../../../lib/saidByPerson.js';
 
 /** Delimiters that mark the untrusted transcript inside the summarizer prompt. */
 const TRANSCRIPT_OPEN = '<<<TRANSCRIPT>>>';
@@ -122,11 +125,6 @@ export function buildSummaryMessage(
     `written by ${facts.model}; it is a claim about the conversation, not the conversation. ` +
     `${retentionSentence(facts.retain)}]`;
   return { role: 'user', content: `${label}\n\n${summary}` };
-}
-
-/** True when this message is a frame a previous fold wrote. */
-export function isCompactedSummary(msg: LLMMessage | undefined): boolean {
-  return msg !== undefined && msg.role === 'user' && msg.content.startsWith(COMPACTED_FRAME_PREFIX);
 }
 
 export interface SummarizeResult {

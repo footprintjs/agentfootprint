@@ -23,19 +23,30 @@
  * reason as much as for the tests that match on them.
  */
 
-import { SCHEMA_CHECK_FRAME_PREFIX } from '../outputEnforcement.js';
+import {
+  EVIDENCE_CHECK_FRAME_PREFIX,
+  SCHEMA_CHECK_FRAME_PREFIX,
+} from '../../../lib/saidByPerson.js';
 
-/** Opening of the evidence correction's authored frame. Stable — tests, docs
- *  and readers match on it. */
-export const EVIDENCE_CHECK_FRAME_PREFIX = '[evidence check';
+// Both markers live in the authorship registry (9.84.0) — the one list of
+// openings this library puts on a user-role message it wrote. The sentences
+// that carry them are still `gate.ts`'s and `outputEnforcement.ts`'s.
+export { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 
 /**
- * True when this message content is a correction the library wrote.
+ * True when this message content is a CORRECTION the library wrote.
  *
  * Both in-loop corrections are listed: the schema re-ask quotes a validator's
  * message about the model's own output, and the evidence recheck quotes the
  * model's own values. Neither is a person supplying data, and treating either
  * as one would exempt the very text it was written to challenge.
+ *
+ * DELIBERATELY NARROWER than `isSaidByPerson` (9.84.0), which excludes all
+ * four authored frames. This one is the exempt corpus's rule, and the exempt
+ * corpus is about who SUPPLIED a value, not who typed the message: widening it
+ * to the drop notice and the compaction frame would change which values the
+ * evidence gate exempts, which is a decision about the gate and not about
+ * authorship. Read `LIBRARY_AUTHORED_PREFIXES` if you want the whole list.
  */
 export function isLibraryAuthoredTurn(content: string): boolean {
   return (

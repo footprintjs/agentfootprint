@@ -46,9 +46,12 @@
  */
 
 import type { LLMMessage } from '../../../adapters/types.js';
+import { DROP_NOTICE_PREFIX } from '../../../lib/saidByPerson.js';
 
-/** Opening of the authored notice. Stable — tests and readers match on it. */
-export const DROP_NOTICE_PREFIX = '[dropped history';
+// The marker and its recognizer live in the leaf both this file and the
+// injection engine can import — a rule author has to be able to apply the same
+// rule the window applies (9.84.0). The sentence below is still ours.
+export { DROP_NOTICE_PREFIX, isDropNotice } from '../../../lib/saidByPerson.js';
 
 /**
  * How many tool names the notice will print before it stops and says `…`.
@@ -132,9 +135,4 @@ export function buildDropNotice(facts: {
       `strategy. ${kept}${observations}Nothing was summarized: those turns are simply not ` +
       `being re-sent. They are retained verbatim in this run's commit log.]`,
   };
-}
-
-/** True when this message is a notice a previous drop wrote. */
-export function isDropNotice(msg: LLMMessage | undefined): boolean {
-  return msg !== undefined && msg.role === 'user' && msg.content.startsWith(DROP_NOTICE_PREFIX);
 }

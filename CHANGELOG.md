@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.84.0] - 2026-09-03
+
+### Fixed
+
+- **`read_skill` refused the skill the model was already in.** A turn routed
+  decisively to `X`, the model called `read_skill("X")` to find out where it
+  stood, and the gate answered _"`read_skill("X")` is not reachable from here.
+  Reachable skills: …"_ — about the one skill whose body was in that call's
+  system prompt and whose tools were in that same call's tool list. The cursor
+  is in neither half of `hops ∪ open` by construction: `makeReachableSkills`
+  filters it out of its own successor set (a move to where you already are is
+  not a move) and `openSkillIds()` excludes every graph-wired skill. Nobody had
+  written the case for _"you asked for the room you are standing in."_ Read as a
+  claim about AVAILABILITY — which is how a model reads _"not reachable"_ — it
+  says the opposite of the request it arrived in. A field report recorded the
+  consequence three times in one day: the model concluded its capability was
+  gone and answered that it could not help, while the skill's tools sat on the
+  wire, loaded and callable.
+
+  A self-call now gets the truth instead of a refusal. It names where the model
+  stands and which tools it could call, taken from the merged wire list the LLM
+  stage actually sent, intersected with the skill's own declared tools — never
+  from the declaration alone. Every configuration that would make that false has
+  its own wording: a skill declaring no tools says so, a step or park hold-out
+  says the tools were withheld rather than naming them, and a call whose wire
+  cannot be established says nothing about tools at all. Mechanically it is still
+  a rejection — no activation, no cursor move, and the refusal budget still
+  counts it, because a self-call _loop_ is exactly the stuck model that budget
+  exists to escalate.
+
+  **Every clause is anchored to one named call.** A tool result is composed on
+  one iteration and re-read on every call after it, including the out-of-budget
+  wrap-up that carries no tools under _"Do not request tools."_ So the notice
+  makes no forward-looking claim at all: no exhortation to act, no offer of a
+  move, no clause conditioned on a budget or a posture that can change after the
+  sentence is written. Deixis counts as forward-looking — _"the call you just
+  made"_ denotes a different call on each re-read, so the anchor is named once
+  in the opening sentence and every later clause refers back to it.
+
+- **The `read_skill` description said the same thing in the other channel.** The
+  current skill was listed under _"Not reachable from here (read_skill for these
+  will be refused)"_, where it appeared purely as an artefact of that same
+  filter. It is in neither column now, and the description names the cursor on
+  every call that has one — the positive signal whose absence was the root of the
+  field failure, since the system prompt carried the skill's body with nothing
+  saying which skill it was. A genuinely unreachable skill is still named there,
+  and a genuinely unreachable hop keeps its refusal word for word.
+
+- **The description no longer predicts what `read_skill` will do.** Naming the
+  cursor is the fix; every sentence tried alongside it turned out false
+  somewhere. _"read_skill MOVES you to a DIFFERENT skill"_ is false at compose
+  time under `strictness: 'rails'` (every model hop refused) and under `'guard'`
+  off an outstanding menu, where the posture arm contradicts it head-on. Its
+  replacement — _"You do not need read_skill to go on using it"_ — was argued to
+  be a claim about necessity that no posture, budget or hold-out could falsify,
+  and the **park** falsifies it: a parked map member keeps the cursor, loses its
+  body and its tools, and `read_skill` is then the only door back. The
+  description is composed before the hold-outs run, so it cannot know when such a
+  claim would be lying. Outside an outstanding menu it now states the name and
+  stops. The menu's stay clause is unchanged.
+
+- **Role visibility now covers the cursor.** The description read the cursor id
+  past the `hiddenIds` filter, so a role denied `skill_read` on the skill the
+  graph had routed to was still told _"You are in '\<that skill\>'"_ — leaking
+  the name of a capability no cursor move would ever grant it. A hidden cursor is
+  named nowhere: not as reachable, not as refusable, not as the cursor, and not
+  in the menu's stay clause. The security suite's _"a hidden skill is never
+  named"_ property is now driven on the `.skillGraph()` path as well as
+  `.skill()`; it stayed green through the leak because its agents used `.skill()`
+  only, so the leaking line never executed.
+
+### Added
+
+- **`saidByPerson(ctx)` / `isSaidByPerson(msg)` — telling what a person said from
+  what the library wrote.** Five classes of `role: 'user'` message are authored
+  by this library, not by a person: the compaction frame, the drop notice (whose
+  text names tools), the schema-check and evidence-check corrections, and any
+  injection-delivered message. The window's own refusal engine has always applied
+  that rule; a `when` predicate could not, because `InjectionContext.history`
+  exposes only `{ role, content, toolName? }`. An author writing an entry rule
+  that reads history was silently matching on our own bookkeeping. One
+  implementation, reused by both — the rule cannot drift between routing and the
+  window.
+
+- **`SkillRejectedPayload.reason`** — `'self-call' | 'unreachable' | 'posture'`,
+  optional and additive, so a consumer can tell a self-call from a genuine
+  unreachable hop without comparing two fields.
+
+### Documentation
+
+- **`strictness` says what a posture governs, exactly.** A posture governs the
+  model's `read_skill` door and nothing else. Two doors stay open under all three
+  postures: OPEN skills, already stated, and a tool's `propose-transition`, now
+  stated with its reason and its reachability check. `'rails'` means _the model
+  never routes_ — never _"nothing but my declared edges routes"_; a tool of yours
+  that proposes is a route you declared in code instead of in the graph. No
+  behaviour changed: the exemption is recorded in three places and pinned by a
+  test whose title is the argument.
+
+- **The injection-engine README's runtime picture matched an older engine.** Its
+  diagram drew one box that "evaluates triggers"; the engine is a four-stage
+  footprintjs subflow — Gather, Evaluate, Route, Delta — and the cursor, the step
+  pointer, the instruction leases and map engagement all advance inside Evaluate.
+  The events table placed `context.evaluated` at subflow exit; the code emits it
+  in stage 2 of 4. Both corrected, along with three counts that had drifted.
+
 ## [9.83.0] - 2026-09-03
 
 ### Fixed
@@ -14,13 +120,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The evidence gate claimed a boundary it did not measure.** Both of its
   user-facing sentences — the correction it sends the model
   (`buildEvidenceCorrection`) and the warning it prints an operator
-  (`evidenceRefusalSentence`) — said the flagged values *"appear in NO tool
-  result **from this turn**"*. The index behind them has never been turn-scoped:
+  (`evidenceRefusalSentence`) — said the flagged values _"appear in NO tool
+  result **from this turn**"_. The index behind them has never been turn-scoped:
   it walks every `role: 'tool'` turn in the history. The library was asserting a
   scope it could not honour, in the two places that assertion is read.
 
-  Both now say what the check really reaches — *"appear in no tool result this
-  run read"* — which is both true and the stronger claim, and the operator
+  Both now say what the check really reaches — _"appear in no tool result this
+  run read"_ — which is both true and the stronger claim, and the operator
   sentence adds the two facts a reader needs: that the corpus is the LIVE
   WINDOW (a window strategy rewrites `scope.history` in place, so a dropped
   result is not in it), and that `noticePriorTurnEvidence` is what answers the
@@ -34,8 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The measured failure: a consumer's agent answered a data question with **zero
   tool calls**, and the gate approved it — `LLM calls 1 · Tool calls 0 ·
-  Iterations 1`, then *"All 7 values in the answer were found in what the tools
-  returned — the answer stands."* They were found: in an inventory result from
+Iterations 1`, then _"All 7 values in the answer were found in what the tools
+  returned — the answer stands."_ They were found: in an inventory result from
   four turns earlier, fetched for a different question. The user had asked about
   array performance; the answer recommended enabling a collector that had been
   running for months. Two turns did it back to back. Every rail passed honestly
@@ -55,14 +161,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     .namesAndNumbersFromEvidence() // ← the other half: it owns the extractor
     .build();
 
-  await agent.run('what arrays are there?');       // fetches, answers, files nothing
+  await agent.run('what arrays are there?'); // fetches, answers, files nothing
   await agent.followUp('how is array performance?'); // no tool call, answers from turn 1
   // → prior-turn-evidence: 3 grounded value(s), all last served in turn 1,
   //   and this turn called no tool at all.
   ```
 
   **The corpus is deliberately NOT narrowed to this turn.** That would have made
-  the old sentence true and been the wrong fix: *"and what about that disk?"*
+  the old sentence true and been the wrong fix: _"and what about that disk?"_
   leans on the previous turn's rows legitimately, and a check that cries wolf is
   a check somebody switches off. ONE grounded value from this turn's own results
   files nothing — not a threshold to tune, but the falsification of the claim
@@ -106,7 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is generated from what the run itself said: the branch descriptions the chart
   declared, and the rule labels this run's `decide()` evidence carried. For one
   branch, both sources are silent by construction — the DEFAULT. It is the
-  branch chosen by *no rule* (it fires exactly when every rule failed, so no
+  branch chosen by _no rule_ (it fires exactly when every rule failed, so no
   `label` describes it), and when the decider lives inside a dynamically
   generated fan-out branch the branch chart does not exist at build time either,
   so there is no declared description to fall back on.
@@ -183,7 +289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     sdk: { Client, StreamableHTTPClientTransport },
     transport: { transport: 'http', url: '/py/mcp' },
   });
-  const tools = await sidecar.tools();   // the same readonly Tool[], _meta and all
+  const tools = await sidecar.tools(); // the same readonly Tool[], _meta and all
   ```
 
   **`connection?: McpConnection`** — the full escape hatch: you connect the
@@ -257,8 +363,8 @@ arms through a real socket against the real SDK.
 
 **What none of that proves: a browser.** This repo has no browser test
 environment, so nobody has yet driven initialize/listTools/callTool from an
-actual page. The honest status is *proven in Node, fenced at the graph, not gated
-in a browser.* Three costs land on the app, not here: your server must send CORS
+actual page. The honest status is _proven in Node, fenced at the graph, not gated
+in a browser._ Three costs land on the app, not here: your server must send CORS
 headers (every MCP request preflights, and `Mcp-Session-Id` must be in
 `Access-Control-Expose-Headers`) — `mcpServe` sends none; SSE through a dev or
 production proxy is unproven; and the SDK's client path adds roughly 260 KB
@@ -277,8 +383,8 @@ first time a tool with an `outputSchema` is validated.
   had a standing rule against exactly that. The library was overruling it.
 
   The instruction was ours. Every verdict projection shipped `table`
-  pre-rendered with `VERDICT_RENDER_NOTE`: *"table is PRE-RENDERED over the
-  same rows as `verdicts` — output it VERBATIM."* That note is RIGHT wherever
+  pre-rendered with `VERDICT_RENDER_NOTE`: _"table is PRE-RENDERED over the
+  same rows as `verdicts` — output it VERBATIM."_ That note is RIGHT wherever
   the model's words are the rows' only surface — a chat client, a log line, an
   email — because the alternative there is retyping, and a retyped identifier
   that looks right and matches nothing is the failure the note exists to stop.
@@ -291,7 +397,7 @@ first time a tool with an `outputSchema` is validated.
   it is in. So the caller says, in one word:
 
   ```ts
-  runbookAsTool({ /* … */ presentation: 'panel' });   // default: 'prose'
+  runbookAsTool({ /* … */ presentation: 'panel' }); // default: 'prose'
   ```
 
   - **`'prose'` (the default)** — today's envelope, key for key: `table`
@@ -357,7 +463,7 @@ first time a tool with an `outputSchema` is validated.
   `recording_note`. The wire ops that already redeem the walk redeem this with
   **zero new operations**.
 
-  **OPT-IN, and that is the honest default.** A walk carries *sentences about*
+  **OPT-IN, and that is the honest default.** A walk carries _sentences about_
   what happened and no payload from it — values are off by construction
   (`narrative({ includeValues: false })`). A recording is the run: shared
   state, the whole commit log, every attached recorder's data — **whatever the
@@ -393,7 +499,7 @@ first time a tool with an `outputSchema` is validated.
   the spine exists to prevent.
 
   **`events` is empty by construction, and says so.** It is the typed
-  *agentfootprint* stream, fired by an agent turn; what ran here is a
+  _agentfootprint_ stream, fired by an agent turn; what ran here is a
   footprintjs chart on its own executor, which fires none. All three keys are
   present (that is what a viewer reads), the empty array is the honest count,
   and the note states it so nobody reads it as a dropped stream — the walk's
@@ -412,8 +518,8 @@ first time a tool with an `outputSchema` is validated.
 
 - **`Tool.resultColumns` + `checkColumnTypes` — the column-type contract: a
   tool declares what its rows contain, and the library checks the rows against
-  it at the boundary.** Three recorded failures, and they are one shape — *a
-  number became something else, and nothing noticed at the seam*:
+  it at the boundary.** Three recorded failures, and they are one shape — _a
+  number became something else, and nothing noticed at the seam_:
 
   1. A mapping report wrote `str(m.get("logical_unit_number") or "")`. **LUN 0
      is falsy**, so LUN 0 was stored as an EMPTY STRING on 2,094 mappings, and
@@ -442,19 +548,19 @@ first time a tool with an `outputSchema` is validated.
   `CostBudget` two-spellings pattern, normalized once).
 
   **THE CEILING**, exported as `COLUMN_TYPE_CEILING` and quoted verbatim into
-  every finding, the `EMPTY_LOOKUP_CEILING` law: *"This judges TYPE, never
+  every finding, the `EMPTY_LOOKUP_CEILING` law: _"This judges TYPE, never
   MEANING — it can see that a column declared `number` holds a string, and it
   can never see that the string should have been 0, or that a 0.0 should have
   been an 8; a column whose every value has its declared type passes here and
-  can still be wrong."* Failures 1 and 3 are caught. **Failure 2 is not, and
+  can still be wrong."_ Failures 1 and 3 are caught. **Failure 2 is not, and
   never will be** — `0.0` is a perfectly good number — and the check says so
   out loud rather than letting a green row imply otherwise.
 
   **TWO finding kinds, because the field bug turned on the difference.** New
   `ContextErrorKind`s at the **write seam**: **`column-type-mismatch`** (the
   column is THERE and holds the wrong thing) and **`missing-column`** (the
-  declared column is in NONE of the rows). *"The value is not what it should
-  be"* sends a person to the mapping code; *"the column was never delivered"*
+  declared column is in NONE of the rows). _"The value is not what it should
+  be"_ sends a person to the mapping code; _"the column was never delivered"_
   sends them to the query. A checker that said only "something is off with
   logical_unit_number" would have helped with neither. Each finding names the
   column, the offending value quoted, the rows affected of the rows read, and
@@ -524,7 +630,7 @@ first time a tool with an `outputSchema` is validated.
   it came back empty.** A triage agent's reverse-lookup tool filtered a column
   before a pivot, so the column did not exist yet and EVERY reverse lookup
   returned an empty result — for every identifier, always. The tool then
-  answered *successfully* with an empty list, and the agent reported in a
+  answered _successfully_ with an empty list, and the agent reported in a
   table, with confidence, that the device was not logged in to any port on any
   collected switch, advising a check of the physical cabling. It was logged in
   the whole time. Every rail passed, and passed honestly: nothing errored,
@@ -548,9 +654,9 @@ first time a tool with an `outputSchema` is validated.
   for the broken filter and for the honest absence. The bound ships as one
   exported string, `EMPTY_LOOKUP_CEILING`, quoted verbatim into every message
   so it cannot drift out of one doc and leave a reader thinking the library
-  knows more than it does: *"An empty result can be perfectly true — the thing
+  knows more than it does: _"An empty result can be perfectly true — the thing
   may exist and simply have nothing to show right now — so this is a place to
-  look, never a verdict that anything is wrong."*
+  look, never a verdict that anything is wrong."_
 
   Deliberately NOT `dangling-reference`, whose meaning is the opposite: there
   the ground has left reach; here the ground IS in reach and the lookup found
@@ -566,7 +672,7 @@ first time a tool with an `outputSchema` is validated.
   make impossible.
 
   **Armed by two halves**, and the second one is why: `noticeEmptyLookups:
-  true` on `Agent.create` **and** at least one tool declaring `argumentsFrom`.
+true` on `Agent.create` **and** at least one tool declaring `argumentsFrom`.
   The declaration alone is not enough — it already arms two other checks, and
   an advisory that armed itself off a declaration made for something else
   would not be opt-in at all. **Default off is byte-identical**: no finding, no
@@ -637,7 +743,7 @@ first time a tool with an `outputSchema` is validated.
   pre-rendered table, and the recorded walk that lets a reader CHECK the
   verdict instead of trusting it. `runbookAsTool` is that envelope as one
   declaration bag; the smallest legal call is `{ name, description,
-  procedure }` and it still yields the honest spine.
+procedure }` and it still yields the honest spine.
 
   **The mandatory honesty spine**, on every answer whatever the runbook's
   shape: `af_coverage` (three lists + a sentence naming the rule set and
@@ -673,7 +779,7 @@ first time a tool with an `outputSchema` is validated.
   tools are invisible — there is no build-time list, the stated 9.72.0
   caveat), so stages compose registered sources instead of importing modules
   and building a second query stack. Inner calls run with `hasArtifacts:
-  false` (one answer, one ticket — never competing chips), a derived
+false` (one answer, one ticket — never competing chips), a derived
   toolCallId naming the outer call, `needs` resolved on the fail-closed
   non-interactive path, and `checkIn`/`wants` tools refused BY NAME (an inner
   call cannot pause, and must never silently skip a consent gate).
@@ -697,8 +803,8 @@ first time a tool with an `outputSchema` is validated.
   run: four tool results carried real numbers, a compute tool that could sum
   them was registered — with `wants` declared over the staged dataset kind —
   and the app's prompt said to use it. The model summed the numbers in its
-  head anyway and stated the total; the evidence gate recorded *"appears in no
-  tool result"* and the answer shipped, because the posture only observed. The
+  head anyway and stated the total; the evidence gate recorded _"appears in no
+  tool result"_ and the answer shipped, because the posture only observed. The
   app patched it with more prose. The library-shaped fix is two mechanisms it
   already owns, on the one dial it already has:
 
@@ -732,9 +838,9 @@ first time a tool with an `outputSchema` is validated.
   `'guard'` allows the one bounded revision then delivers with both attempts
   on the record, `'rails'` refuses with `UnsupportedValuesError`. What the
   revision gains: when the flagged turn holds staged refs a served `wants`
-  tool can spend, the correction now names them — *"pass 'art_…'
+  tool can spend, the correction now names them — _"pass 'art\_…'
   (dataset/rows) to `compute` — compute the number there and answer with what
-  it returns"* — inside the authored frame, so the quoted values still come
+  it returns"_ — inside the authored frame, so the quoted values still come
   last and the exempt-corpus fence is untouched. The `revision-asked`
   `evidence_checked` event carries the same facts additively (`stagedRefs`,
   `spenderTools`). Absent everything — no gate, `nudge` unset, or no
@@ -762,7 +868,7 @@ first time a tool with an `outputSchema` is validated.
 
   **`foundry()` — the project-endpoint provider** (`agentfootprint/providers`).
   The JS answer to Microsoft's `FoundryChatClient(project_endpoint, model,
-  credential)`: point it at a Foundry project endpoint (or let the hosted
+credential)`: point it at a Foundry project endpoint (or let the hosted
   platform's auto-injected `FOUNDRY_PROJECT_ENDPOINT` supply it), name the
   deployment (`AZURE_AI_MODEL_DEPLOYMENT_NAME ?? MODEL_NAME`), and auth is an
   Entra `TokenCredential`, an api key, or — given neither — the platform's own
@@ -888,7 +994,6 @@ first time a tool with an `outputSchema` is validated.
   tests fail against the previous source (proven by restoring it); no public
   API change; `OllamaUnavailableError` is byte-identical.
 
-
 ## [9.73.0] - 2026-08-27
 
 ### Fixed
@@ -925,13 +1030,15 @@ first time a tool with an `outputSchema` is validated.
 
   ```ts
   const agent = Agent.create({
-    provider, model,
+    provider,
+    model,
     // DECLARED, never ambient — this option is the only door.
-    externalGrounds: () => viewerSelection.cells.map((cell) => ({
-      value: cell.text,            // verified by the app against the artifact
-      source: 'viewer-selection',  // the audit label that travels
-    })),
-  })
+    externalGrounds: () =>
+      viewerSelection.cells.map((cell) => ({
+        value: cell.text, // verified by the app against the artifact
+        source: 'viewer-selection', // the audit label that travels
+      })),
+  });
   ```
 
   The provider is consulted once per LLM response that contains an armed call,
@@ -1008,25 +1115,25 @@ first time a tool with an `outputSchema` is validated.
   namespaced key (`MCP_TOOL_EXTRAS_KEY`, the string `agentfootprint`), and
   `mcpClient` / `mockMcpClient` read them back onto the registered `Tool`:
 
-  | field | what it arms on the consuming side |
-  |---|---|
-  | `argumentsFrom` | the dangling-reference and unsupported-argument checks |
-  | `resultKind` | placement's mint — a placed result a `wants` argument can spend |
-  | `owner` | the identity edge subject-joined checks read |
-  | `resultClass` | the per-class `check:semantics` rules |
-  | `resultCeiling` | the author's refusing ceiling on an oversized result |
+  | field           | what it arms on the consuming side                              |
+  | --------------- | --------------------------------------------------------------- |
+  | `argumentsFrom` | the dangling-reference and unsupported-argument checks          |
+  | `resultKind`    | placement's mint — a placed result a `wants` argument can spend |
+  | `owner`         | the identity edge subject-joined checks read                    |
+  | `resultClass`   | the per-class `check:semantics` rules                           |
+  | `resultCeiling` | the author's refusing ceiling on an oversized result            |
 
   ```ts
   const fleet = await mcpClient({ name: 'fleet-mcp', transport });
   const agent = Agent.create({ provider, model })
-    .tools(await fleet.tools())   // backup_status declares argumentsFrom: ['fleet_report']
+    .tools(await fleet.tools()) // backup_status declares argumentsFrom: ['fleet_report']
     .build();
   // …and the choice seam now files `unsupported-argument` for it, exactly as
   // it would for a local defineTool — pinned end to end, disposition row included.
   ```
 
-  **The inclusion bar, stated where the list lives:** *a declaration a
-  consumer-side check or rail reads; nothing that governs execution.* `needs`
+  **The inclusion bar, stated where the list lives:** _a declaration a
+  consumer-side check or rail reads; nothing that governs execution._ `needs`
   (credentials), `checkIn` (human consent) and the session hooks are excluded
   and always will be — they decide how a tool RUNS, and the tool runs on the
   server. A client holding a consent gate the only executor already held is
@@ -1088,7 +1195,7 @@ first time a tool with an `outputSchema` is validated.
   });
 
   // elsewhere — resolves now, and would have been a kind mismatch before
-  defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' }, /* … */ });
+  defineTool({ name: 'chart', wants: { dataset: 'dataset/rows' } /* … */ });
   ```
 
   - **The matcher is untouched.** Nothing here loosens `wants`; exact match is
@@ -1157,9 +1264,9 @@ first time a tool with an `outputSchema` is validated.
   that earns the port its keep —
 
   ```ts
-  await session.handControlTo('person');   // the automation stream stops
+  await session.handControlTo('person'); // the automation stream stops
   // …they sign in, clear the CAPTCHA, approve the consent screen, watching live
-  await session.handControlTo('agent');    // and the agent carries on
+  await session.handControlTo('agent'); // and the agent carries on
   ```
 
   Pair it with a check-in and the agent **pauses** rather than guesses: the
@@ -1177,7 +1284,7 @@ first time a tool with an `outputSchema` is validated.
   **What verification changed.** The `InvokeBrowser` action union, read off a
   real install of `@aws-sdk/client-bedrock-agentcore` 3.1118.0, is exactly
   `mouseClick | mouseMove | mouseDrag | mouseScroll | keyType | keyPress |
-  keyShortcut | screenshot` — with **no navigate member at all**. An adapter
+keyShortcut | screenshot` — with **no navigate member at all**. An adapter
   written from memory would have invented page verbs for a door that has none.
   The same pass fixed `MouseClickArguments` (`{ x, y, button?, clickCount? }`,
   buttons `LEFT|MIDDLE|RIGHT`), `KeyPressArguments` (`{ key, presses? }`) and
@@ -1213,6 +1320,7 @@ first time a tool with an `outputSchema` is validated.
   another agent (Strands, LangGraph, Google ADK, a Marketplace listing)
   discovers yours through its agent card and calls it. The same split as 9.65.0,
   for the third time:
+
   - **`a2aWire()`** is the A2A PROTOCOL — JSON-RPC 2.0, `message/send`, text
     parts, artifacts, `A2A_PROTOCOL_VERSION` `0.3.0` — an open protocol with no
     vendor in it, exported in its own right along with
@@ -1252,8 +1360,8 @@ first time a tool with an `outputSchema` is validated.
 - **A capability this library claimed and could not honour.** `httpHost`
   declares `['streaming']` by default, so the A2A host inherited it while
   `message/send` has nowhere to put a chunk: `requireCapability(host,
-  'streaming')` would have passed for a host that then delivered none. The
-  conformance suite caught it — it asserts chunks *if and only if* the
+'streaming')` would have passed for a host that then delivered none. The
+  conformance suite caught it — it asserts chunks _if and only if_ the
   capability is declared — and the adapter now declares `[]`.
 
 ### Changed
@@ -1271,6 +1379,7 @@ first time a tool with an `outputSchema` is validated.
   looking anything up** (`agentfootprint/providers`). `gatewayTransport` says of
   itself that nothing in it is vendor-specific, and that stays true because the
   four facts which ARE AgentCore's now live in one file beside it:
+
   - **the endpoint** — `agentCoreGatewayUrl({ gatewayId, region })` builds
     `https://{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp`,
     a hostname nobody recalls correctly, which is why it is a function and not a
@@ -1336,6 +1445,7 @@ first time a tool with an `outputSchema` is validated.
   install of `@aws-sdk/client-bedrock-agentcore` **3.1118.0** — names, request
   shapes and enum values read off the package rather than remembered, which is
   the 9.4.0 law:
+
   - **`userFlow: 'consent' | 'exchange'`** — `'exchange'` sends
     `ON_BEHALF_OF_TOKEN_EXCHANGE`, trading the person's existing login for a
     scoped downstream token with no consent screen at any point. Default stays
@@ -1492,7 +1602,7 @@ first time a tool with an `outputSchema` is validated.
 
   The field story: a tool result ended with an offer — "I can also map these
   ids to volume names" — and the person answered "yes please". The model bound
-  *that sentence* as the identifier argument and dispatched. The tool's schema
+  _that sentence_ as the identifier argument and dispatched. The tool's schema
   DECLARED the identifier's shape, in a `pattern` that "yes please" could never
   match; the pre-dispatch validator simply did not read the keyword. So the
   call went out, failed downstream, and cost a round trip — and the consumer
@@ -1637,7 +1747,7 @@ first time a tool with an `outputSchema` is validated.
   check, so one busy check could carry the total while another check looked
   at nothing at all — the per-check rows said so underneath (`⚠ ran 0×`), but
   a reader who stops at the headline got the rosier story. The headline now
-  states coverage: either *all* registered checks ran, or it says COVERAGE IS
+  states coverage: either _all_ registered checks ran, or it says COVERAGE IS
   PARTIAL and names the checks that checked nothing. Same law as the rows —
   a check that never saw a subject is silent about its seam, never a pass.
 
@@ -1667,38 +1777,40 @@ first time a tool with an `outputSchema` is validated.
 - **Six defects in the Context Integrity family, caught by an adversarial
   review before release** — each survived two independent attempts to refute
   it, and each is now pinned by a red-proved regression test.
-  - *A claim finding's identity ignored the FIELD*, so a contract naming two
+
+  - _A claim finding's identity ignored the FIELD_, so a contract naming two
     fields of one entity (the shape `.claims()` itself tells you to write)
     filed one event and swallowed the rest — while the disposition ledger
     counted them all, leaving the two accounts of one run disagreeing.
     `ContextError.predicate` now rides the identity, mirroring the
     substrate's own `assertionKey`; findings that never set it keep exactly
     the identity they had.
-  - *The dangling-reference check was DEAD under `reactMode:
-    'dynamic-grouped'`* — `compactions` was threaded into the wrong mapper,
+  - _The dangling-reference check was DEAD under `reactMode:
+'dynamic-grouped'`_ — `compactions` was threaded into the wrong mapper,
     so the check saw an empty window ledger every pass and filed a healthy
     verdict. Chart-shape parity is now pinned by tests that run the same
     trap under both dynamic shapes.
-  - *The dev canary structurally disabled the wiring-rot theorem.* A minted
+  - _The dev canary structurally disabled the wiring-rot theorem._ A minted
     canary proves the pure function still works; it says nothing about
     whether the pipeline ever calls it (`beginIntegrityRun` mints by calling
     the function directly). Masking theorem (i) with it meant the alarm this
     ledger exists for could never fire.
-  - *`workExisted` was hardcoded `true`* on every exit path, so a run that
+  - _`workExisted` was hardcoded `true`_ on every exit path, so a run that
     died or paused before its first LLM call reported every registered
     checker as dead. It is now measured from a signal the integrity code
     does not itself write.
-  - *An answer agreeing with a settled non-reading was filed as an advisory*
+  - _An answer agreeing with a settled non-reading was filed as an advisory_
     — `null` reported for a fact whose settled value is `null` is agreement,
     not doubt.
-  - *The claim ledger accumulated for agents that never declared a
-    contract*, and appended by whole-array spread. It is now gated on
+  - _The claim ledger accumulated for agents that never declared a
+    contract_, and appended by whole-array spread. It is now gated on
     `.claims()` and appends without the quadratic copy — restoring the
     zero-delta promise for every agent that configured none of this.
 
 - **Two honesty defects in `find_context_errors`**, both caught by the same
   adversarial review and both red-proved by a failing test first.
-  - *The green headline never read the counts it claimed to summarise.*
+
+  - _The green headline never read the counts it claimed to summarise._
     "The checkers below RAN; nothing they cover was violated" was printed on
     the mere absence of a finding, so a run whose every encounter was
     `unreachable` (the check could not see the evidence), whose checks all
@@ -1711,7 +1823,7 @@ first time a tool with an `outputSchema` is validated.
     all, each keep their own sentence. A checker ROW with zero `checked`
     stopped saying "the checker ran and found nothing at this seam" for the
     same reason.
-  - *The tool advertised defect classes no check can file.* The `kind` enum
+  - _The tool advertised defect classes no check can file._ The `kind` enum
     was pinned to the whole `ContextErrorKind` union, so it offered
     `unsupported-argument` and `duplicate-execution` — classes no check in
     this build files — and answering one returned a negative verdict about
@@ -1776,7 +1888,7 @@ first time a tool with an `outputSchema` is validated.
   run's disposition rows ride along, so "the checkers ran and found nothing"
   and "no checker was registered for that seam" stay different answers, and
   a registered check with zero encounters is named as wiring rot. Honest
-  absence has its own sentences: no event tail is *no finding evidence*, a
+  absence has its own sentences: no event tail is _no finding evidence_, a
   tail with no integrity events says the channel is empty and why, and rows
   reporting findings the tail no longer carries say **evidence missing** —
   none of them ever reads as "no context errors found". Synthetic canaries
@@ -1812,7 +1924,7 @@ first time a tool with an `outputSchema` is validated.
 - **`Tool.argumentsFrom` + the dangling-reference check** (the closure
   check's decidable fragment). A tool author can now declare where a tool's
   arguments come from — `defineTool({ name: 'screen_fire', argumentsFrom:
-  ['whats_here'] })` — and `callLLM` checks at request assembly that every
+['whats_here'] })` — and `callLLM` checks at request assembly that every
   served tool's declared grounds still have results in the window: a ground
   the window ledger says was evicted (`droppedObservations`) with nothing
   re-established files a `dangling-reference` finding at seam `'compose'`,
@@ -1856,10 +1968,10 @@ first time a tool with an `outputSchema` is validated.
 
 - **The assertion algebra and the one visible finding type.** An
   `Assertion` is keyed by `(subject, predicate, epoch)` with two rules
-  that do the work: *serving is asserting; history is quotation* (checks
+  that do the work: _serving is asserting; history is quotation_ (checks
   never fire across the quoted stratum — the whole stale-but-honest
-  false-positive class, closed structurally) and *single-valued by
-  default* (you declare exemptions, never rules). Unknown `Claim`s never
+  false-positive class, closed structurally) and _single-valued by
+  default_ (you declare exemptions, never rules). Unknown `Claim`s never
   participate in a comparison. `conflictsOf()` is the pure exclusion
   comparison; `ContextError` is the uniform finding — plain kinds
   (`invariant-violation`, `unsupported-argument`, `dangling-reference`,
@@ -1913,16 +2025,16 @@ when this patch was cut, and they are additive.
 ### Fixed
 
 - **The cache report no longer invents a cause for a turn it could not
-  measure.** *What changed:* when `cacheRecorder().report()` hands back an
+  measure.** _What changed:_ when `cacheRecorder().report()` hands back an
   unknown hit rate, the sentence attached to it is now the one the calls
   themselves gave — most often "no CacheStrategy was given to
   `cacheRecorder()`, so nothing read the usage". When the calls disagree about
   why, the summary says they disagreed and lists the reasons (up to three, then
-  a count of the rest) rather than silently choosing one. *Why it was not
-  there:* the summary sentence was typed into the code as a fixed string, "the
+  a count of the rest) rather than silently choosing one. _Why it was not
+  there:_ the summary sentence was typed into the code as a fixed string, "the
   provider reported no cache fields" — true for the case the author had in
   mind, a guess for every other, and it overwrote what each call had already
-  stated. *How it improves:* run without a strategy against a provider that DID
+  stated. _How it improves:_ run without a strategy against a provider that DID
   report cache traffic, and 9.59.0 told you your provider was reporting
   nothing — sending you off to debug a provider that was working fine, instead
   of naming the one line missing from your own setup. You now read the real
@@ -1945,113 +2057,113 @@ the published bytes and is unchanged.
 
 ### Fixed
 
-- **A red gate could reach npm, and did.** *What changed:* the docs-truth
+- **A red gate could reach npm, and did.** _What changed:_ the docs-truth
   ratchet now runs inside the build job that the publishing job depends on,
   so a red gate fails the build and the publish never starts — however the
-  release was created. *Why it was not there:* the gate existed, but CI ran it
+  release was created. _Why it was not there:_ the gate existed, but CI ran it
   on `push` while the publish workflow runs on `release: published`, and the
   release script fires the release seconds after the push. The two raced, and
-  npm never waited for a verdict. *How it improves:* 9.58.0 shipped with a red
+  npm never waited for a verdict. _How it improves:_ 9.58.0 shipped with a red
   ratchet; that is now structurally impossible.
-- **A generated report was being edited by hand.** *What changed:*
+- **A generated report was being edited by hand.** _What changed:_
   `npm run docs:truth:report` regenerates the report **without** touching the
   accepted-debt baseline, and a test fails if the committed report is not what
-  the generator produces. *Why it was not there:* the report could only be
+  the generator produces. _Why it was not there:_ the report could only be
   regenerated by also re-recording the debt, so an author who merely wanted the
   numbers to match reality had to choose between accepting unrelated debt and
   editing the file. They edited the file: the 9.58.0 release commit changed
   "103 typed events" to "105" and nothing else, leaving the export count stale
-  and the ratchet red. *How it improves:* restating the truth and accepting
+  and the ratchet red. _How it improves:_ restating the truth and accepting
   debt are now separate acts, and the file cannot silently drift.
 - **The cache meter reported 0% for turns that hit cache on every call.**
-  *What changed:* the strategies read the framework's normalised usage instead
+  _What changed:_ the strategies read the framework's normalised usage instead
   of raw provider field names, and every number in the report is now a `Claim`
-  — a value that says how it knows itself. *Why it was not there:* the
+  — a value that says how it knows itself. _Why it was not there:_ the
   strategies parsed `cache_read_input_tokens` off a value that has never
   carried it, so every field read as missing and nothing was recorded; and the
   report typed its totals as plain numbers, so "nobody measured" and "measured,
   and it was zero" looked identical. The test fixtures were themselves
   provider-shaped, which is how it survived a release with a green suite.
-  *How it improves:* a real hit rate, an unmeasured turn that renders as
+  _How it improves:_ a real hit rate, an unmeasured turn that renders as
   unmeasured, and a rate that always states its own denominator ("3 of 20
   calls"). A **silent non-cache** — a prompt below the model's minimum
   cacheable size, which providers process without caching and without an error
   — is now visibly different from a turn nobody measured.
-- **A meter was attached to a provider that cannot feed it.** *What changed:*
+- **A meter was attached to a provider that cannot feed it.** _What changed:_
   the Bedrock strategy declares itself disabled, passes requests through
-  untouched, and answers "not applicable" with the reason. *Why it was not
-  there:* it claimed full support and clamped cache markers onto a request
+  untouched, and answers "not applicable" with the reason. _Why it was not
+  there:_ it claimed full support and clamped cache markers onto a request
   field our Bedrock provider discards, reporting markers that never reached a
-  wire. *How it improves:* it stays registered, so a Bedrock user is told the
+  wire. _How it improves:_ it stays registered, so a Bedrock user is told the
   truth by name instead of guessing. The same honesty is applied to OpenAI,
   which is the costlier gap because it caches automatically.
 
 ### Changed
 
-- **A parked map now tells the model it is parked.** *What changed:* while
+- **A parked map now tells the model it is parked.** _What changed:_ while
   anything is parked, the model receives a short status card naming the cursor
   and the engagement as **separate** things, the reason, and the way back as a
-  concrete call. *Why it was not there:* every honesty signal landed on the
+  concrete call. _Why it was not there:_ every honesty signal landed on the
   record, which the model never reads — so re-engagement was reachable in
   principle and unreachable in practice, because nothing told the model that
-  re-picking a skill it appears to already be in means anything. *How it
-  improves:* a door the model can see. It also learns the distinction the
+  re-picking a skill it appears to already be in means anything. _How it
+  improves:_ a door the model can see. It also learns the distinction the
   kernel is built on instead of inferring a contradiction.
-- **A parked map's tools actually leave the wire.** *What changed:* parking now
+- **A parked map's tools actually leave the wire.** _What changed:_ parking now
   holds the parked map's tool schemas off the request on its own authority.
-  *Why it was not there:* `.maps()` promised parking stops "the prompt fragment
+  _Why it was not there:_ `.maps()` promised parking stops "the prompt fragment
   and tools", but on the default posture for flat graphs only the fragment
   stopped — the model was shown tools for a skill whose instructions had just
-  vanished. *How it improves:* the promise is true on every posture. This is
+  vanished. _How it improves:_ the promise is true on every posture. This is
   **not** a change to `scopeTools` and does not touch the 10.0.0 ledger: those
   dials answer different questions.
 - **A pick of the skill you are already on is now a legal re-engagement.**
-  *What changed:* a `read_skill` pick is routed by intent — of a parked map's
-  member it re-engages the map and does not move the cursor. *Why it was not
-  there:* the reachability gate refuses a pick of the node the cursor occupies,
+  _What changed:_ a `read_skill` pick is routed by intent — of a parked map's
+  member it re-engages the map and does not move the cursor. _Why it was not
+  there:_ the reachability gate refuses a pick of the node the cursor occupies,
   which is right for a move and wrong for this; since parking never moves the
   cursor, a parked map is parked exactly where the model wants to return. For a
-  single-member map that made parking permanent. *How it improves:* the
+  single-member map that made parking permanent. _How it improves:_ the
   documented recovery door is real.
-- **An engagement's founding cause is never rewritten.** *What changed:* the
+- **An engagement's founding cause is never rewritten.** _What changed:_ the
   record now keeps three separate facts — why the map is participating at all,
   why the cursor is on this member, and why this contribution is being served
-  right now. *Why it was not there:* one field answered all three, so
+  right now. _Why it was not there:_ one field answered all three, so
   confirming a guess silently overwrote the guess, and a record founded on a
-  keyword at iteration 1 later read as system-backed since iteration 1. *How it
-  improves:* an incident review can still ask "was this founded on a guess?"
+  keyword at iteration 1 later read as system-backed since iteration 1. _How it
+  improves:_ an incident review can still ask "was this founded on a guess?"
   and get the true answer, however much has happened since.
-- **A declared route no longer forges a user request.** *What changed:* when a
+- **A declared route no longer forges a user request.** _What changed:_ when a
   declared edge moves the cursor to a different member, that member's
   eligibility is worked out from **its own** evidence rather than inherited.
-  *Why it was not there:* the next member inherited the previous one's
+  _Why it was not there:_ the next member inherited the previous one's
   standing, and an explicit request never decays — so one explicit pick at the
   top of a turn silently warranted every skill the graph walked to afterwards.
-  *How it improves:* a member entered weakly can park, exactly as if it had
+  _How it improves:_ a member entered weakly can park, exactly as if it had
   been entered that way from the start. The founding cause still says, forever,
   that the engagement began explicitly on the skill that was actually asked for.
-- **A new turn is judged on the new turn's evidence.** *What changed:* a cursor
+- **A new turn is judged on the new turn's evidence.** _What changed:_ a cursor
   carried into a new turn with nothing explaining it is recorded as `assumed`
   — nobody said why — which is the weakest rung and expires like any guess.
-  *Why it was not there:* an absent explanation was recorded as system-backed,
+  _Why it was not there:_ an absent explanation was recorded as system-backed,
   the strongest and non-decaying category, so turn one's mistaken keyword match
-  became a permanent warrant on turn two and every turn after. *How it
-  improves:* cursor continuity and engagement continuity have independent
+  became a permanent warrant on turn two and every turn after. _How it
+  improves:_ cursor continuity and engagement continuity have independent
   lifetimes, and both are now pinned by tests — half the defect was that
   nothing pinned either.
-- **The idle test checks all three of the conditions it documents.** *What
-  changed:* a map only accrues idle when its contribution was actually served,
-  none of its tools was called, and the turn went elsewhere. *Why it was not
-  there:* only the last was checked, while the refusal text asserted all three.
-  *How it improves:* nothing claims a fact it did not check. (Making it honest
+- **The idle test checks all three of the conditions it documents.** _What
+  changed:_ a map only accrues idle when its contribution was actually served,
+  none of its tools was called, and the turn went elsewhere. _Why it was not
+  there:_ only the last was checked, while the refusal text asserted all three.
+  _How it improves:_ nothing claims a fact it did not check. (Making it honest
   needed the kernel to carry its own record of what was served — reading it
   from the existing delta machinery was silently empty in the grouped chart
   shape, which would have disabled parking there entirely.)
-- **A map that cannot explain its cursor moves is refused at mount.** *What
-  changed:* `.maps()` requires a map that reports why the cursor moved. *Why it
-  was not there:* without it, no explanation ever arrives, and a kernel whose
-  whole job is weighing evidence had none to weigh — silently. *How it
-  improves:* the failure is named at build time instead of at 3am.
+- **A map that cannot explain its cursor moves is refused at mount.** _What
+  changed:_ `.maps()` requires a map that reports why the cursor moved. _Why it
+  was not there:_ without it, no explanation ever arrives, and a kernel whose
+  whole job is weighing evidence had none to weigh — silently. _How it
+  improves:_ the failure is named at build time instead of at 3am.
 
 ### Added
 
@@ -2061,9 +2173,9 @@ the published bytes and is unchanged.
   shipped and was unreachable: the kernel's data model carried the field and
   no option ever set it. It suppresses the park, not the measurement — the
   record still shows a map riding every call unused.
-- **Two documentation pages**: *Mounted maps* (the kernel's why, the evidence
-  ladder, the idle test, the three facts, turns, and the park card) and *The
-  cache meter* (how to read a report, and exactly which providers can feed it).
+- **Two documentation pages**: _Mounted maps_ (the kernel's why, the evidence
+  ladder, the idle test, the three facts, turns, and the park card) and _The
+  cache meter_ (how to read a report, and exactly which providers can feed it).
 - **A measurement, not a fix, for the prompt-cache cost of `read_skill`.** The
   tool's description is rebuilt from the cursor every iteration, and changing a
   tool definition invalidates a provider's entire prompt cache. A shipped test
@@ -2080,7 +2192,6 @@ the published bytes and is unchanged.
 through `isKnown(...)`, or render them with `describeClaim(...)`. This is a
 signature change in a minor release, and deliberately so: the old bare numbers
 were not a contract worth keeping, because the value was zero on every turn.
-
 
 ## [9.58.0] - 2026-08-20
 
@@ -2177,7 +2288,7 @@ to do, and no longer had the evidence to do it.
 What it did next was invent. It took an entity name it remembered plus the
 shape of an id it had used earlier, assembled one that has never existed, and
 was refused — a wasted action out of a small budget. In one archived run the
-final answer to the *person* named a host that appears in no tool result at
+final answer to the _person_ named a host that appears in no tool result at
 all.
 
 Nothing in the conversation said the evidence had gone. That is the release.
@@ -2200,7 +2311,7 @@ Nothing in the conversation said the evidence had gone. That is the release.
   already inside `keepRecentTurns` costs nothing at all. Nothing at or before
   the current request is pinnable, so a new user turn releases the whole
   previous loop. The floor is `1 request + keepLastToolResults pins +
-  keepRecentTurns turns`, whatever your tool count, iteration count or run
+keepRecentTurns turns`, whatever your tool count, iteration count or run
   length.
 
   And a pin that BLOCKS is worse than a pin that misses: when two consecutive
@@ -2211,9 +2322,9 @@ Nothing in the conversation said the evidence had gone. That is the release.
   `keepLastToolResults: false` (or `0`) reproduces 9.56.0 byte for byte.
 
 - **A drop now says whose results it took.** The authored notice gains one
-  sentence: *"Tool results are among them (whats_here, pan_view) — call the
+  sentence: _"Tool results are among them (whats_here, pan_view) — call the
   tool again if you need its output; do not reconstruct ids or values from
-  memory."* The drop is now STATED rather than silent — whether that sentence
+  memory."_ The drop is now STATED rather than silent — whether that sentence
   changes what a model does next is **not measured here**: the five archived
   runs have not been re-run with it on, so it ships as an honesty fix and not
   as a performance claim. Tool names are the only caller data that reaches it, and they
@@ -2239,13 +2350,13 @@ Nothing in the conversation said the evidence had gone. That is the release.
   > You are on action 25 of 30; 5 remain. Finish what you have rather than
   > start something new.
 
-  Measured, not decorative: given its remaining budget a model wrote *"I have 5
-  steps left, enough to finish this properly"* and landed the task, where
+  Measured, not decorative: given its remaining budget a model wrote _"I have 5
+  steps left, enough to finish this properly"_ and landed the task, where
   before it spiralled and produced no answer at all.
 
   The vocabulary is closed rather than a `(ctx) => string` because of
   **absence**. Given a function, an author writes `${ctx.maxIterations}` and
-  ships *"23 of undefined"*, or writes `?? 0` and ships a fabricated
+  ships _"23 of undefined"_, or writes `?? 0` and ships a fabricated
   denominator that nothing — and no model — can tell from a real zero. With
   named slots the library owns absence and applies one rule: if any named fact
   is unavailable, the whole instruction is skipped, by name, as
@@ -2269,7 +2380,7 @@ Nothing in the conversation said the evidence had gone. That is the release.
   message that would become the head was already a user turn (the pinned
   request, or an older turn of a restored conversation) no notice was owed at
   all. Its 245–358 characters were nevertheless allowed to veto a legitimate
-  drop; and because the removable span is the longest *contiguous* run, the
+  drop; and because the removable span is the longest _contiguous_ run, the
   same verdict came back at every boundary while the window grew without
   bound.
 
@@ -2474,11 +2585,11 @@ they do.
   `unknown`, so a surface that guessed at it would put words in a tool's
   mouth. One rule, and it is the whole rule:
 
-  | your payload | the line a person reads |
-  | --- | --- |
-  | `{ message: 'Hop 3 of 12' }` | `Hop 3 of 12` — your sentence, verbatim |
-  | `{ done: 3, total: 12 }` | `` `walk_graph` reported progress (3 so far)… `` |
-  | `'a bare string'` | the same generic line |
+  | your payload                 | the line a person reads                          |
+  | ---------------------------- | ------------------------------------------------ |
+  | `{ message: 'Hop 3 of 12' }` | `Hop 3 of 12` — your sentence, verbatim          |
+  | `{ done: 3, total: 12 }`     | `` `walk_graph` reported progress (3 so far)… `` |
+  | `'a bare string'`            | the same generic line                            |
 
   A top-level string field named **`message`** is shown verbatim, trimmed, and
   cut at **120 characters** with the cut stated (`… (+N more)`) — `message` is
@@ -2504,8 +2615,8 @@ they do.
   `tool_end` used to be able to clear a SIBLING call's status, leaving the
   bubble blank while a tool was still working.
 
-- **Commentary narrates the middle**, so recordings replay it: *"The
-  `walk_graph` tool reported progress while it was still running."* The
+- **Commentary narrates the middle**, so recordings replay it: _"The
+  `walk_graph` tool reported progress while it was still running."_ The
   teaching voice states the fact and never the payload — the same split the
   Lens teaching view keeps, in the same words.
 
@@ -2559,8 +2670,10 @@ tool's name on it.
     series: [{ t: '2026-08-19T10:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 18450 }],
     grain: { interval: '30m', aggregation: 'avg', is_counter: false },
     provenance: { measured_at: '2026-08-19T10:20:00Z', source: 'InfluxDB SwitchPortStats' },
-    coverage: { checked: ['fabric A: all 48 ports'],
-                notChecked: [{ what: 'the peer fabric', why: 'collector scoped to one fabric' }] },
+    coverage: {
+      checked: ['fabric A: all 48 ports'],
+      notChecked: [{ what: 'the peer fabric', why: 'collector scoped to one fabric' }],
+    },
     render: { default: 'table', columns: ['entity', 'value'], sort: 'value desc' },
   });
   ```
@@ -2612,7 +2725,7 @@ tool's name on it.
 - Zero-cost when unused: recognition is strict (`af_semantics: true` AND the
   whole rule set), so every value any tool has ever returned keeps its bytes.
   Runnable example: `examples/features/66-semantic-envelope.ts`. Guide:
-  docs *Build → Semantic tool results*.
+  docs _Build → Semantic tool results_.
 
 ## [9.52.0] - 2026-08-19
 
@@ -2692,7 +2805,7 @@ opaque function on a route edge.
 
 - **`guard:` on route edges — guards as data (the `when` predicate's declared
   twin).** `.route(a, b, { guard: { riskLevel: { in: ['high','critical'] },
-  score: { gte: 0.7 } } })` — conditions over the hop (`toolName`, `result`,
+score: { gte: 0.7 } } })` — conditions over the hop (`toolName`, `result`,
   `status`, `iteration`, `userMessage`, `currentSkillId`) and over the tool
   result's own top-level JSON fields, operators `eq/ne/gt/gte/lt/lte/in/notIn`
   (deliberately footprintjs's `WhereFilter` grammar, mirrored door-locally —
@@ -2702,6 +2815,7 @@ opaque function on a route edge.
   outcome, AND these conditions"). ONE compilation produces the predicate
   that routes, the serializable `SkillGuardData`, and the evidence evaluator
   — so the three can never describe different guards. What being data buys:
+
   - **the check-up proves contradictions** — new ERROR
     `guard-unsatisfiable`: crossed bounds (`gt: 5, lt: 3`), `eq` a same-key
     `ne`/`in`/`notIn` excludes, a `status` outside the closed result-status
@@ -2722,7 +2836,7 @@ opaque function on a route edge.
     evaluation: `guard` on the taken hop (verdict `true`) and `guardsClosed`
     for refusals (verdict `false`, at most one per edge per iteration, on
     whatever move resulted — a stay says `score gte 0.7 — saw "0.2" →
-    failed`). Agents without guards keep byte-identical events.
+failed`). Agents without guards keep byte-identical events.
 
 - **SkillMap & SkillWalker are now the official names.** You declare the
   **SkillMap**; the agent is the **SkillWalker**; the recording carries both.
@@ -2805,7 +2919,7 @@ is the whole release.
 ### Notes for recording consumers (the lens, triage platforms)
 
 - Draw the declared topology from `skill.graph_declared` (`declaredSource:
-  'recording'` can now mean COMPLETE); filter `from !== null` for
+'recording'` can now mean COMPLETE); filter `from !== null` for
   node-to-node edges, exactly as with a built graph's `edges`.
 - Fill per-beat reachability from `cursorMove.reachable` first; the refusal's
   `allowed` and declared-edge folds remain as fallbacks for older eras.
@@ -2864,7 +2978,7 @@ is the whole release.
     `recording.json`, the manifest carries a note naming the fact and the line
     that supplies it, and `BugReportUnit.enveloped` says per conversation which
     shape it got. Nothing is stamped that was not known.
-  - **The evidence is never packed twice** — an envelope *or* a bare recording,
+  - **The evidence is never packed twice** — an envelope _or_ a bare recording,
     never both. The zip is store-only, so a duplicated recording is duplicated
     bytes against the size ceiling the trim hints exist to keep a reporter under.
   - The GitHub issue body names the file that is really in the bundle, including
@@ -3415,9 +3529,8 @@ answer for. These are ours, built from that evidence. The credit is the field's.
 ### Fixed
 
 - Two unanchored `coverage` rules in `.gitignore` matched `src/core/agent/
-  coverage/`, so a new source directory would have been absent from every clone.
+coverage/`, so a new source directory would have been absent from every clone.
   Anchored to the vitest report directory, with a comment naming why.
-
 
 ## [9.42.0] - 2026-08-15
 
@@ -3504,7 +3617,6 @@ answer for. These are ours, built from that evidence. The credit is the field's.
   from a counter, so they differ in their prefix and the fold never shows.
   Fixing it re-keys stored sessions. Next release.
 
-
 ## [9.41.0] - 2026-08-15
 
 **Comparing strategies, and proving a store.** An audit asked whether this
@@ -3574,7 +3686,6 @@ key, and the proof obligations for the second port.
 - `MemoryDefinition` gains optional declared `strategy`, `retrieval` and
   `embedderId` — additive, and what makes a memory row worth grouping on.
 
-
 ## [9.40.0] - 2026-08-15
 
 **Two identity bugs, one of which had been paying out zeros since v2.8.**
@@ -3625,7 +3736,6 @@ key, and the proof obligations for the second port.
   `provider` now flows through to `CostTick` as well (optional; absent stays
   absent rather than becoming `'unknown'`).
 
-
 ## [9.39.0] - 2026-08-14
 
 **Three false doors closed, and two promises the recording did not keep.** An
@@ -3664,7 +3774,7 @@ forking. Mostly yes — but the first thing such an author reads was wrong.
   was reserved. Not re-exported from any barrel, not an `exports` subpath, not
   in the shipped-surface baseline — so nothing public could reach it and its
   removal is not breaking. The by-instance door (`agent.enable.observability({
-  strategy })`) is real, first-class, and now the only one. The cache twin
+strategy })`) is real, first-class, and now the only one. The cache twin
   legitimately has two doors; this one had one door and a sign pointing at a
   wall.
 
@@ -3687,7 +3797,6 @@ forking. Mostly yes — but the first thing such an author reads was wrong.
   `cumulativeCostUsd`, `recentCostUsd`), so every cost strategy attached through
   `enable.cost()` receives zeros. This release makes `model` resolve there; the
   numbers are still zero. Its own ticket.
-
 
 ## [9.38.0] - 2026-08-14
 
@@ -4056,12 +4165,13 @@ labels." Ours had no rule at all. Now it does, and it is enforced, not
 promised.
 
 ### What it is, and — because the name invites the wrong reading — what it
+
 ### is provably not
 
 It is a **fabrication detector, not a correctness judge.** If a value in
 the answer never appeared in anything a tool returned this turn, the model
 typed it rather than read it, and that is all this checks. It cannot catch
-a false claim built entirely from real values — *"fc1/3 is healthy"* when
+a false claim built entirely from real values — _"fc1/3 is healthy"_ when
 the data says the port is down uses two grounded tokens and sails through.
 It cannot catch a real value attached to the wrong thing, a fabricated
 quantity under the digit threshold, or a fabricated name spelled in
@@ -4116,7 +4226,7 @@ is not judged at all, and a turn the iteration or cost limit just cut
 short does not get to spend a revision it can't afford. It composes with,
 rather than collides with, `.reliability()`: reliability governs whether a
 call is retried before anything is committed; this governs an answer
-*after* it has already been committed to the transcript.
+_after_ it has already been committed to the transcript.
 
 ### Measured, not assumed
 
@@ -4195,7 +4305,7 @@ never touched `footprintjs` itself but imports the file that now did.
 - `isDevMode` (a `footprintjs` import) → a bound `devWarn()` / `devMode()`
   reader that the host supplies; every existing warning reads verbatim, and
   the existing `enableDevMode()` tests pass unchanged — the proof that
-  nothing about *what gets warned* moved, only *how it's asked*.
+  nothing about _what gets warned_ moved, only _how it's asked_.
 - `ToolResultStatus` → pulled out to a zero-import leaf and re-exported from
   its old home, so the envelope grammar is unchanged for every existing
   caller. The fence caught four more inline crossings of this type that
@@ -4358,7 +4468,7 @@ was in the bundle — an empty bundle read as "nobody was turned away" when
 it only meant "nobody ran." `standingAgent({ onIngressDecision })` now
 hands your sink one `IngressRecord` per request, filed at the terminal the
 reply actually reached. The honest contract is stated in the type itself:
-`'served'` means **delivered**, not *admitted* — a request the door let
+`'served'` means **delivered**, not _admitted_ — a request the door let
 through whose run, store or provider then broke files as `'failed'`, and
 the record carries the admission verdict (`allow` / `queue` / `refuse`)
 either way. It is a stream you chain into your own sink, not a join onto
@@ -4490,7 +4600,7 @@ read/write." Both, plus `decayPolicy`, are now carried under prefixed
 metadata keys and restored verbatim on read. A caller's own value under one
 of the three keys this adapter generates (`source`, `resourceName`,
 `distance`) is refused by name rather than silently shadowed — recognized by
-*identity*, not shape, so a caller's own `distance: 12` cannot be mistaken
+_identity_, not shape, so a caller's own `distance: 12` cannot be mistaken
 for this adapter's. An oversized carried field is refused rather than
 truncated: provenance that came back shortened would be provenance nobody
 could tell was shortened.
@@ -4680,7 +4790,7 @@ effects. Every line follows the same rules as the rest of the layer:
   retry happened — no event attests one, so the words don't either.
 - **Sizes humanized, and the two units told apart.** `humanizeBytes` /
   `humanizeChars` — `41.0 KB` where the ceiling counts bytes, `240,000
-  characters` where it counts characters (`tools.result_refused` counts
+characters` where it counts characters (`tools.result_refused` counts
   characters, because that's what the limit does).
 - **Refs and digests stay out of prose.** They identify a row for the details
   panel; a reader doesn't read them. The repeated-call nudge's fingerprints
@@ -4734,8 +4844,8 @@ import { googleIdentity } from 'agentfootprint/security';
   now declares the same `ranksBy: 'server-text'` for the identical reason, so
   the two server-ranked stores no longer disagree on how they say what they
   are.)
-- **`googleIdentity`** — a narrow `CredentialProvider`: it vends *Google*
-  access tokens for *Google* APIs from whatever credential the environment
+- **`googleIdentity`** — a narrow `CredentialProvider`: it vends _Google_
+  access tokens for _Google_ APIs from whatever credential the environment
   already has (ADC, workload identity, an impersonated service account).
   `mode: 'user'` is refused by name rather than quietly served a machine
   token, since Google's user-token equivalent has no Node surface yet.
@@ -4810,7 +4920,9 @@ provider scopes a vault on:
 
 ```ts
 await standingAgent({
-  agent, sessions, host: nodeHost({ port: 8080 }),
+  agent,
+  sessions,
+  host: nodeHost({ port: 8080 }),
   identity: {
     verify: jwksIdentity({
       jwksUrl: 'https://idp.example.com/.well-known/jwks.json',
@@ -4823,7 +4935,7 @@ await standingAgent({
 
 **Configured is closed-by-default.** A request with no `Authorization`
 header is refused (401) unless `allowAnonymous: true` is set, and a request
-that *names* a `userId` without proving it is refused either way — a door
+that _names_ a `userId` without proving it is refused either way — a door
 that verifies a token when offered and waves the request through when it is
 not is a door anybody opens by sending less. `jwksIdentity` is the one
 adapter this release ships (`jose`, loaded lazily, pinned against a real
@@ -4842,7 +4954,9 @@ Nothing else reads them; they do not enter the run's own identity tuple.
 
 ```ts
 await standingAgent({
-  agent, sessions, host,
+  agent,
+  sessions,
+  host,
   identity: { verify },
   admission: turnsPerHour({ limit: 60 }),
 });
@@ -5027,8 +5141,12 @@ wire, scoped to the session that asks.**
 ### Added — two wire operations on the existing invoke path
 
 ```ts
-{ op: 'artifact-head', ref }  // → meta
-{ op: 'artifact-get',  ref }  // → meta + data
+{
+  op: 'artifact-head', ref;
+} // → meta
+{
+  op: 'artifact-get', ref;
+} // → meta + data
 ```
 
 Resolved under the requesting session's identity-composed scope — exactly
@@ -5079,7 +5197,9 @@ lines.**
 defineTool({
   name: 'summarize',
   wants: { dataset: 'dataset/rows' },
-  execute: async (args, ctx) => { /* args.dataset is the RESOLVED DATA */ },
+  execute: async (args, ctx) => {
+    /* args.dataset is the RESOLVED DATA */
+  },
 });
 ```
 
@@ -5267,7 +5387,7 @@ on `llm_start`.
 Precedence is stated and enforced, most specific wins: **escalation
 brain > per-skill brain > `.configure()`'s run model > the build
 default.** A brain naming only a model inherits the agent's own provider;
-a brain naming a *foreign* provider without a model is refused at
+a brain naming a _foreign_ provider without a model is refused at
 `Agent.build()` — the run's configured model belongs to another vendor's
 namespace and would fail mid-turn, on exactly the iteration the cursor
 enters the skill.
@@ -5304,12 +5424,12 @@ returns today — stay byte-identical; the envelope is recognized only by
 its own strict shape.
 
 - **`propose-transition`** — `{ kind: 'propose-transition', targetSkillId,
-  reason }`. The typed replacement for a string routing marker: the
-  *graph* decides. A same-batch declared edge still wins; an unreachable
+reason }`. The typed replacement for a string routing marker: the
+  _graph_ decides. A same-batch declared edge still wins; an unreachable
   target is refused out loud, not silently dropped.
 - **`require-instruction`** — `{ kind: 'require-instruction',
-  instructionId, deliveryLease: 'next-call' | 'until-skill-exit' }`.
-  Pushes a *registered* instruction into the coming call(s) —
+instructionId, deliveryLease: 'next-call' | 'until-skill-exit' }`.
+  Pushes a _registered_ instruction into the coming call(s) —
   `read_skill` stays the pull door for optional knowledge; this is the
   push door for mandatory procedure, and it only pushes what was
   registered at build. An unknown id is refused, never improvised.
@@ -5493,7 +5613,7 @@ unmatched, never as an uncontested winner.
 ### Zero-cost when unused
 
 Graphs that use none of the new options are byte-identical in behavior
-*and* events to 9.16.0 — pinned by regression tests. 78+ new tests cover
+_and_ events to 9.16.0 — pinned by regression tests. 78+ new tests cover
 the cascade, the scorers, the strictness postures, and continuity.
 
 ### Deferred
@@ -5528,6 +5648,7 @@ ordering bug with no error, no log line, just a silently different cursor.
 
   On the record, so a trace answers "why didn't the second call route?"
   instead of leaving the reader to guess.
+
 - Single-tool iterations are byte-identical to 9.15.0 — this only changes
   behavior when a batch actually contains more than one result.
 - New `AgentState.toolResults` / `InjectionContext.toolResults`: the full
@@ -5542,7 +5663,7 @@ ordering bug with no error, no log line, just a silently different cursor.
 Wiring a `.skillGraph(...)` onto a classic agent meant the graph would still
 route and the trace would still show an activation — but the model never saw
 the newly-active skill's prompt or tools, because the slot it would have
-changed was already frozen. The configuration *looked* like it worked and
+changed was already frozen. The configuration _looked_ like it worked and
 didn't.
 
 `Agent.build()` now refuses this combination outright, naming both the
@@ -5596,7 +5717,7 @@ const graph = skillGraph({
 
 What previously required `autoActivate: 'currentSkill'` typed on every single
 skill is now one graph-level line. A skill's own explicit `autoActivate` always
-wins — the graph sets a default, never an override. Only *wired* skills (named
+wins — the graph sets a default, never an override. Only _wired_ skills (named
 by an entry or a route) are stamped: an unwired skill's tools would otherwise
 never appear at all. With the dial absent or `false`, compiled skills are
 byte-identical to 9.14.0 (pinned by test). On a `tree()` graph the flat-arm
@@ -5677,10 +5798,10 @@ const memory = defineMemory({
   type: MEMORY_TYPES.EPISODIC,
   strategy: {
     kind: MEMORY_STRATEGIES.SUMMARIZE,
-    recent: 6,                  // the 6 newest entries stay verbatim
-    size: 20,                   // how much history to load per turn
-    llm: anthropic(),           // its OWN instance, not the agent's
-    model: 'claude-haiku-4-5',  // named explicitly — no fallback
+    recent: 6, // the 6 newest entries stay verbatim
+    size: 20, // how much history to load per turn
+    llm: anthropic(), // its OWN instance, not the agent's
+    model: 'claude-haiku-4-5', // named explicitly — no fallback
   },
   store,
 });
@@ -5710,8 +5831,8 @@ quietly bills your MAIN model for compression, and a different vendor is sent a
 model id it has never heard of, mid-conversation, on a paid run.
 
 `Agent.memory()` now also refuses a summarizer that is the agent's own provider
-**instance** at the agent's own model (the narrow 8.14.0 rule; a *second
-instance* of the same vendor at the same model is allowed and sometimes right).
+**instance** at the agent's own model (the narrow 8.14.0 rule; a _second
+instance_ of the same vendor at the same model is allowed and sometimes right).
 `defineMemory` cannot make that check — it has never heard of an agent — so a
 `MemoryDefinition` now declares `billing: { provider, model }` and the builder
 reads it, the same field and shape `WindowStrategy.billing` already used. One
@@ -5824,7 +5945,7 @@ why, with a date.
 import { gemini } from 'agentfootprint/providers';
 
 const vertex = gemini({ project: 'my-project', location: 'us-central1' }); // ADC
-const studio = gemini({ apiKey: process.env.GEMINI_API_KEY! });            // one key
+const studio = gemini({ apiKey: process.env.GEMINI_API_KEY! }); // one key
 ```
 
 Two doors, one adapter, and neither is guessed: a project selects Vertex, a key
@@ -5877,8 +5998,8 @@ Three decisions worth reading before you rely on them:
   that arrives anyway is kept out of the visible answer on both paths.
 - **A stream that reports no usage reports ZERO, never an estimate.**
   `models.countTokens` is on the namespace, is not called, and is named in the pin
-  as not called: it answers what a request *tokenises to*, not what the call was
-  *billed for*. Same law as `openai()` and `ollama()`. (Usage is read off the
+  as not called: it answers what a request _tokenises to_, not what the call was
+  _billed for_. Same law as `openai()` and `ollama()`. (Usage is read off the
   closing chunk BEFORE any content guard — the bug that made streamed turns bill
   as zero on two earlier adapters.)
 
@@ -5950,8 +6071,8 @@ new and load-bearing.
 
 ### Added — Gemini's over-long-request sentence joins the typed error
 
-`ContextWindowExceededError` (9.6.0) now translates *"The input token count
-(1200293) exceeds the maximum number of tokens allowed (1048576)."* — a word order
+`ContextWindowExceededError` (9.6.0) now translates _"The input token count
+(1200293) exceeds the maximum number of tokens allowed (1048576)."_ — a word order
 the existing patterns did not match — and reads both numbers out of it, including
 the case where Google ships the first parenthesis empty. Detection stays
 conservative: "INPUT token count" is what keeps it off a `max_tokens` validation
@@ -6000,8 +6121,8 @@ concurrency-and-sessions section, and a status row per boundary.
 - A `gemini()` error never prints the API key it was constructed with. The
   redaction is narrow by design — the exact string you passed, removed from the
   message, the stack and the wrapped cause — and is not a heuristic scrubber:
-  a thrown provider error reaches the model as a tool result *and* the commit log
-  *and* every observability sink, so one interpolation would leak to all of them.
+  a thrown provider error reaches the model as a tool result _and_ the commit log
+  _and_ every observability sink, so one interpolation would leak to all of them.
 
 ## [9.12.0] - 2026-08-12
 
@@ -6022,7 +6143,7 @@ provider signed:
 const credentials = agentCoreIdentity({
   region: 'us-west-2',
   workloadName: 'workflow_assistant_agent',
-  requireUserToken: true,             // optional — refuse a delegated call with no proof
+  requireUserToken: true, // optional — refuse a delegated call with no proof
 });
 
 // inside a tool
@@ -6037,7 +6158,7 @@ await ctx.credentials.getCredential({ service: 'google', mode: 'user', userToken
 - **Nothing downstream changed.** `GetWorkloadAccessTokenForJWT` answers with the
   same `workloadAccessToken` the by-userId exchange does, so it feeds the same
   `GetResourceOauth2Token` call, the same `Credential`, the same `toHeaders()`.
-  The vault entry at the end belongs to the *person* rather than to the agent,
+  The vault entry at the end belongs to the _person_ rather than to the agent,
   which is what makes revoking their access actually revoke it.
 - **Verified against the real SDK before it shipped**, names and shapes both:
   `{ workloadName, userToken }` in, `{ workloadAccessToken }` out. It joins the
@@ -6121,7 +6242,7 @@ refuses a call it used to allow, or emits a field it did not before.
 ### Added — `maxToolResultChars`: a ceiling on ONE tool result
 
 ```ts
-Agent.create({ provider, model, maxToolResultChars: 20_000 })
+Agent.create({ provider, model, maxToolResultChars: 20_000 });
 ```
 
 Over the cap, the result is **replaced** by a marker that tells the model what
@@ -6161,8 +6282,8 @@ happened and what to do about it:
 ### Added — WHO the run was for, on every event
 
 `EventMeta.principal` and `EventMeta.tenant` (9.11.0) join `sessionId` (9.4.0) on
-every event's meta. The stream has always said *what* happened and *when*; this
-is the *who*, and the three together are an audit record rather than a debug log.
+every event's meta. The stream has always said _what_ happened and _when_; this
+is the _who_, and the three together are an audit record rather than a debug log.
 
 ```ts
 await agent.run(message, {
@@ -6183,7 +6304,7 @@ await agent.run(message, {
   and `sessionId` beside it is the fact the transport delivered.
 - **Which sinks carry it, checked rather than assumed.** `fileObservability`,
   `cloudwatchObservability`, `agentcoreObservability` and `auditExport` serialize
-  the whole envelope and inherit it for free — in `auditExport`'s case *inside*
+  the whole envelope and inherit it for free — in `auditExport`'s case _inside_
   the hash chain, so editing who breaks the same verification as editing what.
   `otelObservability` maps signals onto spans rather than serializing, so the
   actor is PLACED there: `agentfootprint.principal.id` /
@@ -6209,7 +6330,7 @@ const policy = PermissionPolicy.fromRoles(roles, 'support', {
 ```
 
 - **`Tool.capabilities`** (`'memory_read' | 'memory_write' | 'external_net' |
-  'user_data'`) is a declaration, never an inference. A tool's reach is not
+'user_data'`) is a declaration, never an inference. A tool's reach is not
   knowable from its name, schema or description, and guessing would rest a policy
   decision on a heuristic.
 - **`PermissionChecker.governs`** is an optional, feature-detected member —
@@ -6244,8 +6365,8 @@ PermissionPolicy.fromRoles(roles, 'support', {
 - The refusal lands **before `execute`**, so a `surfaceMode: 'tool-only'` skill's
   body is never even computed.
 - **Hidden means unnamed.** The graph offer lists unreachable skills as "not
-  reachable from here" because a cursor can move; a hidden skill is about *who is
-  asking*, and naming it would tell one role about another role's capabilities.
+  reachable from here" because a cursor can move; a hidden skill is about _who is
+  asking_, and naming it would tell one role about another role's capabilities.
 - **The enum stays the full catalog.** `toolArgValidation` runs before the gate,
   so narrowing it would turn a policy refusal into a generic schema error and the
   model would never read the policy's own message — the reasoning 8.5.0 recorded
@@ -6295,7 +6416,7 @@ await standingAgent({
   agentFactory: () => Agent.create({ provider, model }).system('…').build(),
   sessions: sqliteSessions({ file: './sessions.db' }),
   host: nodeHost({ port: 8080 }),
-  maxActiveSessions: 200,        // default 100
+  maxActiveSessions: 200, // default 100
 });
 ```
 
@@ -6393,7 +6514,6 @@ nodeHost({ sessionCookie: 'af_session' });       // …or no client code at all
 - New example: `examples/deploy/multi-user.ts` — two people served at once,
   proving the overlap in wall clock and that neither saw the other's memory.
 
-
 ## [9.9.0] - 2026-08-12
 
 **A bug report IS the evidence.**
@@ -6411,7 +6531,7 @@ with the prose attached.
 ```ts
 import { describeBugReport, exportBugReport } from 'agentfootprint/observe';
 
-const offer = describeBugReport(recording);        // measure — nothing has left yet
+const offer = describeBugReport(recording); // measure — nothing has left yet
 // …show offer.units to the human; they tick some…
 const report = exportBugReport(recording, {
   include: ['conv-1', 'file-conversation', 'file-environment'],
@@ -6420,7 +6540,7 @@ const report = exportBugReport(recording, {
   expected: 'the updated price',
   actual: 'the price from before the update',
 });
-fs.writeFileSync(report.filename, report.zip);     // a real .zip
+fs.writeFileSync(report.filename, report.zip); // a real .zip
 ```
 
 - **The manifest is SELECTABLE UNITS, not a blob.** Each conversation is a unit
@@ -6438,7 +6558,7 @@ fs.writeFileSync(report.filename, report.zip);     // a real .zip
 - **What was left out is STATED.** `manifest.excluded` counts the conversations,
   files, events and turns that were withheld, names their unit ids, and the
   issue body repeats it. A maintainer reading turn 4 must be able to tell that
-  turns 1–3 were *withheld*, not *lost*.
+  turns 1–3 were _withheld_, not _lost_.
 - **Redacted keys, BY NAME.** The recording arrives already redacted (footprintjs
   scrubs at commit time), so nothing here scrubs anything — it would be too late
   to matter and a second policy could only disagree with the first. Instead the
@@ -6474,9 +6594,9 @@ plain `fetch` with no SDK:
 
 ```ts
 const reporter = githubBugReporter({
-  issueRepo: 'footprintjs/agentfootprint',   // public — the conversation
-  evidenceRepo: 'acme/af-bug-evidence',      // private — the run
-});                                          // token: GITHUB_TOKEN, or `token`
+  issueRepo: 'footprintjs/agentfootprint', // public — the conversation
+  evidenceRepo: 'acme/af-bug-evidence', // private — the run
+}); // token: GITHUB_TOKEN, or `token`
 const { issueUrl, zipUrl } = await reporter.file(report);
 ```
 
@@ -6517,13 +6637,13 @@ const { issueUrl, zipUrl } = await reporter.file(report);
 calls — browser-safe and server-safe, no client secret, no dependency:
 
 ```ts
-const signIn = await githubDeviceSignIn({ clientId });     // returns at once
+const signIn = await githubDeviceSignIn({ clientId }); // returns at once
 show(`Open ${signIn.verificationUri} and enter ${signIn.userCode}`);
-const { token, login } = await signIn.completed;           // resolves on approve
+const { token, login } = await signIn.completed; // resolves on approve
 ```
 
-A server PAT files every report as the *application*; this files it as the
-*reporter*, which is what a field tester filing upstream needs. It honours
+A server PAT files every report as the _application_; this files it as the
+_reporter_, which is what a field tester filing upstream needs. It honours
 `slow_down`, respects the code's expiry, takes an `AbortSignal`, and fetches
 `/user` for attribution (a `/user` that refuses is not fatal — the token still
 works, the login is simply absent). The token it returns is handed to
@@ -6593,7 +6713,9 @@ agent.enable.observability({
     maxBytes: 64 * 1024 * 1024,
   }),
 });
-process.on('SIGTERM', async () => { await agent.shutdown(); });  // flushes
+process.on('SIGTERM', async () => {
+  await agent.shutdown();
+}); // flushes
 ```
 
 Four things it is deliberate about:
@@ -6637,8 +6759,8 @@ import { vaultCredentials } from 'agentfootprint/security';
 
 const credentials = vaultCredentials({
   address: 'https://vault.internal:8200',
-  paths: { github: 'ci/github' },      // …or resolve(service), or neither
-});                                     // token: `token`, else VAULT_TOKEN
+  paths: { github: 'ci/github' }, // …or resolve(service), or neither
+}); // token: `token`, else VAULT_TOKEN
 ```
 
 The tool code does not change from the `staticTokens` version — same port, same
@@ -6672,7 +6794,7 @@ service)` as the seam for a shop whose field names are its own.
   the service, the mount path and the HTTP status — and nothing from the
   response body, nothing from the token, not even the field names the secret
   carries. This is the 8.6.0 law applied one adapter down: a thrown message
-  reaches the model as a tool result *and* rides
+  reaches the model as a tool result _and_ rides
   `agentfootprint.credential.failed` to every observer. It is pinned by a
   grep-shaped test that walks every failure path — unknown service, 401, 403,
   404, 503, a non-JSON reply, a KV v1 response, an unrecognised field set, and a
@@ -6685,21 +6807,21 @@ service)` as the seam for a shop whose field names are its own.
 - **`infrastructure/on-premises.mdx`** — the provider page beside AWS. The
   local-first ladder (mock → local model → your gateway → a paid API) as the
   opening frame, then a service-by-service map: LLM (`ollama`, `openai({
-  baseURL })` for vLLM / llama.cpp / a corporate gateway, or the two-method
+baseURL })` for vLLM / llama.cpp / a corporate gateway, or the two-method
   port), stores (`sqliteVectorStore`, `pgVectorStore`, `staticVectorStore`,
   `RedisStore`), embedders (`localEmbedder`, `staticEmbedder`), hosting
   (`httpHost` / `nodeHost` + `sqliteSessions` / `memorySessions`), code
-  execution (`localCodeRunner` — *isolation, not a sandbox*), telemetry
+  execution (`localCodeRunner` — _isolation, not a sandbox_), telemetry
   (`otelObservability` to any OTLP collector, `fileObservability` when there is
   none, `auditExport` for evidence), credentials (`staticTokens`,
   `vaultCredentials`, and the port for everything else) and tools (`mcpClient`
   over stdio or Streamable HTTP). It ends with **what is NOT here** — no
   Kubernetes-native anything, no second secret-manager adapter, no metrics
   exporter, no retention policy, no air-gapped model distribution.
-- **The status vocabulary gained one honest rung.** *Contract-shaped and tested;
-  awaiting field use* is what `fileObservability` and `vaultCredentials` carry:
+- **The status vocabulary gained one honest rung.** _Contract-shaped and tested;
+  awaiting field use_ is what `fileObservability` and `vaultCredentials` carry:
   their ports and refusals are pinned by tests, and neither has met a real
-  production disk or vault. *Verified in a production field deployment* now
+  production disk or vault. _Verified in a production field deployment_ now
   appears in exactly one place, describing a deployment **shape** — a standing
   agent over `httpHost` + `sqliteSessions` against an OpenAI-compatible gateway,
   the shape several past releases exist because of — and never an adapter. The
@@ -6730,14 +6852,14 @@ handed that said "this is over".
 
 Three optional fields, sourced from what the engine already stamps:
 
-| field | source | absent when |
-|---|---|---|
-| `ctx.runId` | the run in flight | there is no run — a call served over `mcpServe` is one call, not a turn |
-| `ctx.sessionId` | `run({ sessionId })` ← `HostRequest.sessionId` | the run is not session-bound |
-| `ctx.identity` | the identity the CALLER passed | the caller passed none |
+| field           | source                                         | absent when                                                             |
+| --------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `ctx.runId`     | the run in flight                              | there is no run — a call served over `mcpServe` is one call, not a turn |
+| `ctx.sessionId` | `run({ sessionId })` ← `HostRequest.sessionId` | the run is not session-bound                                            |
+| `ctx.identity`  | the identity the CALLER passed                 | the caller passed none                                                  |
 
 Every one is **absent rather than invented**, which is the 9.4.0 rule applied one
-layer down. `ctx.identity` is deliberately *not* the run's internal
+layer down. `ctx.identity` is deliberately _not_ the run's internal
 `runIdentity`: that is always populated, defaulting to
 `{ conversationId: '<runId>' }`, and handing a tool a synthesized conversation as
 "the identity" would let it isolate a live sandbox on a fiction.
@@ -6767,12 +6889,12 @@ tool that wants a run-scoped session needs to know it is at a door with no runs
 BEFORE it opens one. Asking for a scope a door cannot honour throws, naming the
 door.
 
-| scope | fires |
-|---|---|
-| `'call'` | when `tool.execute` settles — resolve **or** throw. Every door, including `mcpServe`. |
-| `'run'` | at a run terminal that is **not a pause**. |
-| `'session'` | `agent.closeToolSessions({ sessionId })`. |
-| `'shutdown'` | `agent.shutdown()`. |
+| scope        | fires                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `'call'`     | when `tool.execute` settles — resolve **or** throw. Every door, including `mcpServe`. |
+| `'run'`      | at a run terminal that is **not a pause**.                                            |
+| `'session'`  | `agent.closeToolSessions({ sessionId })`.                                             |
+| `'shutdown'` | `agent.shutdown()`.                                                                   |
 
 Seven laws, each pinned: at most once ever · idempotent by `(tool, scope, key)`
 with the FIRST registration winning (it holds the live handle) · reverse
@@ -6783,7 +6905,7 @@ tolerates "already gone" · nothing live is ever persisted into a checkpoint.
 **A pause is not a terminal.** `'run'` teardown deliberately does not hang off
 `finally`, which also runs on both pause shapes. A `checkIn` on a code
 interpreter stops the run so a person can approve the code; tearing the sandbox
-down there destroys the exact state the resume needs, and it fails *quietly* — as
+down there destroys the exact state the resume needs, and it fails _quietly_ — as
 a resumed run that "just re-ran everything". An error IS a terminal.
 
 ### Added — `agent.closeToolSessions({ sessionId })`
@@ -6872,7 +6994,7 @@ the rows, and what comes back is the finding.
   `client.send(new Command(...))`, pinned in `test/adapters/aws/awsCommandPin.ts`
   and **verified against a real install of the SDK before shipping** — including
   two shapes a design could only have guessed at: `Invoke` answers with an EVENT
-  STREAM, and seven of its nine union members are modelled *exceptions* (folded
+  STREAM, and seven of its nine union members are modelled _exceptions_ (folded
   in as empty output, an `AccessDenied` would have reported a clean run that
   "printed nothing"), and `Stop` takes the session id, not a URI.
 - **`codeRunnerTool({ runner, scope })`** (main barrel) — holds one session per
@@ -6937,8 +7059,8 @@ and now shares the paging with the general one.
 **Behaviour change, named loudly: multi-turn memory starts actually
 retaining.** A six-turn conversation stores twelve message entries where it
 stored two, and the window injects up to `size` of them instead of the last
-exchange — so prompts get longer and stores get bigger *because the agent is
-now remembering what it was asked to remember*. Turn it down deliberately
+exchange — so prompts get longer and stores get bigger _because the agent is
+now remembering what it was asked to remember_. Turn it down deliberately
 (`size`, `DECAY`, `.compaction()`) rather than by accident.
 
 Cost: one paged `list()` per store per run, and only when a memory actually
@@ -7187,7 +7309,7 @@ compaction that runs.
 **AWS adapters tell the truth.**
 
 A production field report tested 9.3.0 against a real account and found two
-adapters *dispatching calls that were never made against AWS* — one sending a
+adapters _dispatching calls that were never made against AWS_ — one sending a
 command that does not exist, one calling a method that a command-based client
 does not have. Both compiled. Both had green tests. Every one of those tests
 injected a double past the SDK, which is exactly why the bug class survives: the
@@ -7284,9 +7406,9 @@ are untouched.
 
 ### Changed — a fail-closed refusal now READS final
 
-When a `PermissionChecker` throws, the call is denied. What the model was *told*
+When a `PermissionChecker` throws, the call is denied. What the model was _told_
 was the checker's own thrown message — and those are written for operators:
-*"not available right now"*, `ECONNREFUSED`, *"timed out"*. **Measured in
+_"not available right now"_, `ECONNREFUSED`, _"timed out"_. **Measured in
 production: a real model read that as weather and retried the same tool to
 `maxIterations`, then returned the empty string.** Against the local policy's
 long-standing bracketed form the same model adapted cleanly on the first
@@ -7327,8 +7449,8 @@ calls did so in a silence that read like health.
 ### Added — `EventMeta.sessionId`: which CONVERSATION an event belongs to
 
 `meta.runId` is per `run()` / `resume()`; a session spans many. A shipped
-telemetry stream could answer *"what happened in this run?"* and not *"what
-happened in this conversation?"* — the question a session-oriented host is built
+telemetry stream could answer _"what happened in this run?"_ and not _"what
+happened in this conversation?"_ — the question a session-oriented host is built
 around, and one the events alone cannot be joined back into afterwards.
 
 `standingAgent` now threads the caller's own session id onto every event the run
@@ -7348,13 +7470,13 @@ three preconditions it had no evidence for, all three of which were wrong at
 once:
 
 - **A euclidean index was accepted.** The construction refusal read
-  `options.distanceMetric`, a *claim by the caller* about an index the store did
+  `options.distanceMetric`, a _claim by the caller_ about an index the store did
   not create, so the default (undeclared) sailed through. Measured live: a
   vector queried against itself returned **0.9991630113800056**, where a true
   cosine self-similarity is exactly `1.0` — the very "number that READS like a
   cosine and is not one" this adapter's own header warns about.
 - **A missing `nonFilterableMetadataKeys: ['af']`** surfaced as a raw AWS
-  `ValidationException` — *"Filterable metadata must have at most 2048 bytes"* —
+  `ValidationException` — _"Filterable metadata must have at most 2048 bytes"_ —
   **mid-import**, with documents already written and success already reported
   for them.
 - **The index dimension was never compared with the embedder.**
@@ -7378,11 +7500,11 @@ index whose metric, layout and dimension it would be guessing at.
 
 **Three promises the code had already made, kept.**
 
-`MemoryStore`'s own docstring has named its backends since 2.x — *"Every storage
+`MemoryStore`'s own docstring has named its backends since 2.x — _"Every storage
 backend (InMemory, Redis, DynamoDB, **Postgres**, Bedrock AgentCore) implements
-this interface"* — and named the queries too, in the two places an implementer
-would look: *"**Postgres**: multi-row INSERT … ON CONFLICT DO UPDATE"* for
-`putMany`, and *"**pgvector**: `ORDER BY embedding <=> query LIMIT k`"* for
+this interface"_ — and named the queries too, in the two places an implementer
+would look: _"**Postgres**: multi-row INSERT … ON CONFLICT DO UPDATE"_ for
+`putMany`, and _"**pgvector**: `ORDER BY embedding <=> query LIMIT k`"_ for
 `search`. Every one of those sentences was true about the design and false about
 the shipped package. Two of the three items below are the same shape: a
 documented promise with nothing behind it.
@@ -7546,8 +7668,8 @@ are now pinned; the rest are below.
 ### The conversation has a door with its own name
 
 ```ts
-await agent.run({ message: 'Book me a table for two.' });   // one turn
-await agent.followUp('Make it three.');                     // the next one
+await agent.run({ message: 'Book me a table for two.' }); // one turn
+await agent.followUp('Make it three.'); // the next one
 
 // …or hand the conversation around — plain JSON, any store, any machine:
 const conversation = agent.checkpoint();
@@ -7605,7 +7727,7 @@ already broken in effect, so the throw is a fix, not a new restriction.
 is what makes `checkpoint()`, `getLastSnapshot()` and `followUp()` possible.
 Two overlapping runs both finished, both returning plausible answers, and the
 state afterwards belonged to whichever finished last — so `checkpoint()` could
-hand back the *other* run's conversation, with nothing in either recording
+hand back the _other_ run's conversation, with nothing in either recording
 saying so. That is corruption, not concurrency. `standingAgent` has serialized
 runs since it existed and calls it "a correctness requirement rather than a
 tuning choice"; the guarantee now lives in the primitive. Two turns at once:
@@ -7619,16 +7741,16 @@ a consent gate any later message could walk around. Answer it with
 `resume(checkpoint, decision)`, or say plainly that it is being dropped:
 
 ```ts
-const dropped = agent.abandonPause();   // { toolName, toolCallId, question }
+const dropped = agent.abandonPause(); // { toolName, toolCallId, question }
 await agent.run({ message: 'never mind, different question' });
 ```
 
-`abandonPause()` *returns* what it dropped, so the abandonment can be logged
+`abandonPause()` _returns_ what it dropped, so the abandonment can be logged
 rather than performed blind.
 
 **A pause belongs to a session, not to the instance.** `standingAgent` shares
 one `Agent` across every session, so the instance guard alone would have let
-session A's unanswered question refuse session B's *first* message — a
+session A's unanswered question refuse session B's _first_ message — a
 different conversation, a different person, an answer they were never asked
 for. The composer now releases the instance at the moment ownership moves: once
 the pause is in the store, the store owns it, and a later request carrying a
@@ -7649,7 +7771,7 @@ No shipped example, test or doc called it twice.
 ### `agent.canExplain()`
 
 `.selfExplain()` was already honest to the **model** with no record bound — the
-trace tools answer *"No completed run is available yet"* and the skill body says
+trace tools answer _"No completed run is available yet"_ and the skill body says
 to say so plainly. It had no answer for the **program**. `canExplain()` returns
 `false` for two honest reasons — not built with `.selfExplain()`, or built with
 it and no turn completed — so a caller can route a why-question before spending
@@ -7677,7 +7799,7 @@ of this class quietly. Three kinds of pin:
    bare `throw`.
 2. **Adapted** — pinned by what reaches the model / the store / the caller,
    observed on the wire, never by mocking internals.
-3. **Stated** — pinned **twice**: the behavior, *and* the sentence in the source
+3. **Stated** — pinned **twice**: the behavior, _and_ the sentence in the source
    that states it. A stated behavior whose statement was deleted is back to
    being a silent success, and only the second assertion catches that.
 
@@ -7696,7 +7818,7 @@ decision somebody makes in a diff.
   prints the messages the provider actually received for each. The model's own
   "this is your first message" reply is the evidence.
 - `examples/features/49-self-explain-live.ts` — turn 2 now goes through
-  `followUp()`. It was a second `run()`, and the scripted mock read the *first*
+  `followUp()`. It was a second `run()`, and the scripted mock read the _first_
   user message, so the demo's own scripting was masking the restart. Live, the
   why-question used to arrive with no subject.
 - `docs-next/content/docs/build/conversations.mdx` — the conversation, the two
@@ -7708,13 +7830,13 @@ decision somebody makes in a diff.
 Additive except for the three refusals, and all three fire on code that was
 already wrong:
 
-| if you… | you now get | do this |
-| --- | --- | --- |
-| call `run()` twice expecting continuity | the same behavior as before (a new conversation) | `followUp(message)` or `run({ message, continueFrom })` |
-| overlap two `run()` calls on one agent | `RunInFlightError` | await the first, or build a second agent |
-| send a message while a pause is open | `PendingQuestionError` | `resume(checkpoint, decision)`, or `abandonPause()` first |
-| call `.system()` twice | build-time throw | join the strings, or `.steering()` / `.configure()` |
-| continue a stored conversation on a differently-**named** agent | `ConversationMismatchError` | continue it on the agent whose id recorded it |
+| if you…                                                         | you now get                                      | do this                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| call `run()` twice expecting continuity                         | the same behavior as before (a new conversation) | `followUp(message)` or `run({ message, continueFrom })`   |
+| overlap two `run()` calls on one agent                          | `RunInFlightError`                               | await the first, or build a second agent                  |
+| send a message while a pause is open                            | `PendingQuestionError`                           | `resume(checkpoint, decision)`, or `abandonPause()` first |
+| call `.system()` twice                                          | build-time throw                                 | join the strings, or `.steering()` / `.configure()`       |
+| continue a stored conversation on a differently-**named** agent | `ConversationMismatchError`                      | continue it on the agent whose id recorded it             |
 
 `checkpoint()` payloads written by 9.1.0 and earlier continue to work; they
 simply carry no `identity` or `agent`, which is the honest answer for a
@@ -7745,13 +7867,13 @@ embedder might have — which then cuts every larger embedder short.
 characters, that this embedder represents faithfully. Every shipped embedder
 fills it in:
 
-| embedder | `maxInputChars` | where the number comes from |
-|---|---|---|
-| `localEmbedder()` | `2000` | measured — the default model's 512-wordpiece-token cliff |
-| `openaiEmbedder()` | `32000` | the documented 8,191-token window, at 4 characters a token |
-| `bedrockEmbedder()` | `32000` | Titan's documented 8,192-token window, same conversion |
-| `staticEmbedder()` | `1000000` | no transformer, so no context window — nothing is ever clipped |
-| `mockEmbedder()` | `1000000` | reads every character in a loop |
+| embedder            | `maxInputChars` | where the number comes from                                    |
+| ------------------- | --------------- | -------------------------------------------------------------- |
+| `localEmbedder()`   | `2000`          | measured — the default model's 512-wordpiece-token cliff       |
+| `openaiEmbedder()`  | `32000`         | the documented 8,191-token window, at 4 characters a token     |
+| `bedrockEmbedder()` | `32000`         | Titan's documented 8,192-token window, same conversion         |
+| `staticEmbedder()`  | `1000000`       | no transformer, so no context window — nothing is ever clipped |
+| `mockEmbedder()`    | `1000000`       | reads every character in a loop                                |
 
 `indexCorpus`, `indexFolder` and `indexDocuments` read the embedder's declared
 ceiling **in preference to** their own 2,000-character default. An explicit
@@ -7769,7 +7891,7 @@ is accepted because the cliff belongs to the **model**, not to the factory.
 ### Truncation became visible
 
 A run that clipped anything now says so — **once**, on `console.warn`, naming
-the count, the ceiling in effect *and where that ceiling came from*, and the
+the count, the ceiling in effect _and where that ceiling came from_, and the
 two fixes (re-split smaller, or raise `maxChunkChars`). `IndexReport` gains
 **`truncatedCount`** beside the existing `truncated` list: the list is what you
 debug with, the count is what you assert on and what a dashboard row can hold.
@@ -7817,27 +7939,27 @@ deprecation warnings on 8.20.0, it compiles and runs unchanged on 9.0.0.**
 
 ### Removed — the sixteen door aliases
 
-Each removed path re-exported the *same symbols* the door carries, never copies,
+Each removed path re-exported the _same symbols_ the door carries, never copies,
 so this is a find-and-replace on import lines. No name moved; no name was lost.
 
-| you were importing from | import from |
-|---|---|
-| `agentfootprint/llm-providers` | `agentfootprint/providers` |
-| `agentfootprint/embedders` | `agentfootprint/providers` |
-| `agentfootprint/tool-providers` | `agentfootprint/providers` |
-| `agentfootprint/thinking` | `agentfootprint/providers` |
-| `agentfootprint/memory-providers` | `agentfootprint/memory` |
-| `agentfootprint/observability-providers` | `agentfootprint/observe` |
-| `agentfootprint/strategies` | `agentfootprint/observe` |
-| `agentfootprint/stream` | `agentfootprint/observe` |
-| `agentfootprint/status` | `agentfootprint/observe` |
-| `agentfootprint/locales` | `agentfootprint/observe` |
-| `agentfootprint/debug` | `agentfootprint/observe` |
-| `agentfootprint/debug/finders` | `agentfootprint/observe` |
-| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe` |
-| `agentfootprint/hosting-providers` | `agentfootprint/hosting` |
-| `agentfootprint/injection-engine` | `agentfootprint/context` |
-| `agentfootprint/identity` | `agentfootprint/security` |
+| you were importing from                             | import from                |
+| --------------------------------------------------- | -------------------------- |
+| `agentfootprint/llm-providers`                      | `agentfootprint/providers` |
+| `agentfootprint/embedders`                          | `agentfootprint/providers` |
+| `agentfootprint/tool-providers`                     | `agentfootprint/providers` |
+| `agentfootprint/thinking`                           | `agentfootprint/providers` |
+| `agentfootprint/memory-providers`                   | `agentfootprint/memory`    |
+| `agentfootprint/observability-providers`            | `agentfootprint/observe`   |
+| `agentfootprint/strategies`                         | `agentfootprint/observe`   |
+| `agentfootprint/stream`                             | `agentfootprint/observe`   |
+| `agentfootprint/status`                             | `agentfootprint/observe`   |
+| `agentfootprint/locales`                            | `agentfootprint/observe`   |
+| `agentfootprint/debug`                              | `agentfootprint/observe`   |
+| `agentfootprint/debug/finders`                      | `agentfootprint/observe`   |
+| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe`   |
+| `agentfootprint/hosting-providers`                  | `agentfootprint/hosting`   |
+| `agentfootprint/injection-engine`                   | `agentfootprint/context`   |
+| `agentfootprint/identity`                           | `agentfootprint/security`  |
 
 What ships now is exactly: the root barrel, the ten doors (`/providers`,
 `/memory`, `/rag`, `/cache`, `/observe`, `/events`, `/context`, `/resilience`,
@@ -7853,23 +7975,23 @@ implementation barrel is served by its door as the same object.
 
 ### Removed — options, strings, methods, fields
 
-| removed | replacement | since |
-|---|---|---|
-| `AgentBuilder.recorder(rec)` | `AgentBuilder.watch(rec)` — same list, same order, same attachment, and variadic | deprecated 8.0.0 |
-| `defineSkill({ viaToolName })` | drop it — `'read_skill'` is the only activation tool the library builds; gate on a `rule` trigger or a `skillGraph()` edge | deprecated 8.7.0 |
-| `skillsFromDir(dir, { viaToolName })` | drop it — same reason | deprecated 8.7.0 |
-| `WindowRefusalReason` member `'summary-not-smaller'` | `'replacement-not-smaller'` | renamed 8.14.0 |
-| type `FoldRefusal` | `WindowRefusal` | renamed 7.17 |
-| type `FoldRefusalReason` | `WindowRefusalReason` | renamed 7.17 |
-| `WindowStrategy` exported from `agentfootprint/memory` | `MemoryWindowStrategy` | renamed 7.27.1 |
-| `CompactionRecord.foldedStageIds` | `WindowRecord.removedStageIds` | family name published 7.17 |
-| `CompactionRecord.foldedMessageCount` | `WindowRecord.removedMessageCount` | family name published 7.17 |
-| `ContextBudgetPressurePayload.capTokens` | `cap`, read with `unit` | renamed 8.14.0 |
-| `ContextBudgetPressurePayload.projectedTokens` | `projected`, read with `unit` | renamed 8.14.0 |
-| `BudgetPressureRecord.capTokens` | `cap`, read with `unit` | renamed 8.14.0 |
-| `BudgetPressureRecord.projectedTokens` | `projected`, read with `unit` | renamed 8.14.0 |
+| removed                                                | replacement                                                                                                                | since                      |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `AgentBuilder.recorder(rec)`                           | `AgentBuilder.watch(rec)` — same list, same order, same attachment, and variadic                                           | deprecated 8.0.0           |
+| `defineSkill({ viaToolName })`                         | drop it — `'read_skill'` is the only activation tool the library builds; gate on a `rule` trigger or a `skillGraph()` edge | deprecated 8.7.0           |
+| `skillsFromDir(dir, { viaToolName })`                  | drop it — same reason                                                                                                      | deprecated 8.7.0           |
+| `WindowRefusalReason` member `'summary-not-smaller'`   | `'replacement-not-smaller'`                                                                                                | renamed 8.14.0             |
+| type `FoldRefusal`                                     | `WindowRefusal`                                                                                                            | renamed 7.17               |
+| type `FoldRefusalReason`                               | `WindowRefusalReason`                                                                                                      | renamed 7.17               |
+| `WindowStrategy` exported from `agentfootprint/memory` | `MemoryWindowStrategy`                                                                                                     | renamed 7.27.1             |
+| `CompactionRecord.foldedStageIds`                      | `WindowRecord.removedStageIds`                                                                                             | family name published 7.17 |
+| `CompactionRecord.foldedMessageCount`                  | `WindowRecord.removedMessageCount`                                                                                         | family name published 7.17 |
+| `ContextBudgetPressurePayload.capTokens`               | `cap`, read with `unit`                                                                                                    | renamed 8.14.0             |
+| `ContextBudgetPressurePayload.projectedTokens`         | `projected`, read with `unit`                                                                                              | renamed 8.14.0             |
+| `BudgetPressureRecord.capTokens`                       | `cap`, read with `unit`                                                                                                    | renamed 8.14.0             |
+| `BudgetPressureRecord.projectedTokens`                 | `projected`, read with `unit`                                                                                              | renamed 8.14.0             |
 
-Three of those are worth a sentence each, because the *reason* is the migration:
+Three of those are worth a sentence each, because the _reason_ is the migration:
 
 - **`viaToolName` named a door that was never built.** The evaluator activates
   an `llm-activated` skill by matching `ctx.activatedInjectionIds`, only
@@ -7908,7 +8030,7 @@ replacement and says when the signpost comes down.
 Deleting the type member alone would have been a silent DOWNGRADE for the two
 `viaToolName` cases: an object literal gets an excess-property error, but an
 options bag arriving through a variable does not, and the value would then be
-*ignored* where 8.7.0 refused it. So the field is read at run time exactly once
+_ignored_ where 8.7.0 refused it. So the field is read at run time exactly once
 more, to say it is gone.
 
 ### Two things deliberately kept
@@ -7923,7 +8045,7 @@ more, to say it is gone.
   `CircuitState`, which is declared in both breaker files as
   `'closed' | 'open' | 'half-open'` — two declarations, one type, pinned as such.
 - **`buildRunSteps(events)` survives, still `@deprecated`.** Its deprecation is
-  a *preference*, not a migration: live consumers should attach
+  a _preference_, not a migration: live consumers should attach
   `runStepRecorder()` and read `getSteps()` (O(N), the house pattern) instead of
   re-walking an event log (O(N²) across repeated calls). But the shim is the only
   way to build steps from a saved event list — replay, post-hoc analysis, tests —
@@ -8000,7 +8122,7 @@ The fix is one coherent rule across the structural splitters:
   alone. The heading is now glued to the first body paragraph; it can never
   again be a chunk by itself.
 - **The family was inspected, and two members are exempt by design.**
-  `fixedWithOverlap` cuts uniformly sized chunks *by request* — imposing a
+  `fixedWithOverlap` cuts uniformly sized chunks _by request_ — imposing a
   250-char floor on `fixedWithOverlap({ chars: 120 })` would repeal the
   caller's own choice, and its only runt (the file tail) has always folded
   backward. `wholeDocument` is one chunk per document by definition.
@@ -8054,7 +8176,7 @@ any immutable or serverless runtime has this problem):
 - **`exportCorpus(store, identity?)`** (`agentfootprint/rag`) — every entry
   of a corpus namespace as one plain-JSON `CorpusBundle`:
   `{ entries: [{ id, text, vector, metadata }], embedder: { id, dimensions },
-  namespace }`. Plain JSON on purpose — the runtime that needs this is
+namespace }`. Plain JSON on purpose — the runtime that needs this is
   exactly the runtime that cannot open a database file. It refuses an empty
   namespace (naming the identity-mismatch cause), entries with no vector or
   no passage (a bundle never ships an unservable or uncitable entry), and a
@@ -8216,7 +8338,7 @@ it, before a byte is embedded. `InMemoryStore` and `sqliteVectorStore` declare
 **Behaviour change:** building a corpus into `AgentCoreStore` or `RedisStore` is
 refused where it used to run. Neither could ever serve those vectors back —
 `RedisStore` has no `search()` at all, so the same mistake already failed one
-layer later, when `defineRAG` refused the store *after* the whole index had been
+layer later, when `defineRAG` refused the store _after_ the whole index had been
 embedded and billed. The refusal moved to the call that starts the spending.
 
 **Absence is not a `false`.** A store that declares nothing behaves exactly as it
@@ -8236,7 +8358,7 @@ it wrong.
 ```ts
 import { bedrockEmbedder } from 'agentfootprint/providers';
 
-const embedder = bedrockEmbedder({ region: 'us-east-1' });            // 1024-d
+const embedder = bedrockEmbedder({ region: 'us-east-1' }); // 1024-d
 const small = bedrockEmbedder({ region: 'us-east-1', dimensions: 512 });
 ```
 
@@ -8409,7 +8531,7 @@ the run stops re-asking and names the rule — in the `outputAttempts` row
 (`brokenBy`), in the event, in `outputContractUnmet()`, and in the warning.
 Re-asking cannot fix a rule: a deterministic one breaks the next answer
 identically, so the retries buy a repeat of the same ending. An answer that was
-*already* bad still spends its retries — the stop applies only when the
+_already_ bad still spends its retries — the stop applies only when the
 middleware is the cause.
 
 ### `.outputFallback()` says which door reaches its tiers
@@ -8496,8 +8618,8 @@ flowchartAsTool({
   name: 'weather_advice',
   description: 'Decide whether to bike tomorrow.',
   flowchart: adviceChart,
-  keepRecord: true,        // ← off by default
-  keepRecordLimit: 20,     // ← bounded LRU window (this is the default)
+  keepRecord: true, // ← off by default
+  keepRecordLimit: 20, // ← bounded LRU window (this is the default)
   redact: { keys: ['apiKey'] },
 });
 ```
@@ -8588,8 +8710,8 @@ artifacts by hand: `innerRunStore`, `innerRunsOf`, `mergeInnerRuns`,
 ### The demo
 
 `examples/features/50-through-the-tool-boundary.ts` — a weather-advice agent
-whose ONE tool is a 4-stage footprintjs chart. Turn 1: *"Should I bike to work
-in Chicago tomorrow?"* Turn 2: *"Why did you say it'll rain?"* — answered
+whose ONE tool is a 4-stage footprintjs chart. Turn 1: _"Should I bike to work
+in Chicago tomorrow?"_ Turn 2: _"Why did you say it'll rain?"_ — answered
 through visible `find_in_trace` → `inspect_tool_call` → `inspect_tool_run`
 calls that cite the inner stage (`validate-forecast#1`), the exact field
 (`rainChancePct = 82`) and the rule that consumed it. The chart's own stage
@@ -8610,8 +8732,8 @@ evidence existed, and the model had no way to reach it.
 ### `find_in_trace(query)` — free text in, step ids out
 
 Every other trace tool needs a name you already have: a step id, a state key, a
-variable. But a follow-up question arrives in the user's words — *"why did you say
-order 7712 was out of warranty?"* — and the model's only options were to guess a
+variable. But a follow-up question arrives in the user's words — _"why did you say
+order 7712 was out of warranty?"_ — and the model's only options were to guess a
 state key or read the whole narrative.
 
 This searches stage names and descriptions, state keys, every committed value and
@@ -8748,7 +8870,7 @@ await callTraceTool(tools, 'find_in_trace', { query: 'order 7712' });
 
 Pure: no engine, no agent, no I/O. Exported from `agentfootprint/observe` (and
 `agentfootprint/debug`). Honest about the two things a serialized run cannot carry
-back — `controlDeps` is a lookup *function* and does not serialize (slices say
+back — `controlDeps` is a lookup _function_ and does not serialize (slices say
 `⚠ control edges unavailable`, the marker that already existed), and the narrative
 survives only if a narrative recorder was attached, since `recordRun` deliberately
 attaches none. Two teaching refusals name `recordRun` as the producer: a bundle with
@@ -8801,11 +8923,11 @@ cursor half and left the rule half standing, and the rule half is the bug: an en
 routed to `T`, `S`'s rule still matched and `S` and `T` were both active. Measured on
 a two-skill support graph:
 
-| iteration | active | tool menu | skill bodies |
-|---|---|---|---|
-| 1 | `triage` | `read_skill`, `lookup_order` | triage |
+| iteration       | active             | tool menu                                    | skill bodies    |
+| --------------- | ------------------ | -------------------------------------------- | --------------- |
+| 1               | `triage`           | `read_skill`, `lookup_order`                 | triage          |
 | 2 — the handoff | `triage`, `refund` | `read_skill`, `lookup_order`, `issue_refund` | triage + refund |
-| 3 | `triage`, `refund` | same | triage + refund |
+| 3               | `triage`, `refund` | same                                         | triage + refund |
 
 Note iteration 3. This was never a one-iteration blip: with the cursor parked on
 `refund`, `triage`'s rule kept matching, so it came back and stayed. The overlap was
@@ -8813,8 +8935,8 @@ the steady state.
 
 **A conditional entry is now active exactly while the cursor is on it** — the same
 compiled expression a route target and an exclusive entry already used. One law for a
-flat graph: *a skill is active iff the cursor is on it, or it declared itself
-unconditional.* `when` chooses where a turn STARTS.
+flat graph: _a skill is active iff the cursor is on it, or it declared itself
+unconditional._ `when` chooses where a turn STARTS.
 
 This finishes 8.3.0 rather than reverting it. Both failures 8.3.0 named — a declared
 step INTO an entry skill, and a `read_skill` pick onto one — are carried by the cursor
@@ -8852,7 +8974,7 @@ superseded pick.
 
 `multi-entry-fanout` fired whenever a graph declared two or more entries, including
 when every one of them carried a `when` — a deterministic rule-router, which is a
-taught shape. Worse, the advice it gave was *"give the extras a `when`"*, to entries
+taught shape. Worse, the advice it gave was _"give the extras a `when`"_, to entries
 that already had one. It computed which entries were unconditional and then used that
 only to soften the middle of the sentence.
 
@@ -8871,7 +8993,7 @@ why the check over-fired. Rewritten.
 A suppression the run cannot name is a silent drop. When a conditional entry's rule
 matched and the cursor law kept it off the wire, the entry's id is now reported on the
 per-iteration evaluation event, beside the `cursorMove` that says where the graph went
-instead. Together they answer *"why isn't my entry loading?"* without anyone
+instead. Together they answer _"why isn't my entry loading?"_ without anyone
 re-running a predicate to guess.
 
 Omitted when nothing was suppressed, and for every non-skill-graph run — so an
@@ -8917,8 +9039,8 @@ build, and one changes a string on the wire. All eight are below.
 correct branch:
 
 - **same provider family** — it billed your MAIN model for every fold. The
-  refusal three lines above it in the same file promised *"the library will not
-  quietly bill your main model for compaction"*, and then did.
+  refusal three lines above it in the same file promised _"the library will not
+  quietly bill your main model for compaction"_, and then did.
 - **different provider** — it sent your agent's model id to a vendor that has
   never heard of it, so the fold died mid-run, on a paid run, in a file whose
   own header promises "everything fails at `.build()`, never mid-run".
@@ -8946,7 +9068,7 @@ Readings are now stamped with the iteration whose call produced them and expire
 one boundary later. An expired reading is `undefined`, which every strategy
 already treats as "do not act" — so a window strategy **stands down** instead of
 deciding on a number nobody took, and says so once on the console rather than
-going quiet. "Counted, never guessed" has to mean counted *recently*.
+going quiet. "Counted, never guessed" has to mean counted _recently_.
 
 An agent whose provider reports usage reliably is unaffected.
 
@@ -8991,10 +9113,10 @@ comparison of two string lengths will not.
 Two emitters share this event name, this `slot: 'messages'` value, and — until
 now — one indistinguishable payload:
 
-| emitter | counts | `unit` |
-|---|---|---|
-| the three context slots (`contextBudget`, **on by default**) | `String.length` | `'chars'` |
-| a window strategy (`.window()` / `.compaction()`) | provider-reported input tokens | `'tokens'` |
+| emitter                                                      | counts                         | `unit`     |
+| ------------------------------------------------------------ | ------------------------------ | ---------- |
+| the three context slots (`contextBudget`, **on by default**) | `String.length`                | `'chars'`  |
+| a window strategy (`.window()` / `.compaction()`)            | provider-reported input tokens | `'tokens'` |
 
 So one subscriber routinely received both, and `cap 200, projected 258` could
 mean 258 characters or 258 tokens — a roughly 4× difference in the same field,
@@ -9018,8 +9140,8 @@ oversight — please do not "fix" them.
 ### `costBudget` can now stop the run
 
 `costBudget` was warn-only, while `commentaryTemplates.ts` narrated
-*"{{appName}} hit a cost limit and stopped."* and `docs/monitor/deployment.mdx`
-claimed the agent *"halts when the per-run USD budget is hit"*. It did neither.
+_"{{appName}} hit a cost limit and stopped."_ and `docs/monitor/deployment.mdx`
+claimed the agent _"halts when the per-run USD budget is hit"_. It did neither.
 `docs/monitor/observability.mdx`, on the same site, correctly said the library
 never auto-aborts.
 
@@ -9128,7 +9250,7 @@ version would make an older deployment refuse a session it can serve.
 **Governance never silently drops — and never silently invents.** Eight ways a
 rule you configured could decide nothing, and you could only find out by reading
 a quiet run. Seven are now refused at build time with a message that names the
-fix; one was a rule that ran everywhere except the one path where a *person* had
+fix; one was a rule that ran everywhere except the one path where a _person_ had
 just typed the value.
 
 Two of these change what a run DOES. Both are called out below.
@@ -9200,7 +9322,7 @@ It now raises `DecisionRequiredError` (`code: 'ERR_DECISION_REQUIRED'`) at the
 API boundary. **Nothing executes and the checkpoint is unchanged**, so the same
 one can be answered properly and resumed again. The error names the gate
 (`gate: 'checkIn' | 'ask'`), the tool, the middleware that asked, and `received`
-— the *shape* that arrived, never its contents, because a resume payload is
+— the _shape_ that arrived, never its contents, because a resume payload is
 caller data and an error message ends up in logs.
 
 Discriminated by the **pause**, never by the input, via the new
@@ -9282,9 +9404,9 @@ never stops your strategy. It now also carries two methods:
 ```ts
 const telemetry = agent.enable.observability({ strategy: cloudwatch });
 
-await telemetry.flush();   // drain: driver queue first, then the buffer
-telemetry();               // detach (unchanged)
-telemetry.stop();          // release — timers, clients, buffers
+await telemetry.flush(); // drain: driver queue first, then the buffer
+telemetry(); // detach (unchanged)
+telemetry.stop(); // release — timers, clients, buffers
 ```
 
 `flush()` enforces the ORDER, which is the part no consumer could write from
@@ -9407,7 +9529,7 @@ of trying again. A drain that cannot finish must return, never retry forever.
 
 With `enable.observability({ detach })`, each export is scheduled onto a
 footprintjs detach driver. Scheduling happened inside a promise continuation,
-so the detach handle reached footprintjs's registry a microtask *after* the
+so the detach handle reached footprintjs's registry a microtask _after_ the
 event was dispatched. `flushAllDetached()` drains until that registry is empty
 — and it was still empty when it looked.
 
@@ -9430,7 +9552,7 @@ the package either way.
   reach today (the declared type is still `Unsubscribe`); it exists so the
   no-subscription case is not the one path that breaks when that type widens.
 - Removed a dead loop condition in the CloudWatch drain (`lastFlushPromise !==
-  Promise.resolve()` compares against a freshly minted promise and is always
+Promise.resolve()` compares against a freshly minted promise and is always
   true).
 
 ## [8.11.0] - 2026-08-07
@@ -9467,7 +9589,7 @@ delivery — just an empty log group.
 The docstring for `logStreamName` had been promising `"Created on first put if
 it doesn't exist"` since the adapter shipped. It was never true. Worse, the
 convention the docs themselves recommended — `` `${HOSTNAME}/${Date.now()}` ``
-— produces a name that *cannot* pre-exist, so following the documentation
+— produces a name that _cannot_ pre-exist, so following the documentation
 guaranteed the bug on every deploy. The only configuration that worked was the
 undocumented one.
 
@@ -9483,7 +9605,7 @@ instead of implying otherwise.
 
 The missing stream was one delivery failure. It turned out **every** delivery
 failure was silent: an IAM denial, a throttle, a rejected batch. Each adapter
-installed its console fallback lazily *inside* its own `_onError` method — so
+installed its console fallback lazily _inside_ its own `_onError` method — so
 the delivery path, which read the hook rather than calling the method, found
 `undefined` and dropped the error on the floor. `cloudwatch`, `xray` and `otel`
 all had it.
@@ -9510,7 +9632,7 @@ fail. It is replaced by six that assert unconditionally.
 
 ### A knob the warning told you to turn, that did not exist
 
-An over-budget context slot warned: *"Raise `budgetCap` on the slot config."*
+An over-budget context slot warned: _"Raise `budgetCap` on the slot config."_
 `budgetCap` was reachable from no public door. `buildMessagesSlot()` was called
 with no arguments at all four of its call sites, so its 10000-character cap was
 unreachable by construction. A warning you cannot act on is worse than no
@@ -9530,15 +9652,15 @@ budget is a signal, not a limiter. `LLMCallOptions` takes the same option
 
 A 429 is a **pre-execution rejection**: the rate limiter refused the request at
 the edge and the server never ran the tool, so a retry cannot double-execute
-anything. That is exactly what is *not* true of a 500 or a timeout, where the
+anything. That is exactly what is _not_ true of a 500 or a timeout, where the
 call may have half-run and a retry could charge a card twice.
 
 That asymmetry is the entire license for this feature, so the policy is 429 and
 nothing else — pinned by a property test that walks twelve other statuses and a
 thrown transport error and asserts a single attempt for each. Managed gateways
 rate-limit per principal by design; without this, a designed and self-clearing
-condition reached the model as a thrown tool error it reads as *"this tool is
-broken"*, whereupon it apologises, picks another tool, or invents an answer.
+condition reached the model as a thrown tool error it reads as _"this tool is
+broken"_, whereupon it apologises, picks another tool, or invents an answer.
 
 It lives at the `fetch` seam because that is the only place `Retry-After` still
 exists — the MCP SDK reads the response, throws `StreamableHTTPError(status,
@@ -9565,18 +9687,22 @@ Per-attempt visibility is the `onRetry` callback — the contract `withRetry` an
   are consumer-called, the docs now say so, and a batching exporter loses its
   final batch and leaks its timer if you skip them:
   ```ts
-  process.on('SIGTERM', async () => { await telemetry.flush(); telemetry.stop(); stop(); });
+  process.on('SIGTERM', async () => {
+    await telemetry.flush();
+    telemetry.stop();
+    stop();
+  });
   ```
   Wiring them into the framework lifecycle would change `run()` timing and
   misbehave for a strategy shared across two `enable` calls, so it is a design
   question on the ledger rather than a silent default.
 - **A Skill's tools are visible from iteration 1.** `DefineSkillOptions.tools`
-  said they were *"added to the tools slot once activated"*. They are added to
+  said they were _"added to the tools slot once activated"_. They are added to
   the registry at build time; activation adds the Skill's **body**, not its
   tools. Gating is opt-in via `autoActivate: 'currentSkill'` (which
   `skillGraph().tree()` sets for you on every leaf) — and the docs said
   otherwise in twelve places, including a `process_refund` example claiming a
-  tool was *"locked away"*. That example now sets `autoActivate` and the prose
+  tool was _"locked away"_. That example now sets `autoActivate` and the prose
   no longer implies a security boundary the default does not provide.
 - **`autoActivate` stopped calling itself a forward-compat marker** awaiting
   "v2.5 runtime wiring" — that wiring shipped in 2.5.0, six majors ago.
@@ -9586,7 +9712,7 @@ Per-attempt visibility is the `onRetry` callback — the contract `withRetry` an
   anything, and a lower tier is not a safer one: `'minimal'` still ships
   `agent.turn_start` (`userPrompt`), `agent.turn_end` (`finalContent`) and
   `agent.iteration_end` (the whole conversation `history[]`) — measured, it
-  carries user content in a *higher* share of its events than `'standard'` does.
+  carries user content in a _higher_ share of its events than `'standard'` does.
   The docstring says this plainly now, points at `auditExport()` (bounded by
   default) and `otelObservability()` (omits `userPrompt`), and warns that
   `redactContent` does **not** apply to this channel — it operates on the
@@ -9680,12 +9806,12 @@ exists.
 `textLoader`, `markdownLoader` and `htmlLoader` need no dependency. `pdfLoader`
 needs one, and it was picked by measuring rather than by reputation:
 
-| package | installed | packages | verdict |
-|---|---|---|---|
-| **`unpdf`** | **2.5 MB** | **1** | chosen — zero transitive deps, per-page text |
-| `pdf-parse@2` | 86 MB | 3 | a native binary (`@napi-rs/canvas`), to read text |
-| `pdf-parse@1` | 34 MB | 4 | unmaintained since 2018 |
-| `pdfjs-dist@6` | 62 MB | 2 | 25× the size for the same engine |
+| package        | installed  | packages | verdict                                           |
+| -------------- | ---------- | -------- | ------------------------------------------------- |
+| **`unpdf`**    | **2.5 MB** | **1**    | chosen — zero transitive deps, per-page text      |
+| `pdf-parse@2`  | 86 MB      | 3        | a native binary (`@napi-rs/canvas`), to read text |
+| `pdf-parse@1`  | 34 MB      | 4        | unmaintained since 2018                           |
+| `pdfjs-dist@6` | 62 MB      | 2        | 25× the size for the same engine                  |
 
 It is an optional peer, lazily loaded, refusing with an install line when a PDF
 is actually met. Per-page text is why a PDF citation can name a page you can
@@ -9789,7 +9915,6 @@ the page its 150-character run-up borrowed from.
 - **`unpdf`** as a new optional peer. Only `pdfLoader` touches it, only when a
   PDF is actually read.
 
-
 ## [8.9.0] - 2026-08-06
 
 **The durable index.** 8.8.0 made retrieval tell the truth about what it read.
@@ -9815,8 +9940,8 @@ await indexDocuments(store, embedder, docs, { embedderId: embedder.id });
 Embedding cost is not one number, and the split is the whole argument for a
 file. **Index time** embeds the corpus: once, scaling with how much you store.
 **Query time** embeds the user's question: per retrieval, scaling with traffic.
-A 10,000-chunk corpus is 10,000 embeddings *once* and one per question
-thereafter — with a `Map` it is 10,000 embeddings *per restart*.
+A 10,000-chunk corpus is 10,000 embeddings _once_ and one per question
+thereafter — with a `Map` it is 10,000 embeddings _per restart_.
 
 `agentfootprint.embedding.generated` has carried an `inputKind: 'document' |
 'query'` field since 2.x and nothing ever emitted it, so any dashboard built
@@ -9839,13 +9964,13 @@ top-K or it does not answer.
 
 Measured against this implementation on Node 22.16, Apple silicon:
 
-| corpus | query | resident matrix | file | first search (hydration) |
-|---|---|---|---|---|
-| 10,000 × 384-d | 6 ms | 15 MB | 21 MB | 45 ms |
-| 50,000 × 384-d | 31 ms | 77 MB | 105 MB | 251 ms |
-| 100,000 × 384-d | 65 ms | 154 MB | 211 MB | 939 ms |
-| 10,000 × 1536-d | 16 ms | 61 MB | 83 MB | 122 ms |
-| 50,000 × 1536-d | 89 ms | 307 MB | 413 MB | **5.7 s** |
+| corpus          | query | resident matrix | file   | first search (hydration) |
+| --------------- | ----- | --------------- | ------ | ------------------------ |
+| 10,000 × 384-d  | 6 ms  | 15 MB           | 21 MB  | 45 ms                    |
+| 50,000 × 384-d  | 31 ms | 77 MB           | 105 MB | 251 ms                   |
+| 100,000 × 384-d | 65 ms | 154 MB          | 211 MB | 939 ms                   |
+| 10,000 × 1536-d | 16 ms | 61 MB           | 83 MB  | 122 ms                   |
+| 50,000 × 1536-d | 89 ms | 307 MB          | 413 MB | **5.7 s**                |
 
 **The documented ceiling is 50,000 chunks** — under 100 ms per query at every
 embedder this library ships, under ~300 MB resident. It degrades linearly to
@@ -9928,12 +10053,11 @@ safe to answer with "no matches".**
 - The BLOB on disk keeps the **original** vector, so `get`/`list` round-trip
   exactly what was written; normalisation happens once, into the resident
   matrix, so search is a dot product without changing what is stored.
-- Found while writing the schema-identity check: it originally ran *after* the
+- Found while writing the schema-identity check: it originally ran _after_ the
   indexes were created, so a foreign `af_vectors` table failed on a missing
   column and was reported as `'cannot-open'` — the right refusal for the wrong
   reason, telling the reader to check file permissions when the real problem was
   that the file belonged to something else. It runs before them now.
-
 
 ## [8.8.0] - 2026-08-06
 
@@ -9969,12 +10093,14 @@ the two are registered separately, each with its own store:
 ```ts
 const agent = Agent.create({ provider })
   .rag(defineRAG({ id: 'product-docs', store: corpusStore, embedder }))
-  .memory(defineMemory({
-    id: 'chat',
-    type: MEMORY_TYPES.EPISODIC,
-    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
-    store: conversationStore,
-  }))
+  .memory(
+    defineMemory({
+      id: 'chat',
+      type: MEMORY_TYPES.EPISODIC,
+      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+      store: conversationStore,
+    }),
+  )
   .build();
 ```
 
@@ -9996,7 +10122,7 @@ namespace it reads from — defaulting to the same `'_global'` the indexer write
 index with no options and retrieve with no options and the documents are found. Pass it
 explicitly for a per-tenant corpus, on both sides.
 
-And a namespace that holds nothing is now *reported* rather than answered around:
+And a namespace that holds nothing is now _reported_ rather than answered around:
 `corpusEmpty: true` on the retrieval event, plus a once-per-process warning naming the
 namespace it searched and the usual cause.
 
@@ -10015,7 +10141,7 @@ namespace it searched and the usual cause.
   are admitted**: `search` returns score-descending, so either the whole pool clears the
   floor (admitted = first `k`, as before) or some entry fails it (every later entry fails
   too, so the pool already holds every entry that clears it). `rejectWindow` only controls
-  how many near-misses can be *shown*.
+  how many near-misses can be _shown_.
 - **`agentfootprint.memory.retrieved`** (new, 72 typed events) — one per retrieval,
   carrying every candidate. `candidates: undefined` means the store ranked server-side
   and returned nothing comparable; it never means there were none.
@@ -10056,7 +10182,7 @@ recency ordering the best-scoring chunk can land last.
 ### Chunks the model can cite
 
 A retrieved page of a PDF rendered as `<memory role="unknown" turn="0">` under the header
-*"Relevant context from prior conversations"* — three claims that were not true of a
+_"Relevant context from prior conversations"_ — three claims that were not true of a
 document, and no way to cite it. `defineRAG` renders a corpus as what it is:
 
 ```text
@@ -10108,13 +10234,12 @@ nothing to configure.
   `core/`; a second implementation is how two recordings of the same bytes end up
   disagreeing about their id.
 
-
 ## [8.7.0] - 2026-08-06
 
 **The check-up stops being quiet, and a dead option stops pretending.** 8.4.0 stopped a
 skill graph from throwing away what the author declared; 8.5.0 stopped it telling the
 model things that were not so. This one is about the configurations the library
-*watched you build and said nothing about* — an entry menu with no way to choose from
+_watched you build and said nothing about_ — an entry menu with no way to choose from
 it, a transition the cursor can never take, a tool name two sources claim, a scoped
 tool provider that returns nothing forever. Nine findings, one shape: the library knew,
 and did not say.
@@ -10122,7 +10247,7 @@ and did not say.
 ### An entry menu with no way to choose from it
 
 Declare two entries and no `.entryBy()` / `.entryByRead()`, and both of them load on
-every call. An entry's compiled trigger is cursor-*independent* — no `when` compiles to
+every call. An entry's compiled trigger is cursor-_independent_ — no `when` compiles to
 `{ kind: 'always' }` — while exactly ONE of them can be the cursor: the first whose
 `when` passes. So the extras pay for their body and their tools on every iteration and
 route nothing, which is the opposite of what a skill graph is for.
@@ -10168,7 +10293,7 @@ all versus only bare edges incoming.
 
 ### `unreachable-skill` is told per trigger kind
 
-The sentence *"it can only be reached by the model via read_skill"* is true for an
+The sentence _"it can only be reached by the model via read_skill"_ is true for an
 `llm-activated` trigger and for no other kind — `Agent.openSkillIds()` admits an open
 pick only for that one. But `deriveTrigger` returns null for an unwired skill, so a
 skill that arrived carrying a hand-authored `rule` trigger **kept it**, and the warning
@@ -10238,7 +10363,7 @@ const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
 - **`ToolDispatchContext.activeSkillIds`** — the real active set for this iteration.
   Optional, so a provider written before 8.7.0 sees `undefined` and behaves as it did.
 - **`agentfootprint.tools.shadowed`** (71 typed events now) — `{ toolName, iteration,
-  schemaFrom, schemaFromId?, dispatchTo, dispatchToId? }`. Names only: never args, never
+schemaFrom, schemaFromId?, dispatchTo, dispatchToId? }`. Names only: never args, never
   results, never a description body.
 - **`skillScopedToolsTarget` / `SKILL_SCOPED_TOOLS_ID_PREFIX`** — the provider-id
   convention, readable by anyone composing providers.
@@ -10256,7 +10381,7 @@ const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
   object-literal form since 8.4.0. **Behavior change.** A fluent graph with an
   error-level problem — `no-entry` or `unknown-skill`, i.e. a graph that cannot start a
   turn at all — built in silence outside dev mode and surfaced as a run that entered no
-  skill. What still builds: every graph whose check-up has no *error* (warnings never
+  skill. What still builds: every graph whose check-up has no _error_ (warnings never
   throw, however many); every call passing `check: 'warn'` explicitly, which still never
   throws, so the mode keeps its name and its meaning; `check: 'off'` skips entirely.
   Only code that was already shipping a graph the library could not start is affected.
@@ -10265,7 +10390,7 @@ const graphScoped = (id: string, tools: Tool[]): ToolProvider => ({
   activates the skill — and no such tool has ever been built. The evaluator activates an
   `llm-activated` skill by matching `ctx.activatedInjectionIds`, which only `read_skill`
   writes, and it has never read the field. A skill declaring `viaToolName:
-  'open_playbook'` activated through `read_skill` exactly like every other skill, so the
+'open_playbook'` activated through `read_skill` exactly like every other skill, so the
   declaration described a door that does not exist. Nothing that worked stops working;
   a silent no-op becomes a named one, at `Agent.injection()` — the one funnel `.skill()`,
   `.skills()`, `.skillGraph()`, `skillsFromDir()` and a hand-built Injection all pass
@@ -10338,7 +10463,7 @@ it raises `CredentialConsentRequiredError`.
   back `authorization-required`.
 - **`CredentialConsentRequiredError`** (`ERR_CREDENTIAL_CONSENT_REQUIRED`, from
   `agentfootprint/identity`) — carries `service`, `sessionId`, `authorizationUrl`,
-  `tool` and `iteration`. The error *message* deliberately omits the URL, because
+  `tool` and `iteration`. The error _message_ deliberately omits the URL, because
   a message is the one string that reliably reaches a log line.
 - **`pauseData.authorization`** — `{ service, authorizationUrl, sessionId }` on a
   consent pause, surfaced by `standingAgent` as `PendingAsk.pauseData`. The
@@ -10366,7 +10491,7 @@ it raises `CredentialConsentRequiredError`.
   This is the mirror image of a guarantee the library kept carefully everywhere
   else. `agentfootprint.credential.authorization_required` was designed to carry
   `{ service, sessionId }` and never the URL; OTel and X-Ray record the tool
-  result's *type* and never its value; the audit bundle's default `bounded` mode
+  result's _type_ and never its value; the audit bundle's default `bounded` mode
   maps `tool_end.result` to `[type: string]`. Every observer channel was
   disciplined. The one channel nobody thought of as an observer — the
   conversation — was not, and it feeds all the others.
@@ -10506,7 +10631,7 @@ that gave the middleware-ask outcome union no `result` arm.
 ## [8.5.0] - 2026-08-06
 
 **`read_skill` tells the whole truth.** 8.4.0 stopped a skill graph from throwing
-away what the author declared. This one stops it from telling the *model* things
+away what the author declared. This one stops it from telling the _model_ things
 that were not so. Five findings, all of the same shape: the library said a thing had
 happened, or offered a thing it would refuse, or recorded a cause that was not the
 cause. One is a build-time refusal, one is a gate refusal, three are fixes.
@@ -10515,8 +10640,8 @@ cause. One is a build-time refusal, one is a gate refusal, three are fixes.
 
 A `tree()` routes by predicate on every iteration. It has no cursor, so `read_skill`
 has nothing to move. But `graph.reachableSkills()` reported **all the leaves**, so
-the gate accepted a leaf pick and `read_skill` answered *"Skill 'x' activated for the
-next iteration"* — and nothing happened. A leaf compiles to a `rule` trigger; a
+the gate accepted a leaf pick and `read_skill` answered _"Skill 'x' activated for the
+next iteration"_ — and nothing happened. A leaf compiles to a `rule` trigger; a
 `read_skill` call writes only `activatedInjectionIds`; no `rule` trigger reads that.
 The leaf never activated, the tree re-decided by predicate, and the run then emitted
 `agentfootprint.skill.reroute_superseded` naming a winner that **did not exist** —
@@ -10542,7 +10667,7 @@ though the tool accepted the name. Answer with the skill the tree routed to, or 
 **Behavior change:** `graph.reachableSkills()` now returns `[]` for a decision
 `tree()`, from every cursor. Its contract is "what `read_skill` may jump to", and
 all-leaves was the lie; use `graph.skills` to enumerate leaves, which is what it was
-always for. `read_skill` is not dead under a tree — anything registered *beside* the
+always for. `read_skill` is not dead under a tree — anything registered _beside_ the
 graph (`.skill(x)`, `.skills(reg)`, `.selfExplain()`) is **open** and still admitted
 from anywhere, because those really do activate by `read_skill`. Two docstrings that
 promised "read_skill stays a full escape hatch there" are corrected.
@@ -10568,7 +10693,7 @@ Not reachable from here (read_skill for these will be refused):
 ```
 
 **The enum stays the full catalog, deliberately.** `toolArgValidation` defaults to
-`'enforce'` and runs *before* the gate; an off-enum id is rejected with a generic
+`'enforce'` and runs _before_ the gate; an off-enum id is rejected with a generic
 schema error and never reaches it. Narrowing the enum would therefore have retired
 the gate's teaching refusal, the `agentfootprint.skill.rejected` event,
 `routeRecorder`'s rejection hops and the rejected-cap governor's only input — four
@@ -10602,7 +10727,7 @@ Use 'both' (system prompt AND tool result) or 'system-prompt'.
 ```
 
 Refusal rather than a quiet fall back to the system slot: the author wrote
-`'tool-only'` to keep the body *out* of the system prompt, and silently putting it
+`'tool-only'` to keep the body _out_ of the system prompt, and silently putting it
 back would honour the activation while breaking the declaration — a different lie,
 not a fix. `'both'` already means "deliver it either way".
 
@@ -10630,7 +10755,7 @@ drift:
 - `routeRecorder()` reads it, and a `'model-pick'` hop carries **no** `edgeLabel`.
 
 This settles the one case no observer could reconstruct: an edge and a same-turn pick
-naming the *same* skill resolves to `'route'` (`D1 > D2`), and only the resolver
+naming the _same_ skill resolves to `'route'` (`D1 > D2`), and only the resolver
 knows. Without `cursorMove` (an older graph, an older recording) the previous
 inference still stands.
 
@@ -10665,11 +10790,11 @@ refusal on the agent, and the gate one is a fix, not a refusal.
 cannot move the graph somewhere the graph doesn't go. That set is about the CURSOR,
 but it was being used as the whole catalog, so three shapes were dead:
 
-| you wrote | before | now |
-|---|---|---|
-| `.skillGraph(g).selfExplain()` | `read_skill('self-explain')` rejected on every call — the debug skill and its six trace tools could never load | activates; the trace tools reach the model on the next iteration |
-| `.skillGraph(g).skill(x)` / `.skills(reg)` | `x` was listed in `read_skill`'s own menu and refused every time; its body was unreachable | activates |
-| `skillGraph({ skills: [..., x] })` with `x` wired to nothing | refused — while its check-up warning said *"it can only be reached by the model via read_skill"* | activates; the warning is true again |
+| you wrote                                                    | before                                                                                                         | now                                                              |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `.skillGraph(g).selfExplain()`                               | `read_skill('self-explain')` rejected on every call — the debug skill and its six trace tools could never load | activates; the trace tools reach the model on the next iteration |
+| `.skillGraph(g).skill(x)` / `.skills(reg)`                   | `x` was listed in `read_skill`'s own menu and refused every time; its body was unreachable                     | activates                                                        |
+| `skillGraph({ skills: [..., x] })` with `x` wired to nothing | refused — while its check-up warning said _"it can only be reached by the model via read_skill"_               | activates; the warning is true again                             |
 
 A skill is **open** when its trigger is `llm-activated` (the trigger `read_skill`
 actually activates — a rule-gated injection is still refused, because admitting it
@@ -10794,7 +10919,7 @@ dropped pick is reported rather than swallowed — see the new event below.
 ### `agentfootprint.skill.reroute_superseded` (new typed event — 70 total)
 
 Fires in exactly one case: a `read_skill` the gate accepted did not end up active
-because a declared edge won the same turn (the model emitted a domain tool *and*
+because a declared edge won the same turn (the model emitted a domain tool _and_
 `read_skill` in one message). Payload: `{ volunteeredId, wonId, fromSkillId,
 iteration }`. It is derived from the real active set, not from which clause won,
 so it cannot fire for a pick that did take effect.
@@ -10838,7 +10963,7 @@ never engages any of this.
 
 **Durable compaction.** An agent that has been up for a week folds week one
 into a summary. Then it gets deployed over. It comes back, is handed the same
-conversation — and now it can still tell you what week one was about, *and*
+conversation — and now it can still tell you what week one was about, _and_
 show you week one, word for word.
 
 The window half of that already worked: a summary is an ordinary message, so
@@ -10909,14 +11034,14 @@ surprise.
 
 ### New exports
 
-| export | what it is |
-| --- | --- |
-| `foldedSpanFor(conversation, message)` | The span behind one summary, joined by **content fingerprint** rather than index — a later fold swallows an earlier summary and every index after it moves. `undefined` means "no fold was recorded for this message", never "there were no originals". |
-| `foldedMessages(conversation)` | Every retained message from every span, oldest fold first. |
-| `FoldedSpan` · `CompactionRetention` · `FoldedConversation` | The types. |
+| export                                                      | what it is                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `foldedSpanFor(conversation, message)`                      | The span behind one summary, joined by **content fingerprint** rather than index — a later fold swallows an earlier summary and every index after it moves. `undefined` means "no fold was recorded for this message", never "there were no originals". |
+| `foldedMessages(conversation)`                              | Every retained message from every span, oldest fold first.                                                                                                                                                                                              |
+| `FoldedSpan` · `CompactionRetention` · `FoldedConversation` | The types.                                                                                                                                                                                                                                              |
 
 The fingerprint is also what makes the join **forgery-proof**: `isCompactedSummary`
-answers "this *looks* like a frame", which is all a prefix check can see, and a
+answers "this _looks_ like a frame", which is all a prefix check can see, and a
 model that copies the frame's opening words passes it. `foldedSpanFor` answers
 the stronger question — different content, different fingerprint, no match.
 
@@ -10977,14 +11102,14 @@ openai({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
 
 Two things go wrong with a local runtime, and each has a one-command answer. Both
 now raise a typed `OllamaUnavailableError` (discriminated by `reason`) whose
-message *is* the instruction — never a raw `ECONNREFUSED`, never a bare `404`,
+message _is_ the instruction — never a raw `ECONNREFUSED`, never a bare `404`,
 and never a hang: a deadline bounds the wait for the daemon to answer (not
 generation, so a slow model is untouched).
 
 - **Daemon not running** — names the address it tried, `ollama serve`, the
   install link, and how to point somewhere else.
 - **Model not pulled** — names `ollama pull <model>`, and asks `/api/tags` so it
-  can also list what this machine *does* have.
+  can also list what this machine _does_ have.
 
 ### Also in this release
 
@@ -10993,7 +11118,7 @@ generation, so a slow model is untouched).
   compaction and cost budgets work against a local model.
 - **Thinking blocks from local reasoning models.** `ollama('deepseek-r1', { think: true })`
   asks Ollama to lift reasoning out of the answer; the new `ollamaThinkingHandler`
-  auto-wires by provider name and normalizes it. When a model was *not* asked and
+  auto-wires by provider name and normalizes it. When a model was _not_ asked and
   writes `<think>…</think>` into the answer instead, the library **recognizes the
   shape and surfaces the blocks, but does not edit the answer** — silently
   rewriting model output is a change of meaning, and that belongs to the
@@ -11039,32 +11164,32 @@ The doors are now named for the job:
 
 **Every old import path still works, unchanged, for all of 8.x.** They are
 marked `@deprecated` so your editor points at the new door; nothing is logged,
-nothing breaks, and each one re-exports the *same symbols* the door carries —
+nothing breaks, and each one re-exports the _same symbols_ the door carries —
 not copies. `test/api-conformance/door-aliases.test.ts` drives the TypeScript
 checker over the shipped `.d.ts` files to prove it, name by name, so the
 aliases cannot drift. They are removed in 9.0.0.
 
 ### Migration
 
-| you were importing from | import from |
-|---|---|
-| `agentfootprint/llm-providers` | `agentfootprint/providers` |
-| `agentfootprint/embedders` | `agentfootprint/providers` |
-| `agentfootprint/tool-providers` | `agentfootprint/providers` |
-| `agentfootprint/thinking` | `agentfootprint/providers` |
-| `agentfootprint/memory-providers` | `agentfootprint/memory` |
-| `agentfootprint/observability-providers` | `agentfootprint/observe` |
-| `agentfootprint/strategies` | `agentfootprint/observe` |
-| `agentfootprint/stream` | `agentfootprint/observe` |
-| `agentfootprint/status` | `agentfootprint/observe` |
-| `agentfootprint/locales` | `agentfootprint/observe` |
-| `agentfootprint/debug` | `agentfootprint/observe` |
-| `agentfootprint/debug/finders` | `agentfootprint/observe` |
-| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe` |
-| `agentfootprint/reliability` | `agentfootprint/resilience` |
-| `agentfootprint/hosting-providers` | `agentfootprint/hosting` |
-| `agentfootprint/injection-engine` | `agentfootprint/context` |
-| `agentfootprint/identity` | `agentfootprint/security` |
+| you were importing from                             | import from                 |
+| --------------------------------------------------- | --------------------------- |
+| `agentfootprint/llm-providers`                      | `agentfootprint/providers`  |
+| `agentfootprint/embedders`                          | `agentfootprint/providers`  |
+| `agentfootprint/tool-providers`                     | `agentfootprint/providers`  |
+| `agentfootprint/thinking`                           | `agentfootprint/providers`  |
+| `agentfootprint/memory-providers`                   | `agentfootprint/memory`     |
+| `agentfootprint/observability-providers`            | `agentfootprint/observe`    |
+| `agentfootprint/strategies`                         | `agentfootprint/observe`    |
+| `agentfootprint/stream`                             | `agentfootprint/observe`    |
+| `agentfootprint/status`                             | `agentfootprint/observe`    |
+| `agentfootprint/locales`                            | `agentfootprint/observe`    |
+| `agentfootprint/debug`                              | `agentfootprint/observe`    |
+| `agentfootprint/debug/finders`                      | `agentfootprint/observe`    |
+| `agentfootprint/observability/contextError/finders` | `agentfootprint/observe`    |
+| `agentfootprint/reliability`                        | `agentfootprint/resilience` |
+| `agentfootprint/hosting-providers`                  | `agentfootprint/hosting`    |
+| `agentfootprint/injection-engine`                   | `agentfootprint/context`    |
+| `agentfootprint/identity`                           | `agentfootprint/security`   |
 
 `agentfootprint`, `agentfootprint/memory`, `agentfootprint/observe`,
 `agentfootprint/security`, `agentfootprint/hosting` and
@@ -11078,7 +11203,7 @@ aliases cannot drift. They are removed in 9.0.0.
   executing those registrations and carrying them in every bundle. Side-effectful
   code stays behind its own plainly-named door.
 - **`agentfootprint/events`** is not folded into `/observe`. It is the typed
-  wire vocabulary observers *read*, not a tool for watching — and concretely,
+  wire vocabulary observers _read_, not a tool for watching — and concretely,
   its `ContextSource` (the injection-flavour union: `'rag' | 'skill' | …`) is a
   completely different type from the `ContextSource` `/observe` already carries
   (the context-bisect record). Two incompatible shapes cannot share a door.
@@ -11123,7 +11248,7 @@ runtime door, and it still returns the `Unsubscribe` you own.
 `CombinedRecorder` keeps its export too.
 
 There is deliberately **no** `WATCH_MOMENTS`. `.act()`'s keys are a closed,
-compiler-pinned list because a rule has to be *told* where it may speak; an
+compiler-pinned list because a rule has to be _told_ where it may speak; an
 observer attends the whole stream, and a list we published would be a
 vocabulary we then had to keep true against every event ever added.
 
@@ -11159,7 +11284,7 @@ vocabulary we then had to keep true against every event ever added.
 ## [7.28.0] - 2026-08-05
 
 A paused agent is a promise you made to a person. Until this release the library
-handed you that promise as JSON and wished you luck: *store it anywhere.*
+handed you that promise as JSON and wished you luck: _store it anywhere._
 Anywhere was the whole of the offer.
 
 `sqliteSessions({ file })` is the first battery included — the same
@@ -11182,7 +11307,7 @@ and the next step up was "bring a Redis" — a service to run, secure, back up a
 pay for, to keep a few kilobytes of chat. Everyone in between wrote the same
 little file store themselves and each one re-decided what a half-written file
 means. A pause had no home at all: a question outstanding is the one piece of
-agent state that *must* outlive the process, because the answer arrives on human
+agent state that _must_ outlive the process, because the answer arrives on human
 time — after lunch, after the deploy, tomorrow. Both land in one table here,
 because `CheckpointEnvelope` was already a union of the two and a session store
 has no business caring which half it is holding.
@@ -11192,8 +11317,7 @@ process (or a few) on ONE machine, writing ONE file. It survives anything that
 ends the process and leaves the disk alone. It is **not** a distributed store:
 two machines do not share a session by both opening a file over a network
 filesystem. WAL gives many readers plus **one writer at a time**, and that is
-the ceiling — a second writer waits for the lock up to `busyTimeoutMs` (default
-5000) and then fails loudly rather than queueing forever. When you outgrow it,
+the ceiling — a second writer waits for the lock up to `busyTimeoutMs` (default 5000) and then fails loudly rather than queueing forever. When you outgrow it,
 one argument to `standingAgent` changes and nothing above it moves.
 
 **A refusal where a fallback would have been easier.** `node:sqlite` ships with
@@ -11209,7 +11333,7 @@ user.
 **"Unreadable is not absent", one level up.** The envelope law already said an
 unreadable stored conversation and an absent one are different facts, and only
 one is safe to answer with a fresh start. A file store can break that promise
-higher up — point it at a log file and a careless adapter opens it as an *empty*
+higher up — point it at a log file and a careless adapter opens it as an _empty_
 store. So the file is checked at construction and refused with
 `UnreadableSessionFileError`, whose `problem` field is the fact to branch on:
 `'cannot-open'`, `'not-our-schema'` (somebody else's table of that name), or
@@ -11220,7 +11344,7 @@ session that was never written hydrates as `undefined`.
 well as fields inside the JSON, so during an incident `sqlite3` answers "which
 sessions are waiting on a person, and since when?" with no JSON parser and
 without this library. `journalMode` on the returned store reports what the file
-*actually got* rather than what was asked for — a silent downgrade from WAL on a
+_actually got_ rather than what was asked for — a silent downgrade from WAL on a
 network filesystem is the kind of thing only ever discovered under load.
 
 Added, all on the existing `agentfootprint/hosting` door — no new subpath:
@@ -11252,7 +11376,7 @@ the machine took, and the machine is shared: the suite runs beside a build, a
 coverage pass, and two other vitest workers. Identical code takes three to five
 times longer under that load with nothing about the code having changed. So the
 assertion cannot tell "we got slower" from "the box was busy", and it fires
-*exactly* when CI is busiest. Five of them had already been logged as flakes —
+_exactly_ when CI is busiest. Five of them had already been logged as flakes —
 `xray` P6, `withCircuitBreaker` P6, `locales/messages` Block D,
 `consumer-domain-events`, `SkillRegistryOptions` — always under concurrent
 build load, always passing in isolation. The failure mode of a guard nobody
@@ -11296,7 +11420,7 @@ still flaked when actually run under the reproduction condition. Three things
 had to be added, each because the proof run said so:
 
 - **Repeat until the sample is worth timing.** Below a scheduler quantum, one
-  preemption *is* the measurement: a 0.2ms operation that gets descheduled
+  preemption _is_ the measurement: a 0.2ms operation that gets descheduled
   reads as a hundred times its real cost, while the 100ms operation beside it
   absorbs the same theft as a rounding error — and load stops cancelling. Each
   operation is now repeated inside one sample until the sample clears 20ms, and
@@ -11328,8 +11452,8 @@ load, which is what makes them worth asserting.
 **No perf claim was deleted. The form changed; the meaning stayed** — and in
 four places the meaning got sharper, because writing the claim down properly
 exposed what it had actually been asserting. Three sites keep a millisecond
-ceiling on purpose and say so at the site: they are stated against a *configured
-delay* (a mock's own thinking band, a slow branch's own timeout, a strategy's
+ceiling on purpose and say so at the site: they are stated against a _configured
+delay_ (a mock's own thinking band, a slow branch's own timeout, a strategy's
 own per-event block) rather than against a guess about the machine, because
 "did not sleep longer than it was told to" has no cheaper form.
 
@@ -11485,8 +11609,8 @@ each of those is now the failure of the thing that caused it. A 400, a 500, one
 refused upgrade, one ended conversation. Never the process.
 
 One of them was not even a throw. `serveOne`'s promise is held in a Set and
-voided at the call site, so anything that escaped it was an *unhandled
-rejection* — which on node's defaults is the same dead container reached by a
+voided at the call site, so anything that escaped it was an _unhandled
+rejection_ — which on node's defaults is the same dead container reached by a
 different road. It is total by construction now, and says so.
 
 **The audit's other finding is that the conversation door was already safe, and
@@ -11503,17 +11627,16 @@ serve. It is a great deal of ceremony when all you wanted was a `/debug/trace`
 beside the agent on the one port the container was given.
 
 ```ts
-nodeHost({ port: 8080, onUnhandled: (req, res) => myRouter(req, res) })
+nodeHost({ port: 8080, onUnhandled: (req, res) => myRouter(req, res) });
 ```
 
 Same single port, opposite direction: the host binds the socket as it always
-did, and every path it does not own is handed to your code **instead of** its
-404. The host still never answers for your application — with this hook it no
+did, and every path it does not own is handed to your code **instead of** its 404. The host still never answers for your application — with this hook it no
 longer has to 404 for it either.
 
 What it never receives is the interesting half. The paths the host owns —
-`invokePath`, `healthPath`, `conversationPath` — never reach it, *including a
-wrong method on one of them*, because a hook that could claim `POST /invoke`
+`invokePath`, `healthPath`, `conversationPath` — never reach it, _including a
+wrong method on one of them_, because a hook that could claim `POST /invoke`
 would be a second door wearing the first one's name. And it is refused at
 construction beside `{ server }`, by name: there, unmatched paths already fall
 through to your own `'request'` listeners, so a second way to answer them would
@@ -11560,7 +11683,7 @@ hosts rather than by care.
   chunks are coerced back to bytes, and no bytes are lost doing it: `setEncoding`
   decodes through a `StringDecoder`, which holds a partial multi-byte sequence
   across a chunk boundary rather than splitting it. Pinned by writing a body in
-  two TCP writes with the split placed *inside* a four-byte character and
+  two TCP writes with the split placed _inside_ a four-byte character and
   asserting it round-trips. Reachable only through `{ server }` — the mode built
   for co-listeners — and reproduced there, with a real second listener on a real
   shared socket rather than a stubbed request.
@@ -11649,7 +11772,7 @@ avoid admitting the cost would have been an accounting trick.
 **The corrective message is an authored frame with the validator's error as
 DATA.** The library's own words come first and say that what follows is a
 report about the answer rather than an instruction; the error is quoted
-verbatim; and *nothing authored follows it*, so there is no trailing sentence
+verbatim; and _nothing authored follows it_, so there is no trailing sentence
 for injected text to pre-empt. A schema whose error message reads "IGNORE ALL
 PREVIOUS INSTRUCTIONS" produces a message that still says, first and in the
 library's voice, what it is. This is exactly the compaction frame's rule
@@ -11728,7 +11851,7 @@ bytes — pinned against 7.25 by test, not by care.
 
 - **`agentfootprint.agent.output_schema_retry`** — one per failed attempt,
   carrying `{ attempt, retriesRemaining, iteration, stage, error, path?,
-  correctiveMessageHash }`. 69 typed events across 20 domains. It sits in the
+correctiveMessageHash }`. 69 typed events across 20 domains. It sits in the
   `agent` domain beside `output_schema_validation_failed`, its in-stage
   sibling; a new domain for one event that has a family home would have been
   taxonomy for its own sake.
@@ -11789,8 +11912,9 @@ side can call. So this release ships a second port beside the first.
 ```ts
 const host = nodeHost({ port: 8080 });
 
-await standingAgent({ agent, sessions, host });        // POST /invoke
-await host.serveConversations((conversation) => {      // WS   /conversation
+await standingAgent({ agent, sessions, host }); // POST /invoke
+await host.serveConversations((conversation) => {
+  // WS   /conversation
   conversation.onFrame((frame) => conversation.send(answer(frame)));
   conversation.onClose(({ by, reason }) => log(by, reason));
 });
@@ -11959,11 +12083,11 @@ So this release does two things, and the second is the reason for the first.
 ```ts
 Agent.create({ provider, model })
   .act({
-    input:      [scrubSSNs],                            // the message, before the run commits it
-    beforeTool: [refundCeiling, fourEyes],              // every call, before it is dispatched
-    afterTool:  [stripPII],                             // every result, before the model reads it
-    window:     slidingWindow({ keepRecentTurns: 12 }), // what the live window keeps
-    output:     [noCodenames],                          // the answer, before the caller gets it
+    input: [scrubSSNs], // the message, before the run commits it
+    beforeTool: [refundCeiling, fourEyes], // every call, before it is dispatched
+    afterTool: [stripPII], // every result, before the model reads it
+    window: slidingWindow({ keepRecentTurns: 12 }), // what the live window keeps
+    output: [noCodenames], // the answer, before the caller gets it
   })
   .build();
 ```
@@ -11977,8 +12101,8 @@ wire, same rows in the ledger.
 
 The canonical path is preserved by **demoting the doors, not deleting them**.
 `.toolMiddleware()`, `.messageMiddleware()`, `.window()` and `.compaction()`
-are unchanged and stay open, and they are now documented under *Composing
-incrementally* — because adding one rule to an agent somebody else built is a
+are unchanged and stay open, and they are now documented under _Composing
+incrementally_ — because adding one rule to an agent somebody else built is a
 real job, and a bundle that must be written all at once cannot do it. That
 division is the one-sentence answer to "which spelling": **`.act()` for an
 agent you own, a door for a piece you are adding to somebody else's.** A second
@@ -12227,8 +12351,8 @@ the honest pick is the one whose bytes come back unchanged.
 **The law, which is the part that outlives this vendor.** In the words of the
 field report that bought it:
 
-> *An unreadable stored conversation and an absent one are different facts, and
-> only one of them is safe to answer with a fresh start.*
+> _An unreadable stored conversation and an absent one are different facts, and
+> only one of them is safe to answer with a fresh start._
 
 A session nobody has used is absent, and answering it fresh is right. A session
 whose bytes are present and unreadable is not, and answering THAT fresh is
@@ -12246,7 +12370,7 @@ through to the fresh-start path.
 meant reading how this repo writes an event blob, and `AgentCoreStore` — the
 `MemoryStore` adapter — wrote them identically: `payload: [{ blob: entry }]`,
 read back as objects only. Same service, same mangling, same silence, different
-loss: an entry that decodes to nothing was *skipped*, so `list()` came back one
+loss: an entry that decodes to nothing was _skipped_, so `list()` came back one
 memory short and `get()` came back `null`. Memory that silently stays empty is
 indistinguishable from memory that works, until somebody notices the assistant
 has forgotten a customer's address. Shipping the cure for one organ while the
@@ -12289,8 +12413,8 @@ and are still described that way.
   refused loudly rather than decoded to `undefined`.
 
 - **`hydrate` no longer answers "no session" for a session that HAS one.** The
-  adapter's decode step now distinguishes *no blob at all* (an absence, which
-  hydrates as `undefined`) from *a blob it cannot read* (which travels on to the
+  adapter's decode step now distinguishes _no blob at all_ (an absence, which
+  hydrates as `undefined`) from _a blob it cannot read_ (which travels on to the
   shared reading law and is refused by name). Both file and event modes pass the
   session id into `checkEnvelope`, so a refusal names the conversation.
 
@@ -12439,7 +12563,7 @@ than by an opinion.** See below.
   satisfy the container contract this repo documents for a managed agent
   runtime, and is not trying to.** It serves MCP — statelessly (it neither
   issues nor demands a session id, so replicas are interchangeable), on the path
-  and port you choose — and it answers *neither* of the contract's two routes:
+  and port you choose — and it answers _neither_ of the contract's two routes:
   `GET /ping` and `POST /invocations` are 404s from it. Two protocols, two
   paths, two adapters: serve the container contract with
   `agentCoreRuntimeHost` and MCP with `mcpServe`. The one thing that is NOT
@@ -12454,7 +12578,7 @@ The refusal becomes acceptance.
 Three releases ago the messages slot was a lie: content declared for it was
 recorded as injected, counted in the slot composition, routed by the engine, and
 never sent. 7.19.1 refused the declaration by name rather than deliver it badly,
-and said why in the same breath — the wire has no system role *inside* the
+and said why in the same breath — the wire has no system role _inside_ the
 message list on the Anthropic family (system is a separate top-level field)
 while the OpenAI family carries it, so wiring the slot straight through would
 have replaced one uniform gap with a **provider-dependent** one that nothing in
@@ -12479,7 +12603,7 @@ refused when the run starts, naming the provider and the roles it does. The role
 is never rewritten to one that fits — changing who appears to speak is a meaning
 change the app must make, not the library. **Position**: a delivered message goes
 at the end of the window, and if its role would repeat the turn already there, it
-is *deferred* to the next boundary with a sentence on
+is _deferred_ to the next boundary with a sentence on
 `messagesDelivery.deferred`, never dropped and never reordered, and never
 inserted between a tool call and its result.
 
@@ -12535,7 +12659,7 @@ end. An honest limitation stated loudly beats a clever one hidden.
 ### Fixed
 
 - **The cache marker for `field: 'messages'` pointed at the wrong message.** It
-  counted entries in a per-slot list of *injections* and handed that count to
+  counted entries in a per-slot list of _injections_ and handed that count to
   providers who read it as a position in `request.messages` — two index spaces
   under one name. It was unreachable while nothing could target the slot, and
   delivery makes it reachable, so it is recomputed against the actual wire array
@@ -12622,7 +12746,6 @@ end. An honest limitation stated loudly beats a clever one hidden.
   mismatch — it counts injections that contribute tools and is stamped onto the
   request's tool array. It is out of this release's scope, and it is now the only
   one of the pair left.
-
 
 ## [7.20.0] - 2026-08-03
 
@@ -12733,7 +12856,7 @@ message-sequence rule; it is queued as a feature, with this gap as its evidence.
   / `.instruction` / `.fact` all pass through — refuses a hand-built `Injection`
   carrying `inject.messages`, so the refusal cannot be walked around. The
   message names the limitation and the working alternatives: `slot:
-  'system-prompt'` (the default, delivered by every provider), a tool's return
+'system-prompt'` (the default, delivered by every provider), a tool's return
   value (a tool result IS a recent message, at the recency the option was
   reaching for), and the text passed to `agent.run({ message })`.
 
@@ -12941,7 +13064,7 @@ Example: `examples/deploy/durable-sessions.ts`.
 ## [7.18.0] - 2026-08-03
 
 Every agent framework lets you wrap a tool call. Most of them let the wrapper
-*answer* — return a canned string, a cached value, a "simulated" result — and
+_answer_ — return a canned string, a cached value, a "simulated" result — and
 the moment one does, the trace is fiction. The model was told a tool ran.
 Nothing ran.
 
@@ -13000,7 +13123,7 @@ taken afterwards: the trace would show text nobody ever sent.
 
 - **`ask` suspends on the SHIPPED pause machinery.** `isAskPause(outcome)`
   narrows a paused run and `outcome.ask` carries `{ question, detail?,
-  middleware }`. Resume with `checkInApproved` / `checkInDeclined` — the same
+middleware }`. Resume with `checkInApproved` / `checkInDeclined` — the same
   human-answer vocabulary check-ins use, deliberately, because a person
   approving is a person approving and one word for one thing beats a synonym.
   A malformed resume DECLINES, so a governed call can never execute because a
@@ -13137,7 +13260,7 @@ measured lifetime. Removing is not forgetting.
   token budget, and reporting a `capTokens` nobody configured would be exactly
   the invented number this family refuses.
 
-  `keepRecentTurns` is required and has no default. It *is* the policy.
+  `keepRecentTurns` is required and has no default. It _is_ the policy.
 
 - **`tokenBudget({ thresholdTokens, keepRecentTurns? })` — counted, then
   dropped.** Reads the input tokens the adapter reported for the last call and
@@ -13185,7 +13308,7 @@ measured lifetime. Removing is not forgetting.
   It appears only at the head (a removal in the middle leaves the opening turn
   in place, so there is nothing to fix and a spliced `user` message is its own
   risk); it never accumulates (the next drop absorbs it); and if it would not
-  be *smaller* than the span it replaces, the whole drop is abandoned under
+  be _smaller_ than the span it replaces, the whole drop is abandoned under
   `summary-not-smaller`, whose meaning generalizes to "the replacement came
   back no smaller than the span" rather than growing the closed reason union.
 
@@ -13279,7 +13402,7 @@ arrived yet.
   Example: `examples/context-engineering/11-compaction.ts`.
 
 - **`CompactionRecord` on `scope.compactions` — the fold's half of the law.**
-  One record per over-budget visit, *including the visits that folded nothing*,
+  One record per over-budget visit, _including the visits that folded nothing_,
   which are the interesting ones. It carries `foldedStageIds` (real
   `runtimeStageId`s, resolvable in the commit log), `foldedMessageCount`,
   `measuredTokens` vs `thresholdTokens`, exact `windowCharsBefore` /
@@ -13303,7 +13426,7 @@ arrived yet.
 - **`COMPACTED_FRAME_PREFIX` / `isCompactedSummary(msg)`** — the authored frame
   is a library constant and the summarizer's text is appended after it as data.
   A summarizer returning `IGNORE ALL PREVIOUS INSTRUCTIONS` still arrives
-  *inside* a message that says, first and in the library's own words, that what
+  _inside_ a message that says, first and in the library's own words, that what
   follows is a summary written by a model and not the conversation. A test pins
   exactly that, with a hostile summarizer. The boundary points both ways: the
   folded transcript reaches the summarizer between markers the authored
@@ -13333,7 +13456,7 @@ arrived yet.
 - **With `.compaction()` configured, the compaction stage becomes the ReAct
   loop target** (`compact`), mounted immediately before the previous one. The
   loop is branch-sourced, so anything ahead of the target runs once and is
-  never seen again — and being the target puts the fold *before* the injection
+  never seen again — and being the target puts the fold _before_ the injection
   engine and the three context slots, which is the point: the triggers, the
   slots and the wire then all see one window, and no part of the run reasons
   over a past the model was not shown. Without `.compaction()` the loop target
@@ -13350,9 +13473,9 @@ arrived yet.
 ## [7.15.0] - 2026-08-02
 
 7.14.0 shipped two hosting ports that name no cloud, plus a conformance suite,
-and made a promise: *a cloud adapter is vendor paths and a header mapping on a
+and made a promise: _a cloud adapter is vendor paths and a header mapping on a
 port that already worked; if writing one needs a change to a port, the port was
-wrong.* A promise like that is worth nothing until somebody writes the adapter.
+wrong._ A promise like that is worth nothing until somebody writes the adapter.
 
 This release writes it. `agentCoreRuntimeHost` is a real cloud runtime's
 container contract — different paths, different body fields, the conversation id
@@ -13366,8 +13489,8 @@ policy store behind the existing permission port, per-request credential vending
 for Gateway tools, and the memory adapter's `search()` finally wired.
 
 Three seams did have to move, and none of them was a port. They are listed under
-"Changed" rather than buried, because *where an adapter needs more than paths
-and headers* is the interesting result of an exercise like this — and two of the
+"Changed" rather than buried, because _where an adapter needs more than paths
+and headers_ is the interesting result of an exercise like this — and two of the
 three turned out not to be about this vendor at all.
 
 ### Added
@@ -13399,7 +13522,7 @@ three turned out not to be about this vendor at all.
   Example: `examples/deploy/agentcore-runtime.ts`.
 
 - **`httpHost({ name, wire, invokePath, healthPath, port?, hostname?,
-  capabilities? })` — the HTTP work, parameterised by the JSON dialect it
+capabilities? })` — the HTTP work, parameterised by the JSON dialect it
   speaks.** Draining on close, aborting when the caller hangs up, failing a
   handler that throws, failing a handler that answers nothing, mapping refusal
   codes to status codes, and choosing between one JSON body and Server-Sent
@@ -13414,7 +13537,7 @@ three turned out not to be about this vendor at all.
   matching and gets it subtly wrong in exactly one deployment.
 
 - **`agentCorePolicy({ policyStoreId, region?, onUnavailable?, onWarning?,
-  principalFor?, name?, cacheSize? })` — an AgentCore policy store behind the
+principalFor?, name?, cacheSize? })` — an AgentCore policy store behind the
   existing `PermissionChecker` port** (`agentfootprint/security`). Every
   attempted tool call becomes one evaluation.
 
@@ -13462,7 +13585,7 @@ three turned out not to be about this vendor at all.
 
   Results are marked `metadata.source: 'agentcore-memory-record'`, because
   `search` reads a genuinely different population than `list`: the records
-  AgentCore's extraction strategies *derived from* your events, whose ids belong
+  AgentCore's extraction strategies _derived from_ your events, whose ids belong
   to AgentCore, so `store.get(result.entry.id)` will not find them.
 
   There is **no `stream()`**. AgentCore Memory has no streaming data-plane
@@ -13579,7 +13702,7 @@ and if writing one ever needs a change to a port, the port was wrong.
 - **`standingAgent({ agent, sessions, host, onConcurrentInvoke? })` — the
   composer.** Per request: wake and hydrate the session, resume that
   conversation or start a fresh one, persist what the run left behind, reply.
-  Persist happens *before* the answer goes out, so a queued next turn can never
+  Persist happens _before_ the answer goes out, so a queued next turn can never
   read state older than the answer already given.
 
   It restates the `resumeOnError` tool re-execution caveat **verbatim** in its
@@ -13593,7 +13716,7 @@ and if writing one ever needs a change to a port, the port was wrong.
   afterwards belongs to whichever started last, so one session's envelope can end
   up holding another session's conversation with nothing in the recording to say
   so. `ConcurrentInvokePolicy` is the separate question of a second turn of the
-  *same* conversation: `'reject'` (default) refuses with a `ConcurrentRunError`
+  _same_ conversation: `'reject'` (default) refuses with a `ConcurrentRunError`
   naming the active run (`409`), `'enqueue'` queues it FIFO behind the run whose
   state it will then read. A request for a **different** session is never
   refused — it waits its turn.
@@ -13634,7 +13757,7 @@ person something, `standingAgent` answers with a `PauseNotCarriedError` and
 writes **nothing** — the session keeps exactly the conversation it had before the
 request. Over HTTP that is a `409`, not a `500`, because the agent did not break
 and every dashboard that sees a 500 will conclude otherwise. `'conversation-v1'`
-stores a conversation; a paused run is a conversation *plus* an engine
+stores a conversation; a paused run is a conversation _plus_ an engine
 checkpoint, and storing half of it would be worse than storing none. Carrying a
 pause would be a NEW format name in the same envelope — which is precisely what
 the version in the format is for.
@@ -13649,7 +13772,7 @@ host can send any string there, including someone else's.
 
 **The conformance suite is the deliverable, not the tests for it.** One handler
 constant, served by `nodeHost` and by a minimal in-process host that declares
-*no* capabilities so the buffering path is exercised rather than assumed, with a
+_no_ capabilities so the buffering path is exercised rather than assumed, with a
 final pair of cases invoking both and comparing directly. A future adapter —
 including a cloud one — is measured against that file.
 
@@ -13677,7 +13800,7 @@ other way, and a value committed where run-level values already commit.
   and the body still arrives only after it does. What changes is who can edit a
   playbook, and whether changing the refund policy shows up as a reviewable diff.
 
-  A skill body is *instructions to a model*, so where it came from is a security
+  A skill body is _instructions to a model_, so where it came from is a security
   property rather than a convenience — content fetched at run time is content
   someone else can change after you reviewed it. The loader therefore accepts a
   local directory and nothing else: a URL is **refused by name**, not fetched.
@@ -13748,7 +13871,7 @@ other way, and a value committed where run-level values already commit.
 
 - **`McpClientOptions.signal` cancels a hung MCP tool call again — it never
   did.** The signal was being sent as part of the `tools/call` request
-  *params*, where an `AbortSignal` JSON-serializes to `{}`: the server received
+  _params_, where an `AbortSignal` JSON-serializes to `{}`: the server received
   a meaningless field and the caller received no cancellation. The SDK takes
   per-request options in a separate trailing argument, which is where the signal
   now goes; it is threaded to `connect()` and `listTools()` for the same reason,
@@ -13787,7 +13910,7 @@ synchronous, and making it async to accommodate a resolver would shift every
 agent's timing for a feature most agents do not use. A resolver that needs I/O
 can do it before `run()` and close over the result.
 
-Every debugging session starts at a *variable* — "where did that instruction come
+Every debugging session starts at a _variable_ — "where did that instruction come
 from?", "which loop wrote the history it answered from?" — and both halves of the
 answer already existed, in vocabularies that did not meet. footprintjs 9.13 records
 a variable's whole life in commit indices and runtimeStageIds; the localizer thinks
@@ -13798,7 +13921,7 @@ Joining them turned out to buy something bigger than a nicer read-out. The backw
 walk narrows each loop with embedding similarity — a proxy that points at a
 neighbourhood and cannot separate a planted instruction from an innocent same-topic
 sibling. But where the recording carries per-write provenance, one part of that guess
-is unnecessary: the commit log *says* which write produced the value this loop read.
+is unnecessary: the commit log _says_ which write produced the value this loop read.
 So the walk stops guessing exactly there — and keeps saying so everywhere else.
 
 ### Added
@@ -13826,7 +13949,7 @@ So the walk stops guessing exactly there — and keeps saying so everywhere else
   same hops, same order, same verdicts (pinned by a deep-equal test).
 
   The proxy still picks WHO; dataflow picks WHERE. A stage-level edge never becomes
-  an exact hop, and a recorded edge outranks the *inferred* proximate-tool hop —
+  an exact hop, and a recorded edge outranks the _inferred_ proximate-tool hop —
   better evidence wins, and the hop record says which kind it used.
 
 - **`AgentOptions.writeProvenance`** (`'off'` default, `'reads-prefix'` to enable) —
@@ -13843,7 +13966,7 @@ So the walk stops guessing exactly there — and keeps saying so everywhere else
 `coverage: 'exact'` requires **positive** evidence — at least one recorded per-write
 edge — not merely the absence of a conservative one. A key nothing ever reads back
 (the agent's `lastToolResult`: written by tool-calls, never read by `call-llm`) has
-an empty edge set, so "no conservative edges" is *vacuously* true; scoring that as
+an empty edge set, so "no conservative edges" is _vacuously_ true; scoring that as
 exact would hand the walk its most confident hop on its least-evidenced key. Absence
 of dataflow is `'unknown'`, never exactness.
 
@@ -13867,7 +13990,7 @@ it with measurements instead of re-deriving why it was strict.
 
 ## [7.11.0] - 2026-08-02
 
-A pipeline whose steps form a *shape* rather than a line — one step feeding two
+A pipeline whose steps form a _shape_ rather than a line — one step feeding two
 independent lookups, a third waiting for both — had no home here. You could nest
 a `Parallel` inside a `Sequence`, but then you were scheduling it by hand, and
 the values did not survive the trip.
@@ -13939,7 +14062,7 @@ switches keep compiling. Same reasoning as `workflow()` in 7.10.0.
 ## [7.10.0] - 2026-08-02
 
 Two routing-shaped gaps closed. Both were things the docs told you to hand-roll,
-and both were fiddly in the same way: the wiring is easy to get *nearly* right,
+and both were fiddly in the same way: the wiring is easy to get _nearly_ right,
 and nearly right fails quietly — at run time, several steps away from the
 mistake.
 
@@ -13948,7 +14071,7 @@ mistake.
 - **`llmRouter` — the classic Swarm decision, packaged.** `swarm()` asks for a
   `route()` that is sync and pure, and it means it: the `Conditional` evaluates
   it once per branch predicate and the loop's exit guard evaluates it again
-  after every turn. So the LLM decision has to happen *somewhere else*, before
+  after every turn. So the LLM decision has to happen _somewhere else_, before
   the message reaches `route` — and that placement is the part everyone
   re-invented, along with the prompt, the parsing, and a second copy of the
   agent roster that drifts from the first.
@@ -13962,8 +14085,8 @@ mistake.
   with a stale decision.
 
   The decision is validated JSON — `RoutingDecision` = `{ agentId?, message,
-  reason? }`. No `agentId` means "done", and the swarm halts through its own
-  halt sentinel. An id that isn't in the roster is kept verbatim, *not* quietly
+reason? }`. No `agentId` means "done", and the swarm halts through its own
+  halt sentinel. An id that isn't in the roster is kept verbatim, _not_ quietly
   swapped for a plausible one: `swarm()`'s existing done/fallback law then ends
   the run, so a hallucinated agent shows up as a halt instead of a wrong answer.
   Unusable output throws `RoutingDecisionError` with the model's raw text
@@ -13998,7 +14121,7 @@ mistake.
   feeds the next step's `{ message }`, the house convention every LLM runner
   speaks; anything else must match exactly) — a chain that doesn't line up is a
   compile error, pinned by `@ts-expect-error` fixtures under `npm run
-  test:types`. At run time, values are handed over **unchanged**: objects stay
+test:types`. At run time, values are handed over **unchanged**: objects stay
   objects. `workflow(draft, edit)` over two `LLMCall`s reads exactly as it
   always did.
 
@@ -14028,7 +14151,7 @@ mistake.
 
 **If you pass `dimensions` today, your vectors change length.** They were the
 model's native length all along; now they are the length you asked for. Anything
-you have already embedded and stored was written at the *old* length, so a store
+you have already embedded and stored was written at the _old_ length, so a store
 built with `openaiEmbedder({ dimensions: 256 })` on 7.8 holds 1536-long vectors
 and will not match new 256-long queries. **Re-embed, or drop `dimensions` to
 keep the old lengths.**
@@ -14046,7 +14169,7 @@ Also changed, in the same spirit of "`.dimensions` must not lie":
   1536 for everything, so `text-embedding-3-large` under-reported by half.
 - An **unknown model with no `dimensions` is now a construction-time error**
   instead of a silent 1536. This is the breaking edge: `openaiEmbedder({
-  baseURL, model: 'nomic-embed-text' })` against a gateway, an Ollama server or
+baseURL, model: 'nomic-embed-text' })` against a gateway, an Ollama server or
   an Azure deployment name now throws until you state the length. That
   population is exactly the one that was being lied to. One option fixes it:
   `{ dimensions: 768 }`.
@@ -14062,7 +14185,7 @@ Also changed, in the same spirit of "`.dimensions` must not lie":
 - **`localEmbedder({ backend })` / `staticEmbedder({ backend })` — pass an
   already-imported module, and the on-device embedders work in a browser.** To
   keep the heavy peer deps optional, both factories import them through a
-  *variable* specifier — which no bundler can see through. The bare name
+  _variable_ specifier — which no bundler can see through. The bare name
   survived a production build and reached the browser unresolved:
   `TypeError: Failed to resolve module specifier '@huggingface/transformers'`.
   The capability was there all along; only the packaging blocked it. Now the
@@ -14099,7 +14222,7 @@ Also changed, in the same spirit of "`.dimensions` must not lie":
 
 - **Docs-truth check — an ongoing, honest answer to "do the docs describe what
   the code actually does?"** `npm run docs:truth` (new CI job `docs-truth`)
-  answers three *separate* questions for every capability the package exposes,
+  answers three _separate_ questions for every capability the package exposes,
   because their combinations are different bugs: DECLARED (in the published
   surface), DOCUMENTED (described in prose on the site), EXERCISED (a real run
   produces it). Declared/documented/never-exercised is the shape a dead or
@@ -14113,7 +14236,7 @@ Also changed, in the same spirit of "`.dimensions` must not lie":
     therefore cannot see a single `agentfootprint/<subpath>` symbol. The
     surface is reported per subpath, since root-barrel-vs-subpath is itself a
     known source of user confusion. Events come from `ALL_EVENT_TYPES`.
-  - The DOCUMENTED column counts *only* prose on the 63 hand-written pages
+  - The DOCUMENTED column counts _only_ prose on the 63 hand-written pages
     under `docs-next/content/docs`. Both TypeDoc trees
     (`docs-next/content/docs/api/`, `docs/api-reference/`) are excluded — they
     are generated from source, so every symbol appears in them by construction

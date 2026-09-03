@@ -58,9 +58,11 @@ const capture = () => {
   const superseded: Ev[] = [];
   const conflicts: Ev[] = [];
   const toolEnds: Ev[] = [];
+  const rejections: Ev[] = [];
   const recorder = {
     id: 'capture-effects',
     onEmit: (e: { name: string; payload?: Ev }) => {
+      if (e.name === 'agentfootprint.skill.rejected') rejections.push(e.payload ?? {});
       if (e.name === 'agentfootprint.tools.effect') effects.push(e.payload ?? {});
       if (e.name === 'agentfootprint.context.evaluated') evaluated.push(e.payload ?? {});
       if (e.name === 'agentfootprint.skill.reroute_superseded') superseded.push(e.payload ?? {});
@@ -68,7 +70,7 @@ const capture = () => {
       if (e.name === 'agentfootprint.stream.tool_end') toolEnds.push(e.payload ?? {});
     },
   };
-  return { effects, evaluated, superseded, conflicts, toolEnds, recorder };
+  return { effects, evaluated, superseded, conflicts, toolEnds, rejections, recorder };
 };
 
 const buildAgent = (args: {
@@ -328,16 +330,66 @@ describe('functional: propose-transition', () => {
     ]);
     expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'tool-proposal', to: 'billing' });
   });
+});
 
-  it('rails admits an accepted proposal — a tool is framework-tier evidence, not a model pick', async () => {
-    const { agent, evaluated } = buildAgent({
+// ─────────────────────────────────────────────────────────────────────────
+// Security — posture independence, and the ONE law that does bind a proposal
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('security: posture independence', () => {
+  // A posture governs the MODEL's routing door only. A proposal is the tool
+  // author's own deterministic code, so the graph checks it for reachability
+  // and nothing else — under every posture, `rails` included. These pin that
+  // as a DECISION: reversing it (teaching `applyToolEffects` to read
+  // `skillStrictness`) turns them red rather than passing quietly.
+  for (const strictness of ['guard', 'rails'] as const) {
+    it(`${strictness} admits an accepted proposal — a tool is framework-tier evidence, not a model pick`, async () => {
+      const { agent, evaluated, effects, rejections } = buildAgent({
+        replies: [call('diagnose', 't1'), final('done')],
+        tools: [effectTool('diagnose', { content: 'x', effects: [propose('billing')] })],
+        graph: hopGraph(),
+        options: { strictness },
+      });
+      await agent.run({ message: 'help' });
+      expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'tool-proposal', to: 'billing' });
+      expect(effects).toEqual([
+        expect.objectContaining({ outcome: 'accepted', targetSkillId: 'billing' }),
+      ]);
+      // No posture refusal anywhere: the gate that owns `skillStrictness`
+      // was never on this path.
+      expect(rejections).toEqual([]);
+    });
+  }
+
+  it('the reachability law still binds under rails — an unreachable proposal is refused', async () => {
+    // The exemption is from the POSTURE, not from the graph. Without this,
+    // "postures don't apply" could be read as "nothing applies".
+    const { agent, effects, evaluated } = buildAgent({
       replies: [call('diagnose', 't1'), final('done')],
-      tools: [effectTool('diagnose', { content: 'x', effects: [propose('billing')] })],
+      tools: [effectTool('diagnose', { content: 'x', effects: [propose('warehouse')] })],
       graph: hopGraph(),
       options: { strictness: 'rails' },
     });
     await agent.run({ message: 'help' });
-    expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'tool-proposal', to: 'billing' });
+    expect(effects[0]).toMatchObject({ outcome: 'refused', targetSkillId: 'warehouse' });
+    expect(String(effects[0]!.refusalReason)).toContain('is not reachable from');
+    expect(cursorMoveOf(evaluated[1]!)?.by).not.toBe('tool-proposal');
+  });
+
+  it('STATED: the tool exemption is documented where the posture is declared', async () => {
+    // The exemption is deliberate, but an author meets `strictness` at its
+    // own definition site and nowhere else. If the door is left open, the
+    // docstring there has to say so — a reader who mounts `'rails'` expecting
+    // "nothing but my declared selection routes" is otherwise wrong on the
+    // strength of what we wrote. This is the doc half of the decision, and it
+    // is load-bearing enough to fail the suite when it goes missing.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../../../src/core/agent/AgentBuilder.ts', import.meta.url),
+      'utf8',
+    );
+    expect(src).toContain('A `propose-transition` tool effect. A proposal comes from a TOOL');
+    expect(src).toContain('admitted under `assist`, `guard` AND');
   });
 
   it('no graph mounted → teaching refusal, recorded', async () => {

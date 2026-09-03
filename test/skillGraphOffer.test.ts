@@ -59,6 +59,11 @@ function splitMenu(description: string): { reachable: string[]; refusable: strin
   return { reachable: ids(head ?? ''), refusable: ids(tail ?? '') };
 }
 
+/** The cursor the description NAMES, if any (9.84.0's positive signal). */
+function namedCursor(description: string): string | undefined {
+  return /You are in '([^']+)'\./.exec(description)?.[1];
+}
+
 /** Capture the read_skill description the model saw on each iteration. */
 async function menus(
   agentOf: (a: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
@@ -141,12 +146,17 @@ describe('read_skill offer — per iteration', () => {
     // is precisely the confusion this feature exists to remove.
     const sections = seen.map(splitMenu);
     // Iteration 1 — cursor on alpha (the entry). Reachable: beta (successor) and
-    // gamma (open — the graph wires no edge into it). alpha itself is excluded:
-    // picking the skill you are already in is a no-op the gate refuses.
-    expect(sections[0]).toEqual({ reachable: ['beta', 'gamma'], refusable: ['alpha'] });
+    // gamma (open — the graph wires no edge into it). alpha itself is in NEITHER
+    // column (9.84.0): it is excluded from its own successor set because a move
+    // to where you already are is not a move, and calling that "not reachable"
+    // said the opposite of the truth about the one skill the model was holding.
+    expect(sections[0]).toEqual({ reachable: ['beta', 'gamma'], refusable: [] });
     // Iteration 2 — the alpha_tool edge fired, cursor on beta. alpha is reachable
-    // again (it is the entry), beta is not (same current-skill exclusion).
-    expect(sections[1]).toEqual({ reachable: ['alpha', 'gamma'], refusable: ['beta'] });
+    // again (it is the entry), beta is now the one in neither column.
+    expect(sections[1]).toEqual({ reachable: ['alpha', 'gamma'], refusable: [] });
+    // The cursor is instead NAMED, which is what the model was missing — and it
+    // still tracks the hop, which is what `refusable` used to prove here.
+    expect(seen.slice(0, 2).map(namedCursor)).toEqual(['alpha', 'beta']);
   });
 
   // The cursor reaches the tools slot by a DIFFERENT key in each chart shape: the
@@ -167,10 +177,12 @@ describe('read_skill offer — per iteration', () => {
         check: 'throw',
       });
       const seen: Array<{ reachable: string[]; refusable: string[] }> = [];
+      const descriptions: string[] = [];
       let i = 0;
       const provider = mock({
         respond: (req: { tools?: ReadonlyArray<{ name: string; description: string }> }) => {
           const rs = (req.tools ?? []).find((x) => x.name === 'read_skill');
+          if (rs) descriptions.push(rs.description);
           if (rs) seen.push(splitMenu(rs.description));
           i++;
           if (i === 1)
@@ -183,8 +195,12 @@ describe('read_skill offer — per iteration', () => {
         .skillGraph(g)
         .build();
       await agent.run({ message: 'go' });
-      expect(seen[0]).toEqual({ reachable: ['beta'], refusable: ['alpha'] });
-      expect(seen[1]).toEqual({ reachable: ['alpha'], refusable: ['beta'] });
+      expect(seen[0]).toEqual({ reachable: ['beta'], refusable: [] });
+      expect(seen[1]).toEqual({ reachable: ['alpha'], refusable: [] });
+      // The cursor no longer shows up in the refusable column (9.84.0), so the
+      // lag this test exists to catch is proved on the two signals that remain:
+      // the reachable set above, and the sentence naming where the model is.
+      expect(descriptions.map(namedCursor)).toEqual(['alpha', 'beta']);
     },
   );
 

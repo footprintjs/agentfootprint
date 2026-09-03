@@ -1253,6 +1253,21 @@ export interface SkillRejectedPayload {
    *  (rules/scorer route turn starts; declared routes handle transitions).
    *  Absent = today's reachability refusal, unchanged. */
   readonly posture?: 'guard' | 'rails';
+  /** WHICH ARM of the gate answered (9.84.0) — optional, so every consumer
+   *  written against the older shape keeps working unchanged:
+   *
+   *   • `'self-call'` — `requestedId === currentSkillId`. The model asked for
+   *     the skill it is already in; the cursor did not move because there was
+   *     nowhere to move it, and the tool result is an acknowledgement naming
+   *     the tools it can call, not a decline. Consumers that count refusals as
+   *     routing failures should read this one as a NAMING failure instead.
+   *   • `'unreachable'` — a genuine hop the cursor cannot make.
+   *   • `'posture'` — a reachable hop a declared `strictness` declined; pairs
+   *     with {@link SkillRejectedPayload.posture}, which names which one.
+   *
+   *  Before this, telling a self-call from an unreachable hop meant comparing
+   *  `requestedId` against `currentSkillId` and knowing why that mattered. */
+  readonly reason?: 'self-call' | 'unreachable' | 'posture';
 }
 
 /**

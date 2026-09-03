@@ -63,6 +63,23 @@ export interface ReadSkillOffer {
    */
   readonly hiddenIds?: readonly string[];
   /**
+   * WHERE THE CURSOR STANDS — the skill the model is already IN (9.84.0).
+   *
+   * Passed on every call that has a cursor, menu or no menu. It does two jobs
+   * the offer could not do before: it NAMES the current skill in the
+   * description (previously only the menu's stay clause ever did, and a
+   * decisively-routed turn has no menu), and it keeps that skill out of the
+   * "Not reachable from here" list — where it appeared purely as an artefact of
+   * being filtered out of its own successor set.
+   *
+   * {@link ReadSkillOffer.menu}'s `cursorId` is the same value and still
+   * honoured; this one is simply not conditional on a menu being outstanding.
+   *
+   * It is NOT exempt from {@link ReadSkillOffer.hiddenIds}. A cursor the
+   * caller's role may not see is not named — see the filter in `describeOffer`.
+   */
+  readonly cursorId?: string;
+  /**
    * Turn-start MENU (SG-C): when set, the description LEADS with these
    * candidates (id + one-line description; advisory relevance %s beside
    * near-tie candidates), names the cursor, and states STAY as a first-class
@@ -114,16 +131,77 @@ function describeOffer(
         c.relevance !== undefined ? ` (relevance ~${Math.round(c.relevance * 100)}%)` : '';
       return `${line(byId.get(c.id)!)}${pct}`;
     });
+  // ── THE CURSOR IS NAMED ON EVERY CALL THAT HAS ONE (9.84.0) ─────────
+  // This used to be the STAY clause and nothing else, so it appeared only while
+  // a turn-start menu was outstanding. A turn that routed DECISIVELY has no
+  // menu — and therefore had no sentence anywhere telling the model which skill
+  // it was in. It received a body with no name on it, then read the gate's
+  // refusal of its own id as "that skill is unavailable" and gave up mid-turn.
+  // So the cursor rides the offer whenever it exists, and the stay clause still
+  // rides it when a menu is open.
+  //
+  // ROLE VISIBILITY WINS OVER THE POSITIVE SIGNAL. `hidden` is built above
+  // precisely so nothing below can name a hidden skill, and reading
+  // `offer.cursorId` raw walked past it: a role denied `skill_read` on the
+  // cursor's own skill was still told "You are in 'alpha'" — the one leak the
+  // hidden set exists to prevent, because it teaches a role the name of a
+  // capability no cursor move will ever make available to it. Naming nothing
+  // is the honest fallback: that role loses the positive signal, which is the
+  // price its own policy asked for.
+  const named = offer.cursorId ?? offer.menu?.cursorId;
+  const cursorId = named !== undefined && !hidden.has(named) ? named : undefined;
+  const staying = offer.menu?.stay === true && cursorId !== undefined;
+  // WHAT THE SECOND HALF MAY SAY: outside an outstanding menu, NOTHING.
+  //
+  // Naming the cursor is the whole fix for the production failure this release
+  // exists for — a model that could not tell it was already in a skill read a
+  // refusal as "unavailable" and gave up. Naming it is enough. Every sentence
+  // added ALONGSIDE the name has turned out false somewhere, five rounds
+  // running, and the last one is worth recording because it looked safest of
+  // all: " You do not need read_skill to go on using it." was argued to be a
+  // claim about NECESSITY that no posture, budget or hold-out could falsify.
+  // The PARK falsifies it. A parked map member keeps the cursor and loses its
+  // body and its tools, and `read_skill` is then the only door back — the
+  // re-engagement arm at `toolCalls.ts` exists precisely because 9.59.0 found
+  // that telling a parked model to answer with the current skill made parking
+  // permanent for the rest of the turn. This description cannot see the park
+  // (see the note below on hold-outs), so it cannot know when it would be
+  // lying. So it says the name and stops.
+  //
+  // What it must NOT say is what `read_skill` would DO from here. The deleted
+  // wording ("read_skill MOVES you to a DIFFERENT skill") was that, and it is
+  // false at compose time under two of the three declared postures: `'rails'`
+  // refuses every model hop outright and `'guard'` refuses every hop that is
+  // not on an outstanding menu, so `read_skill` moves nobody — the posture arm
+  // answers a taken-up pick with "read_skill here reaches only the open skills:
+  // …" and contradicts this sentence head-on. Nor is that fixable by making
+  // the sentence posture-aware: the gate's verdict also turns on whether the
+  // pick lands on a menu that is still outstanding, and on whether it is a
+  // parked map member the re-engagement arm admits — facts about a call that
+  // has not happened. A description that predicts the gate can only be a
+  // partial mirror, and a partial mirror is how each of the previous rounds
+  // ended. So it predicts nothing.
+  const cursorLead =
+    cursorId === undefined
+      ? ''
+      : `You are in '${cursorId}'.` +
+        (staying
+          ? ` Staying is a first-class option: answer WITHOUT calling read_skill to ` +
+            `stay in '${cursorId}'.\n\n`
+          : `\n\n`);
+  // Deliberately no claim about tools here. This description is composed before
+  // the step and park hold-outs filter the wire, so it cannot see what actually
+  // rides; the gate's self-call notice names tools because it reads the merged
+  // list after the fact.
   const menuLead =
     offer.menu !== undefined && menuRows.length > 0
       ? `This turn needs a routing choice — no declared rule or intent decisively matched. ` +
         `Closest candidates (advisory; an offline scorer ranked them and cannot see the ` +
         `conversation):\n${menuRows.join('\n')}\n` +
-        (offer.menu.stay === true && offer.menu.cursorId !== undefined
-          ? `You are in '${offer.menu.cursorId}'. Staying is a first-class option: answer ` +
-            `WITHOUT calling read_skill to stay in '${offer.menu.cursorId}'.\n\n`
-          : `Answering WITHOUT calling read_skill is also allowed.\n\n`)
-      : '';
+        (staying
+          ? cursorLead
+          : `Answering WITHOUT calling read_skill is also allowed.\n\n${cursorLead}`)
+      : cursorLead;
   if (offer.grantable === undefined) {
     // No graph — the plain catalog, filtered. A role with nothing left is told
     // plainly rather than handed an empty list to interpret.
@@ -136,7 +214,16 @@ function describeOffer(
   }
   const grantable = new Set(offer.grantable);
   const open = skills.filter((s) => grantable.has(s.id));
-  const shut = skills.filter((s) => !grantable.has(s.id));
+  // The cursor is never in `grantable` — `makeReachableSkills` filters it out of
+  // its own successor set, because a MOVE to where you already are is not a move.
+  // Listing it under "Not reachable" turned that into a claim about
+  // AVAILABILITY, which is the one thing this list must not say about the skill
+  // the model is standing in. (What this point can and cannot see is settled 30
+  // lines up: the wire is composed AFTER this, so no claim about tools belongs
+  // in either column. The gate's self-call notice is where tools get named,
+  // because it reads the merged list after the fact.) It belongs in neither
+  // column, so it is named once, above, by `cursorLead`.
+  const shut = skills.filter((s) => !grantable.has(s.id) && s.id !== cursorId);
   const parts = [
     open.length > 0
       ? `Reachable from here:\n${open.map(line).join('\n')}`
@@ -266,7 +353,22 @@ export function readSkillDescriptor(
       if ((entry.surfaceMode === 'tool-only' || entry.surfaceMode === 'both') && entry.body) {
         return entry.body;
       }
-      return `Skill '${id}' activated for the next iteration.`;
+      return skillActivationConfirmation(id);
     },
   };
+}
+
+/**
+ * What `read_skill` answers when it activated a skill but did NOT carry its body
+ * (surface modes `'system-prompt'` / `'auto'` — the body lands via the system
+ * slot next iteration).
+ *
+ * Exported because the skill-graph gate has to tell this sentence apart from a
+ * body: a SELF-CALL keeps the body (the model asked to re-read where it is, and
+ * under `'tool-only'` the tool result is the only place that body ever appears)
+ * but must not keep a promise of an activation that is not pending. Comparing
+ * against the one owner of the string beats guessing at its shape.
+ */
+export function skillActivationConfirmation(id: string): string {
+  return `Skill '${id}' activated for the next iteration.`;
 }
