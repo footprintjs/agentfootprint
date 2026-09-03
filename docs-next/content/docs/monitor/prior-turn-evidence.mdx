@@ -162,6 +162,12 @@ It is the vocabulary behind every row above: `indexTruncated` is why a half-read
 `not-applicable` rather than an accusation, and `currentTurn: 0` (a history with no user turn in it)
 is why "no boundary to be before" reads as `unreachable` instead of a pass it did not earn.
 
+Three terminal exits reach a caller without the gate ever producing a reading — an empty answer, a
+middleware denial, and an answer the output schema rejected — and each files its disposition rather
+than leaving the armed row untouched. That is not bookkeeping: an armed row nobody noted is what the
+`'dev'` posture's liveness check reads as wiring rot, so without it an empty answer would fail a
+perfectly healthy run.
+
 `unreachable` on this row has a specific meaning worth watching: the answer named no value the index
 could ground, or the history carried no user turn to be *before*. A row dominated by `unreachable`
 says answers are not stating values this check can see — and that it is watching a seam that is not

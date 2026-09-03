@@ -65,7 +65,7 @@ import {
   buildEvidenceCorrection,
   evidenceRefusalSentence,
 } from '../../src/core/agent/evidence/gate.js';
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, allow, defineTool, deny } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMMessage } from '../../src/adapters/types.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
@@ -444,6 +444,66 @@ describe('zero-delta: the dial absent', () => {
       rows = e.payload.rows as CheckReport[];
     });
     await agent.run('go');
+    expect(recencyRow(rows)).toMatchObject({ checked: 0, findings: 0, notApplicable: 1 });
+  });
+});
+
+describe('contract: an armed row is never left untouched', () => {
+  // `assertAlive` reads an armed row nobody noted as wiring rot, and in dev
+  // posture that is a CheckerDeadError on a healthy run. Three terminal exits
+  // hand a caller something without the gate ever producing a grounding
+  // reading; each has to SAY so. Completing these runs at all is half the
+  // assertion.
+  const runDev = async (
+    replies: readonly ReturnType<typeof answer>[],
+    build?: (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
+  ): Promise<{ rows: CheckReport[]; threw: boolean }> => {
+    let rows: CheckReport[] = [];
+    const base = Agent.create({
+      provider: mock({ replies: [...replies] }),
+      model: 'mock',
+      maxIterations: 4,
+      noticePriorTurnEvidence: true,
+      integrityPosture: 'dev',
+    })
+      .system('s')
+      .tool(inventory())
+      .namesAndNumbersFromEvidence();
+    const agent = (build ? build(base) : base).build();
+    agent.on('agentfootprint.integrity.disposition', (e) => {
+      rows = e.payload.rows as CheckReport[];
+    });
+    // A denial raises at the boundary (a `MessageDeniedError`, by design);
+    // the disposition event still files on the finally path, which is the row
+    // this suite is about. Whether it threw is itself an assertion below.
+    let threw = false;
+    await agent.run('go').catch(() => {
+      threw = true;
+    });
+    return { rows, threw };
+  };
+
+  it('AN EMPTY ANSWER files unreachable — and the dev-posture run does NOT throw', async () => {
+    // `assertAlive` throws CheckerDeadError when `workExisted && touched === 0`,
+    // and an empty answer means `llmLatestContent` is `''` — work existed. So
+    // completing this run at all is the first half of the assertion: without
+    // the note, a healthy run is reported as wiring rot.
+    const { rows, threw } = await runDev([call('c1', 'array_inventory'), answer('')]);
+    expect(threw).toBe(false);
+    expect(recencyRow(rows)).toMatchObject({ checked: 0, findings: 0, unreachable: 1 });
+  });
+
+  it('A DENIED ANSWER files not-applicable — nobody receives it, so there is no provenance to report', async () => {
+    // (A denial raises `MessageDeniedError`, so `assertAlive` — success path
+    // only — never sees this run. The row is filed anyway: the disposition
+    // report is what a reader consults, and an armed check silent in it is
+    // the ambiguity this family exists to remove.)
+    const { rows } = await runDev([call('c1', 'array_inventory'), answer(TURN_1_ANSWER)], (b) =>
+      b.messageMiddleware({
+        name: 'withhold',
+        onMessage: (msg) => (msg.phase === 'output' ? deny('policy') : allow()),
+      }),
+    );
     expect(recencyRow(rows)).toMatchObject({ checked: 0, findings: 0, notApplicable: 1 });
   });
 });

@@ -83,6 +83,13 @@ chooses a branch: the revise / refuse / flag decision is byte-for-byte the one e
 | the answer names no value the index could ground | `unreachable` — nothing to attribute |
 | the history carries no user turn, so there is no boundary | `unreachable` |
 | the evidence index hit its ceiling and is incomplete | `not-applicable` |
+| the answer was empty — nothing to attribute | `unreachable` |
+| the answer was denied by a message middleware, or rejected by the output schema | `not-applicable` — the gate deliberately does not run there |
+
+The last two rows are not bookkeeping. An **armed row nobody noted** is what
+`assertAlive` reads as wiring rot, so under `integrityPosture: 'dev'` an empty
+answer would otherwise fail a perfectly healthy run with `CheckerDeadError`.
+Every terminal exit that reaches a caller without a grounding reading says so.
 
 **Armed by two halves.** `AgentOptions.noticePriorTurnEvidence: true` **and**
 `.namesAndNumbersFromEvidence()`. The second is structural rather than a policy companion: the gate

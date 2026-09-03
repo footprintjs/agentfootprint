@@ -384,7 +384,12 @@ function judgeEvidence(
   const afterRevision = scope.evidenceRevisionSpent === true;
   // An empty answer states nothing. `stoppedEarly` already reports why it is
   // empty; adding "and it cited nothing" would be noise about a non-answer.
-  if (answer === '') return undefined;
+  if (answer === '') {
+    // …but the recency row still has to say it could not run. An armed check
+    // that files nothing is indistinguishable from an unhooked one.
+    noteRecency(noticePriorTurnEvidence, integrityLedger, 'unreachable');
+    return undefined;
+  }
 
   const history = scope.history as readonly LLMMessage[];
   const verdict = checkAnswer(answer, {
@@ -481,6 +486,29 @@ function judgeEvidence(
     );
   }
   return undefined;
+}
+
+/**
+ * File the recency check's disposition WITHOUT reading anything (9.83.0) —
+ * `noteClaims`' precedent, one judge over, and for the identical reason.
+ *
+ * An armed check that leaves its row UNTOUCHED is what `assertAlive` reads as
+ * wiring rot, and in `integrityPosture: 'dev'` that is a `CheckerDeadError` on
+ * a perfectly healthy run. Three terminal exits reach a caller without the
+ * evidence gate ever producing a grounding reading — an empty answer, a
+ * middleware denial, and an answer the output schema rejected — so each says
+ * so in the ledger rather than going quiet.
+ *
+ * Value-conditional on the dial: an unarmed check already carries its
+ * `not-applicable` row from registration and must not be noted twice.
+ */
+function noteRecency(
+  armed: boolean | undefined,
+  ledger: { current: DispositionLedger | undefined } | undefined,
+  disposition: Disposition,
+): void {
+  if (armed !== true) return;
+  ledger?.current?.note('prior-turn-evidence', 'claim', disposition);
 }
 
 /** The `route_decided` rationale for an evidence recheck. */
@@ -822,6 +850,9 @@ function buildJudgingDecider(
       }
       scope.llmLatestContent = verdict.content;
     }
+    // A withheld answer is judged by nothing below, so the recency row says so
+    // here rather than sitting untouched (see `noteRecency`).
+    if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
     if (!denied && judgeUnfinishedSteps(scope, stepPlanFor, earlyStop) === 'step-nudge') {
       emitRouteDecided(scope, 'step-nudge', stepNudgeRationale(scope));
       return 'step-nudge';
@@ -909,6 +940,10 @@ function buildEnforcingDecider(
       // The claim seam never runs on a denied answer — nobody receives it —
       // but the run must still SAY that, per declared claim.
       noteClaims(claims, integrityLedger, 'not-applicable');
+      // Same exit, same reasoning, for the recency read: an answer nobody
+      // receives has no provenance worth reporting, and that is a rule rather
+      // than a failure to reach one.
+      noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
       emitRouteDecided(scope, 'final', base.rationale);
       settleWrapUp(scope, base.earlyStop, false);
       return 'final';
@@ -1014,7 +1049,9 @@ function buildEnforcingDecider(
     // failed its own contract and the caller is being told so; grounding the
     // values inside a shape the app has declared invalid would file a second
     // verdict about a string nobody is going to use, and under `guard` it
-    // would buy a revision for an answer that cannot pass anyway.
+    // would buy a revision for an answer that cannot pass anyway. The recency
+    // row says exactly that — out of scope by rule, never silence.
+    noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
     emitRouteDecided(
       scope,
       'final',

@@ -88,6 +88,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte-identical save the registered `prior-turn-evidence` row filed
   `not-applicable`, which is the family's law rather than an exception to it.
 
+  Three terminal exits reach a caller without the gate ever producing a
+  grounding reading — an empty answer, a middleware denial, and an answer the
+  output schema rejected — and each files its disposition rather than leaving
+  the armed row untouched. An untouched armed row is what `assertAlive` reads
+  as wiring rot, so without this an empty answer under
+  `integrityPosture: 'dev'` would have failed a healthy run with
+  `CheckerDeadError`.
+
   Docs: [Prior-turn evidence](https://agentfootprint.dev/docs/monitor/prior-turn-evidence).
 
 ## [9.82.0] - 2026-08-30
