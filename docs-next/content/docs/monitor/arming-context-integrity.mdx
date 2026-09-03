@@ -3,7 +3,7 @@ title: Arming Context Integrity
 description: Each Context Integrity check only runs once the application declares its precondition. This is the smallest declaration that arms each one — and what an unarmed check used to hide.
 ---
 
-[Context Integrity](doc:context-integrity) ships five checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` and `unsupported-argument` both need a tool that says where its arguments come from (one declaration, two seams), `unsupported-claim` needs a claim contract, `empty-lookup` needs that same `argumentsFrom` field AND an operator's dial — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
+[Context Integrity](doc:context-integrity) ships eight checks. None of them runs for free. `invariant-violation` at the compose seam needs a mounted map, `dangling-reference` and `unsupported-argument` both need a tool that says where its arguments come from (one declaration, two seams), `unsupported-claim` needs a claim contract, `empty-lookup` needs that same `argumentsFrom` field AND an operator's dial — and until 9.62.0, a check with no precondition declared filed **no row at all**. The one always-on row (`wire`) sat there green next to nothing, and a run that checked three things looked identical to a run that checked one.
 
 That is not hypothetical. This library's own reference agent shipped for weeks with every optional check unarmed, and a second, independent integration reported reaching the exact same state without knowing about the first. Nobody had declared the preconditions, nothing said so, and the report stayed green throughout. A consumer running this in production put it plainly: a page listing the cheapest way to arm each check would move more people to actually arm them than a fourth check ever would. This is that page.
 
@@ -197,7 +197,7 @@ Default posture is `'observe'`: rows only, no canary, no throw — the right cho
 
 ## What this doesn't cover — and says so
 
-The finding type names six defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`, `empty-lookup`. **Five ship as checks.** `duplicate-execution` (did settled work again) has no implementation in this build — no code anywhere is looking for it.
+The finding type names nine defect classes: `invariant-violation`, `unsupported-argument`, `dangling-reference`, `duplicate-execution`, `unsupported-claim`, `empty-lookup`, `column-type-mismatch`, `missing-column`, `prior-turn-evidence`. **Eight ship as checks.** `duplicate-execution` (did settled work again) has no implementation in this build — no code anywhere is looking for it.
 
 That absence is stated, not hidden. `find_context_errors` — the tool a debugging agent calls to read findings back from a recording — never offers that kind in its schema, and if something calls it with it anyway, it answers with an explicit refusal rather than a clean-sounding negative:
 

@@ -15,7 +15,7 @@ agent.on('agentfootprint.integrity.context_error', (e) => {
 });
 ```
 
-## The six checks that ship today
+## The checks that ship today
 
 1. **Parked but still served** (compose seam) — with `.maps()` mounted, every pass compares each parked map's owned tool names against the final merged wire list. Day one it caught a real leak: the park hold-out filters registry and skill tools, but a `.toolProvider()` copy of a parked member's name stays on the wire.
 2. **The wire manifest** (wire seam) — the anthropic and browser-anthropic adapters state `LLMResponse.wireManifest` (a `WireToolManifest`: the tool names read back from the FINAL serialized request body, after every transform). The loop compares it against the exact request it handed the adapter, so a frame that says "removed" while the body still carries the schemas is caught — the defect every pre-serialization check structurally misses. A provider that states no manifest leaves the call incomparable: silence, never a guess. An empty manifest is a stated zero.
@@ -122,4 +122,4 @@ const tools = traceToolpack(openRecording(recorder.toRecording()));
 console.log(await callTraceTool(tools, 'find_context_errors', {}));
 ```
 
-`find_context_errors` mounts unconditionally on `traceToolpack()`, so a debugger model always has it. Without an event tail it says so — *"no evidence", never a clean bill of health* — rather than reporting a clean run, and it distinguishes four absences: no tail, a tail with no integrity events, no check registered, and a check registered that never checked anything. Its green is bounded and says so: a headline names how many of the registered checks actually checked something, and every report repeats that green means no REGISTERED check was violated, not that no context error exists. One of the six defect classes the `kind` union names (`'duplicate-execution'`) still has no check in this build; the tool withholds it from its menu and refuses to answer about it instead of implying silence is absence.
+`find_context_errors` mounts unconditionally on `traceToolpack()`, so a debugger model always has it. Without an event tail it says so — *"no evidence", never a clean bill of health* — rather than reporting a clean run, and it distinguishes four absences: no tail, a tail with no integrity events, no check registered, and a check registered that never checked anything. Its green is bounded and says so: a headline names how many of the registered checks actually checked something, and every report repeats that green means no REGISTERED check was violated, not that no context error exists. One of the defect classes the `kind` union names (`'duplicate-execution'`) still has no check in this build; the tool withholds it from its menu and refuses to answer about it instead of implying silence is absence.
