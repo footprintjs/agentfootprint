@@ -42,7 +42,7 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:733](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L733)
+Defined in: [src/core/agent/types.ts:799](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L799)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -55,7 +55,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L726)
+Defined in: [src/core/agent/types.ts:792](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L792)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -72,7 +72,7 @@ cache-write penalty isn't worth paying.
 
 > `readonly` `optional` **checkColumnTypes?**: `"warn"` \| `"enforce"` \| `"off"`
 
-Defined in: [src/core/agent/types.ts:645](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L645)
+Defined in: [src/core/agent/types.ts:711](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L711)
 
 Check a tool's rows against the columns it declared (9.78.0) — the write
 seam's COLUMN-TYPE CONTRACT. **Default `'off'`.**
@@ -290,7 +290,7 @@ trust it.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:760](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L760)
+Defined in: [src/core/agent/types.ts:826](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L826)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -518,11 +518,83 @@ result the tool returned.
 
 ***
 
+### noticePriorTurnEvidence?
+
+> `readonly` `optional` **noticePriorTurnEvidence?**: `boolean`
+
+Defined in: [src/core/agent/types.ts:648](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L648)
+
+Notice when the final answer's values were ALL read before this turn
+(9.83.0) — the claim seam's `prior-turn-evidence` advisory. **Default
+off.**
+
+The recorded failure: an agent answered a data question with ZERO tool
+calls, and the evidence gate approved it — "all 7 values in the answer
+were found in what the tools returned". They were: in an inventory result
+fetched four turns earlier for a different question. The user had asked
+about array performance; the answer recommended enabling a collector that
+had been running for months. Two turns did it back to back. The gate
+measures GROUNDEDNESS and had no notion of WHEN a value was grounded —
+while SAYING it did: both of its sentences claimed the flagged values
+"appear in no tool result from this turn", a boundary the index never
+honoured. 9.83.0 narrowed those sentences to what the gate really reaches
+and made the boundary measurable here instead.
+
+What the library CAN see, once every indexed form carries the turn that
+served it, is that every value the answer states was last served BEFORE
+the turn being answered — and that this turn contributed none of them.
+Turn this on and each such answer files one `advisory` finding on
+`agentfootprint.integrity.context_error`, naming the count, the newest
+turn they came from, how far back that is, and how many tool results this
+turn served (`0` is the sharp case: an answer assembled entirely from the
+conversation).
+
+THE CEILING, and it is why this never accuses: an answer that legitimately
+refers back to an earlier result is indistinguishable, by evidence alone,
+from one that has gone stale. This reports WHERE the values came from,
+never whether they were still the ones the reader wanted. The same
+advisory is filed for the honest follow-up and the stale answer, because
+nothing in this library can tell them apart. Every finding carries the
+ceiling sentence (`PRIOR_TURN_EVIDENCE_CEILING`) in its own message.
+
+WHAT IT CAN SEE, and it is narrower than "the conversation": the evidence
+corpus is `scope.history` as it stands at judgement, which on an agent
+with `.window()` / `.compaction()` / `tokenBudget` is the LIVE WINDOW. So
+the turn ordinals count the turns the run can still see and the distance
+is a FLOOR (the boundary itself is exact — the current request is
+un-droppable). And a value that reached the model through `.memory()`
+recall or RAG is exempt from grounding altogether, so it is invisible
+here: this can under-report, never over-report.
+
+WHAT KEEPS AN HONEST FOLLOW-UP QUIET. ONE grounded value from this turn's
+own results is enough to file nothing — the claim being tested is that
+EVERY value came from earlier, and one that did not falsifies it. A
+follow-up that calls a tool usually gets that for free: a lookup keyed on
+an earlier identifier echoes the identifier back in its own result, so the
+value is re-served this turn. The evidence corpus is deliberately NOT
+narrowed to this turn — "and what about that disk?" leans on the previous
+turn's rows legitimately, and flagging those would make the gate cry wolf
+until somebody switched it off.
+
+TWO HALVES ARM IT: this dial AND `.namesAndNumbersFromEvidence()`. The
+gate is not a policy companion here — it owns the extractor that decides
+which tokens in an answer are DATA at all, so without it there is nothing
+whose provenance could be read. Absent, the run is byte-identical: no
+finding, no event, no branch changes, and the posture decides exactly what
+it always decided. The one visible difference is the registered
+`prior-turn-evidence` row in the disposition report, filed
+`not-applicable` — registered-but-unarmed is a ROW, never silence.
+
+It REPORTS. Whether an answer is advised or refused stays the evidence
+gate's `posture`; nothing here blocks, revises or rewrites anything.
+
+***
+
 ### observerDelivery?
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:821](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L821)
+Defined in: [src/core/agent/types.ts:887](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L887)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -558,7 +630,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:827](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L827)
+Defined in: [src/core/agent/types.ts:893](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L893)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -570,7 +642,7 @@ Queue dials for `observerDelivery: 'deferred'` — see
 
 > `readonly` `optional` **onAuthorizationRequired?**: `AuthorizationRequiredMode`
 
-Defined in: [src/core/agent/types.ts:715](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L715)
+Defined in: [src/core/agent/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L781)
 
 What the run does when a tool's DECLARED credential (`needs: { credential }`)
 comes back `authorization-required` — a person has to click a consent link
@@ -633,7 +705,7 @@ Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:791](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L791)
+Defined in: [src/core/agent/types.ts:857](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L857)
 
 How the ReAct loop behaves — a single setting with three honest choices.
 Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
@@ -771,7 +843,7 @@ and the note would be noise rather than news.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L750)
+Defined in: [src/core/agent/types.ts:816](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L816)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -849,7 +921,7 @@ latency-critical shutdown where an abandoned session is the cheaper loss.
 
 > `readonly` `optional` **wrapUpAtMaxIterations?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:693](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L693)
+Defined in: [src/core/agent/types.ts:759](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L759)
 
 What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
 Default **on**.

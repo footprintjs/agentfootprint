@@ -4,7 +4,7 @@ title: RunbookWalkOptions
 
 # Interface: RunbookWalkOptions
 
-Defined in: [src/core/runbook/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L88)
+Defined in: [src/core/runbook/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L96)
 
 The walk policy.
 
@@ -14,7 +14,7 @@ The walk policy.
 
 > `readonly` `optional` **cap?**: `number`
 
-Defined in: [src/core/runbook/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L91)
+Defined in: [src/core/runbook/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L99)
 
 Row cap on the minted walk (default 500). When the full walk does not
  fit, the CONTROL FLOW survives — see `walk.ts` for the projection law.
@@ -25,7 +25,7 @@ Row cap on the minted walk (default 500). When the full walk does not
 
 > `readonly` `optional` **recording?**: `boolean` \| [`RunbookRecordingOptions`](/docs/api/interfaces/RunbookRecordingOptions)
 
-Defined in: [src/core/runbook/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L130)
+Defined in: [src/core/runbook/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L138)
 
 ALSO file the inner chart's own RECORDING (9.79.0) — `{ snapshot, events,
 structure }`, the shape `observeRecording()` mounts — under kind

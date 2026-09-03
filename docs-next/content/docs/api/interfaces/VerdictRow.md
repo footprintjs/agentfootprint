@@ -4,7 +4,7 @@ title: VerdictRow
 
 # Interface: VerdictRow
 
-Defined in: [src/core/runbook/types.ts:281](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L281)
+Defined in: [src/core/runbook/types.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L289)
 
 One verdict row, as the chart wrote it. The bridge reads rows from the
  final state's `verdicts` key and requires only `verdict`; every other
@@ -20,4 +20,4 @@ One verdict row, as the chart wrote it. The bridge reads rows from the
 
 > `readonly` **verdict**: `string`
 
-Defined in: [src/core/runbook/types.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L282)
+Defined in: [src/core/runbook/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L290)

@@ -4,7 +4,7 @@ title: UnsupportedValue
 
 # Interface: UnsupportedValue
 
-Defined in: [src/core/agent/evidence/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L103)
+Defined in: [src/core/agent/evidence/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L105)
 
 One value in the answer that no tool result carried.
 
@@ -14,7 +14,7 @@ One value in the answer that no tool result carried.
 
 > `readonly` **shape**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L108)
+Defined in: [src/core/agent/evidence/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L110)
 
 Which rule made it a candidate: `'identifier'`, `'number'`, or the name
  of a declared [EvidenceShape](/docs/api/interfaces/EvidenceShape).
@@ -25,6 +25,6 @@ Which rule made it a candidate: `'identifier'`, `'number'`, or the name
 
 > `readonly` **value**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L105)
+Defined in: [src/core/agent/evidence/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L107)
 
 The value as it appeared in the answer, normalized and truncated.

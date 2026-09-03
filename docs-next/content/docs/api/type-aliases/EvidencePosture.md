@@ -6,7 +6,7 @@ title: EvidencePosture
 
 > **EvidencePosture** = `"assist"` \| `"guard"` \| `"rails"`
 
-Defined in: [src/core/agent/evidence/types.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L28)
+Defined in: [src/core/agent/evidence/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L30)
 
 How hard the check pushes back. **Same three words as the skill-graph
 routing dial, deliberately** — one posture vocabulary across the library —
