@@ -117,10 +117,18 @@ export async function presentArtifact(
   const meta = await store.head(scope, ref);
   if (meta === null) {
     const page = await store.list(scope, { limit: PRESENT_LIST_LIMIT });
+    // ANCHORED TO THE CALL, NOT TO THE MOMENT. This refusal is a TOOL RESULT:
+    // it is written into `history` and re-read on every later call of the turn,
+    // including calls made after the model has stored something. "Nothing is
+    // live … right now" was therefore a forecast — true when composed, false
+    // the moment the run had an artifact — and a model re-reading it is being
+    // told its own stored data does not exist. The opening clause names the
+    // call (`present('<ref>')`), so the listing binds to that call and stays
+    // true wherever it is read.
     const listing =
       page.artifacts.length === 0
-        ? `Nothing is live in this run's scope right now — store the data first, then present ` +
-          `its ref.`
+        ? `Nothing was live in this run's scope when you made that call — store the data ` +
+          `first, then present its ref.`
         : `Live refs in scope: ${page.artifacts.map(describeRef).join(', ')}.`;
     return {
       ok: false,

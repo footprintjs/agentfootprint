@@ -308,7 +308,7 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      const rendered = render(result, maxOutputChars, minted, stagedNames, wantNames);
+      const rendered = render(result, maxOutputChars, name, minted, stagedNames, wantNames);
       // Facts only, never `args.code` — generated code quotes the data it was
       // handed, so the code is the one part of this that must not travel.
       codeRuns.set(ctx.toolCallId, {
@@ -670,6 +670,9 @@ async function mintProducedFiles(
 function render(
   result: CodeResult,
   maxOutputChars: number,
+  /** The tool's own name — what the no-inputs line anchors to, so the sentence
+   *  names a call rather than pointing at "this" one. */
+  toolName: string,
   minted?: ReadonlyMap<string, FileMintOutcome>,
   staged: readonly string[] = [],
   declared: readonly string[] = [],
@@ -691,9 +694,16 @@ function render(
     // stored data is a real call), but a model whose code just failed on a
     // missing environment variable would otherwise debug an absence nothing
     // in the conversation explains.
+    //
+    // Anchored, because this line is a TOOL RESULT: it stays in `history` and
+    // is re-read on every later call of the turn. "on this call" moves with
+    // each re-reading — three calls on, one of which DID pass a ref, it denies
+    // the staging that happened. Naming the call this result answers fixes the
+    // sentence to the one call it is true of, and the tenses follow it.
     parts.push(
-      `[no artifact inputs were passed on this call, so nothing was staged and ` +
-        `${STAGED_INPUTS_ENV} is not set. To work on stored data, pass its art_… ref as ` +
+      `[no artifact inputs were passed on the ${toolName} call this result answers, so ` +
+        `nothing was staged into that call's session and ${STAGED_INPUTS_ENV} was not set ` +
+        `for it. To work on stored data, pass its art_… ref as ` +
         `${declared.map((n) => `'${n}'`).join(' / ')}.]`,
     );
   }

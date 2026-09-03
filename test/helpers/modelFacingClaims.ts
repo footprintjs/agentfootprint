@@ -14,26 +14,49 @@
  * A checker whose SCOPE is decided by which suite happens to import it is not a
  * checker, it is a habit. So the list lives here, every model-facing surface
  * this release touches is run through it, and a surface that is NOT run through
- * it is an omission a reader can see (there is one import to look for) rather
- * than one they have to notice the absence of.
+ * it is an omission a reader can see (`test/modelFacingSurfaces.test.ts` is the
+ * inventory) rather than one they have to notice the absence of.
  *
- * ── WHY THE SURFACE IS AN ARGUMENT AND NOT A DIFFERENT FUNCTION ───────────
+ * ── WHY A SURFACE IS TWO DIMENSIONS AND NOT ONE ───────────────────────────
  *
- * A clause is provable or not depending on WHEN the string is read, and the two
- * surfaces differ on exactly that:
+ * A clause is provable or not depending on HOW LONG the string lives, and that
+ * is not the same question as WHERE it is delivered. The first list conflated
+ * them — `'tool-result' | 'tool-description'` — and the conflation held only
+ * because the release happened to touch one channel of each lifetime:
  *
- *   'tool-result'      — composed on iteration N, written into `history`, and
- *                        re-read by the model on call N+1 AND on every call
- *                        after it, including the tool-less wrap-up. Nothing in
- *                        it may depend on state that moves: the cursor, the
- *                        wire, the budget, the posture's verdict.
- *   'tool-description' — recomposed from scratch on every single request and
- *                        never re-read. Present tense about THIS request's
- *                        cursor is a fact there, not a forecast.
+ *   lifetime: 'persistent-history'  — composed on iteration N, written into
+ *                        `history`, and re-read by the model on call N+1 AND on
+ *                        every call after it, including the tool-less wrap-up.
+ *                        Nothing in it may depend on state that moves: the
+ *                        cursor, the wire, the budget, the posture's verdict. A
+ *                        present-tense clause here is a FORECAST.
+ *   lifetime: 'request-ephemeral'  — recomposed from scratch for a single
+ *                        request and never re-read. Present tense about THIS
+ *                        request's cursor is a FACT there, not a forecast.
  *
- * Encoding that as `provableOn` keeps the distinction in the one place a reader
- * checks. Deciding it by which suite calls the function is how the sentence got
- * out the first time.
+ * The two do not correlate with the channel. System-prompt text is rebuilt
+ * every request, so it is EPHEMERAL and may speak in the present; a tool result
+ * is PERSISTENT and may not — and the same sentence in an injected turn is
+ * persistent again, because an injected turn is appended to `history` exactly
+ * as a tool result is. A channel is not evidence about lifetime, so the caller
+ * states both and the RULES JUDGE `lifetime`.
+ *
+ * `channel` is carried for the inventory and for the failure message, so a
+ * failing assertion tells the reader which producer to open rather than only
+ * which sentence is wrong.
+ *
+ * ── EXEMPTIONS ARE LIFETIME CLAIMS, AND THEY HAVE EVIDENCE ────────────────
+ *
+ * Both exemptions below were written as claims about the `read_skill`
+ * DESCRIPTION, and both argued the same thing in prose: that string is rebuilt
+ * per request and never re-read. That is a lifetime, so it is expressed as one
+ * — and it is derivable rather than asserted. `AgentBuilder.skillGraph` REFUSES
+ * `reactMode: 'classic'` at build (the one mode that caches the tools slot),
+ * so a graph-composed description cannot exist on a cached slot: every call
+ * that has an offer recomposed it. {@link GRAPH_TOOL_DESCRIPTION} carries that
+ * evidence, which is why a bare "it's a tool description" is NOT the exemption
+ * — a description composed once and cached would be persistent, and the rows
+ * below would rightly fail it.
  *
  * ── WHAT THIS CHECKER DOES NOT COVER, SAID OUT LOUD ───────────────────────
  *
@@ -48,19 +71,50 @@
  * here so the gap is on the record instead of hiding behind a green suite.
  */
 
-/** Where the string will be read — see the header. */
-export type Surface = 'tool-result' | 'tool-description';
+/**
+ * WHERE the string is delivered, and HOW LONG it lives — see the header. Both
+ * are stated by the caller because neither can be inferred from the other.
+ */
+export interface Surface {
+  readonly channel: 'tool-result' | 'tool-description' | 'injected-turn' | 'system-text';
+  readonly lifetime: 'persistent-history' | 'request-ephemeral';
+}
+
+/**
+ * Any tool result. Persistent by construction: the dispatch loop writes it onto
+ * a `role: 'tool'` message and every later call in the turn re-reads it.
+ */
+export const TOOL_RESULT: Surface = {
+  channel: 'tool-result',
+  lifetime: 'persistent-history',
+};
+
+/**
+ * The `read_skill` description composed from a graph OFFER.
+ *
+ * Ephemeral for a reason with an enforcement point, not by convention:
+ * `.skillGraph()` throws under `reactMode: 'classic'` (AgentBuilder), and
+ * classic is the only mode that caches the tools slot — so a description
+ * carrying an offer was composed for the request the model is answering. A tool
+ * description on a CACHED slot would be `'persistent-history'`, and naming this
+ * constant after the graph rather than after the channel is what keeps the two
+ * cases apart.
+ */
+export const GRAPH_TOOL_DESCRIPTION: Surface = {
+  channel: 'tool-description',
+  lifetime: 'request-ephemeral',
+};
 
 interface BannedClause {
   readonly re: RegExp;
   /** How a later call falsifies it. Printed on failure, so it teaches. */
   readonly why: string;
   /**
-   * Surfaces where the clause IS provable, with the reason it is safe there.
-   * Empty/absent means banned everywhere.
+   * Lifetimes where the clause IS provable, with the reason it is safe there.
+   * Empty/absent means banned wherever the string lives.
    */
-  readonly provableOn?: readonly Surface[];
-  /** Why the exemption holds. Required alongside `provableOn` — an exemption
+  readonly provableWhen?: readonly Surface['lifetime'][];
+  /** Why the exemption holds. Required alongside `provableWhen` — an exemption
    *  without an argument is how a false sentence gets waved through. */
   readonly exemptBecause?: string;
 }
@@ -86,21 +140,21 @@ const BANNED: readonly BannedClause[] = [
   {
     re: /reachable from here|a MOVE from here/,
     why: 'reachability is cursor-relative, and a sibling tool can move the cursor',
-    provableOn: ['tool-description'],
+    provableWhen: ['request-ephemeral'],
     exemptBecause:
-      "the description is rebuilt from THIS request's cursor and never re-read, so the " +
-      'staleness this row names cannot reach it. (The separate posture/re-engagement ' +
-      "falsifier is the documented gap in this file's header — it is not this row.)",
+      "a string rebuilt from THIS request's cursor and never re-read cannot carry the " +
+      'staleness this row names. (The separate posture/re-engagement falsifier is the ' +
+      "documented gap in this file's header — it is not this row.)",
   },
   { re: /right now|\bon this call\b/, why: 'present-tense claim about a wire not yet composed' },
   {
     re: /You are (already )?in '/,
     why: 'present-tense cursor claim: the read_skill description owns the present tense',
-    provableOn: ['tool-description'],
+    provableWhen: ['request-ephemeral'],
     exemptBecause:
-      "the description is recomposed on every call from that call's own cursor, so this is " +
-      'a report of the present rather than a forecast — and it is the positive signal the ' +
-      'whole fix exists to deliver',
+      "a string recomposed for one request, from that request's own cursor, is a report of " +
+      'the present rather than a forecast — and it is the positive signal the whole fix ' +
+      'exists to deliver',
   },
   { re: /\bcallable\b|\byou can call\b/, why: 'capability prediction' },
   {
@@ -114,13 +168,16 @@ const BANNED: readonly BannedClause[] = [
 ];
 
 /**
- * Every banned clause the text contains, with the reason it is unprovable on
- * this surface. `[]` is the only passing answer.
+ * Every banned clause the text contains, with the reason it is unprovable where
+ * this string lives. `[]` is the only passing answer.
+ *
+ * Judged on `surface.lifetime`; `surface.channel` rides the message so a red
+ * suite names the producer to open.
  */
 export function unprovable(text: string, surface: Surface): string[] {
-  return BANNED.filter((row) => row.re.test(text) && !(row.provableOn ?? []).includes(surface)).map(
-    (row) => `${row.re.source} — ${row.why}`,
-  );
+  return BANNED.filter(
+    (row) => row.re.test(text) && !(row.provableWhen ?? []).includes(surface.lifetime),
+  ).map((row) => `[${surface.channel}] ${row.re.source} — ${row.why}`);
 }
 
 /**

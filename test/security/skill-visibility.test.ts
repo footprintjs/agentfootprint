@@ -35,7 +35,11 @@ import { buildReadSkillTool, defineSkill, skillGraph } from '../../src/injection
 import { mock } from '../../src/llm-providers.js';
 import { PermissionPolicy } from '../../src/security/PermissionPolicy.js';
 import { skillTarget, skillIdFromTarget } from '../../src/security/skillTarget.js';
-import { hiddenIdsNamed, unprovable } from '../helpers/modelFacingClaims.js';
+import {
+  hiddenIdsNamed,
+  unprovable,
+  GRAPH_TOOL_DESCRIPTION,
+} from '../helpers/modelFacingClaims.js';
 import type { PermissionChecker, PermissionRequest } from '../../src/adapters/types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
@@ -366,7 +370,7 @@ describe('property — nothing names a hidden skill, on the graph path either', 
     // there cannot be legal here by nobody having looked.
     for (const visible of [['gamma'], ['alpha', 'gamma'], [...graphSkills]]) {
       for (const menu of await graphMenus(visible)) {
-        expect(unprovable(menu, 'tool-description')).toEqual([]);
+        expect(unprovable(menu, GRAPH_TOOL_DESCRIPTION)).toEqual([]);
       }
     }
   });

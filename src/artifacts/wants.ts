@@ -201,12 +201,19 @@ function describeSpokenValue(spoken: unknown): string {
   return `a ${typeof spoken}`;
 }
 
-/** The correcting clause: what CAN resolve, or the honest "nothing can". */
+/** The correcting clause: what CAN resolve, or the honest "nothing can".
+ *
+ *  The empty arm is PAST TENSE and bound to the refused call, because this
+ *  clause rides a TOOL RESULT — `resolveToolWants`'s combined refusal, which
+ *  opens "Tool 'X' was not executed" and is then re-read on every later call of
+ *  the turn. "No live artifacts exist … right now" was a forecast: the model
+ *  mints one two calls later and re-reads a sentence saying its data is not
+ *  there. A fact about the moment that call was refused cannot go stale. */
 function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
   if (live.length === 0) {
     return (
-      `No live '${kind}' artifacts exist in this run's scope right now — produce one first ` +
-      `(a tool that stores '${kind}', or re-run the step that minted it).`
+      `No live '${kind}' artifacts were in this run's scope when that call was refused — ` +
+      `produce one first (a tool that stores '${kind}', or re-run the step that minted it).`
     );
   }
   return `Live '${kind}' refs in scope: ${live

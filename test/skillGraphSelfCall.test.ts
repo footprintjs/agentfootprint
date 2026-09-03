@@ -62,7 +62,12 @@ import { defineSkill, skillGraph, buildReadSkillTool } from '../src/injection-en
 import { mock } from '../src/llm-providers.js';
 import { PermissionPolicy } from '../src/security/PermissionPolicy.js';
 import { selfCallNotice, selfSkillTools } from '../src/core/agent/selfCallNotice.js';
-import { unprovable as unprovableOn, foreignIds } from './helpers/modelFacingClaims.js';
+import {
+  unprovable as unprovableOn,
+  foreignIds,
+  TOOL_RESULT,
+  GRAPH_TOOL_DESCRIPTION,
+} from './helpers/modelFacingClaims.js';
 
 const t = (name: string) =>
   defineTool({
@@ -87,7 +92,8 @@ type Turn = { content: string; toolCalls: Array<{ id: string; name: string; args
 const NOTICE = 'named the skill you were already standing in';
 
 /**
- * The banned-sentence checker, bound to the TOOL-RESULT surface.
+ * The banned-sentence checker, bound to the TOOL-RESULT surface — a channel
+ * whose lifetime is `'persistent-history'`, which is the half the rows judge.
  *
  * The list itself lives in `test/helpers/modelFacingClaims.ts`, shared with
  * every other suite that reads a model-facing string, because round 3 kept it
@@ -95,11 +101,12 @@ const NOTICE = 'named the skill you were already standing in';
  * see. `unprovableDescription` below is the same list bound to the other
  * surface — same rows, one place, the difference stated in the helper.
  */
-const unprovable = (notice: string): string[] => unprovableOn(notice, 'tool-result');
+const unprovable = (notice: string): string[] => unprovableOn(notice, TOOL_RESULT);
 
-/** The same list, bound to the `read_skill` DESCRIPTION. */
+/** The same list, bound to the `read_skill` DESCRIPTION composed from an offer
+ *  — `'request-ephemeral'`, and the helper carries the evidence for that. */
 const unprovableDescription = (description: string): string[] =>
-  unprovableOn(description, 'tool-description');
+  unprovableOn(description, GRAPH_TOOL_DESCRIPTION);
 
 /** The tool names the notice claims rode the call it is about. */
 function namedTools(notice: string): string[] {
