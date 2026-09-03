@@ -22,7 +22,7 @@ import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { IntegritySeam } from '../disposition/types.js';
 
 /**
- * The eight defect classes, by their plain names:
+ * The nine defect classes, by their plain names:
  *
  * | kind | means | mechanism |
  * |---|---|---|
@@ -34,6 +34,7 @@ import type { IntegritySeam } from '../disposition/types.js';
  * | `empty-lookup`         | the run produced this value, and the lookup for it found nothing | join |
  * | `column-type-mismatch` | a column holds something other than the type its tool declared | type |
  * | `missing-column`       | a column the tool declared is in none of its rows      | presence  |
+ * | `prior-turn-evidence`  | every value in the answer was served before this turn  | recency   |
  *
  * `empty-lookup` is the one class that is ADVISORY BY CONSTRUCTION (9.77.0) —
  * every finding it files carries `advisory: true`, because an empty result
@@ -52,6 +53,15 @@ import type { IntegritySeam } from '../disposition/types.js';
  * a string is not a place to look, it is a broken promise — though what the
  * check can see about it is bounded, and the bound ships as
  * `COLUMN_TYPE_CEILING` in every message.
+ *
+ * `prior-turn-evidence` (9.83.0) is the family's SECOND advisory-by-
+ * construction class, and for the same shape of reason as `empty-lookup`:
+ * referring back to an earlier result is ordinary conversation, so an answer
+ * built entirely from earlier turns is a place to look and never a proven
+ * defect. It is deliberately NOT `unsupported-claim`, which is the opposite
+ * fact — there the answer says something the record contradicts, here every
+ * value in it is in the record and the question is only WHEN it got there.
+ * Its bound ships as `PRIOR_TURN_EVIDENCE_CEILING` in every message.
  */
 export type ContextErrorKind =
   | 'invariant-violation'
@@ -61,7 +71,8 @@ export type ContextErrorKind =
   | 'unsupported-claim'
   | 'empty-lookup'
   | 'column-type-mismatch'
-  | 'missing-column';
+  | 'missing-column'
+  | 'prior-turn-evidence';
 
 /** One detected context error — a labelled instance, automatically. */
 export interface ContextError {

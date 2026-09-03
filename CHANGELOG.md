@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.83.0] - 2026-09-03
+
+### Fixed
+
+- **The evidence gate claimed a boundary it did not measure.** Both of its
+  user-facing sentences — the correction it sends the model
+  (`buildEvidenceCorrection`) and the warning it prints an operator
+  (`evidenceRefusalSentence`) — said the flagged values *"appear in NO tool
+  result **from this turn**"*. The index behind them has never been turn-scoped:
+  it walks every `role: 'tool'` turn in the history. The library was asserting a
+  scope it could not honour, in the two places that assertion is read.
+
+  Both now say what the check really reaches — *"appear in no tool result this
+  run read"* — which is both true and the stronger claim, and the operator
+  sentence adds the two facts a reader needs: that the corpus is the LIVE
+  WINDOW (a window strategy rewrites `scope.history` in place, so a dropped
+  result is not in it), and that `noticePriorTurnEvidence` is what answers the
+  recency question. The frame PREFIX is unchanged, so
+  `isLibraryAuthoredTurn` and every consumer matching on it are untouched.
+
+### Added
+
+- **`noticePriorTurnEvidence` — the answer is grounded, and nothing this turn
+  fetched grounds it.** Default off.
+
+  The measured failure: a consumer's agent answered a data question with **zero
+  tool calls**, and the gate approved it — `LLM calls 1 · Tool calls 0 ·
+  Iterations 1`, then *"All 7 values in the answer were found in what the tools
+  returned — the answer stands."* They were found: in an inventory result from
+  four turns earlier, fetched for a different question. The user had asked about
+  array performance; the answer recommended enabling a collector that had been
+  running for months. Two turns did it back to back. Every rail passed honestly
+  — the gate measures GROUNDEDNESS and had no notion of WHEN a value was
+  grounded.
+
+  Every indexed form now carries the turn that last served it — one number,
+  stamped during the walk the index was already doing (`EvidenceCorpus.values`
+  became a `Map<form, turn>`; a TURN starts at each `role: 'user'` message the
+  library did not author). When at least one value in the answer is grounded and
+  **not one of them** came from the turn being answered, one `advisory` finding
+  is filed at the claim seam:
+
+  ```ts
+  const agent = Agent.create({ provider, model, noticePriorTurnEvidence: true })
+    .tool(arrayInventory)
+    .namesAndNumbersFromEvidence() // ← the other half: it owns the extractor
+    .build();
+
+  await agent.run('what arrays are there?');       // fetches, answers, files nothing
+  await agent.followUp('how is array performance?'); // no tool call, answers from turn 1
+  // → prior-turn-evidence: 3 grounded value(s), all last served in turn 1,
+  //   and this turn called no tool at all.
+  ```
+
+  **The corpus is deliberately NOT narrowed to this turn.** That would have made
+  the old sentence true and been the wrong fix: *"and what about that disk?"*
+  leans on the previous turn's rows legitimately, and a check that cries wolf is
+  a check somebody switches off. ONE grounded value from this turn's own results
+  files nothing — not a threshold to tune, but the falsification of the claim
+  being tested. A follow-up that calls a tool usually gets that for free,
+  because a lookup keyed on an earlier identifier echoes it back.
+
+  A turn that served no tool results at all is the SAME finding with a stronger
+  witness, not a second kind: it is a cheaper proof of the identical fact.
+
+  **The ceiling** ships as `PRIOR_TURN_EVIDENCE_CEILING`, exported and quoted
+  verbatim into every message: referring back is indistinguishable, by evidence
+  alone, from going stale; the ordinals count only the turns still in the live
+  window, so the distance is a FLOOR (the boundary itself is exact — the
+  current request is un-droppable); and values that reached the model through
+  `.memory()` recall or RAG are exempt from grounding and invisible to it, so it
+  can under-report and never over-report.
+
+  **Two halves arm it**, and the second is structural rather than a policy
+  companion: the dial AND `.namesAndNumbersFromEvidence()`, whose extractor
+  decides which tokens in an answer are values at all. It REPORTS — whether an
+  answer is advised or refused stays the gate's own `posture` decision, and
+  nothing here blocks, revises or rewrites anything. Absent, a run is
+  byte-identical save the registered `prior-turn-evidence` row filed
+  `not-applicable`, which is the family's law rather than an exception to it.
+
+  Docs: [Prior-turn evidence](https://agentfootprint.dev/docs/monitor/prior-turn-evidence).
+
 ## [9.82.0] - 2026-08-30
 
 ### Added

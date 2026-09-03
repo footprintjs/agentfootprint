@@ -59,8 +59,9 @@ describe('unit: beginIntegrityRun', () => {
     // declaration arms it) + claim/unsupported-claim (unarmed) +
     // write/empty-lookup (unarmed — 9.77.0, two halves) +
     // write/column-type-mismatch and write/missing-column (unarmed — 9.78.0,
-    // two halves, one declaration arming both) — eight rows, always.
-    expect(rows).toHaveLength(8);
+    // two halves, one declaration arming both) + claim/prior-turn-evidence
+    // (unarmed — 9.83.0, two halves) — nine rows, always.
+    expect(rows).toHaveLength(9);
     expect(rows.find((r) => r.seam === 'wire')).toMatchObject({ check: 'invariant-violation' });
     // The armed check: registered, and genuinely armed.
     const composeInvariantRow = rows.find(
@@ -88,7 +89,7 @@ describe('unit: beginIntegrityRun', () => {
     expect(claimRow).toMatchObject({ seam: 'claim', notApplicable: 1, checked: 0, findings: 0 });
   });
 
-  it('nothing opted-in registers all seven opt-in checks as not-applicable, not silence', () => {
+  it('nothing opted-in registers all eight opt-in checks as not-applicable, not silence', () => {
     // The exact shape that used to be indistinguishable from "everything
     // passed": only `wire` present, none of the opt-in checks armed.
     const ledger = beginIntegrityRun(
@@ -96,7 +97,7 @@ describe('unit: beginIntegrityRun', () => {
       'observe',
     );
     const rows = ledger.report();
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     const wireRow = rows.find((r) => r.seam === 'wire');
     expect(wireRow).toMatchObject({ check: 'invariant-violation' });
     for (const [check, seam] of [
@@ -107,6 +108,7 @@ describe('unit: beginIntegrityRun', () => {
       ['empty-lookup', 'write'],
       ['column-type-mismatch', 'write'],
       ['missing-column', 'write'],
+      ['prior-turn-evidence', 'claim'],
     ] as const) {
       const row = rows.find((r) => r.check === check && r.seam === seam);
       expect(row).toMatchObject({ checked: 0, findings: 0, notApplicable: 1, unreachable: 0 });
@@ -136,8 +138,8 @@ describe('unit: beginIntegrityRun', () => {
       'observe',
     );
     const rows = ledger.report();
-    // wire + all seven opt-ins, armed or not — eight rows, always.
-    expect(rows).toHaveLength(8);
+    // wire + all eight opt-ins, armed or not — nine rows, always.
+    expect(rows).toHaveLength(9);
     const claimRow = rows.find((r) => r.check === 'unsupported-claim');
     expect(claimRow).toMatchObject({ seam: 'claim', notApplicable: 0 });
     for (const [check, seam] of [
@@ -147,6 +149,7 @@ describe('unit: beginIntegrityRun', () => {
       ['empty-lookup', 'write'],
       ['column-type-mismatch', 'write'],
       ['missing-column', 'write'],
+      ['prior-turn-evidence', 'claim'],
     ] as const) {
       const row = rows.find((r) => r.check === check && r.seam === seam);
       expect(row).toMatchObject({ notApplicable: 1 });
@@ -175,10 +178,10 @@ describe('unit: beginIntegrityRun', () => {
     // wire + compose/invariant-violation + compose/dangling-reference +
     // choice/unsupported-argument (all four armed by `ALL`, the last two off
     // the one `dangling` declaration) + claim/unsupported-claim and
-    // write/empty-lookup + the two write/column rows (NOT armed — `ALL`
-    // omits those flags, so they register as not-applicable, and still prove
-    // themselves with a canary).
-    expect(rows).toHaveLength(8);
+    // write/empty-lookup + the two write/column rows + claim/
+    // prior-turn-evidence (NOT armed — `ALL` omits those flags, so they
+    // register as not-applicable, and still prove themselves with a canary).
+    expect(rows).toHaveLength(9);
     const registeredChecks = [
       { check: 'invariant-violation', seam: 'wire' },
       { check: 'invariant-violation', seam: 'compose' },
@@ -195,7 +198,7 @@ describe('unit: beginIntegrityRun', () => {
     // The un-armed row proves itself too: registered, honestly noted
     // not-applicable for this run, and still carrying a caught canary — so a
     // reader can tell "no subject today" apart from "this checker is dead".
-    for (const check of ['unsupported-claim', 'empty-lookup'] as const) {
+    for (const check of ['unsupported-claim', 'empty-lookup', 'prior-turn-evidence'] as const) {
       const unarmed = rows.find((r) => r.check === check)!;
       expect(unarmed.notApplicable).toBe(1);
       expect(unarmed.synthetic).toBe(1);
@@ -231,10 +234,10 @@ const screen = () =>
   });
 
 describe('functional: the run files its disposition rows', () => {
-  it('a healthy default agent: one event, a checked-pass wire row PLUS the seven opt-ins as not-applicable', async () => {
+  it('a healthy default agent: one event, a checked-pass wire row PLUS the eight opt-ins as not-applicable', async () => {
     // This agent declares no maps plan, no `argumentsFrom` tool, no claims
     // contract — the exact "nothing armed" shape the per-check registration
-    // law makes observable (see 'nothing opted-in registers all seven
+    // law makes observable (see 'nothing opted-in registers all eight
     // opt-in checks as not-applicable, not silence', above).
     const events: Array<Record<string, unknown>> = [];
     const agent = Agent.create({
@@ -251,7 +254,7 @@ describe('functional: the run files its disposition rows', () => {
     await agent.run('go');
     expect(events).toHaveLength(1);
     const rows = events[0]!.rows as CheckReport[];
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     const wireRow = rows.find((r) => r.seam === 'wire')!;
     expect(wireRow).toMatchObject({ check: 'invariant-violation', findings: 0 });
     expect(wireRow.checked).toBeGreaterThanOrEqual(2); // one per LLM call
@@ -263,6 +266,7 @@ describe('functional: the run files its disposition rows', () => {
       ['empty-lookup', 'write'],
       ['column-type-mismatch', 'write'],
       ['missing-column', 'write'],
+      ['prior-turn-evidence', 'claim'],
     ] as const) {
       expect(rows.find((r) => r.check === check && r.seam === seam)).toMatchObject({
         checked: 0,

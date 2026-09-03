@@ -581,6 +581,72 @@ export interface AgentOptions {
    */
   readonly noticeEmptyLookups?: boolean;
   /**
+   * Notice when the final answer's values were ALL read before this turn
+   * (9.83.0) — the claim seam's `prior-turn-evidence` advisory. **Default
+   * off.**
+   *
+   * The recorded failure: an agent answered a data question with ZERO tool
+   * calls, and the evidence gate approved it — "all 7 values in the answer
+   * were found in what the tools returned". They were: in an inventory result
+   * fetched four turns earlier for a different question. The user had asked
+   * about array performance; the answer recommended enabling a collector that
+   * had been running for months. Two turns did it back to back. The gate
+   * measures GROUNDEDNESS and had no notion of WHEN a value was grounded —
+   * while SAYING it did: both of its sentences claimed the flagged values
+   * "appear in no tool result from this turn", a boundary the index never
+   * honoured. 9.83.0 narrowed those sentences to what the gate really reaches
+   * and made the boundary measurable here instead.
+   *
+   * What the library CAN see, once every indexed form carries the turn that
+   * served it, is that every value the answer states was last served BEFORE
+   * the turn being answered — and that this turn contributed none of them.
+   * Turn this on and each such answer files one `advisory` finding on
+   * `agentfootprint.integrity.context_error`, naming the count, the newest
+   * turn they came from, how far back that is, and how many tool results this
+   * turn served (`0` is the sharp case: an answer assembled entirely from the
+   * conversation).
+   *
+   * THE CEILING, and it is why this never accuses: an answer that legitimately
+   * refers back to an earlier result is indistinguishable, by evidence alone,
+   * from one that has gone stale. This reports WHERE the values came from,
+   * never whether they were still the ones the reader wanted. The same
+   * advisory is filed for the honest follow-up and the stale answer, because
+   * nothing in this library can tell them apart. Every finding carries the
+   * ceiling sentence (`PRIOR_TURN_EVIDENCE_CEILING`) in its own message.
+   *
+   * WHAT IT CAN SEE, and it is narrower than "the conversation": the evidence
+   * corpus is `scope.history` as it stands at judgement, which on an agent
+   * with `.window()` / `.compaction()` / `tokenBudget` is the LIVE WINDOW. So
+   * the turn ordinals count the turns the run can still see and the distance
+   * is a FLOOR (the boundary itself is exact — the current request is
+   * un-droppable). And a value that reached the model through `.memory()`
+   * recall or RAG is exempt from grounding altogether, so it is invisible
+   * here: this can under-report, never over-report.
+   *
+   * WHAT KEEPS AN HONEST FOLLOW-UP QUIET. ONE grounded value from this turn's
+   * own results is enough to file nothing — the claim being tested is that
+   * EVERY value came from earlier, and one that did not falsifies it. A
+   * follow-up that calls a tool usually gets that for free: a lookup keyed on
+   * an earlier identifier echoes the identifier back in its own result, so the
+   * value is re-served this turn. The evidence corpus is deliberately NOT
+   * narrowed to this turn — "and what about that disk?" leans on the previous
+   * turn's rows legitimately, and flagging those would make the gate cry wolf
+   * until somebody switched it off.
+   *
+   * TWO HALVES ARM IT: this dial AND `.namesAndNumbersFromEvidence()`. The
+   * gate is not a policy companion here — it owns the extractor that decides
+   * which tokens in an answer are DATA at all, so without it there is nothing
+   * whose provenance could be read. Absent, the run is byte-identical: no
+   * finding, no event, no branch changes, and the posture decides exactly what
+   * it always decided. The one visible difference is the registered
+   * `prior-turn-evidence` row in the disposition report, filed
+   * `not-applicable` — registered-but-unarmed is a ROW, never silence.
+   *
+   * It REPORTS. Whether an answer is advised or refused stays the evidence
+   * gate's `posture`; nothing here blocks, revises or rewrites anything.
+   */
+  readonly noticePriorTurnEvidence?: boolean;
+  /**
    * Check a tool's rows against the columns it declared (9.78.0) — the write
    * seam's COLUMN-TYPE CONTRACT. **Default `'off'`.**
    *

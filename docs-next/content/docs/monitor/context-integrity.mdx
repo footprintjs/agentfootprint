@@ -23,6 +23,7 @@ agent.on('agentfootprint.integrity.context_error', (e) => {
 4. **Unsupported argument** (choice seam) — the same `argumentsFrom` declaration, one seam later: when the model CALLS an armed tool, every identifier-like string argument must appear somewhere in the frame it chose from. Its own earlier answers are not part of that frame. See below.
 5. **Unsupported claim** (claim seam) — the answer against the run's own settled facts. See below.
 6. **Empty lookup** (write seam, opt-in) — the run itself produced an identifier, and the lookup keyed on it came back empty. The SAME `argumentsFrom` declaration, one seam later still, plus `noticeEmptyLookups: true`. Always an `advisory`, because an empty answer can be perfectly true and nothing here can tell that from a lookup that could never have matched. See [Empty lookups](doc:empty-lookup).
+7. **Prior-turn evidence** (claim seam, opt-in) — the answer is grounded and NOTHING this turn fetched grounds it: every value in it was last served in an earlier turn. `noticePriorTurnEvidence: true` plus `.namesAndNumbersFromEvidence()`, whose extractor decides which tokens are values. Always an `advisory`, because referring back to an earlier result is ordinary conversation and nothing here can tell that from an answer that has gone stale. See [Prior-turn evidence](doc:prior-turn-evidence).
 
 ## The choice seam — an argument nothing served
 

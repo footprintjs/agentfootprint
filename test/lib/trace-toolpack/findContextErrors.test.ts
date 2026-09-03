@@ -564,6 +564,7 @@ describe('find_context_errors — the kind vocabulary it can answer for', () => 
       'empty-lookup',
       'invariant-violation',
       'missing-column',
+      'prior-turn-evidence',
       'unsupported-argument',
       'unsupported-claim',
     ]);

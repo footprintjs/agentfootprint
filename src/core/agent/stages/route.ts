@@ -34,6 +34,8 @@ import {
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
 import type { ResolvedEvidenceGate } from '../evidence/types.js';
+import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
+import { fileIntegrityFindings } from '../integrityFindings.js';
 import { unsupportedClaimsOf } from '../../../integrity/unsupported-claim/check.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import { contextErrorIdentity } from '../../../integrity/finding/types.js';
@@ -371,6 +373,10 @@ function judgeEvidence(
   scope: TypedScope<AgentState>,
   gate: ResolvedEvidenceGate | undefined,
   earlyStop: 'max-iterations' | 'cost-budget' | undefined,
+  /** `AgentOptions.noticePriorTurnEvidence` (9.83.0). Absent → the recency
+   *  read is computed and never looked at, and no row is ever filed. */
+  noticePriorTurnEvidence?: boolean,
+  integrityLedger?: { current: DispositionLedger | undefined },
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -392,6 +398,25 @@ function judgeEvidence(
         | undefined,
     }),
   });
+
+  // ── THE CLAIM SEAM'S RECENCY READ (9.83.0) — `prior-turn-evidence` ──
+  // Judged on EVERY outcome, clean or flagged, and before the branch below
+  // returns: "grounded" and "grounded, but every value is four turns old"
+  // are different facts about the same answer, and an answer that is about
+  // to be revised for a fabrication can still be resting on stale evidence
+  // for everything else it says. Detection only — it never chooses a branch,
+  // so the revise/refuse/flag decision below is byte-for-byte the one every
+  // release since 9.35.0 made.
+  if (noticePriorTurnEvidence === true) {
+    const recency = priorTurnEvidenceOf(verdict.grounding, iteration);
+    integrityLedger?.current?.note(
+      'prior-turn-evidence',
+      'claim',
+      recency.disposition,
+      recency.disposition === 'checked-fail' ? Date.now() : undefined,
+    );
+    fileIntegrityFindings(scope, recency.findings, iteration);
+  }
 
   if (verdict.unsupported.length === 0) {
     typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
@@ -561,6 +586,11 @@ export function buildRouteDeciderStage(
    *  Both absent → the claim seam never runs and not one line changes. */
   claims?: readonly DeclaredClaim[],
   integrityLedger?: { current: DispositionLedger | undefined },
+  /** `AgentOptions.noticePriorTurnEvidence` (9.83.0) — the claim seam's
+   *  recency read. Needs the evidence gate to be armed too (it owns the
+   *  extractor), so absent OR gate-less → not one row, not one event, and
+   *  the decider a pre-9.83.0 chart was handed. */
+  noticePriorTurnEvidence?: boolean,
 ): (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch> {
   const chain = messageMiddleware ?? [];
   if (
@@ -580,9 +610,17 @@ export function buildRouteDeciderStage(
       hasWrapUp,
       claims,
       integrityLedger,
+      noticePriorTurnEvidence,
     );
   if (stepPlanFor !== undefined || evidence !== undefined)
-    return buildJudgingDecider(chain, stepPlanFor, evidence, hasWrapUp);
+    return buildJudgingDecider(
+      chain,
+      stepPlanFor,
+      evidence,
+      hasWrapUp,
+      noticePriorTurnEvidence,
+      integrityLedger,
+    );
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
     // ── The out-of-budget wrap-up (9.56.0) ─────────────────────────────
@@ -747,6 +785,8 @@ function buildJudgingDecider(
   stepPlanFor: StepPlanFor | undefined,
   evidence: ResolvedEvidenceGate | undefined,
   hasWrapUp: boolean,
+  noticePriorTurnEvidence: boolean | undefined,
+  integrityLedger: { current: DispositionLedger | undefined } | undefined,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const { chosen, rationale, earlyStop } = decideBranch(scope);
@@ -788,7 +828,11 @@ function buildJudgingDecider(
     }
     // AFTER the step judge: an answer about to be nudged is not the final
     // answer, and grounding it would pay for a turn that is being replaced.
-    if (!denied && judgeEvidence(scope, evidence, earlyStop) === 'evidence-recheck') {
+    if (
+      !denied &&
+      judgeEvidence(scope, evidence, earlyStop, noticePriorTurnEvidence, integrityLedger) ===
+        'evidence-recheck'
+    ) {
       emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
       return 'evidence-recheck';
     }
@@ -812,6 +856,7 @@ function buildEnforcingDecider(
   hasWrapUp: boolean,
   claims: readonly DeclaredClaim[] | undefined,
   integrityLedger: { current: DispositionLedger | undefined } | undefined,
+  noticePriorTurnEvidence: boolean | undefined,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const base = decideBranch(scope);
@@ -887,7 +932,10 @@ function buildEnforcingDecider(
       // The evidence gate is last of the three judges: it grounds the answer
       // the schema accepted and the procedure finished — the one that is
       // really about to be handed back.
-      if (judgeEvidence(scope, evidence, base.earlyStop) === 'evidence-recheck') {
+      if (
+        judgeEvidence(scope, evidence, base.earlyStop, noticePriorTurnEvidence, integrityLedger) ===
+        'evidence-recheck'
+      ) {
         emitRouteDecided(scope, 'evidence-recheck', evidenceRecheckRationale(scope));
         return 'evidence-recheck';
       }

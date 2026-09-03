@@ -19,6 +19,7 @@ That is not hypothetical. This library's own reference agent shipped for weeks w
 | `unsupported-argument` | `choice` | the SAME `argumentsFrom` field — nothing more to declare | nothing else |
 | `unsupported-claim` | `claim` | `.claims({ field: { entity, field } })` | `.outputSchema()` and a tool returning `semantic({ facts: [...] })` |
 | `empty-lookup` | `write` | `noticeEmptyLookups: true` **plus** the same `argumentsFrom` field | nothing else — see [Empty lookups](doc:empty-lookup) |
+| `prior-turn-evidence` | `claim` | `noticePriorTurnEvidence: true` **plus** `.namesAndNumbersFromEvidence()` | nothing else — see [Prior-turn evidence](doc:prior-turn-evidence) |
 
 Three of these are one field, and one of those three fields buys THREE checks at three different seams — `dangling-reference`, `unsupported-argument` and (once you also set the dial) `empty-lookup` all read the same `argumentsFrom` declaration. The remaining one (`invariant-violation` at `compose`) is one call — `.maps()` with no arguments — but only once a skill map already exists; if nothing is mounted yet, `.maps()` refuses at `build()` rather than mounting a kernel over an empty set, because there would be nothing for it to park.
 

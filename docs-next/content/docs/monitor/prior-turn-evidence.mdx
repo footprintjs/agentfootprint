@@ -1,0 +1,178 @@
+---
+title: Prior-Turn Evidence
+description: The answer is grounded, and nothing this turn fetched grounds it. An advisory that gives grounded values a time axis — and never claims to know whether the reader wanted the older ones.
+---
+
+A consumer's agent answered a data question with **zero tool calls**, and the evidence gate approved
+it:
+
+```
+LLM calls 1 · Tool calls 0 · Iterations 1 · Skills active: none
++4802ms  All 7 values in the answer were found in what the tools returned — the answer stands.
+```
+
+They were found — in an inventory result from **four turns earlier**, fetched for a different
+question. The user had asked about array performance. The answer was assembled out of that
+inventory and confidently recommended enabling a collector that had been running for months. Two
+turns did it back to back.
+
+Every rail passed, and passed honestly. The [evidence gate](doc:evidence-gate) measures
+**groundedness** — did the run read this value? — and had no notion of **when** a value was
+grounded. That was exactly the fact the run needed.
+
+## The half of this that was a bug
+
+The gate's two user-facing sentences — the correction it sends the model, and the warning it prints
+an operator — both said the flagged values *"appear in NO tool result **from this turn**"*. The
+index behind them has never been turn-scoped: it walks every `role: 'tool'` turn in the history. The
+library was **asserting a boundary it did not measure**, in the two places that assertion is read.
+
+Both sentences now say what the check really reaches — *"appear in no tool result this run read"*,
+which is both true and stronger — and the boundary became something the index can measure.
+
+## Giving grounded values a time axis
+
+Every indexed form now carries the turn it was last served in. One number, stamped during the walk
+that was already happening. A **turn** starts at each `role: 'user'` message the library did not
+author. Turn it on with one option, beside the gate:
+
+```ts
+const agent = Agent.create({ provider, model, noticePriorTurnEvidence: true }) // ← default off
+  .tool(arrayInventory)
+  .tool(perfStats)
+  .namesAndNumbersFromEvidence() // ← the other half; it owns the extractor
+  .build();
+```
+
+When every grounded value's newest source is older than the turn being answered, one advisory is
+filed on `agentfootprint.integrity.context_error`, naming the count, the turn they came from, how
+far back that is, and how many tool results this turn served.
+
+## The ceiling — stated first, because it bounds everything below
+
+**An answer that legitimately refers back to an earlier result is indistinguishable, by evidence
+alone, from one that has gone stale: this reports WHERE the values came from and never whether they
+were still the ones the reader wanted. It counts only the turns still in the live window, so the
+distance it names is a floor, and values the run supplied rather than fetched (the prompt, a fact, a
+recalled passage) are exempt from grounding and invisible to it. A place to look, never a verdict
+that anything is wrong.**
+
+That sentence ships as a string (`PRIOR_TURN_EVIDENCE_CEILING`) and is quoted verbatim into every
+finding's own message, so the bound cannot drift out of the docs and leave a reader thinking the
+library knows more than it does. Three parts, all load-bearing:
+
+- **Indistinguishable.** The identical advisory is filed for the honest follow-up whose own tool
+  contributed nothing to the answer, and for the four-turns-stale one. Findings carry
+  `advisory: true` and are counted apart from real defects everywhere the family reports.
+- **The live window.** The corpus is the conversation history *as it stands at judgement*, and
+  [window strategies](doc:compaction) rewrite that in place. So the turn ordinals count the turns the run
+  can still see — "turn 2 of 4" may be the conversation's turn 9 of 13 — and the distance reported is
+  a **floor**. The boundary itself is exact whatever the window does, because the current request is
+  un-droppable by every window strategy.
+- **Exempt values are invisible.** A value that reached the model through [`.memory()`](doc:memory)
+  recall or [RAG](doc:rag) is exempt from grounding, so it counts as neither this turn's nor an
+  earlier turn's. This check can under-report; it can never over-report.
+
+This is deliberately *not* `unsupported-claim`, whose meaning is the opposite. There the answer says
+something the record contradicts. Here every value **is** in the record, and the only question is
+when it got there.
+
+## The test that matters: an honest follow-up stays quiet
+
+The obvious implementation — narrow the evidence corpus to this turn — would have made the gate's
+old sentence true and been the wrong fix. *"And what about that disk?"* leans on the previous turn's
+rows legitimately, and a check that cries wolf is a check somebody switches off within a week. The
+corpus keeps its reach; only the report gained a time axis.
+
+**One grounded value from this turn's own results is enough to file nothing.** That is not a
+threshold to tune: the claim being tested is that EVERY value came from earlier, and one that did
+not falsifies it outright.
+
+```ts
+// Turn 1 — the model fetches the inventory and answers from it.
+await agent.run('what arrays are there?');
+// → "Array SHPMAXDLVAP001 holds 41200 GB."   nothing filed
+
+// Turn 2, THE FIELD CASE — a new question, no tool call, an answer built out
+// of turn 1's numbers.
+await agent.followUp('how is array performance?');
+// → "SHPMAXDLVAP001 is at 41200 GB — enable the perf collector."
+// one advisory: 3 grounded values, all last served in turn 1, and this turn
+// called no tool at all.
+
+// Turn 2 done honestly — a new question, a real tool call, an answer that
+// leans on turn 1 AND on what it just fetched.
+await agent.followUp('how is array performance?');
+// → "SHPMAXDLVAP001 is running 98765 IOPS against 41200 GB."
+// nothing filed: 98765 came from this turn.
+```
+
+In practice a follow-up that calls a tool gets the exemption for free — a lookup keyed on an earlier
+identifier echoes that identifier back in its own result, so the value is re-served this turn and
+re-stamped.
+
+## The strong tell, and why it is not a second kind
+
+A turn that served **no tool results at all** sourced every value from history *by construction* — no
+index required. That is the sharpest version of the signal, and it is the shape the production trace
+showed. It is filed as the same finding with a stronger sentence ("This turn called no tool and
+served no result, so the answer was assembled entirely from the conversation") rather than as a
+second `kind`, because it is a cheaper **proof of the identical fact**, not a different defect.
+Splitting it out would fragment one class by how easily it was noticed and give the disposition
+ledger two rows for one seam.
+
+## Arming, and the two halves
+
+| | |
+| --- | --- |
+| **Dial** | `AgentOptions.noticePriorTurnEvidence` — `true` \| `false` (**default `false`**) |
+| **Declaration** | `.namesAndNumbersFromEvidence()` on the same agent |
+| **Posture** | the family's own: `integrityPosture: 'observe'` (default) files rows; `'dev'` adds the canary and the liveness throw |
+| **Kind / seam** | `prior-turn-evidence` at `'claim'` |
+| **Finding flag** | `advisory: true`, always |
+
+Both halves are required, and the second is structural rather than a policy companion: the evidence
+gate owns the extractor that decides which tokens in an answer are **data** at all, so a dial without
+it has nothing whose provenance it could read.
+
+There is no `assist` / `guard` / `rails` trio here. Those postures grade **how hard a rail pushes
+back**, and this check never pushes back on anything — it reports, and whether an answer is advised
+or refused stays the evidence gate's own `posture` decision. The only posture question it has is the
+family's own.
+
+## Default off means byte-identical — with one deliberate exception
+
+Without the dial, no finding is filed, no event fires, and nothing on the wire, in the history, or in
+the answer changes. The one visible difference is a **registered `prior-turn-evidence` row in the
+disposition report, filed `not-applicable`** — the family's law rather than an exception to it. A
+check that was never armed has to be a ROW, never a silent absence.
+
+```ts
+agent.on('agentfootprint.integrity.disposition', (e) => {
+  const row = e.payload.rows.find((r) => r.check === 'prior-turn-evidence');
+  // dial off → { seam: 'claim', checked: 0, findings: 0, notApplicable: 1 }
+  // dial on, an honest follow-up → { checked: 1, findings: 0 }
+  // dial on, the field case → { checked: 1, findings: 1, lastFiredAt: … }
+});
+```
+
+What the library managed to see is the exported `AnswerGroundingReading` —
+`{ fromThisTurn, fromPriorTurns, latestPriorTurn?, currentTurn, toolResultsThisTurn, indexTruncated }`.
+It is the vocabulary behind every row above: `indexTruncated` is why a half-read corpus files
+`not-applicable` rather than an accusation, and `currentTurn: 0` (a history with no user turn in it)
+is why "no boundary to be before" reads as `unreachable` instead of a pass it did not earn.
+
+`unreachable` on this row has a specific meaning worth watching: the answer named no value the index
+could ground, or the history carried no user turn to be *before*. A row dominated by `unreachable`
+says answers are not stating values this check can see — and that it is watching a seam that is not
+where the app's risk lives.
+
+## See also
+
+- [The evidence gate](doc:evidence-gate) — the check this rides beside: every name and number in the
+  answer must appear in a tool result the run read.
+- [Context Integrity](doc:context-integrity) — the family: seams, the finding event, the disposition
+  vocabulary.
+- [Arming Context Integrity](doc:arming-context-integrity) — the cheapest declaration that arms each
+  check.
+- [Empty lookups](doc:empty-lookup) — the family's other advisory-by-construction check.

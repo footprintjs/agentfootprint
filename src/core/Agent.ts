@@ -502,6 +502,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** See AgentOptions.noticeEmptyLookups (9.77.0). Default false — absent is
    *  byte-identical, save for the registered not-applicable ledger row. */
   private readonly noticeEmptyLookups: boolean = false;
+  /** See AgentOptions.noticePriorTurnEvidence (9.83.0). Default false —
+   *  absent is byte-identical, save for the registered not-applicable ledger
+   *  row. */
+  private readonly noticePriorTurnEvidence: boolean = false;
   /** Set at chart build: whether any tool in the FULL declared catalog
    *  declared `resultColumns` (9.78.0) — the other half of the column-type
    *  contract's arming. */
@@ -944,6 +948,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         );
       }
       this.noticeEmptyLookups = opts.noticeEmptyLookups;
+    }
+    // The claim seam's recency dial (9.83.0) — refused at construction for
+    // the same reason as the write-seam one above: a truthy non-boolean here
+    // would silently arm a check the author only half asked for, and the
+    // arming is what decides whether a run is byte-identical to the one
+    // before it.
+    if (opts.noticePriorTurnEvidence !== undefined) {
+      if (typeof opts.noticePriorTurnEvidence !== 'boolean') {
+        throw new Error(
+          `Agent: noticePriorTurnEvidence must be a boolean, got ` +
+            `${JSON.stringify(opts.noticePriorTurnEvidence)}. It arms the claim-seam ` +
+            `'prior-turn-evidence' advisory — a final answer whose every value was last served ` +
+            `before this turn — and it needs \`.namesAndNumbersFromEvidence()\` armed beside ` +
+            `it, because that gate owns the extractor that decides which tokens are values. ` +
+            `Omit it (or pass false) and no such advisory is ever filed.`,
+        );
+      }
+      this.noticePriorTurnEvidence = opts.noticePriorTurnEvidence;
     }
     // The column-type contract's dial (9.78.0) — refused at construction for
     // the same reason as the postures above, and with one more: `'enforce'`
@@ -2767,6 +2789,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // AND a tool declaring `resultColumns`. Either alone leaves two
         // registered `not-applicable` rows.
         columnTypes: this.checkColumnTypes !== 'off' && this.integrityColumnsPresent,
+        // TWO HALVES (9.83.0), and here the second is structural rather than
+        // a policy choice: the evidence gate owns the extractor that decides
+        // which tokens in an answer are values, so a dial with no gate has
+        // nothing whose provenance it could read. Either alone leaves a
+        // registered `not-applicable` row.
+        priorTurnEvidence: this.noticePriorTurnEvidence && this.evidenceGate !== undefined,
       },
       this.integrityPosture,
     );
@@ -3718,6 +3746,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       hasWrapUp,
       this.claimContract,
       this.integrityLedgerHolder,
+      // THE CLAIM SEAM'S RECENCY READ (9.83.0). Value-conditional on both
+      // halves, so an agent that armed neither hands the decider builder
+      // exactly the arguments it always did — and `buildRouteDeciderStage`'s
+      // no-judge fast path still returns the very function reference every
+      // pre-9.83.0 chart was given.
+      this.noticePriorTurnEvidence && this.evidenceGate !== undefined ? true : undefined,
     );
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).

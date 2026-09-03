@@ -78,3 +78,24 @@ costs a real turn and can refuse a good answer. See `extract.ts` for the
 justification of each clause, and
 `test/core/agent/evidence-false-positives.test.ts` for the measured rate on
 realistic SAN answers.
+
+## What the corpus actually reaches, and WHEN it was read (9.83.0)
+
+The evidence corpus is every `role: 'tool'` turn in `scope.history` **as it
+stands at judgement**. Not "the whole conversation": `.window()` /
+`.compaction()` / `tokenBudget` rewrite `scope.history` in place, so on those
+agents this is the LIVE WINDOW and a result the window has dropped is not in it.
+
+Until 9.83.0 the gate's two sentences — the correction sent to the model and
+the warning printed to an operator — both said the flagged values *"appear in
+no tool result FROM THIS TURN"*. The index has never been turn-scoped, so the
+library was asserting a boundary it did not measure. Both now say what the check
+really reaches ("no tool result this run read"), which is also the stronger
+claim.
+
+The boundary itself is now measurable rather than asserted: every indexed form
+carries the turn that last served it, and
+`AgentOptions.noticePriorTurnEvidence` (default OFF) reports the answer that is
+grounded entirely in earlier turns as a `prior-turn-evidence` advisory at the
+claim seam. It reports; it never revises or refuses — that stays `posture`'s
+decision. See `src/integrity/prior-turn-evidence/README.md`.

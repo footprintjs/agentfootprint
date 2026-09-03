@@ -17,7 +17,11 @@
  *          be opt-in at all; column-types: `Tool.resultColumns` AND the
  *          operator's `checkColumnTypes` dial off `'off'` — the same two
  *          halves, arming BOTH `column-type-mismatch` and `missing-column`
- *          off the one declaration).
+ *          off the one declaration; prior-turn-evidence: the operator's
+ *          `noticePriorTurnEvidence` dial AND an armed evidence gate, the
+ *          same two halves — the gate is what decides which tokens in an
+ *          answer are values at all, so without it there is nothing whose
+ *          provenance could be reported).
  *          Registration is what makes silence auditable — an unregistered
  *          check is honest
  *          absence, a registered one that never notes is the wiring rot
@@ -41,6 +45,7 @@ import { unsupportedArgumentsOf } from '../unsupported-argument/check.js';
 import { unsupportedClaimsOf } from '../unsupported-claim/check.js';
 import { emptyLookupOf, readLookupResult } from '../empty-lookup/check.js';
 import { columnTypesOf, readRowset } from '../column-types/check.js';
+import { priorTurnEvidenceOf } from '../prior-turn-evidence/check.js';
 
 export type IntegrityPosture = 'observe' | 'dev';
 
@@ -87,6 +92,18 @@ export interface IntegrityChecksPresent {
    * arm one without arming the other.
    */
   readonly columnTypes?: boolean;
+  /**
+   * The claim seam's `prior-turn-evidence` notice (9.83.0) — armed only when
+   * BOTH halves are true: the operator turned `noticePriorTurnEvidence` on
+   * AND the agent armed the evidence gate
+   * (`.namesAndNumbersFromEvidence()`). The same two-halves law as its two
+   * write-seam siblings, and here the second half is not merely a policy
+   * choice: the gate owns the extractor that decides which tokens in an
+   * answer are DATA, so with no gate there is no value whose provenance
+   * could be read. Absent → a registered `not-applicable` ROW, never
+   * silence.
+   */
+  readonly priorTurnEvidence?: boolean;
 }
 
 /**
@@ -137,6 +154,7 @@ export function beginIntegrityRun(
   armed('empty-lookup', 'write', present.emptyLookup === true);
   armed('column-type-mismatch', 'write', present.columnTypes === true);
   armed('missing-column', 'write', present.columnTypes === true);
+  armed('prior-turn-evidence', 'claim', present.priorTurnEvidence === true);
 
   if (posture !== 'dev') return ledger;
 
@@ -270,6 +288,27 @@ export function beginIntegrityRun(
     if (caught.findings.some((f) => f.kind === 'missing-column')) {
       ledger.noteSynthetic('missing-column', 'write', 'caught');
     }
+  }
+  {
+    // The claim-seam recency canary (9.83.0): an answer whose only grounded
+    // values were last served two turns ago, on a turn that fetched nothing.
+    // Both halves of the reading are load-bearing — give it one value from
+    // this turn and the claim is falsified, drop the boundary
+    // (`currentTurn: 0`) and there is no "before" to be — so a check that
+    // finds nothing here has lost one of the two facts it exists to pair.
+    ledger.noteSynthetic('prior-turn-evidence', 'claim', 'minted');
+    const caught = priorTurnEvidenceOf(
+      {
+        fromThisTurn: 0,
+        fromPriorTurns: 3,
+        latestPriorTurn: 1,
+        currentTurn: 3,
+        toolResultsThisTurn: 0,
+        indexTruncated: false,
+      },
+      -1,
+    );
+    if (caught.findings.length > 0) ledger.noteSynthetic('prior-turn-evidence', 'claim', 'caught');
   }
   return ledger;
 }

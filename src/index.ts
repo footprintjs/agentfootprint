@@ -475,6 +475,17 @@ export {
   type ColumnType,
   type ToolResultColumns,
 } from './integrity/column-types/types.js';
+// The claim seam's RECENCY advisory (9.83.0) — `AgentOptions.
+// noticePriorTurnEvidence` beside `.namesAndNumbersFromEvidence()`. The
+// CEILING is exported for the same reason the two above are: it is quoted
+// verbatim into every finding, so a consumer rendering findings recognizes
+// the bound instead of re-wording it, and the docs, the code and the tests
+// read one owner. `AnswerGroundingReading` is what the library could see of
+// an answer's grounding — the vocabulary behind an `unreachable` row.
+export {
+  PRIOR_TURN_EVIDENCE_CEILING,
+  type AnswerGroundingReading,
+} from './integrity/prior-turn-evidence/check.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

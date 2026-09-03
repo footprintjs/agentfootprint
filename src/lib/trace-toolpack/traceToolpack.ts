@@ -569,8 +569,8 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
  *     a kind added to the finding type without joining this list fails to
  *     compile HERE, rather than becoming a value the tool's enum silently
  *     rejects at run time.
- *   - the honesty gate. `ContextErrorKind` names six defect classes;
- *     `src/integrity/` ships five checks. Offering the sixth in the
+ *   - the honesty gate. `ContextErrorKind` names nine defect classes;
+ *     `src/integrity/` ships eight checks. Offering the sixth in the
  *     schema enum invites a query whose only possible answer is a negative
  *     verdict about a class nothing in the library could have filed — the
  *     tool telling a model "no duplicate-execution errors" when nothing on
@@ -587,6 +587,7 @@ const CONTEXT_ERROR_KIND_CHECKS: Record<ContextErrorKind, string | false> = {
   'empty-lookup': 'src/integrity/empty-lookup (write)',
   'column-type-mismatch': 'src/integrity/column-types (write)',
   'missing-column': 'src/integrity/column-types (write)',
+  'prior-turn-evidence': 'src/integrity/prior-turn-evidence (claim)',
 };
 const ALL_CONTEXT_ERROR_KINDS = Object.keys(CONTEXT_ERROR_KIND_CHECKS) as ContextErrorKind[];
 /** The kinds the tool OFFERS — the ones a shipped check can actually file. */

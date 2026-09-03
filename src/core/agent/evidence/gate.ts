@@ -42,6 +42,13 @@
  * unexamined. A missed fabrication is a miss; a false accusation costs a real
  * turn and can refuse a good answer, so the bias points the way it does.
  *
+ * **And it does not ask WHEN.** A value read four turns ago for a different
+ * question is as grounded here as one read a second ago — which is a measured
+ * failure, not a hypothetical (see `../../../integrity/prior-turn-evidence`).
+ * That fact is reported beside this check, never folded into it: the gate's
+ * job is "was this read at all", and answering a second question through the
+ * same verdict would make one dial control two decisions.
+ *
  * ## Why the check is DETERMINISTIC
  *
  * No model call, no embedding, no judge. The library's thesis is that
@@ -180,6 +187,13 @@ function anchor(re: RegExp): RegExp {
  *
  * `exempt` is checked BEFORE the evidence: a value the user supplied is not a
  * fabrication whether or not a tool ever echoed it back.
+ *
+ * The same pass reports WHEN each grounded value was read (`grounding`) — the
+ * time axis the corpus gained in 9.83.0. Three buckets, and an exempt value is
+ * in none of them: exemption is a statement about who SUPPLIED a value, and a
+ * value the app or the person put in front of the model was never something
+ * the run had to go and look up. Counting one as tool evidence — of any turn —
+ * would answer a question nobody asked.
  */
 export function checkAnswer(
   answer: string,
@@ -191,15 +205,44 @@ export function checkAnswer(
 ): EvidenceVerdict {
   const candidates = extractCandidates(answer, args.gate);
   const unsupported: UnsupportedValue[] = [];
+  let fromThisTurn = 0;
+  let fromPriorTurns = 0;
+  let latestPriorTurn: number | undefined;
   for (const candidate of candidates) {
     const forms = lookupForms(candidate.value);
-    const known = forms.some((f) => args.exempt.has(f) || args.evidence.values.has(f));
-    if (!known) unsupported.push({ value: clip(candidate.value), shape: candidate.shape });
+    if (forms.some((f) => args.exempt.has(f))) continue;
+    // The NEWEST turn any spelling of this value was served in. Newest,
+    // because the question is whether this turn could have supplied it — an
+    // identifier echoed back by a lookup this turn is this turn's, whatever
+    // else served it three turns ago.
+    let turn: number | undefined;
+    for (const form of forms) {
+      const seen = args.evidence.values.get(form);
+      if (seen !== undefined && (turn === undefined || seen > turn)) turn = seen;
+    }
+    if (turn === undefined) {
+      unsupported.push({ value: clip(candidate.value), shape: candidate.shape });
+      continue;
+    }
+    if (turn >= args.evidence.currentTurn) {
+      fromThisTurn += 1;
+      continue;
+    }
+    fromPriorTurns += 1;
+    if (latestPriorTurn === undefined || turn > latestPriorTurn) latestPriorTurn = turn;
   }
   return {
     unsupported,
     candidates: candidates.length,
     evidenceTruncated: args.evidence.truncated,
+    grounding: {
+      fromThisTurn,
+      fromPriorTurns,
+      ...(latestPriorTurn !== undefined && { latestPriorTurn }),
+      currentTurn: args.evidence.currentTurn,
+      toolResultsThisTurn: args.evidence.toolResultsThisTurn,
+      indexTruncated: args.evidence.truncated,
+    },
   };
 }
 
@@ -226,6 +269,19 @@ export function describeValues(values: readonly UnsupportedValue[]): string {
  * compaction frame and the schema frame follow, and a rule with an exception
  * is not a rule.
  *
+ * ## The scope this sentence used to claim, and no longer does (9.83.0)
+ *
+ * Both this frame and {@link evidenceRefusalSentence} said the flagged values
+ * "appear in NO tool result FROM THIS TURN". The index they are written from
+ * has never been turn-scoped — it walks every `role: 'tool'` turn in
+ * `scope.history` — so the sentence named a boundary the check did not honour,
+ * in the two places the claim is read by a model and by an operator. It was
+ * also needlessly weak: a flagged value appears in no tool result the run can
+ * point at AT ALL, which is a stronger and true thing to say. So the words
+ * changed to the check's real reach. The recency fact the old wording gestured
+ * at is now reported where it can be measured — `prior-turn-evidence`, off by
+ * default — instead of asserted here where it could not be.
+ *
  * `stagedRefs` (optional) is the staged-refs join computed by the recheck
  * stage: when this turn holds placed artifact tickets a served `wants` tool
  * can spend, the frame names the refs and the spender by their declared names
@@ -242,7 +298,7 @@ export function buildEvidenceCorrection(
 ): readonly [{ role: 'assistant'; content: string }, { role: 'user'; content: string }] {
   const frame =
     `${EVIDENCE_CHECK_FRAME_PREFIX} — the answer above states values that appear in NO tool ` +
-    `result from this turn, so they were not read from the data. Reply again using only names ` +
+    `result this run read, so they were not read from the data. Reply again using only names ` +
     `and numbers a tool actually returned. If you need one of these values, call the tool that ` +
     `provides it.` +
     (stagedRefs === undefined ? '' : stagedRefsTeachingClause(stagedRefs)) +
@@ -271,8 +327,8 @@ export function evidenceRefusalSentence(
 ): string {
   const head =
     posture === 'rails'
-      ? `[agentfootprint] this answer was NOT returned: ${values.length} value(s) in it appear in no tool result from this turn`
-      : `[agentfootprint] this answer states ${values.length} value(s) that appear in no tool result from this turn`;
+      ? `[agentfootprint] this answer was NOT returned: ${values.length} value(s) in it appear in no tool result this run read`
+      : `[agentfootprint] this answer states ${values.length} value(s) that appear in no tool result this run read`;
   return (
     `${head} — ${describeValues(values)}. ` +
     (revised ? 'The model was asked once to correct them and they survived the revision. ' : '') +
@@ -280,6 +336,8 @@ export function evidenceRefusalSentence(
     'result (or in the message you sent). Call a tool that returns these values, declare their ' +
     'shape via `shapes` if they are legitimate and the extractor mis-read them, or accept the ' +
     "answer with `posture: 'assist'`. This check catches INVENTED values only — it cannot " +
-    'tell you whether a claim built from real values is true.'
+    'tell you whether a claim built from real values is true, and it does not ask WHEN a value ' +
+    'was read (`noticePriorTurnEvidence` reports that). What it reads is the live window: a ' +
+    'result a window strategy has already dropped is not in it.'
   );
 }

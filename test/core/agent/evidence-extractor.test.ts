@@ -412,8 +412,10 @@ describe('property: invariants', () => {
   it('a value copied verbatim out of a tool result is NEVER flagged', () => {
     const history = toolMessages() as readonly LLMMessage[];
     const corpus = evidenceFromHistory(history);
-    // Every token the evidence index holds, asserted straight back.
-    for (const value of [...corpus.values].slice(0, 400)) {
+    // Every token the evidence index holds, asserted straight back. The
+    // index is a Map of form → the turn that served it (9.83.0), so the
+    // tokens are its KEYS.
+    for (const value of [...corpus.values.keys()].slice(0, 400)) {
       const verdict = checkAnswer(`The value is ${value}.`, {
         gate: GATE,
         evidence: corpus,

@@ -7,6 +7,8 @@
  * Emits:   N/A.
  */
 
+import type { AnswerGroundingReading } from '../../../integrity/prior-turn-evidence/check.js';
+
 /**
  * How hard the check pushes back. **Same three words as the skill-graph
  * routing dial, deliberately** — one posture vocabulary across the library —
@@ -144,4 +146,15 @@ export interface EvidenceVerdict {
    * accusation.
    */
   readonly evidenceTruncated: boolean;
+  /**
+   * WHEN the answer's grounded values were read (9.83.0) — the same pass,
+   * one time axis.
+   *
+   * Always computed, because it is three counters over a loop that was
+   * already running. It is only READ when the operator armed
+   * `AgentOptions.noticePriorTurnEvidence`, which is what turns it into a
+   * `prior-turn-evidence` finding; nothing else in the gate consults it and
+   * no posture changes because of it.
+   */
+  readonly grounding: AnswerGroundingReading;
 }

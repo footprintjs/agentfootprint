@@ -7,6 +7,7 @@
     "context-integrity",
     "arming-context-integrity",
     "empty-lookup",
+    "prior-turn-evidence",
     "column-types",
     "recordings",
     "exporters",

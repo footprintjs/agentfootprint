@@ -28,6 +28,7 @@ disposition accounting below is the first unit built, not the last.
 | `unsupported-claim/` | the answer, against the typed facts the run's own tools settled |
 | `empty-lookup/` | the run itself produced the identifier, and the lookup keyed on it came back empty — an ADVISORY, because an empty answer can be perfectly true |
 | `column-types/` | the tool declared what its rows contain (`Tool.resultColumns`) and the rows say otherwise — `column-type-mismatch` (wrong type) and `missing-column` (declared, never delivered), bounded by a ceiling that judges TYPE and never MEANING |
+| `prior-turn-evidence/` | the answer is grounded and NOTHING this turn fetched grounds it — every value was last served in an earlier turn. An ADVISORY, because referring back is ordinary conversation and nothing here can tell a legitimate reference from a stale one |
 | `argumentLeaves.ts` | the shared leaf: what "a string argument" means, so the two checks that read a call's arguments cannot drift apart about it |
 
 **Still unclaimed:** `duplicate-execution` (did settled work again) is named by the finding type and
