@@ -47,9 +47,9 @@
  *
  * ── EXEMPTIONS ARE LIFETIME CLAIMS, AND THEY HAVE EVIDENCE ────────────────
  *
- * Both exemptions below were written as claims about the `read_skill`
- * DESCRIPTION, and both argued the same thing in prose: that string is rebuilt
- * per request and never re-read. That is a lifetime, so it is expressed as one
+ * Two of the three exemptions below were written as claims about the
+ * `read_skill` DESCRIPTION, and both argued the same thing in prose: that
+ * string is rebuilt per request and never re-read. That is a lifetime, so it is expressed as one
  * — and it is derivable rather than asserted. `AgentBuilder.skillGraph` REFUSES
  * `reactMode: 'classic'` at build (the one mode that caches the tools slot),
  * so a graph-composed description cannot exist on a cached slot: every call
@@ -57,6 +57,15 @@
  * evidence, which is why a bare "it's a tool description" is NOT the exemption
  * — a description composed once and cached would be persistent, and the rows
  * below would rightly fail it.
+ *
+ * The third exemption — the container deictic — is keyed to the same dimension
+ * for a different reason, and the pair is worth reading together. Its falsifier
+ * is not staleness at all: `this session` denotes the same session forever.
+ * What breaks is ATTRIBUTION, and attribution only breaks where a second copy
+ * of the sentence can come to sit beside the first. A persistent surface
+ * manufactures those copies; an ephemeral one cannot. So two rows share one
+ * lifetime exemption while arguing from opposite properties of it — which is
+ * why `exemptBecause` is required TEXT rather than a flag.
  *
  * ── WHAT THIS CHECKER DOES NOT COVER, SAID OUT LOUD ───────────────────────
  *
@@ -105,6 +114,27 @@ export const GRAPH_TOOL_DESCRIPTION: Surface = {
   lifetime: 'request-ephemeral',
 };
 
+/**
+ * The mount kernel's park card, served as a system-prompt fragment.
+ *
+ * Ephemeral with a behavioural proof rather than a convention: the injection
+ * engine rebuilds `activeInjections` on every pass and appends the card from
+ * THAT pass's freshly-advanced engagement state, so a pass on which nothing is
+ * parked carries no card at all — `test/maps/park-is-visible.test.ts` pins the
+ * re-engaged pass having none. Nothing re-reads a previous pass's prompt.
+ *
+ * And it still failed on registration, which is the point of separating the
+ * two dimensions. The row it tripped (`right now`) carries no `provableWhen`,
+ * because its falsifier is not staleness on re-read — it is COMPOSE ORDER. The
+ * card is written in the injection-engine subflow; the tools slot that acts on
+ * the park runs after it. An ephemeral surface may report the present; it still
+ * may not report a wire that does not exist yet.
+ */
+export const PARK_CARD: Surface = {
+  channel: 'system-text',
+  lifetime: 'request-ephemeral',
+};
+
 interface BannedClause {
   readonly re: RegExp;
   /** How a later call falsifies it. Printed on failure, so it teaches. */
@@ -148,6 +178,28 @@ const BANNED: readonly BannedClause[] = [
   },
   { re: /right now|\bon this call\b/, why: 'present-tense claim about a wire not yet composed' },
   {
+    // The present-tense INVENTORY — a CENSUS of what exists, as distinct from
+    // the row above, which catches a claim about what will ride the wire.
+    //
+    // Phase 1 anchored the EMPTY arm of two ternaries ("Nothing was live … when
+    // you made that call") and left the stocked sibling three lines away in
+    // both files, because no row here matched its shape: it names no wire and
+    // forecasts no call, it just publishes a list in the present tense. That is
+    // its own falsifiable claim, and it is falsified in BOTH directions.
+    //
+    // Fires on the BARE form only. An inventory that names the call it was
+    // taken for ("… were live in this run's scope when you made that call: …")
+    // says the same thing without the claim, which is the repair, not an
+    // escape from the row.
+    re: /\b(?:refs?|artifacts?|files?) in scope\b/i,
+    why:
+      'present-tense inventory on a persistent result: an artifact scope is swept and ' +
+      'restocked between calls, so a census composed for one call is BOTH stale (a ref it ' +
+      'names may be gone) and short (a ref minted since is missing) by the time the model ' +
+      're-reads it — bind the list to the call it was taken for, as the empty arm of the ' +
+      'same refusal already does',
+  },
+  {
     re: /You are (already )?in '/,
     why: 'present-tense cursor claim: the read_skill description owns the present tense',
     provableWhen: ['request-ephemeral'],
@@ -160,6 +212,53 @@ const BANNED: readonly BannedClause[] = [
   {
     re: /the call you just made/,
     why: 'deictic anchor: re-read four calls later it denotes the wrong call',
+  },
+  {
+    // The CONTAINER DEICTIC — a third shape, and neither of the two above.
+    //
+    // The wire row catches a forecast about a call that has not happened. The
+    // inventory row catches a census that goes stale in both directions. This
+    // one is neither: `this session`, `this run`, `this conversation` all
+    // RESOLVE, and they go on resolving to the same thing on every re-read —
+    // there is exactly one of each and it does not move. Nothing here is
+    // stale. The defect is that the anchor holds MORE than the sentence
+    // describes. A session contains every call of the turn, so a per-call
+    // report anchored to it ("staged into this session before your code ran:
+    // dataset") is a true sentence about a container, offered in place of the
+    // one fact the model needs — WHICH call it is about. Two staged calls
+    // leave two such lines in `history`, differing only in the names they
+    // list, and a model re-reading them can conclude both files are present.
+    //
+    // So the row fires on a string that names NO call at all, and stands down
+    // the moment one is named — which is the repair all three producers have
+    // converged on: "when you made that call" (present), "when that call was
+    // refused" (wants), "the <tool> call this result answers" (the code
+    // runner). Order-independent, because the anchor is written before the
+    // deictic as often as after it.
+    //
+    // Coarse, and deliberately so. From text alone the only judgeable question
+    // is whether a call is named anywhere; a per-call report that names none
+    // is the entire class. A row that tried to decide WHICH clause an anchor
+    // governs would be parsing English, and would fail closed on the sentences
+    // it exists to bless.
+    re: /^(?![\s\S]*(?:that call|call this result answers))[\s\S]*\bthis (?:session|run|conversation)\b/i,
+    why:
+      'container deictic with no call named: `this session` / `this run` / `this ' +
+      'conversation` resolve — and go on resolving — but they hold every call of the turn, ' +
+      'so a per-call report anchored to one of them cannot say which call it describes. Two ' +
+      'such results in one `history` differ only in their payloads, and neither is ' +
+      'attributable. Name the call the result answers, as the sibling arms already do',
+    provableWhen: ['request-ephemeral'],
+    exemptBecause:
+      'the falsifier is attribution AMONG SIBLINGS, and an ephemeral string has none: it is ' +
+      'composed for one request, read once, and never joined in `history` by a second copy ' +
+      'of itself carrying different data. `this session` read there denotes the only session ' +
+      'the reader is in. The tree makes the distinction concrete inside ONE file: the very ' +
+      "module that writes the result this row catches also writes `codeRunnerTool`'s tool " +
+      'description, "their data is written into this session as files BEFORE your code ' +
+      'runs" — the same words, and true, because a description states the MECHANISM instead ' +
+      "of reporting one call, and it rides the request's `tools` array rather than landing " +
+      'in `history` to be re-read beside a later copy of itself',
   },
   {
     re: /\bis withheld\b|\bare withheld\b/,

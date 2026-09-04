@@ -102,7 +102,54 @@ export interface ReadSkillOffer {
   };
 }
 
-/** Compose the tool description: one catalog, or the offer split in two. */
+/**
+ * Compose the tool description: one catalog, or the offer split in two.
+ *
+ * ── THE LENS LAW ──────────────────────────────────────────────────────────
+ *
+ *   A Lens may omit; it may claim absence or refusal only from authoritative
+ *   evidence for the epoch it describes.
+ *
+ * A Lens is anything that shows the model a narrowed view of a wider set. This
+ * function is the framework's sharpest one — it is handed every registered
+ * skill and returns a text that shows some of them — and it is the law's home
+ * because it is the ONE site that does both halves the law governs. It OMITS
+ * (`hiddenIds` removes a skill from the menu, from both columns, and from the
+ * cursor sentence), and it CLAIMS REFUSAL ("read_skill for these will be
+ * refused"). Every other candidate site does one half: `skillRefusal` in the
+ * tool-calls stage only refuses, and it refuses a call that has already been
+ * judged, so its evidence is a verdict rather than a prediction.
+ *
+ * What the two halves cost, and why they are asymmetric:
+ *
+ *   OMISSION is free. A skill this description does not name is a skill the
+ *   model does not consider — no false sentence exists, and a role-hidden
+ *   skill is silently absent rather than declared forbidden, which is the
+ *   whole reason `hiddenIds` omits instead of refusing (naming it would teach
+ *   a role the shape of somebody else's permissions).
+ *
+ *   ABSENCE is a CLAIM, and a claim needs evidence for THIS epoch. So every
+ *   sentence here that could be read as absence is written cursor-relative and
+ *   epoch-scoped: "Not reachable FROM HERE", "Nothing is reachable FROM HERE".
+ *   Never "does not exist", never "you do not have", never "unavailable". The
+ *   difference is not politeness. This description is recomposed for one
+ *   request from that request's own cursor (the `request-ephemeral` argument
+ *   in `test/helpers/modelFacingClaims.ts`), so "from here" is a fact it holds
+ *   evidence for; "does not exist" is a claim about a catalog it was handed a
+ *   filtered view of, and about postures and parks it cannot see. The
+ *   production failure this whole area exists for was exactly that misreading:
+ *   a model read the gate's refusal of its own cursor id as "that skill is
+ *   unavailable" and gave up mid-turn, having never left the skill it was in.
+ *
+ * The known gap is on the record, not hidden: the refusal column is a
+ * compose-time PREDICTION of the gate, and the module header names the two
+ * shipped mechanisms that falsify it in both directions (a `'rails'`/off-menu
+ * `'guard'` posture refuses a hop this list calls reachable; the re-engagement
+ * arm admits a parked member this list calls refusable). Stating a law does not
+ * close a gap — but it does say which sentences the gap is allowed to touch.
+ *
+ * Pinned by `test/core/agent/epoch-laws.test.ts`.
+ */
 function describeOffer(
   allSkills: readonly Injection[],
   line: (s: Injection) => string,

@@ -117,19 +117,29 @@ export async function presentArtifact(
   const meta = await store.head(scope, ref);
   if (meta === null) {
     const page = await store.list(scope, { limit: PRESENT_LIST_LIMIT });
-    // ANCHORED TO THE CALL, NOT TO THE MOMENT. This refusal is a TOOL RESULT:
-    // it is written into `history` and re-read on every later call of the turn,
-    // including calls made after the model has stored something. "Nothing is
-    // live … right now" was therefore a forecast — true when composed, false
-    // the moment the run had an artifact — and a model re-reading it is being
-    // told its own stored data does not exist. The opening clause names the
-    // call (`present('<ref>')`), so the listing binds to that call and stays
-    // true wherever it is read.
+    // ANCHORED TO THE CALL, NOT TO THE MOMENT — BOTH ARMS. This refusal is a
+    // TOOL RESULT: it is written into `history` and re-read on every later call
+    // of the turn, including calls made after the model has stored something.
+    // "Nothing is live … right now" was therefore a forecast — true when
+    // composed, false the moment the run had an artifact — and a model
+    // re-reading it is being told its own stored data does not exist. The
+    // opening clause names the call (`present('<ref>')`), so the listing binds
+    // to that call and stays true wherever it is read.
+    //
+    // The STOCKED arm needed the same repair for the mirror-image reason, and
+    // did not get it until the sentence had a rule to fail: a bare "Live refs
+    // in scope: …" is a census, and a census goes wrong in both directions —
+    // a ref it names can be swept before the model re-reads it, and a ref
+    // minted since will be missing from it. Neither error is visible to the
+    // model, which reads a list and believes it is looking at the scope. Past
+    // tense plus the call it was taken for is the whole fix: an inventory of a
+    // finished moment cannot go stale.
     const listing =
       page.artifacts.length === 0
         ? `Nothing was live in this run's scope when you made that call — store the data ` +
           `first, then present its ref.`
-        : `Live refs in scope: ${page.artifacts.map(describeRef).join(', ')}.`;
+        : `These were live in this run's scope when you made that call: ` +
+          `${page.artifacts.map(describeRef).join(', ')}.`;
     return {
       ok: false,
       missedRef: ref,

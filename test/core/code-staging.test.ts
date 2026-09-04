@@ -343,8 +343,14 @@ describe('codeRunnerTool({ wants }) — integration', () => {
         string
       >;
       expect(path.dataset?.endsWith('/dataset.json')).toBe(true);
-      // …and the result says what was put in, before what came out.
-      expect(results[0]).toContain('staged into this session');
+      // …and the result says what was put in, before what came out — NAMING
+      // the call it answers, exactly as its ref-less sibling does. A tool
+      // result is re-read for the rest of the turn, and "staged into this
+      // session" belongs to a session that outlives the call: two staged calls
+      // leave two such lines that differ only in the names they list, and
+      // nothing tells the model which line goes with which call.
+      expect(results[0]).toContain('staged for the run_code call this result answers');
+      expect(results[0]).toContain('dataset');
       expect(results[0]).toContain(STAGED_INPUTS_ENV);
       // The code the model wrote was NOT rewritten — staging is beside it.
       expect(spy.calls[0]?.args.at(-1)).toBe('print(1)');

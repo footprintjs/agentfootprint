@@ -681,10 +681,19 @@ function render(
   // What was put IN, stated before what came out. A model whose code failed to
   // find a file needs to know the file was staged and under which name — the
   // alternative is debugging an absence that never happened.
+  //
+  // Anchored to the CALL, like its `else` below and for the same reason: a
+  // session outlives the call, so "staged into this session: dataset" cannot
+  // say WHICH call staged it. Two staged calls in one turn leave two such
+  // lines in `history`, differing only in the names they list, and a model
+  // re-reading them has no way to attribute either — it can conclude both
+  // files are present in the session it is looking at. Naming the call the
+  // result answers is what makes a preamble re-readable, and it is the one
+  // half of this ternary that did not have it.
   if (staged.length > 0) {
     parts.push(
-      `[staged into this session before your code ran: ${staged.join(', ')} — ` +
-        `paths are in ${STAGED_INPUTS_ENV}]`,
+      `[staged for the ${toolName} call this result answers, before its code ran: ` +
+        `${staged.join(', ')} — their paths were in ${STAGED_INPUTS_ENV} for that call]`,
     );
   } else if (declared.length > 0) {
     // The OTHER half of the same law, and the one an absent statement makes

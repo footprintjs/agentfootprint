@@ -78,8 +78,14 @@ export function parkCard(
       `  - ${map.id} — cursor: ${cursor} (unchanged) · engagement: PARKED · ` +
         `reason: ${reasonOf(record)} · re-engage: available`,
     );
+    // SAYS WHAT PARKING DOES, NOT WHAT THIS WIRE HOLDS. "…are not being sent
+    // right now" was a claim about a request that did not exist yet: this card
+    // is composed in the injection-engine pass, and the tools slot that acts on
+    // the park (`parkedToolNames`) runs after it. The card cannot see the wire
+    // it is describing, so it describes the STATE it is reporting instead —
+    // which is the same lesson for the model and is true whenever it is read.
     lines.push(
-      `    Its instructions and its tools are not being sent right now. To bring them ` +
+      `    Parking stops its instructions and its tools from being sent. To bring them ` +
         `back, call read_skill for any of: ${members}. That is allowed even for the ` +
         `skill the cursor is already on — it changes ENGAGEMENT (whether this map is ` +
         `sent to you), not POSITION (where the cursor is). If this map is not what ` +

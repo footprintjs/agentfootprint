@@ -35,6 +35,143 @@
  * name once the skill is active, and dispatch looks up by name. We
  * add them to the dispatch map (`registryByName`) so `lookupTool`
  * resolves correctly.
+ *
+ * ── THE CAPABILITY LAW, EPOCH-SCOPED ──────────────────────────────────
+ *
+ * An EPOCH is one composed request plus the dispatch of the tool calls
+ * that request comes back with. For one epoch E:
+ *
+ *   every offered capability resolves to a dispatchable implementation
+ *   with stable identity. Attention may alter the offer. Omission from
+ *   the offer must NOT be presented as proof of permanent capability loss.
+ *
+ * Clause one is what the two maps returned from here are FOR, and it is
+ * scoped to THE TOOLS THIS FILE ROUTES. `augmentedRegistry` (plus the
+ * per-iteration narrowing the tools slot applies downstream) is this file's
+ * CONTRIBUTION to the offer; `registryByName` is DISPATCH. It is not the
+ * whole offer: the wire list is assembled one layer out, as
+ * `[static, provider, skill, step]` merged first-occurrence-wins
+ * (`buildToolsSlot`), and PROVIDER schemas are a source these maps never
+ * contain. Within the scoped set, a name in the offer that is missing from
+ * dispatch is an `Unknown tool` the model was invited to call — which is why
+ * the autoActivate invariant above exists, and why the name-uniqueness throws
+ * below are throws: an identity that is not stable is one the model cannot
+ * address. Where a provider schema reaches the wire ahead of a skill tool of
+ * the same name, the identity half is the SHADOW SEAM illustrated below.
+ *
+ * `with stable identity` is kept rather than dropped, and the reason is the
+ * event. A law reading only "every offered name resolves to something" would
+ * be true everywhere and would leave `agentfootprint.tools.shadowed` reporting
+ * a deviation from nothing — the framework spends an event on that seam
+ * precisely because reading one contract and calling another implementation is
+ * a violation of an expectation worth naming. Scoping a true clause and
+ * walking its exceptions keeps the expectation stated; weakening the clause to
+ * name resolution would delete it.
+ *
+ * Clause two is the whole point of the narrowing dials — `autoActivate`,
+ * `skillGraph({ scopeTools })`, `.toolsFromActiveSkill()`, a parked map,
+ * an open step tenure. Every one of them subtracts from the OFFER.
+ *
+ * Clause three is a rule about SENTENCES, and nothing in this file can
+ * enforce it; the surfaces that write them are inventoried by
+ * `test/modelFacingSurfaces.test.ts` and judged by
+ * `test/helpers/modelFacingClaims.ts`. It is stated HERE because this is
+ * where a reader learns what an offer is, and therefore where the wrong
+ * inference is cheapest to draw: a tool absent from this iteration's list
+ * is a tool the attention policy did not put there, never a capability
+ * that has been taken away.
+ *
+ * ── WHAT THE LAW DELIBERATELY DOES NOT SAY ────────────────────────────
+ *
+ * Three drafts of it read "position governs the offer, never dispatch".
+ * That generalisation is FALSE across the framework, and it is false in a
+ * direction that matters: it would license telling a model that anything
+ * it once saw is still callable. It holds for the tools THIS file routes —
+ * a scoped skill tool leaves `augmentedRegistry` and stays in
+ * `registryByName`, which is exactly the invariant above. It does not hold
+ * where the implementation never lived in these maps, or where the SCHEMA
+ * the model read never did.
+ *
+ * ── WHERE IT DOES NOT HOLD IS NOT WRITTEN DOWN HERE ───────────────────
+ *
+ * It used to be: a list, in this comment, that called itself complete. It was
+ * wrong three times in three rounds — round 1 missed provider tools vanishing
+ * cross-epoch, round 2 the same-epoch provider/skill shadow, round 3 an
+ * INACTIVE skill shadowing silently and a provider able to claim `skip_step`.
+ * Each round stated the list more precisely and each round an independent
+ * check found one more. A hand-maintained enumeration that claims completeness
+ * is the exact defect this library exists to fix, one level up, so this one is
+ * no longer maintained by hand:
+ *
+ *   THE ENUMERATION IS `test/core/agent/toolDivergenceWalk.test.ts`.
+ *
+ * It walks the configuration space — every source that can put a name on the
+ * wire or answer to one, crossed with the narrowings that change resolution —
+ * drives a REAL run per configuration, and records per epoch what name was
+ * offered, whose contract was on the wire, whose implementation answered, and
+ * whether `agentfootprint.tools.shadowed` fired and what it claimed. Its
+ * committed baseline is the list this comment used to be, kept by observation
+ * instead of by memory: a divergence missing from it fails, and one that stops
+ * appearing fails too. Read it for the SET, and for the reason each member is
+ * tolerated.
+ *
+ * What follows is ILLUSTRATION — the seams a reader of THIS file meets first,
+ * so the two maps below make sense. It is not a boundary, and nothing here
+ * should be read as "and no others":
+ *
+ *   • PROVIDER-DELIVERED tools (`ToolProvider`). Dispatch resolves those
+ *     from `providerToolCache.current`, which the Tools slot OVERWRITES
+ *     with this iteration's `provider.list(ctx)` (buildToolsSlot.ts). So
+ *     `skillScopedTools(id, …)`, which answers `[]` whenever
+ *     `ctx.activeSkillId` is not its skill — and that field reports only a
+ *     `read_skill` activation — drops the tool out of the offer and out of
+ *     dispatch on the SAME epoch.
+ *     Same-epoch offer implies same-epoch dispatch; the cross-epoch half is
+ *     simply not true there.
+ *   • `read_skill` RECOVERY is cursor-gated, so it is not the escape hatch
+ *     that would make the cross-epoch claim harmless anyway.
+ *     `makeReachableSkills` filters the cursor out of its own successor set,
+ *     and under `.tree()` the reachable set is `() => []` outright
+ *     (skillGraph.ts) — a tree routes by predicate and has no cursor to move.
+ *   • The SHADOW SEAM — a SAME-EPOCH divergence, and the one the framework
+ *     TRIES to emit an event for — `claim-swallowed` fires it outside the
+ *     shadow seam too, so the event is a signal, never a boundary. A `ToolProvider` and an ACTIVE skill can declare the
+ *     same tool name, and the two lose in opposite directions, each by a rule
+ *     rather than a race: the wire merge puts provider schemas
+ *     ahead of skill injections first-occurrence-wins, so the model reads the
+ *     PROVIDER's description and `inputSchema`; `lookupTool` checks
+ *     `registryByName` first, where every skill tool lives and no provider
+ *     tool does, so the SKILL's `execute` runs. Clause one's dispatchability
+ *     survives — the name resolves, there is no `Unknown tool` — but stable
+ *     identity does not: the contract offered and the implementation that
+ *     answered are different tools, inside ONE epoch. Nothing throws, because
+ *     nothing here can see it coming: the provider's list is resolved per
+ *     iteration (`list(ctx)`) and the skill has to be active, so there is no
+ *     build-time moment at which the pair is knowable. The pair this file CAN
+ *     see — a static `.tool()` against a skill tool — is refused below, which
+ *     is the better answer whenever the answer is available that early.
+ *     Reported rather than refused: `agentfootprint.tools.shadowed` every
+ *     iteration plus one dev-mode line (`reportShadowedTools`,
+ *     buildToolsSlot.ts). Pinned by `test/toolShadowing.test.ts` and, as a
+ *     counterexample to this law, by epoch-laws 1(g).
+ *     What the event covers is NARROWER than the seam, which is the reason
+ *     this bullet is illustration and the walk is the enumeration: the walk
+ *     records the same divergence with an INACTIVE skill winning dispatch and
+ *     no event at all, a provider claiming `skip_step` and the framework's own
+ *     tool answering, and a configuration where the event fires and names the
+ *     wrong schema source. Their reasons are in the baseline.
+ *
+ * MCP does not add a seam of its OWN, and it is worth saying so because it
+ * looks like it does: `mcpServe` builds `listing` and `byName` ONCE at
+ * construction from the same array, and every server instance installs
+ * those same two captures, so the offer and the dispatch map there cannot
+ * diverge at all. What it does add is a mount: an MCP source reaches an agent
+ * as `staticTools(await client.tools())` — a `ToolProvider` — so it inherits
+ * every provider seam above unchanged. The walk drives both and gets the same
+ * rows for each, which is the only way that claim is worth making.
+ *
+ * Pinned by `test/core/agent/epoch-laws.test.ts` (the law) and
+ * `test/core/agent/toolDivergenceWalk.test.ts` (the set).
  */
 
 import { buildReadSkillTool, buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';

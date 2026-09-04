@@ -134,9 +134,34 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
     const env = scope.$getEnv();
     let inherited = scope.currentSkillId as string | undefined;
 
-    // Deploy honesty: an inherited id that is not a node of the CURRENTLY
-    // mounted graph is dropped (cold start), never silently parked on a node
-    // that does not exist.
+    // ── THE CURSOR LAW ────────────────────────────────────────────────
+    //
+    //   Position belongs to the HOST and the TRACE, never to the transcript.
+    //
+    // The clause below is its hardest one, and it shipped implemented and
+    // unnamed. Deploy honesty: an inherited id that is not a node of the
+    // CURRENTLY mounted graph is dropped (cold start), never silently parked
+    // on a node that does not exist.
+    //
+    // Read the three owners in the order they appear here. The HOST supplies
+    // the candidate — `scope.currentSkillId`, restored from a checkpoint the
+    // caller stored. The host also OWNS the graph, so the host is the only
+    // party who can say whether that id still names a node, which is what
+    // `deps.isNode` asks. The TRACE keeps the answer: whatever survives lands
+    // on `turn_routed`, and what did not survive lands there too, as
+    // `droppedResume`, because a position that was silently discarded is a
+    // position nobody can audit.
+    //
+    // The TRANSCRIPT is the party with no vote, and it is the one that looks
+    // most authoritative. After a deploy that retired a skill, the restored
+    // conversation is still full of it: a `read_skill` result announcing its
+    // activation, its body in an earlier system prompt, its tools' results.
+    // None of that is evidence of where the cursor is — it is evidence of
+    // where the cursor WAS, in a graph that is no longer mounted. Reading
+    // position back out of it would let a deleted skill keep routing a live
+    // conversation. So the id is judged against the mounted graph and nothing
+    // else, and a turn that cannot place its inherited cursor starts cold and
+    // says so, rather than parking on a node no resolver can move off.
     let droppedResume: SkillTurnRoutedPayload['droppedResume'];
     if (inherited !== undefined && !deps.isNode(inherited)) {
       droppedResume = { id: inherited, reason: 'unknown-skill' };

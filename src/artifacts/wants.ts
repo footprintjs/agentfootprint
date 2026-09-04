@@ -203,12 +203,20 @@ function describeSpokenValue(spoken: unknown): string {
 
 /** The correcting clause: what CAN resolve, or the honest "nothing can".
  *
- *  The empty arm is PAST TENSE and bound to the refused call, because this
- *  clause rides a TOOL RESULT — `resolveToolWants`'s combined refusal, which
- *  opens "Tool 'X' was not executed" and is then re-read on every later call of
- *  the turn. "No live artifacts exist … right now" was a forecast: the model
- *  mints one two calls later and re-reads a sentence saying its data is not
- *  there. A fact about the moment that call was refused cannot go stale. */
+ *  BOTH arms are PAST TENSE and bound to the refused call, because this clause
+ *  rides a TOOL RESULT — `resolveToolWants`'s combined refusal, which opens
+ *  "Tool 'X' was not executed" and is then re-read on every later call of the
+ *  turn. "No live artifacts exist … right now" was a forecast: the model mints
+ *  one two calls later and re-reads a sentence saying its data is not there. A
+ *  fact about the moment that call was refused cannot go stale.
+ *
+ *  The LISTING arm carries the same defect pointing the other way, and kept it
+ *  three lines from the fix until the checker grew a rule for a census: "Live
+ *  '<kind>' refs in scope: …" is read as the scope, and by the time it is
+ *  re-read a ref it names may have been swept and a ref minted since is
+ *  missing from it. The model cannot see either error — a list looks like a
+ *  list. So the list says WHEN it was taken, and "Pass one of these" stays
+ *  useful because a swept ref refuses again with a fresher list. */
 function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
   if (live.length === 0) {
     return (
@@ -216,7 +224,7 @@ function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
       `produce one first (a tool that stores '${kind}', or re-run the step that minted it).`
     );
   }
-  return `Live '${kind}' refs in scope: ${live
+  return `These '${kind}' refs were live in this run's scope when that call was refused: ${live
     .map(describeLiveRef)
     .join(', ')}. Pass one of these.`;
 }
