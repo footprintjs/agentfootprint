@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.85.0] - 2026-09-04
+
+A sentence composed once and read many times is not a fact — it is a prediction.
+
+9.84.0 fixed one such sentence and shipped a checker for the class. The checker
+covered two surfaces. Five more sentences matching its own existing rule were
+live elsewhere in the tree, unread by it, because coverage was decided by which
+suite happened to import the helper. That is the same defect one level up: a
+guard asserting a boundary it cannot verify.
+
+### Fixed
+
+- **Five model-facing sentences that outlive the moment they were true.** Each is
+  now anchored to one named call, in the past tense, after tracing it to its
+  delivery point to confirm it really is re-read:
+
+  - `artifacts/present.ts` and `artifacts/wants.ts` — _"Nothing is live in this
+    run's scope right now"_ and its sibling inventory, _"Live refs in scope: …"_.
+    A census goes wrong in BOTH directions on re-read: entries sweep, new ones
+    appear.
+  - `core/codeRunnerTool.ts` — _"staged into this session"_. The anchor resolves,
+    and goes on resolving; the defect is that it resolves to a scope holding many
+    calls, so a per-call report cannot say which call it describes.
+  - `maps/engagement/parkCard.ts` — _"Its instructions and its tools are not being
+    sent right now"_, on a card that rides every call while a map is parked. Its
+    falsifier is compose order, not staleness: the card is written in the
+    injection-engine pass and the tools slot that acts on the park runs after it.
+  - The `read_skill` description no longer predicts what `read_skill` will do.
+    Naming the cursor is the fix; every sentence tried beside it turned out false
+    somewhere. The last one — _"You do not need read_skill to go on using it"_ —
+    was argued to be a necessity claim no posture, budget or hold-out could
+    falsify. The PARK falsifies it: a parked member keeps the cursor, loses its
+    body and its tools, and `read_skill` is then the only door back.
+
+### Added
+
+- **Surfaces carry `channel` and `lifetime` separately.** Where a string is
+  delivered and how long it lives do not correlate: system text is rebuilt every
+  request, so a present-tense clause in it is a fact; a tool result persists, so
+  the same clause is a forecast. The rules judge lifetime. Both existing
+  exemptions turned out to be lifetime claims wearing channel clothes and are now
+  derivable rather than asserted.
+
+- **A producer registry that fails when a surface is not exercised.** Coverage
+  decided by which suite imports a helper is a habit, not a guarantee. Its header
+  states what a green run does not prove: hand-maintained rows cannot see a
+  producer nobody registered.
+
+- **The offer/dispatch divergence list is walked, not written.**
+  `test/core/agent/toolDivergenceWalk.test.ts` crosses every source that can put
+  a name on the wire or answer to one — static, provider, MCP, always-on skill,
+  active skill, inactive skill, stepped skill — against six narrowing states and
+  the framework's auto-attach names, and drives a real run per configuration.
+  Sixty configurations, thirty-six divergences, each with a mechanically derived
+  cause and a stated reason it is tolerated. New fails. Disappeared fails.
+  Vacuous fails, and is unbaselineable.
+
+  It replaced a hand-written enumeration that claimed completeness and was
+  falsified three rounds running. It then found three classes nobody seeded: a
+  provider tool whose name a registry holder already owns is dead in both
+  directions and the shadow report cannot see it; the auto-attach names disagree
+  about what they refuse; and `selfExplain` is a fourth family whose reservation
+  reads only the static registry.
+
+### Documentation
+
+- **Three laws stated where the code lives**, epoch-scoped, after two earlier
+  phrasings were false in shipped configurations. Every offered capability
+  resolves to a dispatchable implementation with stable identity for that epoch;
+  attention may alter the offer, but omission from the offer must not be
+  presented as proof of permanent capability loss. Only static skill-registry
+  tools are known to remain dispatchable after leaving the offer.
+
+- **`docs/design/2026-09-recorded-not-built.md`** — three real defects with
+  reproductions, deliberately not fixed: an inactive skill's tool shadows in
+  silence, the shadow report names the wrong source, and `skip_step` is
+  claimable by a provider. Each names what deciding to fix it would cost.
+
 ## [9.84.0] - 2026-09-03
 
 ### Fixed
