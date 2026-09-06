@@ -1,3 +1,21 @@
+**Mixed** — one decidable claim over recorded context, and the sentence that
+claim is served as.
+Fold: `check.ts` · `danglingReferencesOf` — a tool still on the wire whose
+evidence left the window. It derives from the record, states its own evidence,
+and files a disposition even when it finds nothing.
+Lens: the `message` `check.ts` · `danglingReferencesOf` composes — "'…' is being
+offered while the results that ground its arguments have left the window …",
+which also names the repair (call the missing tools again). It is English prose
+with a model audience, not only a dashboard one:
+`src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` emits every
+ContextError on `agentfootprint.integrity.context_error`, and
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
+all and truncates `error.message` into the `find_context_errors` tool result a
+debugging model reads.
+No `test/modelFacingScan.test.ts` LEDGER row files this check: that scan keys
+on a `this run` / `right now` time anchor, which this prose does not carry, and
+absence from the LEDGER is not evidence a surface is not model-facing.
+
 # dangling-reference — offered without its evidence
 
 **Why.** In a recorded run, a `whats_here` result carrying the valid screen ids was evicted by the

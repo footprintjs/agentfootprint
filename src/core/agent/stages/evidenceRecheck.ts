@@ -44,6 +44,12 @@ export interface EvidenceStagedRefsDeps {
   readonly staticToolNames: () => readonly string[];
 }
 
+// LENS · injected-turn · persistent-history
+// reads: the unsupported values ← scope.evidenceUnsupported, the carrier route.ts wrote onto scope.evidenceUnsupported (copied, not held)
+//        the callable set ← scope.dynamicToolSchemas — the PRE-withholding value, not the wire callLLM.ts · registeredToolSchemas builds
+// known gap: the correction frame is a role:'user' turn that stays in history and is on the record as
+// unrepaired in test/modelFacingScan.test.ts · `LEDGER`, under the key src/core/agent/evidence/gate.ts.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the recheck stage. The decider already found the values and wrote the
  * carrier immediately before routing here — this stage does the work of asking.

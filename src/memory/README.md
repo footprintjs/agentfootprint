@@ -1,3 +1,14 @@
+**Mixed** — persistence, retrieval, and the prose that carries recall onto the
+wire.
+Support: `store/`, `identity/`, `entry/`, `embedding/`, `turn/`.
+Map: `pipeline/`, `wire/` (declared stage compositions).
+Fold: `retrieval/`, `facts/`, `beats/`, `causal/` (derived claims over prior turns).
+Lens: `stages/formatDefault.ts`, `beats/formatAsNarrative.ts`,
+`facts/formatFacts.ts`, `causal/loadSnapshot.ts` — the only four files here that
+put words in front of the model. They all write `scope.formatted`, and they own
+the message role. `asRoleRefusal.ts` · `asRoleRefusal` is the record of what leaving that
+unsaid cost: `asRole` was stored, read back, and never honoured.
+
 # memory/
 
 The agentfootprint memory system lives here. Public API lives at

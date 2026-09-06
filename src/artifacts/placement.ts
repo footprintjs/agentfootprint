@@ -127,6 +127,10 @@ export function isPlacedToolResult(value: unknown): value is PlacedToolResult {
   );
 }
 
+// LENS · tool-result · persistent-history
+// reads: ref/kind/mediaType/bytes ← the ArtifactMeta the dispatch layer minted; size and threshold ← its measure
+// it SUBSTITUTES the result the model would have read, so the ticket and the reason travel together.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** Compose the ticket from the mint the dispatch layer performed. */
 export function placedToolResult(
   toolName: string,

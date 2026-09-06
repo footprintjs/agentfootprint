@@ -172,6 +172,12 @@ interface ToolsSubflowState {
 /** Shared empty hold-out — the no-step iterations never allocate. */
 const EMPTY_NAME_SET: ReadonlySet<string> = new Set();
 
+// LENS · tool-description + tool-list · request-ephemeral
+// reads: hiddenSkillIds ← resolved and PUBLISHED in `discoverStage` — this slot is that fact's owner
+//        the read_skill offer ← readSkillFor({currentSkillId, hiddenSkillIds, menu}) → buildReadSkillTool
+//        menu ← scope.turnRoute.offered while outstanding; step narrowing ← scope.stepPointer + stepPlan
+//        parked tools ← scope.parkedToolNames (owner: src/maps/engagement/lease.ts · advanceEngagement)
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the Tools slot subflow.
  *
@@ -233,6 +239,11 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     if (hiddenSkillIdsFor) {
       const asked = hiddenSkillIdsFor();
       hiddenSkillIds = asked instanceof Promise ? await asked : asked;
+      // FOLD · the one owner of scope.hiddenSkillIds — which skill ids this caller's role may be TOLD about, this iteration
+      // consumers read this and never re-derive it: the read_skill offer this slot hands to the description (`offered`),
+      // toolCalls.ts · dispatchRoster, the read_skill gate (toolCalls.ts · "── Skill-graph read_skill GATE") and the
+      // propose-transition refusal (toolCalls.ts · "── THE REFUSAL SPEAKS WITH THE FILTERED SETS")
+      // detached: yes — a plain string[]; every consumer copies it into a fresh Set and names through spoken().
       // ── ROLE VISIBILITY IS A FILTER, NOT A PROPERTY OF ONE BUILDER (9.86.0) ──
       // Resolved here once per iteration and published on scope, because the
       // DESCRIPTION is not the only sentence that names skill ids: the

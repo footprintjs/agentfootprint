@@ -1,3 +1,10 @@
+**Mixed** — the caveats that make a tool's numbers honest.
+Map: `types.ts` (the declared vocabulary), `envelope.ts` (mints and recognises
+it), plus the build-time gate `check.ts` / `format.ts` / `cli.ts`.
+Lens: `semanticsForModel()` in `envelope.ts` is the model's compact projection
+of the envelope, and `composeNotCovered` writes the absence prose — a served
+view that must not overclaim coverage.
+
 # semantics — the semantic tool-result envelope + `check:semantics`
 
 A tool that answers with numbers owes the reader the caveats that make the

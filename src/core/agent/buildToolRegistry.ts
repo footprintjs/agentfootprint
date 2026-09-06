@@ -1,3 +1,7 @@
+// MAP · the declared dispatch surface: three sources composed once at build time.
+// It decides what EXISTS, never what a given caller is shown — the role filter and the parked
+// suppression are applied downstream by the tools slot (a Lens). The law block below is pinned
+// by tests; it is left exactly as written.
 /**
  * buildToolRegistry — pure function that composes the agent's
  * augmented tool registry from three sources:

@@ -1,3 +1,12 @@
+**Mixed** — a bridge that runs one declared procedure as a tool and returns a
+served view of its own record.
+Walker: `runbookAsTool.ts`, `dispatch.ts`. Trace: `recording.ts` (the inner
+chart's own `{snapshot, events, structure}`). Fold: `coverage.ts` (the
+three-source ledger), `walk.ts` (the projection law). Lens: `verdicts.ts`,
+`report.ts` — the verdict table and the two render notes the model reads.
+Note: "Fold every recorded inner call's declared coverage upward"
+(`coverage.ts` · `foldInnerCoverage`) is the array verb, not the role.
+
 # runbook — procedures as tools, answers as evidence
 
 `runbookAsTool` wraps a footprintjs chart as one Agent tool whose every

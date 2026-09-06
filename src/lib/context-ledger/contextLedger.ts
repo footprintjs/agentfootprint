@@ -126,6 +126,9 @@ interface HistoryMessageLike {
   toolCalls?: Array<{ name?: string }>;
 }
 
+// FOLD · the one owner of which context pieces earned their tokens, derived only from the run's own commit log
+// consumers read this and never re-derive it: gates.ts (ledgerToolGate / ledgerEntryScorer / ledgerGated) and the consumer
+// detached: yes — rows are derived per call, each carrying usedVia so a reader sees why it counted.
 export function contextLedger(): ContextLedger {
   const table = new Map<string, MutableRow>(); // key: `${kind}:${id}`
   const runOffers = new Map<string, Set<string>>(); // runRef → offered keys

@@ -324,12 +324,18 @@ export function skipStepDescriptor(): SkillToolDescriptor<{ reason: string }, st
 
 // ─── Every sentence the model reads ───────────────────────────────────
 
+// LENS · tool-description · request-ephemeral
+// reads: the pointer and the step's declared note; prefixed onto a schema copy rebuilt for THIS request
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** `[Step 3 of 6 — <note>] ` — prefixed onto the current step's tool
  *  description in the offer (a rebuilt schema copy, substituted by name). */
 export function stepBannerPrefix(ptr: StepPointer, step: SkillStep): string {
   return `[Step ${ptr.step} of ${ptr.total} — ${step.note}] `;
 }
 
+// LENS · tool-description · request-ephemeral
+// reads: the pointer and the plan's DECLARED onSkip policy — named as declared, never as a prediction
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** The per-iteration `skip_step` offer description: names the current
  *  step, the remaining count, and the declared onSkip policy. */
 export function skipStepDescription(ptr: StepPointer, plan: StepPlan): string {
@@ -355,6 +361,11 @@ export function readSkillStepIntro(plan: StepPlan): string {
   );
 }
 
+// LENS · tool-result · persistent-history
+// reads: the advanced pointer and the frozen plan, both handed in
+// known gap: ' Now on step N of M' is present tense on a surface re-read all turn; listed as unrepaired
+// in this folder's README ledger.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** Suffix for a completed step's tool result: done + what is next. */
 export function stepAdvanceSuffix(next: StepPointer, plan: StepPlan): string {
   const done = next.step - 1;
@@ -368,6 +379,11 @@ export function stepAdvanceSuffix(next: StepPointer, plan: StepPlan): string {
   );
 }
 
+// LENS · tool-result · persistent-history
+// reads: the pointer AFTER the skip was applied, and the plan — the verdict, never a prediction of it
+// known gap: `skillSteps.ts` · skipNothingActiveSentence is present tense on a persistent surface; on the record as
+// unrepaired in this folder's README ledger.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** The authoritative `skip_step` result under the `'advance'` policy. */
 export function skipAdvanceSentence(
   skippedIndex: number,
@@ -426,6 +442,10 @@ export function remainingStepsOf(
     .filter((s) => s.index >= ptr.step);
 }
 
+// LENS · injected-turn · persistent-history
+// reads: the unrun steps ← `skillSteps.ts` · remainingStepsOf, the owner of that fold
+//        the opening ← STEP_NUDGE_FRAME_PREFIX from src/lib/saidByPerson.ts (writer and recogniser share it)
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The one teaching nudge for a premature stop (at most once per turn).
  *

@@ -40,6 +40,11 @@ import {
 } from '../../../lib/injection-engine/skillSteps.js';
 import type { AgentState } from '../types.js';
 
+// LENS · injected-turn · persistent-history
+// reads: ptr ← pointerOf(scope.stepPointer); plan ← stepPlanFor(ptr.skillId); the sentence ← skillSteps.ts · nudgeTeachingMessage
+// known gap: the teaching message names the skill id and every unrun step's tool name with no
+// scope.hiddenSkillIds filter. Mitigating: the pointer can only stand on a skill this caller activated.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the nudge stage. The decider already judged the table (steps
  * remain, no limit fired, nudge unspent) before routing here — this stage

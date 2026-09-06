@@ -243,7 +243,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
     // v2.14 alignment — auto-wire ThinkingHandler by provider.name. Same
-    // mechanism Agent uses (Agent.ts:300+). When the registry has no
+    // mechanism Agent uses (its own `findThinkingHandler` call in `Agent.ts`).
+    // When the registry has no
     // handler for this provider (e.g., MockProvider), the field stays
     // undefined and sf-thinking is not mounted.
     const auto = findThinkingHandler(opts.provider.name);

@@ -90,6 +90,10 @@ function renderBeat(entry: MemoryEntry<NarrativeBeat>, showRefs: boolean): strin
   return `${sentence} (refs: ${beat.refs.join(', ')})`;
 }
 
+// LENS · system-text · request-ephemeral
+// reads: selected ← the beats fold (extractBeats.ts); source refs appended only under showRefs
+// it writes scope.formatted: this file owns the message role and the wording.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 export function formatAsNarrative(config: FormatAsNarrativeConfig = {}) {
   const header = config.header ?? DEFAULT_HEADER;
   const footer = config.footer ?? '';

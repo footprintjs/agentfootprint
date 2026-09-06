@@ -67,6 +67,10 @@ export interface EngagementAdvance {
   readonly changes: readonly EngagementChange[];
 }
 
+// FOLD · the one owner of which mounted maps are PARKED this pass — and so which injection ids and tool names come off the wire
+// consumers read this and never re-derive it: the engaged/parked events, parkCard, scope.parkedToolNames,
+// ctx.parkedIds, and toolCalls.ts · parkedNow via parkedMemberIds
+// detached: yes — a freshly built record array each pass, never a mutated prior.
 /**
  * Advance every mounted map's engagement by one pass.
  *

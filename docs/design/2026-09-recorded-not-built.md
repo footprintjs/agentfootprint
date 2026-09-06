@@ -55,7 +55,7 @@ for (const [name, tool] of sharedSkillTools.entries()) {
 }
 ```
 
-`toolCalls.ts:2087-2093` then resolves that map **first**, and the provider
+`toolCalls.ts` · `lookupTool` then resolves that map **first**, and the provider
 cache only if the name missed:
 
 ```ts
@@ -258,7 +258,7 @@ refusals) and cannot see a provider at all.
 
 On the wire, `stepSchemas` merges **last** (`buildToolsSlot.ts:573`), so the
 provider's schema wins first-occurrence-wins. At dispatch, `lookupTool`
-(`toolCalls.ts:2087-2093`) reads `registryByName` first, where the framework's
+(`toolCalls.ts` · `lookupTool`) reads `registryByName` first, where the framework's
 own `skip_step` was just installed. The two rules point in opposite directions
 by construction.
 
@@ -337,7 +337,8 @@ registry. Either rename the skill's tool or remove the static registration.
 
 `buildToolRegistry`'s own duplicate-name throw (`:322-328`, "Agent: duplicate
 tool name") is belt-and-suspenders that this pair never reaches.
-`buildToolsSlot.ts:704-706` carries the same claim a second time
+`buildToolsSlot.ts` · "`buildToolRegistry` already throws on that pair at build time"
+carries the same claim a second time
 ("`buildToolRegistry` already throws on that pair at build time") and is stale
 in the same way. The claim's *substance* — the pair is refused at build, which
 is why the report does not cover it — is true; only the address is wrong.

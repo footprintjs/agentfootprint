@@ -1,3 +1,12 @@
+**Mixed** — the mount kernel: it owns ENGAGEMENT, whether a walkable map's
+contribution still earns its place on the wire, which is orthogonal to the
+cursor the map itself owns.
+Fold: `engagement/lease.ts` (the sole owner of the parked set) and
+`engagement/evidence.ts` (the renewal feed it folds).
+Lens: `engagement/parkCard.ts`, the model-visible card.
+Correction to the unit list below: this folder contains only `engagement/`;
+`Claim<T>` lives at `src/lib/claim/claim.ts` and is re-exported from the door.
+
 # maps — the mount kernel
 
 **Why.** An agent can be fed by more than one walkable map: the skill map (which skill is active)

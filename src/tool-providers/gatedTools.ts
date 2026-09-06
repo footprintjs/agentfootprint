@@ -36,6 +36,13 @@
 import type { Tool } from '../core/tools.js';
 import type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
+// LENS · tool-list · request-ephemeral
+// reads: nothing of its own — a caller-supplied predicate over the inner provider, recomputed per iteration
+// known gap: the omission is unclassified and unrecorded here. The predicate may be an AUTHORITY gate (a
+// permission policy, which must be invisible) or an ATTENTION gate (a budget or scope, which must be
+// visible); this seam cannot tell them apart. src/security/index.ts · "A local allowlist and a remote policy engine differ in one way that
+// matters here" states the distinction.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 // #region gatedTools
 export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): ToolProvider {
   return {

@@ -57,6 +57,10 @@ import type { AgentState } from '../types.js';
 // share one constant. The sentence below is still this file's.
 export { WRAP_UP_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 
+// LENS · injected-turn · persistent-history
+// reads: nothing derived — a fixed past fact about the call this frame opened
+//        the frame prefix ← src/lib/saidByPerson.ts (writer and recogniser share one constant)
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The instruction the wrap-up call carries, verbatim.
  *

@@ -1,3 +1,10 @@
+**Mixed** — one pure reducer and one pure composer, deliberately separate files.
+Fold: `lease.ts` (`advanceEngagement`), `evidence.ts`, `types.ts`
+(`parkedMemberIds`) — the sole owner of which mounted maps are parked this pass.
+Lens: `parkCard.ts` turns the parked half of that record into the sentences the
+model reads, built from the value `advanceEngagement` just returned, so the card
+and the suppression are two views of one decision.
+
 # engagement — the lease machine and its renewal feed
 
 **Why.** An earlier design round produced "a parking machine nothing ever tells to park" — a

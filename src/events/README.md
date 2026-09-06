@@ -1,3 +1,14 @@
+**Mixed** — the event contract, the channel that carries it, and one bounded
+claim about what the channel kept.
+Trace: `registry.ts` + `payloads.ts` (the declared VOCABULARY of what may ever be
+recorded, a closed contract) and `dispatcher.ts` (the record itself, written
+during the walk).
+Fold: `eventTail.ts` — its own header says so. It is the one owner of how much of
+the stream was retained, how many were dropped and where the window starts, it
+hands out a detached `snapshot()`, and `dropped` / `firstRetainedIndex` are what
+make its omission an ATTENTION omission rather than a silent one. It is not the
+record; it is a bounded claim about the record.
+
 # `src/events/` — the event registry + dispatcher
 
 ## What lives here

@@ -1,3 +1,8 @@
+**Lens** (for a human, not the wire) — the run served to a HUMAN as evidence: `describeBugReport` measures it
+into units a person can consent to, `exportBugReport` bundles exactly what they
+kept. Every omission here is an attention omission, and the manifest names each
+one.
+
 # `src/lib/bug-report/` — the run, packaged as evidence
 
 A bug report IS the run. `describeBugReport` measures it into selectable units

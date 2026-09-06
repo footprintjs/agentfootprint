@@ -77,7 +77,7 @@ through the build-time recorder; wrap the grouping to derive from it"):
 **derive the lens Group tree from footprintjs's BUILD-TIME structure**, not from
 runtime boundary events. footprintjs already provides the AUTHORITATIVE hierarchy:
 - `FlowChart.buildTimeStructure: SerializedPipelineStructure` (footPrint
-  src/lib/builder/types.ts:50-77) — carries `type`
+  footprintjs's own `builder/types.ts` · `SerializedPipelineStructure`) — carries `type`
   ('stage'|'decider'|'selector'|'fork'|'subflow'|'loop'), `children`, `next`,
   `subflowStructure` (nested), `isSubflowRoot`. Correct parent/child by construction.
 - The build-time `StructureRecorder` (onStageAdded/onEdgeAdded/onSubflowMounted with

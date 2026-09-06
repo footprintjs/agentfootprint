@@ -621,6 +621,9 @@ export function atMountedCursor(args: {
   return stay && args.parked?.has(args.target) !== true;
 }
 
+// LENS · tool-result · persistent-history
+// reads: the dispatchable roster ← `toolCalls.ts` · dispatchRoster: registry ∪ provider cache, filtered through scope.hiddenSkillIds
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * What a call to a name nothing can dispatch gets back (9.86.0).
  *
@@ -677,6 +680,11 @@ export function unknownToolResult(toolName: string, dispatchable: SpokenIds): st
     : `${head} No tool name resolved to an implementation on that call.`;
 }
 
+// LENS · tool-result · persistent-history
+// reads: hops/open ← deps.allowedSkillIds + deps.openSkillIds, each through scope.hiddenSkillIds via spoken()
+//        target class ← skillGraph.ts · classifySkillTarget, carried in, not re-derived
+//        menu/turnStartedBy ← scope.turnRoute (the routing verdict, whole, not a boolean)
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * THE ONE COMPOSER of every `read_skill` refusal (9.86.0) — reachability,
  * posture and tree, from one set of inputs.
@@ -987,6 +995,9 @@ export function buildToolCallsHandler(
     };
   };
 
+  // LENS · tool-result · persistent-history
+  // reads: the tool's own declared resultCeiling / resultColumns ← ../resultCeiling.ts · applyResultCeiling, one owner of the measurement and the sentence
+  // law: may omit, never deny; every clause anchored to the call it was composed on.
   /**
    * The tool's OWN refusing ceiling (9.20.0) — ONE implementation for every
    * dispatch door, applied at the execute boundary the moment the handler's
@@ -1365,6 +1376,10 @@ export function buildToolCallsHandler(
     return step ? { ptr, plan, step } : undefined;
   };
 
+  // LENS · tool-result · persistent-history
+  // reads: the advanced pointer ← pointerOf(scope.stepPointer), under `toolCalls.ts` · "── Step-procedure boundary (9.18.0)"; the sentence ← ../../lib/injection-engine/skillSteps.ts
+  // note: it overwrites the placeholder BEFORE the after-tool moment, so the record carries the authoritative words.
+  // law: may omit, never deny; every clause anchored to the call it was composed on.
   /**
    * `skip_step` bookkeeping — returns the AUTHORITATIVE result that
    * replaces the tool's placeholder (both channels, the read_skill-refusal
@@ -2237,6 +2252,9 @@ export function buildToolCallsHandler(
   // result with the description snapshot (or the teaching refusal), so
   // governance rules and the caps compose over what the model will read.
 
+  // LENS · tool-result · persistent-history
+  // reads: the artifact's description snapshot ← the ArtifactStore port (src/artifacts/present.ts, the owner of head/list)
+  // law: may omit, never deny; every clause anchored to the call it was composed on.
   const applyPresent = async (
     scope: TypedScope<AgentState>,
     call: {
@@ -2440,6 +2458,9 @@ export function buildToolCallsHandler(
       ? undefined
       : parkedMemberIds(deps.engagementPlan, scope.mapEngagement as MapEngagement | undefined);
 
+  // FOLD · the one owner of "which tool names this caller may be told exist" for one iteration
+  // consumers read this and never re-derive it: `toolCalls.ts` · unknownToolResult, called at both dispatch doors
+  // detached: yes — a fresh SpokenIds; the named half leaves through spoken().
   /**
    * Every name `lookupTool` would resolve, in resolution order, through the
    * role filter (9.86.0) — the roster `unknownToolResult` names.
@@ -3000,6 +3021,12 @@ export function buildToolCallsHandler(
               ...(decision.rationale !== undefined && { rationale: decision.rationale }),
               ...(decision.reason !== undefined && { reason: decision.reason }),
             });
+            // LENS · tool-result · persistent-history
+            // reads: the checker's own words ← decision.tellLLM ?? decision.rationale (an AUTHORITY omission: the rule space is never named)
+            // known gap: the generic fallback anchors a per-call refusal to the whole run and is on the record as
+            // unrepaired in test/modelFacingScan.test.ts · `LEDGER`, under this file's own key.
+            // Do not widen it here without that test.
+            // law: may omit, never deny; every clause anchored to the call it was composed on.
             if (decision.result === 'deny') {
               denied = true;
               // Deny default keeps the existing v2.4 shape (carries

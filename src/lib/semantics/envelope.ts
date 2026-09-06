@@ -780,6 +780,9 @@ export function explainSemantics(value: unknown): readonly SemanticIssue[] | und
   return issues.length > 0 ? issues : undefined;
 }
 
+// LENS · tool-result · persistent-history
+// reads: the declared ToolSemantics envelope only — a compact projection that may not overclaim coverage
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The MODEL's view of one recognized envelope — compact and rendering-free.
  *

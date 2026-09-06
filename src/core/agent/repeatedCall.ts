@@ -244,6 +244,9 @@ export interface RepeatedCallOutcome {
   readonly mode?: 'arguments';
 }
 
+// LENS · tool-result · persistent-history
+// reads: the tool name and the count of prior identical calls, both measured before this line runs
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The teaching sentence.
  *

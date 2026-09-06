@@ -337,6 +337,9 @@ const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
   'Loop',
 ]);
 
+// FOLD · the one owner of the run's step graph — which scrubbable positions exist and which transitions each lights up
+// consumers read this and never re-derive it: the recorder handle, its onUpdate, and trace.ts through the offline entry buildStepGraphFromEvents
+// detached: yes — rebuilt per call from the record and never stored (storing it would be a second redaction surface).
 /**
  * Project a `BoundaryRecorder`'s event stream into a `StepGraph`.
  *

@@ -46,6 +46,9 @@ export interface ResultCeilingRefusal {
   readonly sizeChars: number;
 }
 
+// LENS · tool-result · persistent-history
+// reads: the tool's OWN declared ceiling and columns — one owner of the measurement and of the refusal sentence
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Measure one handler result against the tool's declared ceiling.
  *

@@ -1,3 +1,7 @@
+**Map** — the declared, versioned, inspectable unit of agent configuration: a
+named noun on the record, so two runs of "the support agent" can never be
+indistinguishable.
+
 # `recipes/` — the declared unit of agent configuration
 
 Every capability an agent needs already ships. What did not was a **named,

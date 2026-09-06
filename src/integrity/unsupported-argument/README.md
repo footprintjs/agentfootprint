@@ -1,3 +1,15 @@
+**Mixed** — one decidable claim over recorded context, and the sentences that
+claim is served as.
+Fold: `check.ts` · `declaredEnumValuesOf` and the decision in `check.ts` ·
+`unsupportedArgumentsOf` — a tool called with a value nothing in the run served.
+It derives from the record, states its own evidence, and files a disposition
+even when it finds nothing.
+Lens: the two `message` variants and the frame line ("frame this call was
+assembled from") that `check.ts` · `unsupportedArgumentsOf` composes, served
+verbatim (truncated) to a debugging model by
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
+`test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`, count 2.
+
 # unsupported-argument — acted on a value nothing served
 
 **Why.** On the second turn of a recorded triage conversation, the window dropped the user message

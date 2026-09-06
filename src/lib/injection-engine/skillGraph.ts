@@ -2000,6 +2000,12 @@ export const defineSkillMap = skillGraph;
  *  {@link SkillGraph}, exported forever beside it (9.51.0). */
 export type SkillMap = SkillGraph;
 
+// FOLD · the one owner of the skills reachable from where the cursor stands (declared successors ∪ entries, minus the cursor)
+// consumers read this and never re-derive it: the read_skill offer builder (Agent.ts · readSkillOfferFor), the
+// injection-engine config's `reachableSkills` and the read_skill gate's `allowedSkillIds` (both Agent.ts) — which
+// toolCalls reads back as deps.allowedSkillIds at the propose-transition judge and at the gate itself
+// (toolCalls.ts · "── Skill-graph read_skill GATE").
+// detached: yes — dedupe builds a fresh array per call; the declarations never leave.
 /**
  * The reachable-set resolver (the read_skill gate's allowed set). Pure +
  * deterministic over the build-time entries/routes:
@@ -2059,6 +2065,12 @@ function makeReachableSkills(
  */
 export type SkillTargetClass = 'self' | 'hop' | 'open' | 'unreachable';
 
+// FOLD · the one owner of which class a read_skill target falls in from one cursor: 'self' | 'hop' | 'open' | 'unreachable'
+// consumers read this and never re-derive it: skillToolDescriptors.ts · grantableRows and skillToolDescriptors.ts ·
+// classOf · toolCalls.ts · atMountedCursor, the propose-transition judge (toolCalls.ts · "── A PROPOSAL TO THE
+// CURSOR'S OWN SKILL IS A STAY") and the read_skill gate (toolCalls.ts · "── Skill-graph read_skill GATE") ·
+// re-exported for consumers at doors/skill-graph.ts.
+// detached: yes — a string literal over readonly inputs the caller already owns.
 /**
  * Classify one `read_skill` target against one cursor. See
  * {@link SkillTargetClass} for the law this function owns.
@@ -2223,6 +2235,11 @@ function witnessOf(entry: EntryDecl, ctx: InjectionContext): { witness?: RouteWi
   }
 }
 
+// FOLD · the one owner of where the cursor goes next, and which clause decided it (CursorMove)
+// consumers read this and never re-derive it: the `nextSkill` and `explainNextSkill` hooks the Evaluate stage asks;
+// the memoized `nextSkillForTriggers` that `deriveTrigger` reads; and `makeSupersededEntries`.
+// NOT skillToolDescriptors: the read_skill description reads the ALREADY-RESOLVED cursor off the offer (offer.cursorId).
+// detached: yes — a POJO plus a string id, memoized per pass so two readers get one decided value.
 function makeResolveCursor(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],

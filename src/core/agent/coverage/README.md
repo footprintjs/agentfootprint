@@ -1,3 +1,11 @@
+**Mixed** — two declarations a tool authors, one reader the walk calls, one
+sentence the model keeps.
+Map: `types.ts`, `items.ts`, `absent.ts`, `ledger.ts` (what a tool declares).
+Walker: `read.ts` — the ONE reader both dispatch boundaries call.
+Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground).
+Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
+the final answer so the model cannot drop it.
+
 # `coverage/` — an absence that names itself, and a limit that travels
 
 Two result primitives, both **invented in field use** on a live triage agent

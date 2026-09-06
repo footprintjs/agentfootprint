@@ -1,3 +1,6 @@
+**Support** — the one translator from footprintjs's per-event context shapes
+into the `EventMeta` every Trace entry is stamped with. Pure, small, no policy.
+
 # `src/bridge/` — footprintjs ↔ agentfootprint translation helpers
 
 ## What lives here

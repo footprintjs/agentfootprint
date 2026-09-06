@@ -20,6 +20,10 @@
  * arithmetic leaking into a sentence a person reads.
  */
 
+// FOLD · the one owner of how many actions a turn has left — the number a model is told
+// consumers read this and never re-derive it: promptTemplate.ts · renderTemplate, buildInjectionEngineSubflow.ts,
+// callLLM.ts (the llm_start payload), cache/CacheDecisionSubflow.ts
+// detached: yes — a number.
 /**
  * Actions left in this turn — never negative.
  *

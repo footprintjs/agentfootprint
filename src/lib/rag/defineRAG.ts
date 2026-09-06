@@ -302,6 +302,10 @@ export interface DefineRAGOptions {
   // `../../memory/asRoleRefusal.ts`.
 }
 
+// LENS · system-text · request-ephemeral
+// reads: the top-K passages ← the store's search under this corpus, rendered as citable <source> blocks
+// top-K is an ATTENTION omission and stays visible: the block never implies the corpus holds nothing else.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build a RAG context-engineering definition. The returned
  * `MemoryDefinition` is registered on the Agent via `.rag(definition)`

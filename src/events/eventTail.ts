@@ -71,6 +71,10 @@ export interface EventTail {
   snapshot(): EventTailSnapshot;
 }
 
+// FOLD · the one owner of how much of the event stream was retained, how many were dropped, and where the window starts
+// consumers read this and never re-derive it: recordRun.ts · toRecording (its `events` field reads tail.snapshot()),
+// recordingEnvelope.ts, and the trace toolpack's bounded marker
+// detached: yes — snapshot() returns a fresh copy; the tail may keep growing behind the caller.
 /**
  * Start a bounded tail.
  *

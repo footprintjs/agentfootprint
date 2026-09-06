@@ -1,3 +1,6 @@
+**Support** — one definition of the laws an `ArtifactStore` must satisfy, run
+against every in-tree adapter and exported for stores nobody here has written.
+
 # `ArtifactStore` conformance
 
 A shared test battery every artifact store runs against, in-tree or out.

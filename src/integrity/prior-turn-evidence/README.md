@@ -1,3 +1,13 @@
+**Mixed** — one decidable claim over recorded context, and the sentence that
+claim is served as.
+Fold: `check.ts` · `priorTurnEvidenceOf` — an answer grounded in nothing this
+turn fetched. It derives from the record, states its own evidence, and files a
+disposition even when it finds nothing.
+Lens: the `message` `check.ts` · `priorTurnEvidenceOf` composes — a per-turn
+report anchored to `this run`, served verbatim (truncated) to a debugging model
+by `src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
+`test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`.
+
 # prior-turn-evidence — grounded, and nothing this turn fetched grounds it
 
 **Why.** A consumer's agent answered a data question with ZERO tool calls, and the evidence gate

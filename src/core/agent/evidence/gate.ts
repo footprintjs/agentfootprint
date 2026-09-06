@@ -254,6 +254,9 @@ export function describeValues(values: readonly UnsupportedValue[]): string {
   return rest > 0 ? `${rendered}, and ${rest} more` : rendered;
 }
 
+// LENS · injected-turn · persistent-history
+// reads: the ungrounded values ← the EvidenceCorpus it is HANDED (evidenceIndex.ts), never one it builds
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The two messages a flagged answer adds to the conversation: the answer
  * itself, then the correction.

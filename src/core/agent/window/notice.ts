@@ -88,6 +88,12 @@ function namesForWire(toolNames: readonly string[]): string {
   return safe.length > shown.length ? `${shown.join(', ')}, …` : shown.join(', ');
 }
 
+// LENS · injected-turn · persistent-history
+// reads: droppedMessageCount/iteration/strategy ← the strategy's own verdict (strategies/drop.ts · fittingNotice)
+//        currentRequestKept ← window/currentRequest.ts; toolNames ← window/toolNames.ts over the removed span
+// known gap: tool names pass a SHAPE filter (`notice.ts` · SAFE_TOOL_NAME) only — never scope.hiddenSkillIds.
+// Mitigating: those names came out of results this same caller was already served.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the message that takes the head position after a drop.
  *

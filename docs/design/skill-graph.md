@@ -553,7 +553,7 @@ The agent is already a footprintjs chart: an injection-engine subflow runs Gathe
 
 **The ONE keystone engine change (mandatory): `currentSkillId` as first-class graph-machine state on `InjectionContext`.** The engine must track *which skill node the graph is currently in* and expose it. Without it: no allowed set, no `from`-gating, no first-match decider, no pinnable test. Everything in this proposal derives from it.
 
-> **Correction (verified against source, 2026-06-17).** An earlier draft said this is *"already computed as `activatedIds[last]` in `buildToolsSlot.ts:103-110`."* **That is wrong for route-driven graphs — the entire `skillGraph()` use case.** `activatedInjectionIds` is the **`read_skill` / `llm-activated` subset only** (populated solely at `toolCalls.ts:397`; the lone "current skill" derivation — `updateSkillHistory`, `CacheGateDecider.ts:173-174` — reads its tail and its own comment confirms "`read_skill` APPENDS each newly-activated skill"). A skill activated by a **route trigger** (`rule` / `on-tool-return`) lands in the evaluator's `activeInjections` (`evaluator.ts:30-81`) and **never** in `activatedInjectionIds`. Deriving `currentSkillId` from that source leaves it `undefined` for every predicate-routed hop → `from`-gating never fires.
+> **Correction (verified against source, 2026-06-17).** An earlier draft said this is *"already computed as `activatedIds[last]` in `buildToolsSlot.ts` · `readSkillFor`."* **That is wrong for route-driven graphs — the entire `skillGraph()` use case.** `activatedInjectionIds` is the **`read_skill` / `llm-activated` subset only** (populated solely at `toolCalls.ts:397`; the lone "current skill" derivation — `updateSkillHistory`, `CacheGateDecider.ts:173-174` — reads its tail and its own comment confirms "`read_skill` APPENDS each newly-activated skill"). A skill activated by a **route trigger** (`rule` / `on-tool-return`) lands in the evaluator's `activeInjections` (`evaluator.ts:30-81`) and **never** in `activatedInjectionIds`. Deriving `currentSkillId` from that source leaves it `undefined` for every predicate-routed hop → `from`-gating never fires.
 >
 > So `currentSkillId` is **not a value to surface — it is state to introduce:**
 > - the **entry router** SETS it (the first skill chosen);
@@ -606,7 +606,7 @@ The agent is already a footprintjs chart: an injection-engine subflow runs Gathe
 1. `currentSkillId` on `InjectionContext` (keystone).
 2. **Stateful `from`-gating** in `deriveTrigger`: each matcher gated on `ctx.currentSkillId === edge.fromId` AND wrapped in its own try/catch. (Today `from` is informational and matchers are OR'd unguarded — so an edge `A→B on get_wwn` ALSO fires while in skill D producing the same result. This cross-skill edge bleed makes the *deterministic* graph unsound independent of the fallback.)
 3. **Runtime activation gate** at `toolCalls.ts:392` (§4.5) — reject ids ∉ `allowedSet(currentSkillId)`, emit `skill.rejected`. (Today: blind append of any string.)
-4. **Per-decision scoped `read_skill` enum** — `buildReadSkillTool(allowedSet)` rebuilt per decision, not the full catalog once (`skillTools.ts:84-130`).
+4. **Per-decision scoped `read_skill` enum** — `buildReadSkillTool(allowedSet)` rebuilt per decision, not the full catalog once (`skillTools.ts` · `buildReadSkillTool`).
 
 **Build-time only (no engine):** the object façade + the 6 validation checks + the determinism drawing grammar.
 

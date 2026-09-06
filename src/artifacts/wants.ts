@@ -229,6 +229,11 @@ function liveRefsClause(kind: string, live: readonly ArtifactMeta[]): string {
     .join(', ')}. Pass one of these.`;
 }
 
+// LENS · tool-result · persistent-history
+// reads: whether a ref resolves and its kind ← store.get; the live refs of a kind ← store.list, bounded 10/200
+// LIVE source, same repair as present.ts: past tense, bound to the named call. inputSchema.required is
+// read again here as a deliberate second belt (`wants.ts` · requiredArgNames), not as a re-derivation of a fold.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Resolve one tool's declared `wants` against the run's scope — the whole
  * Leg-1 law in one place, shared by every dispatch door.
@@ -371,6 +376,9 @@ export async function resolveToolWants(
   return { ok: true, args: nextArgs, wanted, resolved: resolvedList };
 }
 
+// LENS · tool-result · persistent-history
+// reads: the tool's own wants declaration only — it states configuration and cannot go stale
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The teaching refusal for a `wants`-declaring tool dispatched where NO
  * artifact store is attached — fail-closed, naming the config fix, because

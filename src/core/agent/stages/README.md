@@ -1,3 +1,16 @@
+**Mixed** — the ReAct loop's stages, and the split is per FILE, not per section.
+Walker (the cursor, its guards and its moves): `seed.ts`, `pickEntry.ts`,
+`routeTurn.ts`, `window.ts`, `deliver.ts`, `route.ts`, `outputRetry.ts`,
+`reliabilityExecution.ts`, `prepareFinal.ts`, `breakFinal.ts`.
+Lens (a sentence a model reads, composed here because it has to be composed at
+the moment the gate fires): `callLLM.ts`'s wire assembly (`buildCallLLMStage`,
+`callLLM.ts` · `buildCallLLMStage`), `toolCalls.ts`'s refusals and result overwrites,
+`stepNudge.ts`, `evidenceRecheck.ts`, `wrapUp.ts`.
+This folder holds the library's densest set of model-facing composers, which is
+exactly why it may not claim one role: `Walker` on line 1 would let five Lens
+files inherit a word that says they compose nothing. The 9.86.0 sections below
+state the Lens laws in full; the role word is new, the laws are not.
+
 # `src/core/agent/stages/` — the ReAct loop's stage functions
 
 One file per stage of the Agent chart, mounted by `buildAgentChart` /

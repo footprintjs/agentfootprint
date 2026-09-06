@@ -92,6 +92,10 @@ function defaultRenderFact(entry: MemoryEntry<Fact>, showConfidence: boolean): s
   return `${f.key}: ${valueText}${conf}`;
 }
 
+// LENS · system-text · request-ephemeral
+// reads: selected ← the facts fold (extractFacts.ts / loadFacts.ts)
+// it writes scope.formatted: this file owns the message role and the wording.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 export function formatFacts(config: FormatFactsConfig = {}) {
   const header = config.header ?? DEFAULT_HEADER;
   const footer = config.footer ?? '';

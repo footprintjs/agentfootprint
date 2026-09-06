@@ -1,3 +1,7 @@
+**Trace** — the always-on writers: they group raw footprintjs signals and
+`scope.$emit` calls into typed domain events AS THE WALK HAPPENS, and no
+consumer can turn them off.
+
 # `src/recorders/core/` — semantic grouping layer
 
 ## What lives here

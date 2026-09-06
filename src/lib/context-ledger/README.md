@@ -1,3 +1,12 @@
+**Mixed** — which context pieces earned their tokens, and what a later turn may
+do about it.
+Fold: `contextLedger.ts` + `types.ts` — rows derived only from the run's own
+commit log, with `usedVia` on every row so a reader always sees why something
+counted.
+Lens-policy: `gates.ts` composes no sentence but decides what future surfaces
+may offer, and carries the "demote, never starve" parole rule (`gates.ts` · "THE POLICY PRINCIPLE — demote, never starve")
+so a verdict cannot become self-fulfilling.
+
 # context-ledger — which context pieces earned their tokens?
 
 Context engineering fails in one predictable direction: **"include everything

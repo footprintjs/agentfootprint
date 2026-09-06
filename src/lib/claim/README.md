@@ -1,3 +1,8 @@
+**Support** — the honesty primitive a derived value is spelled in:
+`known(value, evidence)` / `unknown(reason)` / `notApplicable`. A count nobody
+measured cannot be rendered as a zero, because the type has no door from
+`unknown` to `.value`. Every Fold and every Lens in the tree may use it.
+
 # claim — a value that says how it knows itself
 
 **Where it lives.** `src/lib/claim/` — one vocabulary leaf, many doors. It is re-exported

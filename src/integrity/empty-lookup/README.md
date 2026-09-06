@@ -1,3 +1,15 @@
+**Mixed** — one decidable claim over recorded context, and the sentence that
+claim is served as.
+Fold: `check.ts` · `readLookupResult` and the decision in `check.ts` ·
+`emptyLookupOf` — an identifier the run produced that every lookup answers empty
+for. It derives from the record, states its own evidence, and files a
+disposition even when it finds nothing.
+Lens: the `message` `check.ts` · `emptyLookupOf` composes. It is English prose
+with a model audience, not only a dashboard one:
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads
+`error.message` and truncates it into the `find_context_errors` tool result.
+`test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`.
+
 # empty-lookup — the run produced the id, and the lookup found nothing
 
 **Why.** A triage agent's reverse-lookup tool filtered a column before a pivot, so the column did

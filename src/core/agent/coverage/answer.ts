@@ -63,6 +63,10 @@ function renderSection(label: string, items: readonly CoverageItem[]): string {
   return `${label}:\n${lines.join('\n')}`;
 }
 
+// LENS · injected-turn · persistent-history
+// reads: scope.coverageDeclared ← read once by ../stages/prepareFinal.ts · captureTurnPayload — the ONE reader that COMPOSES from it,
+//        folded and capped. Not the only read of the key: ../stages/toolCalls.ts · declareCoverage reads it to append to it.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Fold the run's declarations into one block and append it to the answer.
  *

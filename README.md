@@ -37,6 +37,20 @@
 
 ---
 
+## Map, Walker, Trace, Fold, Lens
+
+Five words for the five jobs every file in this library does.
+
+- **Map** — what could happen: the chart an `Agent` or `LLMCall` declares, the skills and the edges between them. Still; a run never changes it.
+- **Walker** — what is happening: the ReAct loop, one stage at a time, with its cursor and its guards.
+- **Trace** — what happened and why: the typed event stream and the commit log, written as the run happens, never reconstructed after.
+- **Fold** — what may be claimed now: everything derived from that record — the evidence corpus, the reachable set, the influence ranking, the context ledger — each computed by one owner and handed out detached.
+- **Lens** — what this reader is served: for an agent that means **the wire** — the system prompt, the messages and the tool list the model actually gets, plus every sentence composed into them. A Lens may leave something out; it may never say the run holds nothing when it does.
+
+Every folder under `src/` opens its README with its role. The map of the whole tree, with the laws and worked examples, is [docs/design/map-walker-trace-fold-lens.md](docs/design/map-walker-trace-fold-lens.md).
+
+---
+
 ## The new error class
 
 For decades, software had two kinds of errors — and developers never needed deep

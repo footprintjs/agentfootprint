@@ -223,6 +223,9 @@ function indexResult(content: string, sink: Sink): void {
   addText(sink, content);
 }
 
+// FOLD · the one owner of the corpus of values this run can prove it read from a tool result
+// consumers read this and never re-derive it: gate.ts · checkAnswer, which is HANDED the corpus rather than building one; built at one call site, stages/route.ts · `evidence: evidenceFromHistory(history)`
+// detached: yes — never stored; rebuilt per judgement, and the verdict is committed as plain data.
 /**
  * Build the evidence corpus from the history AS IT STANDS: every `role: 'tool'`
  * turn still in it, each indexed form stamped with the turn that served it.

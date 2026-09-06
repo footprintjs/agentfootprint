@@ -84,6 +84,12 @@ function describeRef(meta: ArtifactMeta): string {
   }]`;
 }
 
+// LENS · tool-result · persistent-history
+// reads: the artifact's meta ← store.head(scope, ref); the live refs ← store.list(scope, {limit:10})
+//        both from the ArtifactStore port, the sole owner of those facts
+// the source is LIVE, so every clause is past tense and bound to the named call: a census rendered into a
+// result is re-read after the store has changed.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Resolve one `present` call over the port — ONE law for every dispatch
  * door. `head`, never `get`: presenting is the render-by-ref decision, and

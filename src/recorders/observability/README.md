@@ -1,3 +1,16 @@
+**Mixed** — opt-in surfaces over a run. "observability" here names a TIER
+(opt-in, beside always-on `../core/`), not a role.
+Trace: `BoundaryRecorder.ts` (the unified ordered stream), `RunStepRecorder.ts`,
+`ToolLineageRecorder.ts`, `RouteRecorder.ts`, `ToolChoiceRecorder.ts`.
+Fold: `FlowchartRecorder.ts` (`buildStepGraph`, rebuilt per call), `trace.ts`
+(`serializeTrace`), `recordingEnvelope.ts`, and `recordRun.ts` — which is the one
+KNOWN BREACH of the detachment law: its snapshot half hands out the runner's own
+objects by reference (see its header, and `docs/design/map-walker-trace-fold-lens.md`).
+Lens (for a human, not the wire): `commentary/`, `status/`, `LoggingRecorder.ts`,
+`AgentThinkingTraceRecorder.ts`.
+Name to watch: the exported type `Trace` (`trace.ts` · `Trace`) is a redacted
+projection — a Fold artifact. The append-only evidence is `BoundaryRecorder.ts`.
+
 # `src/recorders/observability/` — Tier-3 observability features
 
 ## What lives here

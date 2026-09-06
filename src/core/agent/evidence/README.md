@@ -1,3 +1,11 @@
+**Mixed** — what the run can still prove it read, and the sentences that carry
+the verdict back.
+Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp),
+`normalize.ts`, `extract.ts`, `types.ts`. Built at exactly one call site
+(`../stages/route.ts` · `checkAnswer`), handed to `gate.ts` as a parameter, never stored.
+Lens: `gate.ts` · `buildEvidenceCorrection` — a `role:'user'` turn that stays
+in history. Not model-facing: `gate.ts` · `evidenceRefusalSentence`, `errors.ts` (the caller reads them).
+
 # `evidence/` — names and numbers must come from a tool result
 
 `.namesAndNumbersFromEvidence()` (9.35.0). Every number, identifier and name in

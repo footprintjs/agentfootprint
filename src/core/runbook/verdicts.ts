@@ -98,6 +98,9 @@ function cell(value: unknown): string {
   return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
+// LENS · tool-result · persistent-history
+// reads: the verdict rows ← the runbook walk projection (walk.ts) and the folded coverage ledger (coverage.ts)
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Render the shown rows as one markdown table. Columns are the FIRST row's
  * own keys in declaration order — the chart writes its rows, so the chart

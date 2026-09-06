@@ -23,7 +23,8 @@
  * selector picks BOTH slots (a one-shot call engineers everything once).
  *
  * WHY messageAPI is a REAL stage: it assembles the LLM request bulk that the
- * agent's `callLLM` builds invisibly today (callLLM.ts:132) — `systemPrompt`
+ * agent's `callLLM` builds invisibly today (`buildCallLLMStage`,
+ * callLLM.ts · buildCallLLMStage) — `systemPrompt`
  * (separate field) + `messages` (the conversation, incl. tool-results) → the
  * message-API payload. Making it a stage makes that assembly visible +
  * inspectable in Lens/Trace. (Tools is a separate field added at Call-LLM —

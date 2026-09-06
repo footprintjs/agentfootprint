@@ -1,3 +1,19 @@
+**Mixed** — two slot builders resolve what the model is served; the third is a
+record of it.
+Lens: `buildSystemPromptSlot.ts` (joined into the prompt by
+`../agent/stages/callLLM.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
+served tool list, the `read_skill` offer, the step narrowing, and the
+`hiddenSkillIds` publication in `buildToolsSlot.ts` · `discoverStage`).
+Trace: `buildMessagesSlot.ts` — its own header says it is not the wire but the
+observability projection of the conversation.
+Correction to the text below: the three slots are not the whole wire. The
+request is assembled in `../agent/stages/callLLM.ts` · `buildCallLLMStage` —
+messages come from `scope.history` (`callLLM.ts` · `messages`), the tool list is
+EMPTIED on the wrap-up (`callLLM.ts` · `registeredToolSchemas`, the
+`scope.wrapUpAsked` arm that yields `EMPTY_TOOL_SCHEMAS`; the other arm is the
+`scope.dynamicToolSchemas` fallback), and the staged-refs nudge is appended by
+`callLLM.ts` · `wireMessages` without passing through any slot.
+
 # `src/core/slots/` — the 3-slot context model
 
 ## What lives here

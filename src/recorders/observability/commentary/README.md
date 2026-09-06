@@ -1,3 +1,8 @@
+**Lens** (for a human, not the wire) — one event in, one English sentence out, for a HUMAN reader. The four
+rules below are the honest-sentence law in miniature: only what the event
+carries, an absent field means an absent clause, prose not details, never a
+secret.
+
 # commentary/ — the prose layer
 
 One event in, one English sentence out. Every viewer (Story Lens, the CLI tail,

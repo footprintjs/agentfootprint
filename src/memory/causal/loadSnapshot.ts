@@ -71,6 +71,10 @@ function defaultQueryFrom(scope: TypedScope<MemoryState>): string {
   return '';
 }
 
+// LENS · system-text · request-ephemeral
+// reads: the nearest past run ← store.search() under the run identity, projected per SnapshotProjection
+// below minScore it returns EMPTY rather than a weaker match — an honest omission, not a degraded claim.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 export function loadSnapshot(config: LoadSnapshotConfig) {
   const { store, embedder } = config;
   if (!store.search) {

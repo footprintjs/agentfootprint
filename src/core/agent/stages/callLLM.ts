@@ -267,6 +267,15 @@ export interface CallLLMStageDeps {
   readonly recordSystemPrompt?: boolean;
 }
 
+// LENS · system-text + tool-list · request-ephemeral
+// reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
+//        messages ← scope.history (`messages`); tools ← scope.dynamicToolSchemas (`registeredToolSchemas`), EMPTIED to EMPTY_TOOL_SCHEMAS under scope.wrapUpAsked
+//        brain ← deps.brainFor(nextSkillCursor ?? currentSkillId)
+// THIS is the wire, and it is assembled inside `buildCallLLMStage` — cite THAT, not this header,
+// when another file points at the assembly. The three slots feed it; they are not it. The staged-refs
+// nudge appended by `wireMessages` exists on THIS request only — scope.history is untouched, which is the right
+// lifetime for a forward-looking sentence.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the callLLM stage function. Captures the LLM provider + model
  * config + cache strategy via the deps object; everything per-iteration

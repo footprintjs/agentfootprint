@@ -21,6 +21,9 @@
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { defineTool, type Tool } from '../tools.js';
 
+// LENS · tool-description · request-ephemeral
+// reads: the declared shell only; the artifact facts are read at dispatch by src/artifacts/present.ts
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** Build the placeholder `present` tool. See the module header. */
 export function buildPresentTool(): Tool {
   return defineTool<{ ref: string; as: string; label?: string }, string>({

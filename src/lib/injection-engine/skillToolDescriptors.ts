@@ -122,6 +122,10 @@ export interface ReadSkillOffer {
   readonly treeRouted?: boolean;
 }
 
+// FOLD · the one owner of which skills this reader's ROLE may be told about (the hidden filter over the catalog)
+// consumers read this and never re-derive it: `grantableRows`, `describeOffer`, and `cursorLead`,
+// which re-checks the same hidden set before it names a cursor
+// detached: yes — a new filtered array; the caller's own readonly array when nothing is hidden.
 /**
  * The skills an offer may NAME — the role filter, in one place (9.86.0).
  *
@@ -164,6 +168,12 @@ function grantableRows(
   );
 }
 
+// LENS · tool-description · request-ephemeral
+// reads: the role filter ← `skillToolDescriptors.ts` · visibleSkills, applied FIRST so nothing below can name a hidden skill
+//        grantable ← skillGraph.ts · makeReachableSkills ∪ openSkillIds; class ← skillGraph.ts · classifySkillTarget
+//        named/held ← spoken (src/lib/spokenIds.ts); the cursor ← offer.cursorId, re-checked against hidden
+// the negative sentence is gated on !hopsSpoken.held: a set the filter emptied drops its clause.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Compose the tool description: one catalog, or the offer split in two.
  *
@@ -404,6 +414,12 @@ function describeOffer(
   return `${menuLead}Activate a skill for the next iteration.${body}\n\n${tail}`;
 }
 
+// LENS · tool-result · persistent-history
+// reads: nothing — it takes no ReadSkillOffer, so it asks neither visibleSkills (the role filter) nor
+//        classifySkillTarget (position): its execute returns the build-time catalog verbatim
+// known gap: unfiltered and un-cursored on a persistent surface. Reachable through SkillRegistry.toTools()
+// and the doors; the Agent's own auto-attach path mounts read_skill only.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Describe the `list_skills` tool — a no-arg tool that returns the registered
  * skills as `{ id, description }[]`. Lets the LLM discover skills without
@@ -439,6 +455,13 @@ export function listSkillsDescriptor(
   };
 }
 
+// LENS · tool-description · request-ephemeral
+// reads: the withhold decision ← `grantableRows` → classifySkillTarget, the same owner the list asks
+//        the description ← `describeOffer`
+// known gap, deliberate and pinned (test/security/skill-visibility.test.ts): the `enum: skillIds` on the
+// read_skill schema is built from the UNFILTERED catalog, so a role-hidden id is still named on the wire —
+// the argument is in the comment beginning "The FULL catalog, always" beside it.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Describe the `read_skill` tool — THE cursor door. The LLM picks WHICH skill
  * via the `id` argument; the host's loop is what turns an accepted pick into a
@@ -531,6 +554,9 @@ export function readSkillDescriptor(
   };
 }
 
+// LENS · tool-result · persistent-history
+// reads: only the id it was handed; exported so the gate can tell this sentence from a skill body
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * What `read_skill` answers when it activated a skill but did NOT carry its body
  * (surface modes `'system-prompt'` / `'auto'` — the body lands via the system

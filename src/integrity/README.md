@@ -1,3 +1,8 @@
+**Fold** — what may be claimed about a run's context now: typed assertions
+folded into decidable contradictions, one visible `ContextError` shape, and a
+disposition ledger that makes "no check ran" a different observable state from
+"nothing was wrong".
+
 # integrity — the Context Integrity family
 
 **Why.** LLM agents treat context as text, but context behaves like runtime state. Ordinary

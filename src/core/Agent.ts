@@ -2347,6 +2347,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       .map((i) => i.id);
   }
 
+  // FOLD (resolver) · assembles the ReadSkillOffer the read_skill DESCRIPTION (a Lens) is built from:
+  // grantable ← makeReachableSkills ∪ openSkillIds, cursor ← scope, hidden ← hiddenSkillIdsNow.
+  // It assembles; it never composes a sentence. The sentence is skillToolDescriptors.describeOffer.
   /**
    * The per-iteration `read_skill` offer builder — or `undefined` to leave the tool
    * exactly as it has always been (8.5.0).
@@ -2445,6 +2448,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return checkerGoverns(this.permissionChecker, 'skill_read');
   }
 
+  // FOLD (resolver) · computes "which skill ids may this caller be told about".
+  // The OWNER of the published fact is src/core/slots/buildToolsSlot.ts · discoverStage, which
+  // resolves it once per iteration and publishes it on scope; every model-facing composer reads THAT.
+  // Second caller: the turn router (stages/routeTurn.ts · resolveHidden) resolves it again, with different
+  // failure semantics, and publishes nothing — two sweeps of one policy question per turn.
   /**
    * Which skills the caller's role may NOT see, asked once per iteration
    * (9.11.0).
@@ -3552,13 +3560,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // so concurrent runs don't share state.
     const providerToolCache: ProviderToolCache = { current: [] };
     const readSkillFor = this.readSkillOfferFor();
-    // Per-role skill visibility. Resolved by the tools slot, for the DESCRIPTION
-    // and nothing else. An earlier draft of 9.84.0 cached the resolved ids here
-    // so the read_skill gate could filter the self-call notice's move offer
-    // through them; the notice no longer names a destination at all (see
-    // `selfCallNotice`), so there is nothing left to filter and the cache is
-    // gone with the clause that needed it. One resolver call per iteration, on
-    // the one surface that speaks in the present tense.
+    // Per-role skill visibility. The RESOLVER is handed to the tools slot, which
+    // is the fact's one owner: it resolves the ids once per iteration and
+    // publishes them on scope (`buildToolsSlot.ts` · `discoverStage`). Since 9.86.0 the
+    // description is NOT the only reader — the read_skill gate's refusals, the
+    // `skill.rejected` payload, the propose-transition refusal and the dispatch
+    // roster all filter through that published set
+    // (`stages/toolCalls.ts` · "── Skill-graph read_skill GATE" the gate, `toolCalls.ts` ·
+    // "── THE REFUSAL SPEAKS WITH THE FILTERED SETS" the propose-transition refusal,
+  // `toolCalls.ts` · `dispatchRoster`). Nothing is cached here: an
+    // earlier draft of 9.84.0 cached the resolved ids so the gate could filter
+    // the self-call notice's move offer through them; the notice no longer names
+    // a destination at all (see `selfCallNotice`), so there is nothing left to
+    // filter and the cache went with the clause that needed it.
     const hiddenSkillIds = this.hiddenSkillIdsNow();
     // Registration-time owner stamps (9.60.0) — the identity edges the
     // integrity checks read. Built once per chart from the registry.

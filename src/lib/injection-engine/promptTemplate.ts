@@ -110,6 +110,10 @@ export function missingFactsFor(
   );
 }
 
+// LENS · system-text · request-ephemeral
+// reads: {{iterationsRemaining}} ← src/lib/iterationBudget.ts · iterationsRemainingOf, the one owner
+// with no maxIterations it leaves the placeholder WHOLE rather than substituting a fabricated denominator.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Render, or `undefined` when any named fact is unavailable.
  *

@@ -1,3 +1,22 @@
+**Mixed** — one decidable claim over recorded context, and the sentences that
+claim is served as.
+Fold: `check.ts` · `columnTypesOf` — the rows a tool served against the columns
+it declared. It derives from the record, states its own evidence, and files a
+disposition even when it finds nothing.
+Lens: the two `message` variants `check.ts` · `columnTypesOf` composes — the
+absent-column sentence ("declares a column '…' that is in NONE of the N rows it
+returned …") and the mistyped-value one, each quoting `check.ts` ·
+`COLUMN_TYPE_CEILING` verbatim so the stated limit travels with the accusation.
+They are English prose with a model audience, not only a dashboard one:
+`src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` emits every
+ContextError on `agentfootprint.integrity.context_error`, and
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
+all and truncates `error.message` into the `find_context_errors` tool result a
+debugging model reads.
+No `test/modelFacingScan.test.ts` LEDGER row files this check: that scan keys
+on a `this run` / `right now` time anchor, which this prose does not carry, and
+absence from the LEDGER is not evidence a surface is not model-facing.
+
 # column-types — the tool declared what its rows contain, and the rows say otherwise
 
 **One job.** A tool may declare its rowset's columns and their types

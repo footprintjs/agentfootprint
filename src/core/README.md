@@ -1,3 +1,14 @@
+**Mixed** — the two primitives that build a map, and the wiring that runs one.
+Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`, `toolContract.ts`, `outputSchema.ts`.
+Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
+`toolSessions.ts`, `durabilityBarrier.ts`.
+Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
+`hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
+filters with. Trace: `cost.ts`. Support: `tools.ts`, `runInput.ts`,
+`conversation.ts`, `translator.ts`, `humanizeLLMError.ts`, `outputFallback.ts`.
+Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
+`LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
+
 # `src/core/` — primitives + Runner foundation
 
 ## What lives here

@@ -147,6 +147,10 @@ export function isCompactedSummary(msg: AuthoredMessage | undefined): boolean {
   return msg !== undefined && msg.role === 'user' && msg.content.startsWith(COMPACTED_FRAME_PREFIX);
 }
 
+// FOLD · the one owner of which role:'user' message a PERSON wrote, as opposed to the ones this library writes in a person's voice
+// consumers read this and never re-derive it: core/agent/window/currentRequest.ts, injection-engine/types.ts's
+// saidByPerson(ctx) (lib/injection-engine/types.ts · saidByPerson), and src/index.ts (published)
+// detached: yes — a boolean over one message; the writers import the prefixes the recogniser matches on.
 /**
  * THE rule: true when this message is something a PERSON said.
  *

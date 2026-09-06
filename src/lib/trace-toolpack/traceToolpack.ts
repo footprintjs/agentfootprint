@@ -324,6 +324,11 @@ function matchWindow(text: string, needleLower: string, radius: number): string 
 
 // ── The factory ────────────────────────────────────────────────────────────
 
+// LENS · tool-result · persistent-history
+// reads: the completed run ← footprintjs's own owners (causalChain, commitValueAt, findLastWriter, sliceForKey,
+//        arrayProvenance, elementProvenance) — re-derived nowhere; the disposition line ← the recorded event
+//        the bounds ← bounded.ts, through which every value this toolpack serves passes
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the introspection toolpack over a COMPLETED run's artifacts.
  *

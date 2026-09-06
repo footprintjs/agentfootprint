@@ -1,3 +1,12 @@
+**Mixed** — a governed store that hands the model a claim ticket instead of the
+bytes.
+Support: the five-verb port, five store adapters, and
+minting/payload/retention/scopePath/streaming/conformance.
+Lens: `present.ts`, `wants.ts`, `placement.ts`, `capability.ts` compose the
+tool-result text and the dispatch refusals the model reads — every one of them
+past tense about the call it was composed on, because a store census is re-read
+after the store has changed.
+
 # src/artifacts — the claim-check store
 
 **One job:** let a tool check a payload into a governed store and hand the

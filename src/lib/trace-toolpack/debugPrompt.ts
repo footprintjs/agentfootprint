@@ -12,6 +12,9 @@
  * for what you open, cite evidence, respect the honesty markers.
  */
 
+// LENS · system-text · persistent-history
+// reads: nothing derived — a fixed methodology string, shared by both doors so they cannot drift
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /** How to walk a trace — the proven overview → drill → cite loop. */
 export const TRACE_DEBUG_METHODOLOGY = `You answer questions about a COMPLETED agent run using its recorded trace, served by the trace tools.
 

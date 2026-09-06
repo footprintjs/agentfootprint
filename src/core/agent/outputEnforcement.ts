@@ -146,6 +146,9 @@ export function describeFailure(err: unknown): OutputFailure {
 // can import (9.84.0) — see `lib/saidByPerson.ts`. The frame below is ours.
 export { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 
+// LENS · injected-turn · persistent-history
+// reads: the validator's own failure, and the declared schema — an authored envelope around an untrusted payload
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The two messages a failed attempt adds to the conversation: the answer
  * that failed, and the correction.

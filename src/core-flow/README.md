@@ -1,3 +1,20 @@
+**Mixed** — the four declared control-flow shapes (sequence, parallel, branch,
+iteration), each a thin typed wrapper over one footprintjs builder primitive —
+and one merge step that runs inside the walk and composes a turn of its own.
+Map: `Sequence.ts`, `Conditional.ts`, `Loop.ts`, and Parallel's declared half
+(`Parallel.ts` · `Parallel`, the builder that names branches and a merge
+strategy): what could happen, still, never changed by a walk.
+Walker + Lens: `Parallel.ts` · `mergeWithLLM`. It runs during the fan-in, and
+the merging model's whole user turn is the library's own assembly, not the
+caller's: the caller supplies `opts.prompt`, and this function appends a
+library-authored `<id>…</id>` fencing of every branch's output, escaped by
+`Parallel.ts` · `xmlEscape` so a branch cannot close its own tag and speak
+outside it. It then puts that turn on the wire with `opts.provider.complete` and
+brackets the call with `agentfootprint.stream.llm_start` / `llm_end`. This is
+the same ground on which `src/patterns/` is Mixed for `LlmRouter.ts` ·
+`compileRouterPrompt` — core-flow is the layer that one is built on, so "never
+changed by a walk" holds for the other three shapes, not for this function.
+
 # `src/core-flow/` — compositions
 
 ## What lives here

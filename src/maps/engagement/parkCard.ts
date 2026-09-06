@@ -49,6 +49,11 @@ function reasonOf(record: MapEngagementRecord): string {
     : 'no recent evidence that it is the right map for this turn';
 }
 
+// LENS · system-text · request-ephemeral
+// reads: the parked standing, cursor and by ← advance.next, the value lease.ts · advanceEngagement just
+//        returned on THIS pass, so the card and the tool suppression are two views of one decision
+//        the map's id and memberIds ← the EngagementPlan, resolved at build time
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Render the model-visible card for a set of parked maps.
  *

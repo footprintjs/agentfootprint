@@ -1,3 +1,8 @@
+**Fold** — what may be claimed when two configurations are SUBSTITUTED rather
+than one removed: a separate kind of counterfactual, kept out of `AblationSpec`
+because a shared union would have produced a confident verdict for an incoherent
+comparison.
+
 # `arms/` — strategy comparison (substitution counterfactuals)
 
 `context-bisect` could already ask **"did removing this cause the bad answer?"**

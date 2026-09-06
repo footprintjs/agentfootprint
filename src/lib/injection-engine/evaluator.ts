@@ -46,6 +46,9 @@ import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionEvaluation } from './types.js';
 import { missingFactsFor } from './promptTemplate.js';
 
+// FOLD · the one owner of which injections are active on this pass (the set the three slots serve from)
+// consumers read this and never re-derive it: the Route and Delta stages, and the three slot subflows via scope.activeInjections
+// detached: yes — projectActiveInjection returns a POJO, not the Injection objects.
 export function evaluateInjections(
   injections: readonly Injection[],
   ctx: InjectionContext,

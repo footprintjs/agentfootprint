@@ -171,6 +171,10 @@ function summarize(text: string, n = 80): string {
   return text.length <= n ? text : text.slice(0, n - 1) + '…';
 }
 
+// LENS · system-text · request-ephemeral
+// reads: selected ← pickByBudget; retrieved ← the retrieval fold, each chunk keeping its promptFragment
+// it writes scope.formatted: this file, not its neighbours, owns the message role and the wording.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 export function formatDefault(config: FormatDefaultConfig = {}) {
   const flavor: MemoryFormatFlavor = config.flavor ?? 'memory';
   const header = config.header ?? (flavor === 'rag' ? RAG_HEADER : DEFAULT_HEADER);

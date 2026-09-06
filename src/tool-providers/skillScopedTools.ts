@@ -63,6 +63,12 @@ export function skillScopedToolsTarget(providerId: string | undefined): string |
   return id.length > 0 ? id : undefined;
 }
 
+// LENS · tool-list · request-ephemeral
+// reads: ctx.activeSkillId — the TAIL of scope.activatedInjectionIds, which only read_skill appends to
+// known gap: that is not the graph cursor and not the mount kernel's engagement fold, so an engaged map
+// can still have its tools dropped here while a parked one loses them by a different mechanism
+// (the park hold-out, src/core/slots/buildToolsSlot.ts · parkHoldOut). Two authorities over one wire surface — see fact 1 below.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 // #region skillScopedTools
 export function skillScopedTools(skillId: string, tools: readonly Tool[]): ToolProvider {
   if (!skillId || skillId.trim().length === 0) {

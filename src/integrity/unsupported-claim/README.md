@@ -1,3 +1,20 @@
+**Mixed** — one decidable claim over recorded context, and the sentences that
+claim is served as.
+Fold: `check.ts` · `unsupportedClaimsOf` — what the answer says against what the
+run actually settled. It derives from the record, states its own evidence, and
+files a disposition even when it finds nothing.
+Lens: the two `message` variants `check.ts` · `unsupportedClaimsOf` composes —
+the contradiction sentence ("The answer's '…' says … while the run verified …")
+and its advisory twin. They are English prose with a model audience, not only a
+dashboard one: `src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` emits every
+ContextError on `agentfootprint.integrity.context_error`, and
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
+all and truncates `error.message` into the `find_context_errors` tool result a
+debugging model reads.
+No `test/modelFacingScan.test.ts` LEDGER row files this check: that scan keys
+on a `this run` / `right now` time anchor, which this prose does not carry, and
+absence from the LEDGER is not evidence a surface is not model-facing.
+
 # unsupported-claim — what the answer says vs what the run settled
 
 **Why.** The evidence gate grounds the answer's names and numbers: every value must appear in a tool

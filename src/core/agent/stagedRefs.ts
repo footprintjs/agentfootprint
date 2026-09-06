@@ -149,6 +149,11 @@ function describeSpenders(tools: readonly string[]): string {
   return tools.map((t) => `\`${t}\``).join(' or ');
 }
 
+// LENS · injected-turn · request-ephemeral
+// reads: the join between data staged BY REFERENCE and the tool declared to spend it, handed in
+// appended by callLLM.ts · wireMessages to THIS request only — scope.history is untouched, which is the correct
+// lifetime for a forward-looking sentence.
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * The one late-positioned line (`nudge: true` on
  * `.namesAndNumbersFromEvidence()`). Appended at request assembly as the LAST

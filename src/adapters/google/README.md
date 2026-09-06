@@ -1,3 +1,6 @@
+**Support** — one vendor's client machinery, built once, behind ports the rest
+of the library owns. It composes nothing a model reads.
+
 # `adapters/google` — the Vertex AI layer
 
 One file, `aiPlatform.ts`, and three adapters that sit on it. Nothing else in

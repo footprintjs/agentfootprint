@@ -1,3 +1,24 @@
+**Mixed** — four roles in one folder, which is why the zones below are not
+roles.
+Map: `skillGraph.ts` (the compiler), `factories/`, `skillMatch.ts`,
+`skillGuard.ts`, `skillSteps.ts`'s declared half, and the build-time checkers
+(`skillGraphCheckup.ts`, `skillContract.ts`, `skillPartition.ts`, …).
+Fold: `skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
+`classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
+`routingPolicy.ts`, `intentScorer.ts`, `entryScorer.ts`.
+Walker: `buildInjectionEngineSubflow.ts` — Gather → Evaluate → Route → Delta,
+one pass per iteration.
+Lens: `skillToolDescriptors.ts` (the whole `read_skill` / `list_skills`
+surface), `skillSteps.ts`'s sentence half (`skillSteps.ts` · “─── Every
+sentence the model reads”, that banner to the end of the file),
+`promptTemplate.ts` · `renderTemplate`, `constrainedEnumPick.ts` ·
+`pickByParse` (it composes “Answer with EXACTLY one id from this list and
+nothing else: …” and appends it to the caller's `systemPrompt`), and
+`llmClassifier.ts` · `systemPromptFor` (a whole system prompt, whose catalog
+rows come from `llmClassifier.ts` · `catalogLines`).
+"PURE CORE" / "HOST ZONE" below are DEPENDENCY zones, not roles: the Map, the
+Fold and the Lens are all PURE CORE, and the Walker is HOST ZONE.
+
 # Injection Engine
 
 The heart of agentfootprint context engineering: one primitive that

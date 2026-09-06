@@ -1,3 +1,22 @@
+**Mixed** — one decidable claim over recorded context, and the sentences that
+claim is served as.
+Fold: `check.ts` · `invariantViolationsOf` and `wire.ts` · `wireViolationsOf` —
+two recorded facts about one subject that cannot both be true. They derive from
+the record, state their own evidence, and file a disposition even when they find
+nothing.
+Lens: the `message` `check.ts` · `invariantViolationsOf` composes, and the two
+directional sentences `wire.ts` · `fileDirection` composes (a tool that crossed
+the wire the composed frame never carried, and its opposite). They are English
+prose with a model audience, not only a dashboard one:
+`src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` emits every
+ContextError on `agentfootprint.integrity.context_error`, and
+`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
+all and truncates `error.message` into the `find_context_errors` tool result a
+debugging model reads.
+No `test/modelFacingScan.test.ts` LEDGER row files this check: that scan keys
+on a `this run` / `right now` time anchor, which this prose does not carry, and
+absence from the LEDGER is not evidence a surface is not model-facing.
+
 # invariant-violation — two things that cannot both be true, caught where they are created
 
 **Why.** In a recorded turn, a subsystem was suspended so its instructions stopped being sent while

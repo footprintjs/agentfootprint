@@ -92,6 +92,10 @@ function retentionSentence(retain: CompactionRetention): string {
         `summary carries them forward.`;
 }
 
+// LENS · injected-turn · persistent-history
+// reads: foldedMessageCount/iteration ← the strategy's verdict; retain ← the RESOLVED retention policy (`summarize.ts` · retentionSentence)
+//        summary ← the summarizer's answer, appended AFTER the library's own label as data
+// law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Build the message that replaces the folded span IN THE WINDOW.
  *

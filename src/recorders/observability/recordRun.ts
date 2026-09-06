@@ -151,6 +151,11 @@ export interface RunRecorder {
   stop(): void;
 }
 
+// FOLD · the one owner of the finished run's record — shared state, commit log and every attached recorder's data
+// consumers read this and never re-derive it: localObservability.ts's `includeSnapshot` branch and src/artifacts/recordingArtifact.ts, which stores the JSON TEXT
+// detached: NO for the snapshot half — parts of it are the runner's own objects by reference: the argument
+// is on this function's `snapshot` field, and the handout is that same field.
+// Serialize to detach; that is why the artifact stores text and why includeSnapshot is opt-in.
 /**
  * Start recording a runner. Call BEFORE `run()` — a recording is
  * collected as the run happens and cannot be reconstructed after it.

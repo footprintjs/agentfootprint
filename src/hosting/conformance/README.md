@@ -1,3 +1,7 @@
+**Support** — one definition of the laws a `SessionLifecycle` store must
+satisfy, run against every in-tree adapter and exported for stores nobody here
+has written.
+
 # `SessionLifecycle` conformance
 
 A shared test battery every session store runs against, in-tree or out.
