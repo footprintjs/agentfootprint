@@ -127,7 +127,19 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // byte-identity test no longer matches it. First case, run
 // `npm run prune:export`; second case, re-read the evidence at the top of
 // prune-export.mjs before assuming anything is still safe to delete.
-const OUTPUT_LIMITS = { bytes: 617_000_000, files: 6_620, duplicateRscBytes: 0 };
+// Raised for 9.87.1: export 615.74 MB / 6,581 files / 911 search records at the
+// last green publish (9.86.1) -> 621.21 MB / 6,617 files / 917 records on the
+// 9.87.0 release commit, which failed this gate and therefore never reached
+// npm. The growth is six new routes — the time-travel guide
+// (docs/debug/time-travel.mdx) and the API routes for milestoneStops,
+// milestoneStopsStrategy, milestoneOf and their types — at ~0.91 MB and 6
+// files per route, which is the per-route cost the paragraph above measured.
+// The old ceilings had 1.26 MB and 3 files of headroom left: the ~2% margin
+// had been spent one route at a time across 9.86.x with nobody re-reading this
+// comment. Same rule as every raise here: ~2% over the measured export, so
+// about fourteen more routes before somebody has to look again — and the
+// thing to look at then is the per-route cost, not the ceiling.
+const OUTPUT_LIMITS = { bytes: 634_000_000, files: 6_750, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

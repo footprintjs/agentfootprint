@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.87.1] - 2026-09-06
+
+9.87.0 never reached npm. Its publish job failed the docs site's byte budget —
+`export bytes: 621.21 MB exceeds 617.00 MB` — after six new routes (the
+time-travel guide and the API pages for `milestoneStops`,
+`milestoneStopsStrategy`, `milestoneOf`) added 5.47 MB to a static export
+that had 1.26 MB of headroom left. No library code changes in this release.
+
+### Fixed
+
+- **The site-budget ceilings are re-baselined** the way the script's own history
+  says to: ~2% over the measured export (634 MB, 6,750 files), with the reason
+  written beside the number in `docs-next/scripts/check-site-budget.mjs`. The
+  gate did its job — growth nobody was watching is exactly what it exists to
+  stop — and the number to look at next is the ~0.9 MB a single docs route
+  costs, not the ceiling.
+
 ## [9.87.0] - 2026-09-06
 
 The agent now supplies the stops for its own runs.
