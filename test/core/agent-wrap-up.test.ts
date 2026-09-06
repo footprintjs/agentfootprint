@@ -36,6 +36,7 @@ import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
 import type { AgentState } from '../../src/core/agent/types.js';
 import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
+import { isLibraryAuthoredFrame, isSaidByPerson } from '../../src/index.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
 import { persistRecording } from '../../src/recorders/observability/recordingEnvelope.js';
 import { fileRecordingSink } from '../../src/recorders/observability/fileRecordingSink.js';
@@ -137,7 +138,7 @@ describe('the exhausted turn spends one more call, with the tools withheld', () 
     expect(seen[2]!.tools).toEqual([]);
   });
 
-  it('carries the instruction VERBATIM, as the last message, framework-authored', async () => {
+  it('carries the instruction VERBATIM, as the last message, framework-authored — and says so in its opening (9.86.0)', async () => {
     const seen: Shot[] = [];
     await agentThatRunsOut(seen).run({ message: 'audit the findings' });
 
@@ -145,11 +146,28 @@ describe('the exhausted turn spends one more call, with the tools withheld', () 
     expect(last.role).toBe('user');
     expect(last.content).toBe(WRAP_UP_INSTRUCTION);
     // The exact sentence, pinned here so a reword has to be deliberate.
+    //
+    // REWORDED IN 9.86.0, for two reasons that are one reason. The message
+    // lands in `scope.history` wearing `role: 'user'`, so (1) it needs the
+    // registered opening that says the library wrote it — without it
+    // `isSaidByPerson` credited the framework's own instruction to a person,
+    // and both the window's refusal engine and a routing rule read it as the
+    // request; and (2) everything in `history` is re-read on every later call
+    // of the turn, so a standing instruction ("Do not request tools") and a
+    // present-tense claim ("your action budget for this turn is exhausted")
+    // are predictions. Every clause is now a past fact about the one call the
+    // frame was written for. The tools are still withheld by `wrapUpAsked` at
+    // request assembly, which is what the assertion above this one proves.
     expect(WRAP_UP_INSTRUCTION).toBe(
-      'Your action budget for this turn is exhausted. Do not request tools. ' +
-        'Give your best final answer from what you have: what you completed, ' +
-        'what remains undone, and anything the person should know.',
+      '[budget exhausted — the action budget was exhausted before this call, so no tools ' +
+        'were offered on it. This call was for the final answer, from what the messages above ' +
+        'already hold: what was completed, what remained undone, and anything the person ' +
+        'should know.]',
     );
+    // The half of the rule the sentence itself carries: a reader can tell
+    // nobody said this.
+    expect(isLibraryAuthoredFrame(last)).toBe(true);
+    expect(isSaidByPerson(last)).toBe(false);
   });
 
   it('adds ONLY the ask — the unrun turn is not replayed as an assistant message', async () => {

@@ -523,6 +523,39 @@ choose.
 | the enum is the full catalog either way                                                     | **shipped**                                                                                                          |
 | under `reactMode: 'classic'` the menu is built at turn 1 and cached, so it lists everything | **shipped limitation** — dev mode warns; use the default `'dynamic'`                                                 |
 
+### The fourth state, and the one function that names all four
+
+The table above is written from the model's point of view, and it is missing the
+state the cursor itself is in. `reachableSkills(cursor)` deliberately excludes the
+cursor — there is nowhere to move to — and five different places read that
+exclusion as "not available", which is a different claim and a false one: the
+cursor's body is already in the prompt and its tools are already on the wire. Two
+of them refused a model that asked to stay where it was.
+
+`classifySkillTarget` is the one owner of that question, and `SkillTargetClass` is
+its answer: `'self'` (a stay — nothing activates, nothing moves), `'hop'` (a
+declared successor, the one class that moves the cursor), `'open'` (a skill the
+graph wires no edge into — a `.selfExplain()` skill, a `.skill()` registered
+beside the graph — which activates without moving the cursor), and
+`'unreachable'`. It is a pure function: give it a cursor, a target and the two
+sets, and it answers the same way for the gate, the tool description, the
+tool-effects judge, the `skill_read` permission check and the refusal sentence.
+
+```ts
+import { classifySkillTarget } from 'agentfootprint/skill-graph';
+
+classifySkillTarget({ cursor: 'billing', target: 'billing' }); // 'self'
+classifySkillTarget({ cursor: 'billing', target: 'refunds', hops: ['refunds'] }); // 'hop'
+classifySkillTarget({ cursor: 'billing', target: 'debug', open: ['debug'] }); // 'open'
+classifySkillTarget({ cursor: 'billing', target: 'vault' }); // 'unreachable'
+```
+
+`'hop'` beats `'open'` when an id is in both sets — the move is the stronger fact.
+No cursor (a cold start) simply means nothing can be `'self'`. Both the type and
+the function are exported from `agentfootprint/skill-graph` and from
+`agentfootprint/context`, and it is the same function object through either door,
+so a host cannot end up with a second answer to the question.
+
 ## What a host owes the graph
 
 The graph is a pure decision layer: it never sees a tool call, so it cannot
@@ -642,14 +675,18 @@ Verbatim, the `tool` message on iteration 2 — the entire feedback the model
 receives:
 
 ```text
-read_skill("audit-log") is not reachable from here. Reachable skills: billing. Pick one of these, or finish.
+read_skill("audit-log") was not granted on that call: 'audit-log' was not reachable from 'triage'. Skills reachable from 'triage' when that call was made: billing.
 ```
 
-One sentence, and it names what **is** allowed rather than only what is not,
-because a refusal that does not teach just moves the puzzle. There are three
-shapes of this sentence: this one (something is reachable), a dead-end variant
-("No skills are reachable from here — answer with the current skill, or finish"),
-and a decision-tree variant that explains a tree has no cursor to move at all.
+It names what **was** allowed rather than only what was not, because a refusal
+that does not teach just moves the puzzle — and every clause is a past fact
+about the one call it names, because a tool result is composed once and re-read
+on every later call of the turn. One composer, `composeReadSkillRefusal`, writes
+all of them: this shape (something was reachable), a dead-end shape ("No skill
+was reachable from 'triage' when that call was made."), a decision-tree shape
+that explains a tree keeps no cursor to move, and the posture shapes. Open
+skills are named in every one of them — no posture governs an open skill — and
+a skill the caller's role may not see is named in none.
 
 ## What the record says
 
@@ -660,8 +697,21 @@ The run emitted one `agentfootprint.skill.rejected`:
   "requestedId": "audit-log",
   "currentSkillId": "triage",
   "allowed": ["billing"],
-  "iteration": 1
+  "iteration": 1,
+  "reason": "unreachable"
 }
+```
+
+`reason` says which arm answered, so a consumer never has to compare
+`requestedId` against `currentSkillId` and know why that mattered — and
+`allowed` is the set the model was actually told about, role-filtered, not the
+graph's raw successor set:
+
+```ts
+if (p.reason === 'self-call') return; // the model asked where it already stood
+if (p.reason === 'unreachable') alertRoutingGap(p.requestedId, p.currentSkillId);
+if (p.reason === 'posture') alertPostureFriction(p.posture, p.requestedId);
+// `reason` is optional and additive — an older payload carries none.
 ```
 
 And, critically, **the cursor did not move.** Both iterations' `cursorMove` on
@@ -762,11 +812,15 @@ skillGraph({
 });
 ```
 
-The same rule for a single message is `isSaidByPerson(msg)`, and
-`isLibraryAuthoredFrame(msg)` is its complement — true for the four prefixed
-frames, false for a delivered injection, which is marked rather than prefixed.
-`LIBRARY_AUTHORED_PREFIXES` is the prefix list itself, exported so a consumer
-reading a stored transcript can apply the same test outside a run.
+The same rule for a single message is `isSaidByPerson(msg)`.
+`isLibraryAuthoredFrame(msg)` is the PREFIX half of it only — true for the six
+frames this library opens with a registered marker (the compaction frame, the
+drop notice, the schema-check and evidence-check corrections, the out-of-budget
+wrap-up instruction and the stepped-skill nudge), and false for a delivered
+injection, which `isSaidByPerson` excludes by its `injectedBy` marker instead.
+So the two are not complements: a message can be the library's and still not be
+a frame. `LIBRARY_AUTHORED_PREFIXES` is the prefix list itself, exported so a
+consumer reading a stored transcript can apply the same test outside a run.
 `AuthoredMessage` is the minimum shape all three accept —
 `{ role, content, injectedBy? }` — so they work on `ctx.history` and on a saved
 transcript alike.

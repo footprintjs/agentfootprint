@@ -356,12 +356,270 @@ describe('property — nothing names a hidden skill, on the graph path either', 
     }
   });
 
+  it('the filter emptied the hop set, and the menu OMITS the clause rather than denying the graph holds one (9.86.0 fix pass)', async () => {
+    // Cursor on `alpha`, whose only declared hop is `beta`, and this role sees
+    // neither. The description composed its columns from the already-filtered
+    // catalog, so it printed "Nothing is reachable from here" over a graph that
+    // was holding alpha → beta — the same filtered-to-empty-reported-as-empty
+    // shape the refusal composer was repaired for, on the surface the model
+    // reads to CHOOSE.
+    const menus = await graphMenus(['gamma']);
+    expect(menus.length).toBeGreaterThan(0);
+    for (const menu of menus) {
+      expect(menu).not.toContain('Nothing is reachable from here');
+      // Still no leak — omitting the sentence names nothing new.
+      expect(hiddenIdsNamed(menu, ['alpha', 'beta'])).toEqual([]);
+    }
+  });
+
   it('a VISIBLE cursor is still named — the fix hides, it does not mute', async () => {
     // The other half. Dropping the sentence for everyone would have "fixed" the
     // leak by re-opening the production bug it was added to close.
     const menus = await graphMenus(['alpha', 'gamma']);
     expect(menus[0]).toContain("You are in 'alpha'.");
     expect(hiddenIdsNamed(menus[0] ?? '', ['beta'])).toEqual([]);
+  });
+
+  /**
+   * THE PROPERTY, WIDENED TO EVERY MODEL-FACING SURFACE (9.86.0).
+   *
+   * Until now "a hidden skill is never named" was asserted over the read_skill
+   * DESCRIPTION and nowhere else, because that was the only composer that had
+   * been taught the filter. The gate's refusals and the `skill.rejected`
+   * payload read the graph's RAW sets one stage downstream, so a role that
+   * could not see `beta` was still told "Reachable skills: beta" the moment it
+   * asked for anything unreachable — the same leak, on the surface nobody had
+   * pointed the property at. The hidden set is now resolved once by the tools
+   * slot and carried on scope, so this block asserts over EVERY tool result and
+   * EVERY rejection payload of a real run.
+   */
+  describe('the same property, over every tool result and every rejection payload', () => {
+    const noop = defineTool({
+      name: 'noop',
+      description: 'does nothing',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => 'ok',
+    });
+
+    /** Run a graph agent that asks for `wanted`, capturing everything the model read. */
+    async function graphRun(args: {
+      readonly visible: readonly string[];
+      readonly wanted: string;
+      readonly build?: (a: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>;
+    }) {
+      const results: string[] = [];
+      const rejected: Array<Record<string, unknown>> = [];
+      const script = [
+        { content: '', toolCalls: [{ id: 'c1', name: 'read_skill', args: { id: args.wanted } }] },
+        { content: 'done', toolCalls: [] },
+      ];
+      let i = 0;
+      const provider = mock({
+        respond: (req: { messages?: ReadonlyArray<{ role: string; content: unknown }> }) => {
+          for (const m of req.messages ?? [])
+            if (m.role === 'tool') results.push(String(m.content));
+          return (script[i++] ?? { content: 'done', toolCalls: [] }) as never;
+        },
+      });
+      let builder = Agent.create({
+        provider,
+        model: 'mock',
+        maxIterations: 4,
+        permissionChecker: PermissionPolicy.fromRoles(
+          { support: ['read_skill', 'noop'] },
+          'support',
+          { skills: { support: [...args.visible] } },
+        ),
+      })
+        .system('s')
+        .tool(noop);
+      builder = (args.build ?? ((a) => a.skillGraph(g())))(builder);
+      const agent = builder
+        .watch({
+          id: 'w',
+          onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+            if (e.name === 'agentfootprint.skill.rejected') rejected.push(e.payload ?? {});
+          },
+        })
+        .build();
+      await agent.run({ message: 'go' });
+      return { results, rejected };
+    }
+
+    it('a refusal never names a hidden HOP — the gate filters the set it names, not the set it admits', async () => {
+      // Cursor on alpha; role sees alpha and gamma, never beta. `delta` is
+      // registered, visible, and unreachable — so the pick is a genuine
+      // reachability refusal and the composer runs.
+      const graphWithDelta = () =>
+        skillGraph({
+          skills: ['alpha', 'beta', 'gamma', 'delta'].map((id) =>
+            defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+          ),
+          start: 'alpha',
+          steps: [
+            { from: 'alpha', to: 'beta', onToolReturn: 'noop' },
+            { from: 'alpha', to: 'gamma', onToolReturn: 'noop' },
+            { from: 'gamma', to: 'delta', onToolReturn: 'noop' },
+          ],
+          check: 'off',
+        });
+      const { results, rejected } = await graphRun({
+        visible: ['alpha', 'gamma', 'delta'],
+        wanted: 'delta',
+        build: (a) => a.skillGraph(graphWithDelta()),
+      });
+      const refusal = results.find((r) => r.includes('was not granted on that call'));
+      expect(refusal).toBeDefined();
+      // Every tool result of the run, and every payload — not just the one.
+      for (const r of results) expect(hiddenIdsNamed(r, ['beta'])).toEqual([]);
+      for (const row of rejected) expect(hiddenIdsNamed(JSON.stringify(row), ['beta'])).toEqual([]);
+      // …and it is filtered rather than mute: the visible hop is still named,
+      // so the model can route in one step.
+      expect(refusal).toContain('gamma');
+      expect(rejected[0]?.allowed).toEqual(['gamma']);
+    });
+
+    it('a POSTURE refusal never names a hidden skill either', async () => {
+      // The other composer arm. Under 'guard' with no outstanding menu, a
+      // reachable hop is declined — and the sentence may still name open
+      // skills, which is the clause the filter has to reach.
+      const guarded = () =>
+        skillGraph({
+          skills: ['alpha', 'beta'].map((id) =>
+            defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+          ),
+          start: 'alpha',
+          steps: [{ from: 'alpha', to: 'beta', onToolReturn: 'noop' }],
+          check: 'off',
+        });
+      const secret = defineSkill({ id: 'secret', description: 'secret', body: 'SECRET_BODY' });
+      const { results, rejected } = await graphRun({
+        visible: ['alpha', 'beta'],
+        wanted: 'beta',
+        build: (a) => a.skillGraph(guarded(), { strictness: 'guard' }).skill(secret),
+      });
+      const refusal = results.find((r) => r.includes('was not granted on that call'));
+      expect(refusal).toBeDefined();
+      // `secret` is an OPEN skill this role may not see. The posture arm's own
+      // open-skill clause is where it would have appeared.
+      for (const r of results) expect(hiddenIdsNamed(r, ['secret'])).toEqual([]);
+      for (const row of rejected) {
+        expect(hiddenIdsNamed(JSON.stringify(row), ['secret'])).toEqual([]);
+      }
+      expect(refusal).toContain("'guard' posture");
+    });
+
+    // ── OMIT, NEVER DENY (9.86.0 fix pass) ────────────────────────────
+    // The filter's other half. Not naming a hidden hop is only half the law;
+    // the other half is that the sentence left behind must not turn the
+    // omission into a claim that nothing was there.
+
+    it('when the filter empties the hop set, the refusal omits the clause — it does NOT say nothing was reachable', async () => {
+      // Cursor on `alpha`, whose ONLY declared hop is `beta`, and `beta` is
+      // hidden from this role. `delta` is visible and WIRED (so it is a graph
+      // member, not an open skill the gate would admit) but unreachable from
+      // `alpha`, so asking for it is a genuine reachability refusal.
+      const graphWithDelta = () =>
+        skillGraph({
+          skills: ['alpha', 'beta', 'gamma', 'delta'].map((id) =>
+            defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+          ),
+          start: 'alpha',
+          steps: [
+            { from: 'alpha', to: 'beta', onToolReturn: 'noop' },
+            { from: 'gamma', to: 'delta', onToolReturn: 'noop' },
+          ],
+          check: 'off',
+        });
+      const { results, rejected } = await graphRun({
+        visible: ['alpha', 'gamma', 'delta'],
+        wanted: 'delta',
+        build: (a) => a.skillGraph(graphWithDelta()),
+      });
+      const refusal = results.find((r) => r.includes('was not granted on that call'));
+      expect(refusal).toBeDefined();
+      expect(refusal).toContain("'delta' was not reachable from 'alpha'");
+      // THE DEFECT: `beta` WAS reachable from `alpha`. Saying otherwise denies
+      // what the graph holds, and a model told the map is a dead end stops
+      // asking for the door it may not be shown.
+      expect(refusal).not.toMatch(/No skill was reachable/);
+      // Still no leak, on either channel.
+      for (const r of results) expect(hiddenIdsNamed(r, ['beta'])).toEqual([]);
+      for (const row of rejected) {
+        expect(hiddenIdsNamed(JSON.stringify(row), ['beta'])).toEqual([]);
+      }
+      // The hop half of the spoken set is empty and the OPEN half is not, so
+      // the payload carries exactly what the sentence named: no hop, and the
+      // one open skill this role may see.
+      expect(rejected[0]?.allowed).toEqual(['gamma']);
+      expect(refusal).toContain('Open skills were admitted on that call: gamma.');
+    });
+
+    it('the unknown-tool roster never names a tool a hidden skill brought', async () => {
+      // The roster read the dispatch map raw, so it named the tools of a skill
+      // this role may not see — the leak the refusals had just closed, one
+      // sentence over. `ghost` is allowlisted for the role and registered by
+      // nobody, so the call reaches the unknown-tool door.
+      const vault = defineTool({
+        name: 'vault_open_safe',
+        description: 'opens the safe',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => 'opened',
+      });
+      const results: string[] = [];
+      const script = [
+        { content: '', toolCalls: [{ id: 'c1', name: 'ghost', args: {} }] },
+        { content: 'done', toolCalls: [] },
+      ];
+      let i = 0;
+      const provider = mock({
+        respond: (req: { messages?: ReadonlyArray<{ role: string; content: unknown }> }) => {
+          for (const m of req.messages ?? [])
+            if (m.role === 'tool') results.push(String(m.content));
+          return (script[i++] ?? { content: 'done', toolCalls: [] }) as never;
+        },
+      });
+      const agent = Agent.create({
+        provider,
+        model: 'mock',
+        maxIterations: 4,
+        permissionChecker: PermissionPolicy.fromRoles(
+          { support: ['read_skill', 'noop', 'ghost'] },
+          'support',
+          { skills: { support: ['alpha'] } },
+        ),
+      })
+        .system('s')
+        .tool(noop)
+        .skillGraph(
+          skillGraph({
+            skills: [
+              defineSkill({ id: 'alpha', description: 'alpha does things', body: 'alpha_BODY' }),
+              defineSkill({
+                id: 'beta',
+                description: 'beta does things',
+                body: 'beta_BODY',
+                tools: [vault],
+              }),
+            ],
+            start: 'alpha',
+            steps: [{ from: 'alpha', to: 'beta', onToolReturn: 'noop' }],
+            check: 'off',
+          }),
+        )
+        .build();
+      await agent.run({ message: 'go' });
+      const unknown = results.find((r) => r.includes('Unknown tool'));
+      expect(unknown).toBeDefined();
+      expect(unknown).toContain("Unknown tool 'ghost' on that call.");
+      // THE DEFECT: `vault_open_safe` belongs to a skill this role may not see
+      // and had never appeared on any request's wire.
+      expect(unknown).not.toContain('vault_open_safe');
+      for (const r of results) expect(hiddenIdsNamed(r, ['beta'])).toEqual([]);
+      // Filtered, not muted: what the role may be told about is still named.
+      expect(unknown).toContain('read_skill');
+      expect(unknown).toContain('noop');
+    });
   });
 
   it('every menu a graph run composes passes the banned-sentence checker', async () => {

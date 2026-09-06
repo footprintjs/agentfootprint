@@ -6,6 +6,7 @@ title: COMPACTED_FRAME_PREFIX
 
 > `const` **COMPACTED\_FRAME\_PREFIX**: `"[compacted history"` = `'[compacted history'`
 
-Defined in: [src/core/agent/window/summarize.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/summarize.ts#L32)
+Defined in: [src/lib/saidByPerson.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L83)
 
-Opening of the authored label. Stable — tests and readers match on it.
+Opening of the authored label a FOLD leaves behind. Stable — tests and
+ readers match on it. Written by `buildSummaryMessage`.

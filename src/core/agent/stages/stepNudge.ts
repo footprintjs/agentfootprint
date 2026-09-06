@@ -11,10 +11,19 @@
  *
  * What it appends is the conversation as it really went: the premature
  * answer as the assistant turn, then a `role: 'user'` teaching message
- * naming every unrun step and its note — "finish them, or say why you are
- * stopping". At most once per turn (`stepNudgeSpent`); the model stopping
- * AGAIN is honored (`steps_unfinished { action: 'accepted' }`, judged by
- * the decider) — a procedure is a declared order, never a forced march.
+ * naming every unrun step and its note. At most once per turn
+ * (`stepNudgeSpent`); the model stopping AGAIN is honored
+ * (`steps_unfinished { action: 'accepted' }`, judged by the decider) — a
+ * procedure is a declared order, never a forced march.
+ *
+ * That teaching message is written by `nudgeTeachingMessage` (skillSteps.ts
+ * owns every sentence about a procedure) and, since 9.86.0, opens with
+ * `STEP_NUDGE_FRAME_PREFIX` from the authorship registry. It has to: this
+ * stage puts it in `scope.history` under `role: 'user'`, where it looks like
+ * a person's turn to `isSaidByPerson` — and its body lists the skill id and
+ * the unrun steps' TOOL NAMES, which is precisely what a routing rule
+ * scanning history matches on. The opening is what tells the window's
+ * refusal engine and a rule author that nobody said it.
  *
  * Pure function apart from its plan closure — no Agent class state.
  */

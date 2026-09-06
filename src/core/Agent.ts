@@ -2384,7 +2384,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           readonly cursorId?: string;
           readonly stay?: boolean;
         };
-      }) => LLMToolSchema)
+      }) => LLMToolSchema | undefined)
     | undefined {
     const skills = this.injections.filter((i) => i.flavor === 'skill');
     if (skills.length === 0) return undefined;
@@ -2407,12 +2407,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     const open = this.openSkillIds();
     const reachable = graphMenu;
+    // A decision `tree()` keeps no cursor, so every routing pick is refused by
+    // construction (9.86.0). The descriptor withholds the tool entirely when
+    // nothing is left to open, and explains the tree when something is.
+    const treeRouted = reachable !== undefined && this.skillGraphIsTree;
     return (args) => {
       const grantable = reachable
         ? [...new Set([...reachable(args.currentSkillId), ...open])]
         : undefined;
-      // Non-null: `skills` is non-empty, so the builder always returns a tool.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      // `undefined` when the offer is WITHHELD — the tools slot then drops the
+      // schema from the request. (`skills` is non-empty, so an empty catalog is
+      // not one of the ways this can be undefined.)
       return buildReadSkillTool(skills, {
         ...(grantable !== undefined && { grantable }),
         ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
@@ -2422,7 +2427,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // The turn-start menu (SG-C) — the tools slot passes it only while the
         // verdict is outstanding; describeOffer leads with it.
         ...(args.menu !== undefined && { menu: args.menu }),
-      })!.schema;
+        ...(treeRouted && { treeRouted: true }),
+      })?.schema;
     };
   }
 
@@ -3366,9 +3372,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // auto-attached `present` tool when a store is attached, 9.22.0) +
     // skill-supplied tools (with autoActivate scoping); validates
     // name uniqueness; produces the dispatch map.
-    const { registryByName, toolSchemas } = buildToolRegistry(registry, this.injections, {
-      hasArtifactStore: artifactStore !== undefined,
-    });
+    const { registryByName, toolSchemas, toolDeclaringSkills } = buildToolRegistry(
+      registry,
+      this.injections,
+      {
+        hasArtifactStore: artifactStore !== undefined,
+      },
+    );
     // A statically registered tool that declares `wants` on an agent with no
     // store is configuration that lies: every call would be refused at
     // dispatch for a gap only the operator can close. Refused at BUILD,
@@ -3767,6 +3777,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
       registryByName,
+      // WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — read by the unknown-tool
+      // roster so a role that may not see a skill is not told the names of the
+      // tools that skill brought. Value-conditional: an agent whose skills carry
+      // no tools hands the handler exactly the deps object it always did.
+      ...(toolDeclaringSkills.size > 0 && { toolDeclaringSkills }),
       // The claim ledger accumulates only for an agent that declared a
       // contract to read it (9.61.0) — value-conditional, so every other
       // agent commits exactly what it always did.

@@ -39,6 +39,7 @@
  * entirely on agents with no stepped skill (zero-cost-when-unused).
  */
 
+import { STEP_NUDGE_FRAME_PREFIX } from '../saidByPerson.js';
 import type { SkillToolDescriptor } from './hostContract.js';
 import { assertArtifactVocabulary } from './skillVocabulary.js';
 import type { Injection } from './types.js';
@@ -425,7 +426,26 @@ export function remainingStepsOf(
     .filter((s) => s.index >= ptr.step);
 }
 
-/** The one teaching nudge for a premature stop (at most once per turn). */
+/**
+ * The one teaching nudge for a premature stop (at most once per turn).
+ *
+ * Written as an AUTHORED FRAME (9.86.0). `stepNudge` appends the result to
+ * `scope.history` wearing `role: 'user'`, so two things follow. First, it has
+ * to be recognisable as this library's own writing: it opens with
+ * {@link STEP_NUDGE_FRAME_PREFIX}, imported from the authorship registry that
+ * `isSaidByPerson` matches against, because the body lists a skill id and
+ * every unrun step's TOOL NAME — exactly the text a routing rule scanning
+ * history watches for, and before the opening was here such a rule fired on
+ * the library's own nudge.
+ *
+ * Second, it is re-read on every later call of the turn, so it may not speak
+ * in the present or issue a standing instruction: "Steps 2–3 have not run …
+ * Finish them" is false the moment they run, and it was still sitting in
+ * `history` when they did. Every clause now reports the call the nudge was
+ * written for, in the past tense, and the ask is stated as what THAT call was
+ * for. Pinned by `test/lib/injection-engine/userTurnProducers.test.ts`, which
+ * runs the composed sentence through `unprovable`.
+ */
 export function nudgeTeachingMessage(ptr: StepPointer, plan: StepPlan): string {
   const remaining = remainingStepsOf(ptr, plan);
   const span =
@@ -434,7 +454,8 @@ export function nudgeTeachingMessage(ptr: StepPointer, plan: StepPlan): string {
       : `Steps ${remaining[0]!.index}–${remaining[remaining.length - 1]!.index}`;
   const list = remaining.map((s) => `${s.index}: ${s.note} (\`${s.tool}\`)`).join('; ');
   return (
-    `${span} of '${ptr.skillId}' ${remaining.length === 1 ? 'has' : 'have'} not run — ` +
-    `${list}. Finish them, or say why you are stopping.`
+    `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
+    `above was given: ${list}. This call was for running them, or for the reason they were ` +
+    `not run.]`
   );
 }

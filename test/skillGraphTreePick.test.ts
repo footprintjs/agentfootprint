@@ -101,9 +101,13 @@ describe('tree pick — the gate refuses', () => {
     });
     const { events, active, toolResults } = await jump((x) => x.system('s').skillGraph(g), 'leaf2');
 
-    // The refusal reached the model, and it names the reason.
-    expect(toolResults.join('\n')).toContain('cannot move a decision tree');
+    // The refusal reached the model, and it names the reason — in the past
+    // tense, bound to the call the pick was made on (9.86.0). The mechanism
+    // is unchanged; what changed is that a result re-read on a later call
+    // still describes the call it answered.
+    expect(toolResults.join('\n')).toContain('this map is a decision tree');
     expect(toolResults.join('\n')).toContain('routes by predicate');
+    expect(toolResults.join('\n')).toContain("'leaf2' was not activated by it");
     // The tool never claims an activation it cannot deliver.
     expect(toolResults.join('\n')).not.toContain('activated for the next iteration');
     // The tree's own routing is untouched: leaf1 every iteration, leaf2 never.
@@ -143,13 +147,18 @@ describe('tree pick — open skills are still the escape hatch', () => {
     expect(active.every((ids) => ids.includes('leaf1'))).toBe(true);
   });
 
-  it('with open skills present the refusal names them instead of the tree message', async () => {
+  it('with open skills present the refusal names them AND still explains the tree (9.86.0 — naming the open skills used to REPLACE the tree explanation, so the one model that could be helped by both got only half)', async () => {
     const a = leaf('leaf1');
     const b = leaf('leaf2');
     const g = skillGraph({ skills: [a, b], tree: decideSkill(() => true, a, b), check: 'throw' });
     const helper = defineSkill({ id: 'helper', description: 'H', body: 'H' });
     const { toolResults } = await jump((x) => x.system('s').skillGraph(g).skill(helper), 'leaf2');
-    expect(toolResults.join('\n')).toContain('Reachable skills: helper');
+    const text = toolResults.join('\n');
+    expect(text).toContain('Open skills were admitted on that call: helper.');
+    // The tree's own reason survives beside it: a model told only "helper is
+    // reachable" learns nothing about why its leaf pick failed, and tries
+    // another leaf.
+    expect(text).toContain('this map is a decision tree');
   });
 });
 

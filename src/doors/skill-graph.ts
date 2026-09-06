@@ -190,6 +190,10 @@ export {
   type SkillRoutingStep,
   type SkillStartRule,
   type TreeOptions,
+  // A host gating its own `read_skill` needs the same four classes the
+  // agent's gate uses — obligation 2, without re-deriving the stay rule.
+  classifySkillTarget,
+  type SkillTargetClass,
 } from '../lib/injection-engine/skillGraph.js';
 export type { TurnRoutingPlan } from '../lib/injection-engine/skillIntent.js';
 

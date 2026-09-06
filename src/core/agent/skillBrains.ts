@@ -29,8 +29,9 @@
  * that disagrees with itself must not pick a silent winner.
  *
  * ESCALATE-ON-EVIDENCE. `escalation: { provider, model?, afterRefusals: N }`
- * — when the gate refuses N routing picks in ONE turn (`skill.rejected`,
- * reachability or posture — real recorded refusals, never vibes), the rest
+ * — when the gate refuses N routing picks in ONE turn (`skill.rejected` —
+ * reachability, posture, OR a self-call: all three refusal arms count, and
+ * they are real recorded refusals, never vibes), the rest
  * of the turn runs on the escalation brain, `skill.escalated` goes on the
  * record once, and the next turn's seed de-escalates. The loop the model is
  * flubbing gets the bigger brain until the turn resolves.
@@ -55,8 +56,15 @@ export interface ProviderChoice {
 
 /** Escalate-on-evidence policy (see the module header). */
 export interface EscalationPolicy extends ProviderChoice {
-  /** Gate refusals (`skill.rejected` — reachability OR posture) in ONE turn
-   *  that flip the rest of the turn onto this brain. Integer ≥ 1. */
+  /** Gate refusals (`skill.rejected`) in ONE turn that flip the rest of the
+   *  turn onto this brain. Integer ≥ 1.
+   *
+   *  ALL THREE refusal arms count — an unreachable pick, a pick a `strictness`
+   *  posture declined, and a SELF-CALL (`read_skill` naming the cursor's own
+   *  skill). The self-call arm composes a notice rather than a refusal, and it
+   *  still counts here on purpose: what this budget measures is a model asking
+   *  the graph where it stands instead of working, which is the same stuck loop
+   *  whichever arm answered it. */
   readonly afterRefusals: number;
 }
 

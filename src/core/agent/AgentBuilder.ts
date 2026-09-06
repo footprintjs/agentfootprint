@@ -168,7 +168,8 @@ export interface SkillGraphOptions {
   readonly providers?: Readonly<Record<string, ProviderChoice>>;
   /**
    * Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
-   * (`skill.rejected` — reachability OR posture) in ONE turn flip the rest
+   * (`skill.rejected` — reachability, posture, OR a self-call: all three
+   * refusal arms count) in ONE turn flip the rest
    * of the turn onto this brain — `skill.escalated` goes on the record at
    * the flip, and the next turn's seed de-escalates. Never on vibes: only
    * real refusals count.

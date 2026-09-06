@@ -807,8 +807,12 @@ brains keeps its exact prior event bytes.
 
 **Escalate on evidence.** `skillGraph(g, { escalation: { provider, model,
 afterRefusals: N } })` — when the routing gate refuses N picks in one turn
-(`skill.rejected`, reachability *or* posture — recorded refusals, never
-vibes), the rest of the turn runs on the escalation brain:
+(`skill.rejected` — **all three refusal arms count**: an unreachable pick, a
+pick a `strictness` posture declined, and a **self-call**, `read_skill` naming
+the cursor's own skill. Recorded refusals, never vibes. The self-call arm
+composes a notice rather than a refusal and still counts, because what this
+budget measures is a model asking the graph where it stands instead of
+working), the rest of the turn runs on the escalation brain:
 `skill.escalated` fires once at the flip with the honest `from`/`to`, and
 the next turn's seed de-escalates. The loop the model is flubbing gets the
 bigger brain until the turn resolves.

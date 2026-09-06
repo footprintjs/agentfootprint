@@ -4,7 +4,7 @@ title: ProviderChoice
 
 # Interface: ProviderChoice
 
-Defined in: [src/core/agent/skillBrains.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L51)
+Defined in: [src/core/agent/skillBrains.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L52)
 
 One brain: a provider port, optionally pinned to a model. `model` absent
  → resolved down the precedence chain (legal only while the provider is
@@ -21,7 +21,7 @@ One brain: a provider port, optionally pinned to a model. `model` absent
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L53)
+Defined in: [src/core/agent/skillBrains.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L54)
 
 ***
 
@@ -29,4 +29,4 @@ Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/ag
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/agent/skillBrains.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L52)
+Defined in: [src/core/agent/skillBrains.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/skillBrains.ts#L53)

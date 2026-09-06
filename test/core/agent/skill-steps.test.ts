@@ -597,10 +597,14 @@ describe('integration: the nudge truth table', () => {
     expect(routed.map((r) => r.chosen)).toContain('step-nudge');
     // The teaching went back as the conversation: premature answer, then the ask.
     const hist = historyOf(agent);
+    // 9.86.0 — the nudge is an AUTHORED FRAME: it opens with a registered
+    // marker (so a rule reading history knows nobody said it) and reports the
+    // unrun steps in the past tense.
     const teachingIdx = hist.findIndex(
-      (m) => m.role === 'user' && m.content.includes('have not run'),
+      (m) => m.role === 'user' && m.content.includes('had not run'),
     );
     expect(teachingIdx).toBeGreaterThan(0);
+    expect(hist[teachingIdx]!.content.startsWith('[steps unrun')).toBe(true);
     expect(hist[teachingIdx]!.content).toContain("Steps 2–3 of 'refund'");
     expect(hist[teachingIdx - 1]).toMatchObject({ role: 'assistant', content: 'all set!' });
   });

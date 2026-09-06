@@ -235,6 +235,10 @@ export {
   type GraphCheckup,
   type GraphProblem,
   type GraphProblemCode,
+  // The ONE owner of "is this target the cursor?" (9.86.0) — every gate,
+  // description and refusal switches on it instead of re-deriving it.
+  classifySkillTarget,
+  type SkillTargetClass,
 } from './skillGraph.js';
 export {
   keywordScorer,

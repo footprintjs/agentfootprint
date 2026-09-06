@@ -381,6 +381,13 @@ describe('LAW 1 — the capability law, epoch-scoped', () => {
     // this epoch's `provider.list(ctx)`, so there is nothing to look up.
     expect(offers[0]).not.toContain('refund_tool');
     expect(results[0]).toContain('Unknown tool');
+    // 9.86.0 — and it names the roster that RESOLVED, which is the repair the
+    // model can act on. `read_skill` is the door out of epoch 1, and it is in
+    // the sentence. (The clause says "resolved to an implementation" rather
+    // than "could be dispatched": the permission gate and the middleware chain
+    // sit between resolution and a tool running, and neither is asked here.)
+    expect(results[0]).toContain('Tool names that resolved to an implementation on that call:');
+    expect(results[0]).toContain('read_skill');
 
     // What IS true, asserted as the law states it: offered in E ⇒ dispatchable
     // in E. Epoch 3 offers it and epoch 3 runs it.
@@ -389,6 +396,42 @@ describe('LAW 1 — the capability law, epoch-scoped', () => {
     // ONE dispatch across three epochs, from the epoch that offered it. The
     // length is the assertion: had epoch 1 resolved it too, this would be two.
     expect(ran).toEqual(['refund_tool']);
+  });
+
+  it('(d2) the unknown-tool answer NAMES the dispatch roster — the same sentence the MCP door has always served (9.86.0: `Unknown tool: X` told the model it was wrong and never what would have worked)', async () => {
+    // The roster is the DISPATCH set, not the offer: a held-out tool still
+    // runs when named ((e) below drives exactly that), so an offer-shaped list
+    // would be a different and here a false claim. And it is anchored to the
+    // call it answers — a tool result is re-read on every later call of the
+    // turn, and a provider's list can change between them.
+    //
+    // 9.86.0 fix pass: the clause reports RESOLUTION, not dispatch. Two gates
+    // sit between them (the `tool_call` permission check and the middleware
+    // chain), so "could be dispatched" promised an outcome the very next gate
+    // could refuse; and the roster is role-filtered before it is named
+    // (test/security/skill-visibility.test.ts drives that half).
+    const ran: string[] = [];
+    const agent = Agent.create({
+      provider: mock({
+        replies: [call('nope', 't1'), FINAL] as never,
+      }),
+      model: 'mock',
+      maxIterations: 4,
+    })
+      .system('s')
+      .tool(stampedTool('calc', 'static-registry', ran))
+      .tool(stampedTool('probe', 'static-registry', ran))
+      .build();
+    const results = resultsOf(agent);
+    await agent.run({ message: 'hello' });
+
+    expect(results[0]).toBe(
+      "Unknown tool 'nope' on that call. Tool names that resolved to an implementation on " +
+        'that call: calc, probe.',
+    );
+    // Nothing ran, and nothing was invented: the roster is exactly what the
+    // dispatch map holds.
+    expect(ran).toEqual([]);
   });
 
   // ── (e) a restored transcript naming a held-out tool ───────────────────
@@ -698,7 +741,7 @@ describe('LAW 2 — a Lens may omit; absence and refusal need evidence for the e
     expect(text).not.toMatch(/does not exist|no such skill/i);
   });
 
-  it('the GATE’s refusal of a real call is epoch-anchored too, and names what IS reachable', async () => {
+  it('the GATE’s refusal of a real call is epoch-anchored too, and names what IS reachable — by NAMING the cursor rather than saying "here" (9.86.0: the epoch a tool result belongs to is the call it answered, and "here" moves)', async () => {
     const triage = defineSkill({ id: 'triage', description: 'triage', body: 'T' });
     const billing = defineSkill({ id: 'billing', description: 'billing', body: 'B' });
     const vault = defineSkill({ id: 'vault', description: 'vault', body: 'V' });
@@ -720,9 +763,12 @@ describe('LAW 2 — a Lens may omit; absence and refusal need evidence for the e
     await agent.run({ message: 'hello' });
 
     const refusal = results[0] ?? '';
-    // The refusal is about HERE. A registered skill the cursor cannot reach is
-    // still a skill that exists, and the message must not read otherwise.
-    expect(refusal).toContain('is not reachable from here');
+    // The refusal is about ONE POSITION AT ONE MOMENT. A registered skill the
+    // cursor cannot reach is still a skill that exists, and the message must
+    // not read otherwise — so it says "was not reachable from 'triage'" (the
+    // epoch, named) rather than "from here" (the epoch, assumed).
+    expect(refusal).toContain("was not reachable from 'triage'");
+    expect(refusal).toContain('that call');
     expect(refusal).toContain('billing');
     expect(absenceClaims(refusal)).toEqual([]);
   });
@@ -752,8 +798,11 @@ describe('LAW 2 — a Lens may omit; absence and refusal need evidence for the e
     // "No skills are reachable from here" would invite a retry from somewhere
     // else, and a tree has no elsewhere. So the message states the mechanism —
     // which is the evidence the composer actually holds.
-    expect(refusal).toContain('cannot move a decision tree');
+    // 9.86.0: the same mechanism, now stated as a fact about the call the pick
+    // was made on rather than about an unbounded present.
+    expect(refusal).toContain('this map is a decision tree');
     expect(refusal).toContain('routes by predicate');
+    expect(refusal).toContain('was not granted on that call');
     expect(absenceClaims(refusal)).toEqual([]);
   });
 });

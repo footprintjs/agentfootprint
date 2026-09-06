@@ -204,12 +204,20 @@ describe('functional: the grammar', () => {
     );
   });
 
-  it('the nudge lists every remaining step with its note and never orders', () => {
+  it('the nudge lists every remaining step with its note and never orders — as an authored frame, in the past tense (9.86.0)', () => {
     const msg = nudgeTeachingMessage(at(2), plan);
-    expect(msg).toContain("Steps 2–3 of 'refund' have not run");
+    // The nudge is appended to `scope.history`, so it is this library writing
+    // in a person's voice and it is re-read on every later call of the turn.
+    // Hence both changes: a registered opening, so `isSaidByPerson` and a
+    // routing rule can tell nobody said it (the body lists a skill id and tool
+    // names, which is exactly what such a rule watches for), and a past-tense
+    // report of the call it was written for instead of "have not run … Finish
+    // them", which the steps themselves falsify the moment they run.
+    expect(msg.startsWith('[steps unrun')).toBe(true);
+    expect(msg).toContain("Steps 2–3 of 'refund' had not run when the answer above was given");
     expect(msg).toContain('2: refund the charge (`charge`)');
     expect(msg).toContain('3: file the receipt (`export`)');
-    expect(msg).toContain('Finish them, or say why you are stopping.');
+    expect(msg).toContain('This call was for running them, or for the reason they were not run.');
     expect(remainingStepsOf(at(2), plan).map((s) => s.index)).toEqual([2, 3]);
   });
 

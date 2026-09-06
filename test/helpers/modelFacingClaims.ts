@@ -17,6 +17,32 @@
  * it is an omission a reader can see (`test/modelFacingSurfaces.test.ts` is the
  * inventory) rather than one they have to notice the absence of.
  *
+ * An inventory still only holds what somebody remembered to register, and in
+ * 9.86.0 two live producers matching these very rules turned out to be missing
+ * from it. So there is a third instrument: `test/modelFacingScan.test.ts` walks
+ * every string literal in `src/`, judges it here at the strictest lifetime, and
+ * fails on one that is neither judged by a registered row nor accounted for
+ * with the reason it is safe.
+ *
+ * ── THE LAW, IN THE FAMILY'S WORDS ────────────────────────────────────────
+ *
+ * A Lens may OMIT; a Lens may never DENY what the Fold holds. The Fold is what
+ * the run really carries — the wire, the registry, the cursor, the catalog —
+ * and every string judged here is a Lens onto it: a narrowed view composed for
+ * a reader who cannot see the Fold directly. Leaving something out of that view
+ * costs nothing and is frequently the point (a role-hidden skill is silently
+ * absent, never declared forbidden). Saying a capability is GONE while it is on
+ * the wire is an honesty failure rather than a wording bug, because the model
+ * acts on it — the field report this whole family exists for records a model
+ * concluding it could not help while the tools it needed sat in that same
+ * call's tool list. A tool result is the hardest Lens of all: it is re-read on
+ * every later call of the turn, so a clause that was true when it was composed
+ * turns into a denial later without anybody rewriting a word. Two walks now
+ * enforce that law instead of remembering it — `test/modelFacingScan.test.ts`
+ * over every sentence-shaped literal in `src/`, and
+ * `test/lib/injection-engine/userTurnProducers.test.ts` over every
+ * `role: 'user'` turn this library writes.
+ *
  * ── WHY A SURFACE IS TWO DIMENSIONS AND NOT ONE ───────────────────────────
  *
  * A clause is provable or not depending on HOW LONG the string lives, and that
@@ -135,21 +161,73 @@ export const PARK_CARD: Surface = {
   lifetime: 'request-ephemeral',
 };
 
-interface BannedClause {
+/**
+ * A turn this library writes in a person's voice and appends to `history` —
+ * the budget wrap-up instruction, the stepped-skill nudge, the window drop
+ * notice, the corrections.
+ *
+ * Persistent for the same reason a tool result is, and the reason is worth
+ * stating because the channel invites the opposite guess: an injected turn is
+ * appended to `scope.history` exactly as a tool result is, so it is re-read on
+ * every later call of the turn — including a schema retry or an evidence
+ * recheck that arrives after the condition it describes has passed.
+ */
+export const INJECTED_TURN: Surface = {
+  channel: 'injected-turn',
+  lifetime: 'persistent-history',
+};
+
+/**
+ * One banned clause: a shape a model-facing sentence may not have, and the
+ * reason a later call falsifies it.
+ *
+ * The exemption is a DISCRIMINATED UNION, not two optional fields, because
+ * the old shape documented `exemptBecause` as required and enforced nothing:
+ * a row could carry `provableWhen` with no argument at all and the compiler
+ * was happy. An exemption with no argument is how a false sentence gets waved
+ * through, so a row now either carries BOTH or NEITHER, and the compiler is
+ * the one saying so — proven in
+ * `test/type-regressions/ModelFacingClaims.assignability.test.ts`, since the
+ * root `tsconfig.json` excludes `test/` and an assertion of this kind is inert
+ * anywhere else. (`test/modelFacingSurfaces.test.ts` asserts the two are
+ * non-empty as well — a union cannot catch `exemptBecause: ''`.)
+ */
+export type BannedClause = {
   readonly re: RegExp;
   /** How a later call falsifies it. Printed on failure, so it teaches. */
   readonly why: string;
-  /**
-   * Lifetimes where the clause IS provable, with the reason it is safe there.
-   * Empty/absent means banned wherever the string lives.
-   */
-  readonly provableWhen?: readonly Surface['lifetime'][];
-  /** Why the exemption holds. Required alongside `provableWhen` — an exemption
-   *  without an argument is how a false sentence gets waved through. */
-  readonly exemptBecause?: string;
-}
+} & (
+  | {
+      /** Lifetimes where the clause IS provable. */
+      readonly provableWhen: readonly Surface['lifetime'][];
+      /** Why the exemption holds — the argument, in prose. */
+      readonly exemptBecause: string;
+    }
+  | { readonly provableWhen?: undefined; readonly exemptBecause?: undefined }
+);
 
-const BANNED: readonly BannedClause[] = [
+/**
+ * The rules, LITERALS FIRST and SHAPES AFTER.
+ *
+ * The literals are the exact wordings that shipped. They are kept because a
+ * regression to a sentence that once escaped should fail by name — but a list
+ * of past wordings only ever catches the past. Fifteen plausible forward-
+ * looking sentences were written out and put through the literals-only list,
+ * and THIRTEEN of them passed it: "You are currently in 'alpha'", "Calling
+ * read_skill switches you to beta", "The following tools are available to you:
+ * …", "Nothing is live in this scope at the moment." Every one of them is the
+ * same defect as the sentences the literals name, wearing different words.
+ * (The fifteen are in `test/modelFacingSurfaces.test.ts`, run against the rules
+ * as they stand — so a row narrowed to let one of them through fails there.)
+ *
+ * So the rows below the literals judge SHAPE: the grammar a claim has when it
+ * is about the present rather than about one finished call. They are coarse on
+ * purpose — a rule that tried to decide which clause an adverb governs would
+ * be parsing English — and the repair they ask for is always the same one, the
+ * one every repaired producer in this tree has converged on: say what was true
+ * on a NAMED call, in the past tense.
+ */
+export const BANNED_CLAUSES: readonly BannedClause[] = [
   { re: /Go ahead and act/, why: 'exhortation: the wrap-up call dispatches no tool at all' },
   {
     // Generalised from the round-3 literal: any claim about what `read_skill`
@@ -168,7 +246,10 @@ const BANNED: readonly BannedClause[] = [
     why: 'a budget read at compose time is a claim about a call that has not happened',
   },
   {
-    re: /reachable from here|a MOVE from here/,
+    // Case-insensitive since 9.86.0: `describeOffer` writes the phrase as a
+    // LINE HEADER ("Reachable from here:"), and a header is exactly the form
+    // that gets lifted into a result when somebody reuses the offer text.
+    re: /reachable from here|a MOVE from here/i,
     why: 'reachability is cursor-relative, and a sibling tool can move the cursor',
     provableWhen: ['request-ephemeral'],
     exemptBecause:
@@ -264,6 +345,94 @@ const BANNED: readonly BannedClause[] = [
     re: /\bis withheld\b|\bare withheld\b/,
     why: 'present-tense hold-out claim: hold-outs advance',
   },
+
+  // ── SHAPES (9.86.0) — the same defects, without their wordings ──────────
+
+  {
+    // PRESENT-TENSE COPULA + CAPABILITY NOUN. The census shape: not a claim
+    // about what a call will do, and not a deictic — just "X is/are <on the
+    // wire>", asserted flat. It is the shape of every inventory the library
+    // serves: tools, skills, refs, maps, runs.
+    //
+    // Falsified by the wire itself. The tools array, the graph's reachable
+    // set, the artifact scope and the mounted maps are all recomposed per
+    // request, so the sentence is re-read on a later call beside a wire that
+    // no longer matches it — and it reads as a DENIAL of a capability that is
+    // on the wire, or an OFFER of one that is not.
+    re: /\b(?:is|are) (?:available|active|loaded|live|on the wire|reachable)\b/i,
+    why:
+      'present-tense capability census: tools, skills, refs and maps are recomposed for every ' +
+      'request, so a flat "is/are available|active|loaded|live|on the wire|reachable" is read ' +
+      'later beside a different wire — bind it to the call it was taken for, in the past tense',
+    provableWhen: ['request-ephemeral'],
+    exemptBecause:
+      "a string recomposed for the request being answered, from that request's own wire, is a " +
+      'REPORT of what that request carries rather than a forecast about a later one — the ' +
+      'ground the cursor row above already stands on, and the reason the `read_skill` ' +
+      'description is allowed to publish a catalog at all',
+  },
+  {
+    // DEICTIC-PRESENT ADVERBS. Distinct from the copula row: the adverb does
+    // not name a capability, it points at a MOMENT — and the moment it points
+    // at is the moment of READING, which the composer cannot see. "Now" is
+    // whenever the model looks.
+    //
+    // No exemption, deliberately, and the file already takes this stance on
+    // the `right now` literal above: an ephemeral surface may report the
+    // present, but it reports it as the state of a named pass or a named call
+    // ("when that call was made", "on that pass"), not by pointing. The repair
+    // is the anchor, and it is available on every surface — so an exemption
+    // here would buy nothing but the shape it exists to catch.
+    re: /\b(?:currently|at the moment|right now|now)\b/i,
+    why:
+      'deictic present: `currently` / `now` / `at the moment` denote the moment the sentence ' +
+      'is READ, which is not the moment it was composed — on a persistent surface that is a ' +
+      'later call, and on any surface it is a moment the composer cannot check. Name the pass ' +
+      'or the call instead ("when that call was made")',
+  },
+  {
+    // SECOND-PERSON EFFECT VERBS. The generalisation of `moves you` — the
+    // clause that escaped into the description in round 3. Any claim that a
+    // named call WILL DO something to the reader is a forecast the gate can
+    // refuse: `'rails'` refuses every model hop, `'guard'` refuses every hop
+    // off an outstanding menu, a role filter can hide the destination, and
+    // the wrap-up call dispatches no tool at all.
+    re: /\b(?:switches|moves|brings|activates|takes|grants) you\b/i,
+    why:
+      'second-person effect prediction: the posture, the role filter and the budget all sit ' +
+      'between the model and the effect claimed, and each of them can refuse it',
+  },
+  {
+    // STANDING IMPERATIVES TO THE MODEL, at a clause start only.
+    //
+    // A tool result is composed once and re-read on every later call of the
+    // turn, wrap-up included. An imperative there is not advice about the call
+    // that produced it — it is an ORDER that outlives its conditions, and the
+    // model obeys it on a call where the tool it names is off the wire or the
+    // budget is spent. "Pick one of these, or finish" was exactly this, and it
+    // cost a refusal to discover.
+    //
+    // Anchored to clause starts (string start, or after `. ! ? : ; —` or a
+    // newline) so the row fires on the imperative MOOD and not on the words:
+    // "Tool names that resolved to an implementation on that call" keeps its
+    // `call`, and
+    // "no rule can Use…" is not a sentence anybody writes. Case-sensitive for
+    // the same reason.
+    re: /(?:^|[.!?:;—]\s+|\n\s*)(?:Do not|Pick one|Call|Use)\s/,
+    why:
+      'standing imperative: a persistent surface is re-read on every later call, so an order ' +
+      'composed under one set of conditions is obeyed under conditions that refuse it — ' +
+      'report what the finished call did and leave the next call to the surfaces that are ' +
+      'recomposed for it',
+    provableWhen: ['request-ephemeral'],
+    exemptBecause:
+      'an instruction that rides ONE request — a tool description in the `tools` array of the ' +
+      'request being answered, a system-prompt fragment rebuilt for it — is spent when that ' +
+      'request is answered ' +
+      'and is never re-read under conditions it did not name. That is what a tool description ' +
+      'is FOR: it says how to use the tool being offered, on the request offering it. The same ' +
+      'words become a standing order the moment they land in `history`',
+  },
 ];
 
 /**
@@ -274,7 +443,7 @@ const BANNED: readonly BannedClause[] = [
  * suite names the producer to open.
  */
 export function unprovable(text: string, surface: Surface): string[] {
-  return BANNED.filter(
+  return BANNED_CLAUSES.filter(
     (row) => row.re.test(text) && !(row.provableWhen ?? []).includes(surface.lifetime),
   ).map((row) => `[${surface.channel}] ${row.re.source} — ${row.why}`);
 }

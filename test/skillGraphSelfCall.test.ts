@@ -62,6 +62,8 @@ import { defineSkill, skillGraph, buildReadSkillTool } from '../src/injection-en
 import { mock } from '../src/llm-providers.js';
 import { PermissionPolicy } from '../src/security/PermissionPolicy.js';
 import { selfCallNotice, selfSkillTools } from '../src/core/agent/selfCallNotice.js';
+import { composeReadSkillRefusal } from '../src/core/agent/stages/toolCalls.js';
+import { WRAP_UP_FRAME_PREFIX } from '../src/lib/saidByPerson.js';
 import {
   unprovable as unprovableOn,
   foreignIds,
@@ -291,6 +293,235 @@ describe('selfCallNotice — every clause is a finished fact', () => {
   });
 });
 
+// ─── 1b. UNIT — the refusal composer: every arm, every clause ────
+
+/**
+ * `composeReadSkillRefusal` is the gate's OTHER model-facing string, and until
+ * 9.86.0 it was two functions that contradicted each other: the reachability
+ * one offered "Reachable skills: beta" while the posture one, forty lines
+ * below in the same gate, answered a model that took the offer up with
+ * "read_skill here reaches only the open skills: gamma". Same call, opposite
+ * claims. It is now one composer, and it is held to the same tense discipline
+ * as the notice: a tool result is re-read on every later call of the turn, so
+ * every clause is a past fact about the ONE call it names.
+ */
+describe('composeReadSkillRefusal — every arm is a finished fact', () => {
+  /** Every arm the gate can reach, with the inputs that reach it. */
+  const arms: ReadonlyArray<{
+    readonly arm: string;
+    readonly text: string;
+  }> = [
+    {
+      arm: 'unreachable, hops and open skills to name',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        cursorId: 'billing',
+        hops: { named: ['refunds'], held: true },
+        openIds: { named: ['debug'], held: true },
+      }),
+    },
+    {
+      arm: 'unreachable, hops only',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        cursorId: 'billing',
+        hops: { named: ['refunds'], held: true },
+        openIds: { named: [], held: false },
+      }),
+    },
+    {
+      arm: 'unreachable at a dead end — nothing to name',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+      }),
+    },
+    {
+      // 9.86.0 fix pass: the graph HELD hops and the role filter emptied them.
+      // This used to compose "No skill was reachable from 'billing'." over a
+      // graph that was routing — a denial of what the fold holds. It now omits
+      // the clause; the assertions below pin the absence.
+      arm: 'unreachable, hops the graph held and the role filter emptied',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        cursorId: 'billing',
+        hops: { named: [], held: true },
+        openIds: { named: [], held: false },
+      }),
+    },
+    {
+      arm: 'unreachable from a cold start — no cursor to name',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        hops: { named: ['triage'], held: true },
+        openIds: { named: [], held: false },
+      }),
+    },
+    {
+      arm: 'a tree, nothing open',
+      text: composeReadSkillRefusal({
+        requestedId: 'leaf-b',
+        targetClass: 'unreachable',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        isTree: true,
+      }),
+    },
+    {
+      arm: 'a tree with open skills',
+      text: composeReadSkillRefusal({
+        requestedId: 'leaf-b',
+        targetClass: 'unreachable',
+        hops: { named: [], held: false },
+        openIds: { named: ['helper'], held: true },
+        isTree: true,
+      }),
+    },
+    {
+      arm: "posture 'rails', open skills present",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: ['debug'], held: true },
+        posture: 'rails',
+      }),
+    },
+    {
+      arm: "posture 'rails', nothing open",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        posture: 'rails',
+      }),
+    },
+    {
+      arm: "posture 'guard', pick off an OUTSTANDING menu",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: ['debug'], held: true },
+        posture: 'guard',
+        menuOffered: { named: ['shipping', 'triage'], held: true },
+      }),
+    },
+    {
+      // The same shape in the posture arm: a menu WAS outstanding and every id
+      // on it is hidden from this caller. Saying "no menu was outstanding" —
+      // and "Declared routes moved the cursor instead" with it — would be two
+      // false clauses, so the arm says only what it can prove.
+      arm: "posture 'guard', a menu the role filter emptied",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        posture: 'guard',
+        menuOffered: { named: [], held: true },
+      }),
+    },
+    {
+      arm: "posture 'guard', no menu, turn resolved decisively",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        posture: 'guard',
+        routedDecisively: true,
+      }),
+    },
+    {
+      arm: "posture 'guard', no menu, no decisive verdict either",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        posture: 'guard',
+      }),
+    },
+  ];
+
+  for (const { arm, text } of arms) {
+    it(`${arm}: no clause a later call can falsify`, () => {
+      expect(unprovable(text)).toEqual([]);
+      // Anchored to ONE named call, in the past — the property the notice is
+      // held to, applied to the string that sits beside it in `history`.
+      expect(text).toContain('was not granted on that call');
+      expect(text).not.toMatch(/\bfrom here\b/);
+      // No exhortation. "Pick one of these, or finish" was the old tail, and
+      // the tool-less wrap-up re-reads it after the last call has gone out.
+      expect(text).not.toMatch(/Pick one|or finish|Continue with/);
+    });
+  }
+
+  it('a posture arm names NO hop — an offer the next arm would decline is the bug this replaced', () => {
+    for (const { arm, text } of arms.filter((a) => a.arm.startsWith('posture'))) {
+      expect(text, arm).not.toMatch(/Skills reachable from/);
+      expect(text, arm).toContain('posture');
+    }
+  });
+
+  it('open skills are named in every arm that has them — no posture governs them', () => {
+    for (const { arm, text } of arms.filter(
+      (a) => a.text.includes('debug') || a.text.includes('helper'),
+    )) {
+      expect(text, arm).toMatch(/Open skills were admitted on that call: /);
+    }
+  });
+
+  it('a dead end says so about the CALL, not about the catalog', () => {
+    const deadEnd = arms.find((a) => a.arm.includes('dead end'))!.text;
+    expect(deadEnd).toContain("No skill was reachable from 'billing' when that call was made.");
+    // Never "there are no skills" — the catalog is not what the gate saw.
+    expect(deadEnd).not.toMatch(/No skills (are|exist)/);
+  });
+
+  // ── OMIT, NEVER DENY (9.86.0 fix pass) ──────────────────────────────
+  // The two arms where the role filter can empty a set the run is still
+  // holding. Both used to reuse the "there was nothing" sentence, which turns
+  // an omission into a denial of what the graph and the menu hold.
+
+  it('a hop set the FILTER emptied names no hop and denies none — the dead-end sentence is not reused', () => {
+    const filtered = arms.find((a) => a.arm.includes('role filter emptied'))!.text;
+    expect(filtered).toBe(
+      'read_skill("vault") was not granted on that call: \'vault\' was not reachable from ' +
+        "'billing'.",
+    );
+    // The denial, in full and in part.
+    expect(filtered).not.toMatch(/No skill was reachable/);
+    expect(filtered).not.toMatch(/Skills reachable from/);
+  });
+
+  it('a MENU the filter emptied is not reported as "no menu was outstanding"', () => {
+    const filtered = arms.find((a) => a.arm.includes('a menu the role filter emptied'))!.text;
+    expect(filtered).toContain("'refunds' was not admitted on that call.");
+    expect(filtered).not.toMatch(/no menu was outstanding/);
+    // The second clause that rode with the false one: it asserts how the turn
+    // was routed, which this arm has no evidence of either.
+    expect(filtered).not.toMatch(/Declared routes moved the cursor/);
+    // And it still names nothing that was on the menu.
+    expect(filtered).not.toMatch(/The menu outstanding when/);
+  });
+});
+
 // ─── 2. UNIT — the description: (b) and (c) ──────────────────────
 
 describe('read_skill description — the cursor is named, and not called unreachable', () => {
@@ -446,7 +677,7 @@ describe('a self-call through a real run', () => {
     expect(rejected).toEqual([]);
   });
 
-  it('an out-of-reach hop still says "not reachable from here"', async () => {
+  it('an out-of-reach hop is refused as a PAST fact about the named call (9.86.0 — "from here" was a claim the model re-read on every later call, when "here" had moved)', async () => {
     const g = skillGraph({
       skills: [skill('alpha'), skill('beta'), skill('delta')],
       start: 'alpha',
@@ -460,10 +691,16 @@ describe('a self-call through a real run', () => {
       (a) => a.system('s').skillGraph(g),
       [readSkill('delta')],
     );
+    // Every clause is anchored to the call the model made read_skill on: the
+    // cursor is NAMED (not "here", which denotes a different node once a
+    // sibling tool fires a step edge), the tense is past, and the exhortation
+    // ("Pick one of these, or finish") is gone — a tool result re-read on the
+    // tool-less wrap-up cannot ask for a pick.
     expect(toolResults[0]).toBe(
-      'read_skill("delta") is not reachable from here. Reachable skills: beta. ' +
-        'Pick one of these, or finish.',
+      'read_skill("delta") was not granted on that call: \'delta\' was not reachable from ' +
+        "'alpha'. Skills reachable from 'alpha' when that call was made: beta.",
     );
+    expect(unprovable(toolResults[0]!)).toEqual([]);
     expect(rejected[0]).toMatchObject({ requestedId: 'delta', reason: 'unreachable' });
   });
 
@@ -664,11 +901,10 @@ describe('the notice, in the last request that carries it', () => {
         // (4) If that last request is the tool-less wrap-up, the notice must
         //     not fight the instruction sitting beside it.
         if (last.tools.length === 0) {
-          expect(
-            last.messages.some((m) =>
-              m.content.startsWith('Your action budget for this turn is exhausted'),
-            ),
-          ).toBe(true);
+          // The wrap-up instruction's own opening, since 9.86.0: it is a
+          // registered authored frame, so it is matched by its marker rather
+          // than by a sentence that can be reworded.
+          expect(last.messages.some((m) => m.content.startsWith(WRAP_UP_FRAME_PREFIX))).toBe(true);
           expect(notice).not.toMatch(/Go ahead|MOVES you|These activate/);
         }
       });
@@ -776,6 +1012,71 @@ describe('per-role skill visibility', () => {
     // named, because the notice names no destination at all.
     expect(foreignIds(notice, 'alpha', ['alpha', 'beta', 'gamma'])).toEqual([]);
   });
+
+  it('a role that may not READ the cursor still gets the notice, not a policy denial (9.86.0 — a stay exercises no capability, so there was nothing for the policy to gate)', async () => {
+    // The second half of the same defect. `skill_read` is asked BEFORE the
+    // graph gate, and it was asked for the skill the model was already
+    // standing in — whose body was in that call's system prompt and whose
+    // tools were on that call's wire. The policy said no, and the model read
+    // "Skill 'alpha' is not available in this context." about the skill it was
+    // working in: the exact sentence the self-call arm exists to prevent,
+    // arriving from a stage upstream of it.
+    //
+    // Nothing is narrowed by the fix: a stay activates nothing and reveals
+    // nothing the request did not already carry, so there is no capability
+    // here to grant. Every other id still goes through the policy — the
+    // sibling assertion below drives one.
+    const g = skillGraph({
+      skills: [skill('alpha'), skill('beta'), skill('gamma')],
+      start: 'alpha',
+      steps: [{ from: 'alpha', to: 'beta', onToolReturn: 'alpha_tool' }],
+      check: 'off',
+    });
+    const seen: string[] = [];
+    const rejected: Array<Record<string, unknown>> = [];
+    let i = 0;
+    const script: Turn[] = [readSkill('alpha'), readSkill('gamma', 'c2')];
+    const provider = mock({
+      respond: (req: { messages?: ReadonlyArray<{ role: string; content: unknown }> }) => {
+        for (const m of req.messages ?? []) if (m.role === 'tool') seen.push(String(m.content));
+        return script[i++] ?? { content: 'done', toolCalls: [] };
+      },
+    });
+    // The role may read NOTHING — including the cursor's own skill.
+    const policy = PermissionPolicy.fromRoles(
+      { support: ['read_skill', 'alpha_tool', 'beta_tool', 'gamma_tool'] },
+      'support',
+      { skills: { support: [] } },
+    );
+    const agent = Agent.create({
+      provider,
+      model: 'mock',
+      maxIterations: 6,
+      permissionChecker: policy,
+    })
+      .system('s')
+      .skillGraph(g)
+      .watch({
+        id: 'w',
+        onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+          if (e.name === 'agentfootprint.skill.rejected') rejected.push(e.payload ?? {});
+        },
+      })
+      .build();
+    await agent.run({ message: 'go' });
+
+    const notice = seen.find((r) => r.includes(NOTICE));
+    expect(notice).toBeDefined();
+    expect(seen[0]).not.toContain('is not available in this context');
+    expect(rejected[0]).toMatchObject({ requestedId: 'alpha', reason: 'self-call' });
+    expect(unprovable(notice!)).toEqual([]);
+
+    // The other id — a genuine read of a skill the policy hides — is still
+    // refused by the policy, with the policy's own message.
+    expect(
+      seen.some((r) => r.includes("Skill 'gamma' is not available to the 'support' role")),
+    ).toBe(true);
+  });
 });
 
 // ─── 10. POSTURE — the notice and the sibling refusal, side by side ──
@@ -798,14 +1099,20 @@ describe('the notice cannot contradict the posture arm', () => {
         .find((m) => m.content.includes(NOTICE))!.content;
       const refusal = calls
         .flatMap((c) => c.messages)
-        .find((m) => m.content.includes('was declined'))!.content;
+        .find((m) => m.content.includes('was not granted on that call'))!.content;
       expect(notice).toBeDefined();
       expect(refusal).toBeDefined();
 
-      // The refusal names what read_skill can still reach here. The notice
-      // names nothing, so the two cannot disagree — under any posture, and
-      // whatever the refusal's own list turns out to be.
-      expect(refusal).toContain('read_skill here reaches only the open skills: gamma');
+      // The refusal names NO hop — under both postures a model pick does not
+      // route, so naming one would be an offer the very next call is refused
+      // (that contradiction, between two composers forty lines apart, is what
+      // 9.86.0 collapsed into one). It names the open skills, which no posture
+      // governs, and it names them as a fact about the finished call.
+      expect(refusal).toContain('Open skills were admitted on that call: gamma.');
+      // No hop list at all — the only id the sentence may name besides the
+      // open skills is the one the model itself supplied.
+      expect(refusal).not.toMatch(/Skills reachable from/);
+      expect(unprovable(refusal)).toEqual([]);
       expect(foreignIds(notice, 'alpha', ['alpha', 'beta', 'gamma'])).toEqual([]);
       expect(unprovable(notice)).toEqual([]);
 

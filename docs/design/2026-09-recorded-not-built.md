@@ -1,6 +1,6 @@
-# Recorded, not built — the divergence walk's three defects
+# Recorded, not built — the divergence walk's five defects
 
-Three things the tool-divergence walk found are **real, reproduced, and
+Five things the tool-divergence walk found are **real, reproduced, and
 deliberately not fixed here**. Each is a behaviour change: fixing it either
 emits events in runs that emit none today, changes a shipped event's payload,
 or refuses a configuration that builds today. That is a decision, not a patch,
@@ -208,7 +208,7 @@ behaviour changes for anyone consuming the event.
 
 **Cost of waiting.** A false report of the seam, which is worse than no report:
 it sends an operator to the provider's file to fix a name the provider never
-put on the wire. Eight baseline rows carry it.
+put on the wire. Ten baseline rows carry it.
 
 ---
 
@@ -337,3 +337,200 @@ tool name") is belt-and-suspenders that this pair never reaches.
 ("`buildToolRegistry` already throws on that pair at build time") and is stale
 in the same way. The claim's *substance* — the pair is refused at build, which
 is why the report does not cover it — is true; only the address is wrong.
+
+---
+
+# Appended 2026-09-05 — two more, found by widening the walk
+
+The three entries above were written when `frameworkCases()` crossed the
+framework's auto-attach names against **three** of the seven claimants —
+`static`, `provider`, `skill-active`. The filter was a leftover, not a
+decision: the framework's four reservations each read a different build-time
+list, so *which source* holds the contested name is precisely what decides
+whether a reservation can see it. Filtering sources filtered answers.
+
+Dropping the filter took the walk from 60 configurations to 76 and from 36
+divergence rows to 46. Ten rows are new. Eight of them are the already-recorded
+seams reached through a source that had not been crossed before — an
+MCP-served catalog, a never-activated scoped skill — and their `tolerated`
+reasons say so and point back up this page. **Two are not**, and they are
+below.
+
+Two sentences above were WRONG once entries 4 and 5 landed, and both are now
+corrected in place. The record of what changed is this list — a reader who
+opens a file and reads its title must not be told the wrong count and then
+corrected three hundred lines later:
+
+- the title said *three defects*; it records **five**, and now says so;
+- entry 2's closing line said *"Eight baseline rows carry it"*; the
+  misattributed-report family is **ten** rows, and entry 5 is about the two
+  that are new.
+
+Written against 9.85.0 plus the uncommitted Packet A and this packet. Line
+numbers are against that working tree and have moved since the entries above
+were written — `buildToolsSlot.ts`'s report loop, cited as `:722` in entry 1
+and `:720-737` in entry 2, is at `:743-762` here.
+
+---
+
+## 4. `.selfExplain()` reserves its tool names against nothing a skill can hold
+
+**The reproduction.** Three cells, one shape: a consumer skill declares a tool
+named `run_overview`, and the agent calls `.selfExplain()`. Every one of them
+builds. Each block below is a real run — the framework's trace pack stamps no
+token, so an unstamped description is the framework's own and
+`[contract:skill-*]` is the consumer's.
+
+*An always-visible skill (`framework/run_overview-vs-skill-static`):*
+
+```
+epoch 1  wire[run_overview] = "run_overview tool [contract:skill-static]"
+epoch 2  wire[run_overview] = "run_overview tool [contract:skill-static]"
+answer  e1:read_skill    -> "Skill 'self-explain' activated for the next iteration."
+answer  e2:run_overview  -> "run_overview ran [impl:skill-static]"
+agentfootprint.tools.shadowed fired 0x
+```
+
+`.selfExplain()` is mounted, its skill activates, and its `run_overview` never
+reaches the wire on any epoch and answers no call. The self-explain skill body
+is in the system prompt telling the model to start with `run_overview`; the
+model does, and gets somebody else's function. Baseline row:
+`framework/run_overview-vs-skill-static::run_overview::claim-swallowed(framework)`.
+
+*A never-activated scoped skill (`framework/run_overview-vs-skill-inactive`) —
+the same configuration under `.toolsFromActiveSkill()`:*
+
+```
+epoch 1  wire[run_overview] = ABSENT
+epoch 2  wire[run_overview] = "Start here. One bounded summary of the completed run: status, step counts, …"
+answer  e1:read_skill    -> "Skill 'self-explain' activated for the next iteration."
+answer  e2:run_overview  -> "run_overview ran [impl:skill-inactive]"
+agentfootprint.tools.shadowed fired 0x
+```
+
+This is the worse half. The wire carries the **framework's own** trace-tool
+description — the model reads "Start here. One bounded summary of the completed
+run" — and a skill that was offered on no epoch of the run answers it. Baseline
+row: `framework/run_overview-vs-skill-inactive::run_overview@e2::contract-swap`.
+
+*A stepped skill (`framework/run_overview-vs-step-skill`)* swallows it the same
+way the always-visible one does, and additionally draws two shadow events that
+name the wrong source — that is entry 5.
+
+**The cause.** `AgentBuilder.ts:2620-2637` searches one list:
+
+```ts
+const reserved: readonly string[] = this.selfExplainConfig.delegate
+  ? ['explain_run']
+  : TRACE_TOOL_NAMES;
+const clash = this.registry.find((entry) => reserved.includes(entry.name));
+```
+
+`this.registry` is the static `.tool()` list. `this.injectionList` — every
+mounted skill and its `tools:[]` — is right there on the same object and is not
+consulted. So the reservation refuses `.tool()` and nothing else, which the
+walk records: `framework/run_overview-vs-static` is `refused`, and all three
+skill shapes build.
+
+The other three auto-attach names each have a net that catches a skill, and
+they were written independently, which is why they catch different subsets:
+
+| name | what its reservation reads | skill tool refused? |
+|---|---|---|
+| `present` | static registry **+ `skillToolEntries` + `sharedSkillTools`** (`buildToolRegistry.ts:286-299`) | always-visible, scoped, stepped — all three |
+| `skip_step` | `registryByName`, after skill tools were merged into it (`buildToolRegistry.ts:358-368`) | all three |
+| `read_skill` | `staticNames` only (`validators.ts:92-98`) — but always-visible and stepped skill tools then hit the duplicate-name throw at `buildToolRegistry.ts:322-328` | always-visible and stepped; a scoped one slips (recorded above as `read_skill-vs-skill-active` / `-vs-skill-inactive`) |
+| `run_overview` | `this.registry` only (`AgentBuilder.ts:2628`) | **none** — and there is no downstream net, because the trace tools ride a `skillScopedTools` provider and never enter `augmentedRegistry`, so the duplicate-name throw never sees them |
+
+The comment directly above the check says it "mirrors the read_skill rule". It
+mirrors the *weakest* of the three, and then loses the backstop that makes even
+that one hold for two of the three skill shapes.
+
+**Why it is not fixed here.** Widening the search from `this.registry` to
+`this.registry` plus every injection's `tools:[]` turns eleven names into
+build-time throws for agents that build and run today — `run_overview`,
+`find_in_trace`, `backtrack`, `get_value` and the rest of `TRACE_TOOL_NAMES`
+are ordinary English and a consumer skill may well hold one. That is a refusal
+of a shipped configuration, which is a major-version conversation, not a patch.
+
+**What deciding to fix it would involve.**
+
+- Deciding whether all eleven `TRACE_TOOL_NAMES` deserve the same reservation
+  strength. `run_overview` and `backtrack` are plausible consumer names in a
+  way `inspect_tool_run` is not, and the blast radius of the fix is entirely a
+  function of that list's length.
+- Deciding refuse-vs-win. `present` and `skip_step` refuse; making the trace
+  pack **win the wire** instead — hoisting its schemas ahead of the skill lists
+  in the merge — removes the divergence without refusing anybody, at the cost
+  of silently taking a name from a skill that has it today. That is the same
+  fork entry 3 reaches for `skip_step`, and it should be answered once for all
+  four families rather than four times.
+- Deciding what `.selfExplain()` should do when it cannot have its own name.
+  Today it mounts a skill whose body instructs the model to call a tool the
+  framework does not own. A reservation is one answer; not mounting the body
+  for a name it lost is another, and is not a refusal of anything.
+- Whether the scoped `read_skill` gap (`read_skill-vs-skill-active`, recorded
+  before this pass) is the same decision. It is: both are a reservation that
+  reads a list narrower than the set of things that can hold a name.
+
+**Cost of waiting.** `.selfExplain()` can be mounted, activate, put its
+methodology in the system prompt, and route every question in it to a consumer
+skill's function — including a skill the model was never offered. Four baseline
+rows carry it. There is no event, so nothing distinguishes it from a trace
+tool that simply returned something unexpected.
+
+---
+
+## 5. A misattributed report can now name the framework's own provider
+
+**The reproduction.** A stepped skill declares a tool named `run_overview`; the
+agent calls `.selfExplain()`; the model activates the procedure, then activates
+self-explain:
+
+```
+epoch 3  wire[run_overview] = "[Step 1 of 1 — the only step] run_overview tool [contract:step-skill]"
+answer  e3:run_overview -> "run_overview ran [impl:step-skill]"
+agentfootprint.tools.shadowed fired 2x
+   {"toolName":"run_overview","iteration":3,"schemaFrom":"provider",
+    "schemaFromId":"skill-scoped:self-explain","dispatchTo":"skill","dispatchToId":"desk-stepped"}
+   {"toolName":"run_overview","iteration":4,"schemaFrom":"provider",
+    "schemaFromId":"skill-scoped:self-explain","dispatchTo":"skill","dispatchToId":"desk-stepped"}
+```
+
+Baseline rows:
+`framework/run_overview-vs-step-skill::run_overview@e3::report-misattributed[provider(skill-scoped:self-explain)->skill(desk-stepped)]`
+and its `@e4` twin.
+
+**The cause.** Entry 2's, exactly — `reportShadowedTools` asserts
+`schemaFrom: 'provider'` (`buildToolsSlot.ts:754`) instead of reading the
+winner off `merged`, and the always-visible skill's schema beat the provider to
+the wire. What is new is *which* provider gets named. `skillScopedTools` builds
+its id as `` `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}` ``
+(`skillScopedTools.ts:78`), and `.selfExplain()` mounts its trace pack through
+that helper (`selfExplain.ts:332`). So `schemaFromId` is
+`skill-scoped:self-explain` — a provider the consumer did not write, did not
+name, and cannot open.
+
+Entry 2's cost sentence is "it sends an operator to the provider's file to fix
+a name the provider never put on the wire." Here there is no such file. The
+address is inside the framework, and the honest reading of the event — "the
+framework's self-explain pack shadowed your skill" — is the reverse of what
+happened: the skill shadowed the pack, which is entry 4.
+
+**Why it is not fixed here.** It is entry 2's fix, and entry 2's reasons: the
+event's payload changes in runs that fire it today.
+
+**What deciding to fix it would involve.** Entry 2's list, plus one addition
+that only this pair makes visible:
+
+- Deciding whether `schemaFromId` may name a framework-internal provider at
+  all. A consumer cannot act on `skill-scoped:self-explain`; if the payload is
+  a call to action, an internal id is a dead end and the event should either
+  say `schemaFrom: 'framework'` or not fire. If it is a diagnostic, the id is
+  the most useful field on it and should stay. The two readings want opposite
+  changes, so the answer decides the shape of the fix rather than following
+  from it.
+
+**Cost of waiting.** The only event that reaches production about this seam
+reports the framework as the shadowing party in the one configuration where
+the framework is the victim. Two baseline rows carry it.

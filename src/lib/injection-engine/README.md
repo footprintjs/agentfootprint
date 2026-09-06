@@ -699,6 +699,219 @@ Runnable end-to-end: `examples/context-engineering/16-skill-steps.ts` (a
 
 ---
 
+## The law for anything this library writes as a user turn (9.86.0)
+
+**A message this library appends to `scope.history` under `role: 'user'` MUST
+open with a registered prefix from `lib/saidByPerson.ts`, and MUST read as a
+past fact about the one call it was written for.**
+
+**Why.** `role: 'user'` is how the library gets a message read as an
+instruction, so the library writes several: a compaction frame, a drop notice,
+two in-loop corrections, the out-of-budget wrap-up, and the stepped-skill
+nudge. Every one of them is indistinguishable from a person's turn to anything
+reading `history` — including `saidByPerson(ctx)`, the predicate this engine
+hands rule authors, and the window's refusal engine, which protects "the
+current request" from being dropped. The nudge is the sharpest case: its body
+names a skill id and every unrun step's TOOL NAME, which is exactly the text a
+routing rule watches for, so an unregistered nudge fires the rule on the
+library's own bookkeeping. And because a `history` entry is re-read on every
+later call of the turn, a sentence written in the present tense is a
+prediction: "Steps 2–3 have not run — finish them" is false the moment they
+run, and it is still sitting in the window when they do.
+
+```typescript
+// skillSteps.ts — the writer imports the opening the recogniser matches on.
+// Both halves, in one sentence: a registered prefix, and a past-tense report
+// of the call it was composed for.
+import { STEP_NUDGE_FRAME_PREFIX } from '../saidByPerson.js';
+
+return (
+  `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
+  `above was given: ${list}. This call was for running them, or for the reason they were ` +
+  `not run.]`
+);
+```
+
+A rule author then gets what they expect, because the frame is excluded before
+they ever see it:
+
+```typescript
+skillGraph({
+  skills: [orderLookup],
+  start: {
+    rules: [
+      {
+        use: 'order-lookup',
+        // Fires only if a PERSON named the tool — never because the nudge,
+        // the drop notice or the wrap-up mentioned it.
+        when: (ctx) => saidByPerson(ctx).some((m) => m.content.includes('lookup_order')),
+      },
+    ],
+  },
+});
+```
+
+Enforced, not asked for: `test/lib/injection-engine/userTurnProducers.test.ts`
+walks `src/` for every `role: 'user'` construction and fails, with the file and
+line, on one that is neither a registered frame, nor a person's own words, nor
+request-only. The sentences themselves are run through `unprovable(text, {
+channel: 'injected-turn', lifetime: 'persistent-history' })`.
+
+---
+
+## Target classification has ONE owner (9.86.0)
+
+**"Is this `read_skill` target the cursor, a hop, an open skill, or nothing?"
+is answered by `classifySkillTarget` and by no one else.**
+
+**Why.** `makeReachableSkills` filters the cursor out of its own successor set.
+That is right for a MOVE — there is nowhere to move to — and it says nothing
+about a READ: the cursor's body is in the prompt and its tools are on the wire.
+Five places needed that distinction and only three had it, each with its own
+`requested === cursor` line: the `read_skill` gate, the tool description, the
+offer builder. The two that never heard about it got it wrong in the same
+direction — the tool-effects judge refused a `propose-transition` that asked to
+STAY as "not reachable", and the `skill_read` permission gate asked a policy to
+grant a capability the model was already exercising, so a role that could not
+read its own skill was told that skill was "not available in this context".
+
+One pure function, four classes, `'hop'` beating `'open'` when an id is in both
+(the move is the stronger fact, and it is what writes the cursor):
+
+```typescript
+import { classifySkillTarget } from 'agentfootprint/skill-graph';
+
+const cursor = 'billing';
+const hops = graph.reachableSkills(cursor); // declared successors
+const open = ['debug']; // skills the graph wires no edge into
+
+classifySkillTarget({ cursor, target: 'billing', hops, open }); // 'self' — a stay
+classifySkillTarget({ cursor, target: 'refunds', hops, open }); // 'hop'  — moves
+classifySkillTarget({ cursor, target: 'debug', hops, open });   // 'open' — activates
+classifySkillTarget({ cursor, target: 'vault', hops, open });   // 'unreachable'
+```
+
+A host wiring its own `read_skill` (obligation 2 of `SkillGraphHost`) switches
+on the same four classes, so the stay rule cannot be re-derived — and
+re-derived wrongly — outside this package. Pinned by
+`test/skillGraphTargetClass.test.ts`.
+
+The DESCRIPTION reads the same classifier: a `.tree()` keeps no cursor, so
+every routing pick is refused by construction and `readSkillDescriptor`
+returns `undefined` when nothing open is left — the tool comes off the wire
+rather than offering a menu the gate will reject. The NAME stays in the
+dispatch map either way: position governs the offer, never dispatch.
+
+**Including the test that decides to withhold it.** `grantableRows` — the
+predicate behind that `undefined` — asks `classifySkillTarget` too, so the
+question "is there anything to list?" and the list itself are literally one
+implementation. They were two, forty lines apart, and the withhold test kept the
+cursor while the list dropped it: a cursor that was its own sole grantable id
+would have offered the tool and then printed the tree paragraph over an empty
+list.
+
+---
+
+## The offer may OMIT a skill; it may never DENY one (9.86.0)
+
+**`describeOffer` is the surface the model reads to CHOOSE. A skill the role
+filter removed disappears from it — and where the filter is what emptied a
+column, the sentence for that column is dropped rather than replaced with a
+negative one.**
+
+**Why.** The description computes its two columns from a catalog `visibleSkills`
+has already role-filtered, and then branched on `length > 0`. So "the graph wires
+nothing out of here" and "the role may not be told about the one edge it wires"
+composed the same words: *"Nothing is reachable from here — answer with the skill
+you are in, or finish."* — printed over a graph that was holding `alpha → beta`
+the whole time. That is the same defect the gate's refusal composer was repaired
+for, on the surface that decides what the model asks for next; a model told the
+map is a dead end stops asking for the door it may not be shown. Omission is free
+and always true. Absence is a CLAIM, and this description only has evidence for
+one kind of absence: the kind where the graph itself held nothing.
+
+**How.** `spoken` (`src/lib/spokenIds.ts` — a leaf, so the composer inside this
+fence and the gate outside it share one implementation) classifies the hop set
+over the UNFILTERED catalog and keeps both halves:
+
+```typescript
+import { buildReadSkillTool, defineSkill } from '../index.js';
+
+const skills = ['alpha', 'beta'].map((id) =>
+  defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+);
+
+// The graph wires alpha → beta, and this role may not be told about `beta`.
+const description = buildReadSkillTool(skills, {
+  grantable: ['beta'],
+  hiddenIds: ['beta'],
+  cursorId: 'alpha',
+})?.schema.description;
+
+// "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nPass the skill's id. …"
+// `beta` is named nowhere — and neither is the claim that nothing was reachable.
+```
+
+With `grantable: []` and nothing hidden, the negative sentence is still composed:
+that absence is cursor-relative, epoch-scoped, and true. Pinned by
+`test/skillGraphOffer.test.ts` (both halves) and end to end by
+`test/security/skill-visibility.test.ts`.
+
+---
+
+## Model-facing sentences are checked by RULE, not by memory (9.86.0)
+
+**Every sentence this package composes for a model is judged by
+`test/helpers/modelFacingClaims.ts`, at the lifetime of the surface it lands
+on. Two producers here are registered in the inventory
+(`test/modelFacingSurfaces.test.ts`), and a walk of `src/`
+(`test/modelFacingScan.test.ts`) fails on a sentence-shaped literal nobody has
+accounted for.**
+
+**Why the lifetime and not the channel.** A `read_skill` DESCRIPTION is
+recomposed for the request being answered — `.skillGraph()` refuses
+`reactMode: 'classic'`, the one mode that caches the tools slot — so it may
+report the present: that is where the catalog and the cursor belong. A tool
+RESULT is written into `history` and re-read on every later call of the turn,
+wrap-up included, so a present-tense claim there is a forecast about a wire
+that will have moved.
+
+**Why a scan and not just a list.** The rules were the exact wordings that had
+already escaped. Fifteen plausible forward-looking sentences were put through
+that list and thirteen passed it — "You are currently in 'alpha'", "Calling
+read_skill switches you to beta", "Nothing is live in this scope at the
+moment". So the rules now judge SHAPE (present-tense copula + capability noun,
+deictic adverbs, second-person effect verbs, standing imperatives at a clause
+start), and the walk reads every literal in `src/` rather than the ones
+somebody remembered to register.
+
+```typescript
+import { unprovable, TOOL_RESULT, GRAPH_TOOL_DESCRIPTION } from '../../../test/helpers/modelFacingClaims.js';
+
+const offer = "You are in 'billing'. Two skills are reachable from here: refunds, shipping.";
+
+// describeOffer, recomposed per request — a report of THIS request's graph:
+unprovable(offer, GRAPH_TOOL_DESCRIPTION); // []
+
+// the same words on a surface that KEEPS them — a forecast, three times over:
+unprovable(offer, TOOL_RESULT);
+// → the cursor claim, the reachability claim, and the capability census
+
+// what the gate says instead, and why it passes: one named call, past tense.
+unprovable(
+  'read_skill("vault") was not granted on that call: \'vault\' was not reachable from ' +
+    "'billing'. Skills reachable from 'billing' when that call was made: refunds.",
+  TOOL_RESULT,
+); // []
+```
+
+Known and on the record rather than hidden: `skillSteps.ts` still appends
+"Now on step 3 of 5" to a tool result, and `skip_step` still answers "no step
+procedure is active". Both are model-facing, both are flagged, and both are
+listed as `unrepaired` in the scan's ledger — a work list, not a pardon.
+
+---
+
 ## API surface
 
 Four sugar factories ship :

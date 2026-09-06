@@ -17,7 +17,7 @@ options existed.
 
 > `readonly` `optional` **continuity?**: `"turn"` \| `"conversation"`
 
-Defined in: [src/core/agent/AgentBuilder.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L143)
+Defined in: [src/core/agent/AgentBuilder.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L158)
 
 What the cursor spans. Default `'turn'` — today's per-run cursor,
 unchanged. `'conversation'`: the turn's final cursor rides the
@@ -35,7 +35,7 @@ not invent persistence.
 
 > `readonly` `optional` **decider?**: [`ProviderChoice`](/docs/api/interfaces/ProviderChoice)
 
-Defined in: [src/core/agent/AgentBuilder.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L172)
+Defined in: [src/core/agent/AgentBuilder.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L188)
 
 The tier-3 DECIDER (9.19.0): an out-of-band constrained pick over an
 outstanding turn-start menu ∪ {stay} (the `llmClassifier` enum
@@ -52,10 +52,11 @@ it to resolve.
 
 > `readonly` `optional` **escalation?**: [`EscalationPolicy`](/docs/api/interfaces/EscalationPolicy)
 
-Defined in: [src/core/agent/AgentBuilder.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L161)
+Defined in: [src/core/agent/AgentBuilder.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L177)
 
 Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
-(`skill.rejected` — reachability OR posture) in ONE turn flip the rest
+(`skill.rejected` — reachability, posture, OR a self-call: all three
+refusal arms count) in ONE turn flip the rest
 of the turn onto this brain — `skill.escalated` goes on the record at
 the flip, and the next turn's seed de-escalates. Never on vibes: only
 real refusals count.
@@ -66,7 +67,7 @@ real refusals count.
 
 > `readonly` `optional` **providers?**: `Readonly`\<`Record`\<`string`, [`ProviderChoice`](/docs/api/interfaces/ProviderChoice)\>\>
 
-Defined in: [src/core/agent/AgentBuilder.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L153)
+Defined in: [src/core/agent/AgentBuilder.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L168)
 
 Per-skill BRAINS (9.19.0) — "the cursor picks the brain": while the
 graph's cursor is on a named skill, `callLLM` runs on its declared
@@ -82,7 +83,7 @@ same id in both homes with different choices is refused naming both.
 
 > `readonly` `optional` **strictness?**: `"assist"` \| `"guard"` \| `"rails"`
 
-Defined in: [src/core/agent/AgentBuilder.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L131)
+Defined in: [src/core/agent/AgentBuilder.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L146)
 
 How much routing authority the model has. Default `'assist'` — today,
 always: any REACHABLE `read_skill` pick is admitted, and a pick off an
@@ -98,3 +99,18 @@ rather than refused.
     honest cost of rails without a resolver. OPEN skills
     (`.selfExplain()`, `.skill()` beside the graph) stay admitted from
     anywhere under every posture.
+
+WHAT A POSTURE GOVERNS, EXACTLY: the MODEL's routing door — a `read_skill`
+hop — and nothing else. It is NOT a lock on the cursor. Two other doors
+stay open under all three postures, deliberately:
+  • OPEN skills, above — the debugging door.
+  • A `propose-transition` tool effect. A proposal comes from a TOOL —
+    deterministic code you shipped, not the model's guess — so it is
+    framework-tier evidence: admitted under `assist`, `guard` AND
+    `rails`, checked only against the graph's own reachability law, and
+    recorded as `cursorMove.by: 'tool-proposal'` (the resolver ranks it
+    BETWEEN a declared edge and a model pick, for that reason).
+So `'rails'` means "the MODEL never routes", never "nothing but my
+declared edges routes": a tool of yours that proposes IS a route you
+declared, in code instead of in the graph. To close that door, don't
+ship the effect — the posture will not second-guess your own code.

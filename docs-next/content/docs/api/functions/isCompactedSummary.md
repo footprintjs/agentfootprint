@@ -6,7 +6,7 @@ title: isCompactedSummary
 
 > **isCompactedSummary**(`msg`): `boolean`
 
-Defined in: [src/core/agent/window/summarize.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/summarize.ts#L128)
+Defined in: [src/lib/saidByPerson.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L146)
 
 True when this message is a frame a previous fold wrote.
 
@@ -14,7 +14,7 @@ True when this message is a frame a previous fold wrote.
 
 ### msg
 
-[`LLMMessage`](/docs/api/interfaces/LLMMessage) \| `undefined`
+[`AuthoredMessage`](/docs/api/interfaces/AuthoredMessage) \| `undefined`
 
 ## Returns
 

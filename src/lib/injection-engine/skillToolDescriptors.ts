@@ -23,6 +23,8 @@
  */
 
 import type { SkillToolDescriptor } from './hostContract.js';
+import { classifySkillTarget } from './skillGraph.js';
+import { spoken } from '../spokenIds.js';
 import type { Injection } from './types.js';
 
 /**
@@ -100,6 +102,66 @@ export interface ReadSkillOffer {
     /** STAY spelled out as a first-class option (mid-conversation menus). */
     readonly stay?: boolean;
   };
+  /**
+   * The mounted graph is a decision `tree()` (9.86.0).
+   *
+   * A tree routes by predicate on every iteration and keeps no cursor, so
+   * `reachableSkills()` is empty from every position and EVERY routing pick is
+   * refused by construction. Offering `read_skill` anyway asked the model to
+   * choose from a menu the library knew it would reject — the same defect
+   * 8.5.0 fixed for the flat graph's unreachable ids, left standing for the
+   * one shape where it is total.
+   *
+   * With no open skill left after {@link ReadSkillOffer.hiddenIds}, the tool is
+   * not offered at all ({@link readSkillDescriptor} returns `undefined`); with
+   * open skills, the description says a tree has no cursor to move and names
+   * exactly the skills a pick CAN open. Either way the name stays dispatchable
+   * — position governs the offer, never dispatch — so a model that calls it
+   * from a restored transcript still reads the gate's own refusal.
+   */
+  readonly treeRouted?: boolean;
+}
+
+/**
+ * The skills an offer may NAME — the role filter, in one place (9.86.0).
+ *
+ * "Hidden first, so nothing below can name one" is the description's own law,
+ * and the tree arm needs the same answer BEFORE it decides whether there is
+ * anything left to offer. Two call sites, one filter.
+ */
+function visibleSkills(
+  allSkills: readonly Injection[],
+  offer?: ReadSkillOffer,
+): readonly Injection[] {
+  const hidden = new Set(offer?.hiddenIds ?? []);
+  return hidden.size > 0 ? allSkills.filter((s) => !hidden.has(s.id)) : allSkills;
+}
+
+/**
+ * The visible skills this offer's gate would admit and this description would
+ * LIST — `grantable`, role-filtered, cursor excluded.
+ *
+ * Through `classifySkillTarget`, the same owner the list forty lines below
+ * uses (9.86.0 fix pass). It used to ask a slightly different question — a bare
+ * `grantable.has(s.id)`, which keeps the cursor — so the withhold test and the
+ * list it withholds could disagree about whether there was anything to show: a
+ * cursor that is its own sole grantable id offered the tool and then printed an
+ * empty list under the tree paragraph. Not reachable today (a `tree()` keeps no
+ * cursor, so `cursorId` is undefined on this path), and the point is that it
+ * cannot become reachable — one question, one implementation.
+ */
+function grantableRows(
+  allSkills: readonly Injection[],
+  offer: ReadSkillOffer,
+): readonly Injection[] {
+  return visibleSkills(allSkills, offer).filter(
+    (s) =>
+      classifySkillTarget({
+        ...(offer.cursorId !== undefined && { cursor: offer.cursorId }),
+        target: s.id,
+        hops: offer.grantable ?? [],
+      }) === 'hop',
+  );
 }
 
 /**
@@ -141,6 +203,17 @@ export interface ReadSkillOffer {
  *   a model read the gate's refusal of its own cursor id as "that skill is
  *   unavailable" and gave up mid-turn, having never left the skill it was in.
  *
+ * AND OMISSION IS NOT A SPECIAL CASE OF ABSENCE (9.86.0 fix pass). The law was
+ * stated here and then broken three lines from the bottom: both columns were
+ * computed from a catalog `visibleSkills` had already role-filtered, so "the
+ * graph wires nothing out of here" and "the role may not be told about the one
+ * edge it wires" composed the same sentence — "Nothing is reachable from here"
+ * over a graph holding `alpha → beta`. The hop set is now classified over the
+ * UNFILTERED catalog and put through `spoken`, which keeps `held`: where the
+ * filter is what emptied the column, the clause is dropped and the description
+ * names the cursor and stops. With nothing wired out at all the sentence still
+ * stands, because that absence is one this description has evidence for.
+ *
  * The known gap is on the record, not hidden: the refusal column is a
  * compose-time PREDICTION of the gate, and the module header names the two
  * shipped mechanisms that falsify it in both directions (a `'rails'`/off-menu
@@ -165,7 +238,7 @@ function describeOffer(
   // Hidden first, so nothing below can name one — the menu, the graph split,
   // the "not reachable" list and the plain catalog all read from this.
   const hidden = new Set(offer.hiddenIds ?? []);
-  const skills = hidden.size > 0 ? allSkills.filter((s) => !hidden.has(s.id)) : allSkills;
+  const skills = visibleSkills(allSkills, offer);
   // The turn-start MENU leads (SG-C) — rendered from the turn verdict, ids
   // resolved against the (hidden-filtered) catalog so an id this description
   // may not name, or one that is not a skill here, is silently skipped rather
@@ -259,8 +332,47 @@ function describeOffer(
           .map(line)
           .join('\n')}\n\n${tail}`;
   }
-  const grantable = new Set(offer.grantable);
-  const open = skills.filter((s) => grantable.has(s.id));
+  // The four target classes, from their ONE owner (9.86.0). `grantable` is the
+  // gate's admitted set (hops ∪ open), so what this description needs from the
+  // classifier is the SELF case: the cursor belongs in neither column, and the
+  // `s.id !== cursorId` check that used to say so lived here, in `toolCalls`,
+  // in `Agent` and in `makeReachableSkills` — four copies of one rule.
+  const classOf = (id: string): ReturnType<typeof classifySkillTarget> =>
+    classifySkillTarget({
+      ...(cursorId !== undefined && { cursor: cursorId }),
+      target: id,
+      hops: offer.grantable ?? [],
+    });
+  // ── OMIT, NEVER DENY, ON THE SURFACE THE MODEL CHOOSES FROM ─────────
+  // (9.86.0 fix pass.) `skills` is already role-filtered, so branching on its
+  // length answered "did the role filter empty this?" with the words for "was
+  // the graph holding nothing?" — the identical defect the refusal composer was
+  // repaired for, on the one surface the model actually reads to pick. So the
+  // hop set is classified over the UNFILTERED catalog and put through `spoken`,
+  // which keeps both halves: `named` is what may be listed, `held` is whether
+  // the graph was holding a hop at all. Where the filter is what emptied it,
+  // the negative sentence is omitted rather than printed.
+  const hopRows = allSkills.filter((s) => classOf(s.id) === 'hop');
+  const hopsSpoken = spoken(
+    hopRows.map((s) => s.id),
+    (id) => !hidden.has(id),
+  );
+  const nameable = new Set(hopsSpoken.named);
+  const open = hopRows.filter((s) => nameable.has(s.id));
+  // ── THE TREE ARM (9.86.0) — a tree has no cursor to move ────────────
+  // `reachableSkills()` is empty from every position under a `tree()`, so the
+  // split above would print "Nothing is reachable from here" and invite a pick
+  // the gate refuses every time. What IS true is named instead: the tree's own
+  // routing, and the open skills a pick can still activate. (With none of
+  // those, `readSkillDescriptor` never gets here — it withholds the tool.)
+  if (offer.treeRouted === true) {
+    return (
+      `${menuLead}Activate a skill for the next iteration. This map is a decision TREE: ` +
+      `it routes by predicate on every iteration and keeps no cursor, so read_skill ` +
+      `cannot move it — a pick of a routed skill is refused. What a pick CAN open are ` +
+      `the skills the tree does not route:\n${open.map(line).join('\n')}\n\n${tail}`
+    );
+  }
   // The cursor is never in `grantable` — `makeReachableSkills` filters it out of
   // its own successor set, because a MOVE to where you already are is not a move.
   // Listing it under "Not reachable" turned that into a claim about
@@ -270,12 +382,15 @@ function describeOffer(
   // in either column. The gate's self-call notice is where tools get named,
   // because it reads the merged list after the fact.) It belongs in neither
   // column, so it is named once, above, by `cursorLead`.
-  const shut = skills.filter((s) => !grantable.has(s.id) && s.id !== cursorId);
-  const parts = [
-    open.length > 0
-      ? `Reachable from here:\n${open.map(line).join('\n')}`
-      : 'Nothing is reachable from here — answer with the skill you are in, or finish.',
-  ];
+  const shut = skills.filter((s) => classOf(s.id) === 'unreachable');
+  const parts: string[] = [];
+  if (open.length > 0) {
+    parts.push(`Reachable from here:\n${open.map(line).join('\n')}`);
+  } else if (!hopsSpoken.held) {
+    // Nothing was wired out of here at all — an absence this description holds
+    // evidence for, cursor-relative and epoch-scoped, so it may be stated.
+    parts.push('Nothing is reachable from here — answer with the skill you are in, or finish.');
+  }
   if (offer.showRefusable !== false && shut.length > 0) {
     parts.push(
       `Not reachable from here (read_skill for these will be refused):\n${shut
@@ -283,7 +398,10 @@ function describeOffer(
         .join('\n')}`,
     );
   }
-  return `${menuLead}Activate a skill for the next iteration.\n\n${parts.join('\n\n')}\n\n${tail}`;
+  // With every clause omitted the description names the cursor and stops, which
+  // is the honest floor: a filtered-away hop is still a hop the graph holds.
+  const body = parts.length > 0 ? `\n\n${parts.join('\n\n')}` : '';
+  return `${menuLead}Activate a skill for the next iteration.${body}\n\n${tail}`;
 }
 
 /**
@@ -344,6 +462,14 @@ export function readSkillDescriptor(
   offer?: ReadSkillOffer,
 ): SkillToolDescriptor<{ id: string }, string> | undefined {
   if (skills.length === 0) return undefined;
+  // ── A TREE WITH NOTHING TO OPEN IS NOT OFFERED (9.86.0) ─────────────
+  // Under a `tree()` every routing pick is refused by construction (the tree
+  // keeps no cursor for read_skill to move), so with no open skill left after
+  // the role filter there is no id this tool could accept. Offering it anyway
+  // is the 8.5.0 defect in its total form: a menu the library knows it will
+  // reject, re-read on every iteration. The NAME stays in the dispatch map, so
+  // a pick made from a restored transcript still reaches the gate's refusal.
+  if (offer?.treeRouted === true && grantableRows(skills, offer).length === 0) return undefined;
 
   const skillIds = skills.map((s) => s.id);
   const line = (s: Injection): string => `  - ${s.id}: ${s.description ?? '(no description)'}`;

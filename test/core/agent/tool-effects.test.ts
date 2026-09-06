@@ -265,6 +265,44 @@ describe('functional: propose-transition', () => {
     expect(cursorMoveOf(evaluated[1]!)?.by).toBe('stay');
   });
 
+  it('a proposal to the CURSOR\'S OWN skill is a STAY: accepted as a no-op, no refusal on the result, cursor unmoved (9.86.0 — the reachable set excludes the cursor, which is right for a move and made "stay here" look unreachable)', async () => {
+    // The reachable set filters the cursor out of its own successor set, so a
+    // tool that judged its data and asked to STAY was told its proposal was
+    // "not reachable from 'triage'" — about the skill the run was already in.
+    // The tool's own answer then carried a `[tool effect refused: …]` suffix,
+    // which is what the model reads: a correct proposal, reported as a defect.
+    const triage = skill('triage');
+    const { agent, effects, evaluated } = buildAgent({
+      replies: [call('diagnose', 't1'), final('done')],
+      tools: [
+        effectTool('diagnose', { content: 'nothing to escalate', effects: [propose('triage')] }),
+      ],
+      graph: skillGraph().entry(triage).route(triage, skill('billing')).build(),
+    });
+    await agent.run({ message: 'help' });
+
+    // Accepted, and marked as the no-op it is — an ADDITIVE field, not a
+    // fourth `outcome`, so a consumer switching exhaustively still compiles.
+    expect(effects).toEqual([
+      expect.objectContaining({
+        kind: 'propose-transition',
+        outcome: 'accepted',
+        stay: true,
+        targetSkillId: 'triage',
+      }),
+    ]);
+    // The model reads the tool's own answer, with nothing appended.
+    const toolMsg = historyOf(agent).find((m) => m.role === 'tool' && m.toolName === 'diagnose');
+    expect(toolMsg?.content).toBe('nothing to escalate');
+    expect(toolMsg?.content).not.toContain('[tool effect refused');
+    // And the cursor did not move — a stay is not a hop wearing a different hat.
+    expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'stay', to: 'triage' });
+    expect(
+      (agent.getLastSnapshot()?.sharedState as { pendingToolTransition?: unknown })
+        .pendingToolTransition,
+    ).toBeUndefined();
+  });
+
   it('a same-batch DECLARED edge still wins — reroute_superseded { source: "tool-proposal" }', async () => {
     const triage = skill('triage');
     const graph = skillGraph()

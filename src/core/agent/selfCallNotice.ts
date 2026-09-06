@@ -20,7 +20,7 @@
  * into `history`, and then read by the model on call N+1 AND ON EVERY CALL
  * AFTER IT for the rest of the turn — including the out-of-budget WRAP-UP,
  * which `callLLM` serves with an EMPTY tool list under a user message saying
- * "Do not request tools".
+ * that no tools were offered on it.
  *
  * The consequence is the whole design: NO COMPOSE-TIME CHECK CAN MAKE A
  * FORWARD-LOOKING SENTENCE SAFE. A budget test, a posture test, a cursor test
@@ -44,7 +44,8 @@
  * open-skill offer ("These activate without moving you: gamma"), and the
  * budget clause that was added to gate them. Each was false somewhere:
  *
- *   • the exhortation, on the wrap-up call, beside "Do not request tools";
+ *   • the exhortation, on the wrap-up call, beside a frame reporting that no
+ *     tools were offered on it;
  *   • the move offer, on the wrap-up call (a hop is a tool call), under
  *     `strictness: 'rails'` (every model hop refused) and under `'guard'` on a
  *     decisively-routed turn (every hop not on an outstanding menu refused) —
@@ -85,11 +86,23 @@ export interface SelfSkillTools {
  * that cannot be established, which is not the same answer and must not be
  * reported as one.
  *
- * `undefined` means the notice says nothing about tools at all. It happens when
- * the tools slot composed no per-iteration list (`reactMode: 'classic'` caches
- * the slot, and `callLLM` falls back to its build-time schemas), or when the
- * cursor's skill is not in the active set. Silence is the only honest output
- * there: the alternative is a sentence naming tools the model may not have.
+ * `undefined` means the notice says nothing about tools at all, and there are
+ * exactly two ways to get it (9.86.0 — the previous note named a third that
+ * cannot happen). It happens when the cursor's skill is not in the ACTIVE set
+ * for that call, and when the wire key is absent from scope altogether.
+ *
+ * `reactMode: 'classic'` is NOT one of them, which is worth stating because the
+ * old note said it was: seed writes `scope.dynamicToolSchemas` from the
+ * build-time schemas at turn start (`stages/seed.ts`), so under classic the key
+ * is present and holds the list `callLLM` really sends — the notice would name
+ * the build-time list, correctly. (No self-call can arise there anyway:
+ * `.skillGraph()` is refused at build under classic, and only a graph gives the
+ * gate a cursor to compare against.) The grouped chart used to be a real third
+ * way — the Tools slot writes the key inside `sf-llm-call` and this gate reads
+ * it outside — until that boundary began bubbling it out.
+ *
+ * Silence is the only honest output in the two remaining cases: the
+ * alternative is a sentence naming tools the model may not have.
  *
  * The out-of-budget wrap-up is NOT one of these cases and must not be modelled
  * as one. Its empty tool list belongs to a LATER call; the wire read here is

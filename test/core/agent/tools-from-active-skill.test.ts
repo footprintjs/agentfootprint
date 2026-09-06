@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../../src/index.js';
-import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
+import { decideSkill, defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 import { scopeToolsToActiveSkill } from '../../../src/core/agent/toolsFromActiveSkill.js';
 import type { Injection } from '../../../src/lib/injection-engine/types.js';
@@ -321,6 +321,43 @@ describe('toolsFromActiveSkill — security', () => {
       .build();
 
     expect(await agent.run({ message: 'refund please' })).toBe('refunded');
+  });
+
+  it("the SAME law holds under a .tree() on its default scopeTools — a leaf's tool is off the wire and still dispatches when named (9.86.0: the tree arm was asserted only for the OFFER, so nobody had checked the half the whole 'offer, not dispatch' page rests on)", async () => {
+    // A decision tree scopes leaf tools by default (`TreeOptions.scopeTools`
+    // is true), which is the strongest narrowing the library ships: the leaf
+    // the predicate did not choose contributes nothing to the request. The
+    // claim under test is the OTHER half — that the narrowing governs the
+    // offer and never the dispatch map — because a model working from a
+    // restored transcript names tools that are not on this call's wire, and a
+    // narrowing that silently swallowed those calls would be a capability
+    // removed rather than a schema withheld.
+    const { provider, offers } = spy({
+      replies: [
+        { toolCalls: [{ id: 't1', name: 'track_parcel', args: {} }] },
+        { content: 'tracked' },
+      ],
+    });
+    const bill = billing();
+    const ship = shipping();
+    const graph = skillGraph({
+      skills: [bill, ship],
+      // The predicate always routes to billing, so shipping is the leaf that
+      // never activates — and `track_parcel` is the tool nothing offers.
+      tree: decideSkill(() => true, bill, ship),
+      check: 'off',
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+      .system('S')
+      .skillGraph(graph)
+      .build();
+
+    const answer = await agent.run({ message: 'where is my parcel' });
+
+    // The premise: the wire never carried it.
+    expect(offers.flat()).not.toContain('track_parcel');
+    // The law: naming it still ran it.
+    expect(answer).toBe('tracked');
   });
 
   it('STATED: dispatch is deliberately NOT gated, and the docstring says so', async () => {

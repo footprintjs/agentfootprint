@@ -724,9 +724,18 @@ export interface AgentOptions {
    * With this on, the run spends ONE more LLM call with **the tools withheld**
    * and this instruction appended, then hands back what comes back:
    *
-   * > *Your action budget for this turn is exhausted. Do not request tools.
-   * > Give your best final answer from what you have: what you completed, what
-   * > remains undone, and anything the person should know.*
+   * > *[budget exhausted — the action budget was exhausted before this call,
+   * > so no tools were offered on it. This call was for the final answer, from
+   * > what the messages above already hold: what was completed, what remained
+   * > undone, and anything the person should know.]*
+   *
+   * Reworded in 9.86.0. The message lives in `history` and is re-read on every
+   * later call of the turn, so it opens with the registered marker that says
+   * the library wrote it (`WRAP_UP_FRAME_PREFIX` — otherwise a routing rule
+   * and the window's own refusal engine read it as the person's request), and
+   * every clause is a past fact about the call it was written for rather than
+   * a standing instruction. The withholding is unchanged: it happens at
+   * request assembly, not because a sentence asked for it.
    *
    * That call is exempt from `maxIterations` by design — it cannot loop,
    * because with no tools on the wire there is nothing for the model to ask
@@ -1379,6 +1388,13 @@ export interface AgentState {
   /** Tool schemas resolved by the tools slot subflow each iteration
    *  (registry + injection-supplied). Used by callLLM. */
   dynamicToolSchemas: readonly LLMToolSchema[];
+  /** Which skill ids the caller's role may NOT see this iteration (9.86.0),
+   *  resolved ONCE by the tools slot and published here so every model-facing
+   *  composer applies the same filter. Read by the `read_skill` gate before it
+   *  names any id — in a refusal or in the `skill.rejected` payload. Absent
+   *  for every agent whose `PermissionChecker` does not govern `'skill_read'`
+   *  (and for all of them the gate's sets are unfiltered, exactly as before). */
+  hiddenSkillIds?: readonly string[];
   // ── Cache layer state (v2.6) ────────────────────────────────
   /** Provider-agnostic cache markers emitted by CacheDecision subflow.
    *  Cleared each iteration by the SkipCaching branch when the
@@ -1452,7 +1468,8 @@ export interface AgentState {
    *  (9.18.0). Written by the StepNudge branch; reset at seed. Absent on
    *  agents with no stepped skill. */
   stepNudgeSpent?: boolean;
-  /** Gate refusals (`skill.rejected` — reachability OR posture) this turn
+  /** Gate refusals (`skill.rejected` — reachability, posture or a self-call,
+   *  all three arms) this turn
    *  (9.19.0). Counted by the tool-calls stage, reset at seed, present ONLY
    *  when an escalation brain is declared — the refusal budget that trips
    *  the flip. */

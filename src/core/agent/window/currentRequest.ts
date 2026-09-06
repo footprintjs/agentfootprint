@@ -44,10 +44,12 @@
  *      is stated rather than hidden: earlier turns of a multi-turn
  *      conversation stay droppable exactly as they were.
  *
- * "The person said it" is deliberately narrow. Five kinds of `role: 'user'`
+ * "The person said it" is deliberately narrow. Seven kinds of `role: 'user'`
  * message are written by this LIBRARY, not by anybody: a drop notice, a
  * compaction frame, the two in-loop corrections (schema check, evidence
- * check), and a message an {@link Injection} delivered (which carries
+ * check), the out-of-budget wrap-up instruction and the stepped-skill nudge
+ * (both registered in 9.86.0 — until then the wrap-up frame could become this
+ * anchor), and a message an {@link Injection} delivered (which carries
  * `injectedBy`). None of them may become the anchor — otherwise the
  * window would protect its own bookkeeping and drop the request underneath
  * it, and a tool able to influence an injection could pin its own text in

@@ -415,12 +415,13 @@ export {
   type WindowStrategyResult,
 } from './core/agent/window/index.js';
 // Which `role: 'user'` message a PERSON wrote (9.84.0), and the registry of
-// openings it is decided against. Five messages in a window carry that role
+// openings it is decided against. Seven messages in a window carry that role
 // without anybody having said them — a compaction frame, a drop notice, the two
-// in-loop corrections, and a message an Injection delivered. This is the one
-// test that tells them apart; the window's refusal engine and
-// `saidByPerson(ctx)` on `agentfootprint/context` both call it, so no reader
-// can hold a different rule.
+// in-loop corrections, the out-of-budget wrap-up instruction, the stepped-skill
+// nudge (the last two registered in 9.86.0), and a message an Injection
+// delivered. This is the one test that tells them apart; the window's refusal
+// engine and `saidByPerson(ctx)` on `agentfootprint/context` both call it, so
+// no reader can hold a different rule.
 export {
   isLibraryAuthoredFrame,
   isSaidByPerson,

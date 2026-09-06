@@ -701,6 +701,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // Pass merged tool schemas (registry + injection-supplied)
         // back up so callLLM uses the right list for THIS iteration.
         dynamicToolSchemas: sf.toolSchemas,
+        // The role-hidden skill ids this iteration (9.86.0), onto the parent
+        // key the read_skill GATE reads before it names any id. Resolved by
+        // the slot's Discover stage; value-conditional, so an agent without
+        // per-role skill visibility bubbles exactly what it always did.
+        ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
         // The integrity dedup seen-list, back onto the parent key —
         // value-conditional, so agents with no findings are byte-identical.
         ...(sf.integrityFindingIds !== undefined && {

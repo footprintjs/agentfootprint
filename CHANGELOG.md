@@ -7,6 +7,325 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.86.0] - 2026-09-05
+
+Every hand-counted list in 9.84.0 and 9.85.0 was short by one or two.
+
+"Five classes of `role: 'user'` message are authored by this library" — seven
+were. "Reachability OR posture" — three arms refuse. "Sixty configurations,
+crossing every source" — the cross skipped four of the seven sources it named,
+and there are seventy-six. The rules that catch a sentence which outlives its
+moment were a transcript of the wordings that had already escaped: thirteen of
+fifteen plausible forward-looking sentences walked straight through them.
+
+None of those was a typo. Each was a fact the library computed in one place and
+re-derived, by hand, wherever a second consumer needed it — and a hand-derived
+list is a list that is short the day after somebody adds the next case. Three
+of them are now WALKS rather than counts: the user-turn producers are parsed out
+of `src/` with the TypeScript compiler, every sentence-shaped literal in `src/`
+is run through the model-facing rules with a file and a line on failure, and the
+offer/dispatch cross iterates its source list whole instead of filtering it.
+Two more are single owners: one function answers "is this `read_skill` target
+the cursor?", and one scope key answers "which skill ids may this role see?".
+
+### Fixed
+
+- **`read_skill` refusals answered for a fact nobody owned.** Five call sites
+  needed to know that `makeReachableSkills` filters the cursor out of its own
+  successor set — correct for a MOVE, silent about a READ. Three of them wrote
+  their own `requested === cursor` line. Two never heard: a tool proposing
+  `propose-transition` back to the cursor's own skill was refused as unreachable,
+  and the `skill_read` permission gate was asked to grant a capability the model
+  was already exercising, then told the model that its own skill was "not
+  available in this context".
+
+  `classifySkillTarget({ cursor, target, hops, open })` now owns it, returning
+  `'self' | 'hop' | 'open' | 'unreachable'`. It is a pure function in the
+  injection engine, exported through the `agentfootprint/context` barrel and the
+  `agentfootprint/skill-graph` door — the same function object through both, so a
+  foreign host cannot re-derive it wrongly either. The five consumers switch on
+  it: the gate arm, `describeOffer`, the tool-effects judge, the `skill_read`
+  permission gate, and the refusal composer. `makeReachableSkills` keeps its own
+  exclusion — it is the PRODUCER of the hop set, and excluding the cursor is what
+  a move means — and its doc comment now says the exclusion is about movement and
+  sends the next reader to `classifySkillTarget`.
+
+- **A refusal could name a skill the caller's own policy hides.** Role visibility
+  was a property of one builder: `Agent.hiddenSkillIdsNow()` fed
+  `buildReadSkillTool` and nothing else. So the description named nothing hidden
+  while the gate, one stage downstream, composed its refusals — and filled
+  `skill.rejected.allowed` — from the graph's raw sets.
+
+  The tools slot now resolves the hidden set once per iteration, publishes it on
+  `scope.hiddenSkillIds`, and both chart shapes bubble it. The gate keeps two sets
+  on purpose: the RAW one it judges with, and the filtered one it speaks with. It
+  judges with the raw set because a narrowing may take a schema off the wire and
+  may never take a name out of the dispatch map — filtering admission would remove
+  a capability, which the monotone rule forbids. In practice a hidden id never
+  reaches the gate, because the same checker denies it upstream; the filter is what
+  makes that true by construction rather than by coincidence.
+
+- **Two refusal composers that contradicted each other forty lines apart are one.**
+  `skillRefusal` and `postureRefusal` are replaced by `composeReadSkillRefusal`,
+  and every arm of it is a past fact about the one call it names. Gone with them:
+  "from here" (deixis — a different place on every re-read), "Pick one of these, or
+  finish" (an exhortation in a string that persists for the rest of the run), and a
+  posture arm that named a hop the very next arm would have declined. A refusal now
+  opens `read_skill("X") was not granted on that call:` and every clause after it
+  refers back to that call.
+
+- **`Unknown tool: X` told the model it was wrong and never what would have
+  worked.** Both dispatch doors now compose one exported `unknownToolResult`, which
+  names the dispatch roster: `Unknown tool 'X' on that call. Tool names that
+  resolved to an implementation on that call: …`, or, with an empty roster, that
+  none did. The leading `Unknown tool` token is preserved, so every matcher on it
+  is untouched.
+
+  It says *resolved*, not *could be dispatched*, because two gates sit between
+  resolution and a tool running — the `tool_call` permission check and the
+  middleware chain — and neither is asked to phrase an error. And the roster is
+  role-filtered before it is named: it used to read the dispatch map raw and could
+  name a tool belonging to a skill the caller's own policy hides, which is the
+  leak the refusals had just closed, one sentence over. `buildToolRegistry` now
+  returns `toolDeclaringSkills` (tool name → the skills that declare it) from the
+  walk it was already doing, and a name is withheld only when EVERY declaring
+  skill is hidden — a tool two skills share stays named. Dispatch is untouched.
+
+- **A filtered-empty list was reported as an empty one — a Lens denying what the
+  Fold holds.** Three sentences branched on `length > 0` over an already-filtered
+  array, so "the graph held nothing" and "the role filter emptied it" composed the
+  same words. A cursor whose only declared hop was hidden answered `read_skill`
+  with *"No skill was reachable from 'alpha' when that call was made."* while the
+  graph was routing `alpha`; a `'guard'` menu whose every id had been hidden since
+  the turn started said *"no menu was outstanding when that call was made.
+  Declared routes moved the cursor instead."* — two false clauses in one breath.
+
+  A model told the map is a dead end stops asking for the door it may not be
+  shown, and the checker cannot see it: every one of those sentences passes
+  `unprovable()`, because the defect is in what the composer was handed, not in
+  how it was worded. So the fact is now a type. `SpokenIds` carries both halves of
+  a filtered set — `named`, and `held` for whether the unfiltered set held
+  anything — and `held` is required, so the compiler asks every caller the
+  question every call site forgot to answer. Where a filter empties a set the
+  clause is OMITTED. Omission is free and always true; the negative is a denial.
+
+  The fourth sentence was the one the model reads to CHOOSE. `describeOffer`
+  computed its columns from an already-filtered catalog, so a cursor whose only
+  declared hop is hidden was told *"Nothing is reachable from here — answer with
+  the skill you are in, or finish."* while the graph held that edge. It classifies
+  the hop set over the unfiltered catalog now and drops the clause when the filter
+  is what emptied it; with nothing wired out at all the sentence still stands,
+  because that absence is one the description has evidence for. Reaching it meant
+  moving `SpokenIds`/`spoken` to `src/lib/spokenIds.ts`: it lived in the tool-calls
+  stage, on the wrong side of the skill-graph fence, so the description — composed
+  inside `src/lib/injection-engine/`, which may not import the agent loop — was the
+  one surface that could not use the fact its own refusals were repaired with.
+
+- **Under a `.tree()` with nothing open, `read_skill` is no longer offered.** A
+  tree routes by predicate on every iteration and keeps no cursor, so the tool had
+  nothing it could do and a menu of one refusal is worse than no menu. The schema
+  leaves the request; the NAME stays in the dispatch map, which is the same law as
+  everywhere else. With open skills present, the description explains the tree and
+  lists exactly what a pick can open, instead of printing "Nothing is reachable
+  from here".
+
+- **Two library-authored user turns were credited to a person.** The out-of-budget
+  wrap-up instruction and the stepped-skill nudge both append to `scope.history`
+  with `role: 'user'` and took no registered opening, so `isSaidByPerson` said a
+  person wrote them. Two things followed. The window's refusal engine could pin
+  "the current request" on the framework's own wrap-up instruction and drop the
+  real request underneath it. And a routing rule written the documented way —
+  `saidByPerson(ctx).some((m) => m.content.includes(…))` — matched on the library's
+  own bookkeeping: the wrap-up said "Do not request tools", and the nudge names a
+  skill id and every unrun step's tool name.
+
+  Both are registered now, and `LIBRARY_AUTHORED_PREFIXES` holds all six openings
+  frozen, so the writer and the recogniser read one constant. Both sentences were
+  also rewritten: each was composed once and re-read on every later call of the
+  turn, which made their present-tense clauses predictions.
+
+- **Three trace-toolpack results said "this call" and "right now".** They are
+  anchored to the call they answer, in the past tense — including the one arm the
+  new deictic-container rule caught the first time it was ever composed.
+
+- **`escalation` counts three kinds of refusal, and its docs named two.**
+  "Reachability OR posture" is wrong in the JSDoc behind `EscalationPolicy` and
+  `SkillGraphOptions`, in the `skill.escalated` payload doc and on the skills page:
+  the counter fires beside all three `skill.rejected` emit sites, self-call
+  included. No behaviour changed — the self-call site has counted since 9.84.0,
+  deliberately.
+
+### Added
+
+- **A WALK over every `role: 'user'` construction site in `src/`.**
+  `test/lib/injection-engine/userTurnProducers.test.ts` parses the tree with the
+  TypeScript compiler (a `PropertyAssignment` of `role: 'user'`, so type members
+  and comments quoting the string are not counted) and requires every site to be
+  classified as an authored frame, a person's own words, or never-in-history, each
+  with a written reason. **Thirty-five** sites are classified today: six authored
+  frames, seven person, twenty-two never-in-history. Sites are keyed by file with
+  the per-file COUNT asserted, so a new producer inside an already-listed file
+  fails as loudly as one in a new file. One producer the parser cannot see — the
+  message an injection delivers, whose role is copied off the `Injection` — is
+  named in the header and pinned by its `injectedBy` marker instead.
+
+- **The model-facing checker judges SHAPE, not just remembered wordings.** Four
+  new rules: a present-tense copula with a capability noun, deictic-present
+  adverbs, second-person effect verbs, and a standing imperative at a clause
+  start. Fifteen plausible forward-looking sentences were written out and put
+  to the rules: "You are currently in 'alpha'", "Calling read_skill switches you
+  to beta", "The following tools are available to you: …", "Nothing is live in
+  this scope at the moment". All fifteen are caught by the rules as they stand,
+  and the suite asserts exactly that. **Thirteen** of them passed against the
+  rule list AS IT STOOD BEFORE THIS RELEASE — the number that motivated the
+  work, measured once against a list this tree no longer contains, so it is a
+  record of why the rules changed rather than something a run here can
+  reproduce. `exemptBecause` is now structurally
+  required: `BannedClause` is a discriminated union, and because the root
+  `tsconfig.json` excludes `test/`, that is proven where it can actually be
+  compiled — `test/type-regressions/`.
+
+- **A WALK over every sentence-shaped literal in `src/`.** The registry's own
+  header used to say the gap it could not close was "a scan of `src/` … and this
+  is not that". `test/modelFacingScan.test.ts` is that: it parses every `.ts` file
+  under `src/` with the TypeScript compiler, folds `+` chains and template holes,
+  runs each literal through the rules at the persistent lifetime, and fails with
+  `file:line` unless the file's flagged literals are accounted for in a ledger of
+  **eighty-four files / one hundred and sixty-three literals**, every entry naming
+  where the string is delivered and how many literals it covers. Per-file counts
+  are the guard again. Four things it cannot see are stated in its header rather
+  than left to be found: a sentence assembled across statements, text that lives
+  in data rather than in `src/`, literals under twenty-five characters, and any
+  falsehood that avoids all the shapes.
+
+  Its ledger carries an `unrepaired` bucket of **thirty-three** literals across
+  thirteen entries that are model-facing, persistent and correctly caught, and
+  that were left alone because each needs its own tests. They are named with their
+  delivery site, so the bucket is a work list rather than a pardon. The bucket's
+  arithmetic is asserted by the suite itself — the counts above come from a run,
+  not from a report, which is the failure this whole entry is about.
+
+- **Five live producers are registered and read.** The `read_skill` refusal
+  composer (every arm), `unknownToolResult`, the trace toolpack's inspection
+  results, and — closing the gap 9.85.0's registry named — the wrap-up and
+  stepped-skill frames at a shared `INJECTED_TURN` surface.
+
+- **The offer/dispatch cross iterates its source list whole.** `frameworkCases()`
+  re-derived a source list inside the walk —
+  `CLAIMANTS.filter((c) => ['static', 'provider', 'skill-active'].includes(c.id))`
+  — so a second hand-written list of sources existed with nothing keeping it in
+  sync with the first, and 9.85.0's "crosses every source" was false. That mattered
+  because the framework's four auto-attach reservations each read a DIFFERENT
+  build-time list, so which source holds a contested name is precisely what decides
+  whether a reservation can see it. The walk goes from **sixty configurations to
+  seventy-six** and from **thirty-six divergence rows to forty-six**; all ten new
+  rows carry a hand-written, checked `tolerated`. Three new tests own what was
+  previously true only because somebody had typed it: that every claimant is
+  crossed against every auto-attach name, that the header's arithmetic equals the
+  recorded case count, and that a placeholder `tolerated` is refused (empty,
+  `todo`/`tbd`/`fixme`/`xxx` on a word boundary in any case, or under forty
+  characters — a floor on effort, not a measure of truth).
+
+  Eight of the ten are already-recorded seams reached through a source that had
+  never been crossed, and say so. Two are defects nobody had recorded and are
+  written up as entries 4 and 5 of `docs/design/2026-09-recorded-not-built.md`
+  rather than papered over: `.selfExplain()` reserves its trace-tool names against
+  `this.registry` and never `this.injectionList`, making it the one auto-attach
+  family with no net at all against a skill's `tools: []`; and the misattributed
+  shadow report can now name a `skill-scoped:self-explain` provider — one the
+  consumer did not write and cannot open — as the file to go look at.
+
+- **`report-misattributed` rows carry their attribution in the row id.** A shadow
+  event's meaning lives in its `schemaFromId`/`dispatchToId`, and the row was keyed
+  on case + tool + epoch, so two reports naming different sources in one epoch — a
+  strictly worse fact than one wrong report — collapsed into one `Map` entry and
+  vanished.
+
+- **`SkillRejectedPayload.allowed` is what the model was actually told.** Role-
+  filtered rather than the graph's raw set. Shape unchanged; only agents with a
+  `PermissionChecker` governing `'skill_read'` see any difference. The field's own
+  JSDoc says so at the call site, which is the doc a consumer actually reads.
+
+- **`ToolRegistryArtifacts.toolDeclaringSkills`** — tool name → the ids of the
+  skills whose `inject.tools` carry it, recorded on the walk `buildToolRegistry`
+  was already doing and thrown away. Empty for an agent whose skills carry no
+  tools. Its one consumer is the unknown-tool roster's role filter; it exists so
+  that consumer does not walk `Agent.injections` a second time to re-derive what
+  this file already knew.
+
+- **`ToolEffectPayload.stay?: true`** on `agentfootprint.tools.effect` — a
+  `propose-transition` naming the cursor's own skill is accepted as a no-op.
+  Deliberately not a fourth `outcome`, so an exhaustive consumer switch keeps
+  compiling.
+
+- **`AgentState.hiddenSkillIds?: readonly string[]`** — the per-iteration
+  role-hidden set, written by the tools slot and read by the `read_skill` gate.
+
+- **`ReadSkillOffer.treeRouted?: boolean`** — declares the mounted graph a decision
+  tree, which is what lets the descriptor withhold the offer.
+
+### Two decisions worth stating plainly
+
+- **A self-call at a MOUNTED cursor is answered BEFORE the permission gate**, because
+  it exercises no capability. `read_skill` naming the cursor's own skill activates
+  nothing and moves nothing, so there is no grant for a `PermissionChecker` to make or
+  withhold; asking it produced a denial about the one skill whose body was already in
+  that call's system prompt. The skip stops at a PARKED cursor, and deliberately: a
+  park suppresses a map's contribution without moving the cursor, so the gate below
+  reads the same id as a RE-ENGAGEMENT and puts the body and its tools back on the
+  wire — which is a capability, and the policy's question to answer. One predicate,
+  `atMountedCursor`, is what both gates ask. Every other id still goes to the policy.
+  The refusal BUDGET is
+  unchanged and still counts the self-call, including the `surfaceMode: 'both'`
+  re-read that returns the body — the 9.84.0 argument stands, and it is about the
+  loop rather than about the wording: a model that keeps asking the graph where it
+  stands instead of working is exactly the stuck run escalation exists for.
+
+- **A `propose-transition` naming the cursor's own skill is a STAY**, accepted as a
+  no-op with `stay: true` on the event and no refusal on the result. The tool asked
+  for a state the run is already in; there is nothing to move and nothing to refuse.
+
+### Deliberately not changed
+
+- **The three `STATED:` prose pins** in `src/core/agent/buildToolRegistry.ts` are
+  untouched, word for word. `test/core/agent/epoch-laws.test.ts` and
+  `test/core/agent/toolDivergenceWalk.test.ts` both read them.
+- **The escalation budget still counts `'both'`-mode self-call re-reads**, per the
+  argument above.
+- **The grounding gate** — item 5 of the "Offer, Not Dispatch" review — is a new
+  DIAL, not a fix for anything here, and is not in this release.
+- **The flat default is not narrowed.** `scopeTools` stays `false` until 10.0.0.
+- **`isLibraryAuthoredTurn`** (the evidence gate's exempt corpus) is deliberately
+  narrower than `isSaidByPerson` and was not widened to the two new frames. It
+  decides who SUPPLIED a value, not who wrote a turn; widening it would change which
+  values the evidence gate exempts, with no finding behind it.
+
+### Changelog corrections
+
+A reader auditing this project by its changelog has to be able to trust the older
+entries, so six sentences in 9.84.0 and 9.85.0 are corrected in place, each marked
+where it stands:
+
+- **9.84.0** — _"Five classes of `role: 'user'` message"_: seven kinds are
+  library-authored; the wrap-up instruction and the stepped-skill nudge went
+  unregistered until this release.
+- **9.84.0** — _"The window's own refusal engine has always applied that rule"_: it
+  applied a three-class version, and 9.84.0 widened it to five.
+- **9.84.0** — _"a step or park hold-out says the tools were withheld rather than
+  naming them"_: the withheld arm names the declared tools, and a parked cursor
+  never reaches the notice at all.
+- **9.85.0** — the fifth _"model-facing sentence"_ bullet credited 9.85.0 with a
+  `read_skill` description fix that shipped in 9.84.0, and quoted a sentence that
+  existed only in a source comment. Removed, with the reason left in its place; the
+  count above it is now four.
+- **9.85.0** — _"drives a real run per configuration. Sixty configurations,
+  thirty-six divergences"_: forty of seventy-six are driven, twenty-six are refused
+  at build and ten are not constructible; the enumeration it replaced was a
+  development draft, never a shipped list.
+- **9.85.0** — law 1 was restated unscoped. It is scoped to the tools
+  `buildToolRegistry` routes, with the shadow seam and the walk as its recorded
+  exceptions.
+
 ## [9.85.0] - 2026-09-04
 
 A sentence composed once and read many times is not a fact — it is a prediction.
@@ -19,7 +338,7 @@ guard asserting a boundary it cannot verify.
 
 ### Fixed
 
-- **Five model-facing sentences that outlive the moment they were true.** Each is
+- **Four model-facing sentences that outlive the moment they were true.** Each is
   now anchored to one named call, in the past tense, after tracing it to its
   delivery point to confirm it really is re-read:
 
@@ -34,12 +353,14 @@ guard asserting a boundary it cannot verify.
     sent right now"_, on a card that rides every call while a map is parked. Its
     falsifier is compose order, not staleness: the card is written in the
     injection-engine pass and the tools slot that acts on the park runs after it.
-  - The `read_skill` description no longer predicts what `read_skill` will do.
-    Naming the cursor is the fix; every sentence tried beside it turned out false
-    somewhere. The last one — _"You do not need read_skill to go on using it"_ —
-    was argued to be a necessity claim no posture, budget or hold-out could
-    falsify. The PARK falsifies it: a parked member keeps the cursor, loses its
-    body and its tools, and `read_skill` is then the only door back.
+
+  _Corrected in 9.86.0._ A fifth bullet stood here, crediting 9.85.0 with the
+  `read_skill` description fix and quoting _"You do not need read_skill to go on
+  using it"_ as a wording it had replaced. `skillToolDescriptors.ts` has no
+  non-comment change between `v9.84.0` and `v9.85.0`: that fix shipped in 9.84.0,
+  where it is also recorded, and the quoted sentence lived only inside a source
+  comment — no release ever put it on the wire. What 9.85.0 added to that file is
+  the LENS LAW block above `describeOffer`, which is a Documentation change.
 
 ### Added
 
@@ -59,13 +380,24 @@ guard asserting a boundary it cannot verify.
   `test/core/agent/toolDivergenceWalk.test.ts` crosses every source that can put
   a name on the wire or answer to one — static, provider, MCP, always-on skill,
   active skill, inactive skill, stepped skill — against six narrowing states and
-  the framework's auto-attach names, and drives a real run per configuration.
-  Sixty configurations, thirty-six divergences, each with a mechanically derived
-  cause and a stated reason it is tolerated. New fails. Disappeared fails.
-  Vacuous fails, and is unbaselineable.
+  the framework's auto-attach names. _Corrected in 9.86.0:_ at 9.85.0 the
+  auto-attach cross did NOT reach every source — it filtered `CLAIMANTS` down to
+  three of the seven — and the walk does not drive a real run per configuration.
+  Both are true of the walk as it stands after 9.86.0 widened it, with these
+  counts. Of its **seventy-six** configurations, **forty** are driven
+  as real runs (thirty-six divergent, four clean), **twenty-six** are refused at
+  build — which is the walk exercising a refusal, and its `because` records the
+  refusal's first line — and **ten** are not constructible at all, so no run is
+  attempted. **Forty-six** divergence rows come out of the forty driven, each
+  with a mechanically derived cause and a stated reason it is tolerated. New
+  fails. Disappeared fails. Vacuous fails, and is unbaselineable.
 
   It replaced a hand-written enumeration that claimed completeness and was
-  falsified three rounds running. It then found three classes nobody seeded: a
+  falsified three rounds running — _corrected in 9.86.0:_ that enumeration was
+  drafted and falsified during this work, and no released version ever carried
+  it, so the walk shipped in place of a draft rather than of a shipped list.
+
+  It then found three classes nobody seeded: a
   provider tool whose name a registry holder already owns is dead in both
   directions and the shadow report cannot see it; the auto-attach names disagree
   about what they refuse; and `selfExplain` is a fourth family whose reservation
@@ -74,10 +406,17 @@ guard asserting a boundary it cannot verify.
 ### Documentation
 
 - **Three laws stated where the code lives**, epoch-scoped, after two earlier
-  phrasings were false in shipped configurations. Every offered capability
-  resolves to a dispatchable implementation with stable identity for that epoch;
-  attention may alter the offer, but omission from the offer must not be
-  presented as proof of permanent capability loss. Only static skill-registry
+  phrasings were false in shipped configurations. Law 1, as the source states it
+  and _corrected here in 9.86.0_, is SCOPED: **among the tools `buildToolRegistry`
+  routes**, every offered capability resolves to a dispatchable implementation
+  with stable identity for that epoch — same-epoch offer implies same-epoch
+  dispatch. It is not a claim about the whole wire, and the source names its
+  recorded exceptions rather than implying there are none: the SHADOW SEAM (the
+  wire list is merged one layer out in `buildToolsSlot` and carries provider
+  schemas these maps never hold), with the full enumeration delegated to
+  `test/core/agent/toolDivergenceWalk.test.ts`. The second clause is unscoped and
+  unchanged: attention may alter the offer, but omission from the offer must not
+  be presented as proof of permanent capability loss. Only static skill-registry
   tools are known to remain dispatchable after leaving the offer.
 
 - **`docs/design/2026-09-recorded-not-built.md`** — three real defects with
@@ -108,9 +447,13 @@ guard asserting a boundary it cannot verify.
   stands and which tools it could call, taken from the merged wire list the LLM
   stage actually sent, intersected with the skill's own declared tools — never
   from the declaration alone. Every configuration that would make that false has
-  its own wording: a skill declaring no tools says so, a step or park hold-out
-  says the tools were withheld rather than naming them, and a call whose wire
-  cannot be established says nothing about tools at all. Mechanically it is still
+  its own wording: a skill declaring no tools says so, a hold-out names the
+  declared tools and states that they were withheld — _corrected in 9.86.0:_ this
+  read "a step or park hold-out says the tools were withheld rather than naming
+  them", and the withheld arm does name them; a PARK never reaches the notice at
+  all, because a self-call at a parked map member is a re-engagement request
+  (9.59.0) answered on an earlier arm — and a call whose wire cannot be
+  established says nothing about tools at all. Mechanically it is still
   a rejection — no activation, no cursor move, and the refusal budget still
   counts it, because a self-call _loop_ is exactly the stuck model that budget
   exists to escalate.
@@ -159,12 +502,21 @@ guard asserting a boundary it cannot verify.
 ### Added
 
 - **`saidByPerson(ctx)` / `isSaidByPerson(msg)` — telling what a person said from
-  what the library wrote.** Five classes of `role: 'user'` message are authored
-  by this library, not by a person: the compaction frame, the drop notice (whose
+  what the library wrote.** _Corrected in 9.86.0:_ this said "five classes", and
+  **seven** kinds of `role: 'user'` message are authored by this library, not by a
+  person. Five are registered here: the compaction frame, the drop notice (whose
   text names tools), the schema-check and evidence-check corrections, and any
-  injection-delivered message. The window's own refusal engine has always applied
-  that rule; a `when` predicate could not, because `InjectionContext.history`
-  exposes only `{ role, content, toolName? }`. An author writing an entry rule
+  injection-delivered message. The out-of-budget wrap-up instruction and the
+  stepped-skill nudge were library-authored the whole time and went unregistered
+  until 9.86.0. _Also corrected:_ the window's own refusal engine had not "always
+  applied that rule" — it applied a THREE-class version (drop notice, compaction
+  frame, injection-delivered), and 9.84.0 widened it to the five registered here,
+  so a schema-check or evidence-check frame can no longer become the protected
+  anchor. That widening changes the anchor only when the run's own message text is
+  absent from the window, because the anchor is matched by content first and only
+  falls back to the last thing a person said. A `when` predicate could apply no
+  version of it, because `InjectionContext.history` exposes only
+  `{ role, content, toolName? }`. An author writing an entry rule
   that reads history was silently matching on our own bookkeeping. One
   implementation, reused by both — the rule cannot drift between routing and the
   window.

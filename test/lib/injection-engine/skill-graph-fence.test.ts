@@ -112,16 +112,27 @@ const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'it knows what an agent is.',
   ],
   [
+    'src/lib/spokenIds.ts',
+    '`SpokenIds` / `spoken` — a filtered set PLUS whether the unfiltered one held anything, ' +
+      'so a sentence can omit a clause instead of denying what the run still holds. It lived in ' +
+      'the tool-calls stage, which put it on the wrong side of this fence: the `read_skill` ' +
+      'DESCRIPTION is composed here, could not import the loop, and went on printing "Nothing is ' +
+      'reachable from here" over a graph whose only hop the role filter had removed. Two lines of ' +
+      'array arithmetic and an interface — no imports, nothing in it that knows what an agent is.',
+  ],
+  [
     'src/lib/saidByPerson.ts',
     '`isSaidByPerson` — which user-role message a person actually wrote, as opposed to the ' +
-      "FIVE this library writes in a person's voice (compaction frame, drop notice, " +
-      'schema-check correction, evidence-check correction, delivered message). ' +
+      "SEVEN this library writes in a person's voice (compaction frame, drop notice, " +
+      'schema-check correction, evidence-check correction, budget wrap-up instruction, ' +
+      'stepped-skill nudge, delivered message). ' +
       '`saidByPerson(ctx)` is the routing layer applying the SAME rule the ' +
       "window's refusal engine applies, which is why it is a leaf: the list had lived split " +
       'across `core/agent/window/` and `core/agent/evidence/`, where the graph cannot reach ' +
-      'either, so an entry rule could filter some of the classes and not the rest. Four ' +
+      'either, so an entry rule could filter some of the classes and not the rest. Six ' +
       'authored prefixes, the delivery marker and a role check — no imports, nothing in it ' +
-      'that knows what an agent or a provider is.',
+      'that knows what an agent or a provider is. `skillSteps.ts` imports the nudge prefix ' +
+      'from here, which is the writer and the recogniser sharing one constant.',
   ],
 ];
 

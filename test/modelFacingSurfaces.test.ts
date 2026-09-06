@@ -23,10 +23,18 @@
  * producers are checked. It cannot see a producer nobody registered. A new
  * model-facing sentence written into a new file tomorrow is invisible here
  * until somebody adds the row — which is precisely the shape of the round-3
- * escape, one level up. No hand-maintained list can close that gap; only a
- * scan of `src/` for the banned clauses could, and this is not that. Read a
- * green run as "the surfaces we know about are clean", never as "every
- * model-facing sentence in the library is clean".
+ * escape, one level up.
+ *
+ * That gap was written down here as a caveat, and it was really a prediction:
+ * the `read_skill` gate's refusals and the trace toolpack were both live
+ * producers matching the checker's own rules, and neither had a row. Both are
+ * registered below now, and the gap itself is closed from the other side by
+ * `test/modelFacingScan.test.ts`, which walks `src/` for sentence-shaped
+ * literals and fails on one nobody has accounted for. The two are different
+ * instruments and both are needed: the scan reads LITERALS and cannot see the
+ * sentence a producer actually composes; the rows here compose the real
+ * output. Still read a green run here as "the producers we registered are
+ * clean", never as "every model-facing sentence in the library is clean".
  *
  * `drivenBy` names the suites that exercise a producer END TO END through a
  * real agent. It is documentation for the reader and is checked only for
@@ -41,10 +49,25 @@ import { resolve } from 'node:path';
 import {
   Agent,
   codeRunnerTool,
+  defineTool,
   inMemoryArtifacts,
   type ArtifactScope,
   type CodeRunner,
 } from '../src/index.js';
+import {
+  callTraceTool,
+  innerRunStore,
+  recordRun,
+  traceToolpack,
+  type TraceToolpackArtifacts,
+} from '../src/observe.js';
+import { composeReadSkillRefusal, unknownToolResult } from '../src/core/agent/stages/toolCalls.js';
+import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
+import {
+  nudgeTeachingMessage,
+  type StepPlan,
+  type StepPointer,
+} from '../src/lib/injection-engine/skillSteps.js';
 import { mock } from '../src/llm-providers.js';
 import { defineSkill } from '../src/injection-engine.js';
 import { selfCallNotice } from '../src/core/agent/selfCallNotice.js';
@@ -62,6 +85,8 @@ import type {
 } from '../src/maps/engagement/types.js';
 import {
   unprovable,
+  BANNED_CLAUSES,
+  INJECTED_TURN,
   TOOL_RESULT,
   GRAPH_TOOL_DESCRIPTION,
   PARK_CARD,
@@ -286,6 +311,249 @@ const codeRunnerResults = async (): Promise<readonly string[]> => {
   return results;
 };
 
+/**
+ * Every arm of the ONE `read_skill` refusal composer (9.86.0).
+ *
+ * It replaced two gate-local composers that could contradict each other, and
+ * it is the producer the round-3 escape happened INSIDE — so the row exists
+ * for the same reason the description's row does: the sentence a model reads
+ * when it is told no is the sentence that teaches it what the map is.
+ *
+ * `hops` and `openIds` arrive ALREADY role-filtered (the gate's contract), so
+ * the fixtures pass filtered lists — a row that passed raw sets would be
+ * checking a call the library never makes.
+ */
+const readSkillRefusals = (): readonly string[] => [
+  // Reachability: hops to name, no hops to name, and the turn's start as the
+  // anchor when no cursor has been set yet.
+  composeReadSkillRefusal({
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    cursorId: 'billing',
+    hops: { named: ['refunds'], held: true },
+    openIds: { named: ['debug'], held: true },
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    cursorId: 'billing',
+    hops: { named: ['refunds'], held: true },
+    openIds: { named: [], held: false },
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    hops: { named: ['triage'], held: true },
+    openIds: { named: [], held: false },
+  }),
+  // The non-'unreachable' fallback: reachable only from a direct caller that
+  // refused an admissible class for a reason of its own.
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+  }),
+  // Tree: nothing to move, with and without open skills to name.
+  composeReadSkillRefusal({
+    requestedId: 'leaf-b',
+    targetClass: 'unreachable',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+    isTree: true,
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'leaf-b',
+    targetClass: 'unreachable',
+    hops: { named: [], held: false },
+    openIds: { named: ['helper'], held: true },
+    isTree: true,
+  }),
+  // The hop set the graph HELD and the role filter emptied — the arm that used
+  // to assert "No skill was reachable from 'billing'" over a graph that was
+  // routing. It composes no hop clause at all now, so the row's markers below
+  // can pin an absence.
+  composeReadSkillRefusal({
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    cursorId: 'billing',
+    hops: { named: [], held: true },
+    openIds: { named: [], held: false },
+  }),
+  // Posture 'rails' — the framework routes, so no hop is named at all. The
+  // gate hands these arms an EMPTY hop list (`{ named: [], held: false }`),
+  // which is what these fixtures pass: a row composing a call the library
+  // never makes would check nothing.
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+    posture: 'rails',
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: ['debug'], held: true },
+    posture: 'rails',
+  }),
+  // Posture 'guard' — off an outstanding menu, with a menu the filter emptied,
+  // and with no menu at all (both arms of the decisively-routed clause).
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: ['debug'], held: true },
+    posture: 'guard',
+    menuOffered: { named: ['shipping', 'triage'], held: true },
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+    posture: 'guard',
+    menuOffered: { named: [], held: true },
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+    posture: 'guard',
+    routedDecisively: true,
+  }),
+  composeReadSkillRefusal({
+    requestedId: 'refunds',
+    targetClass: 'hop',
+    cursorId: 'billing',
+    hops: { named: [], held: false },
+    openIds: { named: [], held: false },
+    posture: 'guard',
+  }),
+];
+
+/**
+ * All three arms of the ONE unknown-tool result: a stocked roster, a bare one,
+ * and the roster the role filter emptied — which names nothing AND denies
+ * nothing, because the dispatch map was holding names this caller may not be
+ * told about.
+ */
+const unknownToolResults = (): readonly string[] => [
+  unknownToolResult('nope', { named: ['calc', 'probe'], held: true }),
+  unknownToolResult('nope', { named: [], held: false }),
+  unknownToolResult('nope', { named: [], held: true }),
+];
+
+/**
+ * The trace toolpack's model-facing RESULTS, composed through the real
+ * `execute` (`callTraceTool` validates args exactly as an Agent dispatch
+ * would, so these are the strings a debugging session reads).
+ *
+ * A run is driven for real because `inspect_tool_call` joins four records —
+ * the assistant turn, the ledger, the tool turn and the event tail — and a
+ * hand-built bag would let the row pass while the join it reports on was
+ * broken. The proposed args are deliberately INVALID against the tool's
+ * schema, which is the one way to reach the validation line.
+ */
+const traceToolpackResults = async (): Promise<readonly string[]> => {
+  const lookupOrder = defineTool<{ orderId: string }, string>({
+    name: 'lookup_order',
+    description: 'Look up an order by id',
+    inputSchema: {
+      type: 'object',
+      properties: { orderId: { type: 'string' } },
+      required: ['orderId'],
+    },
+    execute: ({ orderId }) => `Order ${orderId}: warranty ACTIVE`,
+  });
+  const agent = Agent.create({
+    provider: mock({
+      replies: [
+        // No `orderId` — the args fail the schema the model was shown.
+        {
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'lookup_order', args: {} }],
+          stopReason: 'tool_use',
+        },
+        { content: 'done', toolCalls: [], stopReason: 'stop' },
+      ] as never,
+    }),
+    model: 'mock',
+    maxIterations: 4,
+  })
+    .system('support')
+    .tool(lookupOrder)
+    .build();
+  const recorder = recordRun(agent);
+  await agent.run({ message: 'Order 7712?' });
+  const recording = recorder.toRecording();
+  recorder.stop();
+  const artifacts: TraceToolpackArtifacts = {
+    snapshot: agent.getLastSnapshot()!,
+    events: recording.events,
+  };
+
+  // The descent's two "no record here" arms: a lookup holding OTHER records,
+  // and a lookup holding none at all.
+  const stocked = innerRunStore(4);
+  stocked.keep({ toolCallId: 'c9', toolName: 'weather_advice', outcome: 'ok', steps: 4 });
+  return [
+    await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', { toolCallId: 'c1' }),
+    await callTraceTool(traceToolpack({ ...artifacts, innerRuns: stocked }), 'inspect_tool_run', {
+      toolCallId: 'c1',
+    }),
+    // The id the OUTER run never made — the arm that used to say "every id
+    // this run made" and could not say which run that was.
+    await callTraceTool(traceToolpack({ ...artifacts, innerRuns: stocked }), 'inspect_tool_run', {
+      toolCallId: 'c-missing',
+    }),
+    await callTraceTool(
+      traceToolpack({ ...artifacts, innerRuns: innerRunStore(4) }),
+      'inspect_tool_run',
+      { toolCallId: 'c1' },
+    ),
+  ];
+};
+
+/**
+ * Both spans of the stepped-skill nudge — one unrun step, and a range.
+ *
+ * The nudge is a turn this library writes in a person's voice, so it is read
+ * again on every later call of the turn. Its span clause is the arm that
+ * changes wording, which is why the row composes both rather than one.
+ */
+const stepNudges = (): readonly string[] => {
+  const plan: StepPlan = {
+    skillId: 'refund',
+    steps: [
+      { tool: 'lookup', note: 'find the order first' },
+      { tool: 'charge', note: 'refund the charge' },
+      { tool: 'export', note: 'file the receipt' },
+    ],
+    toolNames: new Set(['lookup', 'charge', 'export']),
+    onSkip: 'advance',
+  };
+  const at = (step: number): StepPointer => ({ skillId: 'refund', step, total: 3, skipped: [] });
+  // `remainingStepsOf` keeps every step at or after the pointer, so a pointer
+  // on the last step is the only way to reach the single-step wording.
+  return [nudgeTeachingMessage(at(1), plan), nudgeTeachingMessage(at(3), plan)];
+};
+
 // ─── The registry ────────────────────────────────────────────────────
 
 const PRODUCERS: readonly ModelFacingProducer[] = [
@@ -420,6 +688,103 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     reaches: [/no artifact inputs were passed/, /\bpaths\b/],
     compose: codeRunnerResults,
   },
+  {
+    id: 'skill-graph — the read_skill REFUSAL composer',
+    module: 'src/core/agent/stages/toolCalls.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'the gate returns it as the result of the `read_skill` call it declined, so it is ' +
+      'written onto a `role: "tool"` message and re-read on every later call of the turn',
+    drivenBy: ['test/skillGraphSelfCall.test.ts', 'test/skillGraphTreePick.test.ts'],
+    // One marker per ARM, because the arms are what a rewrite drops: the
+    // three reachability shapes, the fallback the gate itself never reaches,
+    // the tree, both postures, and the open-skill clause that rides along.
+    reaches: [
+      /was not reachable from 'billing'/,
+      /No skill was reachable from/,
+      /was not reachable from the turn's start/,
+      /was not admitted from/,
+      /this map is a decision tree/,
+      /'rails' posture reserves routing to the framework/,
+      /'guard' posture admits a routing pick only from the menu/,
+      /was not admitted on that call\./,
+      /no menu was outstanding when that call was made/,
+      /had already been resolved decisively/,
+      /Open skills were admitted on that call/,
+    ],
+    compose: async () => readSkillRefusals(),
+  },
+  {
+    id: 'dispatch — the unknown-tool result',
+    module: 'src/core/agent/stages/toolCalls.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'both dispatch doors return it as the tool result of a call they could not route, so ' +
+      'it lands in `history` like any other result',
+    drivenBy: ['test/core/agent/toolDivergenceWalk.test.ts'],
+    reaches: [
+      /Tool names that resolved to an implementation on that call/,
+      /No tool name resolved to an implementation on that call/,
+    ],
+    compose: async () => unknownToolResults(),
+  },
+  {
+    id: 'trace toolpack — the tool-call inspection results',
+    module: 'src/lib/trace-toolpack/traceToolpack.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      "these are the return values of the pack's `execute`, dispatched by a debugging agent " +
+      'like any other tool — every later call of that session re-reads them',
+    drivenBy: [
+      'test/lib/trace-toolpack/inspectToolCall.test.ts',
+      'test/lib/trace-toolpack/innerRunRecords.test.ts',
+    ],
+    // The three arms this row composes, one marker each. NOT every arm of the
+    // pack: the unknown-id arms of `inspect_tool_call` / `trace_node` carry
+    // standing imperatives ("Call run_overview …") that this release did not
+    // repair, and they are on the record as such in
+    // `test/modelFacingScan.test.ts` rather than hidden by a row that quietly
+    // does not compose them.
+    reaches: [
+      /TOOL CALL c1 — lookup_order/,
+      /failed schema validation on call 'c1'/,
+      /no retained inner run/,
+      /Inner runs you CAN open/,
+      /the outer run does not record a call with that id/,
+      /No inner run was held when inspect_tool_run/,
+    ],
+    compose: traceToolpackResults,
+  },
+  {
+    id: 'agent — the out-of-budget WRAP-UP frame',
+    module: 'src/core/agent/stages/wrapUp.ts',
+    surface: INJECTED_TURN,
+    lifetimeBecause:
+      'the stage appends it to `scope.history` as a `role: "user"` turn, so every later call ' +
+      'of the turn re-reads it — a schema retry and an evidence recheck included',
+    drivenBy: [
+      'test/lib/injection-engine/userTurnProducers.test.ts',
+      'test/core/agent-wrap-up.test.ts',
+    ],
+    reaches: [/action budget was exhausted before this call/],
+    compose: async () => [WRAP_UP_INSTRUCTION],
+  },
+  {
+    id: 'skills — the stepped-skill NUDGE frame',
+    module: 'src/lib/injection-engine/skillSteps.ts',
+    surface: INJECTED_TURN,
+    lifetimeBecause:
+      'the nudge stage appends it to `scope.history` as a `role: "user"` turn — the same ' +
+      'lifetime as the wrap-up, and the reason both had to stop speaking in the present',
+    drivenBy: [
+      'test/lib/injection-engine/userTurnProducers.test.ts',
+      'test/core/agent/skill-steps.test.ts',
+    ],
+    // Both span arms: the range and the single step. They are one ternary
+    // apart, and only one of them can be reached by any single fixture.
+    reaches: [/Steps 1–3 of 'refund' had not run/, /Step 3 of 'refund' had not run/],
+    compose: async () => stepNudges(),
+  },
 ];
 
 // ─── The checks ──────────────────────────────────────────────────────
@@ -494,12 +859,128 @@ describe('the model-facing inventory', () => {
     ).toEqual([]);
   });
 
+  it('every exemption carries an argument, and every row a reason — structurally', () => {
+    // `exemptBecause` was DOCUMENTED as required and enforced nowhere: the two
+    // fields were independent optionals, so a row could exempt a whole
+    // lifetime and say nothing about why, and no reader would ever see the
+    // omission. The type is a discriminated union now (both fields, or
+    // neither), and this is the half a union cannot do: an empty string is
+    // still a string.
+    for (const row of BANNED_CLAUSES) {
+      expect(row.why.trim().length, `${row.re.source} has no \`why\``).toBeGreaterThan(0);
+      if (row.provableWhen === undefined) continue;
+      expect(
+        row.provableWhen.length,
+        `${row.re.source} exempts no lifetime — an exemption that exempts nothing`,
+      ).toBeGreaterThan(0);
+      expect(
+        row.exemptBecause.trim().length,
+        `${row.re.source} exempts a lifetime with no argument`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('every producer row states WHY its lifetime is what it is', () => {
+    // A lifetime is what the rules judge on, so an asserted one is an
+    // exemption with no argument wearing a different field name.
+    for (const producer of PRODUCERS) {
+      expect(
+        producer.lifetimeBecause.trim().length,
+        `${producer.id} asserts a lifetime with no evidence`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   it('every producer and every end-to-end suite it names is still on disk', () => {
     for (const producer of PRODUCERS) {
       expect(existsSync(resolve(process.cwd(), producer.module)), producer.module).toBe(true);
       for (const suite of producer.drivenBy) {
         expect(existsSync(resolve(process.cwd(), suite)), `${producer.id} → ${suite}`).toBe(true);
       }
+    }
+  });
+});
+
+/**
+ * THE PROBE — fifteen sentences nobody has shipped, put to the checker.
+ *
+ * The rules were a list of the exact wordings that had already escaped, and a
+ * list of past wordings can only ever catch the past. So fifteen plausible
+ * forward-looking sentences were written — the kind a maintainer produces
+ * without thinking twice, on a surface that keeps them — and run through the
+ * checker as it stood. THIRTEEN passed. Four of them are quoted in the shape
+ * rows of `modelFacingClaims.ts`, because they are the reason those rows
+ * exist.
+ *
+ * The probe is kept as a test rather than as a note, because the interesting
+ * direction is FORWARD: it fails the day somebody narrows a shape row to let
+ * one sentence through, which is exactly how a checker dies.
+ *
+ * The second half is the other half of the same guard. A rule that catches
+ * every sentence catches nothing — it gets deleted the first time it fires on
+ * a true one. So the repaired forms, the ones real producers ship today, must
+ * pass, and they are quoted from the producers rather than invented here.
+ */
+describe('the checker catches the shapes, not only the wordings it has seen', () => {
+  const FORWARD_LOOKING: readonly string[] = [
+    // Present-tense capability census — the wire moves under all four.
+    'The following tools are available to you: calc, probe.',
+    "The 'billing' skill is active for the rest of this turn.",
+    'Nothing is live in this scope at the moment.',
+    'The zone-audit map is loaded, and its members are reachable.',
+    'Two skills are reachable from here: refunds and shipping.',
+    // Deictic present — pointing at the moment of reading.
+    "You are currently in 'alpha'.",
+    'Its tools and instructions are now available.',
+    'No inner runs are held right now.',
+    // Second-person effect — a forecast the posture or the budget can refuse.
+    'Calling read_skill switches you to beta.',
+    "read_skill('vault') grants you the vault tools.",
+    'The refunds skill activates you into a new tool set.',
+    // Standing imperatives — orders that outlive the conditions they were
+    // composed under.
+    'Pick one of the skills above, or finish.',
+    'Do not call read_skill again on this turn.',
+    'Call run_overview to see what the run did do.',
+    'Use trace_node for its details, or trace_slice from a downstream step.',
+  ];
+
+  it('catches all fifteen at a persistent lifetime — thirteen of them used to pass', () => {
+    const escaped = FORWARD_LOOKING.filter(
+      (sentence) => unprovable(sentence, TOOL_RESULT).length === 0,
+    );
+    expect(escaped).toEqual([]);
+  });
+
+  it('the LIFETIME decides: one sentence, clean as a description and false as a result', () => {
+    // The worked example in `src/lib/injection-engine/README.md`, executed
+    // here so the documented law cannot drift from the rules. The description
+    // is recomposed for the request being answered and may report the
+    // present; the same words on a tool result are re-read after the cursor
+    // and the graph have moved.
+    const offer = "You are in 'billing'. Two skills are reachable from here: refunds, shipping.";
+    expect(unprovable(offer, GRAPH_TOOL_DESCRIPTION)).toEqual([]);
+    // The cursor claim, the reachability claim and the capability census —
+    // three rows, three different ways the same sentence goes stale.
+    expect(unprovable(offer, TOOL_RESULT).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('leaves the anchored past-tense forms alone — the repair has to be reachable', () => {
+    // Every one of these is a sentence a producer in this tree composes today.
+    const anchored: readonly string[] = [
+      'read_skill("vault") was not granted on that call: \'vault\' was not reachable from ' +
+        "'billing'. Skills reachable from 'billing' when that call was made: refunds.",
+      "Unknown tool 'nope' on that call. Tool names that resolved to an implementation on " +
+        'that call: calc, probe.',
+      'Open skills were admitted on that call: debug.',
+      "⚠ the arguments failed schema validation on call 'c1' — see the validation event / the " +
+        'tool result, which carries the correction the model was given.',
+      "No inner run was held when inspect_tool_run('c1') was answered. A tool that keeps " +
+        'records had not been called in the turn this trace covers.',
+      'You named the skill you were already standing in on that call, so nothing moved.',
+    ];
+    for (const sentence of anchored) {
+      expect(unprovable(sentence, TOOL_RESULT), sentence).toEqual([]);
     }
   });
 });

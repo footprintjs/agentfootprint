@@ -311,6 +311,16 @@ dev mode warns you about the missing marker so the miss is never silent:
   admitted under every posture, `rails` included. Conflicting same-batch
   proposals reuse the `route_conflict` law: first accepted in call order
   wins, the rest are suppressed on the record (`source: 'tool-proposal'`).
+
+  **A proposal naming the cursor's own skill is a STAY** (9.86.0). The tool
+  asked for the state the run is already in, so there is nothing to move and
+  nothing to refuse: it is accepted as a no-op — no cursor move, no pending
+  transition, and no `[tool effect refused: …]` suffix on the result. The
+  `agentfootprint.tools.effect` event carries the ordinary
+  `outcome: 'accepted'` plus an additive `stay: true`, so an exhaustive switch
+  over `outcome` in your own code keeps compiling. Before this it was refused
+  as unreachable, because the graph's successor set excludes the cursor —
+  right for a move, wrong for a stay.
 - **`{ kind: 'require-instruction', instructionId, deliveryLease }`** —
   pushes a **registered** instruction (a skill body or a declared snippet)
   into the coming call(s). `'next-call'` serves exactly the next LLM call;

@@ -19,8 +19,14 @@
 
 import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../src/index.js';
-import { defineSkill, skillGraph, buildReadSkillTool } from '../src/injection-engine.js';
+import {
+  decideSkill,
+  defineSkill,
+  skillGraph,
+  buildReadSkillTool,
+} from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
+import { unprovable, GRAPH_TOOL_DESCRIPTION } from './helpers/modelFacingClaims.js';
 
 const t = (name: string) =>
   defineTool({
@@ -125,11 +131,142 @@ describe('read_skill offer — the builder', () => {
     expect(d).toContain('Nothing is reachable from here');
   });
 
+  /**
+   * OMIT, NEVER DENY — on the surface the model chooses from (9.86.0 fix pass).
+   *
+   * The refusal composer was taught to tell "the graph held nothing" from "the
+   * role filter emptied it"; this description was not, and it is the sentence
+   * the model reads BEFORE it picks. It computed its columns from an
+   * already-filtered catalog, so a cursor whose only declared hop is hidden was
+   * told "Nothing is reachable from here" while the graph was holding that
+   * edge — a Lens denying what the Fold holds.
+   */
+  it('when the role filter empties the hop set, the negative sentence is OMITTED', () => {
+    const d = buildReadSkillTool(skills, {
+      grantable: ['beta'],
+      hiddenIds: ['beta'],
+      cursorId: 'alpha',
+    })!.schema.description;
+    // The graph holds alpha → beta. Saying nothing is reachable denies it.
+    expect(d).not.toContain('Nothing is reachable from here');
+    // Omission, not a leak: the hidden id is still named nowhere.
+    expect(d).not.toContain('beta');
+    // …and the description is still whole — the cursor and the instructions.
+    expect(d).toContain("You are in 'alpha'.");
+    expect(d).toContain("Pass the skill's id.");
+    // No blank clause left where the sentence used to be.
+    expect(d).not.toContain('\n\n\n');
+    // The arm the omission leaves behind is still a sentence the checker clears
+    // at this surface — a new arm of a registered producer is judged like any
+    // other.
+    expect(unprovable(d, GRAPH_TOOL_DESCRIPTION)).toEqual([]);
+  });
+
+  it('a graph that genuinely holds no hop still says so — the fix omits, it does not mute', () => {
+    // The other half. `grantable: []` with nothing hidden is an absence this
+    // description holds evidence for, so it may state it.
+    const d = buildReadSkillTool(skills, { grantable: [], cursorId: 'alpha' })!.schema.description;
+    expect(d).toContain('Nothing is reachable from here');
+  });
+
   it('showRefusable:false hides the refusable half', () => {
     const d = buildReadSkillTool(skills, { grantable: ['beta'], showRefusable: false })!.schema
       .description;
     expect(d).toContain('  - beta:');
     expect(d).not.toContain('Not reachable from here');
+  });
+});
+
+// ─── 1b. UNIT + SCENARIO — a decision TREE is offered nothing it would refuse ──
+
+/**
+ * ITEM 4 of "Offer, Not Dispatch" (9.86.0).
+ *
+ * 8.5.0's whole argument was that a menu the gate will reject is a menu the
+ * model should never have been shown. Under a `.tree()` that rejection is
+ * TOTAL: the tree routes by predicate and keeps no cursor, so
+ * `reachableSkills()` is empty from every position and every routing pick is
+ * refused. The offer was left standing there anyway, saying "Nothing is
+ * reachable from here" on every single iteration — an invitation to a door
+ * that is not a door.
+ *
+ * Two shapes, because a tree can still have OPEN skills registered beside it:
+ * with none, the tool is not offered at all; with some, it is offered and its
+ * description says what a pick can actually do. Dispatch is untouched in both
+ * — `test/skillGraphTreePick.test.ts` drives a pick made anyway and reads the
+ * gate's refusal.
+ */
+describe('read_skill offer — under a .tree()', () => {
+  const leaf = (id: string) => defineSkill({ id, description: `${id} leaf`, body: `${id}_BODY` });
+
+  it('with nothing open, the tool is WITHHELD — no menu at all beats a menu of one refusal', () => {
+    const tool = buildReadSkillTool([leaf('leaf1'), leaf('leaf2')], {
+      grantable: [],
+      treeRouted: true,
+    });
+    expect(tool).toBeUndefined();
+  });
+
+  it('with open skills, it explains the tree and names exactly what a pick CAN open', () => {
+    const d = buildReadSkillTool(
+      [leaf('leaf1'), leaf('leaf2'), defineSkill({ id: 'helper', description: 'H', body: 'B' })],
+      { grantable: ['helper'], treeRouted: true },
+    )!.schema.description;
+    expect(d).toContain('decision TREE');
+    expect(d).toContain('keeps no cursor');
+    expect(d).toContain('  - helper: H');
+    // The leaves are NOT offered as picks — that is the whole refusal.
+    expect(d).not.toContain('  - leaf1:');
+    expect(d).not.toContain('Nothing is reachable from here');
+  });
+
+  it('a role that may not see the open skill leaves the tree with nothing to offer', () => {
+    // The two filters compose: hidden first, then the tree's own emptiness
+    // test. A role-hidden open skill cannot keep the tool on the wire, or the
+    // offer would name a door only somebody else may use.
+    const tool = buildReadSkillTool(
+      [leaf('leaf1'), defineSkill({ id: 'helper', description: 'H', body: 'B' })],
+      { grantable: ['helper'], treeRouted: true, hiddenIds: ['helper'] },
+    );
+    expect(tool).toBeUndefined();
+  });
+
+  it('END TO END: a tree agent never carries read_skill on the wire, and still dispatches it', async () => {
+    const a = leaf('leaf1');
+    const b = leaf('leaf2');
+    const g = skillGraph({
+      skills: [a, b],
+      tree: decideSkill(() => true, a, b),
+      check: 'throw',
+    });
+    const wire: string[][] = [];
+    const results: string[] = [];
+    let i = 0;
+    const script = [
+      { content: '', toolCalls: [{ id: 'c1', name: 'read_skill', args: { id: 'leaf2' } }] },
+      { content: 'done', toolCalls: [] },
+    ];
+    const provider = mock({
+      respond: (req: {
+        tools?: ReadonlyArray<{ name: string }>;
+        messages?: ReadonlyArray<{ role: string; content: unknown }>;
+      }) => {
+        for (const m of req.messages ?? []) if (m.role === 'tool') results.push(String(m.content));
+        wire.push((req.tools ?? []).map((x) => x.name));
+        return script[i++] ?? { content: 'done', toolCalls: [] };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+      .system('s')
+      .skillGraph(g)
+      .build();
+    await agent.run({ message: 'go' });
+
+    // The offer is gone…
+    for (const call of wire) expect(call).not.toContain('read_skill');
+    // …and the NAME still dispatches: a model working from a restored
+    // transcript reaches the gate's teaching refusal, not a silent nothing.
+    expect(results.join('\n')).toContain('this map is a decision tree');
   });
 });
 
@@ -262,8 +399,12 @@ describe('read_skill offer — the gate is untouched', () => {
     await agent.run({ message: 'go' });
 
     // The gate's teaching refusal, NOT a schema error — this is the whole reason
-    // the enum stayed the full catalog.
-    expect(toolResults.join('\n')).toContain('is not reachable from here');
+    // the enum stayed the full catalog. The sentence is anchored to the call
+    // the model made (9.86.0): "from here" became "from 'alpha'", because a
+    // tool result is re-read after "here" has moved.
+    expect(toolResults.join('\n')).toContain(
+      "read_skill(\"delta\") was not granted on that call: 'delta' was not reachable from 'alpha'",
+    );
     expect(toolResults.join('\n')).not.toContain('Invalid arguments');
     expect(events.some((e) => e.name === 'agentfootprint.skill.rejected')).toBe(true);
     expect(events.some((e) => e.name.includes('args_invalid'))).toBe(false);

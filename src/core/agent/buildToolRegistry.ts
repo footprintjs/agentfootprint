@@ -195,6 +195,26 @@ export interface ToolRegistryArtifacts {
    *  shape; passed to `buildToolsSlot` + the seed stage as the
    *  per-iteration default before the dynamic tools slot has run. */
   readonly toolSchemas: readonly LLMToolSchema[];
+  /**
+   * WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — tool name → the ids of the
+   * skills whose `inject.tools` carry it, in declaration order.
+   *
+   * This walk already happened here; it was thrown away, and the one consumer
+   * that needed it — the unknown-tool roster, which must not name a tool
+   * belonging to a skill the caller's policy hides — had no way to ask. A
+   * consumer re-deriving it from `Agent.injections` would be a second walk of
+   * the same arrays, which is the shape this release exists to remove.
+   *
+   * Shared references are kept whole: a Tool the same reference of which two
+   * skills carry is listed under BOTH ids, so a reader can apply the
+   * sole-owner rule (hide the name only when every declaring skill is hidden)
+   * rather than guessing at ownership.
+   *
+   * EMPTY when no registered skill declares a tool. Static `.tool()`
+   * registrations, `read_skill`, `present` and `skip_step` are never in it:
+   * they are the framework's or the app's, not a skill's.
+   */
+  readonly toolDeclaringSkills: ReadonlyMap<string, readonly string[]>;
 }
 
 /** The build facts that gate auto-attached tools beyond skills (9.22.0). */
@@ -227,12 +247,21 @@ export function buildToolRegistry(
   // belt-and-suspenders.
   const skillToolEntries: ToolRegistryEntry[] = [];
   const sharedSkillTools = new Map<string, Tool>();
+  // The declaration edge, recorded on the walk that already exists (9.86.0):
+  // every skill that carries a name, not only the first one to claim it. The
+  // `continue` below skips a repeat REGISTRATION, not a repeat declaration —
+  // a shared Tool reference is genuinely declared by both skills, and a reader
+  // asking "may this name be spoken?" needs both ids to answer.
+  const declaringSkills = new Map<string, string[]>();
   for (const skill of skills) {
     const meta = skill.metadata as { autoActivate?: string } | undefined;
     const isAutoActivate = meta?.autoActivate === 'currentSkill';
     const toolsFromSkill = skill.inject.tools ?? [];
     for (const tool of toolsFromSkill) {
       const name = tool.schema.name;
+      const declared = declaringSkills.get(name);
+      if (declared === undefined) declaringSkills.set(name, [skill.id]);
+      else if (!declared.includes(skill.id)) declared.push(skill.id);
       // Check EVERY skill tool — including autoActivate ones, which `continue`
       // below and never reach the static registry's gate. (This is the common
       // case: all of Neo's skills are autoActivate, so their scoped tools would
@@ -368,5 +397,5 @@ export function buildToolRegistry(
   }
   const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
 
-  return { augmentedRegistry, registryByName, toolSchemas };
+  return { augmentedRegistry, registryByName, toolSchemas, toolDeclaringSkills: declaringSkills };
 }

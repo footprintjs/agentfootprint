@@ -6,7 +6,7 @@ title: isDropNotice
 
 > **isDropNotice**(`msg`): `boolean`
 
-Defined in: [src/core/agent/window/notice.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/notice.ts#L138)
+Defined in: [src/lib/saidByPerson.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L141)
 
 True when this message is a notice a previous drop wrote.
 
@@ -14,7 +14,7 @@ True when this message is a notice a previous drop wrote.
 
 ### msg
 
-[`LLMMessage`](/docs/api/interfaces/LLMMessage) \| `undefined`
+[`AuthoredMessage`](/docs/api/interfaces/AuthoredMessage) \| `undefined`
 
 ## Returns
 

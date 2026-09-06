@@ -2257,9 +2257,13 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       }
       lines.push(`outcome: ${outcome}`);
       if (invalid) {
+        // Anchored to the call by ID, not by "this call" (9.86.0): the line
+        // lands in a tool result, and a model re-reading it three calls later
+        // resolves "this call" to whichever call it is answering then.
         lines.push(
-          `⚠ the arguments failed schema validation on this call — see the validation event / ` +
-            `the tool result, which carries the correction the model was given.`,
+          `⚠ the arguments failed schema validation on call '${toolCallId}' — see the ` +
+            `validation event / the tool result, which carries the correction the model was ` +
+            `given.`,
         );
       }
 
@@ -2494,7 +2498,7 @@ function unknownInnerRunMessage(
   if (outer === undefined) {
     lines.push(
       `⚠ the outer run does not record a call with that id either — check ` +
-        `inspect_tool_call('${toolCallId}') first; it names every id this run made.`,
+        `inspect_tool_call('${toolCallId}') first; it names every id the outer run recorded.`,
     );
   } else {
     lines.push(
@@ -2504,9 +2508,12 @@ function unknownInnerRunMessage(
   }
 
   if (kept.length === 0) {
+    // Past tense, anchored to the lookup that was answered (9.86.0). "Right
+    // now" pointed at the moment of READING, and this string is a tool result
+    // the model re-reads on every later call of the debugging turn.
     lines.push(
-      `No inner runs are held right now. A tool that keeps records has simply not been called ` +
-        `yet in the turn this trace covers.`,
+      `No inner run was held when inspect_tool_run('${toolCallId}') was answered. A tool that ` +
+        `keeps records had not been called in the turn this trace covers.`,
     );
   } else {
     const sample = kept

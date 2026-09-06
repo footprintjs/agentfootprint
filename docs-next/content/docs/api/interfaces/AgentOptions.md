@@ -42,7 +42,7 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:799](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L799)
+Defined in: [src/core/agent/types.ts:808](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L808)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -55,7 +55,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:792](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L792)
+Defined in: [src/core/agent/types.ts:801](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L801)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -290,7 +290,7 @@ trust it.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:826](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L826)
+Defined in: [src/core/agent/types.ts:835](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L835)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -594,7 +594,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:887](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L887)
+Defined in: [src/core/agent/types.ts:896](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L896)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -630,7 +630,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:893](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L893)
+Defined in: [src/core/agent/types.ts:902](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L902)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -642,7 +642,7 @@ Queue dials for `observerDelivery: 'deferred'` — see
 
 > `readonly` `optional` **onAuthorizationRequired?**: `AuthorizationRequiredMode`
 
-Defined in: [src/core/agent/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L781)
+Defined in: [src/core/agent/types.ts:790](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L790)
 
 What the run does when a tool's DECLARED credential (`needs: { credential }`)
 comes back `authorization-required` — a person has to click a consent link
@@ -705,7 +705,7 @@ Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:857](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L857)
+Defined in: [src/core/agent/types.ts:866](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L866)
 
 How the ReAct loop behaves — a single setting with three honest choices.
 Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
@@ -843,7 +843,7 @@ and the note would be noise rather than news.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:816](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L816)
+Defined in: [src/core/agent/types.ts:825](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L825)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -921,7 +921,7 @@ latency-critical shutdown where an abandoned session is the cheaper loss.
 
 > `readonly` `optional` **wrapUpAtMaxIterations?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:759](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L759)
+Defined in: [src/core/agent/types.ts:768](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L768)
 
 What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
 Default **on**.
@@ -937,9 +937,18 @@ budget had run out.
 With this on, the run spends ONE more LLM call with **the tools withheld**
 and this instruction appended, then hands back what comes back:
 
-> *Your action budget for this turn is exhausted. Do not request tools.
-> Give your best final answer from what you have: what you completed, what
-> remains undone, and anything the person should know.*
+> *[budget exhausted — the action budget was exhausted before this call,
+> so no tools were offered on it. This call was for the final answer, from
+> what the messages above already hold: what was completed, what remained
+> undone, and anything the person should know.]*
+
+Reworded in 9.86.0. The message lives in `history` and is re-read on every
+later call of the turn, so it opens with the registered marker that says
+the library wrote it (`WRAP_UP_FRAME_PREFIX` — otherwise a routing rule
+and the window's own refusal engine read it as the person's request), and
+every clause is a past fact about the call it was written for rather than
+a standing instruction. The withholding is unchanged: it happens at
+request assembly, not because a sentence asked for it.
 
 That call is exempt from `maxIterations` by design — it cannot loop,
 because with no tools on the wire there is nothing for the model to ask

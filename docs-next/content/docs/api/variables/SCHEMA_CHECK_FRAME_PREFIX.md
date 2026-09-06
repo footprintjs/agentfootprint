@@ -6,6 +6,7 @@ title: SCHEMA_CHECK_FRAME_PREFIX
 
 > `const` **SCHEMA\_CHECK\_FRAME\_PREFIX**: `"[schema check"` = `'[schema check'`
 
-Defined in: [src/core/agent/outputEnforcement.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L145)
+Defined in: [src/lib/saidByPerson.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L87)
 
-Opening of the authored frame. Stable — tests and readers match on it.
+Opening of the authored frame a failed output validation writes. Stable —
+ tests and readers match on it. Written by `buildCorrectiveTurn`.

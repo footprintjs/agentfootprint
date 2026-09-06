@@ -509,7 +509,7 @@ Defined in: [src/core/Agent.ts:1088](https://github.com/footprintjs/agentfootpri
 
 > **drainObservers**(`opts?`): `Promise`\<`DrainResult`\>
 
-Defined in: [src/core/Agent.ts:2965](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2965)
+Defined in: [src/core/Agent.ts:2974](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2974)
 
 Flush the deferred-observer backlog of the most recent run's executor,
 then await async listener completions under a deadline (RFC-001 §11 —
@@ -1120,7 +1120,7 @@ Defined in: [src/core/RunnerBase.ts:477](https://github.com/footprintjs/agentfoo
 
 > **outputContractUnmet**(): \{ `attempts`: `number`; `brokenBy?`: `string`; `error`: `string`; `fallbackConfigured`: `boolean`; `path?`: `string`; `retriesSpent`: `number`; `stage`: `"json-parse"` \| `"schema-validate"`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:3045](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3045)
+Defined in: [src/core/Agent.ts:3054](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3054)
 
 Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
 
@@ -1566,7 +1566,7 @@ Graceful exit for a script
 
 > **stoppedEarly**(): \{ `answerWasEmpty`: `boolean`; `iteration`: `number`; `pendingToolCalls`: `number`; `reason`: `"max-iterations"` \| `"cost-budget"`; `wrappedUp?`: `true`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:3005](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3005)
+Defined in: [src/core/Agent.ts:3014](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3014)
 
 Did the last turn stop because a LIMIT cut it short — and if so, which?
 
@@ -1659,7 +1659,7 @@ if (cut) {
 
 > **unsupportedValues**(): \{ `candidates`: `number`; `posture`: `"assist"` \| `"guard"` \| `"rails"`; `refused`: `boolean`; `revised`: `boolean`; `values`: readonly [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)[]; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:3076](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3076)
+Defined in: [src/core/Agent.ts:3085](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L3085)
 
 Did the last turn's answer state names or numbers that appear in NO tool
 result (9.35.0)?

@@ -1,14 +1,14 @@
 {
   "$schema": "tool-divergence baseline v1",
-  "note": "Recorded state of every offer/dispatch divergence the walk in test/core/agent/toolDivergenceWalk.test.ts can reach. This is a RATCHET, not a gate: a divergence that is not here FAILS (it is new), one that is here and stops appearing FAILS (behaviour moved), and one that changes shape FAILS. `tolerated` is hand-written and required \u2014 a row whose reason reads TODO fails, so accepting debt is a person's sentence in a diff somebody reviewed. Re-record with AF_DIVERGENCE_BASELINE=update npx vitest run test/core/agent/toolDivergenceWalk.test.ts, then write the reason for every new row.",
-  "recordedAt": "2026-09-04",
+  "note": "Recorded state of every offer/dispatch divergence the walk in test/core/agent/toolDivergenceWalk.test.ts can reach. This is a RATCHET, not a gate: a divergence that is not here FAILS (it is new), one that is here and stops appearing FAILS (behaviour moved), and one that changes shape FAILS. `tolerated` is hand-written and required — a row whose reason is empty, reads todo/tbd/fixme/xxx in any case, or is shorter than 40 characters FAILS, so accepting debt is a person's sentence in a diff somebody reviewed rather than a side effect of running the re-record. A row that says a defect is real rather than intended names its entry in docs/design/2026-09-recorded-not-built.md, which carries what fixing it would cost. Re-record with AF_DIVERGENCE_BASELINE=update npx vitest run test/core/agent/toolDivergenceWalk.test.ts, then write the reason for every new row.",
+  "recordedAt": "2026-09-06",
   "walk": {
-    "cases": 60,
+    "cases": 76,
     "notConstructible": 10,
-    "refused": 18,
+    "refused": 26,
     "clean": 4,
-    "divergent": 28,
-    "divergences": 36
+    "divergent": 36,
+    "divergences": 46
   },
   "cases": {
     "collision/static-then-provider": {
@@ -38,7 +38,7 @@
     },
     "collision/provider-then-mcp": {
       "outcome": "not-constructible",
-      "because": "`toolProvider` is one posture for the whole agent \u2014 'staticTools' and 'mcp' cannot both be set"
+      "because": "`toolProvider` is one posture for the whole agent — 'staticTools' and 'mcp' cannot both be set"
     },
     "collision/provider-then-skill-static": {
       "outcome": "divergent"
@@ -57,7 +57,7 @@
     },
     "collision/mcp-then-provider": {
       "outcome": "not-constructible",
-      "because": "`toolProvider` is one posture for the whole agent \u2014 'mcp' and 'staticTools' cannot both be set"
+      "because": "`toolProvider` is one posture for the whole agent — 'mcp' and 'staticTools' cannot both be set"
     },
     "collision/mcp-then-skill-static": {
       "outcome": "divergent"
@@ -83,11 +83,11 @@
     },
     "collision/skill-static-then-skill-active": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'always-visible' and 'from-active-skill' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'always-visible' and 'from-active-skill' cannot both be set"
     },
     "collision/skill-static-then-skill-inactive": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'always-visible' and 'from-active-skill' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'always-visible' and 'from-active-skill' cannot both be set"
     },
     "collision/skill-static-then-step-skill": {
       "outcome": "refused",
@@ -105,15 +105,15 @@
     },
     "collision/skill-active-then-skill-static": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'from-active-skill' and 'always-visible' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'from-active-skill' and 'always-visible' cannot both be set"
     },
     "collision/skill-active-then-skill-inactive": {
       "outcome": "refused",
-      "because": "AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole agent \u2014 every skill's tools follow that skill's activation \u2014 so a second call has nothing left to say. Drop it."
+      "because": "AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole agent — every skill's tools follow that skill's activation — so a second call has nothing left to say. Drop it."
     },
     "collision/skill-active-then-step-skill": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'from-active-skill' and 'always-visible' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'from-active-skill' and 'always-visible' cannot both be set"
     },
     "collision/skill-inactive-then-static": {
       "outcome": "refused",
@@ -127,15 +127,15 @@
     },
     "collision/skill-inactive-then-skill-static": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'from-active-skill' and 'always-visible' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'from-active-skill' and 'always-visible' cannot both be set"
     },
     "collision/skill-inactive-then-skill-active": {
       "outcome": "refused",
-      "because": "AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole agent \u2014 every skill's tools follow that skill's activation \u2014 so a second call has nothing left to say. Drop it."
+      "because": "AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole agent — every skill's tools follow that skill's activation — so a second call has nothing left to say. Drop it."
     },
     "collision/skill-inactive-then-step-skill": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'from-active-skill' and 'always-visible' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'from-active-skill' and 'always-visible' cannot both be set"
     },
     "collision/step-skill-then-static": {
       "outcome": "refused",
@@ -153,11 +153,11 @@
     },
     "collision/step-skill-then-skill-active": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'always-visible' and 'from-active-skill' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'always-visible' and 'from-active-skill' cannot both be set"
     },
     "collision/step-skill-then-skill-inactive": {
       "outcome": "not-constructible",
-      "because": "`toolPosture` is one posture for the whole agent \u2014 'always-visible' and 'from-active-skill' cannot both be set"
+      "because": "`toolPosture` is one posture for the whole agent — 'always-visible' and 'from-active-skill' cannot both be set"
     },
     "cross-epoch/dynamic-provider-withdraws": {
       "outcome": "divergent"
@@ -179,11 +179,11 @@
     },
     "framework/read_skill-vs-static": {
       "outcome": "refused",
-      "because": "Agent: tool name 'read_skill' is reserved when \u22651 Skill is registered. Rename your custom 'read_skill' tool or unregister it."
+      "because": "Agent: tool name 'read_skill' is reserved when ≥1 Skill is registered. Rename your custom 'read_skill' tool or unregister it."
     },
     "framework/skip_step-vs-static": {
       "outcome": "refused",
-      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` \u2014 the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
+      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` — the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
     },
     "framework/run_overview-vs-static": {
       "outcome": "refused",
@@ -191,7 +191,7 @@
     },
     "framework/present-vs-static": {
       "outcome": "refused",
-      "because": "Agent: tool name 'present' is reserved when an artifact store is attached \u2014 the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
+      "because": "Agent: tool name 'present' is reserved when an artifact store is attached — the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
     },
     "framework/read_skill-vs-provider": {
       "outcome": "divergent"
@@ -205,37 +205,93 @@
     "framework/present-vs-provider": {
       "outcome": "divergent"
     },
+    "framework/read_skill-vs-mcp": {
+      "outcome": "divergent"
+    },
+    "framework/skip_step-vs-mcp": {
+      "outcome": "divergent"
+    },
+    "framework/run_overview-vs-mcp": {
+      "outcome": "divergent"
+    },
+    "framework/present-vs-mcp": {
+      "outcome": "divergent"
+    },
+    "framework/read_skill-vs-skill-static": {
+      "outcome": "refused",
+      "because": "Agent: duplicate tool name 'read_skill'. Tool names must be unique across .tool() registrations and Skills' inject.tools (after deduping same-reference shares across skills). The LLM dispatches by name; collisions break tool routing."
+    },
+    "framework/skip_step-vs-skill-static": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` — the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
+    },
+    "framework/run_overview-vs-skill-static": {
+      "outcome": "divergent"
+    },
+    "framework/present-vs-skill-static": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'present' is reserved when an artifact store is attached — the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
+    },
     "framework/read_skill-vs-skill-active": {
       "outcome": "divergent"
     },
     "framework/skip_step-vs-skill-active": {
       "outcome": "refused",
-      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` \u2014 the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
+      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` — the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
     },
     "framework/run_overview-vs-skill-active": {
       "outcome": "divergent"
     },
     "framework/present-vs-skill-active": {
       "outcome": "refused",
-      "because": "Agent: tool name 'present' is reserved when an artifact store is attached \u2014 the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
+      "because": "Agent: tool name 'present' is reserved when an artifact store is attached — the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
+    },
+    "framework/read_skill-vs-skill-inactive": {
+      "outcome": "divergent"
+    },
+    "framework/skip_step-vs-skill-inactive": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` — the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
+    },
+    "framework/run_overview-vs-skill-inactive": {
+      "outcome": "divergent"
+    },
+    "framework/present-vs-skill-inactive": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'present' is reserved when an artifact store is attached — the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
+    },
+    "framework/read_skill-vs-step-skill": {
+      "outcome": "refused",
+      "because": "Agent: duplicate tool name 'read_skill'. Tool names must be unique across .tool() registrations and Skills' inject.tools (after deduping same-reference shares across skills). The LLM dispatches by name; collisions break tool routing."
+    },
+    "framework/skip_step-vs-step-skill": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'skip_step' is reserved when any skill declares `steps` — the framework auto-attaches the procedure-integrity tool under that name, and a same-named tool would silently take over the model's recorded skips. Rename your tool."
+    },
+    "framework/run_overview-vs-step-skill": {
+      "outcome": "divergent"
+    },
+    "framework/present-vs-step-skill": {
+      "outcome": "refused",
+      "because": "Agent: tool name 'present' is reserved when an artifact store is attached — the framework auto-attaches the hand-to-the-screen tool under that name, and a same-named tool would silently take over the model's presentations. Rename your tool, or drop the `artifacts` store."
     }
   },
   "divergences": {
     "collision/mcp-then-skill-active::shared_tool@e2::contract-swap": {
       "case": "collision/mcp-then-skill-active",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "mcp",
       "answered": "skill-active",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-active)",
       "cause": "the wire carried 'mcp's contract and 'skill-active's implementation answered, inside epoch 2",
       "tolerated": "The documented shadow seam. The wire merge is [static, provider, skill, step] first-occurrence-wins and an autoActivate skill's tools are deliberately kept out of the static registry, so the PROVIDER's schema is what the model reads; lookupTool checks registryByName first, where every skill tool lives and no provider tool does, so the SKILL's execute is what runs. Reported rather than refused because there is no build-time moment at which the pair is knowable: the provider's list is resolved per iteration and the skill has to be active. Pinned by test/toolShadowing.test.ts and epoch-laws 1(g)."
     },
     "collision/mcp-then-skill-inactive::shared_tool@e1::contract-swap": {
       "case": "collision/mcp-then-skill-inactive",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND an INACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, never activated)",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 1,
@@ -243,11 +299,11 @@
       "answered": "skill-inactive",
       "reported": "none",
       "cause": "the wire carried 'mcp's contract and 'skill-inactive's implementation answered, inside epoch 1",
-      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool \u2014 an autoActivate skill's included, whether or not it is active \u2014 and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
+      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool — an autoActivate skill's included, whether or not it is active — and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
     },
     "collision/mcp-then-skill-static::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/mcp-then-skill-static",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a skill\u2019s `tools:[]` with tools always visible (no `autoActivate`)",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a skill’s `tools:[]` with tools always visible (no `autoActivate`)",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
@@ -255,7 +311,7 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/mcp-then-static::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/mcp-then-static",
@@ -267,59 +323,59 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/mcp-then-step-skill::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/mcp-then-step-skill",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
       "contract": "never on the wire",
       "answered": "never dispatched",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; the shadow report for this name describes a different pair",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
     },
-    "collision/mcp-then-step-skill::shared_tool@e2::report-misattributed": {
+    "collision/mcp-then-step-skill::shared_tool@e2::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/mcp-then-step-skill",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
-    "collision/mcp-then-step-skill::shared_tool@e3::report-misattributed": {
+    "collision/mcp-then-step-skill::shared_tool@e3::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/mcp-then-step-skill",
-      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by an MCP-served tool, mounted through a provider AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 3,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
     "collision/provider-then-skill-active::shared_tool@e2::contract-swap": {
       "case": "collision/provider-then-skill-active",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "provider",
       "answered": "skill-active",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-active)",
       "cause": "the wire carried 'provider's contract and 'skill-active's implementation answered, inside epoch 2",
       "tolerated": "The documented shadow seam. The wire merge is [static, provider, skill, step] first-occurrence-wins and an autoActivate skill's tools are deliberately kept out of the static registry, so the PROVIDER's schema is what the model reads; lookupTool checks registryByName first, where every skill tool lives and no provider tool does, so the SKILL's execute is what runs. Reported rather than refused because there is no build-time moment at which the pair is knowable: the provider's list is resolved per iteration and the skill has to be active. Pinned by test/toolShadowing.test.ts and epoch-laws 1(g)."
     },
     "collision/provider-then-skill-inactive::shared_tool@e1::contract-swap": {
       "case": "collision/provider-then-skill-inactive",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND an INACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, never activated)",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 1,
@@ -327,11 +383,11 @@
       "answered": "skill-inactive",
       "reported": "none",
       "cause": "the wire carried 'provider's contract and 'skill-inactive's implementation answered, inside epoch 1",
-      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool \u2014 an autoActivate skill's included, whether or not it is active \u2014 and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
+      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool — an autoActivate skill's included, whether or not it is active — and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
     },
     "collision/provider-then-skill-static::shared_tool::claim-swallowed(provider)": {
       "case": "collision/provider-then-skill-static",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a skill\u2019s `tools:[]` with tools always visible (no `autoActivate`)",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a skill’s `tools:[]` with tools always visible (no `autoActivate`)",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
@@ -339,7 +395,7 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/provider-then-static::shared_tool::claim-swallowed(provider)": {
       "case": "collision/provider-then-static",
@@ -351,71 +407,71 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/provider-then-step-skill::shared_tool::claim-swallowed(provider)": {
       "case": "collision/provider-then-step-skill",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
       "contract": "never on the wire",
       "answered": "never dispatched",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; the shadow report for this name describes a different pair",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
     },
-    "collision/provider-then-step-skill::shared_tool@e2::report-misattributed": {
+    "collision/provider-then-step-skill::shared_tool@e2::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/provider-then-step-skill",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
-    "collision/provider-then-step-skill::shared_tool@e3::report-misattributed": {
+    "collision/provider-then-step-skill::shared_tool@e3::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/provider-then-step-skill",
-      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill\u2019s step-1 tool, with the tenure open",
+      "configuration": "'shared_tool' claimed by a `ToolProvider` (`staticTools`) AND a STEPPED skill’s step-1 tool, with the tenure open",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 3,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
     "collision/skill-active-then-mcp::shared_tool@e2::contract-swap": {
       "case": "collision/skill-active-then-mcp",
-      "configuration": "'shared_tool' claimed by an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated) AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated) AND an MCP-served tool, mounted through a provider",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "mcp",
       "answered": "skill-active",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-active)",
       "cause": "the wire carried 'mcp's contract and 'skill-active's implementation answered, inside epoch 2",
       "tolerated": "The documented shadow seam. The wire merge is [static, provider, skill, step] first-occurrence-wins and an autoActivate skill's tools are deliberately kept out of the static registry, so the PROVIDER's schema is what the model reads; lookupTool checks registryByName first, where every skill tool lives and no provider tool does, so the SKILL's execute is what runs. Reported rather than refused because there is no build-time moment at which the pair is knowable: the provider's list is resolved per iteration and the skill has to be active. Pinned by test/toolShadowing.test.ts and epoch-laws 1(g)."
     },
     "collision/skill-active-then-provider::shared_tool@e2::contract-swap": {
       "case": "collision/skill-active-then-provider",
-      "configuration": "'shared_tool' claimed by an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated) AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated) AND a `ToolProvider` (`staticTools`)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "provider",
       "answered": "skill-active",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-active)",
       "cause": "the wire carried 'provider's contract and 'skill-active's implementation answered, inside epoch 2",
       "tolerated": "The documented shadow seam. The wire merge is [static, provider, skill, step] first-occurrence-wins and an autoActivate skill's tools are deliberately kept out of the static registry, so the PROVIDER's schema is what the model reads; lookupTool checks registryByName first, where every skill tool lives and no provider tool does, so the SKILL's execute is what runs. Reported rather than refused because there is no build-time moment at which the pair is knowable: the provider's list is resolved per iteration and the skill has to be active. Pinned by test/toolShadowing.test.ts and epoch-laws 1(g)."
     },
     "collision/skill-inactive-then-mcp::shared_tool@e1::contract-swap": {
       "case": "collision/skill-inactive-then-mcp",
-      "configuration": "'shared_tool' claimed by an INACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, never activated) AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated) AND an MCP-served tool, mounted through a provider",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 1,
@@ -423,11 +479,11 @@
       "answered": "skill-inactive",
       "reported": "none",
       "cause": "the wire carried 'mcp's contract and 'skill-inactive's implementation answered, inside epoch 1",
-      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool \u2014 an autoActivate skill's included, whether or not it is active \u2014 and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
+      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool — an autoActivate skill's included, whether or not it is active — and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
     },
     "collision/skill-inactive-then-provider::shared_tool@e1::contract-swap": {
       "case": "collision/skill-inactive-then-provider",
-      "configuration": "'shared_tool' claimed by an INACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, never activated) AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated) AND a `ToolProvider` (`staticTools`)",
       "kind": "contract-swap",
       "tool": "shared_tool",
       "epoch": 1,
@@ -435,11 +491,11 @@
       "answered": "skill-inactive",
       "reported": "none",
       "cause": "the wire carried 'provider's contract and 'skill-inactive's implementation answered, inside epoch 1",
-      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool \u2014 an autoActivate skill's included, whether or not it is active \u2014 and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
+      "tolerated": "ROUND 3, and a genuine defect. Identical mechanism to the active-skill shadow above, with the event missing: reportShadowedTools walks activeInjections, but registryByName holds EVERY skill tool — an autoActivate skill's included, whether or not it is active — and lookupTool reads that map first. So the model reads a provider's contract, an INACTIVE skill's implementation answers, and nothing is on the record. Not fixed here: widening the report's input from the active set to the dispatch map emits events in runs that emit none today, which is a behaviour change and gets its own decision."
     },
     "collision/skill-static-then-mcp::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/skill-static-then-mcp",
-      "configuration": "'shared_tool' claimed by a skill\u2019s `tools:[]` with tools always visible (no `autoActivate`) AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by a skill’s `tools:[]` with tools always visible (no `autoActivate`) AND an MCP-served tool, mounted through a provider",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
@@ -447,11 +503,11 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/skill-static-then-provider::shared_tool::claim-swallowed(provider)": {
       "case": "collision/skill-static-then-provider",
-      "configuration": "'shared_tool' claimed by a skill\u2019s `tools:[]` with tools always visible (no `autoActivate`) AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by a skill’s `tools:[]` with tools always visible (no `autoActivate`) AND a `ToolProvider` (`staticTools`)",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
@@ -459,7 +515,7 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/static-then-mcp::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/static-then-mcp",
@@ -471,7 +527,7 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/static-then-provider::shared_tool::claim-swallowed(provider)": {
       "case": "collision/static-then-provider",
@@ -483,79 +539,79 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change."
     },
     "collision/step-skill-then-mcp::shared_tool::claim-swallowed(mcp)": {
       "case": "collision/step-skill-then-mcp",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
       "contract": "never on the wire",
       "answered": "never dispatched",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "'mcp' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; the shadow report for this name describes a different pair",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
     },
-    "collision/step-skill-then-mcp::shared_tool@e2::report-misattributed": {
+    "collision/step-skill-then-mcp::shared_tool@e2::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/step-skill-then-mcp",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
-    "collision/step-skill-then-mcp::shared_tool@e3::report-misattributed": {
+    "collision/step-skill-then-mcp::shared_tool@e3::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/step-skill-then-mcp",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND an MCP-served tool, mounted through a provider",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 3,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
     "collision/step-skill-then-provider::shared_tool::claim-swallowed(provider)": {
       "case": "collision/step-skill-then-provider",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
       "kind": "claim-swallowed",
       "tool": "shared_tool",
       "epoch": 0,
       "contract": "never on the wire",
       "answered": "never dispatched",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "'provider' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; the shadow report for this name describes a different pair",
-      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache \u2014 so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's \u2014 but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
+      "tolerated": "The mirror of the shadow seam, and unreported. The merge is first-occurrence-wins with the static registry list first, and lookupTool reads registryByName before the provider cache — so a provider tool whose name a registry-list holder already owns loses the wire AND dispatch, and is dead in both directions. reportShadowedTools cannot see it: it fires only when a provider schema SURVIVED the merge. The model is never misled here (it reads one contract and calls that same implementation), so this is the author's problem rather than the model's — but it is silent, and the build cannot refuse it because the provider's list is per-iteration. Reporting it is a behaviour change. Worse here: an event about this very name DOES fire, describing the step-skill/provider pair, so an operator reading it concludes the provider's schema reached the wire. It did not."
     },
-    "collision/step-skill-then-provider::shared_tool@e2::report-misattributed": {
+    "collision/step-skill-then-provider::shared_tool@e2::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/step-skill-then-provider",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 2,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
-    "collision/step-skill-then-provider::shared_tool@e3::report-misattributed": {
+    "collision/step-skill-then-provider::shared_tool@e3::report-misattributed[provider(static)->skill(desk-stepped)]": {
       "case": "collision/step-skill-then-provider",
-      "configuration": "'shared_tool' claimed by a STEPPED skill\u2019s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
+      "configuration": "'shared_tool' claimed by a STEPPED skill’s step-1 tool, with the tenure open AND a `ToolProvider` (`staticTools`)",
       "kind": "report-misattributed",
       "tool": "shared_tool",
       "epoch": 3,
       "contract": "step-skill",
       "answered": "reported dispatchTo=skill",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(static) dispatchTo=skill(desk-stepped)",
       "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
-      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first \u2014 so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
+      "tolerated": "ROUND 3, and a genuine defect. reportShadowedTools hard-codes schemaFrom:'provider', but an ALWAYS-VISIBLE skill's tools ride the STATIC registry list, which merges first — so the SKILL's description is what the model read and the provider's schema was deduped away. In this configuration there is no identity divergence at all (contract and implementation are both the skill's); the only wrong thing in the epoch is the report, which sends an operator to the wrong file. Not fixed here: deriving the winner from the merged list instead of asserting it changes the payload, which is a behaviour change."
     },
     "cross-epoch/dynamic-provider-withdraws::withdrawn_tool@e2::offer-withdrawn": {
       "case": "cross-epoch/dynamic-provider-withdraws",
@@ -567,7 +623,7 @@
       "answered": "unroutable",
       "reported": "none",
       "cause": "offered in an earlier epoch and unroutable in epoch 2: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
-      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) \u2014 so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache \u2014 a behaviour change with its own decision."
+      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) — so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache — a behaviour change with its own decision."
     },
     "cross-epoch/skill-scoped-provider-rescoped::scoped_tool@e4::offer-withdrawn": {
       "case": "cross-epoch/skill-scoped-provider-rescoped",
@@ -579,7 +635,19 @@
       "answered": "unroutable",
       "reported": "none",
       "cause": "offered in an earlier epoch and unroutable in epoch 4: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
-      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) \u2014 so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache \u2014 a behaviour change with its own decision."
+      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) — so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache — a behaviour change with its own decision."
+    },
+    "framework/present-vs-mcp::present::claim-swallowed(mcp)": {
+      "case": "framework/present-vs-mcp",
+      "configuration": "the framework's `present` against an MCP-served tool, mounted through a provider, artifact store attached",
+      "kind": "claim-swallowed",
+      "tool": "present",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "none",
+      "cause": "'mcp' registered 'present' and neither its schema nor its implementation was ever reachable; nothing was reported",
+      "tolerated": "Deliberate in direction, silent in execution, and reached here through a SECOND provider shape: an MCP server's catalog, mounted with staticTools(await client.tools()). The 'present' reservation (buildToolRegistry.ts:286-299) checks the static registry, skillToolEntries and sharedSkillTools — three build-time lists, none of which a ToolProvider is in, because a provider's list is resolved per iteration. So the MCP tool loses the wire and dispatch and never runs. Recorded on the same terms as framework/present-vs-provider; the MCP cell is what proves the blind spot is the provider CHANNEL and not a staticTools artifact."
     },
     "framework/present-vs-provider::present::claim-swallowed(provider)": {
       "case": "framework/present-vs-provider",
@@ -591,7 +659,19 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'present' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "Deliberate in direction, silent in execution. The framework reserves this name the moment it attaches its own tool under it, and refuses a static .tool() or a skill tool that holds it \u2014 but the reservation never runs against a ToolProvider, whose list is resolved per iteration and is not visible at build. So the provider's tool loses the wire and dispatch and simply never runs. Tolerated because the framework's tool is the one the model should get; not fixed because saying so at runtime is a new event, and a behaviour change."
+      "tolerated": "Deliberate in direction, silent in execution. The framework reserves this name the moment it attaches its own tool under it, and refuses a static .tool() or a skill tool that holds it — but the reservation never runs against a ToolProvider, whose list is resolved per iteration and is not visible at build. So the provider's tool loses the wire and dispatch and simply never runs. Tolerated because the framework's tool is the one the model should get; not fixed because saying so at runtime is a new event, and a behaviour change."
+    },
+    "framework/read_skill-vs-mcp::read_skill::claim-swallowed(mcp)": {
+      "case": "framework/read_skill-vs-mcp",
+      "configuration": "the framework's `read_skill` against an MCP-served tool, mounted through a provider",
+      "kind": "claim-swallowed",
+      "tool": "read_skill",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "none",
+      "cause": "'mcp' registered 'read_skill' and neither its schema nor its implementation was ever reachable; nothing was reported",
+      "tolerated": "The framework/read_skill-vs-provider row, reached through an MCP-served catalog instead of a hand-built staticTools list. 'read_skill' is reserved against staticNames only (validators.ts:92-98) and a provider is invisible at build, so the MCP tool wins neither the wire (the framework's schema merges first from augmentedRegistry) nor dispatch, and simply never runs. Tolerated because the framework's read_skill is the one the model should get; not fixed because saying so at run time is a new event on a run that emits none today."
     },
     "framework/read_skill-vs-provider::read_skill::claim-swallowed(provider)": {
       "case": "framework/read_skill-vs-provider",
@@ -603,11 +683,11 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'provider' registered 'read_skill' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "Deliberate in direction, silent in execution. The framework reserves this name the moment it attaches its own tool under it, and refuses a static .tool() or a skill tool that holds it \u2014 but the reservation never runs against a ToolProvider, whose list is resolved per iteration and is not visible at build. So the provider's tool loses the wire and dispatch and simply never runs. Tolerated because the framework's tool is the one the model should get; not fixed because saying so at runtime is a new event, and a behaviour change."
+      "tolerated": "Deliberate in direction, silent in execution. The framework reserves this name the moment it attaches its own tool under it, and refuses a static .tool() or a skill tool that holds it — but the reservation never runs against a ToolProvider, whose list is resolved per iteration and is not visible at build. So the provider's tool loses the wire and dispatch and simply never runs. Tolerated because the framework's tool is the one the model should get; not fixed because saying so at runtime is a new event, and a behaviour change."
     },
     "framework/read_skill-vs-skill-active::read_skill::claim-swallowed(skill-active)": {
       "case": "framework/read_skill-vs-skill-active",
-      "configuration": "the framework's `read_skill` against an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
+      "configuration": "the framework's `read_skill` against an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated)",
       "kind": "claim-swallowed",
       "tool": "read_skill",
       "epoch": 0,
@@ -615,7 +695,31 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'skill-active' registered 'read_skill' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "A genuine gap, and an inconsistency between the three auto-attached names. A skill tool called 'read_skill' under .toolsFromActiveSkill() is neither refused nor reachable: validateToolNameUniqueness reserves 'read_skill' against the STATIC registry only, and buildToolRegistry adds an autoActivate skill's tools to registryByName only when the name is free \u2014 'read_skill' is not. 'present' and 'skip_step' refuse this exact shape at build. Closing the gap is a new build-time throw, so it is a behaviour change with its own decision."
+      "tolerated": "A genuine gap, and an inconsistency between the three auto-attached names. A skill tool called 'read_skill' under .toolsFromActiveSkill() is neither refused nor reachable: validateToolNameUniqueness reserves 'read_skill' against the STATIC registry only, and buildToolRegistry adds an autoActivate skill's tools to registryByName only when the name is free — 'read_skill' is not. 'present' and 'skip_step' refuse this exact shape at build. Closing the gap is a new build-time throw, so it is a behaviour change with its own decision."
+    },
+    "framework/read_skill-vs-skill-inactive::read_skill::claim-swallowed(skill-inactive)": {
+      "case": "framework/read_skill-vs-skill-inactive",
+      "configuration": "the framework's `read_skill` against an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated)",
+      "kind": "claim-swallowed",
+      "tool": "read_skill",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "none",
+      "cause": "'skill-inactive' registered 'read_skill' and neither its schema nor its implementation was ever reachable; nothing was reported",
+      "tolerated": "The framework/read_skill-vs-skill-active gap with the activation removed, and it is the same gap: a scoped skill's tool named 'read_skill' is neither refused nor reachable. validateToolNameUniqueness reserves the name against the STATIC registry only (validators.ts:92-98), and the duplicate-name throw at buildToolRegistry.ts:322-328 that catches an always-visible or stepped skill never sees a scoped one, because scoped tools do not enter augmentedRegistry. 'present' and 'skip_step' refuse this exact shape at build. Closing it is a new build-time throw, so it is a behaviour change with its own decision."
+    },
+    "framework/run_overview-vs-mcp::run_overview::claim-swallowed(framework)": {
+      "case": "framework/run_overview-vs-mcp",
+      "configuration": "`.selfExplain()`'s `run_overview` against an MCP-served tool, mounted through a provider, self-explain activated",
+      "kind": "claim-swallowed",
+      "tool": "run_overview",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "none",
+      "cause": "'framework' registered 'run_overview' and neither its schema nor its implementation was ever reachable; nothing was reported",
+      "tolerated": "The framework/run_overview-vs-provider row, reached through an MCP-served catalog. .selfExplain() reserves TRACE_TOOL_NAMES against this.registry — the static .tool() list — and against nothing else (AgentBuilder.ts:2628), so an MCP tool named run_overview wins both the wire and dispatch and the framework's own trace tool is unreachable. The model is not misled (one contract, that same implementation) but .selfExplain() silently does not self-explain. Widening the reservation is a new build-time throw, and a behaviour change; see entry 4 of docs/design/2026-09-recorded-not-built.md for the full decision."
     },
     "framework/run_overview-vs-provider::run_overview::claim-swallowed(framework)": {
       "case": "framework/run_overview-vs-provider",
@@ -627,19 +731,91 @@
       "answered": "never dispatched",
       "reported": "none",
       "cause": "'framework' registered 'run_overview' and neither its schema nor its implementation was ever reachable; nothing was reported",
-      "tolerated": "A genuine gap, the same one seen from the other side. .selfExplain() reserves its trace-tool names against this.registry \u2014 the static .tool() list \u2014 and against nothing else, so a consumer ToolProvider serving 'run_overview' wins both the wire and dispatch and the framework's own trace tool is unreachable. The model is not misled (one contract, that same implementation), but .selfExplain() silently does not self-explain. Widening the reservation is a new build-time throw, and a behaviour change."
+      "tolerated": "A genuine gap, the same one seen from the other side. .selfExplain() reserves its trace-tool names against this.registry — the static .tool() list — and against nothing else, so a consumer ToolProvider serving 'run_overview' wins both the wire and dispatch and the framework's own trace tool is unreachable. The model is not misled (one contract, that same implementation), but .selfExplain() silently does not self-explain. Widening the reservation is a new build-time throw, and a behaviour change."
     },
     "framework/run_overview-vs-skill-active::run_overview@e3::contract-swap": {
       "case": "framework/run_overview-vs-skill-active",
-      "configuration": "`.selfExplain()`'s `run_overview` against an ACTIVE scoped skill\u2019s `tools:[]` (`.toolsFromActiveSkill()`, activated), self-explain activated",
+      "configuration": "`.selfExplain()`'s `run_overview` against an ACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, activated), self-explain activated",
       "kind": "contract-swap",
       "tool": "run_overview",
       "epoch": 3,
       "contract": "framework",
       "answered": "skill-active",
-      "reported": "tools.shadowed schemaFrom=provider dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(skill-scoped:self-explain) dispatchTo=skill(desk-active)",
       "cause": "the wire carried 'framework's contract and 'skill-active's implementation answered, inside epoch 3",
-      "tolerated": "The shadow seam again, with the framework's own trace pack playing the provider: .selfExplain() serves run_overview through skillScopedTools, so its schema wins the wire while an autoActivate skill tool of the same name wins registryByName and answers. Accurately reported (schemaFrom=provider, dispatchTo=skill), which is why it is tolerated on the same terms as the seam itself \u2014 and it also shows that .selfExplain()'s reservation, which reads only the static registry, does not cover a skill's tools:[]."
+      "tolerated": "The shadow seam again, with the framework's own trace pack playing the provider: .selfExplain() serves run_overview through skillScopedTools, so its schema wins the wire while an autoActivate skill tool of the same name wins registryByName and answers. Accurately reported (schemaFrom=provider, dispatchTo=skill), which is why it is tolerated on the same terms as the seam itself — and it also shows that .selfExplain()'s reservation, which reads only the static registry, does not cover a skill's tools:[]."
+    },
+    "framework/run_overview-vs-skill-inactive::run_overview@e2::contract-swap": {
+      "case": "framework/run_overview-vs-skill-inactive",
+      "configuration": "`.selfExplain()`'s `run_overview` against an INACTIVE scoped skill’s `tools:[]` (`.toolsFromActiveSkill()`, never activated), self-explain activated",
+      "kind": "contract-swap",
+      "tool": "run_overview",
+      "epoch": 2,
+      "contract": "framework",
+      "answered": "skill-inactive",
+      "reported": "none",
+      "cause": "the wire carried 'framework's contract and 'skill-inactive's implementation answered, inside epoch 2",
+      "tolerated": "ENTRY 4 of docs/design/2026-09-recorded-not-built.md, and the worse half of it: the wire carried the FRAMEWORK's own trace-tool description ('Start here. One bounded summary of the completed run…') and a scoped skill the model was offered on no epoch of the run answered it. Two causes meet — .selfExplain() reserves against this.registry only (AgentBuilder.ts:2628) so the skill tool is not refused, and buildToolRegistry.ts:340-344 backfills registryByName from every skill tool with no activation gate while toolCalls.ts resolves that map before the provider cache. Entry 1 is the same dispatch backfill seen with a provider as the victim. Silent: no shadow event fires. Not fixed here for entry 4's reason."
+    },
+    "framework/run_overview-vs-skill-static::run_overview::claim-swallowed(framework)": {
+      "case": "framework/run_overview-vs-skill-static",
+      "configuration": "`.selfExplain()`'s `run_overview` against a skill’s `tools:[]` with tools always visible (no `autoActivate`), self-explain activated",
+      "kind": "claim-swallowed",
+      "tool": "run_overview",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "none",
+      "cause": "'framework' registered 'run_overview' and neither its schema nor its implementation was ever reachable; nothing was reported",
+      "tolerated": "ENTRY 4 of docs/design/2026-09-recorded-not-built.md — a defect this pass recorded rather than fixed, and the reason this row exists at all. .selfExplain()'s reservation searches this.registry and never this.injectionList (AgentBuilder.ts:2628), so an always-visible skill tool named run_overview is refused by nothing: its schema merges first from the static registry list and its execute wins registryByName, and the framework's own trace tool reaches neither the wire nor a dispatch on any epoch. No agentfootprint.tools.shadowed fires. Meanwhile the self-explain skill body is in the system prompt telling the model to start with run_overview. Not fixed here because the fix refuses eleven ordinary English names in agents that build today."
+    },
+    "framework/run_overview-vs-step-skill::run_overview::claim-swallowed(framework)": {
+      "case": "framework/run_overview-vs-step-skill",
+      "configuration": "`.selfExplain()`'s `run_overview` against a STEPPED skill’s step-1 tool, with the tenure open, self-explain activated",
+      "kind": "claim-swallowed",
+      "tool": "run_overview",
+      "epoch": 0,
+      "contract": "never on the wire",
+      "answered": "never dispatched",
+      "reported": "tools.shadowed schemaFrom=provider(skill-scoped:self-explain) dispatchTo=skill(desk-stepped)",
+      "cause": "'framework' registered 'run_overview' and neither its schema nor its implementation was ever reachable; the shadow report for this name describes a different pair",
+      "tolerated": "ENTRY 4 of docs/design/2026-09-recorded-not-built.md, third cell: a STEPPED skill's tool named run_overview. A stepped skill's tools are always visible, so they ride the static registry list and win the wire, and the framework's trace tool is dead in both directions exactly as in the always-visible cell. What is different here is that two shadow events DO fire — and they describe the opposite pair, which is why this row's 'reported' is not 'none' and why entry 5 exists. Not fixed here for entry 4's reason."
+    },
+    "framework/run_overview-vs-step-skill::run_overview@e3::report-misattributed[provider(skill-scoped:self-explain)->skill(desk-stepped)]": {
+      "case": "framework/run_overview-vs-step-skill",
+      "configuration": "`.selfExplain()`'s `run_overview` against a STEPPED skill’s step-1 tool, with the tenure open, self-explain activated",
+      "kind": "report-misattributed",
+      "tool": "run_overview",
+      "epoch": 3,
+      "contract": "step-skill",
+      "answered": "reported dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(skill-scoped:self-explain) dispatchTo=skill(desk-stepped)",
+      "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
+      "tolerated": "ENTRY 5 of docs/design/2026-09-recorded-not-built.md. Entry 2's defect — reportShadowedTools asserts schemaFrom:'provider' (buildToolsSlot.ts:754) instead of reading the winner off `merged` — with a new address: .selfExplain() mounts its trace pack through skillScopedTools (selfExplain.ts:332), whose id is `skill-scoped:` plus the skill id (skillScopedTools.ts:78), so schemaFromId names a provider the consumer did not write and cannot open. The event's honest reading, 'the self-explain pack shadowed your skill', is the reverse of what happened. Not fixed here: it is entry 2's fix and changes a shipped payload."
+    },
+    "framework/run_overview-vs-step-skill::run_overview@e4::report-misattributed[provider(skill-scoped:self-explain)->skill(desk-stepped)]": {
+      "case": "framework/run_overview-vs-step-skill",
+      "configuration": "`.selfExplain()`'s `run_overview` against a STEPPED skill’s step-1 tool, with the tenure open, self-explain activated",
+      "kind": "report-misattributed",
+      "tool": "run_overview",
+      "epoch": 4,
+      "contract": "step-skill",
+      "answered": "reported dispatchTo=skill",
+      "reported": "tools.shadowed schemaFrom=provider(skill-scoped:self-explain) dispatchTo=skill(desk-stepped)",
+      "cause": "the event says the model read the provider's schema; the wire carried 'step-skill' (skill)",
+      "tolerated": "ENTRY 5 of docs/design/2026-09-recorded-not-built.md, the second iteration of the same misreport. Entry 2's defect — reportShadowedTools asserts schemaFrom:'provider' (buildToolsSlot.ts:754) rather than reading the winner off `merged` — pointed at schemaFromId 'skill-scoped:self-explain', which is the framework's OWN provider id (skillScopedTools.ts:78, mounted at selfExplain.ts:332). It fires once per iteration while both hold the name, so an operator sees the wrong party named repeatedly. Not fixed here: it is entry 2's fix and changes a shipped payload."
+    },
+    "framework/skip_step-vs-mcp::skip_step@e2::contract-swap": {
+      "case": "framework/skip_step-vs-mcp",
+      "configuration": "the framework's `skip_step` against an MCP-served tool, mounted through a provider, tenure open",
+      "kind": "contract-swap",
+      "tool": "skip_step",
+      "epoch": 2,
+      "contract": "mcp",
+      "answered": "framework",
+      "reported": "none",
+      "cause": "the wire carried 'mcp's contract and 'framework's implementation answered, inside epoch 2",
+      "tolerated": "Entry 3 of docs/design/2026-09-recorded-not-built.md, reached through an MCP-served catalog. 'skip_step' is reserved against registryByName, which holds static and skill tools and never a provider's; the provider's schema then merges ahead of stepSchemas, so the model read the MCP tool's contract and the framework's skip_step answered — the procedure advanced and completed on a call the model believed was somebody else's tool, with nothing reported. Not fixed here: refusing at compose time, or reporting, changes behaviour and gets its own round."
     },
     "framework/skip_step-vs-provider::skip_step@e2::contract-swap": {
       "case": "framework/skip_step-vs-provider",
@@ -651,7 +827,7 @@
       "answered": "framework",
       "reported": "none",
       "cause": "the wire carried 'provider's contract and 'framework's implementation answered, inside epoch 2",
-      "tolerated": "ROUND 3, and a genuine defect. 'skip_step' is reserved at build against static .tool() tools and skill tools, but a ToolProvider resolves per iteration and is invisible at build; its schema then merges ahead of stepSchemas, so the model reads the provider's contract and the framework's skip_step answers \u2014 the procedure advances on a call the model believed was somebody else's tool, with nothing reported. Not fixed here: refusing at compose, or reporting, changes behaviour and gets its own decision."
+      "tolerated": "ROUND 3, and a genuine defect. 'skip_step' is reserved at build against static .tool() tools and skill tools, but a ToolProvider resolves per iteration and is invisible at build; its schema then merges ahead of stepSchemas, so the model reads the provider's contract and the framework's skip_step answers — the procedure advances on a call the model believed was somebody else's tool, with nothing reported. Not fixed here: refusing at compose, or reporting, changes behaviour and gets its own decision."
     }
   }
 }

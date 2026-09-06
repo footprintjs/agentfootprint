@@ -430,6 +430,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
         dynamicToolSchemas: sf.toolSchemas,
+        // The role-hidden skill ids this iteration (9.86.0) — first hop, onto
+        // the sf-llm-call scope; the boundary's own outputMapper carries them
+        // the rest of the way to the ToolCalls stage. Value-conditional.
+        ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
         ...(sf.integrityFindingIds !== undefined && {
           integrityFindingIds: sf.integrityFindingIds,
         }),
@@ -714,10 +718,24 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(deps.hasEvidenceGate === true && {
             systemPromptInjections: s.systemPromptInjections,
           }),
-          // NOTE: dynamicToolSchemas is intentionally NOT bubbled out — it
-          // is written by the Tools slot and read ONLY by callLLM, both
-          // inside sf-llm-call. The outer Route reads llmLatestToolCalls
-          // (which IS bubbled above), not the schemas.
+          // ── THE WIRE THE MODEL WAS HANDED, BUBBLED OUT (9.86.0) ────────
+          // This comment used to say the opposite, and it was true until the
+          // read_skill gate learned to answer a SELF-CALL by naming the tools
+          // that were genuinely on that call's list (9.84.0). That gate — the
+          // ToolCalls stage — runs OUT HERE, and `selfSkillTools` reads both
+          // of these: `dynamicToolSchemas` for the wire, `activeInjections`
+          // for the cursor's declaration. Inside the grouped chart they never
+          // crossed, so the notice fell back to "the wire is unknown" and said
+          // nothing about tools at all — silence that is honest and useless,
+          // and different from what the same agent says under 'dynamic'.
+          // Neither key is an input to this boundary (see the inputMapper), so
+          // bubbling them feeds nothing back in; `arrayMerge: Replace` below
+          // makes each an overwrite rather than a doubling concat.
+          dynamicToolSchemas: s.dynamicToolSchemas,
+          activeInjections: s.activeInjections,
+          // The role-hidden ids, second hop — the gate filters every set it
+          // names through them before composing a refusal or a payload.
+          ...(s.hiddenSkillIds !== undefined && { hiddenSkillIds: s.hiddenSkillIds }),
           // Accumulators bubbled back for the next iteration's inputMapper.
           totalInputTokens: s.totalInputTokens,
           totalOutputTokens: s.totalOutputTokens,

@@ -146,13 +146,14 @@ export interface InjectionContext {
    * iteration's LLM call. Includes prior iterations within the same turn.
    *
    * **Not everything with `role: 'user'` here was said by a person.** This
-   * library writes five kinds of user-role message itself — a compaction
+   * library writes seven kinds of user-role message itself — a compaction
    * frame, a drop notice (whose text NAMES TOOLS), a schema-check correction,
-   * an evidence-check correction (which QUOTES the model's own values), and a
-   * message an Injection delivered — and all five sit in this list beside the
-   * real ones. Read the person's messages with {@link saidByPerson}; a
-   * predicate that scans raw `history` for a phrase will sooner or later match
-   * our own bookkeeping.
+   * an evidence-check correction (which QUOTES the model's own values), the
+   * out-of-budget wrap-up instruction, the stepped-skill nudge (which names a
+   * skill id and every unrun step's TOOL NAME), and a message an Injection
+   * delivered — and all seven sit in this list beside the real ones. Read the
+   * person's messages with {@link saidByPerson}; a predicate that scans raw
+   * `history` for a phrase will sooner or later match our own bookkeeping.
    */
   readonly history: ReadonlyArray<{
     readonly role: ContextRole;
@@ -361,11 +362,12 @@ export function toolResultsOf(ctx: InjectionContext): ReadonlyArray<{
  * The messages in `ctx.history` a PERSON actually wrote, in order (9.84.0).
  * THE one reader for a predicate that judges what was said.
  *
- * Five kinds of `role: 'user'` message in that list came from this library,
+ * Seven kinds of `role: 'user'` message in that list came from this library,
  * not from anybody: a compaction frame, a drop notice, the two in-loop
- * corrections, and a message an Injection delivered. They are ours, they are
- * in the person's voice, one of them names tools and two quote text the model
- * or a validator produced — so a rule written as
+ * corrections, the out-of-budget wrap-up instruction, the stepped-skill nudge,
+ * and a message an Injection delivered. They are ours, they are in the
+ * person's voice, two of them name tools and two quote text the model or a
+ * validator produced — so a rule written as
  *
  * ```ts
  * activeWhen: (ctx) => ctx.history.some((m) => m.content.includes('refund'))

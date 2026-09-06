@@ -225,7 +225,7 @@ describe('read_skill gate — skills the graph never routed are OPEN', () => {
 // ── what stays bounded ──────────────────────────────────────────────────────
 
 describe('read_skill gate — what the graph DOES wire stays bounded', () => {
-  it('a cursor-gated route target out of reach is still refused, message unchanged', async () => {
+  it('a cursor-gated route target out of reach is still refused — the verdict unchanged, the sentence now anchored to the call it judged (9.86.0)', async () => {
     const alpha = scoped('alpha');
     const beta = scoped('beta');
     const gamma = scoped('gamma'); // reachable only from beta
@@ -251,8 +251,8 @@ describe('read_skill gate — what the graph DOES wire stays bounded', () => {
     await agent.run({ message: 'hi' });
 
     expect(log.results[0]).toBe(
-      'read_skill("gamma") is not reachable from here. Reachable skills: beta. ' +
-        'Pick one of these, or finish.',
+      'read_skill("gamma") was not granted on that call: \'gamma\' was not reachable from ' +
+        "'alpha'. Skills reachable from 'alpha' when that call was made: beta.",
     );
     expect(log.rejected).toEqual([{ iteration: 1, id: 'gamma', allowed: ['beta'] }]);
     expect(log.active[1]!.ids).toEqual(['alpha']);
@@ -346,7 +346,7 @@ describe('read_skill gate — what the graph DOES wire stays bounded', () => {
 // ── the allowed set the model is told about ─────────────────────────────────
 
 describe('read_skill gate — the re-prompt names every id the gate accepts', () => {
-  it('lists hops AND open skills, in that order, de-duplicated', async () => {
+  it('lists hops AND open skills, in that order, de-duplicated — hops as a reachability fact about the named call, open skills as their own clause (9.86.0)', async () => {
     const alpha = scoped('alpha');
     const beta = scoped('beta');
     const gamma = scoped('gamma');
@@ -374,8 +374,9 @@ describe('read_skill gate — the re-prompt names every id the gate accepts', ()
     await agent.run({ message: 'hi' });
 
     expect(log.results[0]).toBe(
-      'read_skill("gamma") is not reachable from here. Reachable skills: beta, helper, ' +
-        'self-explain. Pick one of these, or finish.',
+      'read_skill("gamma") was not granted on that call: \'gamma\' was not reachable from ' +
+        "'alpha'. Skills reachable from 'alpha' when that call was made: beta. Open skills " +
+        'were admitted on that call: helper, self-explain.',
     );
     expect(log.rejected[0]!.allowed).toEqual(['beta', 'helper', 'self-explain']);
   });

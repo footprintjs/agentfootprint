@@ -1243,7 +1243,15 @@ export interface SkillRejectedPayload {
   readonly requestedId: string;
   /** The cursor it was at (undefined = cold start, before any entry resolved). */
   readonly currentSkillId?: string;
-  /** The reachable set it was bounded to (what the re-prompt offered). */
+  /**
+   * What the model was TOLD it could reach — role-filtered (9.86.0).
+   *
+   * No longer the set the call was bounded to: admission still reads the
+   * graph's raw set, and this is the SPEAKING set, so a skill the caller's
+   * `PermissionChecker` hides never appears here. Empty is therefore two
+   * different facts — nothing was reachable, or nothing reachable may be named
+   * — and a reader that needs them apart wants the run's graph, not this row.
+   */
   readonly allowed: readonly string[];
   /** The ReAct iteration the rejection fired on. */
   readonly iteration: number;
@@ -1376,7 +1384,8 @@ export interface SkillStepsUnfinishedPayload {
  * The turn's refusal loop crossed the declared threshold and the rest of the
  * turn runs on the escalation brain (9.19.0). Fired ONCE per turn, at the
  * flip, from the gate that counted the refusals — escalation is always on
- * recorded evidence (`skill.rejected`, reachability or posture), never on
+ * recorded evidence (`skill.rejected` — reachability, posture or a self-call,
+ * all three refusal arms), never on
  * vibes. De-escalation is the next turn's seed; no event marks it.
  */
 export interface SkillEscalatedPayload {
@@ -1417,6 +1426,21 @@ export interface SkillEscalatedPayload {
 export interface ToolEffectPayload {
   readonly kind: 'propose-transition' | 'require-instruction';
   readonly outcome: 'accepted' | 'refused' | 'superseded';
+  /**
+   * The accepted `propose-transition` named the skill the cursor was ALREADY
+   * in — a STAY, accepted as a no-op (9.86.0).
+   *
+   * Nothing moved and nothing activated, because the run is already in the
+   * state the proposal asked for; no `pendingToolTransition` was written and
+   * the tool's result carries no refusal suffix. Before this the reachable set
+   * — which filters the cursor out of its own successor set, correctly, for a
+   * MOVE — made a stay look unreachable and the proposal was refused.
+   *
+   * An ADDITIVE optional field rather than a fourth `outcome`: a consumer
+   * switching exhaustively over `outcome` must keep compiling. Read it to tell
+   * a no-op stay from a hop that will actually move the cursor.
+   */
+  readonly stay?: true;
   /** The tool whose result carried the effect. */
   readonly toolName: string;
   readonly toolCallId?: string;

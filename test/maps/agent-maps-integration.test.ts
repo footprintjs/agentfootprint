@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { defineSkill, skillGraph } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
+import { PermissionPolicy } from '../../src/security/PermissionPolicy.js';
+import type { PermissionChecker, PermissionRequest } from '../../src/adapters/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -217,6 +219,91 @@ describe('integration: the keyword trap parks after renewalGrace idle passes', (
     expect(toolResults.join('\n')).toContain("Skill 'zone-audit' activated");
     expect(toolResults.join('\n')).not.toContain('You are already in');
     expect(toolResults.join('\n')).not.toContain('is not reachable from here');
+  });
+
+  /**
+   * SECURITY — the self-call skip is scoped to a MOUNTED cursor (9.86.0 fix pass).
+   *
+   * 9.86.0 stopped asking `skill_read` whenever the requested id was the
+   * cursor's own, on the argument that a stay activates nothing, moves nothing
+   * and reveals nothing the request did not already carry. That is true of a
+   * MOUNTED cursor and false of a PARKED one: parking suppresses the map's
+   * contribution and leaves the cursor where it was, so the gate below reads
+   * the same id as a RE-ENGAGEMENT and puts the body and its tools back on the
+   * wire. Skipping the check there let a role whose policy hides the skill
+   * un-park and re-activate it — a call 9.85.0 denied.
+   */
+  async function parkedSelfCallUnder(visible: readonly string[]) {
+    const asked: string[] = [];
+    const toolResults: string[] = [];
+    const caps = capture();
+    const policy = PermissionPolicy.fromRoles(
+      { support: ['read_skill', 'screen_open', 'get_zone_info'] },
+      'support',
+      { skills: { support: [...visible] } },
+    );
+    const spy: PermissionChecker = {
+      name: 'spy',
+      ...(policy.governs !== undefined && { governs: policy.governs }),
+      check: (req: PermissionRequest) => {
+        if (req.capability === 'skill_read') asked.push(req.target);
+        return policy.check(req);
+      },
+    };
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          call('c1', 'screen_open'),
+          call('c2', 'screen_open'),
+          call('c3', 'screen_open'),
+          call('c4', 'read_skill', { id: 'zone-audit' }),
+          final,
+        ] as never,
+      }),
+      model: 'mock',
+      maxIterations: 8,
+      permissionChecker: spy,
+    })
+      .system('s')
+      .tool(screenTool)
+      .skillGraph(trapGraph())
+      .maps({ renewalGrace: 3 })
+      .watch({
+        id: 'results',
+        onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+          if (e.name === 'agentfootprint.stream.tool_end')
+            toolResults.push(String(e.payload?.result ?? ''));
+        },
+      })
+      .watch(caps.recorder)
+      .build();
+    await agent.run(TRAP_MESSAGE);
+    const reengaged = caps.mapEvents.find(
+      (e) => e.name === 'agentfootprint.map.engaged' && e.payload.reengaged === true,
+    );
+    return { asked, results: toolResults.join('\n'), reengaged, evaluated: caps.evaluated };
+  }
+
+  it('a role that may not read the PARKED cursor is refused — re-engagement is a capability, not a no-op', async () => {
+    const { asked, results, reengaged, evaluated } = await parkedSelfCallUnder(['billing']);
+    // The premise: the map really did park before the pick.
+    expect(skippedAt(evaluated, 3)).toContainEqual(
+      expect.objectContaining({ id: 'zone-audit', reason: 'parked' }),
+    );
+    // The dispatch of read_skill was put to the policy, not skipped past it.
+    expect(asked).toContain('skill:zone-audit');
+    // …and the policy's answer stood: nothing re-engaged, nothing activated.
+    expect(results).not.toContain("Skill 'zone-audit' activated");
+    expect(results).toContain("Skill 'zone-audit' is not available");
+    expect(reengaged).toBeUndefined();
+  });
+
+  it('the same call under a role that MAY read it still re-engages — the gate asks, it does not refuse', async () => {
+    // Guard against a fix that simply stopped admitting parked members.
+    const { asked, results, reengaged } = await parkedSelfCallUnder(['zone-audit', 'billing']);
+    expect(asked).toContain('skill:zone-audit');
+    expect(results).toContain("Skill 'zone-audit' activated");
+    expect(reengaged?.payload).toMatchObject({ by: 'explicit' });
   });
 
   it("calling the map's own tool renews the lease — no park, ever", async () => {

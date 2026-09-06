@@ -57,11 +57,16 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
+import {
+  classifySkillTarget,
+  type SkillTargetClass,
+} from '../../../lib/injection-engine/skillGraph.js';
 import { skillActivationConfirmation } from '../../../lib/injection-engine/skillToolDescriptors.js';
 import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../../adapters/types.js';
 import { selfCallNotice, selfSkillTools } from '../selfCallNotice.js';
 import { parkedMemberIds } from '../../../maps/engagement/types.js';
+import { spoken, type SpokenIds } from '../../../lib/spokenIds.js';
 import type { MapEngagement } from '../../../maps/engagement/types.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
@@ -216,6 +221,21 @@ export interface ToolCallsHandlerDeps {
   readonly integrityLedger?: {
     current: import('../../../integrity/disposition/ledger.js').DispositionLedger | undefined;
   };
+  /**
+   * WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — tool name → the ids of the
+   * skills whose `inject.tools` carry it, from `buildToolRegistry`, the one
+   * place that already walks every skill's tool array.
+   *
+   * Read by `dispatchRoster` and by nothing else: a role that may not see a
+   * skill may not be told the names of the tools that skill brought. A name is
+   * unnameable only when EVERY declaring skill is hidden, so a tool two skills
+   * share survives one of them being hidden.
+   *
+   * Absent for an agent with no skill-carried tools — the map is built only
+   * when at least one skill declares one — and then the roster is the raw
+   * dispatch set, exactly as it was.
+   */
+  readonly toolDeclaringSkills?: ReadonlyMap<string, readonly string[]>;
   /** Optional external `.toolProvider()` for per-iteration dynamic
    *  tools (skill-scoped, multi-tenant, etc.). Consulted only when
    *  the static registry doesn't have the tool. */
@@ -553,77 +573,269 @@ function reportingCredentials(
 }
 
 /**
- * The re-prompt a refused `read_skill` gets back. It is the model's only feedback,
- * so it names what IS allowed rather than only what isn't.
+ * Is this `read_skill` target the cursor's own skill AND is that cursor
+ * MOUNTED — the one owner of "this call would change nothing" (9.86.0).
  *
- * Three shapes, because "not reachable" has three different reasons and only the
- * first two share a fix:
- *   • something is reachable → name it, and ask for one of those;
- *   • a decision `tree()` → nothing is EVER reachable by `read_skill`, because a
- *     tree has no cursor to move (8.5.0). Saying "no skills are reachable from
- *     here" would invite the model to try again from somewhere else; there is no
- *     "elsewhere", so the message explains the tree instead;
- *   • a flat graph that happens to be at a dead end → the original message.
+ * ── WHY POSITION ALONE IS NOT THE ANSWER ────────────────────────────────
+ *
+ * `classifySkillTarget` answers a question about POSITION: is the target where
+ * the cursor stands? For most of the loop that settles it — the cursor's body
+ * is in that call's system prompt and its tools are on that call's wire, so
+ * asking to read it activates nothing, moves nothing and reveals nothing the
+ * request did not already carry.
+ *
+ * A PARKED map breaks that. Parking suppresses a map's contribution and leaves
+ * the cursor exactly where it was, so at a parked cursor the very same id is a
+ * RE-ENGAGEMENT: the gate admits it, the map engages, and the member's body and
+ * tools ride again on the next pass. That call moves something, which makes it
+ * a capability, which makes it the policy's question to answer.
+ *
+ * The dispatch gate has known this since 9.59.0 — it tests re-engagement BEFORE
+ * its self-call arm, which is this same fact written as two ordered arms. The
+ * `skill_read` permission gate, 480 lines upstream, has no arms to order: it
+ * asks one question and either spends the policy check or skips it, and it was
+ * asking `classifySkillTarget` alone. So a role whose checker hid a skill could
+ * have the model un-park and re-activate it. This function is the question that
+ * gate now asks, over the parked set `parkedNow` hands both of them.
+ *
+ * @example
+ * ```ts
+ * atMountedCursor({ cursor: 'audit', target: 'audit' });                          // true  — a stay
+ * atMountedCursor({ cursor: 'audit', target: 'audit', parked: new Set(['audit']) }); // false — a re-engagement
+ * atMountedCursor({ cursor: 'audit', target: 'billing' });                        // false — a move
+ * ```
  */
-function skillRefusal(requestedId: string, allowed: readonly string[], isTree: boolean): string {
-  const head = `read_skill("${requestedId}") is not reachable from here. `;
-  if (allowed.length > 0) {
-    return `${head}Reachable skills: ${allowed.join(', ')}. Pick one of these, or finish.`;
-  }
-  if (isTree) {
-    return (
-      `read_skill("${requestedId}") cannot move a decision tree. A tree routes by ` +
-      'predicate on every iteration — it has no cursor to jump, so this skill would ' +
-      'not activate even though the tool accepted the name. Answer with the skill the ' +
-      'tree routed to, or finish.'
-    );
-  }
-  return `${head}No skills are reachable from here — answer with the current skill, or finish.`;
+export function atMountedCursor(args: {
+  /** Where the cursor stands. `undefined` = cold start (nothing is a stay). */
+  readonly cursor?: string | undefined;
+  /** The id the model asked for. */
+  readonly target: string;
+  /** Members of every map the kernel holds PARKED — `parkedMemberIds`. */
+  readonly parked?: ReadonlySet<string> | undefined;
+}): boolean {
+  const stay =
+    classifySkillTarget({
+      ...(args.cursor !== undefined && { cursor: args.cursor }),
+      target: args.target,
+    }) === 'self';
+  return stay && args.parked?.has(args.target) !== true;
 }
 
 /**
- * The re-prompt a POSTURE-refused `read_skill` gets back (SG-C `strictness`).
- * The pick was REACHABLE — the graph would have granted it — so the message
- * must teach the posture, not the map: who routes here, and what the model may
- * still do (open skills, staying, finishing).
+ * What a call to a name nothing can dispatch gets back (9.86.0).
+ *
+ * `Unknown tool: X` was the whole sentence, on both dispatch doors, while
+ * `mcpServe` — the same library, one directory away — had been answering
+ * "Unknown tool 'rm_rf'. Served tools: echo, delete_account." for releases. The
+ * model that mistyped a name, or named one from a restored transcript, was told
+ * only that it was wrong, never what would have worked, and the cheapest repair
+ * (read the roster) was the one it could not make.
+ *
+ * The roster is the DISPATCH set — `registryByName` plus the provider cache —
+ * because that is the true statement about resolution: these are the names that
+ * answered to something. It is deliberately NOT the offer: the wire is narrowed
+ * by steps, parks and postures, and a held-out tool still dispatches by name, so
+ * an offer-shaped list would be a different (and here, false) claim.
+ *
+ * ── AND IT SAYS "RESOLVED", NOT "COULD BE DISPATCHED" ───────────────────
+ *
+ * The first draft said "Tools that could be dispatched on that call". Two gates
+ * sit between resolution and a tool running — the `tool_call` permission check
+ * and the middleware chain — so a name in this map can resolve and still be
+ * refused, and the sentence promised the model a dispatch the very next gate
+ * would decline. Neither gate is asked here: a `PermissionChecker` is a port
+ * (a hub call per name, with its own events and its own audit rows), and
+ * spending a whole permission sweep to phrase an error is a cost the sentence
+ * does not need. It reports what this map DID — resolve a name — and claims
+ * nothing about what would have happened next.
+ *
+ * The roster is role-filtered before it gets here (`dispatchRoster`), so a tool
+ * belonging to a skill the caller's policy hides is never named; and when the
+ * filter empties a stocked roster the clause is DROPPED, because "no tool name
+ * resolved" would be a denial of what the dispatch map is holding.
+ *
+ * Anchored past tense, like every other persistent result: "on that call" binds
+ * the roster to the finished call the result answers, so a later iteration that
+ * adds or drops a provider tool cannot make this sentence wrong. No exhortation
+ * — the model does not need to be told to try again.
+ *
+ * Exported for the producer registry, and used by BOTH dispatch doors so they
+ * cannot drift.
  */
-function postureRefusal(
-  requestedId: string,
-  posture: 'guard' | 'rails',
-  turnRoute: TurnRoute | undefined,
-  currentSkillId: string | undefined,
-  openIds: readonly string[],
-): string {
+export function unknownToolResult(toolName: string, dispatchable: SpokenIds): string {
+  const head = `Unknown tool '${toolName}' on that call.`;
+  if (dispatchable.named.length > 0) {
+    return (
+      `${head} Tool names that resolved to an implementation on that ` +
+      `call: ${dispatchable.named.join(', ')}.`
+    );
+  }
+  // Held-but-unnameable: the map had entries this caller may not be told about.
+  // Omission is free; the negative below would be false.
+  return dispatchable.held
+    ? head
+    : `${head} No tool name resolved to an implementation on that call.`;
+}
+
+/**
+ * THE ONE COMPOSER of every `read_skill` refusal (9.86.0) — reachability,
+ * posture and tree, from one set of inputs.
+ *
+ * ── WHY ONE ─────────────────────────────────────────────────────────────
+ *
+ * There were two, and they disagreed. `skillRefusal` named "Reachable skills:
+ * beta" from the graph's raw hop set; `postureRefusal`, forty lines below it in
+ * the same gate, answered a model that took that offer up with "read_skill here
+ * reaches only the open skills: gamma". Same call, same turn, opposite claims —
+ * and the second one cost a refusal from the escalation budget to discover.
+ * Neither had heard of the role filter, so both could name a skill the caller's
+ * policy hides. One composer, handed the FILTERED sets and the posture that
+ * will judge the next pick, cannot contradict itself that way.
+ *
+ * ── THE TENSE DISCIPLINE (the law `selfCallNotice` is written against) ──
+ *
+ * A tool result is composed on iteration N and re-read by the model on every
+ * later call of the turn, including the tool-less wrap-up. So every clause here
+ * is a PAST fact about ONE named call — the call the model made `read_skill`
+ * on — anchored by the phrase "that call", never by deixis ("this turn", "the
+ * call you just made") and never by a forecast ("you can call", "pick one of
+ * these"). What the model may do NEXT is owned by the `read_skill` DESCRIPTION,
+ * which is recomposed for every single request and may therefore speak in the
+ * present. Two owners, one tense each, and they can no longer disagree.
+ *
+ * ── AND WHY IT NEVER NAMES A HOP THE POSTURE WOULD DECLINE ──────────────
+ *
+ * Under `'rails'` the model does not route at all; under `'guard'` it routes
+ * only from an outstanding menu. Naming hops there is an offer the very next
+ * arm of this gate refuses. So those arms name no hop: they say who DID route,
+ * and (when there are any) which open skills were admitted anyway — open skills
+ * never reach the posture arm, so that clause cannot be contradicted.
+ *
+ * ── AND WHY AN EMPTY LIST IS NEVER A DENIAL ─────────────────────────────
+ *
+ * Every set arrives as {@link SpokenIds}, which carries whether the UNFILTERED
+ * set held anything. That is the difference between "nothing was reachable" and
+ * "nothing reachable may be named", and this composer used to say the first
+ * when the second was true — over a graph that was routing the cursor the whole
+ * time. Where the filter empties a set, the clause is omitted. A model told the
+ * map is a dead end stops asking for the door it may not be shown.
+ *
+ * Exported so a producer registry can list it beside the other model-facing
+ * composers rather than re-deriving what it says.
+ */
+export function composeReadSkillRefusal(args: {
+  /** The id the model asked for, verbatim. */
+  readonly requestedId: string;
+  /** Which class the target fell in — from `classifySkillTarget`, the one owner. */
+  readonly targetClass: SkillTargetClass;
+  /** Where the cursor stood when that call was made. */
+  readonly cursorId?: string;
+  /** Declared hops from that cursor, through the role filter — and carrying
+   *  whether the graph held any, so a filtered-to-empty set omits its clause
+   *  instead of denying the hops the graph is holding. */
+  readonly hops: SpokenIds;
+  /** Open skills, through the same filter. */
+  readonly openIds: SpokenIds;
+  /** The mounted graph is a decision `tree()` — no cursor to move. */
+  readonly isTree?: boolean;
+  /** The posture that declined a reachable hop, when one did (SG-C). */
+  readonly posture?: 'guard' | 'rails';
+  /** The menu that was outstanding when that call was made, through the same
+   *  filter. Present only under `'guard'` with a menu the pick missed — and
+   *  `held: true` with nothing named says a menu WAS outstanding and none of it
+   *  may be named, which is a third sentence, not the no-menu one. */
+  readonly menuOffered?: SpokenIds;
+  /** How the turn's start was resolved, for the `'guard'`-without-a-menu arm. */
+  readonly routedDecisively?: boolean;
+}): string {
+  const {
+    requestedId,
+    targetClass,
+    cursorId,
+    hops,
+    openIds,
+    isTree,
+    posture,
+    menuOffered,
+    routedDecisively,
+  } = args;
+  const head = `read_skill("${requestedId}") was not granted on that call: `;
+  // Open skills are the one list every arm may name: they are admitted from
+  // every cursor and no posture governs them (the posture arm below is reached
+  // only by hops), so naming them cannot be falsified by the next call. There is
+  // no negative arm here and there never was — an unnamed open set is simply
+  // omitted, which is the shape the two arms below now share.
   const openClause =
-    openIds.length > 0
-      ? ` read_skill here reaches only the open skills: ${openIds.join(', ')}.`
+    openIds.named.length > 0
+      ? ` Open skills were admitted on that call: ${openIds.named.join(', ')}.`
       : '';
-  if (posture === 'rails') {
+  if (posture !== undefined) {
+    if (posture === 'rails') {
+      return (
+        `${head}this graph's 'rails' posture reserves routing to the framework — turn ` +
+        `starts resolve by declared rule or scorer and transitions by declared routes — ` +
+        `so a model pick was not admitted on that call.${openClause}`
+      );
+    }
+    if (menuOffered !== undefined && menuOffered.named.length > 0) {
+      return (
+        `${head}this graph's 'guard' posture admits a routing pick only from the menu the ` +
+        `framework offered, and '${requestedId}' was not on it. The menu outstanding when ` +
+        `that call was made: ${menuOffered.named.join(', ')}.${openClause}`
+      );
+    }
+    // A menu WAS outstanding and not one of its ids may be named to this
+    // caller. Neither of the other two sentences is available: naming the menu
+    // would leak it, and "no menu was outstanding" is false — as is the
+    // "declared routes moved the cursor instead" clause that rides with it,
+    // which is a second assertion about a turn that did not route that way. So
+    // this arm says the one thing that is true of that call and stops.
+    if (menuOffered !== undefined && menuOffered.held) {
+      return (
+        `${head}this graph's 'guard' posture admits a routing pick only from the menu the ` +
+        `framework offered, and '${requestedId}' was not admitted on that call.${openClause}`
+      );
+    }
     return (
-      `read_skill("${requestedId}") was declined: this graph runs on rails — turn starts ` +
-      `resolve by declared rule or scorer and transitions by declared routes; the model ` +
-      `does not route itself.${openClause} Continue with the skill you are in` +
-      `${currentSkillId !== undefined ? ` ('${currentSkillId}')` : ''}, or finish.`
+      `${head}this graph's 'guard' posture admits a routing pick only while the framework ` +
+      `has declared ambiguity, and no menu was outstanding when that call was made` +
+      `${
+        routedDecisively === true ? " — the turn's start had already been resolved decisively" : ''
+      }` +
+      `. Declared routes moved the cursor instead.${openClause}`
     );
   }
-  // guard — either no menu is outstanding, or the pick was off it.
-  if (turnRoute?.offered !== undefined && menuOutstanding(turnRoute, currentSkillId)) {
+  if (isTree === true) {
     return (
-      `read_skill("${requestedId}") was declined: under this graph's 'guard' posture a ` +
-      `routing pick must come from the offered menu — ${turnRoute.offered.join(', ')} — or ` +
-      `stay (answer without calling read_skill).${openClause}`
+      `${head}this map is a decision tree. A tree routes by predicate on every iteration ` +
+      `and keeps no cursor, so there was nothing for that pick to move and ` +
+      `'${requestedId}' was not activated by it.${openClause}`
     );
   }
-  const decidedBy =
-    turnRoute?.by === 'intent' || turnRoute?.by === 'entry'
-      ? `the turn's start was resolved decisively this turn`
-      : `no routing ambiguity is open this turn`;
-  return (
-    `read_skill("${requestedId}") was declined: this graph's 'guard' posture admits a ` +
-    `routing pick only while the framework has declared ambiguity (an offered menu), and ` +
-    `${decidedBy}; declared routes handle transitions.${openClause} Continue with the ` +
-    `skill you are in${currentSkillId !== undefined ? ` ('${currentSkillId}')` : ''}, or finish.`
-  );
+  // Reachability. `targetClass` is 'unreachable' by the time the gate calls
+  // this arm — 'self' is answered by the notice, 'hop' and 'open' are admitted
+  // — and it is carried rather than re-derived so the sentence and the verdict
+  // read the same classification.
+  const from = cursorId !== undefined ? `'${cursorId}'` : "the turn's start";
+  // The gate reaches this arm only with `'unreachable'`; the weaker sentence is
+  // for a caller that refused an admissible class for a reason of its own, and
+  // it is deliberately not an invented explanation of one.
+  const reason =
+    targetClass === 'unreachable'
+      ? `'${requestedId}' was not reachable from ${from}.`
+      : `'${requestedId}' was not admitted from ${from}.`;
+  // OMIT, NEVER DENY. Three cases, not two: hops to name, no hops at all, and
+  // hops the graph holds that this caller may not be told about. The third used
+  // to fall into the second and assert "No skill was reachable from 'alpha'"
+  // while the graph routed 'alpha' to a skill the role hides — a denial of what
+  // the run holds, and the one shape omission is always safe against.
+  const hopClause =
+    hops.named.length > 0
+      ? ` Skills reachable from ${from} when that call was made: ${hops.named.join(', ')}.`
+      : hops.held
+      ? ''
+      : ` No skill was reachable from ${from} when that call was made.`;
+  return `${head}${reason}${hopClause}${openClause}`;
 }
 
 /**
@@ -1316,6 +1528,37 @@ export function buildToolCallsHandler(
         }
         const currentSkillId = scope.currentSkillId as string | undefined;
         const hops = deps.allowedSkillIds(currentSkillId);
+        // ── A PROPOSAL TO THE CURSOR'S OWN SKILL IS A STAY (9.86.0) ──────
+        // `makeReachableSkills` filters the cursor out of its own successor
+        // set — right for a MOVE, and this judge read it as "not reachable"
+        // and refused. A tool saying "stay where you are" asks for the state
+        // the run is already in: there is no cursor to move, no activation to
+        // append, and nothing to refuse. It is accepted as a no-op — no
+        // `pendingToolTransition`, no cursor move, and no `[tool effect
+        // refused: …]` suffix on a result that proposed nothing wrong.
+        //
+        // The event carries the existing `'accepted'` outcome plus an
+        // ADDITIVE `stay: true`, deliberately not a new enum member: an
+        // exhaustive switch over `outcome` in a consumer must keep compiling.
+        if (
+          classifySkillTarget({
+            ...(currentSkillId !== undefined && { cursor: currentSkillId }),
+            target,
+            hops,
+          }) === 'self'
+        ) {
+          typedEmit(scope, 'agentfootprint.tools.effect', {
+            kind: 'propose-transition',
+            outcome: 'accepted',
+            stay: true,
+            toolName: call.toolName,
+            toolCallId: call.toolCallId,
+            iteration: call.iteration,
+            targetSkillId: target,
+            reason: effect.reason,
+          });
+          continue;
+        }
         if (!hops.includes(target)) {
           refuse(
             'propose-transition',
@@ -2093,6 +2336,63 @@ export function buildToolCallsHandler(
   };
 
   /**
+   * Every member id of every map the kernel currently holds PARKED (9.86.0
+   * fix pass) — asked of `parkedMemberIds`, the kernel's own owner of the fact.
+   *
+   * ONE reader for TWO gates. The `skill_read` permission gate and the graph's
+   * dispatch gate both have to tell a stay from a re-engagement, and they sit
+   * 480 lines apart; the second computed this and the first did not, which is
+   * exactly how a role-hidden parked member became re-activatable. Answers with
+   * `undefined` when no engagement plan is mounted, which is every agent that
+   * never called `.maps()`.
+   */
+  const parkedNow = (scope: TypedScope<AgentState>): ReadonlySet<string> | undefined =>
+    deps.engagementPlan === undefined
+      ? undefined
+      : parkedMemberIds(deps.engagementPlan, scope.mapEngagement as MapEngagement | undefined);
+
+  /**
+   * Every name `lookupTool` would resolve, in resolution order, through the
+   * role filter (9.86.0) — the roster `unknownToolResult` names.
+   *
+   * Derived from the SAME two sources the lookup reads, so a name it reports is
+   * a name that resolved. Then filtered by the SAME fact every other sentence in
+   * this stage filters by: `scope.hiddenSkillIds`, the per-iteration answer to
+   * "which skills may this caller be told about". The first draft applied
+   * neither, and named a hidden skill's tool to a role that may not see the
+   * skill — the leak the `read_skill` refusals had just closed, reappearing one
+   * sentence over because the roster read the dispatch map raw.
+   *
+   * A tool is unnameable only when EVERY skill declaring it is hidden
+   * (`deps.toolDeclaringSkills`, the build-time owner of that fact). A tool two
+   * skills share is still named when either is visible — the same
+   * sole-owner rule the step hold-out uses, for the same reason: a shared name
+   * is somebody's escape hatch. Names nobody declares from a skill — static
+   * `.tool()` registrations, `read_skill`, `skip_step`, provider-delivered
+   * tools — have no owning skill and are never filtered.
+   *
+   * DISPATCH IS UNTOUCHED. `lookupTool` still resolves every name in the map:
+   * a narrowing may take a name out of a sentence, never out of the dispatch
+   * map. This filter governs only what the model is TOLD.
+   */
+  const dispatchRoster = (scope: TypedScope<AgentState>): SpokenIds => {
+    const names = [...registryByName.keys()];
+    const seen = new Set(names);
+    for (const t of externalToolProvider ? providerToolCache?.current ?? [] : []) {
+      if (seen.has(t.schema.name)) continue;
+      seen.add(t.schema.name);
+      names.push(t.schema.name);
+    }
+    const hidden = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
+    if (hidden.size === 0) return { named: names, held: names.length > 0 };
+    const declaredBy = deps.toolDeclaringSkills;
+    return spoken(names, (name) => {
+      const owners = declaredBy?.get(name);
+      return owners === undefined || owners.some((id) => !hidden.has(id));
+    });
+  };
+
+  /**
    * The after-tool moment: the chain's last word, on a call that RAN.
    *
    * Called from all FIVE dispatch sites and from nowhere else — the loop, an
@@ -2185,7 +2485,7 @@ export function buildToolCallsHandler(
      *  call again). */
     ceilingRefused?: true;
   }> => {
-    if (!tool) return { result: `Unknown tool: ${toolName}`, error: true };
+    if (!tool) return { result: unknownToolResult(toolName, dispatchRoster(scope)), error: true };
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
     // as an inline call's, BEFORE credentials, and a refusal means the tool
@@ -2872,11 +3172,41 @@ export function buildToolCallsHandler(
         ) {
           const requestedSkillId = (callArgs as { id?: unknown }).id;
           if (typeof requestedSkillId === 'string' && requestedSkillId.length > 0) {
-            await askCapability(
-              'skill_read',
-              skillTarget(requestedSkillId),
-              `Skill '${requestedSkillId}' is not available in this context.`,
-            );
+            // ── A SELF-CALL AT A MOUNTED CURSOR EXERCISES NO CAPABILITY ───
+            // (9.86.0.) A MOUNTED cursor's own skill is already served: its
+            // body is in that call's system prompt and its tools are on that
+            // call's wire. Asking to read it activates nothing, moves nothing,
+            // and reveals nothing the request did not already carry — so there
+            // is no capability here for a policy to grant or deny, and denying
+            // it told the model its current skill was "not available in this
+            // context" while it was standing in it. That is the exact sentence
+            // the self-call arm exists to stop the model reading. The gate's
+            // self-call arm answers instead.
+            //
+            // A PARKED cursor is the one case where the same id is not a
+            // no-op, and the skip is scoped to exclude it (9.86.0 fix pass):
+            // parking suppressed the map's contribution, so the dispatch gate
+            // 480 lines below reads that call as a RE-ENGAGEMENT and serves the
+            // body and tools again on the next pass. That moves something, so
+            // the policy keeps the question. `atMountedCursor` is where that
+            // rule lives; the dispatch gate writes the same rule as two ordered
+            // arms over the same `parkedNow` set. Every OTHER id still goes
+            // through the policy, unchanged — this narrows nothing a role could
+            // see.
+            const stay = atMountedCursor({
+              ...(typeof scope.currentSkillId === 'string' && {
+                cursor: scope.currentSkillId,
+              }),
+              target: requestedSkillId,
+              parked: parkedNow(scope),
+            });
+            if (!stay) {
+              await askCapability(
+                'skill_read',
+                skillTarget(requestedSkillId),
+                `Skill '${requestedSkillId}' is not available in this context.`,
+              );
+            }
           }
         }
         // ── Check-in gate (evidence-carrying human consent) ──────────────
@@ -3088,7 +3418,7 @@ export function buildToolCallsHandler(
           }
           if (!credentialBlocked && !wantsBlocked) {
             try {
-              if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
+              if (!tool) throw new Error(unknownToolResult(tc.name, dispatchRoster(scope)));
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
@@ -3281,9 +3611,46 @@ export function buildToolCallsHandler(
           const reqId = (callArgs as { id?: unknown }).id;
           if (typeof reqId === 'string' && reqId.length > 0) {
             const currentSkillId = scope.currentSkillId as string | undefined;
+            // ── ADMISSION reads the graph; every SENTENCE reads the filter ──
+            // Two sets, deliberately (9.86.0). `admissible` is the routing law:
+            // what the graph and the mount actually grant, unfiltered, because a
+            // narrowing may take a schema off the wire but never a name out of
+            // the dispatch map — role visibility governs what the model is TOLD,
+            // not what the gate admits. `hopsNamed` / `openNamed` are what any
+            // sentence, and the `skill.rejected` payload, may NAME: the same
+            // hidden set the description filtered itself with, resolved once by
+            // the tools slot and carried here on scope. Without it the refusals
+            // read the raw sets and could name a skill this role may never see —
+            // the leak the description closed, one stage downstream. (A hidden
+            // skill cannot reach this gate anyway: the `skill_read` permission
+            // gate above denies it first, on the same checker. The filter is
+            // what keeps that true by construction rather than by coincidence.)
+            const hiddenIds = new Set(
+              (scope.hiddenSkillIds as readonly string[] | undefined) ?? [],
+            );
+            const mayName = (id: string): boolean => !hiddenIds.has(id);
             const hops = deps.allowedSkillIds(currentSkillId);
-            skillHop = hops.includes(reqId);
-            const allowed = dedupeIds([...hops, ...(deps.openSkillIds ?? [])]);
+            const openAll = deps.openSkillIds ?? [];
+            // `spoken` keeps BOTH halves — what may be named, and whether the
+            // graph held anything before the filter ran. A composer handed only
+            // the filtered array cannot tell "nothing was reachable" from
+            // "nothing reachable may be named", and it used to assert the first.
+            const hopsSpoken = spoken(hops, mayName);
+            const openSpoken = spoken(openAll, mayName);
+            const hopsNamed = hopsSpoken.named;
+            const openNamed = openSpoken.named;
+            // The ONE owner of "is this target the cursor?" — the same function
+            // the description, the tool-effects judge and the permission gate
+            // switch on, so a stay means the same thing in all four.
+            const targetClass = classifySkillTarget({
+              ...(currentSkillId !== undefined && { cursor: currentSkillId }),
+              target: reqId,
+              hops,
+              open: openAll,
+            });
+            skillHop = targetClass === 'hop';
+            const admissible = dedupeIds([...hops, ...openAll]);
+            const allowed = dedupeIds([...hopsNamed, ...openNamed]);
             // ── The RE-ENGAGEMENT arm (9.59.0) — a third admission class ──
             // A pick must be routed by INTENT. The reachable set deliberately
             // excludes the node the cursor already occupies (`makeReachableSkills`
@@ -3301,18 +3668,12 @@ export function buildToolCallsHandler(
             // false, `pendingSkillPick` stays unwritten, and the pick lands on
             // `acceptedSkillPicks`, which the kernel's renewal feed reads as
             // explicit evidence and re-engages on the very next pass.
-            const parked =
-              deps.engagementPlan === undefined
-                ? undefined
-                : parkedMemberIds(
-                    deps.engagementPlan,
-                    scope.mapEngagement as MapEngagement | undefined,
-                  );
+            const parked = parkedNow(scope);
             const reengaging = parked?.has(reqId) === true;
             if (reengaging) {
               // Admitted. Nothing to refuse and no posture to apply: this is
               // not a hop, and a posture governs routing, not engagement.
-            } else if (currentSkillId !== undefined && reqId === currentSkillId) {
+            } else if (targetClass === 'self') {
               // ── The SELF-CALL arm (9.84.0) — BEFORE reachability ─────────
               // The cursor is in neither half of `allowed`, by construction:
               // `makeReachableSkills` filters it out of its own successor set
@@ -3390,9 +3751,16 @@ export function buildToolCallsHandler(
                 reason: 'self-call',
               });
               noteSkillRefusal(scope, iteration);
-            } else if (!allowed.includes(reqId)) {
+            } else if (!admissible.includes(reqId)) {
               skillRejected = true;
-              result = skillRefusal(reqId, allowed, deps.skillGraphIsTree === true);
+              result = composeReadSkillRefusal({
+                requestedId: reqId,
+                targetClass,
+                ...(currentSkillId !== undefined && { cursorId: currentSkillId }),
+                hops: hopsSpoken,
+                openIds: openSpoken,
+                ...(deps.skillGraphIsTree === true && { isTree: true }),
+              });
               typedEmit(scope, 'agentfootprint.skill.rejected', {
                 requestedId: reqId,
                 ...(currentSkillId !== undefined && { currentSkillId }),
@@ -3415,13 +3783,31 @@ export function buildToolCallsHandler(
               if (refusedByPosture) {
                 skillRejected = true;
                 skillHop = false; // a refused pick must not move the cursor below
-                result = postureRefusal(
-                  reqId,
-                  deps.skillStrictness,
-                  turnRoute,
-                  currentSkillId,
-                  deps.openSkillIds ?? [],
-                );
+                // The posture arm names NO hop — under 'rails' the model does
+                // not route, and under 'guard' it routes only from a menu — so
+                // the composer is handed the menu when there IS one and an
+                // empty hop list either way. Open skills are still named:
+                // they never reach this arm, so nothing here can decline them.
+                const menuNamed =
+                  turnRoute?.offered !== undefined && menuOutstanding(turnRoute, currentSkillId)
+                    ? spoken(turnRoute.offered, mayName)
+                    : undefined;
+                result = composeReadSkillRefusal({
+                  requestedId: reqId,
+                  targetClass,
+                  ...(currentSkillId !== undefined && { cursorId: currentSkillId }),
+                  // No hop is named under a posture, and the graph's hop set
+                  // is not this arm's subject — `held: false` is the honest
+                  // shape, not a claim that nothing was reachable (this arm
+                  // never composes the reachability clause at all).
+                  hops: { named: [], held: false },
+                  openIds: openSpoken,
+                  posture: deps.skillStrictness,
+                  ...(menuNamed !== undefined && { menuOffered: menuNamed }),
+                  ...((turnRoute?.by === 'intent' || turnRoute?.by === 'entry') && {
+                    routedDecisively: true,
+                  }),
+                });
                 typedEmit(scope, 'agentfootprint.skill.rejected', {
                   requestedId: reqId,
                   ...(currentSkillId !== undefined && { currentSkillId }),

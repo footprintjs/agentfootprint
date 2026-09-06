@@ -114,7 +114,15 @@ export interface ToolsSlotConfig {
       readonly cursorId?: string;
       readonly stay?: boolean;
     };
-  }) => LLMToolSchema;
+    /**
+     * `undefined` means the OFFER is withheld for this iteration: the schema
+     * leaves the request and the model is not invited to call `read_skill`
+     * (9.86.0 — a `.tree()` with no open skills, where every pick is refused
+     * by construction). Dispatch is untouched, as the substitution note above
+     * says: the name stays in `registryByName`, so a model that calls it from
+     * a restored transcript still reaches the gate and reads its refusal.
+     */
+  }) => LLMToolSchema | undefined;
   /**
    * Which skills the caller's role may NOT see this run (9.11.0).
    *
@@ -225,6 +233,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     if (hiddenSkillIdsFor) {
       const asked = hiddenSkillIdsFor();
       hiddenSkillIds = asked instanceof Promise ? await asked : asked;
+      // ── ROLE VISIBILITY IS A FILTER, NOT A PROPERTY OF ONE BUILDER (9.86.0) ──
+      // Resolved here once per iteration and published on scope, because the
+      // DESCRIPTION is not the only sentence that names skill ids: the
+      // read_skill gate's refusals name them too, and so does the
+      // `skill.rejected` payload. Both used to read the graph's raw sets and
+      // could therefore name a skill this role may never see — the same leak
+      // the description closed, one stage downstream. Written only when a
+      // resolver exists, so an agent without per-role visibility commits the
+      // exact state it always did.
+      scope.$setValue('hiddenSkillIds', hiddenSkillIds);
     }
     if (!toolProvider) return; // No-op fast path: keeps trace shape consistent.
 
@@ -389,15 +407,18 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // parent before this slot mounts — the same value the read_skill gate will read
     // when the model answers. Substituted by name so nothing else in the list moves.
     const substituted = readSkillFor
-      ? staticTools.map((t) =>
-          t.name === 'read_skill'
-            ? readSkillFor({
-                ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
-                ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
-                ...(menu !== undefined && { menu }),
-              })
-            : t,
-        )
+      ? staticTools.flatMap((t) => {
+          if (t.name !== 'read_skill') return [t];
+          // `undefined` = the offer is WITHHELD this iteration (see
+          // `readSkillFor`): the schema comes off the wire, the name stays in
+          // the dispatch map. Position governs the offer, never dispatch.
+          const offered = readSkillFor({
+            ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
+            ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
+            ...(menu !== undefined && { menu }),
+          });
+          return offered === undefined ? [] : [offered];
+        })
       : staticTools;
     // Step narrowing over the STATIC list (9.18.0): hold out the stepped
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
