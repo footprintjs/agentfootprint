@@ -199,9 +199,37 @@ const rx = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * `\bthe\b` matches almost any file and the citation passes vacuously.
  */
 const NOT_A_SYMBOL = new Set([
-  'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'is', 'it',
-  'its', 'not', 'of', 'on', 'one', 'or', 'that', 'the', 'their', 'them',
-  'these', 'this', 'those', 'to', 'what', 'when', 'where', 'which', 'why',
+  'a',
+  'an',
+  'and',
+  'as',
+  'at',
+  'but',
+  'by',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'its',
+  'not',
+  'of',
+  'on',
+  'one',
+  'or',
+  'that',
+  'the',
+  'their',
+  'them',
+  'these',
+  'this',
+  'those',
+  'to',
+  'what',
+  'when',
+  'where',
+  'which',
+  'why',
   'with',
 ]);
 
@@ -273,7 +301,9 @@ describe('every file · symbol citation still points at something real', () => {
             `(${r.candidates
               .slice(0, 4)
               .map((p) => relative(REPO, p))
-              .join(', ')}${r.candidates.length > 4 ? ', …' : ''}). Write the path, not the basename.`,
+              .join(', ')}${
+              r.candidates.length > 4 ? ', …' : ''
+            }). Write the path, not the basename.`,
         );
       }
     }
@@ -294,7 +324,8 @@ describe('every file · symbol citation still points at something real', () => {
         `an ordinary English word cannot be checked — \`\\bthe\\b\` matches almost any file, so ` +
         `the pointer would pass vacuously and prove nothing. Name the real symbol (a function, ` +
         `const, interface, or a quoted banner), or rewrite the sentence so the filename is not ` +
-        `followed by \`·\`.\n\n` + wordy.join('\n'),
+        `followed by \`·\`.\n\n` +
+        wordy.join('\n'),
     ).toEqual([]);
   });
 
@@ -307,14 +338,17 @@ describe('every file · symbol citation still points at something real', () => {
       if (containsSymbol(r.path, c)) continue;
       bad.push(
         `${relative(REPO, c.from)}:${c.fromLine} cites ${c.cited} · ${c.symbol}, ` +
-          `which does not occur in ${relative(REPO, r.path)}\n    (the citing text is: …${c.text}…)`,
+          `which does not occur in ${relative(REPO, r.path)}\n    (the citing text is: …${
+            c.text
+          }…)`,
       );
     }
     expect(
       bad,
       `A citation naming a symbol that is not in the file it names is a pointer that rotted — ` +
         `the function was renamed, moved or deleted and the sentence beside it was not. Re-read ` +
-        `the file and name what is actually there.\n\n` + bad.join('\n'),
+        `the file and name what is actually there.\n\n` +
+        bad.join('\n'),
     ).toEqual([]);
   });
 

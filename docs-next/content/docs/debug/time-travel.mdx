@@ -1,0 +1,150 @@
+---
+title: Scrub a finished run
+description: Time travel over an agent's commit log — stop on iterations, LLM turns, tool calls and decisions instead of on all forty stages, with milestoneStopsStrategy.
+---
+
+A finished run is a commit log: one bundle per executed stage, in order.
+footprintjs 9.17 opens a **reader's cursor** over it — `timeTravel` — with a
+fold at every stop, and takes a strategy that says where the cursor may rest.
+
+Its own strategy, `commitStops`, stops on every stage. That is the truth and it
+is unreadable: a two-turn agent commits around forty of them, most called
+`context`, `sf-cache` or `sf-thinking`. **`milestoneStopsStrategy` is the
+agent's answer to "which of those would a person scrub to?"** — the same
+`milestoneFor` classifier the library has always used, mapped onto the log.
+
+```ts
+import { timeTravel } from 'footprintjs/trace';
+import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
+
+const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+
+cursor.stops.map((s) => `${s.label} · ${milestoneOf(s)?.kind ?? s.kind}`);
+// Run start · start
+// Iteration · iteration
+// System prompt · slot
+// Messages · slot
+// Tools · slot
+// LLM turn · llm-turn
+// Route · decision
+// Tool call · tool-call
+// … Run end · end
+```
+
+Five kinds, and they are the domain's, not the chart's: `iteration` · `slot` ·
+`llm-turn` · `tool-call` · `decision`. `milestoneOf(stop)` is how you read the
+kind back off a stop — footprintjs's `Stop` has no slot for a consumer's own
+vocabulary, so the kind is re-derived from the stop's `runtimeStageId` by the
+same classifier that put it on the axis. A stage that classifies as none of them
+gets no stop; its commits fold into the stop before it, so nothing is lost from
+`stateAt` — it just stops being a place the slider can land.
+
+<Callout type="warn" title="What `'start'` means on this axis">
+On footprintjs's own per-stage axis, `'start'` is the fold *base*: the state
+before any stage ran. Here it also absorbs every stage that ran before the first
+milestone — and an agent seeds a couple of dozen keys in `seed` first. Measured
+on a two-turn run: `commitStops`' start folds no commits and 0 keys; this one
+folds the first commit and 32. So `stateAt(startStop)` is **the state the first
+milestone read**, not the run's raw base. Right for an axis whose stops must
+still partition the log; wrong to assume from `kind === 'start'` alone.
+</Callout>
+
+## Why this and not "one stop per stage"
+
+Granularity used to be a **structural** accident: a stage earned a scrub stop by
+happening to be a subflow. That put an observability decision behind a chart
+lever, and it put agent vocabulary ("what is a slot?") inside a generic
+renderer. The classifier moves the decision to the layer that owns the meaning,
+and this strategy is how every reader gets the same answer from it — a Why Lens,
+a custom panel, a script over a saved recording.
+
+## Ask the three questions
+
+The cursor answers what a reader actually wants to know. One position, always:
+
+```ts
+const turns = cursor.stops.filter((s) => milestoneOf(s)?.kind === 'llm-turn');
+
+cursor.jumpTo(turns[1]!.step);
+cursor.stateAt().state.currentSkillId;    // 'beta'  — where the run stood at turn 2
+cursor.changedSince(turns[0]!);           // ['currentSkillId', 'history', …]
+cursor.mark('the turn that went wrong');  // the READER's note — never written into the run
+```
+
+A refused move never moves. `jumpTo('seed#0')` — a stage that really ran and
+really committed, but is not a milestone — comes back
+`{ moved: false, reason: 'miss', at, nearest }`, and the panel keeps showing
+what it was showing.
+
+## Where the LLM turn lives depends on the chart shape
+
+<Callout type="info" title="One strategy, both shapes">
+`milestoneStops` classifies the LOCAL segment of a stage id, so it never needs
+to be told whether it was handed a run's log or a subflow's. Hand it either.
+</Callout>
+
+**`reactMode: 'dynamic'`** — the turn is a commit on the run's own log, so the
+`llm-turn` stop is on the outer cursor, beside the iteration and slot stops.
+
+```ts
+const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+const turn = cursor.stops.find((s) => milestoneOf(s)?.kind === 'llm-turn')!;
+cursor.stateAt(turn).state;   // the state that turn left behind
+```
+
+**`reactMode: 'dynamic-grouped'`** — each turn is an `sf-llm-call` subflow with
+its own isolated log, so the outer axis holds the **iterations** and the turn is
+one drill down. `drill()` returns a separate cursor over that subflow's own log;
+the same strategy reads it.
+
+```ts
+const iterations = cursor.stops.filter((s) => milestoneOf(s)?.kind === 'iteration');
+
+const inner = cursor.drill(iterations[1]!.runtimeStageId)!;   // its own log, its own base
+const turn = inner.stops.find((s) => milestoneOf(s)?.kind === 'llm-turn')!;
+inner.stateAt(turn).state;
+```
+
+Drill by `runtimeStageId`, not by path: a subflow inside a loop runs many times
+and every iteration shares one path, so `sf-llm-call#1` and `sf-llm-call#26` are
+two different turns and two different logs.
+
+<Callout type="warn" title="Which keys are visible where">
+In the grouped shape the **settled** skill cursor for turn *k* is on the OUTER
+axis, at iteration *k* (`currentSkillId`). Inside the drill, `currentSkillId` is
+the value the turn *started from* — it crosses the mount as a read-only input —
+and the move this turn made is `nextSkillCursor`, which the outputMapper merges
+back out. Both logs are truthful about different questions; scrub the outer axis
+for what settled, drill for what happened.
+</Callout>
+
+## A resumed run gets an axis of its own
+
+The cursor reads the snapshot it is handed, and a resume is its own execution
+with its own commit log. After `agent.resume(checkpoint, answer)`,
+`getSnapshot()` carries the **resumed** half: the axis begins at the stage the
+resume re-entered, and the milestones from before the pause are not on it — they
+are on the snapshot you took at the pause.
+
+```ts
+const paused = await agent.run({ message: 'go' });
+const beforeTheBreak = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+
+await agent.resume(paused.checkpoint, 'approved');
+const afterTheBreak = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
+// two cursors, two halves — `beforeTheBreak` still reads the pre-pause turn
+```
+
+Nothing about the strategy changes across a pause: both axes tile their log and
+both carry unique stops. It is the snapshot that split, not the cursor.
+
+## What it is not
+
+- **Not a second cursor.** A strategy only says where the one cursor may rest.
+  Position, folds, marks and drilling stay with `timeTravel`.
+- **Not a recorder.** Nothing is emitted at run time; marks live in the cursor
+  and never appear in a recording.
+- **Not a re-walk.** A milestone that never committed gets no stop. A cursor
+  that stops where no evidence exists is telling a story, not reading one.
+
+Runnable end-to-end: `examples/observability/23-time-travel-milestones.ts`.

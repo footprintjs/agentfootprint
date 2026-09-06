@@ -1,13 +1,13 @@
 {
   "$schema": "docs-truth exercised-evidence v1",
   "note": "Recorded by `npm run docs:truth:exercise`. Ran every examples/*/*.ts with zero credentials. eventsObserved is RUNTIME evidence (event bus, listener gates forced open). symbolsReferenced is STATIC: named imports of examples that exited 0 — it over-counts, so treat it as a floor for doc gaps and read \"never exercised\" with care.",
-  "recordedAt": "2026-08-20",
+  "recordedAt": "2026-09-06",
   "node": "v22.16.0",
   "credentialsUsed": false,
   "envVarsStrippedByName": 28,
   "totals": {
-    "total": 156,
-    "passed": 156,
+    "total": 161,
+    "passed": 161,
     "failed": 0,
     "eventTapFailures": 0
   },
@@ -53,6 +53,9 @@
     "agentfootprint.error.retried",
     "agentfootprint.eval.score",
     "agentfootprint.fallback.triggered",
+    "agentfootprint.integrity.disposition",
+    "agentfootprint.map.engaged",
+    "agentfootprint.map.parked",
     "agentfootprint.memory.attached",
     "agentfootprint.memory.retrieved",
     "agentfootprint.memory.strategy_applied",
@@ -167,6 +170,7 @@
     "MOCK_EMBEDDER_CALIBRATION",
     "MakeChatAgent",
     "McpCallToolRequest",
+    "McpClient",
     "McpSdkClient",
     "McpSdkServer",
     "MemoryEntry",
@@ -202,6 +206,7 @@
     "RunCheckpointError",
     "RunInFlightError",
     "RunRecorder",
+    "RunbookEnvelope",
     "RunnerBase",
     "RunnerPauseOutcome",
     "SCHEMA_TOOL_NAME",
@@ -220,6 +225,7 @@
     "ToolCatalogReport",
     "ToolChoiceCall",
     "ToolChoiceSummary",
+    "ToolDispatch",
     "ToolDispatchContext",
     "ToolExecutionContext",
     "ToolMiddleware",
@@ -254,6 +260,7 @@
     "compareFinders",
     "consoleObservability",
     "contextLedger",
+    "coverage",
     "debate",
     "decideSkill",
     "defaultStatusTemplates",
@@ -283,6 +290,7 @@
     "formatContextBugReport",
     "formatSemanticsReport",
     "formatToolCatalogReport",
+    "foundryResponsesHost",
     "gatedTools",
     "gemini",
     "githubBugReporter",
@@ -309,6 +317,9 @@
     "mcpClient",
     "mcpServe",
     "memorySessions",
+    "milestoneOf",
+    "milestoneStops",
+    "milestoneStopsStrategy",
     "mock",
     "mockEmbedder",
     "nodeHost",
@@ -332,7 +343,9 @@
     "removeAndRetry",
     "renderStatusLine",
     "rerunWithoutSources",
+    "retryingFetch",
     "routeRecorder",
+    "runbookAsTool",
     "scoreContrastiveInfluence",
     "scoreInfluence",
     "scoreMargin",
@@ -391,6 +404,7 @@
     "src/lib/influence-core/index",
     "src/lib/injection-engine/index",
     "src/lib/mcp/types",
+    "src/llm-providers",
     "src/memory/embedding/mockEmbedder",
     "src/memory/entry/index",
     "src/observe",
@@ -401,938 +415,968 @@
     {
       "file": "examples/canonical/loan-officer-causal.ts",
       "ok": true,
-      "durationMs": 6675,
-      "eventCount": 14
+      "durationMs": 2994,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/01-instruction.ts",
       "ok": true,
-      "durationMs": 4708,
-      "eventCount": 12
+      "durationMs": 1079,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/02-skill.ts",
       "ok": true,
-      "durationMs": 5080,
-      "eventCount": 14
+      "durationMs": 1438,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/03-steering.ts",
       "ok": true,
-      "durationMs": 4553,
-      "eventCount": 12
+      "durationMs": 915,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/04-fact.ts",
       "ok": true,
-      "durationMs": 6011,
-      "eventCount": 12
+      "durationMs": 948,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/05-dynamic-react.ts",
       "ok": true,
-      "durationMs": 2325,
-      "eventCount": 14
+      "durationMs": 1539,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/06-mixed-flavors.ts",
       "ok": true,
-      "durationMs": 1638,
-      "eventCount": 12
+      "durationMs": 1074,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/07-rag.ts",
       "ok": true,
-      "durationMs": 1837,
-      "eventCount": 15
+      "durationMs": 1034,
+      "eventCount": 16
     },
     {
       "file": "examples/context-engineering/08-mcp.ts",
       "ok": true,
-      "durationMs": 1744,
-      "eventCount": 12
+      "durationMs": 965,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/09-skills-from-dir.ts",
       "ok": true,
-      "durationMs": 2518,
-      "eventCount": 14
+      "durationMs": 1733,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/10-mcp-serve.ts",
       "ok": true,
-      "durationMs": 2517,
+      "durationMs": 847,
       "eventCount": 0
     },
     {
       "file": "examples/context-engineering/11-compaction.ts",
       "ok": true,
-      "durationMs": 2810,
-      "eventCount": 15
+      "durationMs": 823,
+      "eventCount": 16
     },
     {
       "file": "examples/context-engineering/12-window-strategies.ts",
       "ok": true,
-      "durationMs": 2544,
-      "eventCount": 15
+      "durationMs": 833,
+      "eventCount": 16
     },
     {
       "file": "examples/context-engineering/13-messages-delivery.ts",
       "ok": true,
-      "durationMs": 2483,
-      "eventCount": 12
+      "durationMs": 1096,
+      "eventCount": 13
     },
     {
       "file": "examples/context-engineering/14-durable-compaction.ts",
       "ok": true,
-      "durationMs": 2113,
-      "eventCount": 15
+      "durationMs": 884,
+      "eventCount": 16
     },
     {
       "file": "examples/context-engineering/15-skill-graph-intents.ts",
       "ok": true,
-      "durationMs": 1924,
-      "eventCount": 14
+      "durationMs": 968,
+      "eventCount": 15
     },
     {
       "file": "examples/context-engineering/16-skill-steps.ts",
       "ok": true,
-      "durationMs": 2495,
-      "eventCount": 18
+      "durationMs": 1270,
+      "eventCount": 19
     },
     {
       "file": "examples/context-engineering/17-brains-and-tool-effects.ts",
       "ok": true,
-      "durationMs": 2827,
-      "eventCount": 16
+      "durationMs": 1581,
+      "eventCount": 17
     },
     {
       "file": "examples/context-engineering/18-start-rule-examples.ts",
       "ok": true,
-      "durationMs": 1676,
+      "durationMs": 684,
       "eventCount": 0
     },
     {
       "file": "examples/context-engineering/19-skill-graph-host.ts",
       "ok": true,
-      "durationMs": 1775,
+      "durationMs": 693,
       "eventCount": 0
     },
     {
       "file": "examples/context-engineering/20-keep-the-evidence.ts",
       "ok": true,
-      "durationMs": 2532,
-      "eventCount": 15
+      "durationMs": 925,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/context-engineering/21-park-the-wrong-map.ts",
+      "ok": true,
+      "durationMs": 1513,
+      "eventCount": 19
+    },
+    {
+      "file": "examples/context-engineering/22-mcp-in-a-browser.ts",
+      "ok": true,
+      "durationMs": 1066,
+      "eventCount": 0
     },
     {
       "file": "examples/core-flow/01-sequence.ts",
       "ok": true,
-      "durationMs": 16744,
+      "durationMs": 13526,
       "eventCount": 6
     },
     {
       "file": "examples/core-flow/02-parallel.ts",
       "ok": true,
-      "durationMs": 10070,
+      "durationMs": 8897,
       "eventCount": 8
     },
     {
       "file": "examples/core-flow/03-conditional.ts",
       "ok": true,
-      "durationMs": 12237,
+      "durationMs": 14196,
       "eventCount": 7
     },
     {
       "file": "examples/core-flow/04-loop.ts",
       "ok": true,
-      "durationMs": 16500,
+      "durationMs": 19663,
       "eventCount": 8
     },
     {
       "file": "examples/core-flow/05-workflow.ts",
       "ok": true,
-      "durationMs": 11906,
+      "durationMs": 12315,
       "eventCount": 6
     },
     {
       "file": "examples/core-flow/06-graph.ts",
       "ok": true,
-      "durationMs": 15751,
+      "durationMs": 15176,
       "eventCount": 6
     },
     {
       "file": "examples/core/01-llm-call.ts",
       "ok": true,
-      "durationMs": 6330,
+      "durationMs": 5844,
       "eventCount": 4
     },
     {
       "file": "examples/core/02-agent-with-tools.ts",
       "ok": true,
-      "durationMs": 13251,
-      "eventCount": 14
+      "durationMs": 12279,
+      "eventCount": 15
     },
     {
       "file": "examples/deploy/agentcore-runtime.ts",
       "ok": true,
-      "durationMs": 2505,
-      "eventCount": 12
+      "durationMs": 1435,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/durable-sessions.ts",
       "ok": true,
-      "durationMs": 1873,
-      "eventCount": 19
+      "durationMs": 1048,
+      "eventCount": 20
     },
     {
       "file": "examples/deploy/echo-conversation.ts",
       "ok": true,
-      "durationMs": 1972,
-      "eventCount": 12
+      "durationMs": 1361,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/deploy/foundry-responses.ts",
+      "ok": true,
+      "durationMs": 1565,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/multi-user.ts",
       "ok": true,
-      "durationMs": 2082,
-      "eventCount": 12
+      "durationMs": 1352,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/one-port.ts",
       "ok": true,
-      "durationMs": 1686,
-      "eventCount": 12
+      "durationMs": 1014,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/own-routes.ts",
       "ok": true,
-      "durationMs": 1711,
-      "eventCount": 12
+      "durationMs": 1189,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/render-by-ref.ts",
       "ok": true,
-      "durationMs": 1857,
-      "eventCount": 17
+      "durationMs": 1192,
+      "eventCount": 18
     },
     {
       "file": "examples/deploy/sqlite-sessions.ts",
       "ok": true,
-      "durationMs": 1862,
-      "eventCount": 16
+      "durationMs": 1301,
+      "eventCount": 17
     },
     {
       "file": "examples/deploy/standing-agent.ts",
       "ok": true,
-      "durationMs": 2030,
-      "eventCount": 12
+      "durationMs": 1414,
+      "eventCount": 13
     },
     {
       "file": "examples/deploy/verified-door.ts",
       "ok": true,
-      "durationMs": 1811,
-      "eventCount": 14
+      "durationMs": 1216,
+      "eventCount": 15
     },
     {
       "file": "examples/dynamic-react/01-classic-react.ts",
       "ok": true,
-      "durationMs": 2660,
-      "eventCount": 14
+      "durationMs": 1993,
+      "eventCount": 15
     },
     {
       "file": "examples/dynamic-react/02-dynamic-react.ts",
       "ok": true,
-      "durationMs": 2824,
-      "eventCount": 14
+      "durationMs": 2174,
+      "eventCount": 15
     },
     {
       "file": "examples/features/01-pause-resume.ts",
       "ok": true,
-      "durationMs": 13729,
-      "eventCount": 16
+      "durationMs": 12066,
+      "eventCount": 17
     },
     {
       "file": "examples/features/02-cost-tracking.ts",
       "ok": true,
-      "durationMs": 14115,
-      "eventCount": 17
+      "durationMs": 17752,
+      "eventCount": 18
     },
     {
       "file": "examples/features/03-permissions.ts",
       "ok": true,
-      "durationMs": 1489,
-      "eventCount": 16
+      "durationMs": 867,
+      "eventCount": 17
     },
     {
       "file": "examples/features/04-observability.ts",
       "ok": true,
-      "durationMs": 11767,
-      "eventCount": 14
+      "durationMs": 14483,
+      "eventCount": 15
     },
     {
       "file": "examples/features/05-events.ts",
       "ok": true,
-      "durationMs": 13858,
-      "eventCount": 15
+      "durationMs": 14482,
+      "eventCount": 16
     },
     {
       "file": "examples/features/06-detached-observability.ts",
       "ok": true,
-      "durationMs": 6331,
-      "eventCount": 12
+      "durationMs": 8398,
+      "eventCount": 13
     },
     {
       "file": "examples/features/06-flowchart-boundary-payloads.ts",
       "ok": true,
-      "durationMs": 14263,
-      "eventCount": 14
+      "durationMs": 11121,
+      "eventCount": 15
     },
     {
       "file": "examples/features/06-status-subpath.ts",
       "ok": true,
-      "durationMs": 16542,
-      "eventCount": 15
+      "durationMs": 10463,
+      "eventCount": 16
     },
     {
       "file": "examples/features/06-tool-args-validation.ts",
       "ok": true,
-      "durationMs": 20317,
-      "eventCount": 15
+      "durationMs": 16771,
+      "eventCount": 16
     },
     {
       "file": "examples/features/07-mock-multi-turn-replies.ts",
       "ok": true,
-      "durationMs": 1410,
-      "eventCount": 14
+      "durationMs": 927,
+      "eventCount": 15
     },
     {
       "file": "examples/features/08-reliability.ts",
       "ok": true,
-      "durationMs": 1500,
-      "eventCount": 20
+      "durationMs": 1049,
+      "eventCount": 21
     },
     {
       "file": "examples/features/09-reliability-gate.ts",
       "ok": true,
-      "durationMs": 1231,
-      "eventCount": 14
+      "durationMs": 801,
+      "eventCount": 15
     },
     {
       "file": "examples/features/10-discovery-provider.ts",
       "ok": true,
-      "durationMs": 1322,
-      "eventCount": 18
+      "durationMs": 879,
+      "eventCount": 19
     },
     {
       "file": "examples/features/11-sequence-policy.ts",
       "ok": true,
-      "durationMs": 1742,
-      "eventCount": 16
+      "durationMs": 1083,
+      "eventCount": 17
     },
     {
       "file": "examples/features/12-strict-output.ts",
       "ok": true,
-      "durationMs": 1332,
-      "eventCount": 15
+      "durationMs": 741,
+      "eventCount": 16
     },
     {
       "file": "examples/features/13-live-state.ts",
       "ok": true,
-      "durationMs": 12601,
-      "eventCount": 14
+      "durationMs": 15509,
+      "eventCount": 15
     },
     {
       "file": "examples/features/14-tool-lineage.ts",
       "ok": true,
-      "durationMs": 1815,
-      "eventCount": 14
+      "durationMs": 1253,
+      "eventCount": 15
     },
     {
       "file": "examples/features/15-skill-graph.ts",
       "ok": true,
-      "durationMs": 1705,
-      "eventCount": 15
+      "durationMs": 1250,
+      "eventCount": 16
     },
     {
       "file": "examples/features/16-providers.ts",
       "ok": true,
-      "durationMs": 1381,
-      "eventCount": 12
+      "durationMs": 968,
+      "eventCount": 13
     },
     {
       "file": "examples/features/17-identity.ts",
       "ok": true,
-      "durationMs": 1596,
-      "eventCount": 16
+      "durationMs": 1138,
+      "eventCount": 17
     },
     {
       "file": "examples/features/18-otel-genai.ts",
       "ok": true,
-      "durationMs": 8565,
-      "eventCount": 14
+      "durationMs": 12068,
+      "eventCount": 15
     },
     {
       "file": "examples/features/19-audit-export.ts",
       "ok": true,
-      "durationMs": 24243,
-      "eventCount": 15
+      "durationMs": 24106,
+      "eventCount": 16
     },
     {
       "file": "examples/features/20-regulated-decisioning.ts",
       "ok": true,
-      "durationMs": 3517,
-      "eventCount": 16
+      "durationMs": 3025,
+      "eventCount": 17
     },
     {
       "file": "examples/features/21-deferred-observers.ts",
       "ok": true,
-      "durationMs": 57786,
-      "eventCount": 15
+      "durationMs": 56401,
+      "eventCount": 16
     },
     {
       "file": "examples/features/22-influence-core.ts",
       "ok": true,
-      "durationMs": 1384,
+      "durationMs": 775,
       "eventCount": 0
     },
     {
       "file": "examples/features/23-skill-graph-scoped-read-skill.ts",
       "ok": true,
-      "durationMs": 2135,
-      "eventCount": 16
+      "durationMs": 1978,
+      "eventCount": 17
     },
     {
       "file": "examples/features/24-skill-graph-entry-relevance.ts",
       "ok": true,
-      "durationMs": 1356,
-      "eventCount": 13
+      "durationMs": 1013,
+      "eventCount": 14
     },
     {
       "file": "examples/features/25-skill-graph-checkup.ts",
       "ok": true,
-      "durationMs": 1287,
+      "durationMs": 843,
       "eventCount": 0
     },
     {
       "file": "examples/features/26-skill-graph-route-recorder.ts",
       "ok": true,
-      "durationMs": 1519,
-      "eventCount": 15
+      "durationMs": 1057,
+      "eventCount": 16
     },
     {
       "file": "examples/features/27-skill-graph-relevance-hint.ts",
       "ok": true,
-      "durationMs": 1280,
-      "eventCount": 13
+      "durationMs": 876,
+      "eventCount": 14
     },
     {
       "file": "examples/features/28-skill-graph-entry-read.ts",
       "ok": true,
-      "durationMs": 1780,
-      "eventCount": 15
+      "durationMs": 1271,
+      "eventCount": 16
     },
     {
       "file": "examples/features/29-skill-contract-check.ts",
       "ok": true,
-      "durationMs": 1348,
+      "durationMs": 783,
       "eventCount": 0
     },
     {
       "file": "examples/features/30-tool-contract-checkup.ts",
       "ok": true,
-      "durationMs": 1287,
+      "durationMs": 738,
       "eventCount": 0
     },
     {
       "file": "examples/features/31-skill-graph-keyword-scorer.ts",
       "ok": true,
-      "durationMs": 1345,
-      "eventCount": 13
+      "durationMs": 1002,
+      "eventCount": 14
     },
     {
       "file": "examples/features/32-context-ledger.ts",
       "ok": true,
-      "durationMs": 1645,
+      "durationMs": 1207,
       "eventCount": 0
     },
     {
       "file": "examples/features/33-checkin.ts",
       "ok": true,
-      "durationMs": 1246,
-      "eventCount": 17
+      "durationMs": 900,
+      "eventCount": 18
     },
     {
       "file": "examples/features/34-checkin-coworker.ts",
       "ok": true,
-      "durationMs": 1353,
-      "eventCount": 17
+      "durationMs": 921,
+      "eventCount": 18
     },
     {
       "file": "examples/features/35-resilience-visibility.ts",
       "ok": true,
-      "durationMs": 1394,
-      "eventCount": 15
+      "durationMs": 1063,
+      "eventCount": 16
     },
     {
       "file": "examples/features/36-per-run-config.ts",
       "ok": true,
-      "durationMs": 1579,
-      "eventCount": 12
+      "durationMs": 1802,
+      "eventCount": 13
     },
     {
       "file": "examples/features/37-middleware.ts",
       "ok": true,
-      "durationMs": 1556,
-      "eventCount": 17
+      "durationMs": 1733,
+      "eventCount": 18
     },
     {
       "file": "examples/features/38-act.ts",
       "ok": true,
-      "durationMs": 1652,
-      "eventCount": 15
+      "durationMs": 2159,
+      "eventCount": 16
     },
     {
       "file": "examples/features/39-approve-once.ts",
       "ok": true,
-      "durationMs": 1829,
-      "eventCount": 17
+      "durationMs": 2328,
+      "eventCount": 18
     },
     {
       "file": "examples/features/40-output-schema-retry.ts",
       "ok": true,
-      "durationMs": 2305,
-      "eventCount": 17
+      "durationMs": 1940,
+      "eventCount": 18
     },
     {
       "file": "examples/features/41-local-model.ts",
       "ok": true,
-      "durationMs": 1526,
-      "eventCount": 14
+      "durationMs": 1031,
+      "eventCount": 15
     },
     {
       "file": "examples/features/42-skill-graph-model-pick.ts",
       "ok": true,
-      "durationMs": 2429,
-      "eventCount": 16
+      "durationMs": 2047,
+      "eventCount": 17
     },
     {
       "file": "examples/features/43-skill-graph-tree-pick.ts",
       "ok": true,
-      "durationMs": 1480,
-      "eventCount": 18
+      "durationMs": 1105,
+      "eventCount": 19
     },
     {
       "file": "examples/features/44-skill-graph-read-skill-offer.ts",
       "ok": true,
-      "durationMs": 1633,
-      "eventCount": 15
+      "durationMs": 1074,
+      "eventCount": 16
     },
     {
       "file": "examples/features/45-credential-consent.ts",
       "ok": true,
-      "durationMs": 1845,
-      "eventCount": 19
+      "durationMs": 1350,
+      "eventCount": 20
     },
     {
       "file": "examples/features/46-skill-graph-checkup-deepens.ts",
       "ok": true,
-      "durationMs": 1411,
+      "durationMs": 874,
       "eventCount": 0
     },
     {
       "file": "examples/features/47-skills-from-dir-graph.ts",
       "ok": true,
-      "durationMs": 1795,
-      "eventCount": 13
+      "durationMs": 1163,
+      "eventCount": 14
     },
     {
       "file": "examples/features/48-graceful-shutdown.ts",
       "ok": true,
-      "durationMs": 21183,
-      "eventCount": 12
+      "durationMs": 21586,
+      "eventCount": 13
     },
     {
       "file": "examples/features/49-self-explain-live.ts",
       "ok": true,
-      "durationMs": 1695,
-      "eventCount": 17
+      "durationMs": 945,
+      "eventCount": 18
     },
     {
       "file": "examples/features/50-through-the-tool-boundary.ts",
       "ok": true,
-      "durationMs": 1458,
-      "eventCount": 16
+      "durationMs": 967,
+      "eventCount": 17
     },
     {
       "file": "examples/features/51-conversations.ts",
       "ok": true,
-      "durationMs": 1321,
-      "eventCount": 14
+      "durationMs": 900,
+      "eventCount": 15
     },
     {
       "file": "examples/features/52-run-code.ts",
       "ok": true,
-      "durationMs": 1964,
-      "eventCount": 18
+      "durationMs": 1238,
+      "eventCount": 19
     },
     {
       "file": "examples/features/53-enterprise-governance.ts",
       "ok": true,
-      "durationMs": 15372,
-      "eventCount": 15
+      "durationMs": 8673,
+      "eventCount": 16
     },
     {
       "file": "examples/features/54-skill-graph-front-door.ts",
       "ok": true,
-      "durationMs": 2698,
+      "durationMs": 768,
       "eventCount": 0
     },
     {
       "file": "examples/features/55-result-ceiling.ts",
       "ok": true,
-      "durationMs": 1602,
-      "eventCount": 14
+      "durationMs": 768,
+      "eventCount": 15
     },
     {
       "file": "examples/features/56-artifacts.ts",
       "ok": true,
-      "durationMs": 28475,
-      "eventCount": 17
+      "durationMs": 20792,
+      "eventCount": 18
     },
     {
       "file": "examples/features/57-artifact-data-flow.ts",
       "ok": true,
-      "durationMs": 24417,
-      "eventCount": 17
+      "durationMs": 26764,
+      "eventCount": 18
     },
     {
       "file": "examples/features/58-typed-hitl-component.ts",
       "ok": true,
-      "durationMs": 14567,
-      "eventCount": 18
+      "durationMs": 13592,
+      "eventCount": 19
     },
     {
       "file": "examples/features/59-artifact-vocabularies.ts",
       "ok": true,
-      "durationMs": 18168,
-      "eventCount": 14
+      "durationMs": 19808,
+      "eventCount": 15
     },
     {
       "file": "examples/features/60-gemini-field-truths.ts",
       "ok": true,
-      "durationMs": 1233,
-      "eventCount": 14
+      "durationMs": 2577,
+      "eventCount": 15
     },
     {
       "file": "examples/features/61-agent-recipes.ts",
       "ok": true,
-      "durationMs": 1461,
-      "eventCount": 12
+      "durationMs": 2197,
+      "eventCount": 13
     },
     {
       "file": "examples/features/62-recording-envelope.ts",
       "ok": true,
-      "durationMs": 1384,
-      "eventCount": 12
+      "durationMs": 2225,
+      "eventCount": 13
     },
     {
       "file": "examples/features/63-recording-carries-the-map.ts",
       "ok": true,
-      "durationMs": 1909,
-      "eventCount": 15
+      "durationMs": 2550,
+      "eventCount": 16
     },
     {
       "file": "examples/features/64-skill-map-guards.ts",
       "ok": true,
-      "durationMs": 1504,
-      "eventCount": 15
+      "durationMs": 2456,
+      "eventCount": 16
     },
     {
       "file": "examples/features/65-tool-progress.ts",
       "ok": true,
-      "durationMs": 2607,
-      "eventCount": 15
+      "durationMs": 3543,
+      "eventCount": 16
     },
     {
       "file": "examples/features/66-semantic-envelope.ts",
       "ok": true,
-      "durationMs": 1730,
-      "eventCount": 16
+      "durationMs": 2704,
+      "eventCount": 17
     },
     {
       "file": "examples/features/67-out-of-budget-wrap-up.ts",
       "ok": true,
-      "durationMs": 4031,
-      "eventCount": 16
+      "durationMs": 4492,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/68-runbook-as-tool.ts",
+      "ok": true,
+      "durationMs": 1862,
+      "eventCount": 17
     },
     {
       "file": "examples/helpers/cli.ts",
       "ok": true,
-      "durationMs": 960,
+      "durationMs": 797,
       "eventCount": 0
     },
     {
       "file": "examples/helpers/neoToolCatalog.ts",
       "ok": true,
-      "durationMs": 990,
+      "durationMs": 846,
       "eventCount": 0
     },
     {
       "file": "examples/helpers/provider.ts",
       "ok": true,
-      "durationMs": 1002,
+      "durationMs": 831,
       "eventCount": 0
     },
     {
       "file": "examples/memory/01-window-strategy.ts",
       "ok": true,
-      "durationMs": 1774,
-      "eventCount": 13
+      "durationMs": 1534,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/02-budget-strategy.ts",
       "ok": true,
-      "durationMs": 1743,
-      "eventCount": 13
+      "durationMs": 1562,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/03-summarize-strategy.ts",
       "ok": true,
-      "durationMs": 3541,
-      "eventCount": 14
+      "durationMs": 3081,
+      "eventCount": 15
     },
     {
       "file": "examples/memory/04-topK-strategy.ts",
       "ok": true,
-      "durationMs": 2249,
-      "eventCount": 15
+      "durationMs": 1857,
+      "eventCount": 16
     },
     {
       "file": "examples/memory/05-extract-strategy.ts",
       "ok": true,
-      "durationMs": 2512,
-      "eventCount": 12
+      "durationMs": 2084,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/06-causal-snapshot.ts",
       "ok": true,
-      "durationMs": 1917,
-      "eventCount": 12
+      "durationMs": 1607,
+      "eventCount": 13
     },
     {
       "file": "examples/memory/07-hybrid-auto.ts",
       "ok": true,
-      "durationMs": 2292,
-      "eventCount": 13
+      "durationMs": 1922,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/08-redis-store.ts",
       "ok": true,
-      "durationMs": 2017,
-      "eventCount": 13
+      "durationMs": 1620,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/09-agentcore-store.ts",
       "ok": true,
-      "durationMs": 2064,
-      "eventCount": 13
+      "durationMs": 1610,
+      "eventCount": 14
     },
     {
       "file": "examples/memory/10-durable-vector-index.ts",
       "ok": true,
-      "durationMs": 1802,
-      "eventCount": 15
+      "durationMs": 1395,
+      "eventCount": 16
     },
     {
       "file": "examples/memory/11-decay-strategy.ts",
       "ok": true,
-      "durationMs": 1319,
-      "eventCount": 12
+      "durationMs": 1047,
+      "eventCount": 13
     },
     {
       "file": "examples/observability/01-trace-debug-session.ts",
       "ok": true,
-      "durationMs": 1429,
+      "durationMs": 937,
       "eventCount": 0
     },
     {
       "file": "examples/observability/02-lint-confusable-catalog.ts",
       "ok": true,
-      "durationMs": 1568,
+      "durationMs": 956,
       "eventCount": 0
     },
     {
       "file": "examples/observability/03-lint-fix-and-pass.ts",
       "ok": true,
-      "durationMs": 1704,
+      "durationMs": 946,
       "eventCount": 0
     },
     {
       "file": "examples/observability/04-tool-choice-margins.ts",
       "ok": true,
-      "durationMs": 2946,
-      "eventCount": 14
+      "durationMs": 2276,
+      "eventCount": 15
     },
     {
       "file": "examples/observability/05-context-bisect.ts",
       "ok": true,
-      "durationMs": 10014,
-      "eventCount": 14
+      "durationMs": 9286,
+      "eventCount": 15
     },
     {
       "file": "examples/observability/06-backtrack-trace.ts",
       "ok": true,
-      "durationMs": 9899,
-      "eventCount": 14
+      "durationMs": 9194,
+      "eventCount": 15
     },
     {
       "file": "examples/observability/07-trace-debug-agent.ts",
       "ok": true,
-      "durationMs": 2805,
-      "eventCount": 16
+      "durationMs": 2196,
+      "eventCount": 17
     },
     {
       "file": "examples/observability/08-self-explain.ts",
       "ok": true,
-      "durationMs": 4725,
-      "eventCount": 17
+      "durationMs": 4383,
+      "eventCount": 18
     },
     {
       "file": "examples/observability/09-attributability-marker.ts",
       "ok": true,
-      "durationMs": 1119,
+      "durationMs": 864,
       "eventCount": 0
     },
     {
       "file": "examples/observability/10-missing-context.ts",
       "ok": true,
-      "durationMs": 1097,
+      "durationMs": 810,
       "eventCount": 0
     },
     {
       "file": "examples/observability/11-contrastive-influence.ts",
       "ok": true,
-      "durationMs": 1151,
+      "durationMs": 782,
       "eventCount": 0
     },
     {
       "file": "examples/observability/12-two-score-localization.ts",
       "ok": true,
-      "durationMs": 1235,
+      "durationMs": 853,
       "eventCount": 0
     },
     {
       "file": "examples/observability/13-context-error-finders.ts",
       "ok": true,
-      "durationMs": 1291,
+      "durationMs": 850,
       "eventCount": 0
     },
     {
       "file": "examples/observability/13-per-loop-trajectory.ts",
       "ok": true,
-      "durationMs": 1299,
-      "eventCount": 15
+      "durationMs": 926,
+      "eventCount": 16
     },
     {
       "file": "examples/observability/14-loop-recall-shortlist.ts",
       "ok": true,
-      "durationMs": 1174,
+      "durationMs": 860,
       "eventCount": 0
     },
     {
       "file": "examples/observability/15-walk-to-root.ts",
       "ok": true,
-      "durationMs": 1291,
+      "durationMs": 863,
       "eventCount": 0
     },
     {
       "file": "examples/observability/16-pluggable-scorer.ts",
       "ok": true,
-      "durationMs": 1869,
-      "eventCount": 14
+      "durationMs": 1395,
+      "eventCount": 15
     },
     {
       "file": "examples/observability/17-localize-quickstart.ts",
       "ok": true,
-      "durationMs": 5263,
-      "eventCount": 12
+      "durationMs": 4574,
+      "eventCount": 13
     },
     {
       "file": "examples/observability/18-influence-strategies-and-rerun.ts",
       "ok": true,
-      "durationMs": 6704,
-      "eventCount": 12
+      "durationMs": 6201,
+      "eventCount": 13
     },
     {
       "file": "examples/observability/19-recorded-chat.ts",
       "ok": true,
-      "durationMs": 7255,
-      "eventCount": 12
+      "durationMs": 6758,
+      "eventCount": 13
     },
     {
       "file": "examples/observability/20-record-and-render.ts",
       "ok": true,
-      "durationMs": 12649,
+      "durationMs": 13760,
       "eventCount": 6
     },
     {
       "file": "examples/observability/21-variable-recall.ts",
       "ok": true,
-      "durationMs": 1201,
-      "eventCount": 15
+      "durationMs": 844,
+      "eventCount": 16
     },
     {
       "file": "examples/observability/22-file-a-bug.ts",
       "ok": true,
-      "durationMs": 1699,
-      "eventCount": 14
+      "durationMs": 1309,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/observability/23-time-travel-milestones.ts",
+      "ok": true,
+      "durationMs": 1027,
+      "eventCount": 16
     },
     {
       "file": "examples/patterns/01-self-consistency.ts",
       "ok": true,
-      "durationMs": 6301,
+      "durationMs": 6612,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/02-reflection.ts",
       "ok": true,
-      "durationMs": 21263,
+      "durationMs": 21125,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/03-debate.ts",
       "ok": true,
-      "durationMs": 28433,
+      "durationMs": 26014,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/04-map-reduce.ts",
       "ok": true,
-      "durationMs": 7763,
+      "durationMs": 7330,
       "eventCount": 8
     },
     {
       "file": "examples/patterns/05-tot.ts",
       "ok": true,
-      "durationMs": 13729,
+      "durationMs": 13628,
       "eventCount": 10
     },
     {
       "file": "examples/patterns/06-swarm.ts",
       "ok": true,
-      "durationMs": 14710,
+      "durationMs": 10816,
       "eventCount": 9
     },
     {
       "file": "examples/patterns/07-llm-swarm.ts",
       "ok": true,
-      "durationMs": 8183,
+      "durationMs": 7788,
       "eventCount": 9
     },
     {
       "file": "examples/rag/01-folder-to-agent.ts",
       "ok": true,
-      "durationMs": 1817,
-      "eventCount": 15
+      "durationMs": 1182,
+      "eventCount": 16
     }
   ]
 }

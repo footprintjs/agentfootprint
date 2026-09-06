@@ -89,7 +89,8 @@ offline replay — a Fold artifact, not this role. The append-only evidence is
 among them — seven of those check folders are Mixed, see the Lens list) ·
 `src/observability/**` (the context-error finders) ·
 `src/lib/context-bisect/**` (the driver and its arms) · `src/lib/influence-core/` ·
-`src/memory/retrieval/`.
+`src/memory/retrieval/` · `src/lib/time-travel/` (where a reader of a finished run
+may stop — derived from the recorded commit log, never a re-walk).
 
 Mixed folders carrying Fold: `src/lib/injection-engine/`
 (`skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·

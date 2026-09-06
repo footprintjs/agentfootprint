@@ -84,6 +84,15 @@ export {
   RESERVED_SUBFLOW_PREFIX,
   isReservedSubflowSegment,
 } from './conventions.js';
+// The milestones ON the reader's cursor. `milestoneFor` above classifies ONE
+// stage id; this is that classifier mapped onto a finished run's commit log as
+// a footprintjs `TimeTravelStrategy`, so `timeTravel(snapshot, { strategy:
+// milestoneStopsStrategy })` scrubs iteration → llm-turn → tool-call →
+// decision instead of stopping on every stage. `milestoneOf(stop)` reads the
+// milestone back off a stop (footprintjs's `Stop` has no slot for a
+// consumer's own vocabulary). Fold: derived from the recorded log, never a
+// re-walk — see src/lib/time-travel/README.md.
+export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './lib/time-travel/index.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
 // are the internal builder↔recorder coordination protocol, not consumer

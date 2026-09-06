@@ -80,6 +80,16 @@
  * retry must never be used for is an assertion that is simply wrong — and the
  * conversions here were re-run under three concurrent suites until they held
  * on their own, before any retry was added.
+ *
+ * AND WHY A COVERAGE RUN GETS A STATED ALLOWANCE
+ * -----------------------------------------------------------------------
+ * One distortion survives all of the above, because it is not machine load:
+ * v8 coverage instrumentation taxes each side of a comparison in proportion
+ * to its own call count, so a ratio between two differently-shaped code paths
+ * moves even on an idle machine. Under `npm run test:coverage` — and only
+ * there — the ceilings carry a measured multiplier. See
+ * {@link COVERAGE_ALLOWANCE} for the number, how it was measured, and what it
+ * does not promise. The plain `npm test` ceilings are unchanged.
  */
 
 import { expect } from 'vitest';
@@ -135,6 +145,62 @@ const SAMPLING_BUDGET_MS = 750;
 const REFERENCE_BATCH = 10;
 /** Rounds for the yardstick itself. It is cheap, but it is timed four times per assertion. */
 const REFERENCE_ROUNDS = 2;
+
+/**
+ * How much the ceilings are widened when the suite runs under v8 coverage.
+ *
+ * WHY A SECOND ALLOWANCE EXISTS AT ALL
+ * -----------------------------------------------------------------------
+ * Everything above cancels a busy MACHINE, because whatever slows the subject
+ * slows the baseline in the same window. Coverage instrumentation is not that
+ * kind of load: it is a per-function, per-branch counter, so it taxes the two
+ * sides of a comparison in PROPORTION TO HOW MANY FUNCTION CALLS EACH MAKES,
+ * and a ratio between two differently-shaped code paths moves even on a
+ * completely idle machine. The five-child compose assertion is the clearest
+ * case — one `exportEvent` call on the baseline against six calls plus an
+ * isolation try/catch on the subject — and it does not divide out.
+ *
+ * HOW THE NUMBER WAS CHOSEN (measured, not guessed)
+ * -----------------------------------------------------------------------
+ * The same suite was run with and without `--coverage` on an idle machine,
+ * with every ceiling and every measurement logged. Uninstrumented, the
+ * tightest site sat about 2.8× under its ceiling; instrumented, the same site
+ * sat about 1.1× under it — i.e. instrumentation ate ~2.5× of the headroom,
+ * which is why it went red under whole-suite parallelism and green on a re-run.
+ * Three is that observed cost rounded up: it puts the worst site back to ~3×
+ * headroom, and leaves the next-tightest sites above 5×.
+ *
+ * WHAT THIS IS AND IS NOT
+ * -----------------------------------------------------------------------
+ * It is a FLOOR ON EFFORT, not a promise: 3 is the smallest widening the
+ * measurements demanded, not a claim that instrumentation costs exactly 3×.
+ * The real guard is the uninstrumented run, whose ceilings are byte-for-byte
+ * unchanged — a genuine regression is deterministic and fails there. This
+ * allowance exists so the coverage pass keeps reporting COVERAGE instead of
+ * reporting the instrumentation's own overhead as a performance regression.
+ */
+const COVERAGE_ALLOWANCE = 3;
+
+/**
+ * The allowance in force for this process: 3 under coverage, 1 otherwise.
+ *
+ * Read from `AF_COVERAGE`, which the `test:coverage` npm script sets. It is
+ * an explicit signal rather than a sniff of the v8 provider because the thing
+ * being detected is "this run is instrumented", and the script that turns
+ * instrumentation on is the only place that knows it for certain.
+ */
+function coverageAllowance(): number {
+  return process.env.AF_COVERAGE === '1' ? COVERAGE_ALLOWANCE : 1;
+}
+
+/** Says, in the failure message, that a ceiling carried the coverage allowance. */
+function coverageNote(allowance: number): string {
+  return allowance > 1
+    ? `\n  NOTE: this run is instrumented (AF_COVERAGE=1), so the ceiling carries` +
+        `\n  the stated ${allowance}× coverage allowance — see COVERAGE_ALLOWANCE.` +
+        `\n  The unwidened ceiling is the one the plain \`npm test\` run enforces.`
+    : '';
+}
 
 /**
  * How long one reference unit costs RIGHT NOW, in this process — the fastest
@@ -311,14 +377,15 @@ export async function expectWithinReferenceUnits(
   const before = referenceUnitMs();
   const subjectMs = typeof subject === 'number' ? subject : await fastest(subject);
   const stick = yardstick(before, referenceUnitMs());
-  const limitMs = stick.unitMs * units * stick.instability;
+  const allowance = coverageAllowance();
+  const limitMs = stick.unitMs * units * stick.instability * allowance;
   expect(
     subjectMs,
     `${why}${detail(
       subjectMs,
       limitMs,
       `${units} × ${stick.unitMs.toFixed(3)}ms reference unit`,
-    )}${instabilityNote(stick)}`,
+    )}${instabilityNote(stick)}${coverageNote(allowance)}`,
   ).toBeLessThan(limitMs);
 }
 
@@ -344,7 +411,8 @@ export async function expectWithinTimes(opts: {
   const [baselineMs, subjectMs] = await fastestAlternating(opts.baseline, opts.subject);
   const stick = yardstick(before, referenceUnitMs());
   const denominatorMs = Math.max(baselineMs, stick.unitMs);
-  const limitMs = denominatorMs * opts.times * stick.instability;
+  const allowance = coverageAllowance();
+  const limitMs = denominatorMs * opts.times * stick.instability * allowance;
   expect(
     subjectMs,
     `${opts.why}${detail(
@@ -352,7 +420,7 @@ export async function expectWithinTimes(opts: {
       limitMs,
       `${opts.times} × baseline ${baselineMs.toFixed(4)}ms ` +
         `(floored at ${stick.unitMs.toFixed(3)}ms)`,
-    )}${instabilityNote(stick)}`,
+    )}${instabilityNote(stick)}${coverageNote(allowance)}`,
   ).toBeLessThan(limitMs);
 }
 
@@ -398,7 +466,9 @@ export async function expectScalesLinearly(opts: {
   const before = referenceUnitMs();
   const [smallMs, largeMs] = await fastestAlternating(opts.small, opts.large);
   const stick = yardstick(before, referenceUnitMs());
-  const limitMs = Math.max(smallMs, stick.unitMs) * opts.scale * slack * stick.instability;
+  const allowance = coverageAllowance();
+  const limitMs =
+    Math.max(smallMs, stick.unitMs) * opts.scale * slack * stick.instability * allowance;
   expect(
     largeMs,
     `${opts.why}${detail(
@@ -406,6 +476,6 @@ export async function expectScalesLinearly(opts: {
       limitMs,
       `${opts.scale}× input × ${slack}× slack over a ${smallMs.toFixed(4)}ms small run ` +
         `(floored at ${stick.unitMs.toFixed(3)}ms)`,
-    )}${instabilityNote(stick)}`,
+    )}${instabilityNote(stick)}${coverageNote(allowance)}`,
   ).toBeLessThan(limitMs);
 }

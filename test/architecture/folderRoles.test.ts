@@ -152,10 +152,7 @@ describe('Support is the one role word that can be refuted, and it is', () => {
   /** `module:` paths from the model-facing register, read as text so this test
    *  never imports (and therefore never runs) the producers themselves. */
   const registeredModules = (): readonly string[] => {
-    const register = readFileSync(
-      join(SRC, '..', 'test', 'modelFacingSurfaces.test.ts'),
-      'utf8',
-    );
+    const register = readFileSync(join(SRC, '..', 'test', 'modelFacingSurfaces.test.ts'), 'utf8');
     return [...new Set([...register.matchAll(/module:\s*'(src\/[^']+)'/g)].map((m) => m[1]!))];
   };
 

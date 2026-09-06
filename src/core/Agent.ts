@@ -3568,7 +3568,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // roster all filter through that published set
     // (`stages/toolCalls.ts` · "── Skill-graph read_skill GATE" the gate, `toolCalls.ts` ·
     // "── THE REFUSAL SPEAKS WITH THE FILTERED SETS" the propose-transition refusal,
-  // `toolCalls.ts` · `dispatchRoster`). Nothing is cached here: an
+    // `toolCalls.ts` · `dispatchRoster`). Nothing is cached here: an
     // earlier draft of 9.84.0 cached the resolved ids so the gate could filter
     // the self-call notice's move offer through them; the notice no longer names
     // a destination at all (see `selfCallNotice`), so there is nothing left to

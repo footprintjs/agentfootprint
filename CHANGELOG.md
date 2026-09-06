@@ -7,6 +7,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.87.0] - 2026-09-06
+
+The agent now supplies the stops for its own runs.
+
+footprintjs 9.17.0 opens a reader's cursor over a finished commit log —
+`timeTravel(snapshot, { strategy })` — with a fold at every stop, and a seam that
+says where the cursor may rest. It ships one strategy, `commitStops`, which stops
+on every executed stage: the truth, and unreadable. A two-turn agent in
+`reactMode: 'dynamic'` commits **42** bundles, and most of them are called
+`context`, `sf-cache` or `sf-thinking`.
+
+`milestoneFor` has classified stage ids into `iteration` · `slot` · `llm-turn` ·
+`tool-call` · `decision` for releases, and every consumer that wanted a milestone
+slider mapped that classifier onto commits itself. This release does that join
+once, on the seam: the same 42-commit run yields **15** stops — Run start →
+Iteration → System prompt → Messages → Tools → LLM turn → Route → Tool call →
+Iteration → … → Run end.
+
+### Added
+
+- **`milestoneStops` / `milestoneStopsStrategy` / `milestoneOf`** (`src/lib/time-travel/`,
+  exported from the root barrel). A footprintjs `TimeTravelStrategy` built by
+  FILTERING footprintjs's own per-stage axis rather than re-deriving it: it calls
+  `commitStops` and keeps the stages `milestoneFor` classifies, so the collapsing
+  that axis already solved — one stop per `runtimeStageId` at its first commit
+  (mounts and fork children commit more than once), the mount set read off the
+  execution tree, the `'start'` / `'end'` bookends, the id-less commit that
+  carries a subflow's `inputMapper` seed — is used, not repeated. A stage that
+  classifies `null` contributes no stop and its commits fold into the stop before
+  it, so the survivors still partition the log end to end and `stateAt(stop)`
+  stays "the state that existed when the next milestone started".
+
+- **Both chart shapes, one strategy.** The classifier reads the LOCAL segment of
+  a stage id, so nothing has to tell it which log it is holding. Under
+  `reactMode: 'dynamic'` the `call-llm` bundle is on the run's own log and the
+  llm-turn stop is on the outer cursor. Under `'dynamic-grouped'` the same run
+  commits **10** bundles outside — the `sf-llm-call` mounts, which become the
+  iteration stops — and `drill(mountRuntimeStageId)` opens that turn's own
+  cursor, where the same strategy finds **7** stops including its LLM turn.
+
+- **`examples/observability/23-time-travel-milestones.ts`** — the same agent run
+  at both chart shapes, printing each axis, the skill the run stood in at each
+  turn, `changedSince` between two turns, a mark that survives a jump, and a
+  refused jump that leaves the cursor put. It also calls `milestoneStops` on the
+  log directly, for the reader who holds a recording rather than a cursor, and
+  shows the two axes agree. Offline, mock provider.
+
+- **`docs-next/content/docs/debug/time-travel.mdx`** — why milestones rather than
+  one-stop-per-stage, the three questions the cursor answers, and where the LLM
+  turn lives in each chart shape.
+
+### Changed
+
+- **`footprintjs` is now `^9.17.0`** (peer + dev), for `timeTravel`,
+  `commitStops` and the `TimeTravelStrategy` seam.
+
+### Honest notes
+
+- **The milestone kind is a function, not a field.** footprintjs's `Stop` is a
+  closed shape with no slot a strategy may write its own vocabulary into, and its
+  `kind` is the port's own `StopKind` (`'commit' | 'mount' | 'start' | 'end'`),
+  not ours to overload. So the kind travels the only way it honestly can:
+  `milestoneOf(stop)` re-derives it from the stop's `runtimeStageId` with the
+  same classifier that put the stop on the axis — one source of truth, read
+  twice. If a later footprintjs gives `Stop` an extension slot, `milestoneOf`
+  becomes a one-line reader of it.
+
+- **Which keys are visible where, in the grouped shape.** The settled skill
+  cursor for turn *k* is on the OUTER axis, at iteration *k* (`currentSkillId`).
+  Inside the drill, `currentSkillId` is the value the turn STARTED from — it
+  crosses the mount as a read-only input — and the move the turn made is
+  `nextSkillCursor`, merged back out by the outputMapper. Both logs are truthful
+  about different questions, and `test/lib/time-travel/milestone-stops.test.ts`
+  pins both rather than picking the flattering one.
+
+- **`'start'` is not the fold base on this axis.** footprintjs's `'start'`
+  bookend is the state before any stage ran; this one also absorbs every stage
+  that ran before the FIRST milestone, because the stops must still partition
+  the log. Measured on a two-turn `dynamic` run: `commitStops`' start folds
+  commits `-1..-1` and 0 keys, `milestoneStops`' start folds `-1..0` and 32 —
+  `seed`'s writes have already landed. So `stateAt(startStop)` here is the state
+  the first milestone READ, not the run's raw base, and a renderer keyed on
+  `kind === 'start'` to show "what the run began with" is showing post-seed
+  state. Said in the folder README, on the docs page, and pinned by a test.
+
+- **A resumed run gets an axis of its own.** The cursor reads the snapshot it is
+  handed, and a resume is its own execution with its own log: after
+  `agent.resume(checkpoint, answer)`, `getSnapshot()` carries the resumed half —
+  the axis begins at the stage the resume re-entered and the pre-pause
+  milestones are not on it. They are on the snapshot taken at the pause. The
+  strategy itself holds across the break (both axes tile, both keep unique
+  stops); it is the snapshot that split, not the cursor.
+
+- **A log with no milestones is not an empty log.** A non-empty log the
+  classifier recognises nothing in — a non-agent chart handed this strategy —
+  yields the two bookends and nothing between them, and every `jumpTo` refuses
+  with `'miss'`. An EMPTY log yields `[]`. Two different facts, two different
+  answers.
+
+- **The performance guards get a stated allowance under coverage.** v8
+  instrumentation is not machine load: it is a per-call counter, so it taxes the
+  two sides of a ratio in proportion to how many calls each makes, and a
+  comparison between two differently-shaped paths moves even on an idle machine.
+  Measured on this suite, the tightest guard sat ~2.8× under its ceiling
+  uninstrumented and ~1.1× under it with `--coverage` — which is why it went red
+  under whole-suite parallelism and green on a re-run. `test:coverage` now sets
+  `AF_COVERAGE=1` and `test/helpers/perf.ts` widens the ceilings by a documented
+  3× when it sees it. The plain `npm test` ceilings are unchanged, which is where
+  a real regression is still caught; the multiplier is a floor on effort, not a
+  promise that instrumentation costs exactly 3×.
+
+- **17 tests over real runs**, not fixtures: the axis in both chart shapes, the
+  partition property (every commit belongs to exactly one stop), a jump that
+  lands and a miss that names a nearest without moving, the skill graph read
+  along the commits with the wire as witness (the skill whose body rode turn *k*
+  is the one that iteration's own log settled on), marks that survive jumps and
+  never appear in the recording, what `'start'` folds on this axis versus the
+  port's, a resumed run's axis, and a log with no milestones in it. One more
+  file — 5 tests in `milestone-stops-contract.test.ts` — mocks `commitStops` to check the one
+  assumption this strategy makes of footprintjs — that a non-empty log yields
+  `[start, …stages, end]` — is refused loudly rather than silently mistaken for
+  an empty axis.
+
 ## [9.86.1] - 2026-09-06
 
 The release that removed hand-counted lists shipped with one, and with main red.

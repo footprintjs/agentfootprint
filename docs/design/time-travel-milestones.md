@@ -7,7 +7,13 @@ originally proposed. Rationale: no hot-path emit, the lens already had the commi
 in `cursorPositionsAtDrill`, and the agentfootprint-lens is agent-aware so importing the
 classifier is clean. Milestone kinds shipped: iteration · slot · llm-turn · tool-call ·
 decision. Boundaries still drive the drill hierarchy (incl. multi-agent nesting), as the
-memo recommends. The rest of this memo is retained for rationale.
+memo recommends. Since **9.87.0** the classifier is also SHIPPED as a stop rule for
+any reader: `milestoneStops` / `milestoneStopsStrategy` (`src/lib/time-travel/`) is a
+footprintjs `TimeTravelStrategy` that maps `milestoneFor` onto a recorded commit log,
+so `timeTravel(snapshot, { strategy: milestoneStopsStrategy })` gives every consumer —
+the lens, a custom panel, a script over a saved recording — the same milestone axis
+from one function, on the outer log and on any drilled subflow history alike.
+The rest of this memo is retained for rationale.
 Author: design review, 2026-06-05.
 
 Read in conjunction with:
