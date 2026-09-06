@@ -91,15 +91,26 @@ export { WRAP_UP_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
  * serves the wrap-up with an empty tool list because `wrapUpAsked` is set,
  * never because a sentence asked the model to abstain.
  *
+ * ## Why it says "the wrap-up call this message opened" and not "this call" (9.86.1)
+ *
+ * The 9.86.0 wording anchored on the bare deictic `this call`. This frame is
+ * written into the `iteration_end` payload the checkpoint tracker snapshots,
+ * and `applyContinuation` restores `history` verbatim — so on the next
+ * `.continue()` turn, with tools back on the wire, the model re-reads "no
+ * tools were offered on it" beside a request that offers them, and resolves
+ * "this call" to the one it is answering. The trace toolpack repaired the same
+ * word in 9.86.0 for the same reason; this frame names the call it is about
+ * instead of pointing at it.
+ *
  * Checked, not asserted: `test/lib/injection-engine/userTurnProducers.test.ts`
  * runs this string through `unprovable(text, { channel: 'injected-turn',
  * lifetime: 'persistent-history' })`.
  */
 export const WRAP_UP_INSTRUCTION =
-  `${WRAP_UP_FRAME_PREFIX} — the action budget was exhausted before this call, so no tools ` +
-  'were offered on it. This call was for the final answer, from what the messages above ' +
-  'already hold: what was completed, what remained undone, and anything the person should ' +
-  'know.]';
+  `${WRAP_UP_FRAME_PREFIX} — the action budget was exhausted before the wrap-up call this ` +
+  'message opened, so no tools were offered on that call. That call was for the final ' +
+  'answer, from what the messages above already hold: what was completed, what remained ' +
+  'undone, and anything the person should know.]';
 
 /**
  * The stage body. The decider has already established the whole table (the

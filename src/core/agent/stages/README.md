@@ -99,6 +99,11 @@ free and is always true; the negative is a denial of what the run is holding, an
 a model told the map is a dead end stops asking for the door it may not be shown.
 The same shape sat in the `'guard'` arm ("no menu was outstanding", plus
 "Declared routes moved the cursor instead") and in the unknown-tool roster.
+(9.86.1 then dropped the "Declared routes" tail from every no-menu arm for a
+second reason: it was composed for all six `TurnRoute.by` values and true of
+none in particular — false for a carried-over cursor, false for a menu the
+model's own pick had resolved. The arm now takes `turnStartedBy` and states the
+one past fact that value stands for.)
 
 **How.** `SpokenIds` is the fact, and `held` is REQUIRED so the compiler asks
 every caller the question the call sites each forgot:

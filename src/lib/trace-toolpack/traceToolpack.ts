@@ -2184,8 +2184,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       lines.push(
         facts.runtimeStageId !== undefined
           ? `step: ${facts.runtimeStageId} — drill with trace_node('${facts.runtimeStageId}')`
-          : `step: ⚠ not resolvable — no event tail, and no committed step carries this call's ` +
-              `result (the turn may have ended before it landed).`,
+          : `step: ⚠ not resolvable — no event tail, and no committed step carries the result ` +
+              `of call '${toolCallId}' (the turn may have ended before it landed).`,
       );
 
       lines.push(
@@ -2193,8 +2193,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
           ? `proposed by the model: ${displayText(
               renderPreview(boundedPreview(facts.proposedArgs, TOOL_RESULT_PREVIEW_CHARS)),
             )}`
-          : `proposed by the model: ⚠ not recorded — the assistant turn carrying this call is ` +
-              `not in the committed history (a window strategy may have folded it away).`,
+          : `proposed by the model: ⚠ not recorded — the assistant turn carrying call ` +
+              `'${toolCallId}' is not in the committed history (a window strategy may have ` +
+              `folded it away).`,
       );
 
       // Ran-with args: the ledger is the ONLY record of a rule rewriting
@@ -2216,7 +2217,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
         lines.push('ran with: the proposed arguments, unchanged (rules looked and allowed them).');
       } else {
         lines.push(
-          'ran with: the proposed arguments — no governance rule filed a row for this call.',
+          `ran with: the proposed arguments — no governance rule filed a row for call ` +
+            `'${toolCallId}'.`,
         );
       }
 
@@ -2228,8 +2230,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
                 `get_value('${facts.runtimeStageId ?? '<step>'}', 'history') for the full turn`,
               ),
             )}`
-          : `result: ⚠ no result recorded for this call in the committed history — it may have ` +
-              `been denied before it ran, or the turn ended (paused/failed) before it landed.`,
+          : `result: ⚠ no result recorded for call '${toolCallId}' in the committed history — ` +
+              `it may have been denied before it ran, or the turn ended (paused/failed) before ` +
+              `it landed.`,
       );
 
       // Outcome + duration: the event tail is the only clock a run has.
@@ -2249,7 +2252,7 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       } else if (end?.payload.error === true) {
         outcome = 'error — the tool threw or returned a failure';
       } else if (checkIn && end === undefined) {
-        outcome = 'paused — a check-in asked a human and this call has no recorded end';
+        outcome = `paused — a check-in asked a human and call '${toolCallId}' has no recorded end`;
       } else if (facts.result !== undefined) {
         outcome = 'ok';
       } else {
@@ -2276,8 +2279,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
         lines.push(`duration: ${end.payload.durationMs}ms`);
       } else {
         lines.push(
-          `duration: ⚠ no tool_end event for this call in the retained tail (it may have been ` +
-            `dropped by the tail cap, or the call never finished).`,
+          `duration: ⚠ no tool_end event for call '${toolCallId}' in the retained tail (it may ` +
+            `have been dropped by the tail cap, or the call never finished).`,
         );
       }
 
@@ -2458,7 +2461,7 @@ function buildInspectToolRun(
         `INSIDE TOOL CALL ${toolCallId} — '${record.toolName}' ran a recorded flowchart ` +
           `(${record.steps} committed step(s), ${record.outcome}).`,
         body,
-        `next inside this call: inspect_tool_run({ toolCallId: '${toolCallId}', ` +
+        `next inside call '${toolCallId}': inspect_tool_run({ toolCallId: '${toolCallId}', ` +
           `runtimeStageId: '<inner id>' }) opens a step · add 'key' for a value in full · ` +
           `'variable' asks why an inner value is what it is · 'find' searches this inner run.`,
         `⚠ the ids above are INNER ids — they name steps of ${record.toolName}'s own chart, not ` +
@@ -2528,9 +2531,12 @@ function unknownInnerRunMessage(
   }
   if (lookup.dropped > 0) {
     lines.push(
+      // Named by id, not "this call" (9.86.1): the same repair the
+      // schema-validation line above got in 9.86.0, on the arm the checker
+      // could not see because its rule only knew `on this call`.
       `⚠ ${lookup.dropped} older record(s) were dropped to stay under the retention cap of ` +
-        `${lookup.limit} — this call may be one of them. Raise it with keepRecordLimit, or ask ` +
-        `sooner after the call.`,
+        `${lookup.limit} — call '${toolCallId}' may be one of them. Raise it with ` +
+        `keepRecordLimit, or ask sooner after the call.`,
     );
   }
   return lines.join('\n');

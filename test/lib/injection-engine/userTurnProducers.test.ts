@@ -289,7 +289,13 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  * the string is not a producer either. Both are all over this tree, and a
  * regex walk would drown the list in them.
  */
-function userMessageSites(): Array<{ file: string; line: number }> {
+function userMessageSites(): ReadonlyArray<{ file: string; line: number }> {
+  // Parsed ONCE per suite (9.86.1). Every `it` below called this fresh, so
+  // the tree was parsed three times, and under CI's v8-instrumented coverage
+  // job each parse took over five seconds — past vitest's default budget —
+  // while the plain test job passed and so did the local gate. The walk is
+  // O(src/), and it says so with its own budget on each test below.
+  if (userMessageSitesMemo !== undefined) return userMessageSitesMemo;
   const found: Array<{ file: string; line: number }> = [];
   for (const file of sourceFiles(join(REPO, 'src'))) {
     const text = readFileSync(file, 'utf8');
@@ -311,42 +317,55 @@ function userMessageSites(): Array<{ file: string; line: number }> {
     };
     visit(sf);
   }
+  userMessageSitesMemo = found;
   return found;
 }
+let userMessageSitesMemo: ReadonlyArray<{ file: string; line: number }> | undefined;
+
+/** The walk reads every file under `src/`; its budget is stated, not the default. */
+const WALK_BUDGET = { timeout: 60_000 };
 
 // ─── Contract: the walk ──────────────────────────────────────────────────
 
 describe("every `role: 'user'` producer in src/ is classified", () => {
-  it('fails on a producer in a file nobody classified, naming its file and line', () => {
-    // The failure message IS the fix instruction: add the site to one of the
-    // three lists in this file, with the reason it belongs there.
-    const unclassified = userMessageSites()
-      .filter(({ file }) => SITES[file] === undefined)
-      .map((s) => `${s.file}:${s.line}`);
-    expect(unclassified).toEqual([]);
-  });
+  it(
+    'fails on a producer in a file nobody classified, naming its file and line',
+    WALK_BUDGET,
+    () => {
+      // The failure message IS the fix instruction: add the site to one of the
+      // three lists in this file, with the reason it belongs there.
+      const unclassified = userMessageSites()
+        .filter(({ file }) => SITES[file] === undefined)
+        .map((s) => `${s.file}:${s.line}`);
+      expect(unclassified).toEqual([]);
+    },
+  );
 
-  it('fails on a NEW producer inside a file that is already listed — the count is the guard', () => {
-    const perFile = new Map<string, number[]>();
-    for (const { file, line } of userMessageSites()) {
-      perFile.set(file, [...(perFile.get(file) ?? []), line]);
-    }
-    const drift: string[] = [];
-    for (const [file, lines] of perFile) {
-      const listed = SITES[file]?.length ?? 0;
-      if (lines.length !== listed) {
-        drift.push(
-          `${file}: ${lines.length} site(s) at line(s) ${lines.join(', ')}, ${listed} listed`,
-        );
+  it(
+    'fails on a NEW producer inside a file that is already listed — the count is the guard',
+    WALK_BUDGET,
+    () => {
+      const perFile = new Map<string, number[]>();
+      for (const { file, line } of userMessageSites()) {
+        perFile.set(file, [...(perFile.get(file) ?? []), line]);
       }
-    }
-    for (const file of Object.keys(SITES)) {
-      if (!perFile.has(file)) {
-        drift.push(`${file}: listed, but constructs no user message any more`);
+      const drift: string[] = [];
+      for (const [file, lines] of perFile) {
+        const listed = SITES[file]?.length ?? 0;
+        if (lines.length !== listed) {
+          drift.push(
+            `${file}: ${lines.length} site(s) at line(s) ${lines.join(', ')}, ${listed} listed`,
+          );
+        }
       }
-    }
-    expect(drift).toEqual([]);
-  });
+      for (const file of Object.keys(SITES)) {
+        if (!perFile.has(file)) {
+          drift.push(`${file}: listed, but constructs no user message any more`);
+        }
+      }
+      expect(drift).toEqual([]);
+    },
+  );
 
   it('every classification carries a reason', () => {
     const reasonless = Object.entries(SITES).flatMap(([file, sites]) =>
@@ -492,8 +511,14 @@ describe('what the model reads on those two calls survives being re-read', () =>
     // schema retry or an evidence recheck re-reads it two calls later.
     expect(WRAP_UP_INSTRUCTION).not.toMatch(/Do not request tools/);
     expect(WRAP_UP_INSTRUCTION).not.toMatch(/this turn/);
-    expect(WRAP_UP_INSTRUCTION).toContain('was exhausted before this call');
-    expect(WRAP_UP_INSTRUCTION).toContain('no tools were offered on it');
+    expect(WRAP_UP_INSTRUCTION).toContain(
+      'was exhausted before the wrap-up call this message opened',
+    );
+    expect(WRAP_UP_INSTRUCTION).toContain('no tools were offered on that call');
+    // And not the bare deictic either (9.86.1): the frame is restored verbatim
+    // by `applyContinuation`, and on the next turn "this call" would denote a
+    // call that has the full tool list.
+    expect(WRAP_UP_INSTRUCTION).not.toMatch(/\bthis call\b/i);
   });
 
   it('the nudge states the unrun steps in the PAST, and asks as what the call was for', () => {
@@ -501,7 +526,8 @@ describe('what the model reads on those two calls survives being re-read', () =>
     expect(content).not.toMatch(/have not run|has not run/);
     expect(content).not.toMatch(/Finish them/);
     expect(content).toContain('had not run when the answer above was given');
-    expect(content).toContain('This call was for running them');
+    expect(content).toContain('This message asked for them to be run');
+    expect(content).not.toMatch(/\bthis call\b/i);
   });
 });
 

@@ -7,6 +7,168 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.86.1] - 2026-09-06
+
+The release that removed hand-counted lists shipped with one, and with main red.
+
+`chore: release v9.86.0` failed CI (run 34008382993, the `coverage` job) while both
+plain `test` jobs and the local release gate passed. Two tests parse every file
+under `src/` with the TypeScript compiler and were called fresh inside every `it`
+— seven parses in one suite, three in the other — and under the coverage job's
+v8 instrumentation each parse took 5.3–6.2 s on the CI runner, past vitest's 5 s
+default. Locally the same parse takes about a second. The release script ran
+`npm test` and never `npm run test:coverage`, so the one command that would have
+shown the failure was the one it did not run. Both walks now parse `src/` once per
+suite and carry a 60 s budget of their own, and Gate 4 of `scripts/release.sh` runs
+`npm run test:coverage` — the instrumented run is a superset of the plain one, so
+the gate now sees what CI sees.
+
+Everything else here is one review of 9.86.0, taken finding by finding.
+
+### Fixed
+
+- **The `'guard'` refusal asserted a fact it did not have.** With no menu
+  outstanding, `composeReadSkillRefusal` ended every refusal with "Declared routes
+  moved the cursor instead." The gate handed it a boolean derived from two of
+  `TurnRoute.by`'s six values, so the clause was composed for the other four too:
+  false for `'continuity'` (the cursor was carried over from the previous turn and
+  nothing moved it — the verdict every follow-up produces under `{ strictness:
+  'guard', continuity: 'conversation' }`), false for `'menu'` resolved by the
+  model's own pick, and unprovable for `'none'`. The composer now takes
+  `turnStartedBy: TurnRoute['by']` and says one past fact per value — "the turn's
+  start had already been resolved decisively", "the cursor had been carried over
+  from the previous turn", "the menu had already been resolved by an earlier
+  pick", "the menu had been resolved by the configured decider before the turn's
+  first call" — and nothing for `'none'`. The old tail is gone from every arm.
+
+- **Two refusals named a cursor the role may not be told about.** The `read_skill`
+  description withholds a hidden cursor's name by its own law, and the gate's
+  refusal printed the same id raw in two clauses ("was not reachable from 'alpha'.
+  Skills reachable from 'alpha' when that call was made: …"). The cursor now goes
+  through the same filter as the hops: a hidden cursor is anchored as "the skill
+  the cursor stood in" — the skill is real and merely unnamed — and "the turn's
+  start" is kept for a genuine cold start, which is a different fact. The
+  `propose-transition` refusal in the tool-effects judge had the same leak twice
+  over: it composed "(reachable: beta, gamma)" from the raw hop set and "from
+  'alpha'" from the raw cursor, and that sentence is appended to the tool result
+  the model reads. It reads `scope.hiddenSkillIds` now, names the filtered hops,
+  omits the clause when the filter emptied them, and anchors a hidden cursor the
+  same way. `skill.rejected.currentSkillId` stays raw on purpose: it is the
+  operator's record on the event channel, not a sentence the model reads.
+
+- **A same-batch STAY did not compete for the transition slot.** The law is "first
+  ACCEPTED proposal wins; later proposals to OTHER targets are superseded", and a
+  stay is accepted — but it `continue`d past the bookkeeping, so a tool that judged
+  its data first and said "stay" lost to a sibling later in call order that said
+  "move", with two `'accepted'` events in one batch, the cursor moved, and no
+  `route_conflict` on the record. A stay judged first now holds the slot (writing
+  nothing to `pendingToolTransition`, because a stay moves nothing) and the later
+  hop is `'superseded'` with the batch's `route_conflict` naming the stay as the
+  winner; a stay judged after an accepted hop is the one superseded. Two stays are
+  both accepted, as two hops to one target are.
+
+- **Both 9.86.0 frames pointed with the word the same release repaired elsewhere.**
+  The wrap-up instruction read "exhausted before this call … This call was for the
+  final answer" and the stepped-skill nudge "This call was for running them". A
+  frame is written into the `iteration_end` payload the checkpoint snapshots and
+  restored verbatim by `applyContinuation`, so on the next `.continue()` turn —
+  tools back on the wire — a model resolves "this call" to the call it is
+  answering and reads "no tools were offered on it" about a request that offers
+  them. They now name the call: "the wrap-up call this message opened … That call
+  was for the final answer", and "This message asked for them to be run". The
+  checker only knew `on this call`; a bare `this call` row catches the shape now,
+  and it found nine more: seven `inspect_tool_call` result lines and the
+  `inspect_tool_run` retention note, all anchored to `call '<id>'`; the coverage
+  ledger's `COVERAGE_NOTE` ("ground the call this result answers did not look at";
+  `canonical-notes.json` is regenerated by the build); and the runbook
+  `recording_note`. The checkIn-resume refusal in the tool-calls stage — "cannot be
+  retried this turn … Answer without it, or finish", a forecast plus a standing
+  order on a persistent result — is a past fact about the resumed call now.
+
+### Changed
+
+- **The shape rows match the grammar they claim.** A second probe of seventeen
+  sentences written AGAINST the rows — the plainest forecast forms, not the ones the
+  rows had been derived from — walked past all four 9.86.0 shape rows: the
+  effect-verb row knew no future or modal tense ("will move you", "can switch
+  you"), the cursor row wanted a quote right after `in ` ("You are in skill
+  'alpha'", "You're in 'alpha'", "Your current skill is 'alpha'"), the copula row
+  knew six nouns ("is enabled", "is mounted", "are offered", "is off the wire",
+  "have been withheld"), and a headed list ("Available tools: calc, probe.")
+  has no copula at all. The rows are widened, a headed-inventory row and a
+  next-call-forecast row are added, and the seventeen sit beside the fifteen in
+  `test/modelFacingSurfaces.test.ts` so the next narrowing fails by name. The
+  `src/` walk then flagged **twenty-five** more literals: ten are repaired above,
+  fourteen are host-facing errors and check-up warnings now classified, and one —
+  an integrity finding's frame line — joins the work list. The ledger stands at
+  **ninety-one files / one hundred and seventy-eight literals**, with
+  **thirty-four** unrepaired across thirteen entries; the suite computes those
+  numbers.
+
+- **A row may no longer exempt every lifetime.** `provableWhen` naming both
+  lifetimes compiled, carried an argument, and disabled the row everywhere — the
+  exemption-with-no-argument defect in a new coat. The suite asserts a strict
+  subset now. The header of `test/helpers/modelFacingClaims.ts` also says what
+  "may speak in the present" means beside the `now` row: present TENSE reported
+  as the state of the request, not the deictic adverbs, which point at the moment
+  of reading on every surface.
+
+- **The divergence walk's summary block is checked whole.** Only `walk.cases` was
+  read back; the other five numbers were written on update and never compared.
+  All six are now derived from the recorded case outcomes and the row set. The
+  placeholder gate also refuses `TODOs` and `to-do`, and the header names five
+  defects, not three. A `claim-swallowed` row's auto-composed `cause` says "names
+  this claimant as the winner of a wire it never reached" when the shadow report
+  names the swallowed claimant itself — the framework's `skill-scoped:self-explain`
+  provider — instead of "describes a different pair", which it does not.
+
+- **Anchors in the walk's baseline and the design note name symbols, not lines.**
+  The ten 9.86.0 rows cited `buildToolRegistry.ts` line ranges from the 9.85.0 tree
+  that the same release had moved by about twenty-nine lines, beside a
+  `buildToolsSlot.ts` line from HEAD. They name the checks now (`holders.includes
+  (PRESENT_TOOL_NAME)`, the `seenNames` loop, the `sharedSkillTools` backfill), and
+  the baseline's `note` says so. The `present-vs-mcp` row no longer claims the MCP
+  cell proves the blind spot is the provider channel: both claimants mount through
+  `staticTools()`, so the cell shows an MCP catalog inherits that seam unchanged and
+  nothing more.
+
+- **`scripts/release.sh` Gate 4 runs `npm run test:coverage`.** See the opening.
+
+### Docs
+
+- `docs/design/2026-09-recorded-not-built.md`: entry 1's "16 baseline rows" is 22
+  (18 with a provider's or a skill's tool dead, 4 with the framework's own), the
+  appendix lists it as the third corrected sentence, and the row paragraph says
+  four-and-six rather than eight-and-two.
+- `docs/api-reference/interfaces/AgentOptions.md`, tracked and last regenerated at
+  9.58.0, still quoted the pre-9.86.0 wrap-up sentence ("Do not request tools");
+  the quote is updated in place, as are the three other copies.
+- The skill-graph quickstart says a host wiring its own `read_skill` under a
+  `tree()` must set `ReadSkillOffer.treeRouted`, and why.
+
+### Changelog corrections
+
+Four sentences in 9.86.0 are corrected in place, each marked where it stands:
+
+- _"Eight of the ten are already-recorded seams … Two are defects"_ — four rows
+  reach recorded seams and six record the two new defects.
+- `ToolRegistryArtifacts.toolDeclaringSkills` and `AgentState.hiddenSkillIds` were
+  listed under Added as if public; neither type is exported from any door.
+- `unknownToolResult` was called "exported"; it is a module export inside the
+  tool-calls stage and not on any door.
+- The `report-misattributed` bullet did not say that `reported` — a field the
+  ratchet compares — changed body on nine unrenamed rows.
+
+### Deliberately not changed
+
+- **The two permission-denied arms** ("This will not change during this run — do
+  not call it again") stay on the unrepaired ledger. Making the sentence true means
+  latching a denial per run, a behaviour change with no field finding behind it;
+  rewording it is that entry's own packet.
+- **The `now` row keeps no exemption.** The header now argues the same thing the
+  row does, rather than the row being softened.
+- **`skill.rejected.currentSkillId`** is not role-filtered — see above.
+
 ## [9.86.0] - 2026-09-05
 
 Every hand-counted list in 9.84.0 and 9.85.0 was short by one or two.
@@ -75,7 +237,9 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   refers back to that call.
 
 - **`Unknown tool: X` told the model it was wrong and never what would have
-  worked.** Both dispatch doors now compose one exported `unknownToolResult`, which
+  worked.** Both dispatch doors now compose one `unknownToolResult` (a module
+  export inside the tool-calls stage, not on any package door — _corrected in
+  9.86.1_), which
   names the dispatch roster: `Unknown tool 'X' on that call. Tool names that
   resolved to an implementation on that call: …`, or, with an empty roster, that
   none did. The leading `Unknown tool` token is preserved, so every matcher on it
@@ -226,10 +390,12 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   `todo`/`tbd`/`fixme`/`xxx` on a word boundary in any case, or under forty
   characters — a floor on effort, not a measure of truth).
 
-  Eight of the ten are already-recorded seams reached through a source that had
-  never been crossed, and say so. Two are defects nobody had recorded and are
-  written up as entries 4 and 5 of `docs/design/2026-09-recorded-not-built.md`
-  rather than papered over: `.selfExplain()` reserves its trace-tool names against
+  Four of the ten reach seams the 9.85.0 baseline already recorded, through a
+  source that had never been crossed, and say so. Six record two defects nobody
+  had recorded — four rows for entry 4 and two for entry 5 of
+  `docs/design/2026-09-recorded-not-built.md` — rather than papering over them
+  (_corrected in 9.86.1: this paragraph said "eight of the ten" and "two", a
+  count of defects presented as a count of rows_): `.selfExplain()` reserves its trace-tool names against
   `this.registry` and never `this.injectionList`, making it the one auto-attach
   family with no net at all against a skill's `tools: []`; and the misattributed
   shadow report can now name a `skill-scoped:self-explain` provider — one the
@@ -239,14 +405,18 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   event's meaning lives in its `schemaFromId`/`dispatchToId`, and the row was keyed
   on case + tool + epoch, so two reports naming different sources in one epoch — a
   strictly worse fact than one wrong report — collapsed into one `Map` entry and
-  vanished.
+  vanished. The `reported` column of every row now carries the `*Id` halves too
+  (`schemaFrom=provider(static) dispatchTo=skill(desk-active)`), which is why nine
+  rows whose ids did not move changed body in the same re-record (_added in
+  9.86.1; the re-record changed a compared field and the entry did not say so_).
 
 - **`SkillRejectedPayload.allowed` is what the model was actually told.** Role-
   filtered rather than the graph's raw set. Shape unchanged; only agents with a
   `PermissionChecker` governing `'skill_read'` see any difference. The field's own
   JSDoc says so at the call site, which is the doc a consumer actually reads.
 
-- **`ToolRegistryArtifacts.toolDeclaringSkills`** — tool name → the ids of the
+- **`ToolRegistryArtifacts.toolDeclaringSkills`** (internal — `ToolRegistryArtifacts`
+  is not exported from any door; _corrected in 9.86.1_) — tool name → the ids of the
   skills whose `inject.tools` carry it, recorded on the walk `buildToolRegistry`
   was already doing and thrown away. Empty for an agent whose skills carry no
   tools. Its one consumer is the unknown-tool roster's role filter; it exists so
@@ -258,7 +428,8 @@ the cursor?", and one scope key answers "which skill ids may this role see?".
   Deliberately not a fourth `outcome`, so an exhaustive consumer switch keeps
   compiling.
 
-- **`AgentState.hiddenSkillIds?: readonly string[]`** — the per-iteration
+- **`AgentState.hiddenSkillIds?: readonly string[]`** (internal — `AgentState` is
+  not exported from any door; _corrected in 9.86.1_) — the per-iteration
   role-hidden set, written by the tools slot and read by the `read_skill` gate.
 
 - **`ReadSkillOffer.treeRouted?: boolean`** — declares the mounted graph a decision

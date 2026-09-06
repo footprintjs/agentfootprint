@@ -101,9 +101,13 @@ change, and it belongs in a release note rather than in a walk.
   name a source the model was never offered. `dispatchToId` is a skill id
   today; an inactive skill's id is a truthful answer but a surprising one.
 - The same widening decides a fourth family the walk found and this note does
-  not otherwise cover: **`claim-swallowed`**, 16 baseline rows, where a provider
-  tool whose name a registry-list holder already owns loses the wire *and*
-  dispatch and is simply dead. `reportShadowedTools` cannot see those either,
+  not otherwise cover: **`claim-swallowed`**, 22 baseline rows — 18 where a
+  provider's or a skill's tool whose name a registry-list holder already owns
+  loses the wire *and* dispatch and is simply dead, and 4 where the
+  FRAMEWORK's own `run_overview` is the dead claimant (entry 4). (This bullet
+  said *16 rows* until 9.86.1; the widening that added entries 4 and 5 added
+  six rows to this family, and this sentence was not on the list of the ones it
+  corrected.) `reportShadowedTools` cannot see those either,
   and for the same reason as above — the only loop it has is over
   `activeInjections` (`buildToolsSlot.ts:722`), so when the name's other holder
   is a static `.tool()`, a framework auto-attach, or an inactive skill, there is
@@ -350,26 +354,34 @@ list, so *which source* holds the contested name is precisely what decides
 whether a reservation can see it. Filtering sources filtered answers.
 
 Dropping the filter took the walk from 60 configurations to 76 and from 36
-divergence rows to 46. Ten rows are new. Eight of them are the already-recorded
-seams reached through a source that had not been crossed before — an
-MCP-served catalog, a never-activated scoped skill — and their `tolerated`
-reasons say so and point back up this page. **Two are not**, and they are
-below.
+divergence rows to 46. Ten rows are new (eighteen keys are new; eight of those
+are the misattributed-report rows re-keyed to carry their attribution). Four
+of the ten reach seams already recorded above through a source that had not
+been crossed before — an MCP-served catalog, a never-activated scoped skill —
+and their `tolerated` reasons say so and point back up this page. **Six
+record the two defects below**: four for entry 4 and two for entry 5. (Until
+9.86.1 this paragraph said *eight* and *two* — a count of defects presented as
+a count of rows.)
 
-Two sentences above were WRONG once entries 4 and 5 landed, and both are now
-corrected in place. The record of what changed is this list — a reader who
-opens a file and reads its title must not be told the wrong count and then
+Three sentences above were WRONG once entries 4 and 5 landed, and all three
+are now corrected in place. The record of what changed is this list — a reader
+who opens a file and reads its title must not be told the wrong count and then
 corrected three hundred lines later:
 
 - the title said *three defects*; it records **five**, and now says so;
 - entry 2's closing line said *"Eight baseline rows carry it"*; the
   misattributed-report family is **ten** rows, and entry 5 is about the two
-  that are new.
+  that are new;
+- entry 1's fourth bullet said *"`claim-swallowed`, 16 baseline rows, where a
+  provider tool … is simply dead"*; the family is **22** rows and in four of
+  them the framework is the victim (corrected in 9.86.1).
 
 Written against 9.85.0 plus the uncommitted Packet A and this packet. Line
 numbers are against that working tree and have moved since the entries above
 were written — `buildToolsSlot.ts`'s report loop, cited as `:722` in entry 1
-and `:720-737` in entry 2, is at `:743-762` here.
+and `:720-737` in entry 2, is at `:743-762` here. Entry 4's table cited
+`buildToolRegistry.ts` lines that 9.86.0 itself moved by ~29 lines; since
+9.86.1 that table and the baseline rows name the symbols instead.
 
 ---
 
@@ -437,9 +449,9 @@ they were written independently, which is why they catch different subsets:
 
 | name | what its reservation reads | skill tool refused? |
 |---|---|---|
-| `present` | static registry **+ `skillToolEntries` + `sharedSkillTools`** (`buildToolRegistry.ts:286-299`) | always-visible, scoped, stepped — all three |
-| `skip_step` | `registryByName`, after skill tools were merged into it (`buildToolRegistry.ts:358-368`) | all three |
-| `read_skill` | `staticNames` only (`validators.ts:92-98`) — but always-visible and stepped skill tools then hit the duplicate-name throw at `buildToolRegistry.ts:322-328` | always-visible and stepped; a scoped one slips (recorded above as `read_skill-vs-skill-active` / `-vs-skill-inactive`) |
+| `present` | static registry **+ `skillToolEntries` + `sharedSkillTools`** (`buildToolRegistry.ts`, the `holders.includes(PRESENT_TOOL_NAME)` check) | always-visible, scoped, stepped — all three |
+| `skip_step` | `registryByName`, after skill tools were merged into it (`buildToolRegistry.ts`, the `registryByName.has(SKIP_STEP_TOOL_NAME)` check) | all three |
+| `read_skill` | `staticNames` only (`validators.ts:92-98`) — but always-visible and stepped skill tools then hit the duplicate-name throw in `buildToolRegistry.ts` (the `seenNames` loop) | always-visible and stepped; a scoped one slips (recorded above as `read_skill-vs-skill-active` / `-vs-skill-inactive`) |
 | `run_overview` | `this.registry` only (`AgentBuilder.ts:2628`) | **none** — and there is no downstream net, because the trace tools ride a `skillScopedTools` provider and never enter `augmentedRegistry`, so the duplicate-name throw never sees them |
 
 The comment directly above the check says it "mirrors the read_skill rule". It
@@ -502,7 +514,7 @@ Baseline rows:
 and its `@e4` twin.
 
 **The cause.** Entry 2's, exactly — `reportShadowedTools` asserts
-`schemaFrom: 'provider'` (`buildToolsSlot.ts:754`) instead of reading the
+`schemaFrom: 'provider'` (`buildToolsSlot.ts`, the literal in `reportShadowedTools`) instead of reading the
 winner off `merged`, and the always-visible skill's schema beat the provider to
 the wire. What is new is *which* provider gets named. `skillScopedTools` builds
 its id as `` `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}` ``

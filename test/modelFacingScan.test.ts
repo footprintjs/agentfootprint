@@ -167,6 +167,11 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
   'src/core/codeRunnerTool.ts': [
     {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "the scope-'run' configuration refusal thrown when the tool is served outside an Agent — the host that served it reads it, on the one call it refused",
+    },
+    {
       kind: 'ephemeral',
       count: 3,
       why: "the code runner's description and its staging clause — one request's tools array, stating the tool's mechanism rather than reporting a call",
@@ -314,8 +319,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/integrity/unsupported-argument/check.ts': [
     {
       kind: 'unrepaired',
-      count: 1,
-      why: 'integrity finding prose, same delivery as its sibling check — a per-call report anchored to the frame `this run` holds',
+      count: 2,
+      why: "integrity finding prose, same delivery as its sibling check — a per-call report anchored to the frame `this run` holds, and the finding's frame line ('frame this call was assembled from'), which the bare call deictic row catches since 9.86.1",
     },
   ],
   'src/lib/trace-toolpack/lazyToolpack.ts': [
@@ -337,8 +342,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/adapters/google/aiPlatform.ts': [
     {
       kind: 'not-model-facing',
-      count: 2,
-      why: "vendor-failure errors thrown to the host, saying the SDK's own message is withheld",
+      count: 3,
+      why: "vendor-failure errors thrown to the host, saying the SDK's own message is withheld, and the long-running-operation timeout thrown to the host ('this call will not report a write')",
     },
   ],
   'src/adapters/hosting/firestoreSessions.ts': [
@@ -393,8 +398,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/adapters/memory/sqliteVector.ts': [
     {
       kind: 'not-model-facing',
-      count: 1,
-      why: 'a durability error thrown at store construction',
+      count: 2,
+      why: 'a durability error and an unreadable-index error, both thrown at store construction',
     },
   ],
   'src/adapters/observability/githubBugReporter.ts': [
@@ -421,8 +426,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/artifacts/sqliteArtifacts.ts': [
     {
       kind: 'not-model-facing',
-      count: 1,
-      why: 'a durability error thrown at store construction',
+      count: 2,
+      why: 'a durability error and an unreadable-store error, both thrown at store construction',
     },
   ],
   'src/cache/portUsage.ts': [
@@ -442,8 +447,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/agent/AgentBuilder.ts': [
     {
       kind: 'not-model-facing',
-      count: 8,
-      why: 'build-time refusals thrown when a declared feature cannot be honored',
+      count: 9,
+      why: 'build-time refusals thrown when a declared feature cannot be honored, including `.maps()` with nothing mounted',
     },
   ],
   'src/core/agent/stages/route.ts': [
@@ -568,8 +573,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/hosting/sqliteSessions.ts': [
     {
       kind: 'not-model-facing',
-      count: 1,
-      why: 'a durability error thrown at store construction',
+      count: 2,
+      why: 'a durability error and an unreadable-store error, both thrown at store construction',
     },
   ],
   'src/hosting/webSocketConversation.ts': [
@@ -652,8 +657,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/lib/injection-engine/skillsFromDir.ts': [
     {
       kind: 'not-model-facing',
-      count: 2,
-      why: 'markdown-loading errors thrown at load time',
+      count: 3,
+      why: 'markdown-loading errors thrown at load time, the removed-`viaToolName` refusal among them',
     },
   ],
   'src/lib/recorded-chat/recordedChat.ts': [
@@ -738,6 +743,58 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 1,
       why: 'a console warning about a skill activated by something other than read_skill',
+    },
+  ],
+
+  // ── caught by the rows widened in 9.86.1 (future-tense effect verbs, the
+  // bare call deictic, the next-call forecast, more copula nouns) ──
+  'src/adapters/llm/contextWindow.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the context-window overflow explanation thrown to the host with its three fixes — the provider refused the request before any model read it',
+    },
+  ],
+  'src/adapters/memory/pgVector.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a schema error thrown at store construction (a missing table is refused rather than answered as an empty corpus)',
+    },
+  ],
+  'src/core/agent/skillBrains.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a build-time refusal thrown when a skill brain is declared with no graph to pick it',
+    },
+  ],
+  'src/lib/injection-engine/factories/defineSkill.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the removed-`viaToolName` refusal thrown at skill definition',
+    },
+  ],
+  'src/lib/injection-engine/skillExamples.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "a graph check-up WARNING handed to the author ('depends on how this graph is MOUNTED') — never on a request",
+    },
+  ],
+  'src/lib/injection-engine/skillNeverRoutes.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the never-routes check-up warning handed to the author, same delivery as skillExamples',
+    },
+  ],
+  'src/lib/rag/defineRAG.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a build-time refusal thrown when a query rewriter is combined with a server-ranking store',
     },
   ],
 };
@@ -827,6 +884,13 @@ function deliverySite(node: ts.Node, sf: ts.SourceFile): string {
  * this tree are invisible here, as they should be.
  */
 function flaggedLiterals(): readonly Flagged[] {
+  // Parsed ONCE per suite (9.86.1). Every `it` below called this fresh — seven
+  // parses of the whole tree — and under CI's v8-instrumented coverage job
+  // each took over five seconds, past vitest's default budget, so the release
+  // commit went red on `coverage` while the plain `test` jobs and the local
+  // gate (which never ran coverage) stayed green. The walk is O(src/) and
+  // states its own budget on each test below.
+  if (flaggedLiteralsMemo !== undefined) return flaggedLiteralsMemo;
   const found: Flagged[] = [];
   for (const file of sourceFiles(join(REPO, 'src'))) {
     const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
@@ -853,43 +917,56 @@ function flaggedLiterals(): readonly Flagged[] {
     };
     visit(sf);
   }
+  flaggedLiteralsMemo = found;
   return found;
 }
+let flaggedLiteralsMemo: readonly Flagged[] | undefined;
+
+/** The walk reads every file under `src/`; its budget is stated, not the default. */
+const WALK_BUDGET = { timeout: 60_000 };
 
 // ─── The checks ──────────────────────────────────────────────────────────
 
 describe('every model-facing-shaped literal in src/ is accounted for', () => {
-  it('fails on a flagged literal in a file nobody classified, naming file, line and rule', () => {
-    // The failure message IS the fix instruction: repair the sentence, or add
-    // the file to the LEDGER above with where the string is delivered.
-    const unclassified = flaggedLiterals()
-      .filter(({ file }) => LEDGER[file] === undefined)
-      .map(
-        ({ file, line, where, rules, text }) =>
-          `${file}:${line} (${where}) ${rules.join(' + ')} :: ${text}`,
-      );
-    expect(unclassified).toEqual([]);
-  });
-
-  it('fails on a NEW flagged literal inside a file that is already listed — the count is the guard', () => {
-    const perFile = new Map<string, Flagged[]>();
-    for (const hit of flaggedLiterals()) {
-      perFile.set(hit.file, [...(perFile.get(hit.file) ?? []), hit]);
-    }
-    const drift: string[] = [];
-    for (const [file, hits] of perFile) {
-      const listed = (LEDGER[file] ?? []).reduce((sum, entry) => sum + entry.count, 0);
-      if (hits.length !== listed) {
-        drift.push(
-          `${file}: ${hits.length} flagged literal(s) at line(s) ` +
-            `${hits.map((hit) => hit.line).join(', ')}, ${listed} accounted for in the ledger`,
+  it(
+    'fails on a flagged literal in a file nobody classified, naming file, line and rule',
+    WALK_BUDGET,
+    () => {
+      // The failure message IS the fix instruction: repair the sentence, or
+      // add the file to the LEDGER above with where the string is delivered.
+      const unclassified = flaggedLiterals()
+        .filter(({ file }) => LEDGER[file] === undefined)
+        .map(
+          ({ file, line, where, rules, text }) =>
+            `${file}:${line} (${where}) ${rules.join(' + ')} :: ${text}`,
         );
-      }
-    }
-    expect(drift).toEqual([]);
-  });
+      expect(unclassified).toEqual([]);
+    },
+  );
 
-  it('fails on a ledger entry whose file has been cleaned up or moved', () => {
+  it(
+    'fails on a NEW flagged literal inside a file that is already listed — the count is the guard',
+    WALK_BUDGET,
+    () => {
+      const perFile = new Map<string, Flagged[]>();
+      for (const hit of flaggedLiterals()) {
+        perFile.set(hit.file, [...(perFile.get(hit.file) ?? []), hit]);
+      }
+      const drift: string[] = [];
+      for (const [file, hits] of perFile) {
+        const listed = (LEDGER[file] ?? []).reduce((sum, entry) => sum + entry.count, 0);
+        if (hits.length !== listed) {
+          drift.push(
+            `${file}: ${hits.length} flagged literal(s) at line(s) ` +
+              `${hits.map((hit) => hit.line).join(', ')}, ${listed} accounted for in the ledger`,
+          );
+        }
+      }
+      expect(drift).toEqual([]);
+    },
+  );
+
+  it('fails on a ledger entry whose file has been cleaned up or moved', WALK_BUDGET, () => {
     // A pardon nobody needs any more is a pardon waiting to cover something
     // else: the file gets rewritten, the entry stays, and the next sentence
     // written into it is excused by an argument about a string that is gone.
@@ -909,51 +986,66 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
     expect(thin).toEqual([]);
   });
 
-  it('the ledger reports its own arithmetic — the work list is a number a run produced, not one a report copied', () => {
-    // 9.86.0 fix pass. The changelog said the `unrepaired` bucket held THIRTY
-    // literals; the ledger held thirty-three, and the wrong number travelled
-    // from one report into the next because nothing in the tree computed it.
-    // This is the computation. When the bucket changes, the failure prints the
-    // numbers to quote — which is the whole argument of the release the ledger
-    // belongs to.
-    const byKind = new Map<Kind, { entries: number; literals: number }>();
-    let files = 0;
-    for (const entries of Object.values(LEDGER)) {
-      files += 1;
-      for (const entry of entries) {
-        const row = byKind.get(entry.kind) ?? { entries: 0, literals: 0 };
-        byKind.set(entry.kind, { entries: row.entries + 1, literals: row.literals + entry.count });
+  it(
+    'the ledger reports its own arithmetic — the work list is a number a run produced, not one a report copied',
+    WALK_BUDGET,
+    () => {
+      // 9.86.0 fix pass. The changelog said the `unrepaired` bucket held THIRTY
+      // literals; the ledger held thirty-three, and the wrong number travelled
+      // from one report into the next because nothing in the tree computed it.
+      // This is the computation. When the bucket changes, the failure prints the
+      // numbers to quote — which is the whole argument of the release the ledger
+      // belongs to.
+      const byKind = new Map<Kind, { entries: number; literals: number }>();
+      let files = 0;
+      for (const entries of Object.values(LEDGER)) {
+        files += 1;
+        for (const entry of entries) {
+          const row = byKind.get(entry.kind) ?? { entries: 0, literals: 0 };
+          byKind.set(entry.kind, {
+            entries: row.entries + 1,
+            literals: row.literals + entry.count,
+          });
+        }
       }
-    }
-    const literalsOf = (kind: Kind): number => byKind.get(kind)?.literals ?? 0;
-    const total = [...byKind.values()].reduce((sum, row) => sum + row.literals, 0);
-    expect({
-      files,
-      total,
-      registry: literalsOf('registry'),
-      ephemeral: literalsOf('ephemeral'),
-      unrepaired: literalsOf('unrepaired'),
-      notModelFacing: literalsOf('not-model-facing'),
-      unrepairedEntries: byKind.get('unrepaired')?.entries ?? 0,
-    }).toEqual({
-      files: 84,
-      total: 163,
-      registry: 8,
-      ephemeral: 18,
-      unrepaired: 33,
-      notModelFacing: 104,
-      unrepairedEntries: 13,
-    });
-    // And the ledger's own total is the number of literals the scan flagged —
-    // the two halves of the same census, which is what makes the bucket a work
-    // list rather than an estimate.
-    expect(total).toBe(flaggedLiterals().length);
-  });
+      const literalsOf = (kind: Kind): number => byKind.get(kind)?.literals ?? 0;
+      const total = [...byKind.values()].reduce((sum, row) => sum + row.literals, 0);
+      expect({
+        files,
+        total,
+        registry: literalsOf('registry'),
+        ephemeral: literalsOf('ephemeral'),
+        unrepaired: literalsOf('unrepaired'),
+        notModelFacing: literalsOf('not-model-facing'),
+        unrepairedEntries: byKind.get('unrepaired')?.entries ?? 0,
+      }).toEqual({
+        // 9.86.1: the rows widened to the grammar they claim flagged sixteen more
+        // literals — one repaired into the registry's own anchor
+        // (`COVERAGE_NOTE`), one integrity frame line added to the work list, and
+        // fourteen host-facing errors and check-up warnings classified.
+        files: 91,
+        total: 178,
+        registry: 8,
+        ephemeral: 18,
+        unrepaired: 34,
+        notModelFacing: 118,
+        unrepairedEntries: 13,
+      });
+      // And the ledger's own total is the number of literals the scan flagged —
+      // the two halves of the same census, which is what makes the bucket a work
+      // list rather than an estimate.
+      expect(total).toBe(flaggedLiterals().length);
+    },
+  );
 
-  it('the scan is actually reading source — the walk fails loudly if it stops finding anything', () => {
-    // Every assertion above passes vacuously if `flaggedLiterals()` returns
-    // nothing (a moved `src/`, a parser change, a rule list that silently
-    // emptied). This is the one row that goes red instead.
-    expect(flaggedLiterals().length).toBeGreaterThan(20);
-  });
+  it(
+    'the scan is actually reading source — the walk fails loudly if it stops finding anything',
+    WALK_BUDGET,
+    () => {
+      // Every assertion above passes vacuously if `flaggedLiterals()` returns
+      // nothing (a moved `src/`, a parser change, a rule list that silently
+      // emptied). This is the one row that goes red instead.
+      expect(flaggedLiterals().length).toBeGreaterThan(20);
+    },
+  );
 });

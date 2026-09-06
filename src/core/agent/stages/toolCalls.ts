@@ -745,8 +745,21 @@ export function composeReadSkillRefusal(args: {
    *  `held: true` with nothing named says a menu WAS outstanding and none of it
    *  may be named, which is a third sentence, not the no-menu one. */
   readonly menuOffered?: SpokenIds;
-  /** How the turn's start was resolved, for the `'guard'`-without-a-menu arm. */
-  readonly routedDecisively?: boolean;
+  /** How the turn's start was resolved — `TurnRoute.by` — for the
+   *  `'guard'`-without-a-menu arm. Each value is a different past fact about
+   *  the turn, and the arm says only the one it was handed (9.86.1): it used to
+   *  append "Declared routes moved the cursor instead." to every no-menu
+   *  refusal, which is false for a cursor carried over from the previous turn
+   *  (`'continuity'`) and for a menu the model's own pick had resolved
+   *  (`'menu'`), and unprovable for `'none'`. */
+  readonly turnStartedBy?: TurnRoute['by'];
+  /** A cursor EXISTED on that call and the role filter kept its id out of the
+   *  sentence (9.86.1). `cursorId` is absent in two situations that need two
+   *  different sentences: a cold start, where "the turn's start" is the true
+   *  anchor, and a hidden cursor, where the skill is real and merely unnamed.
+   *  The description already withholds a hidden cursor's name — pinned by
+   *  `test/security/skill-visibility.test.ts` — and the refusal printed it raw. */
+  readonly cursorWithheld?: boolean;
 }): string {
   const {
     requestedId,
@@ -757,7 +770,8 @@ export function composeReadSkillRefusal(args: {
     isTree,
     posture,
     menuOffered,
-    routedDecisively,
+    turnStartedBy,
+    cursorWithheld,
   } = args;
   const head = `read_skill("${requestedId}") was not granted on that call: `;
   // Open skills are the one list every arm may name: they are admitted from
@@ -796,13 +810,25 @@ export function composeReadSkillRefusal(args: {
         `framework offered, and '${requestedId}' was not admitted on that call.${openClause}`
       );
     }
+    // What the gate KNOWS about why no menu was outstanding is `TurnRoute.by`,
+    // and each value is a different finished fact. Nothing is asserted about
+    // how the cursor came to be where it was beyond that — the old tail,
+    // "Declared routes moved the cursor instead.", was composed for every
+    // value and was true of none of them in particular.
+    const startClause =
+      turnStartedBy === 'entry' || turnStartedBy === 'intent'
+        ? " — the turn's start had already been resolved decisively"
+        : turnStartedBy === 'continuity'
+        ? ' — the cursor had been carried over from the previous turn'
+        : turnStartedBy === 'menu'
+        ? ' — the menu had already been resolved by an earlier pick'
+        : turnStartedBy === 'decider'
+        ? " — the menu had been resolved by the configured decider before the turn's first call"
+        : '';
     return (
       `${head}this graph's 'guard' posture admits a routing pick only while the framework ` +
       `has declared ambiguity, and no menu was outstanding when that call was made` +
-      `${
-        routedDecisively === true ? " — the turn's start had already been resolved decisively" : ''
-      }` +
-      `. Declared routes moved the cursor instead.${openClause}`
+      `${startClause}.${openClause}`
     );
   }
   if (isTree === true) {
@@ -816,7 +842,15 @@ export function composeReadSkillRefusal(args: {
   // this arm — 'self' is answered by the notice, 'hop' and 'open' are admitted
   // — and it is carried rather than re-derived so the sentence and the verdict
   // read the same classification.
-  const from = cursorId !== undefined ? `'${cursorId}'` : "the turn's start";
+  // Three anchors, not two: a named cursor, a cursor this caller may not be
+  // told the name of, and a genuine cold start. The middle one used to print
+  // the raw id — the one name the description's own law withholds.
+  const from =
+    cursorId !== undefined
+      ? `'${cursorId}'`
+      : cursorWithheld === true
+      ? 'the skill the cursor stood in'
+      : "the turn's start";
   // The gate reaches this arm only with `'unreachable'`; the weaker sentence is
   // for a caller that refused an admissible class for a reason of its own, and
   // it is deliberately not an invented explanation of one.
@@ -1528,6 +1562,11 @@ export function buildToolCallsHandler(
         }
         const currentSkillId = scope.currentSkillId as string | undefined;
         const hops = deps.allowedSkillIds(currentSkillId);
+        const targetClass = classifySkillTarget({
+          ...(currentSkillId !== undefined && { cursor: currentSkillId }),
+          target,
+          hops,
+        });
         // ── A PROPOSAL TO THE CURSOR'S OWN SKILL IS A STAY (9.86.0) ──────
         // `makeReachableSkills` filters the cursor out of its own successor
         // set — right for a MOVE, and this judge read it as "not reachable"
@@ -1540,13 +1579,47 @@ export function buildToolCallsHandler(
         // The event carries the existing `'accepted'` outcome plus an
         // ADDITIVE `stay: true`, deliberately not a new enum member: an
         // exhaustive switch over `outcome` in a consumer must keep compiling.
-        if (
-          classifySkillTarget({
-            ...(currentSkillId !== undefined && { cursor: currentSkillId }),
-            target,
-            hops,
-          }) === 'self'
-        ) {
+        //
+        // A STAY COMPETES FOR THE SLOT LIKE ANY OTHER ACCEPTED PROPOSAL
+        // (9.86.1). The batch law is "first ACCEPTED proposal wins, later
+        // proposals to OTHER targets are superseded", and a stay is accepted
+        // — so a stay judged first holds the slot (with nothing written to
+        // `pendingToolTransition`, because a stay moves nothing) and a later
+        // sibling proposing a hop is `'superseded'` and lands in the
+        // `route_conflict` losers, exactly as two conflicting hops do. Before
+        // this the stay `continue`d past the bookkeeping, so the tool that
+        // judged its data first lost to whichever sibling came second, with
+        // two `'accepted'` events in one batch and no conflict on the record.
+        // The same law in the other order: a stay proposed AFTER an accepted
+        // hop is superseded by it, not accepted beside it.
+        if (targetClass === 'self') {
+          if (state.winner !== undefined && state.winner.targetSkillId !== target) {
+            state.losers.push({
+              toolCallId: call.toolCallId,
+              toolName: call.toolName,
+              target,
+            });
+            typedEmit(scope, 'agentfootprint.tools.effect', {
+              kind: 'propose-transition',
+              outcome: 'superseded',
+              toolName: call.toolName,
+              toolCallId: call.toolCallId,
+              iteration: call.iteration,
+              targetSkillId: target,
+              reason: effect.reason,
+              supersededBy: 'earlier-proposal',
+            });
+            continue;
+          }
+          if (state.winner === undefined) {
+            state.winner = {
+              targetSkillId: target,
+              toolName: call.toolName,
+              toolCallId: call.toolCallId,
+              reason: effect.reason,
+              iteration: call.iteration,
+            };
+          }
           typedEmit(scope, 'agentfootprint.tools.effect', {
             kind: 'propose-transition',
             outcome: 'accepted',
@@ -1559,13 +1632,29 @@ export function buildToolCallsHandler(
           });
           continue;
         }
-        if (!hops.includes(target)) {
+        if (targetClass === 'unreachable') {
+          // ── THE REFUSAL SPEAKS WITH THE FILTERED SETS (9.86.1) ──────────
+          // This sentence is appended to the tool result the model reads and
+          // rides the `tools.effect` payload, and it named the raw hop set and
+          // the raw cursor — the leak the `read_skill` refusals closed one
+          // function up. Same filter, same law: the hidden set the tools slot
+          // resolved for this iteration, and OMIT, NEVER DENY — a hop set the
+          // filter emptied composes no reachable clause rather than an empty
+          // one. Admission is still judged on the raw `hops`.
+          const hiddenIds = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
+          const mayName = (id: string): boolean => !hiddenIds.has(id);
+          const reachable = spoken(hops, mayName);
+          const from =
+            currentSkillId === undefined
+              ? 'the turn start'
+              : mayName(currentSkillId)
+              ? `'${currentSkillId}'`
+              : 'the skill the cursor stood in';
           refuse(
             'propose-transition',
             `propose-transition → '${target}' was refused: '${target}' is not reachable from ` +
-              `${currentSkillId !== undefined ? `'${currentSkillId}'` : 'the turn start'} per ` +
-              `the graph's own law${
-                hops.length > 0 ? ` (reachable: ${hops.join(', ')})` : ''
+              `${from} per the graph's own law${
+                reachable.named.length > 0 ? ` (reachable: ${reachable.named.join(', ')})` : ''
               }. The graph decides — a proposal is evidence, never authority.`,
             { targetSkillId: target, reason: effect.reason },
           );
@@ -3637,6 +3726,16 @@ export function buildToolCallsHandler(
             // "nothing reachable may be named", and it used to assert the first.
             const hopsSpoken = spoken(hops, mayName);
             const openSpoken = spoken(openAll, mayName);
+            // The cursor through the SAME filter (9.86.1). The description
+            // withholds a hidden cursor's name and every refusal below printed
+            // it raw in two clauses; `cursorWithheld` keeps the sentence's
+            // anchor honest ("the skill the cursor stood in") without the id.
+            const cursorSpoken =
+              currentSkillId === undefined
+                ? {}
+                : mayName(currentSkillId)
+                ? { cursorId: currentSkillId }
+                : { cursorWithheld: true };
             const hopsNamed = hopsSpoken.named;
             const openNamed = openSpoken.named;
             // The ONE owner of "is this target the cursor?" — the same function
@@ -3756,7 +3855,7 @@ export function buildToolCallsHandler(
               result = composeReadSkillRefusal({
                 requestedId: reqId,
                 targetClass,
-                ...(currentSkillId !== undefined && { cursorId: currentSkillId }),
+                ...cursorSpoken,
                 hops: hopsSpoken,
                 openIds: openSpoken,
                 ...(deps.skillGraphIsTree === true && { isTree: true }),
@@ -3795,7 +3894,7 @@ export function buildToolCallsHandler(
                 result = composeReadSkillRefusal({
                   requestedId: reqId,
                   targetClass,
-                  ...(currentSkillId !== undefined && { cursorId: currentSkillId }),
+                  ...cursorSpoken,
                   // No hop is named under a posture, and the graph's hop set
                   // is not this arm's subject — `held: false` is the honest
                   // shape, not a claim that nothing was reachable (this arm
@@ -3804,9 +3903,9 @@ export function buildToolCallsHandler(
                   openIds: openSpoken,
                   posture: deps.skillStrictness,
                   ...(menuNamed !== undefined && { menuOffered: menuNamed }),
-                  ...((turnRoute?.by === 'intent' || turnRoute?.by === 'entry') && {
-                    routedDecisively: true,
-                  }),
+                  // The whole verdict, not a boolean derived from two of its
+                  // six values: the composer says one past fact per value.
+                  ...(turnRoute !== undefined && { turnStartedBy: turnRoute.by }),
                 });
                 typedEmit(scope, 'agentfootprint.skill.rejected', {
                   requestedId: reqId,
@@ -4287,10 +4386,14 @@ export function buildToolCallsHandler(
             // silently invents a decision, for the same reason it never silently
             // drops one.
             error = true;
+            // A past fact about the resumed call, not a forecast about the
+            // turn (9.86.1): "cannot be retried this turn … Answer without it,
+            // or finish" was a prediction plus a standing order on a result
+            // that is re-read on every later call.
             result =
-              `tool '${toolName}' was not executed and cannot be retried this turn: it declares ` +
-              `its own checkIn consent gate, that gate trips for these arguments, and a resumed ` +
-              `dispatch has no second checkpoint to ask on. Answer without it, or finish. (To ` +
+              `tool '${toolName}' was not executed on that call, and the resumed dispatch had ` +
+              `no second checkpoint to retry it on: it declares its own checkIn consent gate, ` +
+              `and that gate tripped for those arguments. (To ` +
               `the agent's author: the middleware '${askedBy}' and the tool's checkIn ask ` +
               `different questions — one is the rule's, one is the tool's with the evidence ` +
               `pack attached — so approving one is not answering the other. Keep one gate for ` +

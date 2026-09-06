@@ -676,9 +676,11 @@ budget had run out.
 With this on, the run spends ONE more LLM call with **the tools withheld**
 and this instruction appended, then hands back what comes back:
 
-> *Your action budget for this turn is exhausted. Do not request tools.
-> Give your best final answer from what you have: what you completed, what
-> remains undone, and anything the person should know.*
+> *[budget exhausted — the action budget was exhausted before the wrap-up
+> call this message opened, so no tools were offered on that call. That
+> call was for the final answer, from what the messages above already
+> hold: what was completed, what remained undone, and anything the person
+> should know.]*
 
 That call is exempt from `maxIterations` by design — it cannot loop,
 because with no tools on the wire there is nothing for the model to ask

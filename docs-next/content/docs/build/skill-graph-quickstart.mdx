@@ -374,7 +374,13 @@ loop.
   the `skip_step` one. Hand any of them to your own tool factory; inside
   agentfootprint, `buildReadSkillTool` is the one line that passes it to
   `defineTool`. `ReadSkillOffer` is the shape that narrows the description to
-  what the gate will actually grant.
+  what the gate will actually grant. A host wiring its own `read_skill` under
+  a decision `tree()` must set `treeRouted: true` on it: a tree routes by
+  predicate on every iteration and keeps no cursor, so every routing pick is
+  refused by construction, and the flag is what lets the descriptor withhold
+  the offer (with open skills present it explains the tree and lists what a
+  pick can open instead). Without it the host keeps offering a menu the graph
+  will reject.
 - `SkillCachePolicy` (with its `SkillCachePolicyContext`) is the cache
   directive an `ActiveInjection` carries across the boundary — the same
   `'always' | 'never' | 'while-active' | { until }` your cache layer knows,

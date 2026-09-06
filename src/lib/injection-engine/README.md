@@ -727,8 +727,8 @@ import { STEP_NUDGE_FRAME_PREFIX } from '../saidByPerson.js';
 
 return (
   `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
-  `above was given: ${list}. This call was for running them, or for the reason they were ` +
-  `not run.]`
+  `above was given: ${list}. This message asked for them to be run, or for the reason ` +
+  `they were not run.]`
 );
 ```
 

@@ -158,12 +158,19 @@ describe('the exhausted turn spends one more call, with the tools withheld', () 
     // are predictions. Every clause is now a past fact about the one call the
     // frame was written for. The tools are still withheld by `wrapUpAsked` at
     // request assembly, which is what the assertion above this one proves.
+    //
+    // REWORDED AGAIN IN 9.86.1: "before this call … This call was for" anchored
+    // on a bare deictic. The frame is snapshotted into the checkpoint and
+    // restored verbatim on `.continue()`, where the next turn's model — tools
+    // back on the wire — resolves "this call" to the call it is answering. It
+    // now names the call it is about.
     expect(WRAP_UP_INSTRUCTION).toBe(
-      '[budget exhausted — the action budget was exhausted before this call, so no tools ' +
-        'were offered on it. This call was for the final answer, from what the messages above ' +
-        'already hold: what was completed, what remained undone, and anything the person ' +
-        'should know.]',
+      '[budget exhausted — the action budget was exhausted before the wrap-up call this ' +
+        'message opened, so no tools were offered on that call. That call was for the final ' +
+        'answer, from what the messages above already hold: what was completed, what remained ' +
+        'undone, and anything the person should know.]',
     );
+    expect(WRAP_UP_INSTRUCTION).not.toMatch(/\bthis call\b/);
     // The half of the rule the sentence itself carries: a reader can tell
     // nobody said this.
     expect(isLibraryAuthoredFrame(last)).toBe(true);

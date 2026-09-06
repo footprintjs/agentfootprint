@@ -168,7 +168,10 @@ describe('inspect_tool_call — proposed args vs the args that actually ran', ()
     const out = await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', {
       toolCallId: 'c1',
     });
-    expect(out).toContain('no governance rule filed a row for this call');
+    // Named by id since 9.86.1 — a bare `this call` on a persistent result
+    // denotes whichever call re-reads it.
+    expect(out).toContain("no governance rule filed a row for call 'c1'");
+    expect(out).not.toMatch(/\bthis call\b/);
   });
 });
 

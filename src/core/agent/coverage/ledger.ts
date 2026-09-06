@@ -43,10 +43,16 @@ export const COVERAGE_MARKER = 'af_coverage';
  * of survival — the model is told to carry the limits into its answer. The
  * ENFORCEMENT half (`.limitsTravelWithTheAnswer()`) does not depend on the
  * model obeying it; see `answer.ts` for why both exist.
+ *
+ * "the call this result answers", not "this call" (9.86.1): the note rides a
+ * tool result, which is re-read on every later call of the turn, and a bare
+ * `this call` there denotes whichever call is reading it. The container
+ * deictic's own anchor names the call instead.
  */
 export const COVERAGE_NOTE =
-  'This result covers only what `checked` lists. `not_checked` is ground this call did not ' +
-  'look at, and `cannot_cover` is ground this tool can never see — a clean result here is ' +
+  'This result covers only what `checked` lists. `not_checked` is ground the call this result ' +
+  'answers did not look at, and `cannot_cover` is ground this tool can never see — a clean ' +
+  'result here is ' +
   'NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into ' +
   'any answer you build on this result.';
 

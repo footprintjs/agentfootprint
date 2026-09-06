@@ -428,14 +428,29 @@ const readSkillRefusals = (): readonly string[] => [
     posture: 'guard',
     menuOffered: { named: [], held: true },
   }),
+  // No menu at all: one arm per `TurnRoute.by` value the gate can hand over
+  // (9.86.1) — each a different past fact, and none of them the old
+  // "Declared routes moved the cursor instead." tail that was composed for
+  // every value and true of none in particular.
+  ...(['entry', 'intent', 'continuity', 'menu', 'decider', 'none'] as const).map((by) =>
+    composeReadSkillRefusal({
+      requestedId: 'refunds',
+      targetClass: 'hop',
+      cursorId: 'billing',
+      hops: { named: [], held: false },
+      openIds: { named: [], held: false },
+      posture: 'guard',
+      turnStartedBy: by,
+    }),
+  ),
+  // A cursor this caller may not be told the name of (9.86.1): the anchor is
+  // the skill, unnamed, and not "the turn's start".
   composeReadSkillRefusal({
-    requestedId: 'refunds',
-    targetClass: 'hop',
-    cursorId: 'billing',
-    hops: { named: [], held: false },
+    requestedId: 'vault',
+    targetClass: 'unreachable',
+    cursorWithheld: true,
+    hops: { named: ['refunds'], held: true },
     openIds: { named: [], held: false },
-    posture: 'guard',
-    routedDecisively: true,
   }),
   composeReadSkillRefusal({
     requestedId: 'refunds',
@@ -710,6 +725,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /was not admitted on that call\./,
       /no menu was outstanding when that call was made/,
       /had already been resolved decisively/,
+      /had been carried over from the previous turn/,
+      /had already been resolved by an earlier pick/,
+      /resolved by the configured decider before the turn's first call/,
+      /was not reachable from the skill the cursor stood in/,
       /Open skills were admitted on that call/,
     ],
     compose: async () => readSkillRefusals(),
@@ -766,7 +785,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'test/lib/injection-engine/userTurnProducers.test.ts',
       'test/core/agent-wrap-up.test.ts',
     ],
-    reaches: [/action budget was exhausted before this call/],
+    reaches: [/action budget was exhausted before the wrap-up call this message opened/],
     compose: async () => [WRAP_UP_INSTRUCTION],
   },
   {
@@ -877,6 +896,14 @@ describe('the model-facing inventory', () => {
         row.exemptBecause.trim().length,
         `${row.re.source} exempts a lifetime with no argument`,
       ).toBeGreaterThan(0);
+      // A STRICT subset of the lifetimes (9.86.1). `provableWhen` naming both
+      // lifetimes compiles, carries an argument, and disables the row
+      // everywhere — the exemption-with-no-argument defect in a new coat. There
+      // are exactly two lifetimes, so "strict subset" is "fewer than two".
+      expect(
+        row.provableWhen.length,
+        `${row.re.source} exempts EVERY lifetime — a rule that fires nowhere`,
+      ).toBeLessThan(2);
     }
   });
 
@@ -945,11 +972,72 @@ describe('the checker catches the shapes, not only the wordings it has seen', ()
     'Use trace_node for its details, or trace_slice from a downstream step.',
   ];
 
+  /**
+   * THE SECOND PROBE (9.86.1) — seventeen sentences written AGAINST the rows,
+   * not from them.
+   *
+   * The fifteen above were the sentences the 9.86.0 shape rows were written
+   * to; a suite that proves the rules catch the sentences they were derived
+   * from proves the probe, not the class. A reviewer wrote seventeen more in
+   * the same class — the plainest forecast forms, the ones a maintainer types
+   * without thinking — and all seventeen walked past the rows as they stood:
+   * the effect-verb row knew no future tense, the cursor row wanted a quote
+   * right after `in `, the copula row knew six nouns, and a headed list has no
+   * copula at all. The rows were widened to the grammar they claim, and these
+   * are kept here so the next narrowing fails by name.
+   */
+  const FORWARD_LOOKING_SECOND_PROBE: readonly string[] = [
+    // Effect verbs in the future and modal tenses.
+    "read_skill will move you to 'beta'.",
+    "read_skill('vault') will take you to the vault tools.",
+    'You may call read_skill to switch skills.',
+    // Cursor claims with a noun, a contraction, or a possessive.
+    "You are in skill 'alpha'.",
+    "You're in 'alpha'.",
+    "Your current skill is 'alpha'.",
+    // Headed inventories — the census with its verb elided.
+    'Available tools: calc, probe.',
+    'Tools you have: calc, probe.',
+    'Skills you can reach: refunds, shipping.',
+    // The copula with the nouns real producers use.
+    "'billing' is enabled for this turn.",
+    'The vault tools are yours to use.',
+    'Nothing is in scope.',
+    'The zone-audit map is mounted.',
+    'read_skill is off the wire.',
+    'No tools are offered on this request.',
+    'Tools have been withheld.',
+    // A forecast about the next call.
+    'The budget has run out; the next call will not run a tool.',
+  ];
+
   it('catches all fifteen at a persistent lifetime — thirteen of them used to pass', () => {
     const escaped = FORWARD_LOOKING.filter(
       (sentence) => unprovable(sentence, TOOL_RESULT).length === 0,
     );
     expect(escaped).toEqual([]);
+  });
+
+  it('catches the seventeen written against the rows — all seventeen used to pass (9.86.1)', () => {
+    const escaped = FORWARD_LOOKING_SECOND_PROBE.filter(
+      (sentence) => unprovable(sentence, TOOL_RESULT).length === 0,
+    );
+    expect(escaped).toEqual([]);
+  });
+
+  it('the widened rows still stand down on an ephemeral surface where the sentence is a report', () => {
+    // The other half of widening: a `read_skill` description saying "Available
+    // skills: refunds, shipping." on the request that offers them is a report,
+    // and the headed-inventory row must let it through there — a row that fires
+    // on every true description gets deleted.
+    expect(unprovable('Available skills: refunds, shipping.', GRAPH_TOOL_DESCRIPTION)).toEqual([]);
+    expect(unprovable("You are in skill 'alpha'.", GRAPH_TOOL_DESCRIPTION)).toEqual([]);
+    // And two that are banned everywhere: pointing at the moment of reading,
+    // and forecasting what a call after this one will do.
+    expect(unprovable("You're currently in 'alpha'.", GRAPH_TOOL_DESCRIPTION)).not.toEqual([]);
+    expect(unprovable('The next call will not run a tool.', GRAPH_TOOL_DESCRIPTION)).not.toEqual(
+      [],
+    );
   });
 
   it('the LIFETIME decides: one sentence, clean as a description and false as a result', () => {

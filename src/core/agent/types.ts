@@ -724,10 +724,11 @@ export interface AgentOptions {
    * With this on, the run spends ONE more LLM call with **the tools withheld**
    * and this instruction appended, then hands back what comes back:
    *
-   * > *[budget exhausted — the action budget was exhausted before this call,
-   * > so no tools were offered on it. This call was for the final answer, from
-   * > what the messages above already hold: what was completed, what remained
-   * > undone, and anything the person should know.]*
+   * > *[budget exhausted — the action budget was exhausted before the wrap-up
+   * > call this message opened, so no tools were offered on that call. That
+   * > call was for the final answer, from what the messages above already
+   * > hold: what was completed, what remained undone, and anything the person
+   * > should know.]*
    *
    * Reworded in 9.86.0. The message lives in `history` and is re-read on every
    * later call of the turn, so it opens with the registered marker that says

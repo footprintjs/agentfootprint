@@ -434,8 +434,24 @@ describe('composeReadSkillRefusal — every arm is a finished fact', () => {
         menuOffered: { named: [], held: true },
       }),
     },
-    {
-      arm: "posture 'guard', no menu, turn resolved decisively",
+    // No menu outstanding — one arm per `TurnRoute.by` value (9.86.1). The
+    // gate used to reduce the verdict to a boolean and the composer appended
+    // "Declared routes moved the cursor instead." to every one of these, which
+    // is false for a carried-over cursor and for a menu the model's own pick
+    // resolved. Each arm now says the one past fact its value stands for.
+    ...(
+      [
+        ['entry', "the turn's start had already been resolved decisively"],
+        ['intent', "the turn's start had already been resolved decisively"],
+        ['continuity', 'the cursor had been carried over from the previous turn'],
+        ['menu', 'the menu had already been resolved by an earlier pick'],
+        [
+          'decider',
+          "the menu had been resolved by the configured decider before the turn's first call",
+        ],
+      ] as const
+    ).map(([by, clause]) => ({
+      arm: `posture 'guard', no menu, turn started by '${by}' — says: ${clause}`,
       text: composeReadSkillRefusal({
         requestedId: 'refunds',
         targetClass: 'hop',
@@ -443,11 +459,23 @@ describe('composeReadSkillRefusal — every arm is a finished fact', () => {
         hops: { named: [], held: false },
         openIds: { named: [], held: false },
         posture: 'guard',
-        routedDecisively: true,
+        turnStartedBy: by,
+      }),
+    })),
+    {
+      arm: "posture 'guard', no menu, the cascade decided nothing ('none')",
+      text: composeReadSkillRefusal({
+        requestedId: 'refunds',
+        targetClass: 'hop',
+        cursorId: 'billing',
+        hops: { named: [], held: false },
+        openIds: { named: [], held: false },
+        posture: 'guard',
+        turnStartedBy: 'none',
       }),
     },
     {
-      arm: "posture 'guard', no menu, no decisive verdict either",
+      arm: "posture 'guard', no menu, no verdict handed over at all",
       text: composeReadSkillRefusal({
         requestedId: 'refunds',
         targetClass: 'hop',
@@ -455,6 +483,18 @@ describe('composeReadSkillRefusal — every arm is a finished fact', () => {
         hops: { named: [], held: false },
         openIds: { named: [], held: false },
         posture: 'guard',
+      }),
+    },
+    {
+      // 9.86.1: a cursor existed and the role filter withholds its name. The
+      // anchor is the skill, unnamed — not the id, and not "the turn's start".
+      arm: 'unreachable from a cursor this caller may not be told the name of',
+      text: composeReadSkillRefusal({
+        requestedId: 'vault',
+        targetClass: 'unreachable',
+        cursorWithheld: true,
+        hops: { named: ['refunds'], held: true },
+        openIds: { named: [], held: false },
       }),
     },
   ];
@@ -508,6 +548,42 @@ describe('composeReadSkillRefusal — every arm is a finished fact', () => {
     // The denial, in full and in part.
     expect(filtered).not.toMatch(/No skill was reachable/);
     expect(filtered).not.toMatch(/Skills reachable from/);
+  });
+
+  it("the no-menu 'guard' arm says how the turn started and nothing more (9.86.1)", () => {
+    // The clause that was composed unconditionally. `by: 'continuity'` is the
+    // one `run-manifest`'s own `{ strictness: 'guard', continuity:
+    // 'conversation' }` produces on every follow-up, and nothing moved the
+    // cursor on such a turn.
+    for (const { arm, text } of arms.filter((a) => a.arm.includes('no menu'))) {
+      expect(text, arm).not.toMatch(/Declared routes moved the cursor/);
+      expect(text, arm).toContain('no menu was outstanding when that call was made');
+    }
+    const byArm = (by: string): string =>
+      arms.find((a) => a.arm.includes(`turn started by '${by}'`))!.text;
+    expect(byArm('continuity')).toContain(
+      'the cursor had been carried over from the previous turn',
+    );
+    expect(byArm('menu')).toContain('the menu had already been resolved by an earlier pick');
+    expect(byArm('decider')).toContain('resolved by the configured decider');
+    expect(byArm('entry')).toContain("the turn's start had already been resolved decisively");
+    expect(byArm('intent')).toContain("the turn's start had already been resolved decisively");
+    // 'none' and "nothing handed over" assert nothing about the start.
+    for (const arm of ["('none')", 'no verdict handed over']) {
+      const text = arms.find((a) => a.arm.includes(arm))!.text;
+      expect(text, arm).toMatch(/no menu was outstanding when that call was made\./);
+      expect(text, arm).not.toMatch(/resolved|carried over/);
+    }
+  });
+
+  it('a hidden cursor is not named and not mistaken for a cold start (9.86.1)', () => {
+    const text = arms.find((a) => a.arm.includes('may not be told the name of'))!.text;
+    expect(text).toBe(
+      'read_skill("vault") was not granted on that call: \'vault\' was not reachable from the ' +
+        'skill the cursor stood in. Skills reachable from the skill the cursor stood in when ' +
+        'that call was made: refunds.',
+    );
+    expect(text).not.toMatch(/the turn's start/);
   });
 
   it('a MENU the filter emptied is not reported as "no menu was outstanding"', () => {

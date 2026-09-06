@@ -75,9 +75,17 @@ npm run build
 
 echo "[3/8] Build ✓"
 
-# ── Gate 4: Full test suite ─────────────────────────────────────────────
-echo "==> Running full test suite..."
-npm test
+# ── Gate 4: Full test suite, THE WAY CI'S COVERAGE JOB RUNS IT ──────────
+# `npm run test:coverage` is `npm test` under v8 instrumentation — the same
+# tests, slower. CI runs both; this script used to run only the fast one, and
+# 9.86.0 shipped with `coverage` red on the release commit: two tests that
+# parse all of src/ took 5.3–6.2 s each under instrumentation on the CI
+# runner, past vitest's 5 s default, while passing in 1–2 s here. The local
+# gate could not see what CI saw because it never ran the command CI ran.
+# One command is the law now: the instrumented run is a superset of the plain
+# one, so nothing the plain run would catch is lost.
+echo "==> Running full test suite (with coverage — the command CI's coverage job runs)..."
+npm run test:coverage
 
 echo "[4/8] Full test suite ✓"
 

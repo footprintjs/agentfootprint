@@ -139,8 +139,9 @@ const RECORDING_NOTE =
   'mounts — so this walk can be drawn as the flowchart it actually ran. It carries what the ' +
   'row projection cannot: the chart STRUCTURE (the only route to a drawable graph; a finished ' +
   "run does not leave it behind), the run's shared state, its whole commit log, and every " +
-  "attached recorder's data — that is, whatever the chart WROTE, scrubbed by this call's " +
-  '`redact` policy and by nothing else. `events` is empty by construction: a chart run is not ' +
+  "attached recorder's data — that is, whatever the chart WROTE, scrubbed by the `redact` " +
+  'policy of the call this result answers and by nothing else. `events` is empty by ' +
+  'construction: a chart run is not ' +
   'an agent turn and fires no agentfootprint events, so there are none to record.';
 
 /**

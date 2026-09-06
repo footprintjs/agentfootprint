@@ -74,9 +74,10 @@ budget had run out.
 **Since 9.56.0 the run spends one more LLM call with the tools withheld**, carrying one
 instruction, and hands back what comes back:
 
-> [budget exhausted — the action budget was exhausted before this call, so no tools were
-> offered on it. This call was for the final answer, from what the messages above already
-> hold: what was completed, what remained undone, and anything the person should know.]
+> [budget exhausted — the action budget was exhausted before the wrap-up call this message
+> opened, so no tools were offered on that call. That call was for the final answer, from what
+> the messages above already hold: what was completed, what remained undone, and anything the
+> person should know.]
 
 The bracketed opening is not decoration: it is the marker that tells the window's refusal engine
 and a routing rule reading `history` that the library wrote this message, not the person (see

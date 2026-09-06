@@ -453,9 +453,13 @@ export function nudgeTeachingMessage(ptr: StepPointer, plan: StepPlan): string {
       ? `Step ${remaining[0]!.index}`
       : `Steps ${remaining[0]!.index}–${remaining[remaining.length - 1]!.index}`;
   const list = remaining.map((s) => `${s.index}: ${s.note} (\`${s.tool}\`)`).join('; ');
+  // "This message asked …" rather than "This call was for …" (9.86.1): the
+  // nudge persists in `history` past the call it was written for, and a bare
+  // `this call` resolves to whichever call re-reads it. The message is the
+  // one thing that stays where it is.
   return (
     `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
-    `above was given: ${list}. This call was for running them, or for the reason they were ` +
-    `not run.]`
+    `above was given: ${list}. This message asked for them to be run, or for the reason ` +
+    `they were not run.]`
   );
 }

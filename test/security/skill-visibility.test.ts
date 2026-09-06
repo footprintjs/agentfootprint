@@ -555,6 +555,129 @@ describe('property — nothing names a hidden skill, on the graph path either', 
       expect(refusal).toContain('Open skills were admitted on that call: gamma.');
     });
 
+    it('a refusal never names a hidden CURSOR — the anchor is the skill, unnamed (9.86.1)', async () => {
+      // The description for this very request withholds `alpha` ("ROLE
+      // VISIBILITY WINS OVER THE POSITIVE SIGNAL") and the refusal printed it
+      // raw in two clauses: "'delta' was not reachable from 'alpha'. Skills
+      // reachable from 'alpha' when that call was made: gamma." The one id the
+      // description's law says the role must not be taught, on a persistent
+      // result. Role sees gamma and delta; cursor alpha and hop beta are hidden.
+      const graphWithDelta = () =>
+        skillGraph({
+          skills: ['alpha', 'beta', 'gamma', 'delta'].map((id) =>
+            defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+          ),
+          start: 'alpha',
+          steps: [
+            { from: 'alpha', to: 'beta', onToolReturn: 'noop' },
+            { from: 'alpha', to: 'gamma', onToolReturn: 'noop' },
+            { from: 'gamma', to: 'delta', onToolReturn: 'noop' },
+          ],
+          check: 'off',
+        });
+      for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+        const { results, rejected } = await graphRun({
+          visible: ['gamma', 'delta'],
+          wanted: 'delta',
+          build: (a) => a.skillGraph(graphWithDelta(), { reactMode } as never),
+        });
+        const refusal = results.find((r) => r.includes('was not granted on that call'));
+        expect(refusal, reactMode).toBeDefined();
+        // Not the cursor, not the hidden hop — on every tool result of the run.
+        for (const r of results)
+          expect(hiddenIdsNamed(r, ['alpha', 'beta']), reactMode).toEqual([]);
+        // The skill is real and merely unnamed: not "the turn's start", which
+        // is the cold-start anchor and would be a false fact about this call.
+        expect(refusal, reactMode).toContain(
+          "'delta' was not reachable from the skill the cursor stood in.",
+        );
+        expect(refusal, reactMode).not.toMatch(/the turn's start/);
+        // Filtered, not muted: the visible hop is still named.
+        expect(refusal, reactMode).toContain('gamma');
+        expect(rejected[0]?.allowed, reactMode).toEqual(['gamma']);
+        // `skill.rejected.currentSkillId` is the OPERATOR's record of where the
+        // cursor stood, on the event channel a recorder reads — not a sentence
+        // the model reads — and it stays raw, like every other event payload.
+        expect(rejected[0]?.currentSkillId, reactMode).toBe('alpha');
+      }
+    });
+
+    it('a propose-transition refusal never names a hidden hop or a hidden cursor (9.86.1)', async () => {
+      // The tool-effects judge composed its reachability refusal from the raw
+      // hop set and the raw cursor, and the refusal is appended to the tool
+      // result the model reads — "'delta' is not reachable from 'alpha' per the
+      // graph's own law (reachable: beta, gamma)" named both hidden ids. Same
+      // filter as the gate's now.
+      const results: string[] = [];
+      const effectsSeen: Array<Record<string, unknown>> = [];
+      const script = [
+        { content: '', toolCalls: [{ id: 'c1', name: 'diagnose', args: {} }] },
+        { content: 'done', toolCalls: [] },
+      ];
+      let i = 0;
+      const provider = mock({
+        respond: (req: { messages?: ReadonlyArray<{ role: string; content: unknown }> }) => {
+          for (const m of req.messages ?? [])
+            if (m.role === 'tool') results.push(String(m.content));
+          return (script[i++] ?? { content: 'done', toolCalls: [] }) as never;
+        },
+      });
+      const diagnose = defineTool({
+        name: 'diagnose',
+        description: 'judges the data',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => ({
+          content: 'hm',
+          effects: [{ kind: 'propose-transition', targetSkillId: 'delta', reason: 'data' }],
+        }),
+      });
+      const agent = Agent.create({
+        provider,
+        model: 'mock',
+        maxIterations: 4,
+        permissionChecker: PermissionPolicy.fromRoles(
+          { support: ['read_skill', 'noop', 'diagnose'] },
+          'support',
+          { skills: { support: ['gamma', 'delta'] } },
+        ),
+      })
+        .system('s')
+        .tool(noop)
+        .tool(diagnose)
+        .skillGraph(
+          skillGraph({
+            skills: ['alpha', 'beta', 'gamma', 'delta'].map((id) =>
+              defineSkill({ id, description: `${id} does things`, body: `${id}_BODY` }),
+            ),
+            start: 'alpha',
+            steps: [
+              { from: 'alpha', to: 'beta', onToolReturn: 'noop' },
+              { from: 'alpha', to: 'gamma', onToolReturn: 'noop' },
+              { from: 'gamma', to: 'delta', onToolReturn: 'noop' },
+            ],
+            check: 'off',
+          }),
+        )
+        .watch({
+          id: 'w',
+          onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+            if (e.name === 'agentfootprint.tools.effect') effectsSeen.push(e.payload ?? {});
+          },
+        })
+        .build();
+      await agent.run({ message: 'go' });
+      const refusal = results.find((r) => r.includes('[tool effect refused:'));
+      expect(refusal).toBeDefined();
+      expect(refusal).toContain("'delta' is not reachable from the skill the cursor stood in");
+      // Named: the visible hop. Not named: the hidden hop and the hidden cursor.
+      expect(refusal).toContain('(reachable: gamma)');
+      for (const r of results) expect(hiddenIdsNamed(r, ['alpha', 'beta'])).toEqual([]);
+      // The event's refusalReason is the same sentence, so it is filtered too;
+      // its `targetSkillId` is the tool's own proposal and stays.
+      expect(effectsSeen[0]).toMatchObject({ outcome: 'refused', targetSkillId: 'delta' });
+      expect(hiddenIdsNamed(String(effectsSeen[0]?.refusalReason), ['alpha', 'beta'])).toEqual([]);
+    });
+
     it('the unknown-tool roster never names a tool a hidden skill brought', async () => {
       // The roster read the dispatch map raw, so it named the tools of a skill
       // this role may not see — the leak the refusals had just closed, one

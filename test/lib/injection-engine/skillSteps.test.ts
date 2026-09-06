@@ -217,7 +217,11 @@ describe('functional: the grammar', () => {
     expect(msg).toContain("Steps 2–3 of 'refund' had not run when the answer above was given");
     expect(msg).toContain('2: refund the charge (`charge`)');
     expect(msg).toContain('3: file the receipt (`export`)');
-    expect(msg).toContain('This call was for running them, or for the reason they were not run.');
+    expect(msg).toContain(
+      'This message asked for them to be run, or for the reason they were not run.',
+    );
+    // Not `this call` (9.86.1): the nudge outlives the call it was written for.
+    expect(msg).not.toMatch(/\bthis call\b/i);
     expect(remainingStepsOf(at(2), plan).map((s) => s.index)).toEqual([2, 3]);
   });
 

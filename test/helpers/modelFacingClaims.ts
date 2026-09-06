@@ -67,6 +67,17 @@
  * as a tool result is. A channel is not evidence about lifetime, so the caller
  * states both and the RULES JUDGE `lifetime`.
  *
+ * "May speak in the present" means the present TENSE — "You are in 'alpha'",
+ * "Two skills are reachable" — reported as the state of the request being
+ * answered. It does not extend to the deictic ADVERBS (`now`, `currently`,
+ * `right now`, `at the moment`), which the `now` row bans on every lifetime:
+ * they point at the moment of reading rather than name the pass, and the
+ * anchor that repairs them ("when that call was made", "on that pass") is
+ * available on an ephemeral surface too. So an ephemeral producer may say
+ * "You are on step 2 of 5" and may not say "You are currently on step 2 of
+ * 5" — the file's stance since the `right now` literal, stated here so the
+ * header and the row agree.
+ *
  * `channel` is carried for the inventory and for the failure message, so a
  * failing assertion tells the reader which producer to open rather than only
  * which sentence is wrong.
@@ -281,7 +292,10 @@ export const BANNED_CLAUSES: readonly BannedClause[] = [
       'same refusal already does',
   },
   {
-    re: /You are (already )?in '/,
+    // Widened in 9.86.1: the contraction and an optional noun ("You're in
+    // 'alpha'", "You are in skill 'alpha'", "Your current skill is 'alpha'")
+    // walked past a row that required the quote right after `in `.
+    re: /You(?:'re| are)(?: already| currently)? in (?:(?:the |skill |the skill )?)'|Your current skill is '/,
     why: 'present-tense cursor claim: the read_skill description owns the present tense',
     provableWhen: ['request-ephemeral'],
     exemptBecause:
@@ -359,11 +373,17 @@ export const BANNED_CLAUSES: readonly BannedClause[] = [
     // request, so the sentence is re-read on a later call beside a wire that
     // no longer matches it — and it reads as a DENIAL of a capability that is
     // on the wire, or an OFFER of one that is not.
-    re: /\b(?:is|are) (?:available|active|loaded|live|on the wire|reachable)\b/i,
+    // Widened in 9.86.1 to the nouns real producers use for the same census
+    // (`enabled`, `mounted`, `offered`, `in scope`, `off the wire`, `yours to
+    // use`), the passive `have been withheld`, and the auxiliary-less
+    // "Skills you can reach: …" — a probe of seventeen forecast sentences
+    // found six of them walking past the six-noun list.
+    re: /\b(?:is|are) (?:available|active|loaded|live|on the wire|off the wire|reachable|enabled|mounted|offered|in scope|yours to use)\b|\b(?:has|have) been withheld\b|\b(?:you can|you may) (?:reach|use|call)\b/i,
     why:
       'present-tense capability census: tools, skills, refs and maps are recomposed for every ' +
-      'request, so a flat "is/are available|active|loaded|live|on the wire|reachable" is read ' +
-      'later beside a different wire — bind it to the call it was taken for, in the past tense',
+      'request, so a flat "is/are available|active|loaded|live|on the wire|reachable|enabled|' +
+      'mounted|offered|in scope" is read later beside a different wire — bind it to the call ' +
+      'it was taken for, in the past tense',
     provableWhen: ['request-ephemeral'],
     exemptBecause:
       "a string recomposed for the request being answered, from that request's own wire, is a " +
@@ -397,10 +417,59 @@ export const BANNED_CLAUSES: readonly BannedClause[] = [
     // refuse: `'rails'` refuses every model hop, `'guard'` refuses every hop
     // off an outstanding menu, a role filter can hide the destination, and
     // the wrap-up call dispatches no tool at all.
-    re: /\b(?:switches|moves|brings|activates|takes|grants) you\b/i,
+    //
+    // Widened in 9.86.1 to the future and modal forms — "will move you",
+    // "would take you", "can switch you", "to bring you" — which are the
+    // plainest way to write the forecast and matched nothing in 9.86.0.
+    re: /\b(?:switches|moves|brings|activates|takes|grants) you\b|\b(?:will|would|can|could|shall|may|to) (?:switch|move|bring|activate|take|grant) you\b/i,
     why:
       'second-person effect prediction: the posture, the role filter and the budget all sit ' +
       'between the model and the effect claimed, and each of them can refuse it',
+  },
+  {
+    // A HEADED INVENTORY. "Available tools: calc, probe." and "Tools you
+    // have: calc, probe." are the copula census with the verb elided — a
+    // label, a colon, a list — and no copula row can see them. Same
+    // falsifier, same repair: name the call the list was taken for.
+    re: /(?:^|\n)\s*(?:Available|Your|The following|Current(?:ly)? available) (?:tools?|skills?|maps?|refs?)\b[^\n:]*:|(?:^|\n)\s*(?:Tools?|Skills?) you (?:have|can (?:use|call|reach))\s*:/i,
+    why:
+      'headed inventory: a label-and-colon list of what is on the wire is the capability census ' +
+      'with its verb elided, re-read later beside a different wire — bind the list to the call ' +
+      'it was taken for',
+    provableWhen: ['request-ephemeral'],
+    exemptBecause:
+      'the same argument as the copula row: a list composed from the request being answered is ' +
+      'a report of what that request carries, and is never re-read beside a later wire',
+  },
+  {
+    // A CAPABILITY FORECAST ABOUT THE NEXT CALL. "the next call will not run
+    // a tool", "cannot be retried this turn", "will not change during this
+    // run" — a claim about what a LATER call will or cannot do, which is the
+    // denial class in its purest form: the budget, the wire and the checker
+    // all move between this sentence and the call it forecasts.
+    re: /\b(?:the )?next call will\b|\bcannot be (?:retried|called|used|reached)\b|\bwill not (?:run|change|be (?:offered|available|reachable))\b/i,
+    why:
+      'forecast about a later call: the wire, the budget and the checker are decided at request ' +
+      'assembly, so what a call after this one will or cannot do is not a fact the composer holds',
+  },
+  {
+    // THE BARE CALL DEICTIC. `on this call` is banned above as a literal;
+    // the bare `this call` walked past it in both 9.86.0 frames ("exhausted
+    // before this call", "This call was for running them") and in a trace
+    // result ("this call may be one of them"). A frame written into
+    // `history` is restored verbatim by `applyContinuation`, and on the next
+    // turn a model resolves "this call" to the call it is answering — which
+    // has the full tool list. Same exemption shape as the container deictic:
+    // on an ephemeral surface there is exactly one call the phrase can mean.
+    re: /\bthis call\b/i,
+    why:
+      'bare call deictic: `this call` denotes whichever call re-reads the sentence, and on a ' +
+      'persistent surface that is a later call with a different wire — name the call ("the ' +
+      'wrap-up call this message opened", "call \'c1\'") instead of pointing at it',
+    provableWhen: ['request-ephemeral'],
+    exemptBecause:
+      'a string composed for one request and never re-read has exactly one call it can mean, ' +
+      'and a tool description saying "on this call" is describing the request that carries it',
   },
   {
     // STANDING IMPERATIVES TO THE MODEL, at a clause start only.

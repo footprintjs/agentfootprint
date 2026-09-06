@@ -368,6 +368,118 @@ describe('functional: propose-transition', () => {
     ]);
     expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'tool-proposal', to: 'billing' });
   });
+
+  // ── A STAY competes for the slot (9.86.1) ──────────────────────────────
+  // The law above is "first ACCEPTED proposal wins, later proposals to OTHER
+  // targets are superseded". A stay is accepted. 9.86.0 let it through without
+  // claiming the slot, so the tool that judged its data first lost to whichever
+  // sibling came second — two 'accepted' events in one batch, the cursor moved,
+  // and no route_conflict on the record.
+
+  it('a STAY judged first holds the slot: a later hop in the same batch is superseded, and route_conflict names the stay', async () => {
+    const triage = skill('triage');
+    const graph = skillGraph().entry(triage).route(triage, skill('billing')).build();
+    const { agent, effects, conflicts, evaluated } = buildAgent({
+      replies: [
+        batch([
+          { name: 'stay_here', id: 'a' },
+          { name: 'go_billing', id: 'b' },
+        ]),
+        final('done'),
+      ],
+      tools: [
+        effectTool('stay_here', { content: 'nothing to escalate', effects: [propose('triage')] }),
+        effectTool('go_billing', { content: 'escalate', effects: [propose('billing', 'B says')] }),
+      ],
+      graph,
+    });
+    await agent.run({ message: 'help' });
+    expect(effects).toEqual([
+      expect.objectContaining({ outcome: 'accepted', stay: true, targetSkillId: 'triage' }),
+      expect.objectContaining({
+        outcome: 'superseded',
+        targetSkillId: 'billing',
+        supersededBy: 'earlier-proposal',
+      }),
+    ]);
+    expect(conflicts).toEqual([
+      expect.objectContaining({
+        source: 'tool-proposal',
+        winner: expect.objectContaining({ toolName: 'stay_here', target: 'triage' }),
+        losers: [expect.objectContaining({ toolName: 'go_billing', target: 'billing' })],
+      }),
+    ]);
+    // The cursor stayed — a stay moves nothing, and it won.
+    expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'stay', to: 'triage' });
+    expect(
+      (agent.getLastSnapshot()?.sharedState as { pendingToolTransition?: unknown })
+        .pendingToolTransition,
+    ).toBeUndefined();
+    // The loser's result still carries no refusal suffix — superseded is not refused.
+    const b = historyOf(agent).find((m) => m.role === 'tool' && m.toolName === 'go_billing');
+    expect(b?.content).toBe('escalate');
+  });
+
+  it('a STAY judged after an accepted hop is the one superseded — same law, other order', async () => {
+    const triage = skill('triage');
+    const graph = skillGraph().entry(triage).route(triage, skill('billing')).build();
+    const { agent, effects, conflicts, evaluated } = buildAgent({
+      replies: [
+        batch([
+          { name: 'go_billing', id: 'a' },
+          { name: 'stay_here', id: 'b' },
+        ]),
+        final('done'),
+      ],
+      tools: [
+        effectTool('go_billing', { content: 'escalate', effects: [propose('billing', 'A says')] }),
+        effectTool('stay_here', { content: 'nothing to escalate', effects: [propose('triage')] }),
+      ],
+      graph,
+    });
+    await agent.run({ message: 'help' });
+    expect(effects).toEqual([
+      expect.objectContaining({ outcome: 'accepted', targetSkillId: 'billing' }),
+      expect.objectContaining({
+        outcome: 'superseded',
+        targetSkillId: 'triage',
+        supersededBy: 'earlier-proposal',
+      }),
+    ]);
+    expect(effects[1]).not.toHaveProperty('stay');
+    expect(conflicts).toEqual([
+      expect.objectContaining({
+        winner: expect.objectContaining({ toolName: 'go_billing', target: 'billing' }),
+        losers: [expect.objectContaining({ toolName: 'stay_here', target: 'triage' })],
+      }),
+    ]);
+    expect(cursorMoveOf(evaluated[1]!)).toMatchObject({ by: 'tool-proposal', to: 'billing' });
+  });
+
+  it('two STAYs in one batch are both accepted — a same-target repeat, as two hops to one target are', async () => {
+    const triage = skill('triage');
+    const graph = skillGraph().entry(triage).route(triage, skill('billing')).build();
+    const { agent, effects, conflicts } = buildAgent({
+      replies: [
+        batch([
+          { name: 'stay_a', id: 'a' },
+          { name: 'stay_b', id: 'b' },
+        ]),
+        final('done'),
+      ],
+      tools: [
+        effectTool('stay_a', { content: 'a', effects: [propose('triage')] }),
+        effectTool('stay_b', { content: 'b', effects: [propose('triage')] }),
+      ],
+      graph,
+    });
+    await agent.run({ message: 'help' });
+    expect(effects.map((e) => [e.outcome, e.stay])).toEqual([
+      ['accepted', true],
+      ['accepted', true],
+    ]);
+    expect(conflicts).toEqual([]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────

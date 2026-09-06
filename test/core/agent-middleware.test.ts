@@ -516,7 +516,13 @@ describe('middleware — integration', () => {
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toContain('declares its own checkIn consent gate');
-    expect(toolResult?.content).toContain('trips for these arguments');
+    // Past tense, about the resumed call (9.86.1): the result is re-read on
+    // every later call of the turn, so "trips for these arguments … cannot be
+    // retried this turn. Answer without it, or finish." was a forecast plus a
+    // standing order. What it says now is what happened on that call.
+    expect(toolResult?.content).toContain('that gate tripped for those arguments');
+    expect(toolResult?.content).toContain('was not executed on that call');
+    expect(toolResult?.content).not.toMatch(/cannot be retried|Answer without it, or finish/);
     // The refusal names the middleware, so the author knows which gate to drop.
     expect(toolResult?.content).toContain("'gate'");
   });

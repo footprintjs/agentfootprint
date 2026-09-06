@@ -1439,6 +1439,14 @@ export interface ToolEffectPayload {
    * An ADDITIVE optional field rather than a fourth `outcome`: a consumer
    * switching exhaustively over `outcome` must keep compiling. Read it to tell
    * a no-op stay from a hop that will actually move the cursor.
+   *
+   * A stay COMPETES for the batch's one transition slot like any other
+   * accepted proposal (9.86.1): judged first, it holds the slot, and a later
+   * sibling proposing a hop is `'superseded'` with the batch's
+   * `skill.route_conflict` naming the stay as the winner; judged after an
+   * accepted hop, the stay is the one superseded. 9.86.0 let a stay through
+   * without claiming the slot, so two `'accepted'` events could land in one
+   * batch while the cursor moved.
    */
   readonly stay?: true;
   /** The tool whose result carried the effect. */

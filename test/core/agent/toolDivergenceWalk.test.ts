@@ -98,11 +98,13 @@
  * does mean a re-record cannot go green on its own.
  *
  * A `tolerated` reason says why a row is not fixed; it has no room for what
- * fixing it would COST, which is the thing a decision actually needs. The three
- * rows that read "a genuine defect" — the inactive-skill shadow, the
- * misattributed report, and a provider claiming `skip_step` — are written up
- * with their reproductions and their decision surface in
- * `docs/design/2026-09-recorded-not-built.md`.
+ * fixing it would COST, which is the thing a decision actually needs. The rows
+ * that read "a genuine defect" — the inactive-skill shadow, the misattributed
+ * report, a provider claiming `skip_step`, `.selfExplain()`'s reservation that
+ * reads only the static registry, and the shadow report naming the framework's
+ * own provider — are written up with their reproductions and their decision
+ * surface in `docs/design/2026-09-recorded-not-built.md`, one entry each; the
+ * rows say `ENTRY n` for the two that were found by this walk.
  *
  * ── What a green run does NOT prove ──────────────────────────────────────
  *
@@ -846,6 +848,20 @@ interface Divergence {
   readonly cause: string;
 }
 
+/**
+ * The `schemaFromId` / `dispatchToId` values a shadow event uses for one
+ * claimant — the id the source is MOUNTED under, which is what the event
+ * names. The framework's `.selfExplain()` pack rides a skill-scoped provider
+ * whose id is `skill-scoped:` plus the skill id (skillScopedTools.ts); the
+ * skill claimants are named by their skill id; a `staticTools` provider has no
+ * id of its own.
+ */
+const sourceIdsOf = (claimant: string): readonly string[] => {
+  if (claimant === 'framework') return ['skill-scoped:self-explain'];
+  const mounted = CLAIMANTS.find((c) => c.id === claimant);
+  return mounted?.activate !== undefined ? [mounted.activate] : [];
+};
+
 const channelOf = (claimant: string, claims: ReadonlyMap<string, Channel>): Channel =>
   claims.get(claimant) ?? 'framework';
 
@@ -998,6 +1014,18 @@ const divergencesOf = (c: WalkCase, obs: Observation): readonly Divergence[] => 
   for (const claimant of c.claims.keys()) {
     if (contractsForName.has(claimant) || implsForName.has(claimant)) continue;
     const aboutThisName = obs.shadowed.find((e) => e.toolName === c.name);
+    // What the shadow report says about the SWALLOWED claimant (9.86.1). A
+    // report can name the dead claimant as the schema's winner — the
+    // framework's trace pack rides `skillScopedTools('self-explain')`, so
+    // `schemaFromId` is `skill-scoped:self-explain` — and that is not "a
+    // different pair": it is this pair with the winner inverted, which is
+    // entry 5's defect. Only a report naming neither side describes another
+    // pair.
+    const namesTheSwallowed =
+      aboutThisName !== undefined &&
+      [aboutThisName.schemaFromId, aboutThisName.dispatchToId].some(
+        (id) => id !== undefined && sourceIdsOf(claimant).includes(id),
+      );
     found.push({
       id: `${c.id}::${c.name}::claim-swallowed(${claimant})`,
       case: c.id,
@@ -1010,9 +1038,11 @@ const divergencesOf = (c: WalkCase, obs: Observation): readonly Divergence[] => 
       reported: describeReport(aboutThisName),
       cause:
         `'${claimant}' registered '${c.name}' and neither its schema nor its implementation was ever reachable` +
-        (aboutThisName
-          ? '; the shadow report for this name describes a different pair'
-          : '; nothing was reported'),
+        (aboutThisName === undefined
+          ? '; nothing was reported'
+          : namesTheSwallowed
+          ? '; the shadow report for this name names this claimant as the winner of a wire it never reached'
+          : '; the shadow report for this name describes a different pair'),
     });
   }
 
@@ -1093,7 +1123,7 @@ const MIN_TOLERATED_CHARS = 40;
  * and on word boundaries, so a reason that happens to contain "toolbox" is not
  * accused of being a TODO.
  */
-const PLACEHOLDER_WORD = /\b(todo|tbd|fixme|xxx)\b/i;
+const PLACEHOLDER_WORD = /\b(todos?|to-?dos?|tbd|fixme|xxx)\b/i;
 
 /**
  * Why a `tolerated` string is not a reason — or `undefined` when it is one.
@@ -1288,6 +1318,24 @@ describe('the divergence walk — every offer/dispatch disagreement, discovered'
     // The recorded count is the same number, so the header's sum cannot drift
     // from the file the ratchet reads.
     expect(loadBaseline().walk.cases).toBe(total);
+  });
+
+  it('every `walk` summary number is the count the walk produces — not only `cases`', async () => {
+    // 9.86.1: the update path wrote all six numbers and only `cases` was ever
+    // read back, so the block the changelog quotes ("forty … twenty-six …
+    // ten") could be hand-edited to anything while the rows stayed ratcheted.
+    // The per-case outcomes are pinned below; this pins their SUM.
+    const recorded = loadBaseline();
+    const outcomes = Object.values(recorded.cases).map((c) => c.outcome);
+    const count = (o: Outcome): number => outcomes.filter((x) => x === o).length;
+    expect(recorded.walk).toEqual({
+      cases: outcomes.length,
+      notConstructible: count('not-constructible'),
+      refused: count('refused'),
+      clean: count('clean'),
+      divergent: count('divergent'),
+      divergences: Object.keys(recorded.divergences).length,
+    });
   });
 
   it('two differently-attributed reports for one tool in one epoch stay two rows', () => {
