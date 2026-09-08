@@ -153,6 +153,32 @@ export interface SeedStageDeps {
    * other agent commits exactly the keys it always did.
    */
   readonly hasEvidenceRevision?: boolean;
+  /**
+   * The name of the synthetic tool the `'tool-forced'` output strategy puts on
+   * every request (9.88.0). Present ONLY under that strategy; absent → this
+   * stage commits exactly the keys it always did.
+   *
+   * Seeded rather than left to the request assembly that adds the tool,
+   * because it is a build-time constant and a reader rebuilding what the model
+   * was served needs it from the RECORD, not from the receipt it is checking.
+   */
+  readonly forcedOutputToolName?: string;
+  /**
+   * The `Tool.wants` declarations, by tool name (9.88.0) — present ONLY when
+   * the evidence gate's nudge is armed and at least one tool declares `wants`,
+   * which is exactly when request assembly can compose the staged-refs line.
+   * Absent → this stage commits exactly the keys it always did.
+   *
+   * A plain record, not the `Map` the join takes: an object write to scope is
+   * JSON-round-tripped, and a `Map` round-trips to `{}`.
+   *
+   * WHY IT IS ON THE RECORD AT ALL. The nudge is a real line the model reads
+   * and it is written to no history — so without this, the one model-facing
+   * line the run never persists would also be the one a rebuild could not
+   * derive. With it, `servedView.ts` · `servedAt` composes the same line from
+   * the same three inputs the stage used.
+   */
+  readonly toolWantsByName?: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
@@ -362,6 +388,18 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   scope.activeInjections = [];
   scope.activatedInjectionIds = [];
   scope.dynamicToolSchemas = deps.toolSchemas;
+  // The forced-output tool's NAME (9.88.0) — the one fact about it that lands
+  // on the record. Value-conditional: an agent on the default `'instruct'`
+  // strategy writes nothing here.
+  if (deps.forcedOutputToolName !== undefined) {
+    scope.forcedOutputToolName = deps.forcedOutputToolName;
+  }
+  // The `wants` declarations (9.88.0) — the third input to the staged-refs
+  // nudge, and the only one that was build-time-only. Value-conditional in the
+  // same way, and under the same condition request assembly uses.
+  if (deps.toolWantsByName !== undefined) {
+    scope.toolWantsByName = deps.toolWantsByName;
+  }
   // Messages-slot delivery ledger (7.21) — empty at the start of every run.
   // A resumed run rebuilds it from the markers in the restored window rather
   // than trusting this, so an empty ledger never means "deliver it again".

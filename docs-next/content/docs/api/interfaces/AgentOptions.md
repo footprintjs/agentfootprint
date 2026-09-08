@@ -4,7 +4,7 @@ title: AgentOptions
 
 # Interface: AgentOptions
 
-Defined in: [src/core/agent/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L147)
+Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L148)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:147](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **artifacts?**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions)
 
-Defined in: [src/core/agent/types.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L416)
+Defined in: [src/core/agent/types.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L437)
 
 The artifact store (9.21.0) — the claim-check seam. When set, every tool's
 `ctx.artifacts` is this store bound to the RUN's scope (the same
@@ -42,7 +42,7 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:808](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L808)
+Defined in: [src/core/agent/types.ts:830](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L830)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -55,7 +55,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:801](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L801)
+Defined in: [src/core/agent/types.ts:823](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L823)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -72,7 +72,7 @@ cache-write penalty isn't worth paying.
 
 > `readonly` `optional` **checkColumnTypes?**: `"warn"` \| `"enforce"` \| `"off"`
 
-Defined in: [src/core/agent/types.ts:711](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L711)
+Defined in: [src/core/agent/types.ts:732](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L732)
 
 Check a tool's rows against the columns it declared (9.78.0) — the write
 seam's COLUMN-TYPE CONTRACT. **Default `'off'`.**
@@ -141,7 +141,7 @@ law, not an exception to it.
 
 > `readonly` `optional` **commitValues?**: `CommitValuesMode`
 
-Defined in: [src/core/agent/types.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L342)
+Defined in: [src/core/agent/types.ts:343](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L343)
 
 Commit-log value encoding (#13c-B) — forwarded to the internal
 executor as `{ commitValues }`. Agent default is **`'delta'`**: a
@@ -161,7 +161,7 @@ stores its full final value) if a downstream consumer reads
 
 > `readonly` `optional` **contextBudget?**: `object`
 
-Defined in: [src/core/agent/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L216)
+Defined in: [src/core/agent/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L217)
 
 Per-slot context budgets, in characters (8.11.0).
 
@@ -207,7 +207,7 @@ Give a long-running support agent more room for history
 
 > `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
 
-Defined in: [src/core/agent/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L192)
+Defined in: [src/core/agent/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L193)
 
 Cumulative USD cap for one run. Requires a `pricingTable` — the budget is
 money and only a pricing table turns tokens into money (refused at build
@@ -237,7 +237,7 @@ Agent.create({ provider, model, pricingTable,
 
 > `readonly` `optional` **credentials?**: `CredentialProvider`
 
-Defined in: [src/core/agent/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L392)
+Defined in: [src/core/agent/types.ts:413](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L413)
 
 Credential provider for downstream OAuth (declare-and-push). When set, a
 tool that declares `needs: { credential }` has it resolved BEFORE `execute`
@@ -251,7 +251,7 @@ From `agentfootprint/security` (`agentCoreIdentity({ region })`,
 
 > `readonly` `optional` **externalGrounds?**: [`ExternalGroundsProvider`](/docs/api/type-aliases/ExternalGroundsProvider)
 
-Defined in: [src/core/agent/types.ts:533](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L533)
+Defined in: [src/core/agent/types.ts:554](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L554)
 
 App-verified ground for the choice-seam integrity check (9.72.0).
 
@@ -290,7 +290,7 @@ trust it.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:835](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L835)
+Defined in: [src/core/agent/types.ts:857](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L857)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -306,7 +306,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core/agent/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L152)
+Defined in: [src/core/agent/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L153)
 
 Stable id used for topology + events. Default: 'agent'.
 
@@ -316,7 +316,7 @@ Stable id used for topology + events. Default: 'agent'.
 
 > `readonly` `optional` **integrityPosture?**: `"observe"` \| `"dev"`
 
-Defined in: [src/core/agent/types.ts:500](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L500)
+Defined in: [src/core/agent/types.ts:521](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L521)
 
 How loud the Context Integrity checkers are about their OWN health
 (9.60.0). Default `'observe'`.
@@ -339,7 +339,7 @@ that way.
 
 > `readonly` `optional` **keepLastToolResults?**: `number` \| `false`
 
-Defined in: [src/core/agent/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L483)
+Defined in: [src/core/agent/types.ts:504](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L504)
 
 How many tools' most recent results the window keeps beyond
 `keepRecentTurns` (9.57.0). **On by default, at 2.** Only meaningful
@@ -380,7 +380,7 @@ and the window behaves exactly as it did in 9.56.0.
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L157)
+Defined in: [src/core/agent/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L158)
 
 Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
@@ -390,7 +390,7 @@ Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/agent/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L155)
+Defined in: [src/core/agent/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L156)
 
 ***
 
@@ -398,7 +398,7 @@ Defined in: [src/core/agent/types.ts:155](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **maxToolResultChars?**: `number`
 
-Defined in: [src/core/agent/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L288)
+Defined in: [src/core/agent/types.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L289)
 
 The ceiling on ONE tool result, in characters (9.11.0). **Opt-in — there
 is no default, and there will not be one.**
@@ -449,7 +449,7 @@ a support agent whose search tool can return a whole knowledge base
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L153)
+Defined in: [src/core/agent/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L154)
 
 ***
 
@@ -457,7 +457,7 @@ Defined in: [src/core/agent/types.ts:153](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/agent/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L150)
+Defined in: [src/core/agent/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L151)
 
 Human-friendly name shown in events/metrics. Default: 'Agent'.
 
@@ -467,7 +467,7 @@ Human-friendly name shown in events/metrics. Default: 'Agent'.
 
 > `readonly` `optional` **noticeEmptyLookups?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:582](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L582)
+Defined in: [src/core/agent/types.ts:603](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L603)
 
 Notice when a lookup for a value THIS RUN PRODUCED comes back empty
 (9.77.0) — the write seam's `empty-lookup` advisory. **Default off.**
@@ -522,7 +522,7 @@ result the tool returned.
 
 > `readonly` `optional` **noticePriorTurnEvidence?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:648](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L648)
+Defined in: [src/core/agent/types.ts:669](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L669)
 
 Notice when the final answer's values were ALL read before this turn
 (9.83.0) — the claim seam's `prior-turn-evidence` advisory. **Default
@@ -594,7 +594,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:896](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L896)
+Defined in: [src/core/agent/types.ts:918](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L918)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -630,7 +630,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:902](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L902)
+Defined in: [src/core/agent/types.ts:924](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L924)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -642,7 +642,7 @@ Queue dials for `observerDelivery: 'deferred'` — see
 
 > `readonly` `optional` **onAuthorizationRequired?**: `AuthorizationRequiredMode`
 
-Defined in: [src/core/agent/types.ts:790](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L790)
+Defined in: [src/core/agent/types.ts:812](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L812)
 
 What the run does when a tool's DECLARED credential (`needs: { credential }`)
 comes back `authorization-required` — a person has to click a consent link
@@ -670,7 +670,7 @@ bearer capability carrying a session-correlating `state` parameter; before
 
 > `readonly` `optional` **permissionChecker?**: [`PermissionChecker`](/docs/api/interfaces/PermissionChecker)
 
-Defined in: [src/core/agent/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L229)
+Defined in: [src/core/agent/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L230)
 
 Permission adapter. When set, the Agent calls
 `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
@@ -685,7 +685,7 @@ normally.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/docs/api/interfaces/PricingTable)
 
-Defined in: [src/core/agent/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L163)
+Defined in: [src/core/agent/types.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L164)
 
 Pricing adapter. When set, Agent emits `agentfootprint.cost.tick`
 after every LLM response (once per ReAct iteration) with per-call
@@ -697,7 +697,7 @@ and cumulative USD. Run-scoped — the cumulative resets each `.run()`.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L148)
+Defined in: [src/core/agent/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L149)
 
 ***
 
@@ -705,7 +705,7 @@ Defined in: [src/core/agent/types.ts:148](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:866](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L866)
+Defined in: [src/core/agent/types.ts:888](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L888)
 
 How the ReAct loop behaves — a single setting with three honest choices.
 Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
@@ -742,7 +742,7 @@ it re-seeds context every turn by design, so there is no classic-grouped.)
 
 > `readonly` `optional` **readTracking?**: `RetentionPolicy`
 
-Defined in: [src/core/agent/types.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L328)
+Defined in: [src/core/agent/types.ts:329](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L329)
 
 Read-tracking policy for the snapshot's per-stage read view
 (footprintjs `StageSnapshot.stageReads`) — the observability-cost
@@ -767,11 +767,41 @@ behavior-change callout.
 
 ***
 
+### recordReceipt?
+
+> `readonly` `optional` **recordReceipt?**: `boolean`
+
+Defined in: [src/core/agent/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L405)
+
+Mint a RECEIPT on every LLM call (9.88.0). **Default ON.**
+
+The receipt is the hashes-and-references record `receiptAt(snapshot, k)`
+reads — the second half of `hash(servedAt(k)) === receiptAt(k).hash`. It
+carries no bytes, so unlike `recordSystemPrompt` there is no privacy
+reason to decline it; the reason to decline it is COST. It is one
+commit-log value per iteration plus a SHA-256 per system piece, per
+message and per tool schema, and an offline eval loop scoring ten thousand
+turns nobody will ever scrub is entitled to skip all of that.
+
+`false` does not make a run unreadable: `servedAt` still rebuilds every
+epoch from the committed pieces. What is lost is the check on that
+rebuild — `receiptAt` returns `undefined`, exactly as on a recording made
+before this release.
+
+#### Example
+
+```ts
+decline the receipt in a bulk eval loop
+  Agent.create({ provider, model, recordReceipt: false })
+```
+
+***
+
 ### recordSystemPrompt?
 
 > `readonly` `optional` **recordSystemPrompt?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L384)
+Defined in: [src/core/agent/types.ts:385](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L385)
 
 Record the ASSEMBLED system prompt on every LLM call (9.50.0).
 **Opt-in. Default OFF — and the default is a privacy decision.**
@@ -805,7 +835,7 @@ capture the prompt while debugging context assembly
 
 > `readonly` `optional` **repeatedCallNudge?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L448)
+Defined in: [src/core/agent/types.ts:469](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L469)
 
 Tell the model when it has already made this exact call and already got
 this exact answer (9.26.0). **On by default.**
@@ -843,7 +873,7 @@ and the note would be noise rather than news.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:825](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L825)
+Defined in: [src/core/agent/types.ts:847](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L847)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -866,7 +896,7 @@ When omitted, no build-time observation is wired up.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/agent/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L154)
+Defined in: [src/core/agent/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L155)
 
 ***
 
@@ -874,7 +904,7 @@ Defined in: [src/core/agent/types.ts:154](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **toolArgValidation?**: [`ToolArgValidationMode`](/docs/api/type-aliases/ToolArgValidationMode)
 
-Defined in: [src/core/agent/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L247)
+Defined in: [src/core/agent/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L248)
 
 Tool-args validation mode (#9). Default `'enforce'`: LLM-produced args
 are validated against the tool's declared `inputSchema` BEFORE dispatch.
@@ -898,7 +928,7 @@ string" cannot be acted on; every other issue still names types only.
 
 > `readonly` `optional` **toolTeardownTimeoutMs?**: `number`
 
-Defined in: [src/core/agent/types.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L305)
+Defined in: [src/core/agent/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L306)
 
 How long ONE tool teardown may take before the runner stops waiting
 (default 5000ms). See `ctx.onTeardown`.
@@ -921,7 +951,7 @@ latency-critical shutdown where an abandoned session is the cheaper loss.
 
 > `readonly` `optional` **wrapUpAtMaxIterations?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:768](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L768)
+Defined in: [src/core/agent/types.ts:790](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L790)
 
 What a turn does when its ACTION BUDGET runs out mid-task (9.56.0).
 Default **on**.
@@ -986,7 +1016,7 @@ Agent.create({ provider, model, wrapUpAtMaxIterations: false });         // cuts
 
 > `readonly` `optional` **writeProvenance?**: [`WriteProvenanceMode`](/docs/api/type-aliases/WriteProvenanceMode)
 
-Defined in: [src/core/agent/types.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L360)
+Defined in: [src/core/agent/types.ts:361](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L361)
 
 Per-write read provenance — forwarded to the internal executor as
 `{ writeProvenance }`. Default **`'off'`** (footprintjs's own default):

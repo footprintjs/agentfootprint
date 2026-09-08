@@ -41,8 +41,11 @@ import {
 } from 'footprintjs/trace';
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 
-import { parseRuntimeStageId, splitStageId } from 'footprintjs/trace';
-import { INJECTION_KEYS, SUBFLOW_IDS } from '../../conventions.js';
+import { INJECTION_KEYS } from '../../conventions.js';
+// The flat/grouped fork, from its ONE owner (9.88.0). This file used to carry a
+// private copy and `context-bisect/trajectory.ts` carried its byte-twin; two
+// answers to "which log is iteration k in?" is one answer too many.
+import { llmCallMountKeys } from '../time-travel/epochs.js';
 import type {
   ContextLedger,
   LedgerRow,
@@ -76,18 +79,6 @@ interface SnapshotLike {
   commitLog?: CommitBundle[];
   executionTree?: unknown;
   subflowResults?: Record<string, { treeContext?: { history?: CommitBundle[] } }>;
-}
-
-/** sf-llm-call mount keys in loop order — grouped-mode iterations live in
- *  their own retained inner logs (the same projection context-bisect's
- *  assembleGroupedTrajectory uses). */
-function llmCallMountKeys(subflowResults: Record<string, unknown> | undefined): string[] {
-  if (!subflowResults) return [];
-  return Object.keys(subflowResults)
-    .filter(
-      (k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL,
-    )
-    .sort((a, b) => parseRuntimeStageId(a).executionIndex - parseRuntimeStageId(b).executionIndex);
 }
 
 function snapshotOf(source: RunnerLike | unknown): SnapshotLike | undefined {

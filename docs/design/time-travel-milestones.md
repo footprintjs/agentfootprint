@@ -13,6 +13,11 @@ footprintjs `TimeTravelStrategy` that maps `milestoneFor` onto a recorded commit
 so `timeTravel(snapshot, { strategy: milestoneStopsStrategy })` gives every consumer —
 the lens, a custom panel, a script over a saved recording — the same milestone axis
 from one function, on the outer log and on any drilled subflow history alike.
+Since **9.88.0** the axis also answers what was HANDED to the model at each
+`llm-turn` stop: `servedAt(source, epoch)` rebuilds the request from the
+committed pieces, `receiptAt(source, epoch)` reads the hashes-and-references
+record the call left behind, and the law `hash(servedAt(k)) === receiptAt(k).hash`
+turns "the record is complete" into something a test can fail.
 The rest of this memo is retained for rationale.
 Author: design review, 2026-06-05.
 

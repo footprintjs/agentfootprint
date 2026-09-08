@@ -7,6 +7,877 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.88.0] - 2026-09-07
+
+**The receipt at the stop.** Stand on an `llm-turn` stop, ask what the model
+read, and until now the honest answer was "most of it". The request a provider
+receives is assembled from committed pieces and is itself never committed — the
+`call-llm` bundle holds the response, not the ask. Two things now stand at every
+turn, and one law binds them:
+
+```
+hash(servedAt(k)) === receiptAt(k).hash
+```
+
+`servedAt(snapshot, epoch)` rebuilds the request from the committed pieces;
+`receiptAt(snapshot, epoch)` reads the hashes-and-references record the call
+itself left behind. Agreement means the record is complete. Disagreement means
+something reached the model that the run never wrote down — a defect in the
+record, not in the check.
+
+Writing the conformance test found **five** places where the committed pieces
+and the sent request had drifted apart. A four-lens review then found eleven
+more, and two independent verifiers found five more after that — two of them
+NEW instances of the very laws the previous pass was enforcing. Every one is
+reproduced and closed below, each with a test that fails without the fix. None
+was closed by loosening an assertion.
+
+And then a fourth pass found two more, in the same place, for the same reason:
+the gap catalogue was checked by a person reading it against the two shapes, and
+three careful readings came up short three times. That is not a run of bad luck.
+It is the defect this library diagnosed in 9.86 — **a hand-counted list is short
+the day after** — so the catalogue is no longer counted. It is WALKED:
+`test/lib/time-travel/gap-catalogue-walk.test.ts` derives every field of both
+shapes and requires each one to be named by a gap or excused in writing, then
+damages a real recording the way each gap describes and requires every field
+that moves to be named by that gap.
+
+Then a **fourth review round read the walk instead of trusting it**. The walk
+was green and bit on five attack
+probes — and three shipped sentences a renderer prints were still FALSE, which
+is the half no walk can check. The one that matters most said only `Agent` has a
+run id to salt the hashes with, in a paragraph explaining why `LLMCall` mints no
+receipt; `LLMCall.ts` · `createExecutor` mints `runId: makeRunId()` exactly as
+`Agent` does. The other two were the same defect in the account itself: a gap
+naming a field whose absence its own mechanism does not cause. And the walk's
+DIVERGENCE half turned out to be vacuous for two of its four rows — the damages
+moved nothing, so both rows passed while proving nothing, and one gap's field
+list could be emptied outright with the file still green.
+
+And then a SEVENTH round drove a real view for every sentence in the catalogue
+instead of reading them, which is how this release actually ends. It found four
+more printed sentences that mislead a reader — one of them written by the round
+before it, and MEASURED false: `no-run-log` said its fields "could not be fully
+recovered here" on a view where the damaged rebuild is byte-identical to the
+intact one. It also overturned that round's own conclusion, that a reduced
+sentence cannot go false. Ten of the eleven still can. What ends the class is
+not a rule about wording but an ASSERTION per claim, driven on a real run, and
+that file now exists. All of it is closed below, at the root, additively.
+
+### Added
+
+- **`servedAt(source, epoch)` / `servedViews(source)`** — the request an epoch
+  was served, rebuilt from the log: the joined system text and its pieces, the
+  conversation as sent, the request-only lines, the tool names and schemas, the
+  forced tool and the wrap-up withholding. Works on a live snapshot and on a
+  recording read back from JSON, in both chart shapes.
+- **`receiptAt(source, epoch)`** — the receipt, or `undefined` on a recording
+  made before this release. A missing receipt never makes an epoch unreadable:
+  `servedAt` rebuilds it either way, so an old recording stays readable. (It
+  does return `undefined` for an epoch the run does not have, which is
+  `epochAt`'s answer rather than a fact about receipts — the docstring says so
+  now and used to say the opposite.)
+- **`ServedView.gaps`** — what the log honestly cannot rebuild, each entry
+  naming the receipt field it explains. `SERVED_GAPS` is the catalogue those
+  sentences come from, so a renderer prints the library's own wording. A rebuild
+  that quietly omits a piece looks exactly like one that proved the piece
+  absent; this is what keeps them apart.
+- **`epochAt` / `epochLocations`** — the ONE owner of where an iteration's
+  pieces live: the run's own log under `reactMode: 'dynamic'`, the turn's inner
+  `sf-llm-call` history under `'dynamic-grouped'`. `contextLedger` and
+  `context-bisect`'s trajectory assembler each carried a private copy of that
+  fork; both now ask this one and their own copies are gone. An `EpochLocation`
+  carries the FOLD SOURCE its log belongs to — the log plus the base it was
+  recorded against — and that fold's `basis` verdict.
+- **`keyedFold(source)`** — the value of one state key at one commit, folded
+  from the run's own base. Built because a RESUMED run replays a fiction
+  without it: a resume is a fresh executor seeded from `checkpoint.sharedState`,
+  so the whole pre-pause world is the resumed run's fold BASE and not its log,
+  and `commitValueAt` says in its own docstring that it cannot see a base.
+  Measured on a paused-and-resumed agent under `reactMode: 'dynamic'`: the old
+  read returned an EMPTY system prompt and a one-message window for a call that
+  really went out with 27 characters of prompt and three messages, and declared
+  no gap. It now rebuilds both and matches the wire, in both chart shapes.
+  `keyed-fold-equivalence.test.ts` pins every answer against footprintjs's own
+  `stateAt`, which is used here for the base and the `basis` verdict.
+- **`receipt.params`** — the sampling knobs the call went out with:
+  `temperature`, `maxTokens`, `thinkingBudget`, `stop`, `toolChoice`, read off
+  the request the provider PORT was handed. The same context at
+  `temperature: 0` and at `1.2` is a different call, and "why did this turn
+  ramble?" is unanswerable from a record that kept the prompt and dropped the
+  dial. Scalars and short strings; no bytes, no privacy change.
+- **`receipt.cache.markersApplied`** — which `cache_control` breakpoints the
+  strategy actually applied, three scalars each (`field`, `boundaryIndex`,
+  `ttl`). `transformHash` is a digest over the whole prepared request: inside a
+  run it says only "something changed", and across epochs it is not comparable
+  at all — so it could not answer *did the breakpoints move between call 3 and
+  call 4?*, which is the question that decides an Anthropic bill. Two receipts'
+  `markersApplied` answer it by inspection.
+- **`receipt.cache.transform`** — `'unchanged' | 'rewritten' | 'unknown'`.
+  Branch on this, never on `transformHash === null`.
+- **`RECEIPT_BOUNDARY`** — the one sentence every receipt field is true at, so
+  a renderer prints the library's own wording: *a receipt describes the request
+  as this library last saw it.* Where that is — the provider port — is in the
+  comment beside the constant, because the sentence is printed and the sixth
+  round's rule is that a printed sentence names no mechanism.
+- **`ServedView.basis`** — `{ model, provider, runId }`, read off the receipt.
+  A served view could not previously say WHICH model saw this, only that
+  something did. Absent when no receipt was committed, and deliberately not
+  part of the law: there is no committed counterpart to check it against.
+- **`AgentOptions.recordReceipt`** — the receipt's OFF SWITCH. Default ON.
+  There is no privacy reason to decline it (it carries no bytes) but there is a
+  cost reason: one commit-log value per iteration plus a SHA-256 per system
+  piece, per message and per tool schema. An offline eval loop scoring ten
+  thousand turns nobody will scrub is entitled to skip all of it. `servedAt`
+  still rebuilds every epoch; `receiptAt` returns `undefined`, exactly as on a
+  pre-9.88 recording.
+- **Four more `ServedGapKind`s**, because a view must be able to say what it
+  cannot prove: `no-fold-base` (the recording travelled without
+  `initialState` — most of a resumed run is then unreadable),
+  `no-conversation-on-record` (neither `history` nor `messagesInjections` was
+  committed: the turns are UNKNOWN, not empty), `no-run-log` (a subtree handed
+  in on its own loses every run constant) and `provider-defaults` (the sampling
+  dials are the PORT's values; a vendor may resolve its own). Seven kinds ship,
+  with `no-receipt-on-chart` below.
+- **`UNGAPPED_FIELDS`** — the other half of the account. `SERVED_GAPS` says what
+  a rebuild cannot prove; this says which fields need no gap and, in one
+  sentence each, why (`omittedForAttention`, `callRuntimeStageId`, `gaps`).
+  Between them they cover every field of a `Receipt` and a `ServedView`, and a
+  walk is what keeps that true rather than a person's reading. TWO reasons
+  qualify a field for this list and they are not the same reason: no fold can
+  fail to produce it (`callRuntimeStageId`), or its absence is universal and has
+  nothing to do with this recording (`omittedForAttention` — no chart supplies
+  it, on any run). A field a gap DOES name never belongs here, whatever else is
+  true of it, which is why `epoch` left.
+- **`ServedGap` kind `no-receipt-on-chart`** — an epoch that minted no receipt
+  now says so. `LLMCall` and the two message-API charts run a `call-llm` stage
+  and rebuild perfectly, but mint nothing, so `ServedView.basis` was dropped and
+  NOTHING explained it — a Lens denying rather than omitting, on a source
+  `servedAt`'s own `@param` names as supported. The gap names the fields only a
+  receipt carries (`basis.*` — all four, `params`, `cache.*`) and says what
+  follows for them. WHY there is no receipt is carried as data, not prose — see
+  `ServedGap.cause` below.
+- **`ServedGap.cause` and `ServedGapCause`** — the discriminating fact, computed
+  where it is known instead of guessed at in a sentence.
+  `'no-receipt-committed'` when nothing was written under the receipt key;
+  `'receipt-shape-rejected'` when something WAS and it carries no basis, so the
+  read refused it — the value that means the recording is damaged rather than
+  that the run never minted. A renderer prints the gap's structural sentence
+  and, if it wants, the cause. Absent on every other gap: a gap carries one when
+  the site that raised it read something that told it.
+- **`receiptHash` / `messageDigestInput`** — the digest halves of the law, so a
+  consumer checks the rebuild with the library's own rule instead of a fourth
+  copy of it.
+- **`BoundaryRecorder`** carries `systemPromptText` and the tool catalog through
+  from `stream.llm_start`. Both were dropped there, which meant the one opt-in
+  that puts the prompt on the record (`recordSystemPrompt`) reached every sink
+  except the ordered boundary stream a replay reads.
+
+### Fixed
+
+- **The system-prompt join is one function.** `joinSystemPrompt` — pieces with
+  content, `'\n\n'` between them — was written inline five times (`callLLM`,
+  `LLMCall`, both message-API charts, the tool-calls self-call frame). The
+  joined string is never committed, so a rebuild rests entirely on the join
+  being one rule; a sixth copy in the reader is exactly the defect this closes.
+- **`seed` records two build-time facts** it never had to before, both
+  value-conditional so every other agent's committed key set is byte-identical:
+  `forcedOutputToolName` (so a rebuild can NAME the forced tool without reading
+  the receipt it is checking) and `toolWantsByName` (the last input to the
+  staged-refs nudge that was build-time-only — with it, the one model-facing
+  line written to no history is recomposed from committed state instead of
+  being declared a gap).
+- **`stepOutputText` skips the receipt.** A run-salted digest is semantically
+  empty by construction; left in a step's output text it is hundreds of
+  characters of noise inside a character budget that then has less room for the
+  assistant's own words. Measured: it alone reordered `localizeContextBug`'s
+  suspects and demoted a planted fact below a tool. A text corpus scored by an
+  embedder must contain only text somebody wrote.
+- **A resumed run no longer replays a fiction.** `readAtCall` /
+  `readRunConstant` folded with `commitValueAt`, which cannot see a run's
+  initial state. Every key not re-`set` after a resume folded to absent, so
+  `servedAt` returned an empty system prompt and a truncated conversation while
+  declaring NO gap. Both now fold through `keyedFold`, from the base the
+  recording carries; when that base did not travel, the view raises
+  `no-fold-base` instead of a confident empty one.
+- **`servedAt` no longer asserts an empty conversation on an `LLMCall` run** —
+  a source its own JSDoc named. Those charts have no `history`: the messages
+  slot IS the conversation, and `?? []` swallowed the difference. The
+  messages-slot join is now one exported function (`messagesFromInjections`),
+  called by `LLMCall` on the way out and by the rebuild on the way back — the
+  same argument that made the system-prompt join one function. A chart that
+  committed neither source raises `no-conversation-on-record`.
+- **`SERVED_GAPS['cache-transform']` no longer claims more than a receipt can
+  know.** It said a null `transformHash` "is the proof that this particular
+  call was not rewritten". It is not: the receipt is minted at the provider
+  PORT, and a decorated provider, a vendor adapter or a consumer's own
+  `complete()` rewrites downstream of it. Reproduced with an injected system
+  suffix and an unregistered tool, both invisible to a record reading
+  `'unchanged'`. The sentence is now scoped to the CACHE STRATEGY and carries
+  `RECEIPT_BOUNDARY`.
+- **`messageDigestInput` covers the join key — BOTH of them.** `toolCallId` —
+  `tool_use_id` on Anthropic's wire, `tool_call_id` on OpenAI's — pairs a tool
+  result to the call that asked for it, and was excluded. Two parallel calls
+  whose results happen to be byte-identical hashed the SAME, so filing one
+  call's answer under another was invisible to the law. `toolName` was excluded
+  too, and on two shipped providers it is the join key: `GeminiProvider` ·
+  `toGeminiContents` pairs a `functionResponse` to its call BY NAME (and drops
+  a non-real id), and `OllamaProvider` · `toOllamaMessages` puts `tool_name` on
+  the wire. There, two `role:'tool'` messages with identical text and SWAPPED
+  names still fingerprinted identically — the exact mis-pairing the id was
+  added to catch, invisible on the providers that need it most. It rides as its
+  own field beside the id, so neither can absorb the other's bytes. It also now covers `thinkingBlocks` and
+  `toolCalls[].providerMeta` as `stableJson` fingerprints: `adapters/types.ts`
+  is explicit that a signed thinking block must be echoed byte-exact or the API
+  rejects the turn, so two requests that differ only there are not the same
+  request. Signatures are opaque tokens, not content — no bytes are added.
+- **`stableJson` no longer collapses the unreadable to the empty string.** It
+  returns `undefined`, and callers substitute a mark (`UNSERIALIZABLE`) or
+  branch. Before, two DIFFERENT requests that could not be serialized compared
+  equal, and the receipt wrote `transformHash: null` — "the cache strategy
+  changed nothing" — about a pair it had never read. That case is now
+  `cache.transform: 'unknown'`.
+- **`readRunConstant` on a subtree says so.** Handed a recording with no run
+  log, it read every run constant as absent; the view now raises `no-run-log`.
+- **The per-epoch scrub is a constant factor over the batch form.**
+  `epochLocations` re-located every epoch on every `servedAt` call, and the
+  iteration number was resolved by rescanning the log per bundle. Measured
+  against that shape: the scrub cost 2.4x the batch form at 13 epochs, 3.7x at
+  49 and 5.0x at 97 — the factor grew with the run, which is what turned a
+  600-turn scrub into 20.8 s. Epochs are now located once per recording
+  (a module-level `WeakMap`), the iteration is read from the same one-pass index
+  every other key uses, and the fold resumes forward rather than replaying from
+  its anchor. The overhead is 1.0-1.1x at every size, and the absolute scrub of
+  a 96-turn run (1,651 commits, 97 epochs) fell from 50.2 ms to 17.8 ms. The
+  batch form pays for the correctness fix: 10.0 ms to 16.2 ms on the same run,
+  because every read now folds from the base.
+- **Control characters in `receipt.ts` are written as escapes.** The digest
+  separators were literal `U+001C`-`U+001F` bytes in the source — invisible in a
+  terminal, in a diff and in review, and one `sed` away from being eaten. Same
+  bytes, same hashes; they can now be read.
+- **`test/lib/time-travel/receipt-conformance.test.ts` · `describe('a redacted
+  run')` was a NO-OP, and two READMEs documented what it pretended to prove.**
+  It passed `redact: [...]` to `Agent.create`, which has no such option;
+  `tsconfig.json` excludes `test/`, so the unknown key was never typechecked and
+  was silently dropped. The run was not redacted, and the READMEs' "honest edge"
+  told a reader a recording was safe to pass on. The case is replaced by what is
+  true — an agent recording carries the plaintext, the receipt carries
+  unredacted run-salted hashes of it, and redaction here is EXECUTOR-level
+  (`flowchartAsTool({ redact })` scrubs an inner run's commit log; note that the
+  same snapshot's live `sharedState` is not scrubbed). Both READMEs now say so.
+  `test/type-regressions/AgentOptionsRedaction.assignability.test.ts` pins it at
+  the compiler: `redact` is not an `AgentOptions` key and an excess property on
+  the literal is refused. The false sentence itself is swept out of the two
+  places the previous pass missed — `receipt.ts`'s THIRD LAW, which said the
+  salt "is the reason a recording is safe to pass on", and the PRINTED takeaway
+  of `examples/observability/24-receipt-at-the-stop.ts`, which a reader copies.
+  Both now say what a recording actually contains: the salt protects the
+  fingerprints and only the fingerprints.
+
+#### The five the verifiers found — two of them new instances of these laws
+
+- **`servedAt` raises `no-fold-base` off BOTH folds, not one.** An epoch has
+  two: the log holding its call, and the RUN log holding its build-time
+  constants (the forced tool's name, the `wants` the staged-refs nudge is
+  composed from). Under `reactMode: 'dynamic-grouped'` those are different logs
+  with different bases, and `EpochLocation.runBasis` — added by the previous
+  pass for exactly this — was computed, exported on a public type, and read by
+  nobody. So a grouped recording that travelled without its RUN base read every
+  run constant as absent and declared NO gap: the Lens denying rather than
+  omitting, which is the law the two blocking fixes before it were about. The
+  gap now also names what a missing run base costs — `tools.names`,
+  `tools.forced`, `messages.requestOnly`.
+- **A fold's answers are DETACHED.** `keyedFold` memoizes: the same object comes
+  back for every read of the same question, and the forward cursor seeds every
+  later epoch's replay from that very object. `servedAt` then aliased those
+  objects straight into `ServedView` (`tools.schemas`, and `messages.asSent` in
+  the common case), so a consumer that edited what it was handed silently
+  rewrote what LATER epochs reported was served. This was new in 9.88.0 — the
+  reader it replaced, footprintjs's `commitValueAt`, clones per call, so the
+  same edit was harmless before; the memo introduced it, and the memo is where
+  it is closed. Every answer is now deep-frozen before it is cached, which is
+  what footprintjs's own `stateAt` already does, and `servedAt` copies the two
+  containers it would otherwise alias so a `ServedView` is a value in its own
+  right. `receiptAt` and `epochLocations` (array and locations) are frozen for
+  the same reason. Cost, measured at 601 epochs / 10,219 commits: see below.
+- **`receipt.params` describes the request the PORT got.** It was read from
+  `baseRequest` — the request handed TO the cache strategy — so a strategy that
+  rewrote `maxTokens` or `temperature` left five receipt fields describing
+  something the port was never handed, no gap named them, and
+  `SERVED_GAPS['provider-defaults']` asserted the falsehood in words ("the
+  sampling knobs on the receipt are the values the PORT was handed"). It now
+  reads `preparedRequest`, which is what `ReceiptParams` and `RECEIPT_BOUNDARY`
+  already promised, and the `provider-defaults` sentence is true.
+- **`SERVED_GAPS['cache-transform']` names everything a rewrite could have
+  changed.** It listed the three `cache.*` fields — the report — and excused
+  nothing it reports on. A strategy is handed the whole composed request, and
+  both the receipt and the rebuild describe the version it was GIVEN, so the
+  gap now also covers `system.*`, `messages.*` and `tools.*`. `params` is
+  deliberately not among them: that one is read past the strategy.
+- **`FlowchartAsToolOptions.redact` no longer claims a kept record is safe to
+  serve back to a model.** The commit-log half of the claim is true; the
+  `sharedState` of a kept recording is the live view and holds the plaintext.
+  The behaviour is a different subsystem's decision and is recorded, with its
+  reproduction and what a fix would cost, as entry 6 of
+  `docs/design/2026-09-recorded-not-built.md`.
+- **`ServedGap.fields` says which spelling it uses.** The catalogue is rendered
+  beside a `ServedView` but names `Receipt` paths, and three of them differ
+  (`system.hash`/`chars` is the view's `system.text`,
+  `messages.entries`/`count` is `messages.asSent`, `tools.schemaHashes` is
+  `tools.schemas`). The mapping is now on the field's own docstring instead of
+  in a renderer's head.
+- **`SERVED_GAPS['no-fold-base']` names the COUNTS, and the epoch number.** It
+  named `system.hash` and `messages.entries` and not `system.chars` or
+  `messages.count` — the counts of the very things it named. The two counts
+  were not unnamed: `cache-transform` names them, for an unrelated reason, and
+  its docstring said of exactly those fields that the rebuild "produces them
+  and they DO agree with the receipt". So a base-less rebuild reported a
+  shorter prompt over fewer turns while the only entry covering the counts told
+  a reader they agreed. Measured on a resumed run whose base was stripped: a real system
+  prompt and a real window become a shorter prompt and a shorter window, and
+  both counts move with them. `tools.withheld` joins them, because it is folded
+  from `wrapUpAsked` like any other key, and the VIEW's own `epoch` too, because
+  a fold that cannot read `iteration` numbers the turn by its POSITION instead —
+  so the view and the receipt can disagree about which turn this is. (That last
+  entry shipped as `basis.epoch`, the RECEIPT's number, which a missing base
+  cannot touch. Corrected in the round below.)
+- **`cache-transform`'s docstring no longer asserts agreement it cannot have.**
+  It said of its composition fields that "the rebuild produces them and they
+  agree with the receipt", which is false on every view that also raises
+  `no-fold-base`. Both the docstring and the sentence a renderer prints are now
+  scoped: this entry says the rebuild stops AT the cache strategy, never that
+  the rebuild got that far, and where another gap on the same view names the
+  same field that one is the stronger claim.
+- **`no-conversation-on-record` names `messages.requestOnly`.** The staged-refs
+  nudge is recomposed FROM the conversation, so a rebuild with no conversation
+  finds no refs and reports no nudge — indistinguishable from a call that had
+  none.
+- **A `ServedView` is a value, all of it.** Two of its six containers were
+  frozen (`messages.asSent`, `tools.schemas`, the two that would otherwise alias
+  the fold's memo); `system.pieces`, `messages.requestOnly`, `tools.names`,
+  `gaps` and the view object itself were plain, while the type said `readonly`
+  throughout. No leak — the other four are built per call — but a promise that
+  holds for two containers out of six is one a reader cannot use. The whole view
+  is frozen now, down to the pieces and gaps, and the docstring says which two
+  are also copies and why.
+
+#### The fourth round — three false sentences and one vacuous half
+
+The walk was green and bit on five attack probes. What it cannot see is whether
+a sentence is TRUE, and three of them were not.
+
+- **A shipped sentence said `LLMCall` has no run id to salt hashes with, and it
+  does.** `servedView.ts`'s module comment, and the `no-receipt-on-chart` `why` a
+  renderer prints verbatim, both explained the refusal to mint a receipt on the
+  three non-agent charts with THE SALT: "only `Agent` has a run id to give". But
+  `LLMCall.ts` · `createExecutor` mints `runId: makeRunId()` exactly as `Agent`
+  does and owns its own executor, so the salt is there for the taking. The
+  DECISION is unchanged — declare, do not mint — because the other reason holds
+  for all three charts: a receipt carries a cache verdict about a strategy none
+  of them runs, and `cache.transform` has no value meaning "no strategy ran".
+  The salt clause is now SCOPED to the two message-API charts, where it is true
+  and is the reason wiring cannot fix them: `buildMessageApiChart` and
+  `buildAgentMessageApiChart` are exported chart BUILDERS whose deps carry no run
+  id and no way to ask for one, run on a consumer's own executor. The printed
+  sentence gives the cache verdict and nothing else, because that is the half
+  that holds everywhere the gap fires.
+- **The epoch account was INVERTED.** `no-fold-base` named `basis.epoch` — the
+  RECEIPT's number, minted live and carried in the call's own bundle, which no
+  missing base can move — while the number that CAN be fabricated, the view's
+  own `epoch`, was excused in `UNGAPPED_FIELDS` on the ground that "a caller
+  passes it to `servedAt` and gets it back". True of `servedAt`; untrue of
+  `servedViews()`, which returns whatever the fold produced, and
+  `EpochLocation.epoch` falls back to POSITION when it cannot read `iteration`.
+  Measured: a resumed run whose base and `iteration` writes had both gone
+  rebuilt its second turn as epoch 1 while that turn's own receipt still said 2.
+  Now `no-fold-base` names `epoch` and `no-receipt-on-chart` names `basis.epoch`
+  (a receipt-only field like the other three on `basis`), the `UNGAPPED_FIELDS`
+  key is gone, and `ServedGap.fields` names the ONE place the two shapes hold
+  two records of one fact rather than two spellings of it. Pinned by a new
+  conformance case that measures the disagreement.
+- **`omittedForAttention` was blamed on the missing receipt.** It was in
+  `no-receipt-on-chart.fields`, but its absence has nothing to do with a
+  receipt: no chart in this library supplies it, on any recording, so it is absent on views that
+  HAVE a receipt too — where nothing explained it at all. It is a key of
+  `UNGAPPED_FIELDS` now with the true reason: a slot writes its budget drops to
+  `slotCompositions` inside its own subflow and no boundary bubbles them out, so
+  `buildReceipt` is never handed one. Recorded as entry 9 of
+  `docs/design/2026-09-recorded-not-built.md`.
+- **The walk's divergence half was VACUOUS for two of four rows.** It asks "is
+  every field that MOVED named?", which a damage that moves nothing satisfies
+  for free. `no-run-log`'s damage moved nothing at all and
+  `no-conversation-on-record`'s never reached `messages.requestOnly`: measured,
+  emptying `no-run-log.fields` to `[]` and deleting `messages.requestOnly` from
+  `no-conversation-on-record` left the file green. The previous round wrote a
+  guard for exactly this hazard, for ONE row. It is general now: the loop
+  collects the moved paths per damage and FAILS on an empty set, and both rows
+  are driven on a run that composes a staged-refs nudge, which is the one shape
+  where losing the run log or the conversation really costs a request-only line.
+  "A damage row that damages nothing" joins the header's own blind-spot list.
+- **`no-fold-base`'s "mechanical rule" named a reader it does not apply to.**
+  The comment said a field belongs on the list when the rebuild derives it from
+  `readAtCall`, `readAfterCall` or `readRunConstant`. `readAfterCall` reads the
+  receipt, which the call's own bundle commits — no missing base can cost it,
+  and naming it is what let the receipt's own `basis.epoch` onto a list it does
+  not belong on. The rule is now the two readers that fold over values the log
+  may never have written, with the third named as deliberately excluded.
+- **`cache-transform` says it is unconditional.** It is raised on every view,
+  including the three charts that can run no cache strategy at all — where the
+  same view's `no-receipt-on-chart` says exactly that. The `why` now OPENS with
+  the condition: raised unconditionally, vacuous where no strategy ran, a
+  boundary rather than a claim that anything was rewritten. Raising it
+  conditionally instead would mean inferring "no strategy ran" from a recording,
+  which is the absence-of-evidence reading this whole feature refuses; recorded
+  as entry 8 of `docs/design/2026-09-recorded-not-built.md`.
+#### The fifth and sixth rounds — a printed gap sentence stops describing code
+
+Five review rounds, and each one found NEW false prose in the sentences the
+round before had just written, at a roughly constant rate. That is not a run of
+careless writing. It is the law this library named in 9.84–9.86 — **a sentence
+composed once and read many times is a PREDICTION** — one surface over: composed
+once, and read against every later version of the code it describes.
+
+The reproduction is one shipped string. `SERVED_GAPS['no-receipt-on-chart'].why`
+said *"THREE causes and none of them is a hole in this view: …"*. A fourth path
+was then added — a value under the receipt key refused because it carries no
+basis — and BOTH halves went false at once: four causes, and that one IS a hole.
+Nobody edited the string. Nobody had to.
+
+**THE RULE, AND THEN THE RULE THAT REPLACED IT.** The fifth round allowed a
+gap sentence three things: which fields it covers, what MECHANICALLY could not
+be established, and what therefore follows. The sixth round deleted the middle
+one, and the reason is the whole story of this release.
+
+Five rounds tried to write TRUE mechanism sentences and the rate of new
+falsehoods held constant. So the sixth put one question to all ten printed
+sentences — *could this become false without anyone editing it?* — and NINE
+could, two of them being false the day they shipped. Exactly one could not:
+
+> `UNGAPPED_FIELDS.gaps` — *"The account itself rather than a fact about the
+> request: a gap naming this list would be the account excusing its own
+> absence."*
+
+It survives because it makes **no claim about code**. It says what the field
+means inside the account, and nothing outside the sentence can falsify it. Every
+other sentence described a MECHANISM — "the fold could not read", "only its
+inputs are on the record", "the request-only lines are recomposed from the
+conversation" — and a mechanism is code, and code moves. The conclusion is not
+to write them better. It is to STOP WRITING THEM.
+
+**A printed gap sentence may now say only three things: WHICH FIELDS it covers,
+WHAT THEY MEAN ON THIS VIEW for the person reading, and WHAT TO DO
+DIFFERENTLY.** It may not name a module, a function, a key, a version, a chart,
+a strategy, an option, or any mechanism at all — not `initialState`, not "the
+fold", not "the cache strategy", not "recomposed from". A sentence that needs
+one of those words to be understood is explaining WHY the gap exists, which is
+not the printed sentence's job. NINE of the ten got shorter — the tenth is the
+one that already had the shape, and it is unchanged to the byte.
+
+**None of it is lost.** The mechanism moved into the code comment above each
+catalogue entry, phrased for a maintainer and carrying the `file · symbol`
+pointers that are correct there and banned in printed prose. The CAUSE is
+already data (`ServedGap.cause`). The docs still explain the mechanism at
+length, because a doc is versioned with the code and its reader can open the
+file — so `src/lib/time-travel/README.md` and the docs-site page are now
+deliberately LONGER than what a renderer prints, and both say so.
+
+**WHAT IT RULES OUT — AND THE CLAIM A SEVENTH ROUND OVERTURNED.** The sixth
+round shipped this paragraph saying the reduction had made the prose
+UNROTTABLE: a sentence with no code claim in it cannot go false when the code
+changes, so the class is closed outright rather than merely thinned. A verifier
+then read all eleven printed sentences one at a time, and that is false. **TEN
+of them still make a claim a code edit falsifies.** Exactly one does not —
+`UNGAPPED_FIELDS.gaps` — and it does not because it is SELF-REFERENTIAL: it says
+what its field is inside the account, not anything about the request. The other
+ten cannot copy that shape, because a sentence that tells a reader something
+USEFUL — *may be SHORT*, *absent means unknown*, *the tool list is complete and
+the schemas are one short* — is a claim about how the rebuild behaves, and the
+rebuild is code. **The reduction changed the VOCABULARY of the claims, not their
+CLASS.**
+
+What the reduction really buys is smaller and still worth the rows: the
+sentences are short and readable, and the enumerations that went false in five
+rounds have nowhere to come back through. It also makes the rule enforceable.
+The fifth round's checker was PHRASING-shaped and near-synonyms walked through
+it; the sixth round's printed surface admits no code-shaped token — dotted path,
+`.ts` file, camelCase, PascalCase, `SCREAMING_SNAKE`, a call with parens, a
+quoted option name, a version number — and no mechanism verb from a closed list
+of ten. That is close to a whitelist, and a whitelist has no synonyms.
+
+**WHAT ACTUALLY CLOSES THE CLASS IS A RUN, and the evidence is in the same
+report that overturned the claim.** Driving one real view per gap, the verifier
+recorded seven sentences HOLDING and four MISLEADING — and caught a BRAND-NEW
+false sentence in the very round written to end false sentences. No rule caught
+it. Measurement caught it. So a gap sentence MAY make a code claim, because a
+sentence that makes none cannot inform, and **every claim it makes is now
+ASSERTED against a real view in a test that sits beside it**:
+`test/lib/time-travel/gap-sentences.test.ts` drives one run per catalogue entry,
+decomposes each sentence into quoted clauses, pairs every clause with its own
+assertion, and requires the clauses to PARTITION the sentence so no printed word
+sits outside a checked claim. The prose rule stays and is no longer sold as the
+thing that makes the sentences true.
+
+**THE HONEST LIMIT**, in the new file's header and in the checker's: a claim
+nobody wrote an assertion for. The partition guarantees each clause has a test;
+it cannot guarantee the test is as strong as the clause. That is a smaller blind
+spot than six rounds of rewriting produced, and it is the whole of it.
+
+- **The rule is a checker, not a habit.** `test/helpers/gapProseClaims.ts` is
+  the reader-facing sibling of `modelFacingClaims.ts`: **six** banned shapes now
+  — the two REDUCTION rows the sixth round added (code shape, mechanism verb),
+  then the four PHRASING rows the fifth round wrote (cardinality, benignity,
+  discrimination, cross-module), kept as the second line of defence and
+  redundant on the printed surface by design. Each carries the reason an edit
+  elsewhere falsifies it, and a structurally-required exemption argument (the
+  same discriminated union, proven the same way in
+  `test/type-regressions/GapProseClaims.assignability.test.ts`). The three
+  strong rows stand down on `'prose-doc'`, because naming the mechanism is what
+  a doc is FOR; the other three do not, because a cause count goes stale in a
+  doc exactly as it does in a constant.
+- **Every printed gap sentence is one or two sentences and names nothing.**
+  `no-receipt-on-chart` now reads in full: *"Nothing on this view has been
+  checked against what went out. Every field below is missing as a whole, and an
+  absence among them says nothing about the call — not even that a dial was left
+  unset."* `forced-tool-schema` is 26 words. `callRuntimeStageId`'s excuse is 12.
+- **TWO SENTENCES WERE FALSE THE DAY THEY SHIPPED, and both were mechanism
+  claims, so the rule deletes the category rather than the instances.**
+  `cache-transform` said *"only its INPUTS are on the record"* while three of
+  the fields it covers are OUTPUTS that are on the record — `cache.transform`
+  (the verdict of comparing what the strategy was given against what it handed
+  back), `cache.transformHash` (the digest of the result, when they differed)
+  and `cache.markersApplied` (the breakpoints actually applied, as against the
+  candidates in `scope.cacheMarkers`, which are the inputs). And
+  `no-receipt-on-chart` opened *"No receipt was found for this epoch"* and
+  closed *"absent here means unrecorded"* — both false under
+  `'receipt-shape-rejected'`, where a receipt WAS written and the read refused
+  it, which is to say the sentence asserted which cause applied and was wrong
+  for one of two. Neither can be written under the new rule. Both are corrected
+  in the two doc tables and in the comment beside each entry, where the
+  mechanism now lives, rather than merely dropped.
+- **`RECEIPT_BOUNDARY` was the one printed sentence exempted from the rule, and
+  the exemption is gone.** It named `LLMProvider.complete` and `complete()` — a
+  module and a call, printed to a reader who cannot open either. It now reads
+  *"A receipt describes the request as this library last saw it. Whatever
+  handled it after that could have changed it, and nothing on the receipt would
+  show that."* The port, the decorated provider, the vendor adapter and the
+  vendor's own defaults are in the comment above the constant. One string, one
+  rule set: the walk no longer strips it before judging, and asserts it on its
+  own as well as inside the two entries that quote it.
+- **THE CAUSE IS A VALUE.** The enumeration was prose doing DATA'S job: a frozen
+  constant cannot know which cause applied at the site it is printed beside, so
+  it listed them all and hoped. `ServedGap.cause` carries the answer now,
+  computed in the one function that has it — the receipt read reports whether
+  the key held nothing (`'no-receipt-committed'`) or held something it refused
+  (`'receipt-shape-rejected'`). Same "one fact, one owner" move that fixed the
+  `read_skill` refusals in 9.86. One test per cause: the first on a real
+  `LLMCall` run, the second on a crafted recording whose receipt key holds a
+  value with no basis, since no run produces one. The set is closed AT THE SITE
+  and deliberately no wider — a pre-9.88 recording, `recordReceipt: false` and a
+  chart that mints none all leave the same record, and claiming to separate them
+  would be this field repeating the defect it was added to fix.
+- **`ServedView.basis`'s docstring claimed the gap discriminates.** It said the
+  gap "says which of the three it was", which it never could. It points at
+  `cause` now.
+- **`receiptAt`'s docstring merged two causes, omitted a third, and denied a
+  fourth.** It said `undefined` has three causes, gave `recordReceipt: false` as
+  a gloss on "this chart mints none" (two different causes), left out the
+  malformed-receipt refusal, and asserted that none of them is "the epoch is
+  missing" — which is false, because `epochAt` returning nothing is exactly one
+  of the ways it returns `undefined`. It now gives the same account
+  `ServedGapCause` gives, so the two exported accounts cannot disagree, and says
+  plainly that a missing epoch is a separate answer.
+- **`UNGAPPED_FIELDS.omittedForAttention` said "no chart supplies it".** True of
+  this library and not of the world: `buildReceipt` is a pure exported mint, so
+  a consumer can hand it the fact. Narrowed to **no chart in this library** —
+  and then, in the sixth round, moved out of the printed sentence altogether,
+  because a dated measurement over a set of charts is a claim about code. The
+  measurement is unchanged and still re-taken by the walk on every run; it reads
+  the claim from the COMMENT beside the entry now, so a chart that starts
+  supplying one still fails the suite instead of aging the sentence. What a
+  reader is shown is what the field means: *"Absent means nobody recorded a
+  drop, never that nothing was dropped."*
+- **`examples/observability/24-receipt-at-the-stop.ts` clipped a printed reason
+  mid-version-number.** It printed `reason.split('.')[0]`, so "measured on
+  9.88.0" reached a reader as "measured on 9." — a fragment that reads as a
+  complete sentence. It wraps on word boundaries now, and prints the gap's
+  `cause` beside its kind.
+- **The walk's divergence half now STATES ITS MEASUREMENT instead of implying
+  coverage.** The header claimed the vacuous-row guard was closed "by driving
+  each row on a run that reaches its own fields". Measured, that clause is
+  false: `no-fold-base` moves 7 of the 11 fields it names, `no-run-log` 1 of 4,
+  `no-receipt-on-chart` 3 of 8, and only `no-conversation-on-record` reaches all
+  3. The reasons are structural — a receipt-only field never appears on a view,
+  so removing the receipt cannot MOVE it — so the header names the numbers per
+  row, a test pins them so the table cannot go stale, and it says plainly that a
+  field claim divergence does not reach is carried by the coverage half and by
+  `receipt-conformance.test.ts`. No new machinery was built for this; the honest
+  fix was to say what was measured.
+- **The gap tables in `src/lib/time-travel/README.md` and
+  `docs-next/content/docs/debug/time-travel.mdx` were short AND over-broad on the
+  day they shipped** — `no-run-log` missing `tools.schemaHashes`,
+  `cache-transform` claiming all of `tools.*` when it names two of the four
+  fields under `tools`. That is this release's own defect one layer out, where
+  the walk was not looking. Both tables now carry the LITERAL field lists, and
+  the walk parses them: every row must match `Object.keys(SERVED_GAPS)`, every
+  field cell must match that entry's `fields` exactly, and no cell may name a
+  field the catalogue has moved to `UNGAPPED_FIELDS`. A doc that restates a
+  frozen exported constant is checked against it, not retyped.
+
+#### The seventh round — every sentence is asserted against a real run
+
+The rounds above all ended by READING the sentences. This one drove a view for
+each of them, which is how the library closes everything else, and it found a
+different class of defect: not prose that names a mechanism, but prose that is
+plain, short, rule-abiding and UNTRUE OF THE VIEW IT IS PRINTED BESIDE.
+
+- **`no-run-log` claimed a loss that a run says did not happen.** It read *"The
+  fields below could not be fully recovered here"* — an assertion that recovery
+  DID fail. Measured on the ordinary view that raises it, a
+  `'dynamic-grouped'` agent with one plain tool and its `commitLog` emptied:
+  `tools.names`, `tools.schemas`, `tools.forced` and `messages.requestOnly` all
+  come back BYTE-IDENTICAL to the intact view. The gap fires and costs nothing,
+  because that run has no forced tool name and no `wants` to lose. It now reads
+  *"The fields below may be SHORT: a name can be missing from the tool list, and
+  a line that went out with the request can be missing too. An absence below is
+  not evidence that there was nothing there — read the whole recording rather
+  than a piece of it."* **The repair is the sentence and not the condition**,
+  and the reason is that the condition cannot be narrowed by anything the read
+  can see: whether the run had a constant to lose is recorded in the log whose
+  absence raises the gap. Both directions are asserted — emptying the run log
+  takes a forced-output run's tool list from one name to none and a staged-refs
+  run's request-only line to nothing, and takes nothing at all from the plain
+  run. Its second clause was loose as well: it said a line could go missing
+  *"from the conversation"*, and a request-only line is by construction in no
+  conversation — asserted now against the wire, which carries it as the last
+  message of the request while the rebuilt `messages.asSent` does not contain it.
+- **Three sentences were true where they were composed and misleading where they
+  were PRINTED.** One sentence, several contexts: the library's own Honest
+  Sentence law says it has to hold in all of them.
+  - `cache-transform` ended by quoting `RECEIPT_BOUNDARY` — *"A receipt
+    describes the request as this library last saw it"* — and it is raised on
+    EVERY view, including a receipt-less one. Measured: an `LLMCall` view
+    carries exactly `no-receipt-on-chart` and `cache-transform`, so the reader
+    was told what a receipt describes beside a view that has none. The quote is
+    gone from it and the claim survives in the entry's own words, in the
+    vocabulary of a view: *"…and nothing on this view would show it."*
+    `provider-defaults` keeps the quote and is the only entry that may have it —
+    it is pushed inside `if (receipt !== undefined)`, so a view carrying it
+    always has a receipt for the sentence to be about. Asserted across every run
+    in the new file: a gap whose `why` includes the boundary appears only on a
+    view whose `basis` is defined.
+  - `no-fold-base` said the view's number *"may differ from the one the receipt
+    for this turn carries"* — printed on views that carry no receipt (a
+    base-less `LLMCall` recording raises both gaps at once). It now says what
+    the NUMBER means: *"The turn number below may be this turn's place in run
+    order rather than the number the run itself gave it."* Asserted on the
+    resumed run whose base and `iteration` writes are gone: the view calls the
+    second turn 1 while the run's own count for it was 2.
+  - `no-receipt-on-chart` closed *"their absence here is a gap in the record,
+    never a call made without them"*. True of each field AS A WHOLE and false
+    one level down, which is the level a reader reads at: a receipt always
+    carries `params` and always carries a `cache.transform` verdict, and an
+    absence INSIDE `params` — measured `{}` on an agent that set no dials — IS a
+    call made without one. It now claims nothing about what is inside a field it
+    cannot see: *"…an absence among them says nothing about the call — not even
+    that a dial was left unset."*
+
+- **`test/lib/time-travel/gap-sentences.test.ts` — the assertion, beside the
+  sentence.** One real run per catalogue entry and per `UNGAPPED_FIELDS` key,
+  and an assertion for each claim the sentence makes — not that the gap fired,
+  but that what it says about the view HOLDS. Each sentence is decomposed into
+  clauses quoted verbatim from the constant, each clause carries its own
+  assertion, and three contract tests hold the binding shut: every catalogue key
+  is an entry, every quote is verbatim and in order, and **the clauses PARTITION
+  the sentence** — strike them out and only punctuation is left, so no printed
+  word sits outside a checked claim. Rewrite a sentence and the partition fails,
+  which sends the author back to write the assertion for what it now claims. The
+  measurements the round took by hand are transcribed into it rather than
+  re-derived, and the rest were driven to fill the gaps between them.
+- **`UNGAPPED_FIELDS.gaps` is labelled as the one clause class that is not a
+  claim about the request.** It is the only sentence no code edit can falsify,
+  and it is that way because it is self-referential — a statement about what its
+  field is inside the account. The new file carries a flag naming that category
+  rather than an assertion pretending to cover it, and a contract test requires
+  exactly that one entry to be flagged.
+
+### Changed
+
+### The receipt's three laws
+
+1. **Hashes and references, never bytes.** No message text, no prompt text, no
+   schema bodies. Those bytes are already governed — `recordSystemPrompt` is
+   opt-in for exactly this reason, redaction scrubs the committed mirror, a
+   window strategy decides what survives — and a receipt carrying content would
+   quietly reopen all three.
+2. **Run-salted digests.** `sha256(runId + '\u001f' + content)`, first 16 hex
+   characters. Hashes are NOT redacted, and the salt is why that is safe: an
+   unsalted hash of a one-line prompt or a two-word user turn is a dictionary
+   lookup away from being read back, and receipts travel inside recordings.
+3. **No authority omissions.** A receipt never names — and never counts — what a
+   caller's role was not allowed to see. Committed state is readable by the
+   trace toolpack's debugging tools, so a receipt carrying `hiddenSkillIds`, or
+   even "3 skills withheld", would restate a permission decision one layer down
+   where nobody is checking.
+
+### Measured
+
+- `test/lib/time-travel/receipt-conformance.test.ts` — 51 tests over real runs:
+  both chart shapes, a pause and a resume in both, a skill-graph hop, a stepped
+  skill, a parked map, a wrap-up call, a forced output tool, a staged-refs
+  nudge, a cache strategy that rewrites the composition and one that rewrites a
+  sampling dial, a marker-applying one, a provider decorated past the port, an
+  `LLMCall` chart, a JSON round-trip, a pre-9.88 recording, a recording with no
+  fold base on either of its two folds, a recording whose base AND whose
+  `iteration` writes are gone (where the view numbers the turn by position and
+  its own receipt still says otherwise), a subtree with no run log, a reader
+  that tries to edit what it was handed, and the off switch. The vendored
+  SHA-256 is checked against `node:crypto` on every shape it hashes. Two
+  mutation tests drop a committed piece from the replay and require the law to
+  go red naming the epoch and the field.
+- `test/lib/time-travel/gap-catalogue-walk.test.ts` — 44 tests, and the reason
+  this release has one more file than it planned. `SERVED_GAPS` was hand-checked
+  against the two shapes three times and came up short three times, which is not
+  a run of bad luck: A HAND-COUNTED LIST IS SHORT THE DAY AFTER. So the
+  correspondence is WALKED, the way `userTurnProducers.test.ts` walks every
+  `role:'user'` producer and `toolDivergenceWalk.test.ts` crosses every
+  claimant. It derives the field list twice — from the declarations, with the
+  TypeScript parser, and from five real runs — and requires every field to be
+  named by a gap or to be a key of `UNGAPPED_FIELDS` with a written reason;
+  requires every `fields` entry and every `UNGAPPED_FIELDS` key to resolve to a
+  field that exists, so a rename cannot leave a gap pointing at nothing; and
+  requires the kinds `viewOf` can push and the kinds in the catalogue to be the
+  same set. Then it DAMAGES a real recording the way each gap describes,
+  rebuilds, and requires every field that MOVES to be named by that gap — which
+  is the half that catches a field named by the wrong gap for the wrong reason,
+  and the half the first three checks could not. Verified by reverting each fix
+  and watching the right row go red.
+
+  **The two halves, and what each cannot prove.** The ACCOUNT half (coverage,
+  resolution, reachability, and the two doc tables) proves every field of both
+  shapes is named by a gap or excused in writing, that every pointer lands on a
+  field that exists, and that the prose copies say what the constant says. It
+  cannot prove any of it is TRUE: a gap can name a field for a mechanism that
+  does not cause its absence, and this release shipped two of those. The
+  DIVERGENCE half proves that for the four damages it can apply, no field moves
+  without the responsible gap naming it — and, since this round, that each
+  damage moves SOMETHING, so a row cannot pass by damaging nothing. It cannot
+  prove a row moved everything the gap is about, it has no damage at all for the
+  three gaps that are conditions of the RUN rather than of the recording
+  (`cache-transform`, `provider-defaults`, `forced-tool-schema` —
+  `receipt-conformance.test.ts` drives those), and the damage table is
+  hand-listed, so a gap whose damage nobody wrote down still gets only the
+  account half. Neither half reads a `why`. That is a person's job, and it is
+  where this release's last three defects came from.
+- `test/lib/time-travel/keyed-fold-equivalence.test.ts` — 9 tests: every key at
+  every commit of a real run, checked against `stateAt` itself, including a
+  merge with no `set` anchor (which cannot be folded at all without the base),
+  a resumed agent in both chart shapes, and a replayed value that comes back
+  frozen.
+- **The detachment freeze costs 23%, and the alternative costs more.** Measured
+  on a 601-epoch run (10,219 commits): the whole per-epoch scrub is 1,141 ms
+  with the freeze and 930 ms without, against 20.8 s two fixes ago; the batch
+  form moves 919 ms to 1,116 ms. Copying instead is dearer, not cheaper — on
+  the same 1,200-message structure `structuredClone` costs 0.94 ms against
+  `freezeDeep`'s 0.26 ms, and a copy would run once per READ where the freeze
+  runs once per memoized answer.
+- `test/lib/time-travel/served-view-complexity.test.ts` — 2 tests: epochs are
+  located once per recording (checked by identity, no clock), and the per-epoch
+  scrub stays within 2x the batch form at both 13 and 49 epochs without
+  drifting. Against the shape this release replaced those ratios are 2.4x and
+  3.7x, climbing to 5.0x at 97 epochs.
+- Full suite: 10,348 passing, 20 skipped, 624 files.
+- `test/lib/time-travel/served-view-complexity.test.ts` is a RATIO guard, and a
+  ratio is immune to the machine but not to contention: it failed once inside a
+  fully parallel `vitest run` and passes alone and in a clean full run. The
+  freeze does not touch its subject — the scrub and the batch form do the same
+  folding in the same order, so both pay it identically (measured: scrub/batch
+  is 1.02 with the freeze and 1.01 without). Recorded rather than widened.
+- Runnable: `examples/observability/24-receipt-at-the-stop.ts` — three turns, the
+  law checked against the rebuild AND against the request the provider really
+  received, with the staged-refs nudge printed back from the record, the
+  sampling dials, and the port boundary printed where a reader meets it.
+
+### A stated limit
+
+The `@wire` clauses of the conformance test are not an INDEPENDENT witness.
+They compare the receipt against the request the provider stub really received,
+which catches a rebuild that drifts from the request and a receipt that
+describes something the provider never got. It does not catch a defect in the
+shared assembly: the receipt and the request are minted from the same locals
+inside `callLLM`, a few lines apart, so a change that alters both symmetrically
+leaves every `@wire` clause green. A genuinely independent witness would have to
+come from outside the process that composed the request — a recorded HTTP body
+from a real adapter, or a second implementation written against the vendor's own
+schema. Neither exists; the limit is stated in the test's own header rather than
+left to be discovered.
+
+Typechecking the whole of `test/` would have closed the redaction hole at its
+root. It was tried and surfaces 1,054 pre-existing errors across the suite and
+the examples it pulls in — a repair of its own, not a line item in this release.
+The hole is closed instead in `test/type-regressions/`, which already compiles
+under `npm run test:types`.
+
+`ServedGap.fields` carries TWO relations on one list. Most entries mean *the
+rebuild cannot produce this field*; `cache-transform`'s composition fields mean
+*it can, and both sides agree, but only up to the cache strategy*. A checker
+that granted the second as an excuse would stop checking fields the record
+proves perfectly well — which is exactly what happened when the composition
+fields were added, and it silently disabled one clause of the law. The clause
+now asks its narrower question against its own list of gaps, and the field's
+docstring names both relations. A second array on the public type is the
+cleaner shape; adding a public field in a fix pass is not, so it is written
+down rather than shipped.
+
+**A green `gap-catalogue-walk` proves the fields are ACCOUNTED FOR, not that the
+account is TRUE.** A gap can name a field for the wrong reason and the walk will
+call it covered; a `why` can be a fluent sentence about the wrong mechanism; an
+`UNGAPPED_FIELDS` reason can be wishful. Only a person reading the `why` catches
+that — which is how the defect the walk was built for was found in the first
+place — three times in this release, the last of them after the walk was
+already green. Five narrower blind spots are named in the file's own header
+rather than left to be discovered: the reachability half reads `gapOf('…')`
+literals out of the source (and so fails on any `gapOf` call whose argument is
+not a literal, which is the only shape that could hide one); the static half
+follows type references by name and does not expand an alias, a mapped type or
+an intersection; the runtime half only produces what its five scenarios reach;
+the DAMAGES table is hand-listed, so a gap whose damage nobody wrote down gets
+the coverage check and not the divergence one; and A DAMAGE ROW THAT DAMAGES
+NOTHING passed as a green row for one release, which is why the loop now
+requires each damage to move something and still says that "something" is not
+"everything". Three gaps have no damage at all,
+because they are conditions of the RUN rather than of the recording —
+`cache-transform`, `provider-defaults`, `forced-tool-schema` — and
+`receipt-conformance.test.ts` drives each of those on a real run instead.
+
+**A recording stops being JSON-serializable at about 600 epochs**, and it is the
+same reader at the same size that the epoch memo was built for. Measured on the
+looping run the complexity guard uses: 301 epochs serialize to 145,238,645
+characters; 601 epochs throw `RangeError: Invalid string length` — V8's maximum
+string length, not a library limit. Nothing here fails before then, and none of
+these readers needs `JSON.stringify` to work: `servedAt`, `receiptAt` and
+`epochLocations` all read the live object. But a recording that cannot be
+written to a file cannot be handed to anybody, so at that size the answer is to
+persist per-epoch views rather than the whole snapshot. Stated rather than
+worked around, beside the memo it shares a size with.
+
+`flowchartAsTool({ redact })`'s kept inner recording carries an UNREDACTED
+`sharedState` while the commit log is scrubbed. It is a different subsystem and
+every available fix changes behaviour for runs that work today, so this release
+corrects the option's own claim and records the defect — reproduction, cause
+and what each fix would cost — as entry 6 of
+`docs/design/2026-09-recorded-not-built.md`.
+
+**Three more are RECORDED rather than built**, as entries 7-9 of the same file,
+because the last review round's job was to make every printed sentence true
+rather than to close every hole: `cache-transform` does not name `tools.forced`
+or `tools.withheld` although a strategy that rewrote `toolChoice` could make
+both stale (the receipt builds them from assembly's decision, not from the
+prepared request); `cache-transform` stays unconditional, because raising it
+conditionally would mean inferring "no strategy ran" from a recording; and a
+slot's attention drops never reach `Receipt.omittedForAttention`, because no
+boundary bubbles `slotCompositions` out of the slot subflow. Each entry carries
+its reproduction, its cause, and what a fix would cost.
+
 ## [9.87.1] - 2026-09-06
 
 9.87.0 never reached npm. Its publish job failed the docs site's byte budget —

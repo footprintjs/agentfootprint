@@ -35,6 +35,7 @@ import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { buildToolsSlot } from '../slots/buildToolsSlot.js';
+import { joinSystemPrompt } from './composeRequest.js';
 
 /** Route branch ids. */
 const ROUTE_TOOL_CALLS = 'tool-calls';
@@ -104,10 +105,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
   // converge). tools is a separate field Call-LLM reads directly. ──
   const messageApiStage = (scope: TypedScope<AgentMsgApiState>): void => {
     const sysInjections = (scope.systemPromptInjections ?? []) as readonly InjectionRecord[];
-    scope.assembledSystem = sysInjections
-      .map((r) => r.rawContent ?? '')
-      .filter((s) => s.length > 0)
-      .join('\n\n');
+    scope.assembledSystem = joinSystemPrompt(sysInjections);
     scope.assembledMessages = [...((scope.history ?? []) as readonly LLMMessage[])];
   };
 

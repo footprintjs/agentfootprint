@@ -1,0 +1,35 @@
+---
+title: ReceiptRequestOnlyMessage
+---
+
+# Interface: ReceiptRequestOnlyMessage
+
+Defined in: src/lib/time-travel/receipt.ts:190
+
+A line that existed on the request only and was never written to history.
+
+## Properties
+
+### hash
+
+> `readonly` **hash**: `string`
+
+Defined in: src/lib/time-travel/receipt.ts:192
+
+***
+
+### reason
+
+> `readonly` **reason**: `string`
+
+Defined in: src/lib/time-travel/receipt.ts:194
+
+Which library mechanism composed it. `'staged-refs-nudge'` today.
+
+***
+
+### role
+
+> `readonly` **role**: `ContextRole`
+
+Defined in: src/lib/time-travel/receipt.ts:191

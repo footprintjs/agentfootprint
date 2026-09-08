@@ -733,6 +733,16 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // makes each an overwrite rather than a doubling concat.
           dynamicToolSchemas: s.dynamicToolSchemas,
           activeInjections: s.activeInjections,
+          // THE RECEIPT (9.88.0), second hop. `callLLM` writes it INSIDE this
+          // boundary, so under `'dynamic-grouped'` it lands in the turn's own
+          // inner log and nowhere else; a reader scrubbing the OUTER axis
+          // would find an iteration stop with no record of what that iteration
+          // sent. Bubbling costs nothing and never doubles: the receipt is a
+          // fresh object every call (the epoch is on it), so the net-change
+          // filter cannot drop it and `arrayMerge: Replace` below makes it an
+          // overwrite. Value-conditional, so a chart whose inner stage never
+          // wrote one crosses no new key.
+          ...(s.receipt !== undefined && { receipt: s.receipt }),
           // The role-hidden ids, second hop — the gate filters every set it
           // names through them before composing a refusal or a payload.
           ...(s.hiddenSkillIds !== undefined && { hiddenSkillIds: s.hiddenSkillIds }),

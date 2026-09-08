@@ -276,8 +276,26 @@ export interface DomainLLMStartEvent extends DomainEventBase {
   readonly model: string;
   readonly provider: string;
   readonly systemPromptChars?: number;
+  /**
+   * The ASSEMBLED system prompt, verbatim as sent (9.88.0) — carried through
+   * from `stream.llm_start`, so present under exactly the same condition:
+   * the run was built with `recordSystemPrompt: true`. It used to be dropped
+   * here, which meant the one opt-in that puts the prompt on the record
+   * reached every sink EXCEPT the ordered boundary stream a replay reads.
+   *
+   * PRIVACY: it carries whatever its pieces carried. See
+   * `payloads.ts` · `LLMStartPayload`.
+   */
+  readonly systemPromptText?: string;
   readonly messagesCount?: number;
   readonly toolsCount?: number;
+  /**
+   * The tool CATALOG the model saw for this call — `{ name, description }` per
+   * tool, in request order (9.88.0, carried through from `stream.llm_start`;
+   * absent when the call had no tools). `toolsCount` above says HOW MANY, and
+   * a count is not an answer to "which tools was it choosing between?".
+   */
+  readonly tools?: readonly { readonly name: string; readonly description?: string }[];
   /** Capture-time classification: `'user→llm'` for the first call or any
    *  call not preceded by a tool result; `'tool→llm'` after a tool result. */
   readonly actorArrow: 'user→llm' | 'tool→llm';
@@ -1028,8 +1046,14 @@ export class BoundaryRecorder implements CombinedRecorder {
           model: p.model,
           provider: p.provider,
           ...(p.systemPromptChars !== undefined ? { systemPromptChars: p.systemPromptChars } : {}),
+          // 9.88.0 — these two used to be dropped. Both are already governed
+          // upstream (the text by `recordSystemPrompt`, the catalog by there
+          // being any tools), so dropping them here removed evidence from the
+          // one stream a replay walks without adding a single guarantee.
+          ...(p.systemPromptText !== undefined ? { systemPromptText: p.systemPromptText } : {}),
           ...(p.messagesCount !== undefined ? { messagesCount: p.messagesCount } : {}),
           ...(p.toolsCount !== undefined ? { toolsCount: p.toolsCount } : {}),
+          ...(p.tools !== undefined ? { tools: p.tools } : {}),
           actorArrow,
         });
         break;

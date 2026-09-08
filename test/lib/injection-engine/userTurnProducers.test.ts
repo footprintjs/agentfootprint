@@ -200,6 +200,16 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'why it needs no frame.',
     },
   ],
+  'src/lib/time-travel/servedView.ts': [
+    {
+      cls: 'never-in-history',
+      why:
+        'not a producer at all: the REBUILD of the staged-refs nudge, composed post-hoc from ' +
+        'the committed record so a reader can see the one model-facing line the run never ' +
+        'persisted. It goes onto a `ServedView`, which is a reading of a finished run — no ' +
+        'scope, no history, no request.',
+    },
+  ],
   'src/core/agent/stages/reliabilityExecution.ts': [
     {
       cls: 'never-in-history',

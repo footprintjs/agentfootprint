@@ -147,19 +147,27 @@ Redaction policy for the INNER run, applied before every invocation
 (`executor.setRedactionPolicy`).
 
 footprintjs scrubs at COMMIT time, so a redacted key never reaches the
-inner commit log at all — which is what makes a kept record safe to
-serve back to a model. Same mechanism, same placeholders, and the same
+inner COMMIT LOG at all. Same mechanism, same placeholders, and the same
 `(redacted by policy)` flag as the outer run; the trace tools pass
 placeholders through verbatim and never reconstruct around them.
 
 Independent of `keepRecord` — a chart handling secrets should carry a
 policy whether or not anyone keeps its record — but if you keep the
-record, this is the switch that decides what the record contains.
+record, this is the switch that decides what that record's LOG contains.
 
-What it does NOT govern: the string this tool RETURNS. `resultMapper`
-is handed `snapshot.values`, which is the run's live state — the same
-unredacted view a stage read. Scrubbing what the LLM sees is the
-mapper's job; this option scrubs what the RECORD keeps.
+WHAT IT DOES NOT GOVERN — two things, and neither is a rounding error:
+
+1. The string this tool RETURNS. `resultMapper` is handed
+   `snapshot.values`, which is the run's live state — the same unredacted
+   view a stage read. Scrubbing what the LLM sees is the mapper's job.
+2. The `sharedState` of a kept record. A policy scrubs WRITES; the live
+   state view is not a write, and the redacted mirror is served only by
+   `getSnapshot({ redact: true })`, which this option does not reach. So
+   a record kept under `keepRecord` holds the plaintext on
+   `recording.snapshot.sharedState` even while its commit log holds
+   `REDACTED`. Do not treat a kept record as safe to hand on because a
+   policy is set — see `docs/design/2026-09-recorded-not-built.md` ·
+   "A kept inner recording carries the secret in `sharedState`".
 
 ***
 

@@ -166,6 +166,7 @@ import {
   type ToolResultStatus,
 } from '../toolEffects.js';
 import type { AgentState } from '../types.js';
+import { joinSystemPrompt } from '../composeRequest.js';
 
 export interface ToolCallsHandlerDeps {
   /** Map from tool name → Tool instance, built from the augmented
@@ -2420,12 +2421,9 @@ export function buildToolCallsHandler(
     scope: TypedScope<AgentState>,
     history: readonly LLMMessage[],
   ): LLMMessage[] => {
-    const systemPrompt = (
-      (scope.systemPromptInjections as readonly InjectionRecord[] | undefined) ?? []
-    )
-      .map((r) => r.rawContent ?? '')
-      .filter((s) => s.length > 0)
-      .join('\n\n');
+    const systemPrompt = joinSystemPrompt(
+      (scope.systemPromptInjections as readonly InjectionRecord[] | undefined) ?? [],
+    );
     return systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : [...history];
   };
 

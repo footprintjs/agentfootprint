@@ -139,7 +139,20 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_000_000, records: 2_000 };
 // comment. Same rule as every raise here: ~2% over the measured export, so
 // about fourteen more routes before somebody has to look again — and the
 // thing to look at then is the per-route cost, not the ceiling.
-const OUTPUT_LIMITS = { bytes: 634_000_000, files: 6_750, duplicateRscBytes: 0 };
+//
+// Raised for 9.88.0: measured export 658.46 MB / 6,851 files on this release
+// commit, up from the 634.00 MB / 6,750 file ceiling above — which itself had
+// no headroom left for this release's growth. The growth is 29 new API doc
+// routes for the receipt-at-the-stop exports — epochAt, epochLocations,
+// keyedFold, messageDigestInput, receiptAt, receiptHash, servedAt,
+// servedViews, and milestoneOf/milestoneStops/milestoneStopsStrategy (the
+// 9.87.0 exports whose API pages had never actually been generated until this
+// build caught them up) — plus their eleven interface/type-alias/variable
+// pages, at the same ~0.91 MB and 6 files per route this file has measured
+// since 9.87.1. Same rule as every raise here: ~2% over the measured export,
+// so roughly fourteen more routes before somebody has to look again — and the
+// thing to look at then is still the per-route cost, not the ceiling.
+const OUTPUT_LIMITS = { bytes: 672_000_000, files: 6_990, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
@@ -177,7 +190,15 @@ const OUTPUT_LIMITS = { bytes: 634_000_000, files: 6_750, duplicateRscBytes: 0 }
 // and 408.9 KB after — same 16 async assets, same bytes. The ceiling is already
 // ~1% over that, which is as tight as the others now are; moving it would be
 // pretending the prune bought headroom here that it did not.
-const DEMO_ASYNC_GZIP_LIMIT = 413_000;
+//
+// Raised for 9.88.0: 408.9 KB -> 416.4 KB measured, still the same 16 async
+// assets. The demo imports `defineTool` from 'agentfootprint', so the receipt
+// family (composeRequest, epochs, keyedFold, receipt, servedView) rides the
+// main entry's transitive graph the same way the 9.61.0/9.78.0 families did —
+// this is that story again, not a chunking change. Fix, if this keeps
+// climbing, is still the one named in 9.61.0: reach the checks only through a
+// dynamic import.
+const DEMO_ASYNC_GZIP_LIMIT = 420_600;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

@@ -4,7 +4,7 @@ title: AgentArtifactsOptions
 
 # Interface: AgentArtifactsOptions
 
-Defined in: [src/core/agent/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L80)
+Defined in: [src/core/agent/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L81)
 
 The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
 operator dials. `placement` cannot be spelled without `store` — a
@@ -17,7 +17,7 @@ lies, and the shape refuses it before a runtime check has to.
 
 > `readonly` `optional` **placement?**: [`ArtifactPlacement`](/docs/api/interfaces/ArtifactPlacement)
 
-Defined in: [src/core/agent/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L93)
+Defined in: [src/core/agent/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L94)
 
 The placement threshold. A tool result whose finalized text exceeds
 `maxInlineChars` is checked into the store (under the tool's declared
@@ -34,7 +34,7 @@ results are never measured and never placed, exactly as before.
 
 > `readonly` `optional` **recordings?**: `boolean` \| [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 
-Defined in: [src/core/agent/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L131)
+Defined in: [src/core/agent/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L132)
 
 Check each completed run's RECORDING into the store (9.26.0), so a screen
 can replay the turn later without the deployment inventing a place to keep
@@ -78,6 +78,6 @@ RESUMED run — which is what the recorder saw.
 
 > `readonly` **store**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/core/agent/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L82)
+Defined in: [src/core/agent/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L83)
 
 The claim-check store — same seam as the bare `ArtifactStore` form.

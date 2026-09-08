@@ -93,6 +93,42 @@ export {
 // consumer's own vocabulary). Fold: derived from the recorded log, never a
 // re-walk — see src/lib/time-travel/README.md.
 export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './lib/time-travel/index.js';
+// THE RECEIPT AT THE STOP (9.88.0). The wire a model receives is assembled from
+// committed pieces and is itself never committed — so `servedAt(snapshot, k)`
+// REBUILDS it from those pieces, and `receiptAt(snapshot, k)` reads the
+// hashes-and-references record the call left behind at the same stop. The law
+// they hold together is `receiptHash(runId, servedAt(k).system.text) ===
+// receiptAt(k).system.hash`; whatever the log cannot rebuild is named in
+// `servedAt(k).gaps` rather than quietly missing. `epochAt` / `epochLocations`
+// are the one owner of where an iteration's pieces live in either chart shape.
+export {
+  epochAt,
+  epochLocations,
+  keyedFold,
+  messageDigestInput,
+  receiptAt,
+  receiptHash,
+  servedAt,
+  servedViews,
+  RECEIPT_BOUNDARY,
+  SERVED_GAPS,
+  UNGAPPED_FIELDS,
+  type EpochLocation,
+  type FoldBasis,
+  type KeyedFold,
+  type Receipt,
+  type ReceiptCacheMarker,
+  type ReceiptMessage,
+  type ReceiptParams,
+  type ReceiptPiece,
+  type ReceiptRequestOnlyMessage,
+  type ServedGap,
+  type ServedGapCause,
+  type ServedGapKind,
+  type ServedPiece,
+  type ServedRequestOnly,
+  type ServedView,
+} from './lib/time-travel/index.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
 // are the internal builder↔recorder coordination protocol, not consumer

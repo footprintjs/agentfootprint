@@ -61,6 +61,8 @@ import {
 } from '../influence-core/index.js';
 import { safeStringify } from '../trace-toolpack/bounded.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
+// The one committed key that is a fingerprint, not prose — see NOT_OUTPUT_KEYS.
+import { RECEIPT_KEY } from '../time-travel/receipt.js';
 
 // ─── Options / handle ────────────────────────────────────────────────
 
@@ -141,9 +143,23 @@ function cap(text: string, maxChars: number): string {
 }
 
 /**
+ * Keys a step commits that are BOOKKEEPING ABOUT the step rather than output
+ * FROM it. They are skipped by {@link stepOutputText} — see the note there.
+ */
+const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([RECEIPT_KEY]);
+
+/**
  * Default child text: everything the step committed, `key=value` in trace
  * order. For an agent's LLM call this carries the assistant content +
  * tool-call intents — the step's observable OUTPUT.
+ *
+ * WITH ONE EXCLUSION (9.88.0). The receipt an LLM call commits is a
+ * FINGERPRINT of the request, not something the step said: run-salted hex
+ * digests, which are by construction semantically empty. Left in, they are
+ * hundreds of characters of noise inside a `maxChars` budget that then has
+ * less room for the assistant's actual words — measured, that alone reordered
+ * the localizer's suspects and demoted a planted fact below a tool. A text
+ * corpus scored by an embedder must contain only text somebody wrote.
  */
 export function stepOutputText(
   commitLog: readonly CommitBundle[],
@@ -156,7 +172,10 @@ export function stepOutputText(
   const paths = new Set<string>();
   for (const bundle of commitLog) {
     if (bundle.runtimeStageId !== runtimeStageId) continue;
-    for (const entry of bundle.trace) paths.add(entry.path);
+    for (const entry of bundle.trace) {
+      if (NOT_OUTPUT_KEYS.has(entry.path)) continue;
+      paths.add(entry.path);
+    }
   }
   if (paths.size === 0) return undefined;
   const parts: string[] = [];

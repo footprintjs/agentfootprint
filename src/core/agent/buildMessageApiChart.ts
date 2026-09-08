@@ -44,6 +44,7 @@ import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
+import { joinSystemPrompt } from './composeRequest.js';
 
 /** Minimal scope for the LLM-only proof. */
 interface MessageApiState {
@@ -105,10 +106,7 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
   // the assembly callLLM does invisibly today, surfaced as a real stage. ──
   const messageApiStage = (scope: TypedScope<MessageApiState>): void => {
     const sysInjections = (scope.systemPromptInjections ?? []) as readonly InjectionRecord[];
-    scope.assembledSystem = sysInjections
-      .map((r) => r.rawContent ?? '')
-      .filter((s) => s.length > 0)
-      .join('\n\n');
+    scope.assembledSystem = joinSystemPrompt(sysInjections);
     // The conversation (incl. any tool-result messages) IS the message
     // stream — read from history directly (same as the agent's callLLM).
     // Materialise a plain array (history is a reactive proxy ref).

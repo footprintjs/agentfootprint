@@ -39,6 +39,8 @@ import {
   type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
+import { contributingPieces, joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
+import { buildReceipt, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
@@ -54,14 +56,6 @@ import {
 } from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
-/**
- * Drop the fields that exist for the library and never for the model.
- *
- * Today that is exactly one: `injectedBy`, the delivery marker (7.21).
- * Messages without it pass through by reference, so an agent that delivers
- * nothing allocates nothing — and the array's length and order are untouched
- * either way, which is what keeps `CacheMarker{field:'messages'}` honest.
- */
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
@@ -85,16 +79,6 @@ function readExternalGrounds(
   } catch {
     return [];
   }
-}
-
-function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
-  if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
-  return messages.map((m) => {
-    if (m.injectedBy === undefined) return m;
-    const { injectedBy: _marker, ...wire } = m;
-    void _marker;
-    return wire;
-  });
 }
 
 export interface CallLLMStageDeps {
@@ -265,6 +249,34 @@ export interface CallLLMStageDeps {
    * and on the payload field; this dep only obeys it.
    */
   readonly recordSystemPrompt?: boolean;
+  /**
+   * The run's id, read through an accessor for the same reason seed's
+   * `getCurrentRunId` is: a stage factory is built once per agent and the id
+   * changes every run.
+   *
+   * It is the SALT on every hash the receipt carries — see
+   * `receipt.ts` · `receiptHash`. Absent (or absent at call time) means an
+   * unsalted digest, which is a weaker fingerprint, not a broken one: the
+   * conformance law still holds because both sides salt with the same value.
+   */
+  readonly getRunId?: () => string | undefined;
+  /**
+   * Mint the receipt on every call (9.88.0). Default ON.
+   *
+   * `false` is the OFF SWITCH `AgentOptions.recordReceipt` sets. It exists
+   * because a receipt is not free: one commit-log value per iteration, a
+   * SHA-256 per system piece, per message, per tool schema. An offline eval
+   * loop running ten thousand scored turns nobody will ever scrub is entitled
+   * to decline all of it, and the switch is one boolean because the mint is one
+   * call.
+   *
+   * Turning it off does NOT make the log unreadable: `servedAt` still rebuilds
+   * every epoch from the committed pieces. What is lost is the second half of
+   * the law — there is no fingerprint left to check the rebuild against, so
+   * `receiptAt` returns `undefined` exactly as it does for a pre-9.88
+   * recording.
+   */
+  readonly recordReceipt?: boolean;
 }
 
 // LENS · system-text + tool-list · request-ephemeral
@@ -325,10 +337,13 @@ export function buildCallLLMStage(
       iterIndex: iteration,
     });
 
-    const systemPrompt = systemPromptInjections
-      .map((r) => r.rawContent ?? '')
-      .filter((s) => s.length > 0)
-      .join('\n\n');
+    // ── the system-prompt join ────────────────────────────────────────
+    // The pieces are committed (`systemPromptInjections`); THIS STRING IS NOT.
+    // It lives and dies inside this stage, which is why the join is one
+    // exported function rather than four lines here — a reader rebuilding what
+    // the model was served has to apply the identical rule to the identical
+    // records (`composeRequest.ts` · `joinSystemPrompt`).
+    const systemPrompt = joinSystemPrompt(systemPromptInjections);
 
     // Read the LLM message stream from `scope.history` directly. The
     // `messagesInjections` projection is for observability — it
@@ -383,6 +398,10 @@ export function buildCallLLMStage(
     // untouched, so it never enters the exempt corpus and never persists —
     // recomposed each iteration, present exactly while both conditions hold.
     let wireMessages = messages;
+    // Lines composed for THIS request and written to no history — each with
+    // the mechanism that composed it, so the receipt can say a line existed
+    // without saying what it said.
+    const requestOnly: { readonly message: LLMMessage; readonly reason: string }[] = [];
     if (deps.toolWants !== undefined) {
       const match = findStagedRefs(
         messages,
@@ -390,7 +409,9 @@ export function buildCallLLMStage(
         new Set(registeredToolSchemas.map((t) => t.name)),
       );
       if (match !== undefined) {
-        wireMessages = [...messages, { role: 'user', content: stagedRefsNudgeLine(match) }];
+        const nudge: LLMMessage = { role: 'user', content: stagedRefsNudgeLine(match) };
+        requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
+        wireMessages = [...messages, nudge];
         typedEmit(scope, 'agentfootprint.agent.grounding_nudged', {
           iteration,
           refs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
@@ -454,6 +475,52 @@ export function buildCallLLMStage(
       cachingDisabled: scope.cachingDisabled ?? false,
     });
     const llmRequest = cachePrepared.request;
+
+    // ── THE RECEIPT ──────────────────────────────────────────────────────
+    // Written HERE, immediately before the provider is called, so it is
+    // committed in the call-llm bundle that already exists — the llm-turn stop
+    // a reader already scrubs to. Before rather than after on purpose: the
+    // stage commits on the error path too, so a call that throws still leaves
+    // the record of what it was about to send.
+    //
+    // Hashes and references only. Every law this record obeys — no bytes, no
+    // authority omissions, run-salted digests — is stated once, at
+    // `receipt.ts` · `Receipt`, and enforced by the shape it fills in.
+    //
+    // NOT HERE: `omittedForAttention`. A slot's budget drops are in
+    // `slotCompositions`, which a slot writes INSIDE its own subflow and no
+    // boundary bubbles out — so at this scope the key is absent in both chart
+    // shapes. It was read here for one measured pass and the read alone was a
+    // defect: a tracked get of an always-absent key put `slotCompositions` on
+    // every call-llm stage's read set, which gave `trajectory.ts` a phantom
+    // context source per loop and moved the localizer's ranking. A receipt
+    // records what the run knows; it does not go looking.
+    if (deps.recordReceipt !== false) {
+      scope[RECEIPT_KEY] = buildReceipt({
+        runId: deps.getRunId?.() ?? '',
+        epoch: iteration,
+        model,
+        provider: provider.name,
+        systemText: systemPrompt,
+        systemPieces: contributingPieces(systemPromptInjections).map((r) => ({
+          text: r.rawContent,
+          slot: r.slot,
+          source: r.source,
+        })),
+        messages,
+        requestOnly,
+        tools: activeToolSchemas,
+        forced: deps.schemaTool?.name ?? null,
+        withheld: scope.wrapUpAsked === true ? 'wrap-up' : null,
+        baseRequest,
+        preparedRequest: llmRequest,
+        // The breakpoints the strategy really APPLIED, not the candidates it
+        // was offered. `scope.cacheMarkers` already records the offer; which of
+        // them survived the provider's clamp is the half that decides the bill,
+        // and it existed only in this local until now.
+        markersApplied: cachePrepared.markersApplied,
+      });
+    }
 
     // THE CLOSURE CHECK (9.60.0, dangling-reference). At assembly, BEFORE the
     // call — the composition defect exists whether or not the call lands. A

@@ -23,14 +23,11 @@
  *     primitives run correctly over the isolated log. Such frames carry `subflowScope`.
  */
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import {
-  commitValueAt,
-  findLastWriter,
-  parseRuntimeStageId,
-  splitStageId,
-} from 'footprintjs/trace';
+import { commitValueAt, findLastWriter, splitStageId } from 'footprintjs/trace';
 import type { UntrackedSource } from 'footprintjs/trace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+// The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
+import { llmCallMountKeys } from '../time-travel/epochs.js';
 import type { EvidenceInput } from '../influence-core/index.js';
 import { stepOutputText } from './llmEdgeWeigher.js';
 import { CONTEXT_BISECT_DEFAULTS, type ContextBugArtifacts, type HonestyFlag } from './types.js';
@@ -340,15 +337,6 @@ function projectFrame(
     ...(untrackedReadsPresent ? { incompleteSources } : {}),
     untrackedReadsPresent,
   };
-}
-
-/** The sf-llm-call mount keys in `subflowResults`, in loop order (by execution index). */
-function llmCallMountKeys(subflowResults: Record<string, unknown>): string[] {
-  return Object.keys(subflowResults)
-    .filter(
-      (k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL,
-    )
-    .sort((a, b) => parseRuntimeStageId(a).executionIndex - parseRuntimeStageId(b).executionIndex);
 }
 
 /**

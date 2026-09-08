@@ -78,6 +78,7 @@ import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { findThinkingHandler } from '../thinking/registry.js';
 import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
+import { joinSystemPrompt, messagesFromInjections } from './agent/composeRequest.js';
 
 export interface LLMCallOptions {
   readonly provider: LLMProvider;
@@ -456,17 +457,13 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       const messagesInjections = (scope.messagesInjections ?? []) as readonly InjectionRecord[];
       const iteration = (scope.iteration as number | undefined) ?? 1;
 
-      const systemPrompt = systemPromptInjections
-        .map((r) => r.rawContent ?? '')
-        .filter((s) => s.length > 0)
-        .join('\n\n');
+      const systemPrompt = joinSystemPrompt(systemPromptInjections);
 
-      const messages = messagesInjections
-        .map((r) => ({
-          role: r.asRole ?? 'user',
-          content: r.rawContent ?? r.contentSummary,
-        }))
-        .filter((m) => m.content.length > 0);
+      // The messages-slot join (9.88.0). One exported rule, for the same
+      // reason the system-prompt join is one: `LLMCall` has no `history`, so
+      // these records ARE the committed conversation, and `servedAt` rebuilds
+      // it by calling this identical function over the identical records.
+      const messages = messagesFromInjections(messagesInjections);
 
       typedEmit(scope, 'agentfootprint.stream.llm_start', {
         iteration,

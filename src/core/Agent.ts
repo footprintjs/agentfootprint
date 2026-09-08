@@ -731,6 +731,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  every `stream.llm_start` carries the assembled system prompt verbatim as
    *  `systemPromptText`. */
   private readonly recordSystemPromptValue: boolean = false;
+  /** `AgentOptions.recordReceipt` (9.88.0) — ON by default. `false` declines
+   *  the mint at `callLLM`; nothing else about the run changes. */
+  private readonly recordReceiptValue: boolean = true;
 
   constructor(
     opts: AgentOptions,
@@ -815,6 +818,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.mapsPlan = mapsPlan;
     this.claimContract = claimContract;
     if (opts.recordSystemPrompt === true) this.recordSystemPromptValue = true;
+    // The receipt's OFF SWITCH (9.88.0). Default ON, so only an explicit
+    // `false` is remembered and every other agent's dep bag is byte-identical.
+    if (opts.recordReceipt === false) this.recordReceiptValue = false;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputEnforcement = outputEnforcement;
@@ -3293,6 +3299,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // toolSchemas is finalized further down; pass a getter that reads
     // the eventual const at stage-execution time.
     let toolSchemasResolved: readonly LLMToolSchema[] = [];
+    // The `Tool.wants` declarations seed puts on the record (9.88.0), late-bound
+    // for the same reason `toolSchemasResolved` is: the registry is harvested
+    // further down, and seed is built here. Stays `undefined` unless the
+    // evidence gate arms the staged-refs nudge — the exact condition under
+    // which request assembly can compose that line at all.
+    let seededToolWants: Readonly<Record<string, readonly string[]>> | undefined;
     // The stores the conversation itself is kept in — the durable anchor seed
     // resolves the turn number against. Deduplicated (several memories over
     // one store is the common shape) and reference-stable, so the scan runs
@@ -3306,10 +3318,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
     const seed = buildSeedStage({
       maxIterations,
+      // The forced-output tool's name (9.88.0) — a build-time constant, put on
+      // the record once so a rebuild can name it without reading a receipt.
+      ...(this.outputEnforcement?.schemaTool !== undefined && {
+        forcedOutputToolName: this.outputEnforcement.schemaTool.name,
+      }),
       cachingDisabled,
       ...(costBudget !== undefined && { costBudgetOnExceed: costBudget.onExceed }),
       get toolSchemas() {
         return toolSchemasResolved;
+      },
+      get toolWantsByName() {
+        return seededToolWants;
       },
       consumePendingResumeHistory: () => {
         const h = this.pendingResumeHistory;
@@ -3632,6 +3652,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Consumed only by the evidence gate (the callLLM nudge and the recheck
     // correction), so an agent without the gate never reads it.
     const toolWants = toolWantsOf(registryByName);
+    // …and onto the record (9.88.0), under the SAME arming condition callLLM
+    // uses below, so the rebuild composes the nudge exactly when the run could.
+    // A plain record: a `Map` written to scope round-trips to `{}`.
+    if (this.evidenceGate?.nudge === true && toolWants.size > 0) {
+      seededToolWants = Object.fromEntries([...toolWants].map(([name, kinds]) => [name, kinds]));
+    }
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(toolOwners.size > 0 && { toolOwners }),
@@ -3652,6 +3678,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
     const callLLM = buildCallLLMStage({
+      // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
+      getRunId: () => this.currentRunContext?.runId,
+      // …and its off switch. Value-conditional, so an agent on the default
+      // hands `callLLM` exactly the dep bag it always did.
+      ...(this.recordReceiptValue === false && { recordReceipt: false }),
       provider,
       model,
       ...(temperature !== undefined && { temperature }),

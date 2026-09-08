@@ -1,15 +1,22 @@
-# Recorded, not built — the divergence walk's five defects
+# Recorded, not built — ten defects, real and deliberately unfixed
 
-Five things the tool-divergence walk found are **real, reproduced, and
-deliberately not fixed here**. Each is a behaviour change: fixing it either
-emits events in runs that emit none today, changes a shipped event's payload,
-or refuses a configuration that builds today. That is a decision, not a patch,
-so each gets its own round. This note exists so none of them has to be
-rediscovered — and so the reason each one is tolerated is a sentence somebody
-wrote, rather than an omission somebody inherited.
+Ten things are **real, reproduced, and deliberately not fixed here** — five
+found by the tool-divergence walk, one (entry 6) found from the other side while
+building the receipt at the llm-turn stop, three (entries 7-9) left standing by
+the receipt's sixth review round, and one (entry 10) left standing by its
+seventh, where the job was to make every printed sentence true rather than to
+close every hole. Each is a behaviour change:
+fixing it either emits events in runs that emit none today, changes a shipped
+event's payload or a shipped record's meaning, or refuses a configuration that
+builds today. That is a decision, not a patch, so each gets its own round. This
+note exists so none of them has to be rediscovered — and so the reason each one
+is tolerated is a sentence somebody wrote, rather than an omission somebody
+inherited.
 
-Written 2026-09-03, against 9.84.0 plus the uncommitted walk. Line numbers are
-against that working tree.
+Entries 1-5 were written 2026-09-03, against 9.84.0 plus the uncommitted walk;
+their line numbers are against that working tree. Entries 6-10 were written
+2026-09-07/08 against 9.88.0 and cite `file` · `symbol`, which is the house rule
+now.
 
 The machine-checked half of this record already ships:
 `test/core/agent/toolDivergenceWalk.baseline.json` holds every divergence row
@@ -547,3 +554,258 @@ that only this pair makes visible:
 **Cost of waiting.** The only event that reaches production about this seam
 reports the framework as the shadowing party in the one configuration where
 the framework is the victim. Two baseline rows carry it.
+
+---
+
+# Appended 2026-09-07 — the receipt pass: one more, found from the other side
+
+The five above were found by walking tool DIVERGENCE. This one was found by
+walking what a RECORD contains, while building the receipt at the llm-turn stop
+(9.88.0). It belongs here for the same reason they do: it is real, reproduced,
+and fixing it is a behaviour change rather than a patch.
+
+---
+
+## 6. A kept inner recording carries the secret in `sharedState`
+
+**The claim it contradicts.** `flowchartAsTool.ts` · `FlowchartAsToolOptions.redact`
+said, until this pass edited it:
+
+> footprintjs scrubs at COMMIT time, so a redacted key never reaches the
+> inner commit log at all — which is what makes a kept record safe to
+> serve back to a model.
+
+The first clause is true. The second does not follow from it, and is false for
+the object the option's neighbour (`keepRecord`) retains.
+
+**The reproduction.** A chart that writes a key, wrapped with both options on,
+invoked once; then the kept record is opened. This is
+`test/lib/time-travel/receipt-conformance.test.ts` ·
+`'redaction is EXECUTOR-level and reaches an inner tool run, not an agent log'`,
+which asserts the whole shape rather than only the half that is reassuring:
+
+```ts
+const tool = flowchartAsTool({
+  name: 'inner_chart',
+  flowchart: chart,          // sets scope.apiKey = 'sk-inner-secret'
+  keepRecord: true,
+  redact: { keys: ['apiKey'] },
+});
+await tool.execute({}, { toolCallId: 'c1' } as never);
+const snapshot = innerRunsOf(tool)!.get('c1')!.recording!.snapshot;
+
+JSON.stringify(snapshot.commitLog).includes('sk-inner-secret');  // false — scrubbed
+JSON.stringify(snapshot.commitLog).includes('REDACTED');         // true
+snapshot.sharedState.apiKey;                                     // 'sk-inner-secret'
+```
+
+**The cause.** Two mechanisms that are correct on their own and were never
+composed. `executor.setRedactionPolicy` makes footprintjs scrub at COMMIT time,
+so the value is `'REDACTED'` in every bundle. The live state view is not a
+commit: it is the run's own heap, and the *redacted mirror* of it is served only
+by `getSnapshot({ redact: true })`. `flowchartAsTool.ts` · `keepRecordOf` calls
+`executor.getSnapshot()` with no argument, so the retained
+`recording.snapshot.sharedState` is the unredacted view. Every fold in
+`src/lib/time-travel/` reads the commit log and is therefore clean; anything
+that reads `sharedState` — a debugger, a serializer, `inspect_tool_run` — is
+not.
+
+**Why it is not fixed here.** It is a different subsystem from this packet, and
+every available fix changes behaviour for runs that work today:
+
+- Passing `{ redact: true }` at `keepRecordOf` changes what `inspect_tool_run`
+  and every consumer of `innerRunsOf` can see, on runs that set a policy today
+  and read state out of the kept record.
+- Scrubbing `sharedState` after the fact would make a kept record disagree with
+  the run's own state at the same instant, which is a second, quieter lie.
+- Refusing `keepRecord: true` together with `redact` removes a combination that
+  builds today, and is the only option that cannot be made to look like a
+  patch.
+
+Which of the three is right depends on whether a kept record is EVIDENCE (the
+run as it was, governed by who may open it) or a TRANSPORT (something handed
+on, governed by what it may contain). That is a decision, not an implementation.
+
+**What was done here instead.** The JSDoc no longer claims what it cannot
+deliver. `FlowchartAsToolOptions.redact` now says, in its own "what it does NOT
+govern" list, that a kept record holds the plaintext on
+`recording.snapshot.sharedState` while its commit log holds `REDACTED`, and
+points here. The conformance test already asserted it; the words now match the
+assertion.
+
+**Cost of waiting.** A consumer who sets `redact` because a chart handles
+secrets, and `keepRecord` because they want the record, is told by the option's
+own documentation that the combination is safe to serve back to a model. It is
+safe in the commit log and unsafe in the state view, and nothing at runtime says
+so.
+
+---
+
+# Appended 2026-09-07 — the receipt's FOURTH review round: three more
+
+Entries 1-6 are behaviour changes somebody has to decide on. These three came
+out of the last review round on `servedAt` / `SERVED_GAPS` (9.88.0), where the
+round's job was to make every printed sentence true. Each is a place where the
+account is now HONEST about a limit rather than fixed — which is the outcome the
+house law asks for (a Lens may omit, never deny), and the reason each one is
+here instead of in the diff.
+
+---
+
+## 7. `cache-transform` does not name `tools.forced` or `tools.withheld`
+
+**The reproduction.** `servedView.ts` · `SERVED_GAPS['cache-transform'].fields`
+names eleven fields: the three `cache.*` that describe the rewrite, plus the
+composition it was handed — `system.hash/chars/pieces`,
+`messages.count/entries/requestOnly`, `tools.names`, `tools.schemaHashes`. It
+does NOT name `tools.forced` or `tools.withheld`, and the entry's own stated
+rule is "everything a rewrite could have changed".
+
+A cache strategy is handed the whole `LLMRequest` and hands one back. A strategy
+that dropped the synthetic answer tool from `request.tools`, or rewrote
+`toolChoice`, would send a request whose forcing does not match the receipt —
+and the receipt would not know, because `callLLM.ts` builds those two fields from
+assembly's own decision (`deps.schemaTool?.name`, `scope.wrapUpAsked`) rather
+than from `preparedRequest`. `params.toolChoice` IS read past the strategy, so a
+strategy that rewrote the choice would leave the two halves of the same fact
+disagreeing on one receipt.
+
+**Why it is not fixed here.** Deciding it needs a measurement nobody has taken:
+whether any strategy in the wild rewrites `tools` or `toolChoice` at all, and
+whether the right answer is to widen the gap (cheap, weakens a caveat that is
+already the weakest entry in the catalogue) or to read both fields off
+`preparedRequest` at mint time (a behaviour change to a shipped receipt field,
+which would then describe the wire rather than the decision — two different
+facts, and the second is not obviously the more useful one). Widening it on a
+guess would put two more fields under a caveat this library cannot show a run
+for, which is the "gap that names a field for the wrong reason" this whole round
+was about.
+
+**Cost of waiting.** A reader who checks `tools.forced` against the wire on a run
+with a rewriting cache strategy can find a mismatch the catalogue does not warn
+about. No shipped strategy in this repo rewrites either field, so the exposure
+today is a consumer's own strategy.
+
+---
+
+## 8. `cache-transform` is raised on every view, including charts with no strategy
+
+**The reproduction.** `servedView.ts` · `viewOf` pushes `gapOf('cache-transform')`
+unconditionally. On an `LLMCall` view the gaps read
+`['no-receipt-on-chart', 'cache-transform']` — the first saying no cache strategy
+runs on this chart, the second describing what a cache strategy may have done.
+Two sentences on one view, one of them about a mechanism that cannot be present.
+
+**What was done here instead.** The printed sentence was made honest about being
+the WEAKEST claim on the view rather than about the mechanism that makes it one.
+It says what reached the provider may differ from the fields below and that
+*"where another gap on this view covers one of them, that gap is the stronger
+claim"* — so a reader who also has `no-fold-base` or `no-receipt-on-chart` in
+front of them knows which sentence governs. Two later rounds moved the rest out
+of it: the sixth deleted the mechanism clause that named the charts (a printed
+sentence names no chart), and the seventh removed the quoted `RECEIPT_BOUNDARY`,
+because a sentence opening "A receipt describes the request…" was being printed
+on the receipt-less views this very entry exists on. The condition now lives in
+the comment beside the entry and in the qualifier on `ServedGap.fields`.
+
+**Why the other option is not built.** Raising it only where a cache subflow is
+mounted means INFERRING from a recording that no strategy ran, and absence of
+evidence is exactly the inference this feature exists to refuse: a recording
+that travelled without its fold base would read "no strategy" for the same
+reason it reads "no system prompt". A conditional raise would therefore need its
+own committed fact (the strategy's name at mount) before it could be honest, and
+committing a new fact is a behaviour change to every run.
+
+**Cost of waiting.** The weakest entry in the catalogue is on every view, so a
+renderer that prints all gaps prints one line of boilerplate per epoch. It is
+noise rather than a false statement, and the sentence says so by pointing at the
+gap that outranks it; `test/lib/time-travel/gap-sentences.test.ts` asserts that
+pointer on a base-less view, where both gaps name `system.chars` and the rebuild
+really is short.
+
+---
+
+## 9. A slot's attention drops never reach the receipt
+
+**The reproduction.** `Receipt.omittedForAttention` is declared, documented, and
+supplied by no chart IN THIS LIBRARY — measured on 9.88.0 across both shapes,
+and the walk re-takes that measurement on every run. It is a key of
+`UNGAPPED_FIELDS` for exactly that reason: its absence is universal and says
+nothing about any particular recording. `buildReceipt` is a pure exported mint,
+so a consumer that calls it directly CAN hand it the fact — which is why the
+claim is scoped to this library rather than to the world.
+
+**The cause.** A slot writes its budget drops to `slotCompositions` INSIDE its
+own subflow, and no boundary bubbles that record out, so the agent's request
+assembly has nothing to pass and `buildReceipt` is never handed one. And there
+is a second reason stacked under the first, found while writing the assertion
+for the `UNGAPPED_FIELDS` sentence: the built-in slots never DROP anything.
+`slotOverflow` answers an over-budget composition with `planAction: 'none'`, the
+whole content goes to the model, and `droppedCount` is 0 on every run this
+library can produce. So a run where something was dropped and the receipt is
+silent — the run that would pin "never that nothing was dropped" outright —
+cannot be driven here; `gap-sentences.test.ts` asserts the shape's half (hand
+the mint a drop and it carries it) and says so beside the assertion.
+`callLLM.ts` deliberately does not go looking for it: a tracked read of an
+always-absent key put `slotCompositions` on every `call-llm` stage's read set,
+which gave `trajectory.ts` a phantom context source per loop and moved the
+localizer's ranking. The read alone was the defect.
+
+**Why it is not fixed here.** The fix is an outputMapper change at the slot
+subflow boundary — new state crossing out of every slot on every run, read by a
+recorder that does not exist yet — and that is a behaviour change to the
+composition path, not to the receipt.
+
+**Cost of waiting.** "Why did the model not know that?" is the question the field
+was declared for, and today the record cannot answer it from the receipt. The
+`UNGAPPED_FIELDS` reason now says so in the words a reader meets: absent means
+nobody recorded a drop, never that nothing was dropped.
+
+---
+
+## 10. An assertion can be weaker than the clause it checks
+
+**The reproduction.** `test/lib/time-travel/gap-sentences.test.ts` binds every
+printed gap sentence to a run: each sentence is decomposed into quoted clauses,
+each clause carries an assertion, and the clauses must PARTITION the sentence,
+so no printed word sits outside a checked claim. That closes "a claim with no
+test". It does not close **a claim whose test checks less than the claim says**.
+
+Written out, because it is the residue of seven review rounds and not a
+hypothetical: `no-fold-base` says a value that could not be recovered "reads as
+empty rather than as unknown". The assertion checks four such values on one
+resumed run — the system text, its pieces, the tool names, the tool schemas.
+The clause quantifies over every field the gap names. The difference between
+"four, here" and "every, always" is real and nothing in the file measures it.
+
+Two more instances, found by the verifier that approved the release and recorded
+here rather than widened at the last minute: `cache-transform`'s "where another gap
+on this view covers one of them, that gap is the stronger claim" is asserted for ONE
+pairing (`no-fold-base` on `system.chars`) where the sentence quantifies over every
+co-present gap; and `forced-tool-schema`'s "so the tool list is complete" is
+asserted on the grouped chart shape only, where the sentence covers both. Each is
+true where it was measured and unmeasured where it was not — which is exactly the
+shape of this entry.
+
+**The cause.** The partition is a TEXT operation over the sentence; the
+assertion is a JUDGEMENT about what would prove the clause. No structure
+available here can compare the two — that comparison is the reading a person
+does, and it is the same reading that found the four false sentences this round
+repaired.
+
+**Why it is not fixed here.** Every candidate fix is a bigger claim than the
+one it would check. Property-testing each clause over generated recordings would
+assert against the same rebuild the clause describes, which proves the rebuild
+agrees with itself; requiring N assertions per clause counts assertions rather
+than strength; and a coverage threshold over `servedView.ts` would measure lines
+executed, not claims established. None of those is machinery worth adding on the
+last round of a release.
+
+**Cost of waiting.** A clause can drift from its assertion without any test going
+red — the failure mode is a sentence that is a little stronger than what was
+measured. It is bounded by what the partition already guarantees (every clause
+has a run behind it) and by the size of the surface — one short sentence per
+catalogue entry, a handful of clauses each. The honest statement of it is in the
+new file's header, in
+`test/helpers/gapProseClaims.ts`, and in the CHANGELOG: **the blind spot is a
+claim nobody wrote an assertion for.**

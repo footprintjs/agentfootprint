@@ -1023,6 +1023,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // literals — one repaired into the registry's own anchor
         // (`COVERAGE_NOTE`), one integrity frame line added to the work list, and
         // fourteen host-facing errors and check-up warnings classified.
+        // 9.88.0: a SERVED_GAPS sentence arrived and then LEFT again inside one
+        // release. It was flagged as reader-facing prose printed beside a
+        // rebuilt request; the sixth review round reduced every gap sentence to
+        // fields, meaning and what to do, and the reduced sentences are short
+        // enough that none of them trips the grammar any more. Net zero, and the
+        // census is back where 9.86.1 left it.
         files: 91,
         total: 178,
         registry: 8,

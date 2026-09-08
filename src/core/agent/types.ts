@@ -38,6 +38,7 @@ import type { FoldedSpan, WindowRecord } from './window/types.js';
 import type { ExternalGround } from '../../integrity/unsupported-argument/check.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
+import type { Receipt } from '../../lib/time-travel/receipt.js';
 import type { OutputAttempt } from './outputEnforcement.js';
 import type { UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
@@ -382,6 +383,26 @@ export interface AgentOptions {
    *   Agent.create({ provider, model, recordSystemPrompt: true })
    */
   readonly recordSystemPrompt?: boolean;
+  /**
+   * Mint a RECEIPT on every LLM call (9.88.0). **Default ON.**
+   *
+   * The receipt is the hashes-and-references record `receiptAt(snapshot, k)`
+   * reads — the second half of `hash(servedAt(k)) === receiptAt(k).hash`. It
+   * carries no bytes, so unlike `recordSystemPrompt` there is no privacy
+   * reason to decline it; the reason to decline it is COST. It is one
+   * commit-log value per iteration plus a SHA-256 per system piece, per
+   * message and per tool schema, and an offline eval loop scoring ten thousand
+   * turns nobody will ever scrub is entitled to skip all of that.
+   *
+   * `false` does not make a run unreadable: `servedAt` still rebuilds every
+   * epoch from the committed pieces. What is lost is the check on that
+   * rebuild — `receiptAt` returns `undefined`, exactly as on a recording made
+   * before this release.
+   *
+   * @example decline the receipt in a bulk eval loop
+   *   Agent.create({ provider, model, recordReceipt: false })
+   */
+  readonly recordReceipt?: boolean;
   /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
@@ -1389,6 +1410,49 @@ export interface AgentState {
   /** Tool schemas resolved by the tools slot subflow each iteration
    *  (registry + injection-supplied). Used by callLLM. */
   dynamicToolSchemas: readonly LLMToolSchema[];
+  /**
+   * THE RECEIPT (9.88.0) — what the model was handed on this call, as hashes
+   * and references, written by `callLLM` immediately before the provider is
+   * called and therefore committed in the call-llm bundle. Read it with
+   * `receiptAt(snapshot, epoch)`; rebuild the request it fingerprints with
+   * `servedAt(snapshot, epoch)`.
+   *
+   * It changes every call (the epoch is on it), so it commits every iteration
+   * rather than being dropped by the net-change filter — which is what makes
+   * bubbling it out of `sf-llm-call` in the grouped chart worth doing.
+   *
+   * Every value on it is a digest, a count or a name the run already
+   * published. It carries no message text, no prompt text, no schema bodies
+   * and — by its first law — no authority omissions.
+   */
+  receipt?: Receipt;
+  /**
+   * The name of the synthetic tool a `'tool-forced'` output strategy puts on
+   * every request (9.88.0) — seeded once, from the build-time strategy, on an
+   * agent that has one. Absent for every other agent, which is what keeps
+   * `seed`'s committed key set unchanged for them.
+   *
+   * It exists so a rebuild can NAME the forced tool without reading the
+   * receipt: the receipt is the thing a rebuild is checked against, and a
+   * check that reads its own answer sheet proves nothing. The tool's SCHEMA is
+   * still not on the record — see `servedView.ts` · `SERVED_GAPS`.
+   */
+  forcedOutputToolName?: string;
+  /**
+   * The `Tool.wants` declarations by tool name (9.88.0) — seeded once, on an
+   * agent whose evidence gate arms the staged-refs nudge. Absent for every
+   * other agent.
+   *
+   * It is the one input to that nudge that was build-time-only. The nudge is a
+   * `role: 'user'` line composed for a single request and written to no
+   * history; with this key on the record, `servedView.ts` · `servedAt` composes
+   * the identical line from committed state — conversation, tools served, and
+   * these declarations — instead of declaring the model's own words a gap.
+   *
+   * A plain record rather than the `Map` the join takes, because an object
+   * write to scope is JSON-round-tripped and a `Map` round-trips to `{}`.
+   */
+  toolWantsByName?: Readonly<Record<string, readonly string[]>>;
   /** Which skill ids the caller's role may NOT see this iteration (9.86.0),
    *  resolved ONCE by the tools slot and published here so every model-facing
    *  composer applies the same filter. Read by the `read_skill` gate before it

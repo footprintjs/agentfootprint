@@ -6,4 +6,4 @@ title: LLMCallOutput
 
 > **LLMCallOutput** = `string`
 
-Defined in: [src/core/LLMCall.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L160)
+Defined in: [src/core/LLMCall.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L161)
